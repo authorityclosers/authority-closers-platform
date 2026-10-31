@@ -1,0 +1,342 @@
+/* Leads' work views (Dipak's Home + Leads handoff, 31 Oct 2026; owner, 31 Oct
+   2026): one pinned head (the lead type, search with one Filter, the stage pick
+   with Call Next, To Call | Follow-ups | All Leads), the list under it, and on a
+   wide screen the selected lead beside the list. No boxes around groups. */
+
+/* The one pinned head: nothing scrolls above it. A solid background, and a
+   shadow only once the list has scrolled under it. */
+.head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 0;
+  background: var(--sx-paper);
+}
+
+@supports (animation-timeline: scroll()) {
+  .head {
+    animation: head-lift linear both;
+    animation-timeline: scroll(nearest block);
+    animation-range: 0 24px;
+  }
+}
+
+@keyframes head-lift {
+  from {
+    box-shadow: none;
+  }
+
+  to {
+    box-shadow: var(--sx-shadow-1);
+  }
+}
+
+/* A phone stacks the head: type, search, views, then the stage pick with Call
+   Next; it scrolls the page under the 62 px top bar. */
+.headTools {
+  display: contents;
+}
+
+.headSide {
+  order: 1;
+  min-width: 0;
+}
+
+.searchRow {
+  order: 2;
+}
+
+.headViews {
+  display: grid;
+  order: 3;
+  gap: 8px;
+  min-width: 0;
+}
+
+.headStage {
+  display: flex;
+  order: 4;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.headStage > .stage {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 899.98px) {
+  .head {
+    top: calc(62px + env(safe-area-inset-top, 0px));
+  }
+}
+
+/* A computer: one toolbar row (type, search, stage pick, Call Next), the views
+   under it. It scrolls the shell's main, whose 24 px top padding would leave a
+   band above the head: the head sits flush with its edge. */
+@media (min-width: 900px) {
+  .head {
+    top: -24px;
+    padding: 12px 0 8px;
+  }
+
+  .headTools {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .headSide {
+    flex: none;
+  }
+
+  .searchRow {
+    flex: 0 1 440px;
+  }
+
+  .headStage {
+    flex: 1 1 auto;
+    gap: 12px;
+  }
+
+  .headStage > .stage {
+    flex: 0 1 280px;
+  }
+
+  .headStage > .callNextButton {
+    margin-left: auto;
+  }
+
+  .headViews {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+  }
+}
+
+.searchRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.searchRow > * {
+  flex: none;
+}
+
+.search {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+}
+
+.search:focus-within {
+  box-shadow: var(--sx-focus-ring);
+}
+
+.searchMark {
+  flex: none;
+  margin-left: 14px;
+  color: var(--sx-muted);
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  padding: 0 10px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  text-overflow: clip;
+}
+
+.searchInput::-webkit-search-cancel-button {
+  display: none;
+}
+
+.searchClear {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 42px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-muted);
+  cursor: pointer;
+}
+
+.searchClear:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.tabs,
+.subTabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  min-width: 0;
+}
+
+.subTabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--sx-dur-fast) var(--sx-ease-out),
+    color var(--sx-dur-fast) var(--sx-ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.subTabs .tab {
+  flex: none;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--sx-line);
+}
+
+.tab:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.tab[aria-selected="true"] {
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink);
+}
+
+.subTabs .tab[aria-selected="true"] {
+  border-color: var(--sx-line-strong);
+}
+
+/* A computer's views are tabs in a row, left aligned, as wide as their words. */
+@media (min-width: 900px) {
+  .tabs {
+    display: flex;
+    gap: 4px;
+  }
+
+  .tabs .tab {
+    padding: 0 18px;
+  }
+}
+
+/* The stage pick is the one picker (app/ui/picker.tsx); the head sizes it. */
+.stage {
+  min-width: 0;
+}
+
+/* Call Next Lead / Start Cold Calling: in the pinned head, never over a row. */
+.callNextButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-gradient-primary);
+  color: var(--lx-on-teal);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.callNextButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.callNextButton:active {
+  transform: scale(var(--sx-press-scale));
+}
+
+.callNextButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* The list, and on a wide screen the selected lead beside it (about 40 / 60). */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  min-width: 0;
+}
+
+.splitList {
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .split[data-pane] {
+    grid-template-columns: minmax(340px, 2fr) minmax(0, 3fr);
+    align-items: start;
+  }
+}
+
+/* The lead beside the list stays in view under the pinned head. */
+.splitPane {
+  position: sticky;
+  top: calc(var(--work-head-h, 120px) - 24px + 8px);
+  max-height: calc(100dvh - 48px - var(--work-head-h, 120px) - 8px);
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.paneEmpty {
+  margin: 0;
+  padding: 48px 16px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab {
+    transition: none;
+  }
+
+  .callNextButton:active {
+    transform: none;
+  }
+}

@@ -121,7 +121,9 @@ it("says which CRM's export it is and imports in one press, columns tucked away"
   const dialog = await mount(2);
   expect(dialog.textContent).toContain("Zoho CRM export.");
   expect(dialog.textContent).toContain("Columns matched: Phone, Stage");
-  expect(dialog.querySelectorAll("select")).toHaveLength(0);
+  expect(
+    dialog.querySelectorAll('button[aria-haspopup="listbox"]'),
+  ).toHaveLength(0);
   await act(async () => button(dialog, "Import 2 leads")!.click());
   await settle();
   expect(commitImport).toHaveBeenCalledWith(
@@ -130,6 +132,8 @@ it("says which CRM's export it is and imports in one press, columns tucked away"
     "me",
     expect.any(String),
     null,
+    // Bulk upload (section 5): Cold Leads unless picked otherwise.
+    { side: "cold" },
   );
 });
 
@@ -137,13 +141,17 @@ it("shows the columns on Change columns", async () => {
   const dialog = await mount(2);
   await act(async () => button(dialog, "Change columns")!.click());
   await settle();
-  expect(dialog.querySelectorAll("select").length).toBeGreaterThan(0);
+  expect(
+    dialog.querySelectorAll('button[aria-haspopup="listbox"]').length,
+  ).toBeGreaterThan(0);
   expect(button(dialog, "Change columns")).toBeUndefined();
 });
 
 it("shows the columns when many rows make no lead", async () => {
   const dialog = await mount(1);
-  expect(dialog.querySelectorAll("select").length).toBeGreaterThan(0);
+  expect(
+    dialog.querySelectorAll('button[aria-haspopup="listbox"]').length,
+  ).toBeGreaterThan(0);
   expect(button(dialog, "Change columns")).toBeUndefined();
 });
 

@@ -114,6 +114,25 @@ function createSampleReport(): SalesReport {
   };
 }
 
+/** The picker button whose name starts with these words. */
+function picker(name: string) {
+  return [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      'button[aria-haspopup="listbox"]',
+    ),
+  ].find((button) => button.textContent?.startsWith(name));
+}
+
+/** Opens the named picker and chooses the row with this key. */
+async function pick(name: string, key: string) {
+  await act(async () => picker(name)!.click());
+  await act(async () =>
+    document
+      .querySelector<HTMLElement>(`[role="option"][data-key="${key}"]`)!
+      .click(),
+  );
+}
+
 beforeEach(() => {
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -294,19 +313,23 @@ describe("TranscriptReader", () => {
         ),
       );
 
-      const jumpSelect = document.querySelector<HTMLSelectElement>(
-        'select[aria-label="Jump to moment"]',
-      );
-      expect(jumpSelect).not.toBeNull();
-      expect(jumpSelect?.options.length).toBeGreaterThan(1);
+      const jumpSelect = picker("Jump to moment");
+      expect(jumpSelect).not.toBeUndefined();
+      await act(async () => jumpSelect!.click());
+      expect(
+        document.querySelectorAll('[role="option"]').length,
+      ).toBeGreaterThan(0);
 
-      // Select the strength moment (start_ms: 6500)
-      await act(async () => {
-        jumpSelect!.value = "6500";
-        jumpSelect!.dispatchEvent(new Event("change", { bubbles: true }));
-      });
+      // Choose the strength moment (start_ms: 6500)
+      await act(async () =>
+        document
+          .querySelector<HTMLElement>('[role="option"][data-key="good-0-0"]')!
+          .click(),
+      );
 
       expect(scrollIntoViewMock).toHaveBeenCalled();
+      // An action list: it shows its prompt again after the jump.
+      expect(jumpSelect!.dataset.value).toBe("");
     } finally {
       HTMLElement.prototype.scrollIntoView = originalScroll;
     }
@@ -520,13 +543,7 @@ describe("TranscriptReader", () => {
       "1 match",
     );
 
-    const filter = document.querySelector<HTMLSelectElement>(
-      'select[aria-label="Filter by speaker"]',
-    )!;
-    await act(async () => {
-      filter.value = "rep";
-      filter.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await pick("Filter by speaker", "rep");
     expect(document.querySelector('[role="status"]')?.textContent).toBe(
       "No matches",
     );
@@ -535,10 +552,7 @@ describe("TranscriptReader", () => {
     ).toBeNull();
     expect(document.querySelectorAll("mark")).toHaveLength(0);
 
-    await act(async () => {
-      filter.value = "prospect";
-      filter.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await pick("Filter by speaker", "prospect");
     expect(document.querySelector('[role="status"]')?.textContent).toBe(
       "1 match",
     );
@@ -561,24 +575,13 @@ describe("TranscriptReader", () => {
           />,
         ),
       );
-      const filter = document.querySelector<HTMLSelectElement>(
-        'select[aria-label="Filter by speaker"]',
-      )!;
-      await act(async () => {
-        filter.value = "prospect";
-        filter.dispatchEvent(new Event("change", { bubbles: true }));
-      });
+      await pick("Filter by speaker", "prospect");
       expect(document.querySelector('[data-segment-id="seg-3"]')).toBeNull();
 
-      const jumpSelect = document.querySelector<HTMLSelectElement>(
-        'select[aria-label="Jump to moment"]',
-      )!;
-      await act(async () => {
-        jumpSelect.value = "6500";
-        jumpSelect.dispatchEvent(new Event("change", { bubbles: true }));
-      });
+      // The strength moment (start_ms: 6500) is said by the hidden rep.
+      await pick("Jump to moment", "good-0-0");
 
-      expect(filter.value).toBe("all");
+      expect(picker("Filter by speaker")?.dataset.value).toBe("");
       const scrolled = scrollIntoViewMock.mock.contexts.at(-1) as HTMLElement;
       expect(scrolled.getAttribute("data-segment-id")).toBe("seg-3");
     } finally {

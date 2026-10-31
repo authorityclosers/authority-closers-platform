@@ -15,6 +15,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { notify } from "../notice-center";
+import { Picker } from "../ui/picker";
 import {
   AppCard,
   AppCardSkeleton,
@@ -133,54 +134,47 @@ function AutoRepliesForm({
             <span className={cardStyles.fieldLabel}>
               <strong>Who gets it</strong>
             </span>
-            <select
+            <Picker
+              title="Who gets it"
               value={every ? "every_lead" : "form_yes"}
-              onChange={(event) =>
+              options={[
+                { key: "form_yes", label: "Ad leads who said yes on the form" },
+                { key: "every_lead", label: "Every new lead" },
+              ]}
+              onChange={(key) =>
                 change({
                   ...rules,
                   firstReply: {
                     ...first,
-                    who:
-                      event.target.value === "every_lead"
-                        ? "every_lead"
-                        : "form_yes",
+                    who: key === "every_lead" ? "every_lead" : "form_yes",
                   },
                 })
               }
-            >
-              <option value="form_yes">
-                Ad leads who said yes on the form
-              </option>
-              <option value="every_lead">Every new lead</option>
-            </select>
+            />
           </label>
           <label className={cardStyles.field}>
             <span className={cardStyles.fieldLabel}>
               <strong>Template</strong>
               <small>WhatsApp allows only an approved template here.</small>
             </span>
-            <select
+            <Picker
+              title="Template"
               value={
-                first.template ? `${first.template}|${first.language}` : ""
+                first.template ? `${first.template}|${first.language}` : null
               }
-              onChange={(event) => {
-                const [template, language] = event.target.value.split("|");
+              placeholder="Pick an approved template"
+              options={approved.map((t) => ({
+                key: `${t.name}|${t.language}`,
+                label: `${readable(t.name)} (${t.language})`,
+              }))}
+              onChange={(key) => {
+                const [template, language] = (key ?? "").split("|");
                 change({
                   ...rules,
                   firstReply: { ...first, template, language },
                 });
               }}
-            >
-              <option value="">Pick an approved template</option>
-              {approved.map((t) => (
-                <option
-                  key={`${t.name}|${t.language}`}
-                  value={`${t.name}|${t.language}`}
-                >
-                  {readable(t.name)} ({t.language})
-                </option>
-              ))}
-            </select>
+            />
           </label>
           {every ? (
             <label className={cardStyles.field}>
@@ -332,15 +326,18 @@ function NewTemplate({
                 Utility is about their enquiry; marketing is offers.
               </small>
             </span>
-            <select
+            <Picker
+              title="Kind"
               value={category}
-              onChange={(e) =>
-                setCategory(e.target.value as "UTILITY" | "MARKETING")
-              }
-            >
-              <option value="UTILITY">Utility (about their enquiry)</option>
-              <option value="MARKETING">Marketing</option>
-            </select>
+              options={[
+                { key: "UTILITY", label: "Utility (about their enquiry)" },
+                { key: "MARKETING", label: "Marketing" },
+              ]}
+              onChange={(key) => {
+                if (key === null) return;
+                setCategory(key as "UTILITY" | "MARKETING");
+              }}
+            />
           </label>
         </div>
         <label className={cardStyles.field}>

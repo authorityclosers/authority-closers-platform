@@ -146,7 +146,9 @@ def action_of(current: Stage | None, target: Stage) -> Action:
 
 def reasons_of(stage: Stage) -> tuple[tuple[str, str], ...]:
     if stage.kind not in ("lost", "junk"):
-        return ()
+        # An open stage may offer reasons of its own, never required (Open Leads: Discussion
+        # Incomplete, Call Later; Dipak's handoff, 31 Oct 2026).
+        return stage.reasons or ()
     if stage.reasons:
         return stage.reasons
     return LOST_REASONS if stage.kind == "lost" else JUNK_REASONS
@@ -164,6 +166,8 @@ def needs_of(stage: Stage) -> tuple[tuple[str, ...], tuple[str, ...]]:
         needs = ()
     asks: list[str] = []
     if stage.kind == "lost" and REASON not in needs:
+        asks.append(REASON)
+    if stage.kind not in CLOSED_KINDS and stage.reasons and REASON not in needs:
         asks.append(REASON)
     if stage.kind == "not_connected" and NEXT_ACTION not in needs:
         asks.append(NEXT_ACTION)

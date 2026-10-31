@@ -15,6 +15,7 @@ import {
 } from "./speaker-profiles";
 import { confirmedRoles } from "./sales-signals";
 import { RichText } from "./report-entities";
+import { Picker } from "./ui/picker";
 
 // Spoken lines show only the mentions worth a glance, so they stay calm.
 const TRANSCRIPT_KINDS = [
@@ -154,18 +155,19 @@ export function ReportTranscript({
           {speakerOptions.length > 0 && (
             <label className={styles.field}>
               <span>{copy.speakerLabel}</span>
-              <select
-                value={selectedSpeaker}
-                onChange={(event) => setSelectedSpeaker(event.target.value)}
-                aria-label={copy.speakerFilterLabel}
-              >
-                <option value={ALL_SPEAKERS}>{copy.allSpeakers}</option>
-                {speakerOptions.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+              <Picker
+                title={copy.speakerFilterLabel}
+                ariaLabel={copy.speakerFilterLabel}
+                value={
+                  selectedSpeaker === ALL_SPEAKERS ? null : selectedSpeaker
+                }
+                all={{ label: copy.allSpeakers }}
+                options={speakerOptions.map(([value, label]) => ({
+                  key: value,
+                  label,
+                }))}
+                onChange={(key) => setSelectedSpeaker(key ?? ALL_SPEAKERS)}
+              />
             </label>
           )}
         </div>

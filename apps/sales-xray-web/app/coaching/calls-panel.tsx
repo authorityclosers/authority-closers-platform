@@ -11,6 +11,7 @@ import {
   type Ref,
 } from "react";
 import { Empty, kitStyles, List, Panel, Row, Segmented } from "../ui/kit";
+import { Picker } from "../ui/picker";
 import type { CallSummary, ProgressPoint } from "./coaching-client";
 import { CALLS, FOCUS, POINT_COPY, THEIR } from "./coaching-copy";
 import { callDate } from "./coaching-format";
@@ -169,23 +170,22 @@ export function CallsPanel({
               />
             ) : null}
             {filtered && canCompare ? (
-              <span className={`${kitStyles.field} ${styles.callFinding}`}>
-                <select
-                  aria-label={CALLS.finding}
-                  aria-controls={listId}
-                  value={finding}
-                  onChange={(event) => {
-                    setFinding(event.target.value as Finding);
-                    setExpanded(false);
-                  }}
-                >
-                  <option value="all">{CALLS.allFindings}</option>
-                  <option value="suggested">{POINT_COPY.suggested}</option>
-                  <option value="no_suggestion">
-                    {POINT_COPY.no_suggestion}
-                  </option>
-                </select>
-              </span>
+              <Picker
+                title={CALLS.finding}
+                ariaLabel={CALLS.finding}
+                className={styles.callFinding}
+                value={finding}
+                options={[
+                  { key: "all", label: CALLS.allFindings },
+                  { key: "suggested", label: POINT_COPY.suggested },
+                  { key: "no_suggestion", label: POINT_COPY.no_suggestion },
+                ]}
+                onChange={(key) => {
+                  if (!key) return;
+                  setFinding(key as Finding);
+                  setExpanded(false);
+                }}
+              />
             ) : null}
             <span className={styles.note} role="status">
               {CALLS.count(shown.length)}

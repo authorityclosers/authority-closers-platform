@@ -31,6 +31,7 @@ import { useRegisteredCommands } from "../ui/command-registry";
 import { resetBackCloseForTests } from "../ui/back-close";
 import {
   BugReportHost,
+  KEY_SEND_STORE,
   forgetDraftForTests,
   privateScreen,
 } from "./bug-report-sheet";
@@ -78,6 +79,7 @@ beforeEach(async () => {
   captureScreen.mockReset();
   clearRecentErrors();
   forgetDraftForTests();
+  window.localStorage.removeItem(KEY_SEND_STORE);
   if (!URL.createObjectURL) {
     Object.assign(URL, {
       createObjectURL: () => "blob:preview",
@@ -630,4 +632,244 @@ it("takes no picture of screens that can show calls or messages", async () => {
   expect(document.querySelector("dialog")?.textContent).toContain(
     "can show call details or messages",
   );
+});
+
+// Owner, 31 Oct 2026: "ctrl + enter and enter to submit ... with only one time
+// asking confirmation ... once a tick box is ticked that never ask this again".
+function answering() {
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(
+    async () =>
+      new Response(JSON.stringify({ bug_id: "b-keys" }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  return fetcher;
+}
+
+/** Enter in the words; true when the keyboard keeps it (a new line). */
+async function pressEnter(keys: KeyboardEventInit = {}): Promise<boolean> {
+  let kept = true;
+  await act(async () => {
+    kept = document.querySelector("textarea")!.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+        ...keys,
+      }),
+    );
+  });
+  await pause(20);
+  return kept;
+}
+
+function asked(): boolean {
+  return (
+    document
+      .querySelector("dialog footer")
+      ?.textContent?.includes("Send this report?") ?? false
+  );
+}
+
+function tickBox(): HTMLInputElement {
+  return document.querySelector<HTMLInputElement>(
+    'dialog footer input[type="checkbox"]',
+  )!;
+}
+
+function sentWords(fetcher: ReturnType<typeof answering>, call: number) {
+  return JSON.parse(String(fetcher.mock.calls[call][1]?.body)).words;
+}
+
+async function sendAsked() {
+  await act(async () => button("Send").click());
+  await pause(20);
+}
+
+async function doneAndOpenedAgain() {
+  await act(async () => button("Done").click());
+  await pause(600);
+  await opened();
+}
+
+it("Enter asks once before sending, and asks again next time without the tick", async () => {
+  captureScreen.mockResolvedValue(null);
+  const fetcher = answering();
+  await opened();
+  await act(async () => type("Save does nothing"));
+  expect(await pressEnter()).toBe(false);
+  expect(asked()).toBe(true);
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(document.activeElement).toBe(button("Send"));
+  expect(tickBox().closest("label")?.textContent).toBe("Don't ask again");
+  expect(tickBox().checked).toBe(false);
+
+  await act(async () => button("Keep editing").click());
+  expect(asked()).toBe(false);
+  expect(document.activeElement).toBe(document.querySelector("textarea"));
+  expect(fetcher).not.toHaveBeenCalled();
+
+  await pressEnter();
+  expect(asked()).toBe(true);
+  await sendAsked();
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(sentWords(fetcher, 0)).toBe("Save does nothing");
+  expect(document.querySelector("dialog")?.textContent).toContain(
+    "Sent. We'll tell you when it's fixed.",
+  );
+  expect(window.localStorage.getItem(KEY_SEND_STORE)).toBeNull();
+
+  // Not ticked: the next keyboard send asks again.
+  await doneAndOpenedAgain();
+  await act(async () => type("Still broken"));
+  await pressEnter({ ctrlKey: true });
+  expect(asked()).toBe(true);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+it("after Don't ask again, Enter and Ctrl or Cmd+Enter send at once, also after the app mounts again", async () => {
+  captureScreen.mockResolvedValue(null);
+  const fetcher = answering();
+  await opened();
+  await act(async () => type("First report"));
+  await pressEnter({ ctrlKey: true });
+  expect(asked()).toBe(true);
+  await act(async () => tickBox().click());
+  expect(tickBox().checked).toBe(true);
+  await sendAsked();
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(window.localStorage.getItem(KEY_SEND_STORE)).not.toBeNull();
+
+  await act(async () => button("Done").click());
+  await pause(600);
+  await remounted();
+  await opened();
+  await act(async () => type("Second report"));
+  expect(await pressEnter()).toBe(false);
+  expect(asked()).toBe(false);
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(sentWords(fetcher, 1)).toBe("Second report");
+
+  await doneAndOpenedAgain();
+  await act(async () => type("Third report"));
+  await pressEnter({ metaKey: true });
+  expect(asked()).toBe(false);
+  expect(fetcher).toHaveBeenCalledTimes(3);
+  expect(sentWords(fetcher, 2)).toBe("Third report");
+});
+
+it("Keep editing with the tick still asks next time", async () => {
+  captureScreen.mockResolvedValue(null);
+  const fetcher = answering();
+  await opened();
+  await act(async () => type("Filter resets"));
+  await pressEnter();
+  await act(async () => tickBox().click());
+  await act(async () => button("Keep editing").click());
+  expect(window.localStorage.getItem(KEY_SEND_STORE)).toBeNull();
+  await pressEnter();
+  expect(asked()).toBe(true);
+  expect(tickBox().checked).toBe(false);
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("Shift+Enter is a new line, never a send", async () => {
+  captureScreen.mockResolvedValue(null);
+  const fetcher = answering();
+  await opened();
+  await act(async () => type("Steps:"));
+  expect(await pressEnter({ shiftKey: true })).toBe(true);
+  expect(asked()).toBe(false);
+  expect(fetcher).not.toHaveBeenCalled();
+  // The keyboard adds the line; Enter then sends the words as written.
+  await act(async () => type("Steps:\n1. Open Leads"));
+  await pressEnter();
+  await sendAsked();
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(sentWords(fetcher, 0)).toBe("Steps:\n1. Open Leads");
+});
+
+it("Enter that picks a word while typing Hindi or Marathi does not send", async () => {
+  captureScreen.mockResolvedValue(null);
+  const fetcher = answering();
+  await opened();
+  await act(async () => type("सेव नहीं हुआ"));
+  expect(await pressEnter({ isComposing: true })).toBe(true);
+  expect(await pressEnter({ ctrlKey: true, isComposing: true })).toBe(true);
+  // Safari ends the word first, then sends Enter as key 229.
+  expect(await pressEnter({ keyCode: 229 })).toBe(true);
+  expect(asked()).toBe(false);
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("never sends an empty report from the keyboard", async () => {
+  captureScreen.mockResolvedValue(null);
+  const fetcher = answering();
+  await opened();
+  await pressEnter();
+  await pressEnter({ ctrlKey: true });
+  await act(async () => type("   \n "));
+  await pressEnter();
+  await pressEnter({ ctrlKey: true });
+  expect(asked()).toBe(false);
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(button("Send report").disabled).toBe(true);
+});
+
+it("on a touch screen Enter stays a new line, and Ctrl+Enter still sends", async () => {
+  captureScreen.mockResolvedValue(null);
+  const fetcher = answering();
+  await opened();
+  const real = window.matchMedia.bind(window);
+  vi.stubGlobal("matchMedia", (query: string) =>
+    query === "(pointer: fine)"
+      ? {
+          matches: false,
+          media: query,
+          onchange: null,
+          addEventListener() {},
+          removeEventListener() {},
+          addListener() {},
+          removeListener() {},
+          dispatchEvent: () => false,
+        }
+      : real(query),
+  );
+  await act(async () => type("Calls tab is empty"));
+  expect(await pressEnter()).toBe(true);
+  expect(asked()).toBe(false);
+  expect(await pressEnter({ ctrlKey: true })).toBe(false);
+  expect(asked()).toBe(true);
+  await sendAsked();
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+it("asks every time when this device can keep nothing", async () => {
+  captureScreen.mockResolvedValue(null);
+  const fetcher = answering();
+  await opened();
+  const blocked = () => {
+    throw new DOMException("The operation is insecure.", "SecurityError");
+  };
+  vi.stubGlobal("localStorage", {
+    getItem: blocked,
+    setItem: blocked,
+    removeItem: blocked,
+    clear: blocked,
+    key: blocked,
+    length: 0,
+  });
+  await act(async () => type("Report one"));
+  await pressEnter();
+  await act(async () => tickBox().click());
+  await sendAsked();
+  expect(fetcher).toHaveBeenCalledTimes(1);
+
+  await doneAndOpenedAgain();
+  await act(async () => type("Report two"));
+  await pressEnter();
+  expect(asked()).toBe(true);
+  expect(fetcher).toHaveBeenCalledTimes(1);
 });

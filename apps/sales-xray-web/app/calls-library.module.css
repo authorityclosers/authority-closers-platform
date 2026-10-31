@@ -505,6 +505,7 @@
   color: var(--lx-on-teal);
 }
 
+/* An icon, then the shared picker, which brings its own box. */
 .repFilter,
 .sort {
   position: relative;
@@ -512,37 +513,12 @@
   flex: none;
   align-items: center;
   gap: 6px;
-  min-height: var(--lx-control-compact-h, 32px);
-  padding: 0 8px 0 10px;
-  border: 1px solid transparent;
-  border-radius: var(--lx-radius-sm);
-  background: var(--sx-fill);
   color: var(--lx-muted);
 }
 
-.repFilter:focus-within,
-.sort:focus-within {
-  border-color: var(--lx-teal);
-}
-
-.repFilter select,
-.sort select {
-  max-width: 180px;
-  min-width: 0;
-  padding: 0 2px 0 0;
-  border: 0;
-  background: none;
-  color: var(--lx-ink-2);
-  cursor: pointer;
-  font: inherit;
-  font-weight: 600;
-  outline: none;
-}
-
-.repFilter select option,
-.sort select option {
-  background: var(--lx-surface);
-  color: var(--lx-ink);
+.repPicker,
+.sortPicker {
+  max-width: 220px;
 }
 
 .selectToggle {
@@ -1323,10 +1299,8 @@
     min-width: 0;
   }
 
-  /* 16px stops iPhone zooming into the field or a list. */
-  .search input,
-  .repFilter select,
-  .sort select {
+  /* 16px stops iPhone zooming into the field. */
+  .search input {
     font-size: 16px;
   }
 
@@ -1334,19 +1308,33 @@
     display: none;
   }
 
-  /* Sort is one icon on a phone; the native list opens on tap. */
+  /*
+   * Sort is one icon on a phone; the picker's button lies over it unseen, so
+   * a tap opens the list.
+   */
   .sort {
     grid-area: sort;
     justify-content: center;
     width: 44px;
     padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--lx-radius-sm);
+    background: var(--sx-fill);
   }
 
-  .sort select {
+  .sort:focus-within {
+    border-color: var(--lx-teal);
+  }
+
+  .sortPicker {
     position: absolute;
     inset: 0;
-    width: 100%;
     max-width: none;
+  }
+
+  .sortPicker > button {
+    min-height: 0;
+    height: 100%;
     opacity: 0;
   }
 
@@ -1354,8 +1342,8 @@
     grid-area: rep;
   }
 
-  .repFilter select {
-    max-width: 128px;
+  .repPicker {
+    max-width: 168px;
   }
 
   .filters {
@@ -1524,8 +1512,7 @@
   }
 
   /* The whole box takes the tap, not just the text line. */
-  .search input,
-  .repFilter select {
+  .search input {
     align-self: stretch;
   }
 

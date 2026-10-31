@@ -425,6 +425,18 @@ export function ReportHeader({
           role="group"
           aria-label="Report actions"
         >
+          {lead ? (
+            // The lead's page, with what the call and its form told us
+            // (owner, bug report 128).
+            <Link
+              className={styles.reportAction}
+              href={leadLink(lead.leadId)}
+              data-report-lead-action=""
+            >
+              <UserRound size={16} aria-hidden="true" />
+              Prospect’s Information
+            </Link>
+          ) : null}
           {!claimed && (
             <Link className={styles.reportAction} href="/login">
               Sign in to save

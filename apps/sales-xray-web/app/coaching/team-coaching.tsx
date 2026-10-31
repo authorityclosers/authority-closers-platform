@@ -14,6 +14,7 @@ import {
   Row,
   Tiles,
 } from "../ui/kit";
+import { Picker } from "../ui/picker";
 import { TEAM } from "./coaching-copy";
 import { callDate } from "./coaching-format";
 import type { TeamCoaching, TeamRep } from "./team-contract";
@@ -180,42 +181,44 @@ function RepList({
         (areas.length === 1 && reps.some((rep) => !rep.skill_id)) ||
         hasMissingFocus ||
         area !== "all" ? (
-          <span className={`${kitStyles.field} ${styles.repArea}`}>
-            <select
-              aria-label="Coaching area"
-              value={area}
-              onChange={(event) => {
-                setArea(event.target.value);
-                setAll(false);
-              }}
-            >
-              <option value="all">{TEAM.allAreas}</option>
-              {areas.map((skill) => (
-                <option key={skill} value={skill}>
-                  {AREA[skill] ?? "Other"}
-                </option>
-              ))}
-              {hasMissingFocus ? (
-                <option value={NO_FOCUS}>{TEAM.noFocusShown}</option>
-              ) : null}
-            </select>
-          </span>
+          <Picker
+            title="Coaching area"
+            ariaLabel="Coaching area"
+            className={styles.repArea}
+            value={area}
+            options={[
+              { key: "all", label: TEAM.allAreas },
+              ...areas.map((skill) => ({
+                key: skill,
+                label: AREA[skill] ?? "Other",
+              })),
+              ...(hasMissingFocus
+                ? [{ key: NO_FOCUS, label: TEAM.noFocusShown }]
+                : []),
+            ]}
+            onChange={(key) => {
+              if (!key) return;
+              setArea(key);
+              setAll(false);
+            }}
+          />
         ) : null}
         {reps.length > 1 ? (
-          <span className={`${kitStyles.field} ${styles.repOrder}`}>
-            <select
-              aria-label={TEAM.sortReps}
-              aria-controls={listId}
-              value={order}
-              onChange={(event) => {
-                setOrder(event.target.value);
-                setAll(false);
-              }}
-            >
-              <option value="latest">{TEAM.latestFirst}</option>
-              <option value="name">{TEAM.nameOrder}</option>
-            </select>
-          </span>
+          <Picker
+            title={TEAM.sortReps}
+            ariaLabel={TEAM.sortReps}
+            className={styles.repOrder}
+            value={order}
+            options={[
+              { key: "latest", label: TEAM.latestFirst },
+              { key: "name", label: TEAM.nameOrder },
+            ]}
+            onChange={(key) => {
+              if (!key) return;
+              setOrder(key);
+              setAll(false);
+            }}
+          />
         ) : null}
         <span className={styles.note} role="status">
           {TEAM.repCount(shown.length)}

@@ -1,0 +1,137 @@
+/* Bulk upload's choices (owner + Dipak, 30 Oct 2026): where, who, and the starting stage.
+   Tokens only. */
+
+.choices {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.choice {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.label {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.help,
+.problem {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.problem {
+  color: var(--sx-bad);
+  font-weight: 600;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chip::after {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+}
+
+.chip:focus-visible,
+.count:focus-visible,
+.personName input:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 2px;
+}
+
+.people {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  list-style: none;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 4px 12px;
+  min-width: 0;
+}
+
+.person + .person {
+  border-top: 1px solid var(--sx-line);
+}
+
+.personName {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.personName span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.personName input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  accent-color: var(--sx-accent);
+}
+
+.count {
+  box-sizing: border-box;
+  flex: none;
+  width: 84px;
+  min-height: 40px;
+  padding: 6px 10px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: 16px;
+  text-align: right;
+}
+
+.count:disabled {
+  opacity: 0.5;
+}

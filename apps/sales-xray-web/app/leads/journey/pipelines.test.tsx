@@ -124,14 +124,16 @@ it("makes a pipeline from a kind of business and the sources ticked", async () =
     )!.set!.call(name, "Partner outreach");
     name.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  const kind = dialog.querySelector("select")!;
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(
-      HTMLSelectElement.prototype,
-      "value",
-    )!.set!.call(kind, "b2b_services");
-    kind.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  const kind = dialog.querySelector<HTMLButtonElement>(
+    'button[aria-haspopup="listbox"]',
+  )!;
+  await act(async () => kind.click());
+  await act(async () =>
+    dialog
+      .querySelector<HTMLElement>('[role="option"][data-key="b2b_services"]')!
+      .click(),
+  );
+  expect(kind.getAttribute("data-value")).toBe("b2b_services");
   const boxes = [
     ...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
   ];

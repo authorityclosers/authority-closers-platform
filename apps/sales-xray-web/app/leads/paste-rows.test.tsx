@@ -112,6 +112,7 @@ it("reads rows pasted into quick add as it opens, and adds them all", async () =
     "me",
     expect.any(String),
     null,
+    { side: "cold" },
   );
   expect(dialog.textContent).toContain("New leads");
 });

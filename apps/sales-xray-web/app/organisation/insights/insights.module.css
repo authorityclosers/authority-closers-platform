@@ -144,21 +144,6 @@
 .select {
   min-width: 0;
   max-width: 200px;
-  height: var(--sx-control-h);
-  box-sizing: border-box;
-  padding: 0 28px 0 10px;
-  border: 1px solid var(--sx-line-strong);
-  border-radius: var(--sx-radius-sm);
-  background-color: var(--sx-surface);
-  color: var(--sx-ink);
-  font: inherit;
-  font-size: var(--sx-text-sm);
-}
-
-.select:focus-visible {
-  border-color: var(--sx-accent);
-  box-shadow: 0 0 0 3px var(--sx-accent-soft);
-  outline: none;
 }
 
 .preparing {
@@ -1049,10 +1034,9 @@ a.callTitle:hover {
   .filterDetails {
     width: 100%;
   }
-  .filterFields > select {
+  .filterFields > .select {
     flex: 1;
     min-width: 130px;
-    min-height: 44px;
   }
 }
 

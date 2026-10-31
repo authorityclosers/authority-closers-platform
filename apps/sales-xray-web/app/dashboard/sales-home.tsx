@@ -13,53 +13,41 @@
  * - One primary action: Call the next lead (you), or review the late
  *   follow-ups (the team).
  * - The second figures sideways in a slider (the team's outcomes).
- * - Recent calls, with Activity beside them; then My work.
+ * - The team's recent calls, with Activity beside them; then My work.
+ * - A seller's Home (Leads redesign, section 6; Dipak and the owner, 30 Oct
+ *   2026): today's work counting down and the pending work first; then what
+ *   was done (Analyse yourself, then recent calls with Activity beside them,
+ *   three each); the longest breaks last.
  *
  * Only real numbers: nothing here is estimated or invented.
  */
 
-import {
-  ArrowRight,
-  ChevronRight,
-  FileText,
-  PhoneCall,
-  UsersRound,
-} from "lucide-react";
+import { FileText, Gauge, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import type { LibrarySubmission } from "../acquisition-client";
-import { useWeekActivity } from "../calls/call-rows";
-import { displayName } from "../display-name";
 import { can } from "../organisation/roles";
 import { FirstRun } from "./first-run";
-import { HomeActivity, HomeRecentCalls, SetupStart } from "./home-v2";
-import {
-  FourTiles,
-  MyWork,
-  RecentToggle,
-  TodayBar,
-  mineFour,
-  teamFour,
-} from "./home-today";
-import { TeamActivity } from "./team-activity";
+import { MyTasks, SellerBlocks } from "./seller-home";
+import type { Side } from "../ui/side-selector";
+import { SetupStart } from "./home-v2";
+import { TodayBar } from "./home-today";
+import { TeamFloor } from "./team-floor";
 import { TeamControls } from "./team-controls";
-import { handOverLead } from "../leads/lead-handoff";
 import {
   readDesk,
   readPerformance,
-  readTasks,
   readTeam,
   type Desk,
   type Performance,
   type Period,
 } from "../leads/leads-client";
 import { ActionList, ActionRow } from "../ui/kit";
+import { ModeSwitch } from "./mode-switch";
 import { OutcomeTiles, TILE_SETS } from "./outcome-tiles";
-import { ShareOut } from "../leads/assign-sheet";
 import { TakingSwitch } from "../leads/taking-switch";
 import type { HomeDesk } from "./my-day-client";
-import { NextUp, TeamPoolCard, YourTargets, useMyDay } from "./my-day";
 import { TodaySkeleton } from "./sales-home-skeleton";
 import styles from "./sales-home.module.css";
 
@@ -113,29 +101,6 @@ function useDesk() {
   return state;
 }
 
-/** Your tasks due today and those already past their time; null until read,
- *  "off" when they didn't load (the tile says so instead of waiting forever). */
-function useTasksToday() {
-  const [tasks, setTasks] = useState<
-    { today: number; late: number } | "off" | null
-  >(null);
-  useEffect(() => {
-    const controller = new AbortController();
-    readTasks("today", controller.signal).then(
-      (list) =>
-        setTasks({
-          today: list.counts.today ?? 0,
-          late: list.counts.overdue ?? 0,
-        }),
-      () => {
-        if (!controller.signal.aborted) setTasks("off");
-      },
-    );
-    return () => controller.abort();
-  }, []);
-  return tasks;
-}
-
 /** All the organisation's leads, for an owner or admin; null until read, and
  *  still null if the read fails (Home then stays as it is). */
 function useTeamLeadCount(enabled: boolean): number | null {
@@ -184,116 +149,74 @@ function usePerformance() {
   };
 }
 
-/** My day or Team: one tap, on Today's line. */
-function ViewChip({ to, onPick }: { to: HomeView; onPick: () => void }) {
-  return (
-    <button type="button" className={styles.viewShortcut} onClick={onPick}>
-      {to === "mine" ? "My day" : "Team"}
-      <ChevronRight size={16} aria-hidden="true" />
-    </button>
-  );
-}
-
+/** The team's Home: the floor, on the side the address names; the
+ *  owner's own tasks beside it when they work leads. */
 function TeamHome({
-  desk,
-  saved,
-  allLeads,
-  works,
   manages,
-  onMine,
+  mine,
 }: {
-  desk: HomeDesk | null;
-  /** The team's latest saved calls, for Recent calls' Reports. */
-  saved: readonly LibrarySubmission[] | null;
-  allLeads: number | null;
-  works: boolean;
   manages: boolean;
-  onMine: () => void;
+  mine: HomeDesk | null;
 }) {
   const { period, setPeriod, shown, failed } = usePerformance();
-  const four = teamFour(shown, allLeads, desk?.counts.unassigned ?? null);
-  const late = shown?.sellers.reduce((sum, seller) => sum + seller.late, 0);
+  const [side, setSide] = useHomeSide();
   const sellers = shown?.sellers.length ?? 0;
   return (
-    <>
-      <TodayBar>
-        {works ? <ViewChip to="mine" onPick={onMine} /> : null}
-        {manages ? <TeamControls /> : null}
-      </TodayBar>
-      <FourTiles label="The team's day" tiles={four} />
-      {/* The screen's one primary action, while any follow-up is late. */}
-      {manages && late ? (
-        <Link className={styles.primary} href="/leads?tab=all&due=late">
-          {`Review ${late} late ${late === 1 ? "follow-up" : "follow-ups"}`}
-          <ArrowRight size={18} aria-hidden="true" />
-        </Link>
-      ) : null}
-      <section className={styles.block} aria-labelledby="sales-title">
-        <div className={styles.head}>
-          <h2 id="sales-title">How sales are going</h2>
-        </div>
+    <TeamFloor
+      side={side}
+      onSide={setSide}
+      controls={manages ? <TeamControls /> : null}
+      mine={mine ? <MyTasks desk={mine} side={side} /> : null}
+      outcomes={
         <OutcomeTiles
           period={period}
           onPeriod={setPeriod}
           performance={shown}
           failed={failed}
-          tiles={TILE_SETS.slider}
-          layout="slider"
+          tiles={TILE_SETS.outcomes}
+          layout="grid"
         />
-      </section>
-      <RecentToggle
-        calls={<TeamActivity saved={saved} bare only="calls" />}
-        activity={<TeamActivity saved={saved} bare />}
-        seeAll={{ calls: "/analysis/calls" }}
-      />
-      {works ? <MyWork desk={desk} /> : null}
-      <ActionList label="More">
-        <ActionRow
-          icon={<UsersRound size={20} />}
-          tone="neutral"
-          title="Your team"
-          note={
-            sellers
-              ? `${sellers} ${sellers === 1 ? "seller" : "sellers"}, how each one does`
-              : "Sellers and how each one does"
-          }
-          href="/organisation?tab=team"
-        />
-        <ActionRow
-          icon={<FileText size={20} />}
-          tone="neutral"
-          title="Call reports"
-          note="Every analysed call"
-          href="/reports"
-        />
-      </ActionList>
-    </>
+      }
+      more={
+        <ActionList label="More">
+          <ActionRow
+            icon={<Gauge size={20} />}
+            tone="neutral"
+            title="Performance"
+            note="Each seller's calls, talk time and breaks"
+            href="/performance"
+          />
+          <ActionRow
+            icon={<UsersRound size={20} />}
+            tone="neutral"
+            title="Your team"
+            note={
+              sellers
+                ? `${sellers} ${sellers === 1 ? "seller" : "sellers"}`
+                : "Sellers and how each one does"
+            }
+            href="/organisation?tab=team"
+          />
+          <ActionRow
+            icon={<FileText size={20} />}
+            tone="neutral"
+            title="Call reports"
+            note="Every analysed call"
+            href="/reports"
+          />
+        </ActionList>
+      }
+    />
   );
 }
 
-function SellerHome({
-  state,
-  recent,
-  onTeam,
-}: {
-  state: ReturnType<typeof useDesk>;
-  recent: readonly LibrarySubmission[] | null;
-  /** Owners and admins: back to the team's Home. */
-  onTeam?: () => void;
-}) {
-  // Read beside the desk, so both land together (Lead OS's team engine).
-  const myDay = useMyDay();
-  const tasks = useTasksToday();
-  const [week] = useWeekActivity();
-  const [sharing, setSharing] = useState(false);
-  if (state.status === "loading" || myDay.status === "loading")
-    return <TodaySkeleton />;
+function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
+  const [side, setSide] = useHomeSide();
+  if (state.status === "loading") return <TodaySkeleton />;
   if (state.status === "error")
     return (
       <section className={styles.block}>
-        <TodayBar>
-          {onTeam ? <ViewChip to="team" onPick={onTeam} /> : null}
-        </TodayBar>
+        <TodayBar />
         <div className={styles.quiet} role="status">
           <span>Your leads didn&apos;t load. Come back in a moment.</span>
           <Link className={styles.more} href="/leads">
@@ -303,73 +226,49 @@ function SellerHome({
       </section>
     );
   const desk: HomeDesk = state.desk;
-  // My day's ranked work with why; the desk's queue if My day didn't load.
-  const ranked = myDay.status === "ready" ? myDay.value.do_now : null;
-  const first = ranked
-    ? ranked[0] && { id: ranked[0].lead_id, name: ranked[0].lead_name }
-    : desk.queue[0] && { id: desk.queue[0].lead_id, name: desk.queue[0].name };
-  const mineNone = !desk.queue.length && !desk.counts.open;
-  const nextUp =
-    myDay.status === "ready" ? myDay.value.fallback?.next_up : null;
   return (
-    <>
-      <TodayBar>
-        {/* Taking new leads, as a small pill (Dipak, 28 Oct 2026). */}
-        <TakingSwitch
-          key={`taking-${desk.me.taking_leads !== false}`}
-          initial={desk.me.taking_leads !== false}
-          place="chip"
-          pausedUntil={desk.me.paused_until ?? null}
-        />
-        {onTeam ? <ViewChip to="team" onPick={onTeam} /> : null}
-      </TodayBar>
-      <FourTiles label="Your day" tiles={mineFour(desk, tasks)} />
-      {first ? (
-        <Link
-          className={styles.primary}
-          href="/leads"
-          onClick={() => handOverLead(first.id, true)}
-        >
-          <PhoneCall size={18} aria-hidden="true" />
-          {`Call ${displayName(first.name).split(" ")[0]}`}
-        </Link>
-      ) : mineNone && desk.team_pool?.open ? (
+    <SellerBlocks
+      desk={desk}
+      side={side}
+      onSide={setSide}
+      headerExtras={
         <>
-          <TeamPoolCard desk={desk} onShare={() => setSharing(true)} />
-          {desk.me.can_manage ? (
-            <ShareOut
-              open={sharing}
-              target={{
-                kind: "unassigned",
-                count: desk.team_pool?.unassigned ?? 0,
-              }}
-              onClose={() => setSharing(false)}
-              onDone={() => setSharing(false)}
-            />
-          ) : null}
+          {/* Taking new leads, as a small pill (Dipak, 28 Oct 2026). */}
+          <TakingSwitch
+            key={`taking-${desk.me.taking_leads !== false}`}
+            initial={desk.me.taking_leads !== false}
+            place="chip"
+            pausedUntil={desk.me.paused_until ?? null}
+          />
         </>
-      ) : (
-        <>
-          <p className={styles.caughtUp} role="status">
-            <strong>All caught up</strong>
-            <span>
-              {nextUp?.length
-                ? "Nothing is due now. Next up:"
-                : "New leads land on Leads the moment they come in."}
-            </span>
-          </p>
-          {nextUp?.length ? <NextUp items={nextUp} /> : null}
-        </>
-      )}
-      <YourTargets myDay={myDay} />
-      <RecentToggle
-        calls={<HomeRecentCalls week={week} saved={recent} bare />}
-        activity={<HomeActivity week={week} bare />}
-        seeAll={{ calls: "/analysis/calls", activity: "/leads?tab=work" }}
-      />
-      <MyWork desk={desk} />
-    </>
+      }
+    />
   );
+}
+
+const readSide = (): Side =>
+  new URLSearchParams(window.location.search).get("side") === "cold"
+    ? "cold"
+    : "inbound";
+
+/** Your day's side, Inbound or Cold (Dipak's handoff, items 05-06), kept in
+ *  the address like the view, so Back returns to the same mode. Home opens on
+ *  Inbound, as Leads does. */
+function useHomeSide(): [Side, (next: Side) => void] {
+  const side = useSyncExternalStore<Side>(onView, readSide, () => "inbound");
+  const choose = (next: Side) => {
+    const params = new URLSearchParams(window.location.search);
+    if (next === "cold") params.set("side", "cold");
+    else params.delete("side");
+    const query = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}`,
+    );
+    window.dispatchEvent(new Event(VIEW_EVENT));
+  };
+  return [side, choose];
 }
 
 type HomeView = "team" | "mine";
@@ -428,7 +327,6 @@ function brandNew(desk: HomeDesk): boolean {
 export function SalesHome({
   manager,
   layout = "v1",
-  recent = null,
 }: {
   manager: boolean;
   /** Kept for callers; Home has one layout now (28 Oct 2026). */
@@ -440,6 +338,27 @@ export function SalesHome({
 }) {
   const desk = useDesk();
   const [view, setView] = useHomeView();
+  const person = desk.status === "ready" ? desk.desk.me.person_id : null;
+  // Remembered per person on this device; the address still says which, so
+  // Back returns to it.
+  useEffect(() => {
+    if (!person || new URLSearchParams(window.location.search).has("view"))
+      return;
+    try {
+      if (window.localStorage.getItem(`sx:home-view:${person}`) === "mine")
+        setView("mine");
+    } catch {
+      // Storage refused (a private window): Team, as before.
+    }
+  }, [person]); // eslint-disable-line react-hooks/exhaustive-deps
+  const chooseView = (next: HomeView) => {
+    setView(next);
+    try {
+      if (person) window.localStorage.setItem(`sx:home-view:${person}`, next);
+    } catch {
+      // Not remembered this time; the address still has it.
+    }
+  };
   const teamLeads = useTeamLeadCount(manager);
   // A Viewer sees the team and works no leads (Roles B, 27 Oct 2026): the Team
   // view only, with no My day and no first steps; editing stays with managers.
@@ -462,24 +381,27 @@ export function SalesHome({
         )}
       </div>
     );
+  // Team | Me (owner, 31 Oct 2026): for those who manage sellers and work
+  // leads, one toggle; the whole screen slides in from its side.
+  const shown: HomeView =
+    manager && (view === "team" || !works) ? "team" : "mine";
   return (
-    <div className={styles.home}>
-      {manager && (view === "team" || !works) ? (
-        <TeamHome
-          desk={desk.status === "ready" ? desk.desk : null}
-          saved={recent}
-          allLeads={teamLeads}
-          works={works}
-          manages={manages}
-          onMine={() => setView("mine")}
-        />
-      ) : (
-        <SellerHome
-          state={desk}
-          recent={recent}
-          onTeam={manager ? () => setView("team") : undefined}
-        />
-      )}
+    <div className={styles.home} data-home="">
+      {/* The month's revenue bar goes here, above both modes (capture-setup
+          session, 31 Oct 2026). */}
+      {manager && works ? (
+        <ModeSwitch value={view} onChange={chooseView} />
+      ) : null}
+      <div key={shown} className={styles.mode} data-mode={shown}>
+        {shown === "team" ? (
+          <TeamHome
+            manages={manages}
+            mine={works && desk.status === "ready" ? desk.desk : null}
+          />
+        ) : (
+          <SellerHome state={desk} />
+        )}
+      </div>
     </div>
   );
 }

@@ -221,3 +221,63 @@ it("knows what a move still lacks", () => {
     missing(lost, { ...BLANK, reason: "other", reasonNote: "Moved away" }),
   ).toEqual([]);
 });
+
+it("keeps the stages in view, a check on the one picked and its questions under it", () => {
+  act(() =>
+    root.render(
+      <StageSheet
+        open
+        lead={LEAD}
+        moves={FROM_NEW}
+        onClose={() => {}}
+        onMoved={() => {}}
+      />,
+    ),
+  );
+  const row = (label: string) =>
+    Array.from(
+      document.querySelectorAll<HTMLButtonElement>("section li button"),
+    ).find((button) => button.querySelector("span")?.textContent === label)!;
+  // Every stage has its colour dot.
+  expect(
+    document.querySelectorAll("section li button svg circle"),
+  ).toHaveLength(6);
+  act(() => row("Closed / Lost").click());
+  expect(row("Closed / Lost").getAttribute("aria-pressed")).toBe("true");
+  expect(row("Not Connected").getAttribute("aria-pressed")).toBe("false");
+  expect(document.body.textContent).toContain("Why was it lost?");
+  // Picked again, it folds away.
+  act(() => row("Closed / Lost").click());
+  expect(document.body.textContent).not.toContain("Why was it lost?");
+});
+
+it("asks why an open lead is still open, and never requires it", () => {
+  const open = option("open_leads", "Open Leads", "active", [], {
+    asks: ["reason", "note"],
+    reasons: [
+      { key: "discussion_incomplete", label: "Discussion Incomplete" },
+      { key: "call_later", label: "Call Later" },
+    ],
+  });
+  act(() =>
+    root.render(
+      <StageSheet
+        open
+        lead={LEAD}
+        moves={[open]}
+        initial="open_leads"
+        onClose={() => {}}
+        onMoved={() => {}}
+      />,
+    ),
+  );
+  const text = document.body.textContent ?? "";
+  expect(text).toContain("Why is it still open?");
+  expect(text).not.toContain("Why was it lost?");
+  expect(text).toContain("Call Later");
+  const save = document.querySelector<HTMLButtonElement>(
+    'button[data-group="active"]:not([aria-pressed])',
+  )!;
+  expect(save.disabled).toBe(false);
+  expect(missing(open, BLANK)).toEqual([]);
+});

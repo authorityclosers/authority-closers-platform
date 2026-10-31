@@ -362,11 +362,13 @@ async def pipeline_report(
     owner: UUID | None = None,
     source: str | None = None,
     reasons: Mapping[str, str] | None = None,
+    test_data: bool = False,
 ) -> Report:
-    """One organisation's pipeline numbers (test leads left out)."""
+    """One organisation's pipeline numbers. Test leads are left out, unless ``test_data``:
+    a sandbox organisation, whose leads are all test data, counts them."""
     where: list[Any] = [
         Lead.tenant_id == tenant_id,
-        Lead.test_data.is_(False),
+        *(() if test_data else (Lead.test_data.is_(False),)),
         lead_in(journey.pipeline),
     ]
     if owner is not None:

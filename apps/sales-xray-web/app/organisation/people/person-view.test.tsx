@@ -311,7 +311,7 @@ it("shows members only their own calls and offers no actions on others", async (
   expect(host.textContent).toContain(
     "You see your own calls and reports here, not a teammate's.",
   );
-  expect(host.querySelector("select")).toBeNull();
+  expect(host.querySelector('button[aria-haspopup="listbox"]')).toBeNull();
   expect(host.textContent).not.toContain("Remove");
   expect(host.querySelector('a[href^="/coaching"]')).toBeNull();
   expect(calls.some((call) => call.url.startsWith("/v1/me/coaching"))).toBe(

@@ -5,6 +5,12 @@ history of each report: status, severity, area, team notes and the work-board ca
 report's state now is the newest value of each. ``bug_report_attachments`` holds a voice note
 sent with a report (written with it, never changed). The schema gate allows no database triggers,
 so the ORM refuses updates and deletes of either (as audit events do).
+
+The advanced reporter (migration 0149, owner 31 Oct 2026): ``bug_report_files`` holds the
+files that follow a report (the picture before its marks, each commented part's small
+picture, the person's own files), each written once; ``bug_reporter_access`` is the
+append-only history of who may use the advanced reporter (asked, let in, turned down, taken
+away), the newest entry per person standing.
 """
 
 from datetime import datetime
@@ -19,6 +25,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    SmallInteger,
     String,
     UniqueConstraint,
     Uuid,
@@ -45,6 +52,19 @@ SEVERITIES = ("blocker", "high", "medium", "low")
 EVENT_KINDS = ("status", "severity", "area", "note", "board")
 ACTORS = ("reporter", "staff", "board")
 SCREENSHOT_TYPES = ("image/png", "image/jpeg", "image/webp")
+# The advanced reporter (0149): what a file that follows a report is, and its types.
+FILE_ROLES = ("original", "element", "attachment")
+FILE_TYPES = (
+    "image/webp",
+    "video/webm",
+    "video/mp4",
+    "text/plain",
+    "text/csv",
+    "application/json",
+    "application/pdf",
+)
+MAX_FILES = 30
+ACCESS_KINDS = ("requested", "granted", "denied", "revoked")
 # Issues (v0.93, owner 25 Oct 2026): reports that look like one problem.
 ISSUE_STATUSES = ("new", "fixing", "fixed_next", "solved")
 ISSUE_EVENT_KINDS = ("status", "note", "reopened")
@@ -189,6 +209,67 @@ class BugReportAttachment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class BugReportFile(Base):
+    """A file that follows a report from the advanced reporter, written once."""
+
+    __tablename__ = "bug_report_files"
+    __table_args__ = (
+        ForeignKeyConstraint(["bug_id"], ["bug_reports.id"], name="fk_bug_file_report"),
+        UniqueConstraint("bug_id", "position", name="uq_bug_file_position"),
+        CheckConstraint("position BETWEEN 1 AND 30", name="bug_file_position"),
+        CheckConstraint("role IN ('original', 'element', 'attachment')", name="bug_file_role"),
+        CheckConstraint(
+            "(role = 'element') = (part IS NOT NULL) AND (part IS NULL OR part BETWEEN 1 AND 50)",
+            name="bug_file_part",
+        ),
+        CheckConstraint(
+            "content_type IN ('image/webp', 'video/webm', 'video/mp4', 'text/plain', 'text/csv',"
+            " 'application/json', 'application/pdf')",
+            name="bug_file_type",
+        ),
+        CheckConstraint(
+            "bytes > 0 AND length(sha256) = 64 AND length(trim(name)) > 0", name="bug_file_size"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    bug_id: Mapped[UUID] = mapped_column(Uuid)
+    position: Mapped[int] = mapped_column(SmallInteger)
+    role: Mapped[str] = mapped_column(String(16))
+    part: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    name: Mapped[str] = mapped_column(String(120))
+    content_type: Mapped[str] = mapped_column(String(32))
+    bytes: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64))
+    storage_key: Mapped[str] = mapped_column(String(256))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class BugReporterAccess(Base):
+    """One step in who may use the advanced reporter; the newest per person stands."""
+
+    __tablename__ = "bug_reporter_access"
+    __table_args__ = (
+        ForeignKeyConstraint(["person_id"], ["persons.id"], name="fk_bug_access_person"),
+        ForeignKeyConstraint(["actor_person_id"], ["persons.id"], name="fk_bug_access_actor"),
+        CheckConstraint(
+            "kind IN ('requested', 'granted', 'denied', 'revoked')", name="bug_access_kind"
+        ),
+        # A person asks for themself; the owner decides for others.
+        CheckConstraint(
+            "(kind = 'requested') = (actor_person_id = person_id)", name="bug_access_actor"
+        ),
+        Index("ix_bug_access_person", "person_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    person_id: Mapped[UUID] = mapped_column(Uuid)
+    kind: Mapped[str] = mapped_column(String(16))
+    actor_person_id: Mapped[UUID] = mapped_column(Uuid)
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class BugIssue(Base):
     """Reports that look like one problem (one fingerprint): written once."""
 
@@ -275,6 +356,8 @@ class BugReportHistoryError(RuntimeError):
 @event.listens_for(BugReport, "before_update")
 @event.listens_for(BugReportEvent, "before_update")
 @event.listens_for(BugReportAttachment, "before_update")
+@event.listens_for(BugReportFile, "before_update")
+@event.listens_for(BugReporterAccess, "before_update")
 @event.listens_for(BugIssue, "before_update")
 @event.listens_for(BugIssueReport, "before_update")
 @event.listens_for(BugIssueEvent, "before_update")
@@ -285,6 +368,8 @@ def _refuse_update(_mapper: object, _connection: object, _target: object) -> Non
 @event.listens_for(BugReport, "before_delete")
 @event.listens_for(BugReportEvent, "before_delete")
 @event.listens_for(BugReportAttachment, "before_delete")
+@event.listens_for(BugReportFile, "before_delete")
+@event.listens_for(BugReporterAccess, "before_delete")
 @event.listens_for(BugIssue, "before_delete")
 @event.listens_for(BugIssueReport, "before_delete")
 @event.listens_for(BugIssueEvent, "before_delete")

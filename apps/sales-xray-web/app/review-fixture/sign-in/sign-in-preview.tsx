@@ -22,6 +22,7 @@ import { useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { AccountAuth } from "../../account-auth";
 import { providerLabel, type SignInProvider } from "../../account-auth-client";
+import { Picker } from "../../ui/picker";
 import { SetupFlow } from "../../welcome/setup-flow";
 import { forgetFreshSignIn, type SetupStep } from "../../welcome/setup-state";
 import styles from "./sign-in-preview.module.css";
@@ -352,19 +353,15 @@ function Walkthrough({ search }: { search: string }) {
           <span className={styles.badge}>Preview · nothing is sent</span>
           <label className={styles.picker}>
             <span className={styles.srOnly}>Screen</span>
-            <select
-              value={screen === "done" ? "" : screen}
-              onChange={(event) => show(event.target.value as Screen)}
-            >
-              {screen === "done" ? (
-                <option value="">End of the preview</option>
-              ) : null}
-              {SCREENS.map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
+            <Picker
+              title="Screen"
+              value={screen === "done" ? null : screen}
+              placeholder={screen === "done" ? "End of the preview" : undefined}
+              options={SCREENS.map(([key, label]) => ({ key, label }))}
+              onChange={(key) => {
+                if (key) show(key as Screen);
+              }}
+            />
           </label>
           <span className={styles.hint}>
             Any email, any 6 digits, any password.

@@ -91,8 +91,11 @@ export function CaptureSetupGate() {
     const manual = asked > 0;
     let stopped = false;
     let started = false;
+    // The time limit starts with the read, not with the page: a seller can spend
+    // minutes on the screens that go first (Redmi, 31 Oct 2026: a fresh install
+    // never saw the setup after the permissions checklist).
     const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
+    let timer: number | undefined;
     const html = document.documentElement;
     // The Terms card, Home's first run and the permissions checklist go first.
     const waiting = () =>
@@ -103,6 +106,7 @@ export function CaptureSetupGate() {
     const start = async () => {
       if (stopped || started || waiting()) return;
       started = true;
+      timer = window.setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
       try {
         const app = inPhoneApp();
         const [setup, status, capture] = await Promise.all([

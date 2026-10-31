@@ -38,10 +38,19 @@ afterEach(async () => {
 
 const openChoices = (label: string) =>
   act(async () => {
-    [...document.querySelectorAll("summary")]
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        'button[aria-haspopup="listbox"]',
+      ),
+    ]
       .find((item) => item.textContent?.startsWith(label))!
       .click();
   });
+
+const option = (label: string) =>
+  [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+    (item) => item.textContent?.trim() === label,
+  )!;
 
 const button = (label: string) =>
   [...document.querySelectorAll("button")].find(
@@ -57,7 +66,7 @@ it("counts only the filters that narrow the list", () => {
   ).toBe(3);
 });
 
-it("applies a name, whose leads and a pipeline together", async () => {
+it("applies whose leads and a pipeline together", async () => {
   const onApply = vi.fn();
   await act(async () =>
     root.render(
@@ -72,30 +81,21 @@ it("applies a name, whose leads and a pipeline together", async () => {
       />,
     ),
   );
-  const input = document.querySelector<HTMLInputElement>(
-    'input[type="search"]',
-  )!;
-  await act(async () => {
-    const set = Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value",
-    )!.set!;
-    set.call(input, "  pune ");
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  // Search is on the Leads page itself (Dipak's handoff, 31 Oct 2026).
+  expect(document.querySelector('input[type="search"]')).toBeNull();
   await openChoices("Whose leads");
-  await act(async () => button("Mine").click());
+  await act(async () => option("Mine").click());
   await openChoices("Pipeline");
-  await act(async () => button("Partner outreach").click());
-  await act(async () => button("Show leads").click());
+  await act(async () => option("Partner outreach").click());
+  await act(async () => button("Show Results").click());
   expect(onApply).toHaveBeenCalledWith({
     who: "mine",
     pipeline: "partner",
-    q: "pune",
+    q: "",
   });
 });
 
-it("a seller sees no whose-leads choice, and Clear all clears", async () => {
+it("a seller sees no whose-leads choice, and Clear Filters clears", async () => {
   const onApply = vi.fn();
   await act(async () =>
     root.render(
@@ -111,7 +111,7 @@ it("a seller sees no whose-leads choice, and Clear all clears", async () => {
     ),
   );
   expect(document.body.textContent).not.toContain("Whose leads");
-  await act(async () => button("Clear all").click());
+  await act(async () => button("Clear Filters").click());
   expect(onApply).toHaveBeenCalledWith({
     who: "mine",
     pipeline: null,
@@ -151,8 +151,9 @@ it("each filter that is on has its own remove", async () => {
   expect(onChange).toHaveBeenCalledWith({ ...on, who: "team" });
 });
 
-// Owner, 24 Oct 2026: "filters and sorting both on mobile as well as PC".
-it("filters by the next follow-up and the last contact, and sorts the whole list", async () => {
+// Owner, 24 Oct 2026: "filters and sorting both on mobile as well as PC"; Dipak's
+// handoff, 31 Oct 2026 (items 50-53): lead source, date and follow-up.
+it("filters by source, date and follow-up, and sorts the whole list", async () => {
   const onApply = vi.fn();
   await act(async () =>
     root.render(
@@ -167,20 +168,34 @@ it("filters by the next follow-up and the last contact, and sorts the whole list
       />,
     ),
   );
-  await openChoices("Next follow-up");
-  await act(async () => button("Due today").click());
-  await openChoices("Last contact");
-  await act(async () => button("Never talked").click());
+  await openChoices("Lead source");
+  await act(async () => option("File upload").click());
+  await openChoices("Date");
+  await act(async () => option("Came in today").click());
+  await openChoices("Follow-up");
+  await act(async () => option("Overdue").click());
   await openChoices("Sort by");
-  await act(async () => button("Name").click());
-  await act(async () => button("Show leads").click());
+  await act(async () => option("Name").click());
+  await act(async () => button("Show Results").click());
   expect(onApply).toHaveBeenCalledWith({
     ...NONE,
-    more: { due: "today", contact: "never", sort: "name", order: null },
+    more: {
+      source: "csv",
+      created: "today",
+      when: "overdue",
+      due: null,
+      sort: "name",
+      order: null,
+    },
   });
   expect(
     filtersOn({ ...NONE, more: { due: "today", sort: "name" } }, "team"),
   ).toBe(1);
+  // In Follow-ups the split is the view's own tabs, not a filter.
+  expect(filtersOn({ ...NONE, more: { when: "today" } }, "team")).toBe(1);
+  expect(
+    filtersOn({ ...NONE, more: { view: "follow_ups", when: "today" } }, "team"),
+  ).toBe(0);
 });
 
 it("the sort and the new filters show as chips that remove themselves", async () => {
@@ -218,7 +233,7 @@ it("the sort and the new filters show as chips that remove themselves", async ()
   });
 });
 
-it("asks for the pipeline first, then whose leads, then the rest", async () => {
+it("asks for the pipeline first, then whose leads, then source, date and follow-up", async () => {
   await act(async () =>
     root.render(
       <FilterSheet
@@ -238,5 +253,36 @@ it("asks for the pipeline first, then whose leads, then the rest", async () => {
   );
   expect(fields[0]).toContain("Pipeline");
   expect(fields[1]).toContain("Whose leads");
-  expect(fields[2]).toContain("Name or number");
+  expect(fields).toHaveLength(6);
+  expect(fields[2]).toContain("Lead source");
+  expect(fields[3]).toContain("Date");
+  expect(fields[4]).toContain("Follow-up");
+  expect(fields[5]).toContain("Sort by");
+});
+
+it("sorts oldest first: the newest-first order, reversed", async () => {
+  const onApply = vi.fn();
+  await act(async () =>
+    root.render(
+      <FilterSheet
+        open
+        onClose={() => undefined}
+        filters={NONE}
+        defaultWho="team"
+        canPickWho
+        pipes={[]}
+        onApply={onApply}
+      />,
+    ),
+  );
+  await openChoices("Sort by");
+  expect(option("Newest first")).toBeTruthy();
+  await act(async () => option("Oldest first").click());
+  await act(async () => button("Show Results").click());
+  expect(onApply).toHaveBeenCalledWith({
+    who: "team",
+    pipeline: null,
+    q: "",
+    more: { sort: "created", order: "asc" },
+  });
 });

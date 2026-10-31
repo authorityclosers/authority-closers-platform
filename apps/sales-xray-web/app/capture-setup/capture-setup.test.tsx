@@ -99,6 +99,8 @@ function fakeServer(view: CaptureSetup, consent: "on" | "ask" = "ask") {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      // Like fetch: a read whose time limit already passed never reaches the server.
+      if (init.signal?.aborted) throw new DOMException("Aborted", "AbortError");
       const url = String(input);
       const method = init.method ?? "GET";
       const body = init.body ? JSON.parse(String(init.body)) : null;
@@ -199,6 +201,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   await act(async () => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
@@ -349,6 +352,28 @@ describe("CaptureSetupFlow", () => {
     );
   });
 
+  it("tells a Xiaomi phone to choose No restrictions on the battery step", async () => {
+    // HyperOS opens its own Battery saver list, set to "Battery saver" (Redmi, 31 Oct 2026).
+    fakePhone({
+      checks: {
+        calls: true,
+        notifications: true,
+        recordings: true,
+        recorder: true,
+        battery: false,
+        autostart: true,
+      },
+    });
+    fakeServer(setup({ consent: "on" }), "on");
+    await flow(setup({ consent: "on" }));
+    await act(async () => button("Continue").click());
+    await settle();
+    expect(title()).toBe("Let Sales X-Ray run in the background");
+    expect(host.textContent).toContain(
+      "On the next screen, choose No restrictions.",
+    );
+  });
+
   it("has no close button while required, and Skip when it isn't", async () => {
     fakeServer(setup());
     await flow(setup(), { inApp: false });
@@ -428,6 +453,23 @@ describe("CaptureSetupGate", () => {
     );
     await settle();
     expect(title()).toBe("What Sales X-Ray captures");
+  });
+
+  it("still opens when the screens before it took longer than the read's time limit", async () => {
+    // Redmi, 31 Oct 2026: the permissions checklist took a minute on a fresh
+    // install, and the setup never opened after it.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    document.documentElement.setAttribute("data-sx-consent", "");
+    await gate(setup());
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+    });
+    await act(async () =>
+      document.documentElement.removeAttribute("data-sx-consent"),
+    );
+    await settle();
+    expect(title()).toBe("What Sales X-Ray captures");
+    vi.useRealTimers();
   });
 
   it("stays shut while a no stands, and never locks anyone out on a failed read", async () => {

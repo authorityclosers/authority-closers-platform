@@ -65,8 +65,15 @@ it("keeps more pipelines in a menu", async () => {
       <PipelinePicker pipelines={four} value="events" onChange={onChange} />,
     ),
   );
-  const select = host.querySelector("select")!;
-  expect(select.value).toBe("events");
-  expect(select.options).toHaveLength(5);
+  const button = host.querySelector<HTMLButtonElement>(
+    'button[aria-haspopup="listbox"]',
+  )!;
+  expect(button.getAttribute("data-value")).toBe("events");
   expect(host.querySelector('[role="group"]')).toBeNull();
+  await act(async () => button.click());
+  expect(host.querySelectorAll('[role="option"]')).toHaveLength(5);
+  await act(async () =>
+    host.querySelector<HTMLElement>('[role="option"][data-key=""]')!.click(),
+  );
+  expect(onChange).toHaveBeenLastCalledWith(null);
 });

@@ -160,16 +160,25 @@ describe("ReportTranscript", () => {
         search.dispatchEvent(new Event("input", { bubbles: true }));
       });
     }
-    const speaker = container.querySelector<HTMLSelectElement>(
-      'select[aria-label="Filter transcript by speaker"]',
+    const speaker = [
+      ...container.querySelectorAll<HTMLButtonElement>(
+        'button[aria-haspopup="listbox"]',
+      ),
+    ].find((button) =>
+      button.textContent?.includes("Filter transcript by speaker"),
     );
-    expect(speaker).not.toBeNull();
+    expect(speaker).not.toBeUndefined();
     if (speaker) {
-      await act(async () => {
-        speaker.value = "speaker:speaker-2";
-        speaker.dispatchEvent(new Event("change", { bubbles: true }));
-      });
+      await act(async () => speaker.click());
+      await act(async () =>
+        container
+          .querySelector<HTMLElement>(
+            '[role="option"][data-key="speaker:speaker-2"]',
+          )!
+          .click(),
+      );
     }
+    expect(speaker?.dataset.value).toBe("speaker:speaker-2");
     expect(container.querySelectorAll("[data-segment-id]")).toHaveLength(1);
     const segmentButton = container.querySelector<HTMLButtonElement>(
       "[data-segment-id=segment-2]",
@@ -309,8 +318,13 @@ it("shows the names and colours set on the call map", async () => {
   ]);
   expect(names[1].style.getPropertyValue("--voice")).not.toBe("");
   expect(container.textContent).toContain("Names come from the call map");
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!
+      .click(),
+  );
   expect(
-    [...container.querySelectorAll("option")].map(
+    [...container.querySelectorAll('[role="option"]')].map(
       (option) => option.textContent,
     ),
   ).toEqual(["All speakers", "Speaker 1", "Nandlal ji"]);

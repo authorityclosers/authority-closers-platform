@@ -318,23 +318,6 @@ button.stageButton:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-.landingTo select {
-  width: 100%;
-  min-height: 44px;
-  padding: 0 12px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-md);
-  background: var(--sx-surface);
-  color: var(--sx-ink);
-  font: inherit;
-  font-size: var(--sx-text-md);
-}
-
-.landingTo select:focus-visible {
-  outline: none;
-  box-shadow: var(--sx-focus-ring);
-}
-
 .landingNote {
   padding: 12px 0;
   color: var(--sx-muted);

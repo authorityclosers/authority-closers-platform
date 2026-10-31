@@ -124,9 +124,15 @@ it("keeps the Calls workspace controls", async () => {
   await settle();
   const calls = contract.callsWorkspace;
   expect(host.querySelector("h1")?.textContent?.trim()).toBe(calls.title);
-  const labels = [...host.querySelectorAll("[aria-label]")].map(
-    (node) => node.getAttribute("aria-label") ?? "",
-  );
+  const labels = [
+    ...[...host.querySelectorAll("[aria-label]")].map(
+      (node) => node.getAttribute("aria-label") ?? "",
+    ),
+    // A picker's name is the hidden words before its choice.
+    ...[...host.querySelectorAll('button[aria-haspopup="listbox"]')].map(
+      (node) => node.firstElementChild?.textContent?.trim() ?? "",
+    ),
+  ];
   expect(missing(calls.labels, labels)).toEqual([]);
   for (const prefix of calls.rowLabels)
     expect(labels.some((label) => label.startsWith(prefix))).toBe(true);

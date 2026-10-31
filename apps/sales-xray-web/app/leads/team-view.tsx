@@ -133,12 +133,22 @@ export function WorkHoursPanel({
   const [start, setStart] = useState(current?.start ?? "09:30");
   const [end, setEnd] = useState(current?.end ?? "19:00");
   const [pause, setPause] = useState(current?.pause_leads ?? true);
+  // One set break (lunch): a gap between calls there isn't red on Home.
+  const [lunch, setLunch] = useState(current?.breaks?.[0] ?? null);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const save = async (clear = false) => {
     if (!clear && start >= end) {
       setNote("Work ends after it starts. Pick the hours again.");
+      return;
+    }
+    if (
+      !clear &&
+      lunch &&
+      !(start <= lunch.start && lunch.start < lunch.end && lunch.end <= end)
+    ) {
+      setNote("The break sits inside work hours. Pick its time again.");
       return;
     }
     setBusy(true);
@@ -150,6 +160,7 @@ export function WorkHoursPanel({
           start,
           end,
           pause_leads: pause,
+          breaks: lunch ? [lunch] : [],
         }),
       );
     } catch (reason) {
@@ -220,6 +231,40 @@ export function WorkHoursPanel({
           />
           New leads wait outside work hours, then go out when work starts
         </label>
+        <label className={styles.toggle}>
+          <input
+            type="checkbox"
+            checked={lunch !== null}
+            onChange={(event) =>
+              setLunch(
+                event.target.checked ? { start: "13:00", end: "14:00" } : null,
+              )
+            }
+          />
+          A set break every work day (lunch): not counted against sellers
+        </label>
+        {lunch ? (
+          <div className={styles.row}>
+            <Field label="Break starts">
+              <input
+                type="time"
+                value={lunch.start}
+                onChange={(event) =>
+                  setLunch({ ...lunch, start: event.target.value })
+                }
+              />
+            </Field>
+            <Field label="Break ends">
+              <input
+                type="time"
+                value={lunch.end}
+                onChange={(event) =>
+                  setLunch({ ...lunch, end: event.target.value })
+                }
+              />
+            </Field>
+          </div>
+        ) : null}
         {readOnly ? null : (
           <div className={styles.row}>
             <Button

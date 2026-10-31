@@ -43,6 +43,33 @@ const sandboxTeam = {
     },
   ],
 };
+// The shared picker: its button's words start with its name.
+const pickerNamed = (host: HTMLElement, name: string) =>
+  [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      'button[aria-haspopup="listbox"]',
+    ),
+  ].find((button) => button.textContent?.startsWith(name))!;
+// Open a picker and tap the row with this key.
+const pick = async (picker: HTMLButtonElement, key: string) => {
+  await act(async () => picker.click());
+  await act(async () =>
+    picker
+      .parentElement!.querySelector<HTMLElement>(
+        `[role="option"][data-key="${key}"]`,
+      )!
+      .click(),
+  );
+};
+// A picker's rows show only while it is open: open it, read, close it.
+const pickerRows = async (picker: HTMLButtonElement) => {
+  await act(async () => picker.click());
+  const rows = [
+    ...picker.parentElement!.querySelectorAll<HTMLElement>('[role="option"]'),
+  ].map((row) => ({ key: row.dataset.key, label: row.textContent }));
+  await act(async () => picker.click());
+  return rows;
+};
 
 afterEach(() => vi.unstubAllGlobals());
 describe("anonymous Team coaching", () => {
@@ -317,10 +344,8 @@ describe("anonymous Team coaching", () => {
         <TeamCoachingStory coaching={parseTeamCoaching(sandboxTeam)!} />,
       ),
     );
-    const select = host.querySelector<HTMLSelectElement>(
-      'select[aria-label="Coaching area"]',
-    )!;
-    expect([...select.options].map((option) => option.textContent)).toEqual([
+    const areaPicker = pickerNamed(host, "Coaching area");
+    expect((await pickerRows(areaPicker)).map((row) => row.label)).toEqual([
       "All areas",
       "Closing",
       "Qualification",
@@ -350,10 +375,7 @@ describe("anonymous Team coaching", () => {
     expect(links()[0].textContent).toContain("Asha Rao");
     expect(links()[0].querySelector("mark")?.textContent).toBe("Asha");
     expect(host.querySelector('[role="status"]')?.textContent).toBe("1 rep");
-    await act(async () => {
-      select.value = "qualification";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await pick(areaPicker, "qualification");
     expect(links()).toHaveLength(1);
     expect(links()[0].textContent).toContain(
       "Confirm who decides before the sale",
@@ -365,7 +387,7 @@ describe("anonymous Team coaching", () => {
     expect(clearFilters()).toBeDefined();
     await act(async () => clearFilters()!.click());
     expect(search.value).toBe("");
-    expect(select.value).toBe("all");
+    expect(areaPicker.dataset.value).toBe("all");
     expect(document.activeElement).toBe(search);
     expect(links()).toHaveLength(8);
     expect(clearFilters()).toBeUndefined();
@@ -385,30 +407,21 @@ describe("anonymous Team coaching", () => {
     expect(links()[0].getAttribute("href")).toBe(
       `/coaching?person=${sandboxTeam.reps[9].person_id}`,
     );
-    await act(async () => {
-      select.value = "closing_decision_management";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await pick(areaPicker, "closing_decision_management");
     expect(links()).toHaveLength(0);
     expect(host.textContent).toContain(
       "Try another name, focus or coaching area.",
     );
-    await act(async () => {
-      select.value = "qualification";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await pick(areaPicker, "qualification");
     expect(links()).toHaveLength(1);
     expect(
       host.querySelector('ul[aria-label="Coaching areas"]')!.textContent,
     ).toBe(totalsBefore);
     await act(async () => clearFilters()!.click());
     expect(search.value).toBe("");
-    expect(select.value).toBe("all");
+    expect(areaPicker.dataset.value).toBe("all");
     expect(document.activeElement).toBe(search);
-    await act(async () => {
-      select.value = "qualification";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await pick(areaPicker, "qualification");
     await setQuery("Closer");
     expect(links()).toHaveLength(0);
     expect(host.querySelector('[role="status"]')?.textContent).toBe("0 reps");
@@ -419,7 +432,7 @@ describe("anonymous Team coaching", () => {
     await act(async () => clear.click());
     expect(search.value).toBe("");
     expect(document.activeElement).toBe(search);
-    expect(select.value).toBe("all");
+    expect(areaPicker.dataset.value).toBe("all");
     expect(links()).toHaveLength(8);
     const showAll = [...host.querySelectorAll("button")].find(
       (button) => button.textContent === "Show all 10 people",
@@ -439,10 +452,7 @@ describe("anonymous Team coaching", () => {
     expect(document.activeElement).toBe(search);
     expect(showAll.getAttribute("aria-expanded")).toBe("false");
     await setQuery("Closer");
-    await act(async () => {
-      select.value = "closing_decision_management";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await pick(areaPicker, "closing_decision_management");
     const filteredAll = [...host.querySelectorAll("button")].find(
       (button) => button.textContent === "Show all 9 people",
     )!;
@@ -451,7 +461,7 @@ describe("anonymous Team coaching", () => {
     await act(async () => fewer().click());
     expect(links()).toHaveLength(8);
     expect(search.value).toBe("Closer");
-    expect(select.value).toBe("closing_decision_management");
+    expect(areaPicker.dataset.value).toBe("closing_decision_management");
     expect(host.querySelector('[role="status"]')?.textContent).toBe("9 reps");
     expect(document.activeElement).toBe(search);
     await setQuery("Closer 9");
@@ -467,7 +477,7 @@ describe("anonymous Team coaching", () => {
     // Clear an area-only match even after its list has been expanded.
     await act(async () => clearFilters()!.click());
     expect(search.value).toBe("");
-    expect(select.value).toBe("all");
+    expect(areaPicker.dataset.value).toBe("all");
     expect(links()).toHaveLength(8);
     expect(document.activeElement).toBe(search);
     expect(clearFilters()).toBeUndefined();
@@ -485,7 +495,7 @@ describe("anonymous Team coaching", () => {
       )!;
     await act(async () => findArea("Qualification").click());
     expect(search.value).toBe("");
-    expect(select.value).toBe("qualification");
+    expect(areaPicker.dataset.value).toBe("qualification");
     expect(document.activeElement).toBe(search);
     expect(links()).toHaveLength(1);
     expect(links()[0].textContent).toContain("Asha Rao");
@@ -495,7 +505,7 @@ describe("anonymous Team coaching", () => {
     await setQuery("Asha");
     await act(async () => findArea("Closing & Decision Management").click());
     expect(search.value).toBe("");
-    expect(select.value).toBe("closing_decision_management");
+    expect(areaPicker.dataset.value).toBe("closing_decision_management");
     expect(links()).toHaveLength(8);
     expect(host.querySelector('[role="status"]')?.textContent).toBe("9 reps");
     expect(document.activeElement).toBe(search);
@@ -523,8 +533,8 @@ describe("anonymous Team coaching", () => {
     // A current skill remains findable even when absent from the historical
     // suggestion totals. Adding its option must not invent a total or action.
     search = host.querySelector<HTMLInputElement>('input[type="search"]')!;
-    const currentAreas = host.querySelector<HTMLSelectElement>("select")!;
-    expect([...currentAreas.options].map((option) => option.value)).toEqual([
+    const currentAreas = pickerNamed(host, "Coaching area");
+    expect((await pickerRows(currentAreas)).map((row) => row.key)).toEqual([
       "all",
       "qualification",
       "closing_decision_management",
@@ -534,10 +544,7 @@ describe("anonymous Team coaching", () => {
     expect(totals.textContent).toContain("1 of 3 calls");
     expect(totals.textContent).not.toContain("Closing");
     expect(findArea("Closing & Decision Management")).toBeNull();
-    await act(async () => {
-      currentAreas.value = "closing_decision_management";
-      currentAreas.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await pick(currentAreas, "closing_decision_management");
     expect(links()).toHaveLength(8);
     expect(links().every((link) => link.textContent?.includes("Closer"))).toBe(
       true,
@@ -551,19 +558,16 @@ describe("anonymous Team coaching", () => {
     await act(async () => clearFilters()!.click());
     expect(search.value).toBe("");
     expect(document.activeElement).toBe(search);
-    expect(currentAreas.value).toBe("all");
+    expect(currentAreas.dataset.value).toBe("all");
     expect(links()).toHaveLength(8);
     await act(async () => findArea("Qualification").click());
     expect(links()).toHaveLength(1);
     expect(links()[0].textContent).toContain("Asha Rao");
     // Even one historic area needs All areas once its shortcut hides other
     // current focuses. A successful filter must always be resettable.
-    const oneArea = host.querySelector("select")!;
-    expect(oneArea.value).toBe("qualification");
-    await act(async () => {
-      oneArea.value = "all";
-      oneArea.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    const oneArea = pickerNamed(host, "Coaching area");
+    expect(oneArea.dataset.value).toBe("qualification");
+    await pick(oneArea, "all");
     expect(links()).toHaveLength(8);
     // No historical suggestions still permits current-focus filtering, and
     // a rep without a known skill contributes no made-up area.
@@ -585,8 +589,8 @@ describe("anonymous Team coaching", () => {
       ),
     );
     search = host.querySelector<HTMLInputElement>('input[type="search"]')!;
-    const withoutTotals = host.querySelector<HTMLSelectElement>("select")!;
-    expect([...withoutTotals.options].map((option) => option.value)).toEqual([
+    const withoutTotals = pickerNamed(host, "Coaching area");
+    expect((await pickerRows(withoutTotals)).map((row) => row.key)).toEqual([
       "all",
       "closing_decision_management",
       "no-focus",
@@ -599,25 +603,19 @@ describe("anonymous Team coaching", () => {
     expect(links()).toHaveLength(1);
     expect(links()[0].textContent).toContain("Closer 1");
     await setQuery("");
-    await act(async () => {
-      withoutTotals.value = "closing_decision_management";
-      withoutTotals.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await pick(withoutTotals, "closing_decision_management");
     expect(links()).toHaveLength(1);
     expect(links()[0].getAttribute("href")).toBe(
       `/coaching?person=${sandboxTeam.reps[0].person_id}`,
     );
     await act(async () => clearFilters()!.click());
-    expect(withoutTotals.value).toBe("all");
+    expect(withoutTotals.dataset.value).toBe("all");
     expect(links()).toHaveLength(2);
     expect(document.activeElement).toBe(
       host.querySelector('input[type="search"]'),
     );
     // Missing focus is inspectable without inventing an area or diagnosis.
-    await act(async () => {
-      withoutTotals.value = "no-focus";
-      withoutTotals.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await pick(withoutTotals, "no-focus");
     expect(links()).toHaveLength(1);
     expect(links()[0].textContent).toContain("Asha Rao");
     expect(links()[0].textContent).toContain("No focus shown");
@@ -629,7 +627,7 @@ describe("anonymous Team coaching", () => {
     await setQuery("Closer");
     expect(links()).toHaveLength(0);
     await act(async () => clearFilters()!.click());
-    expect(withoutTotals.value).toBe("all");
+    expect(withoutTotals.dataset.value).toBe("all");
     expect(search.value).toBe("");
     expect(document.activeElement).toBe(search);
     expect(links()).toHaveLength(2);
@@ -651,11 +649,8 @@ describe("anonymous Team coaching", () => {
         />,
       ),
     );
-    const missingSelect = host.querySelector<HTMLSelectElement>("select")!;
-    await act(async () => {
-      missingSelect.value = "no-focus";
-      missingSelect.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    const missingArea = pickerNamed(host, "Coaching area");
+    await pick(missingArea, "no-focus");
     expect(links()).toHaveLength(8);
     expect(host.querySelector('[role="status"]')?.textContent).toBe("10 reps");
     const missingAll = [...host.querySelectorAll("button")].find(
@@ -663,10 +658,7 @@ describe("anonymous Team coaching", () => {
     )!;
     await act(async () => missingAll.click());
     expect(links()).toHaveLength(10);
-    await act(async () => {
-      missingSelect.value = "qualification";
-      missingSelect.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await pick(missingArea, "qualification");
     expect(links()).toHaveLength(1);
     expect(links()[0].textContent).toContain("No focus shown");
     expect(
@@ -691,9 +683,7 @@ describe("anonymous Team coaching", () => {
     const root = createRoot(host);
     try {
       await act(async () => root.render(<TeamCoachingStory coaching={team} />));
-      const order = host.querySelector<HTMLSelectElement>(
-        'select[aria-label="Sort reps"]',
-      )!;
+      const order = pickerNamed(host, "Sort reps");
       const list = host.querySelector(
         'ul[aria-label="Reps and their current focus"]',
       )!;
@@ -704,16 +694,12 @@ describe("anonymous Team coaching", () => {
       const totals = host.querySelector(
         'ul[aria-label="Coaching areas"]',
       )!.textContent;
-      const choose = (value: string) =>
-        act(async () => {
-          order.value = value;
-          order.dispatchEvent(new Event("change", { bubbles: true }));
-        });
+      const choose = (value: string) => pick(order, value);
       const button = (text: string) =>
         [...host.querySelectorAll("button")].find(
           (item) => item.textContent === text,
         )!;
-      expect(order.value).toBe("latest");
+      expect(order.dataset.value).toBe("latest");
       expect(names()).toEqual([
         "Closer 9",
         "Closer 8",
@@ -741,7 +727,6 @@ describe("anonymous Team coaching", () => {
       expect(button("Show all 10 people").getAttribute("aria-expanded")).toBe(
         "false",
       );
-      expect(order.getAttribute("aria-controls")).toBe(list.parentElement!.id);
       expect(list.querySelector("a")!.getAttribute("href")).toBe(
         `/coaching?person=${team.reps[9].person_id}`,
       );
@@ -779,9 +764,9 @@ describe("anonymous Team coaching", () => {
       );
       expect(search.value).toBe("");
       expect(names()).toEqual(["Asha Rao"]);
-      expect(order.value).toBe("name");
+      expect(order.dataset.value).toBe("name");
       await act(async () => button("Clear filters").click());
-      expect(order.value).toBe("name");
+      expect(order.dataset.value).toBe("name");
       expect(names()[0]).toBe("Asha Rao");
       expect(document.activeElement).toBe(search);
       expect(

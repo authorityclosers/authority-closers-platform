@@ -59,6 +59,7 @@ import {
   type TestOffer,
   type TestResult,
 } from "./connected-apps-client";
+import { Picker } from "../ui/picker";
 import { Sheet } from "../ui/sheet";
 import { MetaSetup } from "./meta-setup";
 import { GoogleFilesCard } from "./google-files-card";
@@ -566,59 +567,61 @@ function TestForm({
       {offer.needs.includes("pageId") ? (
         <label className={styles.field}>
           <span>{NEED_LABELS.pageId}</span>
-          <select
-            value={pageId}
-            onChange={(event) => set("pageId", event.target.value)}
-          >
-            <option value="">Choose a Page</option>
-            {app.connections.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
+          <Picker
+            mode="inline"
+            title={NEED_LABELS.pageId}
+            value={pageId || null}
+            options={app.connections.map((item) => ({
+              key: item.id,
+              label: item.label,
+            }))}
+            placeholder="Choose a Page"
+            onChange={(key) => set("pageId", key ?? "")}
+          />
         </label>
       ) : null}
       {needsForm ? (
         <label className={styles.field}>
           <span>{NEED_LABELS.formId}</span>
-          <select
-            value={values.formId ?? ""}
+          <Picker
+            mode="inline"
+            title={NEED_LABELS.formId}
+            value={values.formId || null}
             disabled={!pageId || forms.page !== pageId}
-            onChange={(event) => set("formId", event.target.value)}
-          >
-            <option value="">
-              {!pageId
+            options={
+              forms.page === pageId
+                ? (forms.items?.map((form) => ({
+                    key: form.id,
+                    label: form.name,
+                  })) ?? [])
+                : []
+            }
+            placeholder={
+              !pageId
                 ? "Choose a Page first"
                 : forms.page !== pageId
                   ? "Loading the Page’s forms…"
                   : forms.items?.length
                     ? "Choose a form"
-                    : "This Page has no lead forms"}
-            </option>
-            {forms.page === pageId
-              ? forms.items?.map((form) => (
-                  <option key={form.id} value={form.id}>
-                    {form.name}
-                  </option>
-                ))
-              : null}
-          </select>
+                    : "This Page has no lead forms"
+            }
+            onChange={(key) => set("formId", key ?? "")}
+          />
         </label>
       ) : null}
       {app.app === "whatsapp" && app.connections.length > 1 ? (
         <label className={styles.field}>
           <span>Send from</span>
-          <select
-            value={values.numberId ?? ""}
-            onChange={(event) => set("numberId", event.target.value)}
-          >
-            {app.connections.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
+          <Picker
+            mode="inline"
+            title="Send from"
+            value={values.numberId || null}
+            options={app.connections.map((item) => ({
+              key: item.id,
+              label: item.label,
+            }))}
+            onChange={(key) => set("numberId", key ?? "")}
+          />
         </label>
       ) : null}
       {offer.needs.includes("to") ? (

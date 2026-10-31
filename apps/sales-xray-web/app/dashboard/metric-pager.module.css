@@ -1,0 +1,246 @@
+/* Home's metric pages: on a phone one page per swipe, momentum from the
+   platform, dots right under the cards; from 1024 px every page at once
+   (owner, 31 Oct 2026). The track clips its own overflow; the page never
+   scrolls sideways. */
+.pager {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.track {
+  display: grid;
+  grid-auto-columns: 100%;
+  grid-auto-flow: column;
+  align-items: start;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  /* Sideways for the pages, up and down for the page itself. */
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.track::-webkit-scrollbar {
+  display: none;
+}
+
+.page {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+/* A page's title shows where every page shows at once. */
+.pageTitle {
+  display: none;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+/* The dots: the current page is a short pill. */
+.dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--sx-ink) 22%, transparent);
+  cursor: pointer;
+  transition:
+    width var(--sx-dur-base) var(--sx-spring),
+    background-color var(--sx-dur-base) var(--sx-ease-out);
+}
+
+.dot[aria-selected="true"] {
+  width: 18px;
+  background: var(--sx-accent);
+}
+
+.dot:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* The figures: soft glass, two a row on a phone. */
+.more {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.more > li {
+  display: grid;
+  min-width: 0;
+}
+
+.figure {
+  display: grid;
+  align-content: space-between;
+  gap: 4px;
+  min-width: 0;
+  min-height: 96px;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in oklab, var(--sx-ink) 7%, transparent);
+  border-radius: 20px;
+  background: color-mix(in oklab, var(--sx-surface) 74%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, var(--sx-surface) 90%, transparent),
+    0 1px 2px color-mix(in oklab, var(--sx-ink) 5%, transparent),
+    0 12px 28px -18px color-mix(in oklab, var(--sx-ink) 28%, transparent);
+  color: var(--sx-ink);
+  text-decoration: none;
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  transition:
+    transform var(--sx-dur-fast) var(--sx-ease-out),
+    box-shadow var(--sx-dur-fast) var(--sx-ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+
+a.figure:active {
+  transform: scale(0.98);
+}
+
+a.figure:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@media (hover: hover) {
+  a.figure:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, var(--sx-surface) 90%, transparent),
+      0 2px 4px color-mix(in oklab, var(--sx-ink) 6%, transparent),
+      0 16px 32px -18px color-mix(in oklab, var(--sx-ink) 34%, transparent);
+  }
+}
+
+/* Swiped in: the figures rise, one after another. */
+.page[data-active] .figure {
+  animation: figure-rise var(--sx-dur-page) var(--sx-ease-out) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+@keyframes figure-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.figureLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.figure strong {
+  color: var(--sx-ink);
+  font-size: 30px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.figure[data-red] strong {
+  color: var(--sx-bad);
+}
+
+.figure[data-red] .figureLabel::after {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--sx-bad);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--sx-bad) 18%, transparent);
+  content: "";
+}
+
+.figure strong[aria-busy] {
+  width: 50%;
+  min-height: 1.1em;
+  border-radius: 6px;
+  background: var(--sx-fill-soft);
+}
+
+.figureNote {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+/* A computer: no slider; every page is a titled row of four. */
+@media (min-width: 1024px) {
+  .pager {
+    gap: 0;
+  }
+
+  .track {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    gap: 20px;
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+
+  .pageTitle {
+    display: block;
+  }
+
+  .dots {
+    display: none;
+  }
+
+  .more {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .page[data-active] .figure {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page[data-active] .figure {
+    animation: none;
+  }
+
+  .dot,
+  .figure {
+    transition: none;
+  }
+
+  a.figure:hover,
+  a.figure:active {
+    transform: none;
+  }
+}

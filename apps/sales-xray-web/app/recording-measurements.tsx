@@ -10,6 +10,7 @@ import {
 } from "./measurement-contract";
 import styles from "./recording-measurements.module.css";
 import { MEASUREMENT_COPY, type MeasurementLanguage } from "./measurement-copy";
+import { Picker } from "./ui/picker";
 
 const clock = (ms: number) =>
   `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
@@ -135,16 +136,16 @@ function MeasurementContent({
       {data.channels.length > 1 && (
         <label className={styles.select}>
           {copy.channel}
-          <select
-            value={channelIndex}
-            onChange={(event) => setChannelIndex(Number(event.target.value))}
-          >
-            {data.channels.map((item, index) => (
-              <option key={item.channel_index} value={index}>
-                {copy.channel} {item.channel_index + 1}
-              </option>
-            ))}
-          </select>
+          <Picker
+            title={copy.channel}
+            className={styles.channelPicker}
+            value={String(channelIndex)}
+            options={data.channels.map((item, index) => ({
+              key: String(index),
+              label: `${copy.channel} ${item.channel_index + 1}`,
+            }))}
+            onChange={(key) => setChannelIndex(Number(key))}
+          />
         </label>
       )}
       {data.channels.length > 1 && (

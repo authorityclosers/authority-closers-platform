@@ -283,14 +283,17 @@ it("walks from a kind of business to saved stages, with today's leads placed", a
   expect(container.textContent).toContain("Where your leads go");
   expect(container.textContent).toContain("11 leads");
   expect(container.textContent).toContain("Junk leads stay Junk.");
-  const select = container.querySelector<HTMLSelectElement>("select")!;
-  expect(select.value).toBe("discussion_incomplete");
+  const picker = container.querySelector<HTMLButtonElement>(
+    'button[aria-haspopup="listbox"]',
+  )!;
+  expect(picker.getAttribute("data-value")).toBe("discussion_incomplete");
   await act(async () => {
-    Object.getOwnPropertyDescriptor(
-      HTMLSelectElement.prototype,
-      "value",
-    )!.set!.call(select, "interested");
-    select.dispatchEvent(new Event("change", { bubbles: true }));
+    picker.click();
+  });
+  await act(async () => {
+    container
+      .querySelector<HTMLElement>('[role="option"][data-key="interested"]')!
+      .click();
   });
 
   await press("Next");

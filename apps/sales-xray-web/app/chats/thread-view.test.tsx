@@ -199,10 +199,15 @@ it("after 24 hours offers approved WhatsApp templates only, filled in and previe
   await settle();
   expect(host.textContent).toContain("only lets you send an approved template");
   expect(host.querySelector("textarea")).toBeNull();
-  const options = [...host.querySelectorAll("option")].map(
+  const picker = host.querySelector<HTMLButtonElement>(
+    'button[aria-haspopup="listbox"]',
+  )!;
+  await act(async () => picker.click());
+  const options = [...host.querySelectorAll('[role="option"]')].map(
     (o) => o.textContent,
   );
   expect(options).toEqual(["Visit reminder (en)"]);
+  await act(async () => picker.click());
   const send = [...host.querySelectorAll("button")].find((button) =>
     button.textContent?.includes("Fill in 2 parts"),
   )!;
@@ -247,7 +252,7 @@ it("before a yes, notes how they agreed instead", async () => {
   expect(
     calls.find((call) => call.url.endsWith("/opt-in"))?.body,
   ).toMatchObject({ agreed: true, how: "Said yes on the call" });
-  expect(host.querySelector("select")).not.toBeNull();
+  expect(host.querySelector('button[aria-haspopup="listbox"]')).not.toBeNull();
 });
 
 it("shows no AI chip while AI replies are off", async () => {

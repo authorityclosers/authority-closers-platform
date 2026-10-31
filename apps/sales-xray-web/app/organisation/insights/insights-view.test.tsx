@@ -83,6 +83,19 @@ const button = (name: string) =>
   Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(
     (item) => item.textContent === name,
   )!;
+// A filter's picker: its button reads the filter's name before the choice.
+const picker = (name: string) =>
+  Array.from(
+    host.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]'),
+  ).find((item) => item.textContent?.startsWith(`${name} `)) ?? null;
+async function pick(name: string, key: string) {
+  await act(async () => picker(name)!.click());
+  await act(async () =>
+    host
+      .querySelector<HTMLElement>(`[role="option"][data-key="${key}"]`)!
+      .click(),
+  );
+}
 
 async function searchPeople(value: string) {
   await act(async () => {
@@ -450,7 +463,7 @@ it("renders a seeded sandbox page whole, labelled synthetic, without reading", a
   // Synthetic calls have no report page: nothing links to one.
   expect(host.querySelector('a[href^="/analysis/calls/"]')).toBeNull();
   expect(fetchMock).not.toHaveBeenCalled();
-  expect(host.querySelector('select[aria-label="Team"]')).not.toBeNull();
+  expect(picker("Team")).not.toBeNull();
 });
 
 it("puts a chosen filter in the address and reads it", async () => {
@@ -465,14 +478,9 @@ it("puts a chosen filter in the address and reads it", async () => {
     />,
   );
   expect(fetchMock).not.toHaveBeenCalled();
-  const outcome = host.querySelector<HTMLSelectElement>(
-    'select[aria-label="Outcome"]',
-  );
-  expect(outcome).not.toBeNull();
-  await act(async () => {
-    outcome!.value = "won";
-    outcome!.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  expect(picker("Outcome")).not.toBeNull();
+  await pick("Outcome", "won");
+  expect(picker("Outcome")?.getAttribute("data-value")).toBe("won");
   expect(`${window.location.pathname}${window.location.search}`).toBe(
     "/organisation/insights?outcome=won",
   );
@@ -504,7 +512,7 @@ it("reads in the browser when the server could not, and links real calls", async
   );
   expect(host.textContent).not.toContain("Synthetic sandbox data");
   expect(host.textContent).toContain("Skills needing work");
-  expect(host.querySelector('select[aria-label="Team"]')).toBeNull();
+  expect(picker("Team")).toBeNull();
   // Real members open their profile from the people table.
   await choose("People");
   expect(host.querySelector('a[href^="/organisation/people/"]')).not.toBeNull();
@@ -616,17 +624,8 @@ it("never lets an older answer replace newer figures", async () => {
       initialCalls={{ status: 200, body: fixture.calls }}
     />,
   );
-  const outcome = host.querySelector<HTMLSelectElement>(
-    'select[aria-label="Outcome"]',
-  )!;
-  await act(async () => {
-    outcome.value = "lost";
-    outcome.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  await act(async () => {
-    outcome.value = "won";
-    outcome.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  await pick("Outcome", "lost");
+  await pick("Outcome", "won");
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });

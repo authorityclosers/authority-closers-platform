@@ -1,4 +1,4 @@
-import { serverReads } from "../../server-reads";
+import { SERVER_READ_BUDGET_MS, serverReads } from "../../server-reads";
 import {
   DEFAULT_FILTERS,
   INSIGHTS_PATH,
@@ -25,7 +25,7 @@ export default async function Page({
   const filters = staticPreview ? DEFAULT_FILTERS : filtersFrom(params);
   const query = queryOf(filters);
   const paths = [INSIGHTS_PATH + query, `${INSIGHTS_PATH}/calls${query}`];
-  const reads = await serverReads(paths, 2500);
+  const reads = await serverReads(paths, SERVER_READ_BUDGET_MS);
   return (
     <InsightsPage
       filters={filters}

@@ -193,10 +193,160 @@ export type BugDetail = BugSummary & {
   /** Set when a "Not good" with words became this report. */
   fromFeedback: { about: string; moment: string } | null;
   errors: ClientError[];
-  /** The last app steps before the report (event names and times). */
-  trail: { event: string; at: string | null; route: string | null }[];
+  /** The last app steps before the report (event names, times, their safe words). */
+  trail: {
+    event: string;
+    at: string | null;
+    route: string | null;
+    detail: Record<string, string>;
+  }[];
+  /** The advanced reporter's parts, when it was used (31 Oct 2026). */
+  advanced: BugAdvanced | null;
+  files: BugFile[];
   history: BugEvent[];
 };
+
+export type BugComment = {
+  n: number;
+  note: string;
+  selector: string;
+  testid: string | null;
+  components: string[];
+  tag: string | null;
+  role: string | null;
+  onPicture: boolean;
+};
+
+export type BugCall = {
+  method: string | null;
+  path: string;
+  status: number | null;
+  ms: number | null;
+  reference: string | null;
+  failed: boolean;
+};
+
+export type BugAdvanced = {
+  steps: string[];
+  comments: BugComment[];
+  calls: BugCall[];
+  speed: Record<string, number>;
+  marked: boolean;
+};
+
+export type BugFile = {
+  position: number;
+  role: "original" | "element" | "attachment";
+  part: number | null;
+  name: string;
+  contentType: string;
+  bytes: number;
+};
+
+/** Who may use the advanced reporter, where each person stands now. */
+export type AccessState = "requested" | "granted" | "denied" | "revoked";
+export const ACCESS_LABEL: Record<AccessState, string> = {
+  requested: "Asked",
+  granted: "Let in",
+  denied: "Turned down",
+  revoked: "Taken away",
+};
+export type ReporterAccessPerson = {
+  personId: string;
+  name: string | null;
+  email: string | null;
+  state: AccessState;
+  since: string | null;
+  note: string | null;
+};
+
+const SPEED_WORDS: Record<string, string> = {
+  first_byte_ms: "First byte",
+  ready_ms: "Page ready",
+  loaded_ms: "Fully loaded",
+  largest_paint_ms: "Largest paint",
+  layout_shift: "Layout shift",
+  memory_mb: "Memory (MB)",
+  page_age_s: "Page open (s)",
+};
+export const speedWords = (key: string) => SPEED_WORDS[key] ?? key;
+
+function words(value: unknown): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(read.object(value)).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
+}
+
+export function normalizeAdvanced(raw: unknown): BugAdvanced | null {
+  const body = read.object(raw);
+  if (!Array.isArray(body.steps) && !Array.isArray(body.comments)) return null;
+  return {
+    steps: read
+      .array(body.steps)
+      .filter((step): step is string => typeof step === "string"),
+    comments: read.array(body.comments).map((item) => {
+      const row = read.object(item);
+      return {
+        n: read.number(row.n),
+        note: read.string(row.note),
+        selector: read.string(row.selector),
+        testid: read.optionalString(row.testid),
+        components: read
+          .array(row.components)
+          .filter((name): name is string => typeof name === "string"),
+        tag: read.optionalString(row.tag),
+        role: read.optionalString(row.role),
+        onPicture: read.boolean(row.on_picture),
+      };
+    }),
+    calls: read.array(body.calls).map((item) => {
+      const row = read.object(item);
+      return {
+        method: read.optionalString(row.method),
+        path: read.string(row.path),
+        status: read.optionalNumber(row.status),
+        ms: read.optionalNumber(row.ms),
+        reference: read.optionalString(row.reference),
+        failed: read.boolean(row.failed),
+      };
+    }),
+    speed: Object.fromEntries(
+      Object.entries(read.object(body.speed)).filter(
+        (entry): entry is [string, number] =>
+          typeof entry[1] === "number" && Number.isFinite(entry[1]),
+      ),
+    ),
+    marked: read.boolean(body.marked),
+  };
+}
+
+const FILE_ROLES = ["original", "element", "attachment"] as const;
+
+export function normalizeAccess(raw: unknown): ReporterAccessPerson[] {
+  return read.array(read.object(raw).people).flatMap((item) => {
+    const row = read.object(item);
+    const state = row.state;
+    if (
+      state !== "requested" &&
+      state !== "granted" &&
+      state !== "denied" &&
+      state !== "revoked"
+    )
+      return [];
+    return [
+      {
+        personId: read.string(row.person_id),
+        name: read.optionalString(row.name),
+        email: read.optionalString(row.email),
+        state,
+        since: read.optionalString(row.since),
+        note: read.optionalString(row.note),
+      },
+    ];
+  });
+}
 
 export type BugPage = {
   items: BugSummary[];
@@ -322,7 +472,25 @@ export function normalizeDetail(raw: unknown): BugDetail {
         event: read.string(row.event, "step"),
         at: read.optionalString(row.at),
         route: read.optionalString(row.route),
+        detail: words(row.detail),
       };
+    }),
+    advanced: normalizeAdvanced(context.advanced),
+    files: read.array(body.files).flatMap((item) => {
+      const row = read.object(item);
+      const role = FILE_ROLES.find((name) => name === row.role);
+      return role
+        ? [
+            {
+              position: read.number(row.position),
+              role,
+              part: read.optionalNumber(row.part),
+              name: read.string(row.name, role),
+              contentType: read.string(row.content_type),
+              bytes: read.number(row.bytes),
+            },
+          ]
+        : [];
     }),
     history: read.array(body.history).map((item) => {
       const row = read.object(item);

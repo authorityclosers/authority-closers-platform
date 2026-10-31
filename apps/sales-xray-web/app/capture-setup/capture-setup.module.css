@@ -128,16 +128,6 @@
   font-weight: 600;
 }
 
-.choice select {
-  min-height: var(--sx-control-h);
-  padding: 0 10px;
-  border: 1px solid var(--sx-line-strong);
-  border-radius: var(--sx-radius-sm);
-  background: var(--sx-surface);
-  color: var(--sx-ink);
-  font: inherit;
-}
-
 .checks {
   display: grid;
   gap: 10px;

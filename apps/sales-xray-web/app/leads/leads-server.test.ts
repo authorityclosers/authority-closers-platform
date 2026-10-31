@@ -5,6 +5,7 @@ import { serverLeads } from "./leads-server";
 import { firstPageFor, type ServerLeads } from "./leads-seed";
 
 vi.mock("../server-reads", () => ({
+  SERVER_READ_BUDGET_MS: 800,
   serverApiOrigin: vi.fn(() => "http://api.example.test"),
   serverReads: vi.fn(),
   SESSION_PATHS: ["/v1/me/workspaces", "/v1/me/sales-xray-workspaces"],
@@ -36,7 +37,7 @@ const reads = () => ({
   },
   "/v1/lead-desk": { status: 200, body: desk },
 });
-const load = (query: Record<string, string> = { tab: "all", stage: "open" }) =>
+const load = (query: Record<string, string> = {}) =>
   serverLeads(Promise.resolve(query));
 beforeEach(() => {
   vi.mocked(serverApiOrigin).mockReturnValue("http://api.example.test");
@@ -44,7 +45,10 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValueOnce(reads())
     .mockResolvedValueOnce({
-      "/v1/lead-desk/leads?scope=team&stage=open": { status: 200, body: page },
+      "/v1/lead-desk/leads?scope=team&side=inbound&view=to_call": {
+        status: 200,
+        body: page,
+      },
     });
 });
 it("reads only the first page through the existing bounded private server reader", async () => {
@@ -55,13 +59,24 @@ it("reads only the first page through the existing bounded private server reader
   expect(serverReads).toHaveBeenNthCalledWith(
     1,
     ["/v1/me/workspaces", "/v1/me/sales-xray-workspaces", "/v1/lead-desk"],
-    600,
+    800,
   );
-  expect(serverReads).toHaveBeenNthCalledWith(
-    2,
-    ["/v1/lead-desk/leads?scope=team&stage=open"],
-    600,
-  );
+  // The list gets what is left of the same 800 ms.
+  const left = vi.mocked(serverReads).mock.calls[1][1] as number;
+  expect(left).toBeGreaterThan(0);
+  expect(left).toBeLessThanOrEqual(800);
+});
+it("leaves the list to the browser once the budget is spent", async () => {
+  const now = vi.spyOn(Date, "now").mockReturnValue(1000);
+  vi.mocked(serverReads)
+    .mockReset()
+    .mockImplementationOnce(async () => {
+      now.mockReturnValue(1800);
+      return reads();
+    });
+  expect(await load()).toMatchObject({ identity, firstPage: null });
+  expect(serverReads).toHaveBeenCalledOnce();
+  now.mockRestore();
 });
 it("falls back before reading query parameters in a static build", async () => {
   vi.mocked(serverApiOrigin).mockReturnValue(null);
@@ -73,6 +88,9 @@ it.each<Record<string, string>>([
   { tab: "all", who: "mine" },
   { tab: "all", q: "fictional" },
   { tab: "all", stage: "won" },
+  { side: "cold" },
+  { view: "all" },
+  { view: "follow_ups", when: "today" },
 ])(
   "leaves other views, saved filters and their scope to the normal reader (%j)",
   async (query) => {
@@ -122,7 +140,10 @@ it("uses mine for a seller, leaving team permission to the ordinary API", async 
       },
     })
     .mockResolvedValueOnce({
-      "/v1/lead-desk/leads?scope=mine&stage=open": { status: 200, body: page },
+      "/v1/lead-desk/leads?scope=mine&side=inbound&view=to_call": {
+        status: 200,
+        body: page,
+      },
     });
   expect(await load()).toMatchObject({ firstPage: { scope: "mine", page } });
 });
@@ -132,17 +153,24 @@ it("a server page never answers another identity, scope, pipeline or filter", ()
     desk,
     firstPage: { scope: "team", page },
   } as unknown as ServerLeads;
-  const ask = { scope: "team", stage: "open", query: "" };
+  const opening = { side: "inbound", view: "to_call" };
+  const ask = { scope: "team", stage: "all", query: "", more: opening };
   expect(firstPageFor(seed, identity, ask)).toBe(page);
   expect(firstPageFor(null, undefined, ask)).toBeNull();
   expect(firstPageFor(seed, "other-identity", ask)).toBeNull();
   for (const change of [
     { scope: "mine" },
     { stage: "won" },
+    { stage: "new" },
+    // Leads opens on Inbound, To Call (Dipak's handoff, 31 Oct 2026).
+    { more: { ...opening, side: "cold" } },
+    { more: { ...opening, view: "follow_ups" } },
+    { more: { ...opening, step: "new" } },
+    { more: null },
     { query: "test" },
     { pipeline: "other" },
     { owner: "other" },
-    { more: { due: "today" } },
+    { more: { ...opening, due: "today" } },
   ])
     expect(firstPageFor(seed, identity, { ...ask, ...change })).toBeNull();
 });

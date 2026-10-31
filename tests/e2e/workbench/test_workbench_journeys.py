@@ -102,6 +102,23 @@ def _heading(page: Page, label: str) -> Locator:
     return page.get_by_role("heading", name=re.compile(r"^" + re.escape(label) + r"(?:\s|$)"))
 
 
+def _pick(picker: Locator, key: str | None = None, *, label: str | None = None) -> None:
+    """Choose a row of the shared picker by its key, or by the words it shows."""
+    picker.click()
+    # The rows open under the button, in a phone's sheet or in place: all in its root.
+    root = picker.locator("xpath=..")
+    row = (
+        root.get_by_role("option", name=label, exact=True)
+        if label is not None
+        else root.locator(f'[role="option"][data-key="{key}"]')
+    )
+    expect(row).to_be_visible()
+    # A phone's sheet ignores pointer clicks in its first 350 ms (its guard
+    # against ghost taps), so the row gets a plain click event once it shows.
+    row.dispatch_event("click")
+    expect(row).to_be_hidden()
+
+
 def _call_title_links(
     call_list: Locator, calls: list[dict[str, object]], *, include_hidden: bool = False
 ) -> Locator:
@@ -1311,13 +1328,13 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
         match = team.get_by_role("link", name=re.compile(re.escape(rep["name"])))
         expect(match).to_have_count(0)
         search = team.get_by_role("searchbox", name="Find a rep", exact=True)
-        area = team.get_by_role("combobox", name="Coaching area", exact=True)
+        area = team.get_by_role("button", name=re.compile(r"^Coaching area\b"))
         search.fill(f"  {rep['name'].swapcase()}  ")
         expect(rows).to_have_count(1)
         expect(match).to_contain_text(rep["focus_label"])
         expect(match).to_have_attribute("href", f"/coaching?person={rep['person_id']}")
         expect(team.get_by_role("status")).to_have_text("1 rep")
-        area.select_option(rep["skill_id"])
+        _pick(area, rep["skill_id"])
         expect(rows).to_have_count(1)
         team.scroll_into_view_if_needed()
         journey.snapshot("named-match")
@@ -1325,7 +1342,7 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
             journey.control_target(control, label)
         journey.unclipped_text(team)
 
-        area.select_option(other_area)
+        _pick(area, other_area)
         expect(rows).to_have_count(0)
         expect(team.get_by_text("No reps match", exact=True)).to_be_visible()
         expect(team.get_by_role("status")).to_have_text("0 reps")
@@ -1336,7 +1353,7 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
         clear.click()
         expect(search).to_have_value("")
         expect(search).to_be_focused()
-        expect(area).to_have_value("all")
+        expect(area).to_have_attribute("data-value", "all")
         expect(rows).to_have_count(8)
         expect(team.get_by_role("status")).to_have_text(f"{len(team_data['reps'])} reps")
 
@@ -1355,7 +1372,7 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
         expect(search).to_be_focused()
         expect(search).to_be_in_viewport()
         expect(search).to_have_value("")
-        expect(area).to_have_value("all")
+        expect(area).to_have_attribute("data-value", "all")
         expect(expand_reps).to_have_attribute("aria-expanded", "false")
         journey.snapshot("team-shortened")
 
@@ -1470,7 +1487,7 @@ def test_fixture_team_skill_reps(browser: Browser, viewport: tuple[int, str]) ->
         team = page.get_by_role("region", name=re.compile(r"^Who needs help with what"))
         summary = page.get_by_role("region", name=re.compile(r"^What the team should work on"))
         search = team.get_by_role("searchbox", name="Find a rep", exact=True)
-        area = team.get_by_role("combobox", name="Coaching area", exact=True)
+        area = team.get_by_role("button", name=re.compile(r"^Coaching area\b"))
         links = team.get_by_role("list", name="Reps and their current focus").get_by_role("link")
         expect(
             summary.get_by_role("button", name=re.compile(r"^Find reps working on "))
@@ -1485,7 +1502,7 @@ def test_fixture_team_skill_reps(browser: Browser, viewport: tuple[int, str]) ->
             expect(search).to_have_value("")
             expect(search).to_be_focused()
             expect(search).to_be_in_viewport()
-            expect(area).to_have_value(str(skill["skill_id"]))
+            expect(area).to_have_attribute("data-value", str(skill["skill_id"]))
             expect(team.get_by_role("status")).to_have_text(f"{len(matches)} reps")
             expect(links).to_have_count(min(8, len(matches)))
             for index, rep in enumerate(matches[:8]):
@@ -1529,7 +1546,7 @@ def test_fixture_team_skill_reps(browser: Browser, viewport: tuple[int, str]) ->
         last = skills[-1]
         other = next(skill for skill in skills if skill["skill_id"] != last["skill_id"])
         conflict = next(rep for rep in data["reps"] if rep["skill_id"] == last["skill_id"])
-        area.select_option(other["skill_id"])
+        _pick(area, other["skill_id"])
         search.fill(f"  {conflict['name'].swapcase()}  ")
         expect(team.get_by_role("status")).to_have_text("0 reps")
         expect(team.get_by_text("No reps match", exact=True)).to_be_visible()
@@ -3567,7 +3584,7 @@ def test_fixture_coaching_call_findings(browser: Browser, viewport: tuple[int, s
         journey.open("/review-fixture/coaching?view=me")
         section = page.locator("#coaching-calls")
         search = section.get_by_role("searchbox", name="Find a call", exact=True)
-        select = section.get_by_role("combobox", name="What the report found", exact=True)
+        select = section.get_by_role("button", name=re.compile(r"^What the report found\b"))
         on_skill = section.get_by_role("button", name="On this skill", exact=True)
         all_calls = section.get_by_role("button", name="All calls", exact=True)
         listing = section.get_by_role("list", name="Your recent calls", exact=True)
@@ -3609,14 +3626,13 @@ def test_fixture_coaching_call_findings(browser: Browser, viewport: tuple[int, s
         expect(select).to_have_count(0)
         on_skill.click()
         verify(findings["all"])
-        expect(select).to_have_value("all")
-        assert select.get_attribute("aria-controls") == listing.locator("..").get_attribute("id")
-        select.select_option("suggested")
+        expect(select).to_have_attribute("data-value", "all")
+        _pick(select, "suggested")
         verify(findings["suggested"])
         section.evaluate("el => el.scrollIntoView({block: 'start', behavior: 'instant'})")
         journey.snapshot("needed-work")
         journey.control_target(select, "saved-finding")
-        select.select_option("no_suggestion")
+        _pick(select, "no_suggestion")
         verify(findings["no_suggestion"])
         section.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
         listing.locator("li").last.evaluate(
@@ -3633,7 +3649,7 @@ def test_fixture_coaching_call_findings(browser: Browser, viewport: tuple[int, s
         match = findings["no_suggestion"][0]
         search.fill(f"  {match['call_label'].upper()}  ")
         verify([match])
-        select.select_option("suggested")
+        _pick(select, "suggested")
         expect(listing).to_have_count(0)
         expect(section.get_by_role("status")).to_have_text("0 calls")
         expect(section).to_contain_text("Try another call name, or show all calls on this skill.")
@@ -3642,7 +3658,7 @@ def test_fixture_coaching_call_findings(browser: Browser, viewport: tuple[int, s
         page.keyboard.press("Enter")
         expect(search).to_be_focused()
         expect(search).to_have_value("")
-        expect(select).to_have_value("suggested")
+        expect(select).to_have_attribute("data-value", "suggested")
         verify(findings["suggested"])
         section.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
         journey.snapshot("clear-keeps-finding")
@@ -3651,14 +3667,14 @@ def test_fixture_coaching_call_findings(browser: Browser, viewport: tuple[int, s
         verify(calls, False)
         on_skill.focus()
         page.keyboard.press("Enter")
-        expect(select).to_have_value("all")
+        expect(select).to_have_attribute("data-value", "all")
         verify(findings["all"])
-        select.select_option("no_suggestion")
+        _pick(select, "no_suggestion")
         search.fill("Missing fictional call")
         shortcut = progress.get_by_role("button", name="See calls on this skill", exact=True)
         shortcut.focus()
         page.keyboard.press("Enter")
-        expect(select).to_have_value("all")
+        expect(select).to_have_attribute("data-value", "all")
         expect(search).to_have_value("")
         verify(findings["all"])
         expect(section).to_be_focused()
@@ -3817,7 +3833,7 @@ def test_fixture_team_shared_dates(browser: Browser, viewport: tuple[int, str]) 
         journey.open("/review-fixture/coaching?view=team")
         team = page.get_by_role("region", name=re.compile(r"^Who needs help with what"))
         search = team.get_by_role("searchbox", name="Find a rep", exact=True)
-        area = team.get_by_role("combobox", name="Coaching area", exact=True)
+        area = team.get_by_role("button", name=re.compile(r"^Coaching area\b"))
         rows = team.get_by_role(
             "list", name="Reps and their current focus", exact=True
         ).get_by_role("listitem")
@@ -4191,8 +4207,8 @@ def test_fixture_insights_people_search(browser: Browser, viewport: tuple[int, s
             ) as filtered:
                 names.nth(index).click()
             assert filtered.value.status == 200
-            expect(page.get_by_role("combobox", name="Person", exact=True)).to_have_value(
-                person["key"]
+            expect(page.get_by_role("button", name=re.compile(r"^Person\b"))).to_have_attribute(
+                "data-value", person["key"]
             )
             assert parse_qs(urlsplit(page.url).query).get("person") == [person["key"]]
         search.scroll_into_view_if_needed()
@@ -4331,7 +4347,9 @@ def test_fixture_insights_people(browser: Browser, viewport: tuple[int, str]) ->
         ) as filtered:
             names.last.click()
         assert filtered.value.status == 200
-        expect(page.get_by_role("combobox", name="Person", exact=True)).to_have_value(last["key"])
+        expect(page.get_by_role("button", name=re.compile(r"^Person\b"))).to_have_attribute(
+            "data-value", last["key"]
+        )
         address = urlsplit(page.url)
         assert address.path == "/organisation/insights"
         assert parse_qs(address.query).get("person") == [last["key"]]
@@ -4378,7 +4396,7 @@ def test_fixture_team_missing_focus(browser: Browser, viewport: tuple[int, str])
         journey.open("/review-fixture/coaching?data=sandbox&view=team&example=no-focus-reps")
         team = page.get_by_role("region", name=re.compile(r"^Who needs help with what"))
         search = team.get_by_role("searchbox", name="Find a rep", exact=True)
-        area = team.get_by_role("combobox", name="Coaching area", exact=True)
+        area = team.get_by_role("button", name=re.compile(r"^Coaching area\b"))
         reset = team.get_by_role("button", name="Clear filters", exact=True)
         listing = team.get_by_role("list", name="Reps and their current focus", exact=True)
         rows = listing.get_by_role("listitem")
@@ -4408,7 +4426,7 @@ def test_fixture_team_missing_focus(browser: Browser, viewport: tuple[int, str])
 
         team.get_by_role("button", name="Show all 60 people", exact=True).click()
         expect(links).to_have_count(60)
-        area.select_option("no-focus")
+        _pick(area, "no-focus")
         assert_reps(missing, True)
         expect(team.get_by_role("status")).to_have_text("2 reps")
         expect(team.get_by_role("button", name="Show fewer people", exact=True)).to_have_count(0)
@@ -4437,9 +4455,9 @@ def test_fixture_team_missing_focus(browser: Browser, viewport: tuple[int, str])
         page.keyboard.press("Enter")
         expect(search).to_be_focused()
         expect(search).to_have_value("")
-        expect(area).to_have_value("all")
+        expect(area).to_have_attribute("data-value", "all")
         assert_reps(data["reps"][:8], False)
-        area.select_option("no-focus")
+        _pick(area, "no-focus")
         search.fill(str(missing[0]["name"]))
         assert_reps([missing[0]], True)
         reset.click()
@@ -4643,23 +4661,31 @@ def test_fixture_team_current_areas(browser: Browser, viewport: tuple[int, str])
         journey.open("/review-fixture/coaching?data=sandbox&view=team&example=current-focus-areas")
         team = page.get_by_role("region", name=re.compile(r"^Who needs help with what"))
         search = team.get_by_role("searchbox", name="Find a rep", exact=True)
-        area = team.get_by_role("combobox", name="Coaching area", exact=True)
+        area = team.get_by_role("button", name=re.compile(r"^Coaching area\b"))
         reset = team.get_by_role("button", name="Clear filters", exact=True)
         links = team.get_by_role(
             "list", name="Reps and their current focus", exact=True
         ).get_by_role("link")
         totals = page.get_by_role("list", name="Coaching areas", exact=True)
         historical = totals.inner_text()
-        assert area.locator("option").evaluate_all("els => els.map(el => el.value)") == [
+        # The picker's rows show while it is open; the chosen row closes it.
+        area_rows = area.locator("xpath=..").get_by_role("option")
+        area.click()
+        expect(area_rows).to_have_count(len(options) + 1)
+        assert area_rows.evaluate_all("els => els.map(el => el.dataset.key)") == [
             "all",
             *options,
         ]
+        expect(area.locator("xpath=..").locator(f'[data-key="{missing_skill}"]')).to_have_text(
+            "Delivery"
+        )
+        area_rows.first.dispatch_event("click")
+        expect(area_rows).to_have_count(0)
         expect(totals.get_by_role("listitem")).to_have_count(len(suggestions))
         removed = next(row for row in data["suggestions"] if row["skill_id"] == missing_skill)
         expect(
             page.get_by_role("button", name=f"Find reps working on {removed['label']}", exact=True)
         ).to_have_count(0)
-        expect(area.locator(f'option[value="{missing_skill}"]')).to_have_text("Delivery")
 
         def assert_reps(expected: list[dict[str, object]]) -> None:
             expect(links).to_have_count(min(len(expected), 8))
@@ -4670,7 +4696,7 @@ def test_fixture_team_current_areas(browser: Browser, viewport: tuple[int, str])
                     "href", f"/coaching?person={rep['person_id']}"
                 )
 
-        area.select_option(missing_skill)
+        _pick(area, missing_skill)
         assert_reps(matching)
         expect(team.get_by_role("status")).to_have_text(f"{len(matching)} reps")
         team.scroll_into_view_if_needed()
@@ -4690,7 +4716,7 @@ def test_fixture_team_current_areas(browser: Browser, viewport: tuple[int, str])
         page.keyboard.press("Enter")
         expect(search).to_have_value("")
         expect(search).to_be_focused()
-        expect(area).to_have_value("all")
+        expect(area).to_have_attribute("data-value", "all")
         assert_reps(data["reps"])
         assert totals.inner_text() == historical, (
             "Current focus filtering changed historical counters"
@@ -5508,9 +5534,9 @@ def test_fixture_team_rep_order(browser: Browser, viewport: tuple[int, str]) -> 
             team = page.get_by_role("region", name=re.compile(r"^Who needs help with what"))
             listing = team.get_by_role("list", name="Reps and their current focus", exact=True)
             rows = listing.get_by_role("listitem")
-            order = team.get_by_role("combobox", name="Sort reps", exact=True)
+            order = team.get_by_role("button", name=re.compile(r"^Sort reps\b"))
             search = team.get_by_role("searchbox", name="Find a rep", exact=True)
-            area = team.get_by_role("combobox", name="Coaching area", exact=True)
+            area = team.get_by_role("button", name=re.compile(r"^Coaching area\b"))
             totals = page.get_by_role("list", name="Coaching areas", exact=True)
             original_totals = totals.inner_text()
             alphabetical_ids = page.evaluate(
@@ -5575,20 +5601,30 @@ def test_fixture_team_rep_order(browser: Browser, viewport: tuple[int, str]) -> 
                     )
                     expect(toggle).to_have_attribute("aria-expanded", str(expanded).lower())
 
-            expect(order).to_have_value("latest")
+            expect(order).to_have_attribute("data-value", "latest")
             check_order(latest)
             if len(reps) > 8:
                 team.get_by_role("button", name=f"Show all {len(reps)} people", exact=True).click()
                 check_order(latest, expanded=True)
-            order.select_option(label="Name A–Z")
+            _pick(order, label="Name A–Z")
             check_order(alphabetical)
-            assert order.get_attribute("aria-controls") == listing.locator("..").get_attribute("id")
+            # The picker opens on ArrowDown at the chosen row; Home or End
+            # moves in its list and Enter picks.
+            rows_of_order = order.locator("xpath=..").get_by_role("option")
             order.focus()
-            order.press("Home")
-            expect(order).to_have_value("latest")
+            order.press("ArrowDown")
+            expect(rows_of_order.last).to_be_focused()
+            page.keyboard.press("Home")
+            page.keyboard.press("Enter")
+            expect(rows_of_order).to_have_count(0)
+            expect(order).to_have_attribute("data-value", "latest")
             check_order(latest)
-            order.press("End")
-            expect(order).to_have_value("name")
+            order.press("ArrowDown")
+            expect(rows_of_order.first).to_be_focused()
+            page.keyboard.press("End")
+            page.keyboard.press("Enter")
+            expect(rows_of_order).to_have_count(0)
+            expect(order).to_have_attribute("data-value", "name")
             expect(order).to_be_focused()
             check_order(alphabetical)
             if kind == "sandbox":
@@ -5609,22 +5645,22 @@ def test_fixture_team_rep_order(browser: Browser, viewport: tuple[int, str]) -> 
                 expect(search).to_be_focused()
                 check_order(alphabetical)
                 toggle.click()
-            order.select_option(label="Latest call")
+            _pick(order, label="Latest call")
             check_order(latest)
             if kind == "sandbox":
                 team.evaluate("el => el.scrollIntoView({block: 'start', behavior: 'instant'})")
                 journey.snapshot("latest-folded")
 
-            order.select_option("name")
+            _pick(order, "name")
             selected = alphabetical[min(10, len(reps) - 1)]
             search.fill(f"  {selected['name'].swapcase()}  ")
-            area.select_option(selected["skill_id"])
+            _pick(area, selected["skill_id"])
             check_order([selected])
-            order.select_option("latest")
+            _pick(order, "latest")
             check_order([selected])
-            order.select_option("name")
+            _pick(order, "name")
             other = next(rep["skill_id"] for rep in reps if rep["skill_id"] != selected["skill_id"])
-            area.select_option(other)
+            _pick(area, other)
             expect(rows).to_have_count(0)
             expect(team.get_by_text("No reps match", exact=True)).to_be_visible()
             clear = team.get_by_role("button", name="Clear filters", exact=True)
@@ -5633,8 +5669,8 @@ def test_fixture_team_rep_order(browser: Browser, viewport: tuple[int, str]) -> 
             clear.press("Enter")
             expect(search).to_have_value("")
             expect(search).to_be_focused()
-            expect(area).to_have_value("all")
-            expect(order).to_have_value("name")
+            expect(area).to_have_attribute("data-value", "all")
+            expect(order).to_have_attribute("data-value", "name")
             check_order(alphabetical)
 
             skill_index = next(
@@ -5654,8 +5690,8 @@ def test_fixture_team_rep_order(browser: Browser, viewport: tuple[int, str]) -> 
             find.press("Enter")
             expect(search).to_have_value("")
             expect(search).to_be_focused()
-            expect(area).to_have_value(selected["skill_id"])
-            expect(order).to_have_value("name")
+            expect(area).to_have_attribute("data-value", selected["skill_id"])
+            expect(order).to_have_attribute("data-value", "name")
             check_order([rep for rep in alphabetical if rep["skill_id"] == selected["skill_id"]])
             results.append(
                 {"fixture": kind, "reps_checked": len(baseline), "orders": ["latest", "name"]}

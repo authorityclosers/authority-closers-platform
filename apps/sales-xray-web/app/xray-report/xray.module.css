@@ -1599,17 +1599,7 @@
   padding: 3px;
 }
 .currency {
-  appearance: none;
-  background: var(--xr-card-3);
-  border: 0;
-  border-radius: 9px;
-  color: var(--xr-text);
-  cursor: pointer;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  min-height: 38px;
-  padding: 0 10px;
+  flex: none;
 }
 .amountBox {
   display: grid;
@@ -1665,7 +1655,6 @@
 }
 .iconSave:focus-visible,
 .iconCancel:focus-visible,
-.currency:focus-visible,
 .quickDay:focus-visible,
 .askInput:focus-visible,
 .save:focus-visible,

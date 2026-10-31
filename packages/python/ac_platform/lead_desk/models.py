@@ -264,7 +264,8 @@ class LeadTask(Base):
     """What a seller must do for a lead, as it stands now (the work-memory engine,
     migration 0129; docs/product/lead-desk/work-memory-engine.md, 2.2). Every change to
     it is a ``task`` event in the lead's history. Its command id is unique in the
-    workspace, so a retried command never makes a second task."""
+    workspace, so a retried command never makes a second task. A task of your own has no
+    lead (migration 0147): it is on its owner's list, so it always has one."""
 
     __tablename__ = "lead_desk_tasks"
     __table_args__ = (
@@ -299,6 +300,10 @@ class LeadTask(Base):
             name="lead_desk_task_source",
         ),
         CheckConstraint("length(trim(title)) > 0", name="lead_desk_task_title"),
+        CheckConstraint(
+            "lead_id IS NOT NULL OR owner_person_id IS NOT NULL",
+            name="lead_desk_task_lead_or_owner",
+        ),
         Index("uq_lead_desk_task_command", "tenant_id", "command_id", unique=True),
         Index(
             "ix_lead_desk_task_open",
@@ -313,7 +318,8 @@ class LeadTask(Base):
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     tenant_id: Mapped[UUID] = mapped_column(Uuid)
-    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    # Empty for a task of your own (migration 0147).
+    lead_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     owner_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     command_id: Mapped[UUID] = mapped_column(Uuid)

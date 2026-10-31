@@ -58,7 +58,7 @@ async def soon(desk: LeadDesk) -> Soon:
         found.append((lead[0], "follow_up", lead[1], lead[2], None))
     task = (
         await desk.db.execute(
-            select(LeadTask.starts_at, LeadTask.lead_id, Lead.name, LeadTask.title)
+            select(LeadTask.starts_at, Lead.id, Lead.name, LeadTask.title)
             .join(Lead, and_(Lead.id == LeadTask.lead_id, Lead.tenant_id == LeadTask.tenant_id))
             .where(
                 LeadTask.tenant_id == desk.tenant_id,

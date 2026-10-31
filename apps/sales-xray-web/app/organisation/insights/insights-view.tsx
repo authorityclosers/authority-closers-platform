@@ -44,6 +44,7 @@ import {
   Card,
   Tiles,
 } from "../../ui/kit";
+import { Picker } from "../../ui/picker";
 import {
   BarList,
   ShareLine,
@@ -454,77 +455,69 @@ function FilterBar({
           Filter{active ? ` · ${active}` : ""}
         </summary>
         <div className={styles.filterFields}>
-          <select
+          <Picker
             className={styles.select}
-            aria-label="Person"
-            value={filters.person ?? ""}
-            onChange={(event) =>
-              onChange({ person: event.target.value || null })
-            }
-          >
-            <option value="">Everyone</option>
-            {filters.person && !personName ? (
-              <option value={filters.person}>Selected person</option>
-            ) : null}
-            {data.facets.people.map((person) => (
-              <option key={person.key} value={person.key}>
-                {person.name}
-              </option>
-            ))}
-          </select>
+            title="Person"
+            ariaLabel="Person"
+            value={filters.person}
+            all={{ label: "Everyone" }}
+            options={[
+              ...(filters.person && !personName
+                ? [{ key: filters.person, label: "Selected person" }]
+                : []),
+              ...data.facets.people.map((person) => ({
+                key: person.key,
+                label: person.name,
+              })),
+            ]}
+            onChange={(key) => onChange({ person: key || null })}
+          />
           {data.facets.teams.length ? (
-            <select
+            <Picker
               className={styles.select}
-              aria-label="Team"
-              value={filters.team ?? ""}
-              onChange={(event) =>
-                onChange({ team: event.target.value || null })
-              }
-            >
-              <option value="">All teams</option>
-              {filters.team && !teamName ? (
-                <option value={filters.team}>Selected team</option>
-              ) : null}
-              {data.facets.teams.map((team) => (
-                <option key={team.key} value={team.key}>
-                  {team.name}
-                </option>
-              ))}
-            </select>
+              title="Team"
+              ariaLabel="Team"
+              value={filters.team}
+              all={{ label: "All teams" }}
+              options={[
+                ...(filters.team && !teamName
+                  ? [{ key: filters.team, label: "Selected team" }]
+                  : []),
+                ...data.facets.teams.map((team) => ({
+                  key: team.key,
+                  label: team.name,
+                })),
+              ]}
+              onChange={(key) => onChange({ team: key || null })}
+            />
           ) : null}
-          <select
+          <Picker
             className={styles.select}
-            aria-label="Outcome"
-            value={filters.outcome ?? ""}
-            onChange={(event) =>
-              onChange({
-                outcome: (event.target.value || null) as Filters["outcome"],
-              })
+            title="Outcome"
+            ariaLabel="Outcome"
+            value={filters.outcome}
+            all={{ label: "Any outcome" }}
+            options={OUTCOMES.map((outcome) => ({
+              key: outcome.key,
+              label: outcome.label,
+            }))}
+            onChange={(key) =>
+              onChange({ outcome: (key || null) as Filters["outcome"] })
             }
-          >
-            <option value="">Any outcome</option>
-            {OUTCOMES.map((outcome) => (
-              <option key={outcome.key} value={outcome.key}>
-                {outcome.label}
-              </option>
-            ))}
-          </select>
+          />
           {data.facets.languages.length > 1 || filters.language ? (
-            <select
+            <Picker
               className={styles.select}
-              aria-label="Language"
-              value={filters.language ?? ""}
-              onChange={(event) =>
-                onChange({ language: event.target.value || null })
-              }
-            >
-              <option value="">Any language</option>
-              {data.facets.languages.map((language) => (
-                <option key={language.key} value={language.key}>
-                  {language.label}
-                </option>
-              ))}
-            </select>
+              title="Language"
+              ariaLabel="Language"
+              value={filters.language}
+              all={{ label: "Any language" }}
+              options={data.facets.languages.map((language) => ({
+                key: language.key,
+                label: language.label,
+              }))}
+              onChange={(key) => onChange({ language: key || null })}
+            />
           ) : null}
           {active ? (
             <Button

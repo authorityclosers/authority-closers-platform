@@ -8,9 +8,8 @@
  * that takes the whole row.
  */
 
-import { ChevronDown } from "lucide-react";
-
 import { Segmented } from "../ui/kit";
+import { Picker } from "../ui/picker";
 import styles from "./leads.module.css";
 
 type Pipeline = Readonly<{ key: string; name: string }>;
@@ -40,20 +39,14 @@ export function PipelinePicker({
       </div>
     );
   return (
-    <label className={styles.pipelineChip}>
-      <select
-        aria-label="Pipeline to call"
-        value={value ?? ""}
-        onChange={(event) => onChange(event.target.value || null)}
-      >
-        <option value="">All pipelines</option>
-        {pipelines.map((item) => (
-          <option key={item.key} value={item.key}>
-            {item.name}
-          </option>
-        ))}
-      </select>
-      <ChevronDown size={14} aria-hidden="true" />
-    </label>
+    <Picker
+      className={styles.pipelineChip}
+      title="Pipeline to call"
+      ariaLabel="Pipeline to call"
+      value={value || null}
+      all={{ label: "All pipelines" }}
+      options={pipelines.map((item) => ({ key: item.key, label: item.name }))}
+      onChange={onChange}
+    />
   );
 }

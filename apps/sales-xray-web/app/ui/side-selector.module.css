@@ -1,0 +1,67 @@
+/* Inbound Leads | Cold Leads: two pills in one track, full width on a phone.
+   The chosen one is filled, Inbound in the brand accent, Cold in slate blue,
+   so the colour always says which side you are on. */
+.wrap {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.selector {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--sx-line);
+  border-radius: 999px;
+  background: var(--sx-fill-soft);
+}
+
+.option {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 150ms var(--sx-ease-out),
+    color 150ms var(--sx-ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.option:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.option[aria-checked="true"] {
+  color: var(--lx-on-teal);
+}
+
+.option[aria-checked="true"][data-side="inbound"] {
+  background: var(--sx-accent);
+}
+
+.option[aria-checked="true"][data-side="cold"] {
+  background: var(--lx-closing);
+}
+
+.note {
+  margin: 0;
+  padding: 0 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .option {
+    transition: none;
+  }
+}

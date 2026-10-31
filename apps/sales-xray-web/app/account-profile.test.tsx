@@ -65,14 +65,21 @@ async function changeInput(name: string, value: string) {
   });
 }
 
+// The country picker: its button, beside the hidden field it fills.
+const countryPicker = () =>
+  host
+    .querySelector('input[name="phone_country"]')
+    ?.parentElement?.querySelector<HTMLButtonElement>(
+      'button[aria-haspopup="listbox"]',
+    ) ?? null;
+
 async function changeCountry(value: string) {
-  const select = host.querySelector<HTMLSelectElement>(
-    'select[name="phone_country"]',
-  )!;
-  await act(async () => {
-    select.value = value;
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  await act(async () => countryPicker()!.click());
+  await act(async () =>
+    host
+      .querySelector<HTMLElement>(`[role="option"][data-key="${value}"]`)!
+      .click(),
+  );
 }
 
 async function submit() {
@@ -259,10 +266,7 @@ it("saves a 10-digit Indian mobile as canonical E.164 under the default +91 choi
     ),
   );
   await flush();
-  expect(
-    host.querySelector<HTMLSelectElement>('select[name="phone_country"]')
-      ?.value,
-  ).toBe("IN");
+  expect(countryPicker()?.getAttribute("data-value")).toBe("IN");
   await changeInput("full_name", "Morgan Lee");
   await changeInput("phone_number_e164", "9876543210");
   await submit();
@@ -292,20 +296,15 @@ it("requires an explicit country choice when a stored non-Indian number is chang
   );
   await flush();
   // Known: shown, not asked (owner, 18 Oct).
-  expect(host.querySelector('select[name="phone_country"]')).toBeNull();
+  expect(countryPicker()).toBeNull();
   const change = [...host.querySelectorAll("button")].filter(
     (button) => button.textContent === "Change",
   );
   await act(async () => change[1].click());
   await flush();
-  expect(
-    host.querySelector<HTMLSelectElement>('select[name="phone_country"]')
-      ?.value,
-  ).toBe("");
+  expect(countryPicker()?.getAttribute("data-value")).toBe("");
   await submit();
-  expect(document.activeElement).toBe(
-    host.querySelector('select[name="phone_country"]'),
-  );
+  expect(document.activeElement).toBe(countryPicker());
   expect(fetcher).toHaveBeenCalledTimes(2);
 });
 

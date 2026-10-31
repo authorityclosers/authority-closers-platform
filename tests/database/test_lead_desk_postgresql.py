@@ -1134,16 +1134,25 @@ def test_work_hours_hold_night_leads_and_keep_calls_on_the_phone(
                     "start": "09:30",
                     "end": "19:00",
                     "pause_leads": True,
+                    # A set break (lunch): a gap between calls there isn't red on Home.
+                    "breaks": [{"start": "13:00", "end": "14:00"}],
                 }
                 bad = await client.put(
                     f"{BASE}/work-hours", json={**body, "end": "08:00"}, headers=WRITE
                 )
                 assert bad.status_code == 422
+                outside = await client.put(
+                    f"{BASE}/work-hours",
+                    json={**body, "breaks": [{"start": "08:00", "end": "09:00"}]},
+                    headers=WRITE,
+                )
+                assert outside.status_code == 422
                 saved = await client.put(f"{BASE}/work-hours", json=body, headers=WRITE)
                 assert saved.status_code == 200, saved.text
                 view = saved.json()["settings"]["work_hours"]
                 assert view["days"] == [(today + 1) % 7] and view["pause_leads"] is True
                 assert view["inside"] is False and view["next_start"] is not None
+                assert view["breaks"] == [{"start": "13:00", "end": "14:00"}]
                 assert saved.json()["settings"]["revision"] == 1
 
                 added = await client.post(
@@ -1201,10 +1210,23 @@ def test_work_hours_hold_night_leads_and_keep_calls_on_the_phone(
                 detail = (await client.get(f"{BASE}/leads/{lead['lead']['lead_id']}")).json()
                 assert detail["lead"]["owner_person_id"] == str(seller.person_id)
                 assert detail["owner_reason"].startswith("Work hours started.")
+                # An app that doesn't send breaks keeps the set ones.
+                kept = await client.put(
+                    f"{BASE}/work-hours",
+                    json={
+                        **{key: value for key, value in body.items() if key != "breaks"},
+                        "expected_revision": 1,
+                    },
+                    headers=WRITE,
+                )
+                assert kept.status_code == 200, kept.text
+                assert kept.json()["settings"]["work_hours"]["breaks"] == [
+                    {"start": "13:00", "end": "14:00"}
+                ]
                 # Clearing the hours: nothing waits and every call counts again.
                 cleared = await client.put(
                     f"{BASE}/work-hours",
-                    json={"expected_revision": 1, "days": []},
+                    json={"expected_revision": 2, "days": []},
                     headers=WRITE,
                 )
                 assert cleared.status_code == 200, cleared.text

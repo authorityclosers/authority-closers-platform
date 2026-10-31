@@ -10,13 +10,15 @@
  * - one recent block: Recent calls, with Activity beside it;
  * - My work: what you did today or this week, against nothing but itself.
  * Only real numbers; a figure the server doesn't send is not drawn.
+ * A seller's Home also counts today's work down at the top and ends with
+ * their longest breaks (Leads redesign, section 6, 30 Oct 2026).
  */
 
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
-import type { HomeDesk } from "./my-day-client";
+import type { HomeBreak, HomeDesk } from "./my-day-client";
 import type { Performance } from "../leads/leads-client";
 import { Segmented } from "../ui/kit";
 import styles from "./home-today.module.css";
@@ -180,12 +182,12 @@ export function FourTiles({ tiles, label }: { tiles: Four[]; label: string }) {
             data-four={tile.key}
             data-red={tile.red || undefined}
             aria-busy={tile.value === null || undefined}
+            aria-description={tile.rule}
           >
+            {/* No rule line on the card (owner, 31 Oct 2026): red is the
+                number's colour and a small dot. */}
             <span className={styles.label}>{tile.label}</span>
             <strong className={styles.value}>{tile.value ?? " "}</strong>
-            <span className={styles.rule}>
-              {tile.value === null ? " " : tile.rule}
-            </span>
           </Link>
         </li>
       ))}
@@ -294,6 +296,104 @@ export function MyWork({ desk }: { desk: HomeDesk | null }) {
           ),
         )}
       </dl>
+      {/* One Performance button on Home (Leads redesign, section 6). */}
+      <Link className={styles.workMore} href="/performance">
+        Performance
+        <ChevronRight size={16} aria-hidden="true" />
+      </Link>
+    </section>
+  );
+}
+
+/**
+ * Today's work counting down (Leads redesign, section 6: "20 → 19 → 18"):
+ * the leads still to call today out of today's whole list, falling as calls
+ * happen.
+ */
+export function TodayCountdown({ desk }: { desk: HomeDesk | null }) {
+  const today = desk?.to_call_today;
+  const total = today ? today.left + today.called : 0;
+  if (!today || total === 0) return null;
+  return (
+    <section className={styles.countdown} aria-labelledby="countdown-title">
+      <div className={styles.countdownHead}>
+        <h2 id="countdown-title">To call today</h2>
+        <span>{`${today.called} called`}</span>
+      </div>
+      <p className={styles.countdownFigure}>
+        <strong>{today.left}</strong>
+        <span>{`of ${total} left`}</span>
+      </p>
+      <div
+        className={styles.countdownBar}
+        role="progressbar"
+        aria-label="Called today"
+        aria-valuemin={0}
+        aria-valuemax={total}
+        aria-valuenow={today.called}
+      >
+        <span
+          style={{ width: `${Math.round((today.called / total) * 100)}%` }}
+        />
+      </div>
+    </section>
+  );
+}
+
+const CLOCK = new Intl.DateTimeFormat("en-US", {
+  hour: "numeric",
+  minute: "2-digit",
+  timeZone: "Asia/Kolkata",
+});
+
+/** "45 min", "1 h", "1 h 20 min". */
+export function breakLength(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const rest = minutes % 60;
+  return `${Math.floor(minutes / 60)} h${rest ? ` ${rest} min` : ""}`;
+}
+
+/** One break as a row: when, how long, red unless the team set it. */
+export function BreakRow({ gap }: { gap: HomeBreak }) {
+  return (
+    <li className={styles.breakRow} data-red={gap.planned ? undefined : ""}>
+      <span>
+        {`${CLOCK.format(new Date(gap.start))} – ${CLOCK.format(new Date(gap.end))}`}
+        {gap.planned ? <small>Set break</small> : null}
+      </span>
+      <strong>{`${gap.approximate ? "≈ " : ""}${breakLength(gap.minutes)}`}</strong>
+    </li>
+  );
+}
+
+/**
+ * Your 3 longest breaks today, at the very end of Home (Leads redesign,
+ * section 6): the gaps between your calls inside the working day (the team's
+ * work hours when set, else your first call to your last), longest first. A
+ * gap that isn't a set break is red. ≈ marks a gap next to a call from the
+ * app's Call button, whose time is when you came back to the app.
+ */
+export function YourBreaks({ desk }: { desk: HomeDesk | null }) {
+  const breaks = desk?.breaks;
+  if (!Array.isArray(breaks)) return null;
+  return (
+    <section className={styles.breaks} aria-labelledby="breaks-title">
+      <h2 id="breaks-title">Your 3 longest breaks today</h2>
+      {breaks.length ? (
+        <ol className={styles.breakList}>
+          {breaks.map((gap) => (
+            <BreakRow key={gap.start} gap={gap} />
+          ))}
+        </ol>
+      ) : (
+        <p className={styles.breakNote}>No breaks between calls yet today.</p>
+      )}
+      {breaks.some((gap) => gap.approximate) ? (
+        <p className={styles.breakNote}>
+          ≈ Next to a call from the app&apos;s Call button: its time is when you
+          came back to the app.
+        </p>
+      ) : null}
     </section>
   );
 }

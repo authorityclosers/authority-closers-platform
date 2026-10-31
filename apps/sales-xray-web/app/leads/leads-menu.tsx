@@ -10,6 +10,7 @@ import {
   ChartNoAxesCombined,
   FlaskConical,
   Import,
+  NotebookPen,
   Plug,
   Route,
   Split,
@@ -34,11 +35,13 @@ const ICONS: Record<string, ReactNode> = {
   numbers: <ChartNoAxesCombined size={20} />,
   sources: <Plug size={20} />,
   stages: <Route size={20} />,
+  notes: <NotebookPen size={20} />,
   import: <Import size={20} />,
   test: <FlaskConical size={20} />,
 };
 
 const GROUPS = [
+  { label: "Your work", keys: ["notes"] },
   { label: "Set up leads", keys: ["sources", "stages", "team"] },
   { label: "Manage leads", keys: ["share", "import", "numbers", "test"] },
 ];

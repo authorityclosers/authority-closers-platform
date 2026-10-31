@@ -186,11 +186,12 @@ def test_rehearse_apply_map_follow_ups_rerun_and_resync(
             assert leads["+919876081003"].next_action_at is None
             assert verified is not None
             assert await count(AuditEvent, AuditEvent.action == tool.ACTION) == 1
-            # A new organisation starts on the sales team's eight stages.
+            # A new organisation starts on the recommended nine stages.
             async with sessions() as db:
                 journey = await journeys.read(db, tenant)
-            assert journey.industry == "inside_sales_demos" and journey.junk_in_lost
-            assert [stage.label for stage in journey.live][0] == "New lead"
+            assert journey.industry == "recommended" and journey.has_junk
+            assert len(journey.live) == 9 and journey.live[0].label == "New Lead"
+            assert journey.live[0].cold_label == "Unworked"
 
             # Profiles: name and phone from the input; Ravi's own kept; complete, so no
             # details form before the terms box on a first call.

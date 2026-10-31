@@ -8,6 +8,7 @@ import type { UploadPolicy } from "./acquisition-client";
 import type { ImportPreview } from "./bulk-import-client";
 import type { ImportSelection } from "./bulk-import-files";
 import { BulkImportPreview } from "./bulk-import-preview";
+import { Picker } from "./ui/picker";
 import {
   advanceImport,
   confirmImport,
@@ -215,26 +216,25 @@ export function BulkRecordingImport({
               key={folder.folder}
               label={folder.folder || "Top-level recordings"}
             >
-              <select
-                aria-label={`Member for ${folder.folder || "top-level recordings"}`}
-                value={folders[folder.folder] ?? ""}
+              <Picker
+                title={`Member for ${folder.folder || "top-level recordings"}`}
+                ariaLabel={`Member for ${folder.folder || "top-level recordings"}`}
+                value={folders[folder.folder] ?? null}
                 disabled={working}
-                onChange={(event) => {
+                all={{ label: "Unassigned — wait for a member" }}
+                options={preview.members.map((member) => ({
+                  key: member.personId,
+                  label: member.name,
+                }))}
+                onChange={(key) => {
                   setFolders((current) => ({
                     ...current,
-                    [folder.folder]: event.target.value || null,
+                    [folder.folder]: key || null,
                   }));
                   confirmationKey.current = null;
                   setConsent(false);
                 }}
-              >
-                <option value="">Unassigned — wait for a member</option>
-                {preview.members.map((member) => (
-                  <option key={member.personId} value={member.personId}>
-                    {member.name}
-                  </option>
-                ))}
-              </select>
+              />
             </Field>
           ))}
         </Panel>

@@ -215,6 +215,8 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "bug_report_events",
         "feedback_responses",
         "bug_report_attachments",
+        "bug_report_files",
+        "bug_reporter_access",
         "bug_issues",
         "bug_issue_reports",
         "bug_issue_events",

@@ -10,9 +10,12 @@ vi.mock("./server-get", () => ({
 }));
 
 import {
+  SERVER_READ_BUDGET_MS,
   serverApiOrigin,
   serverDisplayDates,
+  serverFetch,
   serverReads,
+  serverReadsBuilt,
   serverSession,
   SESSION_PATHS,
 } from "./server-reads";
@@ -172,4 +175,75 @@ it("writes dates in the request's language and India time where it draws data", 
   });
   vi.stubEnv("AC_CONVERSATION_API_ORIGIN", "");
   expect(await serverDisplayDates()).toBeNull();
+});
+
+it("reads each request as its own person and keeps no answer between requests", async () => {
+  const people: Record<string, unknown> = {
+    "ac_session=fictional-a": { person_id: "fictional-a" },
+    "ac_session=fictional-b": { person_id: "fictional-b" },
+  };
+  network.mockImplementation(async (_url: string, sent: { cookie: string }) =>
+    json(people[sent.cookie]),
+  );
+  const as = (cookie: string) => {
+    incoming.value = new Headers({ cookie, host: "ok.test" });
+    return serverReads(["/v1/lead-desk"]);
+  };
+  // Together and one after another: each answer is its own person's.
+  const [a, b] = await Promise.all([
+    as("ac_session=fictional-a"),
+    as("ac_session=fictional-b"),
+  ]);
+  expect(a?.["/v1/lead-desk"]?.body).toEqual({ person_id: "fictional-a" });
+  expect(b?.["/v1/lead-desk"]?.body).toEqual({ person_id: "fictional-b" });
+  const again = await as("ac_session=fictional-a");
+  expect(again?.["/v1/lead-desk"]?.body).toEqual({ person_id: "fictional-a" });
+  expect(network).toHaveBeenCalledTimes(3);
+});
+
+it("gives up on a slow API within the budget, and the browser reads", async () => {
+  network.mockImplementation(
+    (_url: string, _sent: unknown, signal: AbortSignal) =>
+      new Promise((_resolve, reject) =>
+        signal.addEventListener("abort", () => reject(new Error("aborted"))),
+      ),
+  );
+  incoming.value = new Headers({ cookie: "a=b", host: "ok.test" });
+  const started = Date.now();
+  const reads = await serverReads(["/v1/lead-desk", "/v1/me/workspaces"]);
+  const waited = Date.now() - started;
+  expect(reads).toEqual({ "/v1/lead-desk": null, "/v1/me/workspaces": null });
+  expect(waited).toBeGreaterThanOrEqual(SERVER_READ_BUDGET_MS - 50);
+  expect(waited).toBeLessThan(SERVER_READ_BUDGET_MS + 400);
+  // A failing API is the same: null, never the page.
+  network.mockRejectedValue(new Error("connection refused"));
+  expect(await serverReads(["/v1/lead-desk"])).toEqual({
+    "/v1/lead-desk": null,
+  });
+});
+
+it("renders per request in a server-reading build; the origin switches the reads", () => {
+  expect(serverReadsBuilt({ AC_SALES_XRAY_SERVER_READS: "1" })).toBe(true);
+  expect(
+    serverReadsBuilt({ AC_CONVERSATION_API_ORIGIN: "http://api:8000" }),
+  ).toBe(true);
+  expect(serverReadsBuilt({})).toBe(false);
+  expect(
+    serverReadsBuilt({
+      AC_SALES_XRAY_SERVER_READS: "1",
+      AC_SALES_XRAY_STATIC_PREVIEW: "1",
+    }),
+  ).toBe(false);
+});
+
+it("hands a server read its answer as a Response, with the page's host", async () => {
+  network.mockResolvedValue(json({ ok: true }));
+  const answer = await serverFetch("http://127.0.0.1:8100/v1/me/coaching", {
+    headers: { Cookie: "a=b", Host: "ok.test" },
+  });
+  expect(await answer.json()).toEqual({ ok: true });
+  expect(network.mock.calls[0][1]).toMatchObject({
+    cookie: "a=b",
+    host: "ok.test",
+  });
 });

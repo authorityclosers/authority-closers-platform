@@ -71,22 +71,27 @@ const button = (text: string) =>
   [...host.querySelectorAll("button")].find((item) =>
     item.textContent?.includes(text),
   );
-async function type(
-  field: HTMLInputElement | HTMLSelectElement,
-  value: string,
-) {
+async function type(field: HTMLInputElement, value: string) {
   await act(async () => {
-    const proto =
-      field instanceof HTMLSelectElement
-        ? HTMLSelectElement.prototype
-        : HTMLInputElement.prototype;
-    Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(field, value);
-    field.dispatchEvent(
-      new Event(field instanceof HTMLSelectElement ? "change" : "input", {
-        bubbles: true,
-      }),
-    );
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(field, value);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
   });
+}
+/** Chooses a row in the picker: open it, then click the row. */
+async function pick(key: string) {
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!
+      .click(),
+  );
+  await act(async () =>
+    host
+      .querySelector<HTMLElement>(`[role="option"][data-key="${key}"]`)!
+      .click(),
+  );
 }
 
 it("sends a real request with a pasted key, never with cookies, and shows the answer", async () => {
@@ -138,7 +143,7 @@ it("uses the key just made, and asks for a call id where the request needs one",
     root.render(<TryApi freshKey="sxk_test_new" onUsed={() => undefined} />),
   );
   expect(host.textContent).toContain("Using the key you just made");
-  await type(host.querySelector("select")!, "facts");
+  await pick("facts");
   expect(button("Send request")?.disabled).toBe(true);
   await type(
     host.querySelector<HTMLInputElement>(

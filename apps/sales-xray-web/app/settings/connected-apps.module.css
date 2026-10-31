@@ -784,7 +784,6 @@
 }
 
 .field input,
-.field select,
 .field textarea {
   min-height: var(--sx-control-h);
   box-sizing: border-box;
@@ -801,7 +800,6 @@
 }
 
 .field input:focus-visible,
-.field select:focus-visible,
 .field textarea:focus-visible {
   outline: 2px solid var(--sx-accent);
   outline-offset: 1px;

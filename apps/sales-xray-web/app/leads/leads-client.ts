@@ -251,6 +251,8 @@ export type LeadPage = {
   next_offset: number | null;
   /** Every stage's count for the same people and search (the stage tabs). */
   stage_counts?: Record<string, number>;
+  /** Each of the owner's stages' count before the stage pick (a side's first page). */
+  step_counts?: Record<string, number>;
   /** Leads per seller ("none": nobody's) for the same filters, without the seller picked. */
   owner_counts?: Record<string, number>;
 };
@@ -287,6 +289,8 @@ export type WorkHours = {
   pause_leads: boolean;
   inside: boolean;
   next_start: string | null;
+  /** Breaks the team takes every work day (lunch); absent from an older server. */
+  breaks?: { start: string; end: string }[];
 };
 
 export type PhoneHealth = {
@@ -357,6 +361,17 @@ export type ImportResult = {
   unmatched_owners?: string[];
   /** People the import took past their open-lead limit, said plainly. */
   warnings?: string[];
+  /** Bulk upload: who got how many of the new leads, and their side. */
+  given?: { person_id: string; name: string; leads: number }[];
+  side?: "live" | "cold";
+};
+
+/** Bulk upload's choices (stages-views-sources.md section 5): Inbound ("live") or Cold,
+ *  the salespeople picked and how many each, and the stage new leads start in. */
+export type ImportOptions = {
+  side?: "live" | "cold";
+  shares?: { person_id: string; count: number }[];
+  step?: string;
 };
 
 export type SourceView = {
@@ -681,7 +696,18 @@ export type ListSort = "next_action" | "last_contact" | "name" | "created";
 export type ListDue = "late" | "today" | "week" | "none";
 export type ListSince = "today" | "week" | "month" | "never";
 export type ListMade = "today" | "week" | "month";
+/** Inbound Leads or Cold Leads (Dipak's Home + Leads handoff, 31 Oct 2026). */
+export type LeadSide = "inbound" | "cold";
+/** A work view, not a stage: To Call, Follow-ups or All Leads. */
+export type WorkView = "to_call" | "follow_ups" | "all";
+/** Follow-ups due today, overdue or upcoming. */
+export type FollowUpWhen = "today" | "overdue" | "upcoming";
 export type ListMore = {
+  side?: LeadSide | null;
+  view?: WorkView | null;
+  /** One of the organisation's stages (its key). */
+  step?: string | null;
+  when?: FollowUpWhen | null;
   source?: string | null;
   due?: ListDue | null;
   contact?: ListSince | null;
@@ -697,6 +723,10 @@ export function moreParams(
   if (!more) return [];
   return (
     [
+      ["side", more.side],
+      ["view", more.view],
+      ["step", more.step],
+      ["when", more.when],
       ["source", more.source],
       ["due", more.due],
       ["contact", more.contact],
@@ -734,7 +764,9 @@ export function readLeads(
   signal?: AbortSignal,
 ) {
   const params = new URLSearchParams({ scope });
-  for (const [key, value] of moreParams(more)) params.set(key, value);
+  // All Leads is the list with no work view.
+  for (const [key, value] of moreParams(more))
+    if (key !== "view" || value !== "all") params.set(key, value);
   if (owner) params.set("owner", owner);
   if (pipeline) params.set("pipeline", pipeline);
   if (stage) params.set("stage", stage);
@@ -742,6 +774,18 @@ export function readLeads(
   if (offset) params.set("offset", String(offset));
   if (test) params.set("test", "only");
   return request<LeadPage>(`/leads?${params}`, { signal });
+}
+
+/** Each side's numbers: every Inbound lead and the Cold leads imported tell
+ *  whether someone has both lead types. */
+export type SideNumbers = {
+  inbound: { leads: number; new: number; to_call: number; follow_ups: number };
+  cold: { imported: number; unworked: number; attempted: number };
+};
+
+/** Both sides' numbers for the seller's own leads, or the team's. */
+export function readSides(scope: "mine" | "team", signal?: AbortSignal) {
+  return request<SideNumbers>(`/sides?scope=${scope}`, { signal });
 }
 
 /** My work: what the seller did, today, yesterday or this week. */
@@ -820,8 +864,15 @@ export type TaskView = {
   bucket: TaskBucket | null;
 };
 
+/** A task in Tasks: on a lead, or of your own with no lead (migration 0147,
+ *  owner order 30 Oct 2026: "optional linked lead"). */
+export type ListedTask = Omit<TaskView, "lead_id" | "lead_name"> & {
+  lead_id: string | null;
+  lead_name: string | null;
+};
+
 export type TaskList = {
-  tasks: TaskView[];
+  tasks: ListedTask[];
   counts: Partial<Record<TaskBucket, number>>;
 };
 
@@ -831,6 +882,10 @@ export type NewTask = {
   ends_at?: string | null;
   location?: string | null;
   note?: string | null;
+  /** In the seller's words; without them the server names it by its kind. */
+  title?: string | null;
+  /** How early the phone reminds; 0 is at its time (lead_desk/task_push.py). */
+  remind_before_minutes?: number | null;
 };
 
 /** A seller's open tasks in one bucket, earliest first, with every bucket's count. */
@@ -838,18 +893,27 @@ export function readTasks(view: TaskBucket, signal?: AbortSignal) {
   return request<TaskList>(`/tasks?view=${view}`, { signal });
 }
 
-export function addTask(leadId: string, task: NewTask, command = commandId()) {
+function newTask(task: NewTask, command: string) {
   const body = Object.fromEntries(
     Object.entries(task).filter(([, value]) => value !== "" && value != null),
   );
+  return json("POST", {
+    command_id: command,
+    client_at: new Date().toISOString(),
+    ...body,
+  });
+}
+
+export function addTask(leadId: string, task: NewTask, command = commandId()) {
   return request<TaskView>(
     `/leads/${encodeURIComponent(leadId)}/tasks`,
-    json("POST", {
-      command_id: command,
-      client_at: new Date().toISOString(),
-      ...body,
-    }),
+    newTask(task, command),
   );
+}
+
+/** A task of your own, on no lead: on your list, and it reminds you. */
+export function addOwnTask(task: NewTask, command = commandId()) {
+  return request<ListedTask>("/tasks", newTask(task, command));
 }
 
 /** Notes: what people wrote on your leads, newest first; with words, what says
@@ -956,6 +1020,8 @@ export type NewLead = {
   person_id?: string;
   /** A pipeline picked by hand; none: the one that takes added leads. */
   pipeline?: string;
+  /** Inbound ("live", the default) or Cold Leads (section 5). */
+  side?: "live" | "cold";
 };
 
 /** Whether a number is already a lead (Add lead asks while it is typed). */
@@ -1028,6 +1094,8 @@ export type Disposition = {
   follow_up_at?: string;
   remark?: string;
   deal_value?: string;
+  /** Why an open lead is still open (Open Leads: Discussion Incomplete, Call Later). */
+  outcome_reason?: string;
 };
 
 /** A move the lists and To call follow at once (lead-moves.ts). */
@@ -1363,7 +1431,13 @@ export function saveSettings(
 /** Sets the team's work hours; no days clears them. */
 export function saveWorkHours(
   revision: number,
-  hours: { days: number[]; start: string; end: string; pause_leads: boolean },
+  hours: {
+    days: number[];
+    start: string;
+    end: string;
+    pause_leads: boolean;
+    breaks?: { start: string; end: string }[];
+  },
 ) {
   return request<Team>(
     "/work-hours",
@@ -1439,9 +1513,10 @@ export async function previewImport(file: File) {
 export function commitImport(
   preview: ImportPreview,
   mapping: Record<string, string>,
-  assign: "rules" | "me",
+  assign: "rules" | "me" | "people" | "none",
   command = commandId(),
   pipeline: string | null = null,
+  options: ImportOptions = {},
 ) {
   return request<ImportResult>(
     "/imports",
@@ -1453,6 +1528,7 @@ export function commitImport(
       assign,
       ...(pipeline ? { pipeline } : {}),
       ...(preview.detected ? { source_name: preview.detected } : {}),
+      ...options,
     }),
   );
 }

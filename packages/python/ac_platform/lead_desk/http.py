@@ -67,6 +67,7 @@ from ac_platform.lead_desk.contracts import (
     DuplicateBand,
     DuplicateCompare,
     DuplicateQueue,
+    Effort,
     FollowUp,
     ImportCommand,
     ImportPreview,
@@ -128,8 +129,10 @@ from ac_platform.lead_desk.contracts import (
     WorkHoursCommand,
 )
 from ac_platform.lead_desk.intake import MAX_FILE_BYTES, Intake
+from ac_platform.lead_desk.sides import Side, SideNumbers, side_numbers
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
 from ac_platform.lead_desk.vocabulary import STAGES
+from ac_platform.lead_desk.work_views import FollowUpWhen, WorkView
 from ac_platform.tenancy.models import Membership, Organisation
 
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
@@ -273,6 +276,10 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         contact: LeadSince | None = None,
         created: LeadMade | None = None,
         duplicates: Literal["review"] | None = None,
+        side: Side | None = None,
+        view: WorkView | None = None,
+        step: str | None = Query(default=None, max_length=40),
+        when: FollowUpWhen | None = None,
     ) -> LeadPage:
         no_query(
             request,
@@ -292,6 +299,10 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                     "contact",
                     "created",
                     "duplicates",
+                    "side",
+                    "view",
+                    "step",
+                    "when",
                 }
             ),
         )
@@ -317,7 +328,23 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 contact=contact,
                 created=created,
                 duplicates=duplicates == "review",
+                side=side,
+                view=view,
+                step=step,
+                when=when,
             )
+
+    @router.get("/sides", response_model=SideNumbers, response_model_by_alias=True)
+    async def sides(
+        request: Request,
+        response: Response,
+        scope: Literal["mine", "team"] = "mine",
+    ) -> SideNumbers:
+        """Inbound Leads and Cold Leads: each side's three header numbers, for the same
+        people as the list (Dipak, 30 Oct 2026)."""
+        no_query(request, frozenset({"scope"}))
+        async with desk_for(request, response) as lead_desk:
+            return await side_numbers(lead_desk, scope=scope)
 
     @router.get("/activity", response_model=ActivityPage, response_model_by_alias=True)
     async def activity(
@@ -541,6 +568,13 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await task_book.TaskBook(lead_desk).create(lead_id, command)
+
+    @router.post("/tasks", response_model=TaskView, response_model_by_alias=True)
+    async def add_own_task(command: TaskCommand, request: Request, response: Response) -> TaskView:
+        """A task of your own, on no lead (owner order, 30 Oct 2026): on your list."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await task_book.TaskBook(lead_desk).create(None, command)
 
     @router.get("/tasks", response_model=TaskList, response_model_by_alias=True)
     async def list_tasks(
@@ -923,6 +957,14 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request, frozenset({"days"}))
         async with desk_for(request, response) as lead_desk:
             return await lead_desk.performance(days)
+
+    @router.get("/performance/sellers", response_model=Effort, response_model_by_alias=True)
+    async def effort(request: Request, response: Response, days: int = 1) -> Effort:
+        """The Performance page: each seller's effort with Inbound and Cold apart (owners and
+        admins see every seller; a seller their own)."""
+        no_query(request, frozenset({"days"}))
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.effort(days)
 
     @router.get("/me", response_model=Me, response_model_by_alias=True)
     async def me(request: Request, response: Response) -> Me:
