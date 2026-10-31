@@ -101,6 +101,28 @@ it("is a chip on Leads that opens the switch instead of flipping", async () => {
   expect(document.querySelector("dialog[open]")).toBeNull();
 });
 
+// Phone personas (1 Nov 2026): on Home the chip says what it is, and stopping
+// says what happens to new ad and website leads.
+it("names itself on Home and says where new leads go before stopping", async () => {
+  const fetchMock = vi.fn<typeof fetch>(async () => me(false));
+  vi.stubGlobal("fetch", fetchMock);
+  await act(async () =>
+    root.render(<TakingSwitch initial place="chip" words="full" />),
+  );
+  const chip = host.querySelector<HTMLButtonElement>("button")!;
+  expect(chip.textContent).toBe("Taking new leads · On");
+  await act(async () => chip.click());
+  await act(async () => toggle().click());
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(document.querySelector("dialog[open]")?.textContent).toContain(
+    "New ad and website leads go to others until you turn this back on.",
+  );
+  await act(async () => inSheet("Stop taking leads").click());
+  expect(host.querySelector("button")?.textContent).toBe(
+    "Taking new leads · Off",
+  );
+});
+
 it("lets an owner hand leads out after hours, after asking", async () => {
   const hours = {
     days: [1, 2, 3, 4, 5, 6],

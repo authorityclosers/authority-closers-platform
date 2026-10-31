@@ -232,6 +232,7 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
             key={`taking-${desk.me.taking_leads !== false}`}
             initial={desk.me.taking_leads !== false}
             place="chip"
+            words="full"
             pausedUntil={desk.me.paused_until ?? null}
           />
         </>

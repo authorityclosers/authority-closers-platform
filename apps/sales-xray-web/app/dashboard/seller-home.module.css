@@ -9,6 +9,7 @@
 
 .head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -24,6 +25,7 @@
 
 .headEnd {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
 }

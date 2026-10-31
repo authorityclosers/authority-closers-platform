@@ -28,8 +28,9 @@
   display: none;
 }
 
+/* Home names the switch at every width ("Taking new leads · On"). */
 @media (max-width: 899.98px) {
-  .chip > button {
+  .chip:not([data-words="full"]) > button {
     width: 44px;
     min-width: 44px;
     height: 44px;
