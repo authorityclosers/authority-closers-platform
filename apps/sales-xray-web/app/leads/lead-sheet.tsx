@@ -1472,9 +1472,17 @@ export function storyLines(
     (event) =>
       event.kind === "call" && event.via === "phone" && event.connected,
   );
+  // One rule with Home's numbers (phone personas, 1 Nov 2026: a call with its
+  // transcript read "not reached yet"): the phone measured talk, said connected,
+  // or the call has a transcript; a dial counts through "We talked" (results).
+  const talkedCall = (event: (typeof detail.events)[number]) =>
+    event.kind === "call" &&
+    (event.connected === true ||
+      !!event.submission_id ||
+      (!!event.via && (event.duration_seconds ?? 0) > 0));
   const talks = Math.max(
     results.filter((event) => event.connected).length,
-    phoneTalks.length,
+    detail.events.filter(talkedCall).length,
   );
   const tries = Math.max(lead.attempts, lead.calls, phoneTalks.length);
   if (!tries) lines.push("Not called yet.");

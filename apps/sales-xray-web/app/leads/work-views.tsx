@@ -302,6 +302,35 @@ export function pickableStages(
   );
 }
 
+/** Stage keys a link may bring from another list, and the kind each means. */
+const MEANS: Readonly<Record<string, string>> = {
+  new_lead: "new",
+  unworked: "new",
+  open_leads: "follow_up",
+  discussion_incomplete: "follow_up",
+};
+
+/**
+ * The stage a link means in this organisation's list (phone personas, 1 Nov
+ * 2026: Home's Open Leads opened "open_leads" in a list without one): the stage
+ * itself, else the first live stage of the same kind, else null (all stages).
+ */
+export function resolveStep(
+  stages: readonly StageView[],
+  key: string,
+): string | null {
+  const live = stages.filter((stage) => !stage.archived);
+  if (live.some((stage) => stage.key === key)) return key;
+  const kind = MEANS[key] ?? key;
+  return live.find((stage) => stage.kind === kind)?.key ?? null;
+}
+
+/** A key in words, never as it is: "demo_done" reads "Demo done". */
+const keyWords = (key: string) => {
+  const words = key.replace(/[_-]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
 /** The stage pick: the one picker, each stage with its colour dot and count. */
 export function StagePicker({
   stages,
@@ -326,7 +355,7 @@ export function StagePicker({
   }));
   // A link may name a stage this list does not offer: it still shows.
   if (value && !stages.some((stage) => stage.key === value))
-    options.push({ key: value, label: value });
+    options.push({ key: value, label: keyWords(value) });
   const total = counts
     ? Object.values(counts).reduce((sum, count) => sum + count, 0)
     : null;

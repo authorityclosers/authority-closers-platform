@@ -113,6 +113,15 @@ def test_each_side_lists_counts_and_numbers_its_own_leads(
             assert badge["to_call"] == numbers.json()["inbound"]["to_call"]
             assert badge["overdue"] == sum(row["overdue"] for row in inbound["leads"])
 
+            # Home's "Follow-ups late" is the Late list it opens, on Inbound (phone personas,
+            # 1 Nov 2026: "2 late" over a list of 0).
+            effort = await here.client.get(f"{BASE}/performance/sellers?days=1")
+            assert effort.status_code == 200, effort.text
+            late_list = await page(scope="mine", stage="open", side="inbound", due="late")
+            seller = effort.json()["sellers"][0]
+            assert seller["inbound"]["late"] == late_list["total"] == 1
+            assert seller["cold"]["late"] == 0
+
             refused = await here.client.get(
                 f"{BASE}/leads", params={"scope": "mine", "side": "warm"}
             )
@@ -120,6 +129,11 @@ def test_each_side_lists_counts_and_numbers_its_own_leads(
 
             # An admin still sees a worked cold lead late; an untouched one is late for no one.
             here.as_admin()
+            # Home's team "Follow-ups late" is the team's Late list on Inbound too.
+            report = await here.client.get(f"{BASE}/reports/performance", params={"days": 1})
+            assert report.status_code == 200, report.text
+            team_late = await page(scope="team", stage="open", side="inbound", due="late")
+            assert sum(rep["late"] for rep in report.json()["sellers"]) == team_late["total"]
             team_cold = await page(scope="team", stage="open", side="cold")
             seen = {row["name"]: row["overdue"] for row in team_cold["leads"]}
             assert seen["Fictional Cold tried"] is True

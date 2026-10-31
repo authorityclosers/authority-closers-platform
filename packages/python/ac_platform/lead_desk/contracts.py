@@ -208,9 +208,9 @@ class SideEffort(Model):
     eligible: int = 0
     # Inbound only: median minutes from a lead arriving to its first call.
     first_call_minutes: int | None = None
-    # What was missed. Now: open leads more than an hour late (a follow-up past its
-    # time, or a new lead never called). In the period: calls in that nobody took,
-    # and of those leads, the ones nobody reached afterwards.
+    # What was missed. Now (Inbound only, what the Late list shows): open leads whose
+    # follow-up time has passed. In the period: calls in that nobody took, and of those
+    # leads, the ones nobody reached afterwards.
     late: int = 0
     missed_calls: int = 0
     not_called_back: int = 0
@@ -1149,7 +1149,7 @@ class SellerOutcome(Model):
     interested: int
     won: int
     open_leads: int
-    # Open leads whose call is more than an hour late, now.
+    # Inbound open leads whose follow-up time has passed, now (the Late list).
     late: int
 
 

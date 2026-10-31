@@ -265,7 +265,10 @@ def test_the_desk_carries_inbound_and_cold_apart(postgres_harness: Any, tmp_path
                     .values(pipeline="cold")
                 )
                 stored = await here.stored(hot)
-                for lead_id, seconds in ((hot, 60), (cold, 0)):
+                # The Inbound call the phone timed (connected); a dial with no talk on Cold
+                # (a dial's time away alone never connects: phone personas, 1 Nov 2026).
+                timed = {"via": "phone", "direction": "outgoing", "duration_seconds": 60}
+                for lead_id, data in ((hot, timed), (cold, {"duration_seconds": 0})):
                     db.add(
                         LeadEvent(
                             id=uuid4(),
@@ -273,7 +276,7 @@ def test_the_desk_carries_inbound_and_cold_apart(postgres_harness: Any, tmp_path
                             lead_id=UUID(lead_id),
                             kind="call",
                             actor_person_id=here.seller.person_id,
-                            data={"duration_seconds": seconds, "simulated": False},
+                            data={**data, "simulated": False},
                             created_at=stored.created_at,
                         )
                     )

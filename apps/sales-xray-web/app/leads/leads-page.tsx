@@ -134,6 +134,7 @@ import {
   FollowUpTabs,
   LeadSearch,
   StagePicker,
+  resolveStep,
   ViewTabs,
   WorkHead,
   WorkSplit,
@@ -919,6 +920,14 @@ export function LeadsRoute({
   // The tabs carry the stages of the pipeline shown; across several, the six kinds.
   const journeyFor = several(pipes) ? pipeline : MAIN_PIPELINE;
   const journeyKey = `${contextKey}:${journeyFor}`;
+  // A link may name a stage this organisation doesn't have (Home's Open Leads in
+  // a list without one): the stage that means the same, else all stages with a
+  // word; never the raw key (phone personas, 1 Nov 2026).
+  const stepShown =
+    more.step && journey?.key === journeyKey
+      ? resolveStep(journey.view.stages, more.step)
+      : (more.step ?? null);
+  const stepLost = !!more.step && stepShown === null;
   useEffect(() => {
     if (!authenticated || !journeyFor) return;
     let live = true;
@@ -1371,6 +1380,10 @@ export function LeadsRoute({
     view === OPENING_STAGE
       ? listTitle(workView, side, more.when ?? null)
       : null;
+  const headingShown =
+    stepLost && heading
+      ? `${heading} · that stage isn't in your list`
+      : heading;
   const stageLabel =
     heading ??
     tabs.find((tab) => tab.key === view)?.label ??
@@ -1724,7 +1737,7 @@ export function LeadsRoute({
                       side={side}
                       value={
                         view === OPENING_STAGE
-                          ? (more.step ?? null)
+                          ? stepShown
                           : (pickable.find((stage) => stage.kind === view)
                               ?.key ?? null)
                       }
@@ -1870,7 +1883,7 @@ export function LeadsRoute({
                 }}
                 stageWord={stageWord}
                 quietLate={side === "cold" && !can}
-                heading={heading}
+                heading={headingShown}
                 empty={view === OPENING_STAGE ? emptyWords(workView) : null}
                 canManage={can}
                 initial={desk === serverSeed?.desk ? serverSeed : null}
@@ -1889,7 +1902,11 @@ export function LeadsRoute({
                 onTable={setTableMode}
                 onStepCounts={onStepCounts}
                 pipeline={pipeline}
-                more={listMore}
+                more={
+                  listMore && stepShown !== (listMore.step ?? null)
+                    ? { ...listMore, step: stepShown }
+                    : listMore
+                }
                 onSort={(sort, order) =>
                   applyFilters({
                     ...shownFilters,

@@ -460,10 +460,15 @@ def call_seconds(data: Mapping[str, Any]) -> int:
 
 
 def call_answered(data: Mapping[str, Any]) -> bool:
-    """Connected: talk time above 0, or the phone's log said so. A dial reads as connected as
-    before (its time away above 0), whatever the phone timed later: one call, counted once."""
-    dialled = is_dial(data) and int(data.get("duration_seconds") or 0) > 0
-    return call_seconds(data) > 0 or dialled or data.get("connected") is True
+    """Connected, one rule with the lead's own story (phone personas, 1 Nov 2026): talk seconds
+    the phone measured, the phone's log said so, a transcript (the call's recording), or the
+    seller's "We talked" right after a Call-button dial. A dial's time away is none of these."""
+    return (
+        call_seconds(data) > 0
+        or data.get("connected") is True
+        or bool(data.get("submission_id"))
+        or data.get(TALKED) is True
+    )
 
 
 def dial_start(at: datetime, data: Mapping[str, Any]) -> datetime:
@@ -524,6 +529,10 @@ TIMED_CALL = "timed_call"
 PHONE_SECONDS = "phone_seconds"
 # A phone-logged call matches the app's dial that started within this of it.
 DIAL_MATCH = timedelta(minutes=2)
+# Read beside a dial's data, never saved into it: its seller answered "We talked" after it.
+TALKED = "talked"
+# The after-call answer that belongs to a dial comes within this of it.
+DIAL_ANSWER = timedelta(minutes=30)
 # How long the seller who saved a call's answer may undo it (undo_result).
 RESULT_UNDO = timedelta(minutes=5)
 # History lines that set where a lead stands: the newest of them is the one an undo may take back.
@@ -1209,12 +1218,52 @@ class LeadDesk:
             if str(event_id) not in hidden
         ]
         timed = await self._call_timings([row.event_id for row in rows if is_dial(row.data)])
-        return [
-            row._replace(data={**row.data, PHONE_SECONDS: timed[str(row.event_id)]})
-            if str(row.event_id) in timed
-            else row
-            for row in rows
-        ]
+        talked = await self._dials_talked(
+            [row for row in rows if is_dial(row.data) and str(row.event_id) not in timed]
+        )
+
+        def read_beside(row: CallRow) -> CallRow:
+            if str(row.event_id) in timed:
+                return row._replace(data={**row.data, PHONE_SECONDS: timed[str(row.event_id)]})
+            if row.event_id in talked:
+                return row._replace(data={**row.data, TALKED: True})
+            return row
+
+        return [read_beside(row) for row in rows]
+
+    async def _dials_talked(self, dials: list[CallRow]) -> set[UUID]:
+        """Call-button dials whose seller answered "We talked" right after (DIAL_ANSWER): the
+        same lead and person. Their answer says the call connected."""
+        if not dials:
+            return set()
+        answers = (
+            await self.db.execute(
+                select(
+                    LeadEvent.lead_id,
+                    LeadEvent.actor_person_id,
+                    LeadEvent.created_at,
+                    LeadEvent.data,
+                ).where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.kind == "result",
+                    LeadEvent.lead_id.in_({row.lead_id for row in dials}),
+                    LeadEvent.created_at >= min(row.at for row in dials) - DIAL_MATCH,
+                    LeadEvent.created_at <= max(row.at for row in dials) + DIAL_ANSWER,
+                )
+            )
+        ).all()
+        return {
+            row.event_id
+            for row in dials
+            if any(
+                lead == row.lead_id
+                and actor == row.actor
+                and row.at - DIAL_MATCH <= at <= row.at + DIAL_ANSWER
+                and isinstance(data, dict)
+                and data.get("connected") is True
+                for lead, actor, at, data in answers
+            )
+        }
 
     async def _to_call_today(
         self, mine: Any, day_end: datetime, today: Sequence[CallRow]
@@ -5095,7 +5144,8 @@ class LeadDesk:
                     Lead.pipeline,
                     Lead.stage,
                     Lead.calls,
-                    overdue_filter(self.now),
+                    # Late as the Late list (due=late) shows it: a follow-up time passed.
+                    and_(Lead.next_action_at.is_not(None), Lead.next_action_at < self.now),
                 )
                 .where(
                     Lead.tenant_id == self.tenant_id,
@@ -5198,7 +5248,9 @@ class LeadDesk:
             into["open"].add(lead_id)
             if stage == "new" and not calls:
                 into["backlog"] += 1
-            if late:
+            # Home's "Follow-ups late" opens the Late list on Inbound: it counts those only
+            # (phone personas, 1 Nov 2026: "2 late" over a list of 0).
+            if late and lead_side(pipeline) == "inbound":
                 into["late"] += 1
         for owner, pipeline, created, first_contact in arrivals:
             minutes = first_call_minutes(created, first_contact)
@@ -5695,7 +5747,9 @@ class LeadDesk:
                 .where(
                     Lead.tenant_id == self.tenant_id,
                     Lead.stage.in_(OPEN_STAGES),
-                    Lead.next_action_at < self.now - timedelta(hours=1),
+                    # What the Late list Home opens shows: Inbound, a follow-up time passed.
+                    Lead.next_action_at < self.now,
+                    func.coalesce(Lead.pipeline, "live") != "cold",
                     Lead.owner_person_id.is_not(None),
                 )
                 .group_by(Lead.owner_person_id)
