@@ -1576,10 +1576,12 @@ class LeadDesk:
                 ).all()
             }
         total = int(await self.db.scalar(select(func.count()).where(*where)) or 0)
+        # The lead's id ends every order (owner's bug report, 31 Oct 2026): leads that share
+        # their times, as an import's do, otherwise came back on two pages.
         order: tuple[Any, ...] = (
-            (func.coalesce(Lead.next_action_at, Lead.created_at), Lead.created_at)
+            (func.coalesce(Lead.next_action_at, Lead.created_at), Lead.created_at, Lead.id)
             if stage == "open" or stage in OPEN_STAGES or view is not None
-            else (Lead.updated_at.desc(),)
+            else (Lead.updated_at.desc(), Lead.id)
         )
         if sort is not None:
             order = self._list_order(sort, descending)
