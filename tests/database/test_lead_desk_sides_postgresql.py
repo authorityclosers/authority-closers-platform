@@ -134,6 +134,11 @@ def test_each_side_lists_counts_and_numbers_its_own_leads(
             assert report.status_code == 200, report.text
             team_late = await page(scope="team", stage="open", side="inbound", due="late")
             assert sum(rep["late"] for rep in report.json()["sellers"]) == team_late["total"]
+            # New leads are Inbound arrivals: the three Cold leads are never new leads
+            # (ph1-20, 1 Nov 2026: "New leads 903" with 900 Cold imports in it).
+            week = await here.client.get(f"{BASE}/reports/performance", params={"days": 7})
+            assert week.status_code == 200, week.text
+            assert week.json()["current"]["new_leads"] == 3
             team_cold = await page(scope="team", stage="open", side="cold")
             seen = {row["name"]: row["overdue"] for row in team_cold["leads"]}
             assert seen["Fictional Cold tried"] is True

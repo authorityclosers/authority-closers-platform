@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
-from sqlalchemy import and_, false, or_
+from sqlalchemy import and_, case, false, func, or_
 
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.models import Lead
@@ -35,6 +35,27 @@ def in_view(view: WorkView, day_end: datetime) -> Any:
         )
     # Planned contact: Open Leads and Interested with a time (retries stay in To Call).
     return and_(Lead.stage.in_(NEEDS_FOLLOW_UP), Lead.next_action_at.is_not(None))
+
+
+def call_order(now: datetime, day_start: datetime) -> tuple[Any, ...]:
+    """To Call's order, next lead first (Dipak's handoff p.12: a promised follow-up stays in
+    sight when a new enquiry arrives, and an older backlog doesn't push fresh enquiries
+    down): due today and already due, then new leads never called (oldest first), then the
+    older backlog, then the rest of today; the lead's id last, so a page never repeats one.
+    Home's next lead is the first row of this order (phone personas, 1 Nov 2026: Home said
+    Kiara while Leads dialled Krishna)."""
+    bucket = case(
+        (and_(Lead.next_action_at >= day_start, Lead.next_action_at <= now), 0),
+        (and_(Lead.stage == "new", Lead.next_action_at.is_(None)), 1),
+        (Lead.next_action_at < day_start, 2),
+        else_=3,
+    )
+    return (
+        bucket,
+        func.coalesce(Lead.next_action_at, Lead.created_at),
+        Lead.created_at,
+        Lead.id,
+    )
 
 
 def in_when(when: FollowUpWhen, day_start: datetime) -> Any:

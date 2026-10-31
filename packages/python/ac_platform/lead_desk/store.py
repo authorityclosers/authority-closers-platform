@@ -184,6 +184,7 @@ from ac_platform.lead_desk.vocabulary import (
 from ac_platform.lead_desk.work_views import (
     FollowUpWhen,
     WorkView,
+    call_order,
     count_steps,
     in_step,
     in_view,
@@ -1373,30 +1374,17 @@ class LeadDesk:
         return found
 
     async def _next_on(self, mine: Any, side: Side, day_start: datetime) -> Lead | None:
-        """The next lead to call on one side (handoff p.12: a promised follow-up stays
-        visible when a new enquiry arrives; an older overdue backlog doesn't push fresh
-        enquiries down): due today first, then new ones never called (oldest first, as
-        Leads lists them), then the older backlog, then later today."""
+        """The next lead to call on one side: the first row of the side's To Call list, in
+        its calling order (work_views.call_order), so Home and the dialler agree (phone
+        personas, 1 Nov 2026: Home said Kiara while Leads dialled Krishna)."""
         day_end = day_start + timedelta(days=1)
-        steps: tuple[tuple[Any, tuple[Any, ...]], ...] = (
-            (
-                and_(Lead.next_action_at >= day_start, Lead.next_action_at <= self.now),
-                (Lead.next_action_at,),
-            ),
-            (and_(Lead.stage == "new", Lead.next_action_at.is_(None)), (Lead.created_at,)),
-            (Lead.next_action_at < day_start, (Lead.next_action_at, Lead.created_at)),
-            (
-                and_(Lead.next_action_at > self.now, Lead.next_action_at < day_end),
-                (Lead.next_action_at,),
-            ),
+        found: Lead | None = await self.db.scalar(
+            select(Lead)
+            .where(mine, on_side(side), in_view("to_call", day_end))
+            .order_by(*call_order(self.now, day_start))
+            .limit(1)
         )
-        for where, order in steps:
-            found = await self.db.scalar(
-                select(Lead).where(mine, on_side(side), where).order_by(*order).limit(1)
-            )
-            if found is not None:
-                return found
-        return None
+        return found
 
     async def _side_cards(
         self, mine: Any, journey: Any, day_start: datetime
@@ -1730,7 +1718,10 @@ class LeadDesk:
         # The lead's id ends every order (owner's bug report, 31 Oct 2026): leads that share
         # their times, as an import's do, otherwise came back on two pages.
         order: tuple[Any, ...] = (
-            (func.coalesce(Lead.next_action_at, Lead.created_at), Lead.created_at, Lead.id)
+            # To Call in its calling order, next lead first: Home's next lead is its first row.
+            call_order(self.now, self._day_start())
+            if view == "to_call"
+            else (func.coalesce(Lead.next_action_at, Lead.created_at), Lead.created_at, Lead.id)
             if stage == "open" or stage in OPEN_STAGES or view is not None
             else (Lead.updated_at.desc(), Lead.id)
         )
@@ -5711,9 +5702,12 @@ class LeadDesk:
         )
 
         async def arrived(since: datetime, until: datetime | None) -> tuple[int, int | None]:
+            # New leads and their first call's speed are Inbound: an imported Cold list is
+            # never "new leads" (ph1-20, 1 Nov 2026: 903 with 900 Cold imports in it).
             where = [
                 Lead.tenant_id == self.tenant_id,
                 *counted,
+                func.coalesce(Lead.pipeline, "live") != "cold",
                 since <= ARRIVED,
             ]
             if until is not None:

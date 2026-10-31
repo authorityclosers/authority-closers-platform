@@ -46,6 +46,10 @@ export function minutesWords(minutes: number): string {
   return hours < 24 ? `${hours} h` : `${Math.round(hours / 24)} days`;
 }
 
+/** The tile's own window: "Today", "Last 7 days", "Last 30 days". */
+export const windowWords = (period: Period) =>
+  period === 1 ? "Today" : `Last ${period} days`;
+
 /** "the previous 7 days", or "yesterday" for today. */
 export const beforeWords = (period: Period) =>
   period === 1 ? "yesterday" : `the previous ${period} days`;
@@ -479,7 +483,13 @@ export function OutcomeTiles({
                   />
                 ) : null}
                 {layout === "slider" ? null : (
-                  <span className={styles.note}>{tile.note(data)}</span>
+                  <span className={styles.note}>
+                    {/* The window, said on the tile (ph1-20, 1 Nov 2026:
+                        "Connected 86%" read as today's beside today's 0). */}
+                    {tile.compare
+                      ? `${windowWords(period)} · ${tile.note(data)}`
+                      : tile.note(data)}
+                  </span>
                 )}
               </button>
             );

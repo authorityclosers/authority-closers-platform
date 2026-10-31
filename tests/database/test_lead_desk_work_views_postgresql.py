@@ -15,6 +15,7 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy import Engine, inspect, update
 
+from ac_platform.lead_desk.hours import IST
 from ac_platform.lead_desk.models import Lead
 from tests.database.conversation_harness import conversation_harness
 from tests.database.test_conversation_postgresql import run
@@ -87,15 +88,35 @@ def test_work_views_and_the_stage_filter(postgres_harness: Any, tmp_path: Path) 
                 assert answer.status_code == 200, answer.text
                 return [row["name"] for row in answer.json()["leads"]]
 
-            # To Call: by when each is due (a new lead from its arrival), the next lead first.
+            # To Call in its calling order, next lead first (Dipak's handoff p.12, one rule
+            # with Home's next lead): due today and already due, then new leads never called
+            # (oldest first), then the older backlog (phone personas, 1 Nov 2026: Home said
+            # Kiara while Leads dialled Krishna).
             to_call = await names(scope="mine", side="inbound", view="to_call")
-            assert to_call == [
-                "Fictional follow-up old",
-                "Fictional new older",
-                "Fictional new newer",
-                "Fictional retry late",
-                "Fictional follow-up due",
-            ]
+            now = datetime.now(UTC)
+            if (now - timedelta(hours=2)).astimezone(IST).date() == now.astimezone(IST).date():
+                assert to_call == [
+                    "Fictional retry late",
+                    "Fictional follow-up due",
+                    "Fictional new older",
+                    "Fictional new newer",
+                    "Fictional follow-up old",
+                ]
+            else:
+                # Just after midnight India time the retry is yesterday's: the backlog.
+                assert sorted(to_call) == sorted(
+                    [
+                        "Fictional retry late",
+                        "Fictional follow-up due",
+                        "Fictional new older",
+                        "Fictional new newer",
+                        "Fictional follow-up old",
+                    ]
+                )
+            # Home's next Inbound lead is that list's first row.
+            desk = await here.client.get(BASE)
+            assert desk.status_code == 200, desk.text
+            assert desk.json()["sides"]["inbound"]["next_lead"]["name"] == to_call[0]
             # Follow-ups: planned or overdue contact, soonest first; retries stay in To Call.
             assert await names(scope="mine", side="inbound", view="follow_ups") == [
                 "Fictional follow-up old",

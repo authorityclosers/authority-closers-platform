@@ -147,17 +147,18 @@ async function openControls() {
   await settle();
 }
 
-it("shows five cards with their values, and no tabs or rows of sellers", async () => {
+it("shows what works with its value, and no tabs or rows of sellers", async () => {
   await openControls();
-  // Five settings, then the month's revenue target (capture-setup's card).
-  expect(chips()[5]?.[0]).toBe("revenue");
-  expect(chips().slice(0, 5)).toEqual([
+  // Four settings, then the month's revenue target (capture-setup's card). No
+  // "Soon" anywhere: the 7 PM summary waits until it works (ph1-19, 1 Nov 2026).
+  expect(chips()[4]?.[0]).toBe("revenue");
+  expect(chips().slice(0, 4)).toEqual([
     ["hours", "Not set"],
     ["first_call", "Within 10 min"],
     ["nudges", "On, except 1"],
-    ["alerts", "0 of 3 on"],
-    ["summary", "7:00 PM · Soon"],
+    ["alerts", "Off"],
   ]);
+  expect(sheet()?.textContent).not.toContain("Soon");
   expect(button("Alerts")).toBeUndefined();
   expect(button("Targets")).toBeUndefined();
   expect(sheet()?.textContent).not.toContain("Rohan");
@@ -179,6 +180,20 @@ it("sets the first-call limit in one tap", async () => {
   await act(async () => button("Team controls")?.click());
   await settle();
   expect(chips()[1]).toEqual(["first_call", "Within 15 min"]);
+});
+
+// Dipak (ph1-19, 1 Nov 2026): no dead ends. With no first-call limit, the
+// alert says where to set one, and that line opens it.
+it("opens the first-call limit from the alert that needs it", async () => {
+  sla = { ...sla, on: false };
+  await openControls();
+  await card("alerts");
+  const go = Array.from(sheet()?.querySelectorAll("button") ?? []).find(
+    (each) => each.textContent === "Set a first-call limit",
+  ) as HTMLButtonElement;
+  await act(async () => go.click());
+  await settle();
+  expect(sheet()?.textContent).toContain("First call on new enquiries");
 });
 
 it("excepts one seller from nudges inside its card", async () => {
@@ -220,15 +235,14 @@ it("starts working hours from the owner's usual day: 10:30 to 7, lunch 1:30 to 2
   expect(chips()[0]).toEqual(["hours", "10:30–7:00 · lunch 1:30–2:15"]);
 });
 
-it("keeps what the server does not do yet switched off", async () => {
+it("shows only the alert that works, and switches it", async () => {
   await openControls();
   await card("alerts");
   const switches = Array.from(sheet()?.querySelectorAll("[role=switch]") ?? []);
   expect(switches.map((each) => (each as HTMLButtonElement).disabled)).toEqual([
     false,
-    true,
-    true,
   ]);
+  expect(sheet()?.textContent).not.toContain("Soon");
   await act(async () => (switches[0] as HTMLElement).click());
   await settle();
   expect(sent.at(-1)?.body).toEqual({

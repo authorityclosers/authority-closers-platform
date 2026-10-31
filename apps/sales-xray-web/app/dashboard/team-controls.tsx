@@ -2,19 +2,19 @@
 
 /**
  * Team controls (owner, 31 Oct 2026: "what settings would immediately matter
- * to an owner?"): one sheet of five cards, each showing its value; one tap
- * opens its detail. No tabs and no list of every seller: an exception to a
- * team rule is picked inside its card ("Except…").
+ * to an owner?"): one sheet of cards, each showing its value; one tap opens
+ * its detail. No tabs and no list of every seller: an exception to a team rule
+ * is picked inside its card ("Except…").
  *
  * 1. Working hours & breaks: they drive late, overdue and break detection.
  * 2. First call on new enquiries: the first-response target (5-30 minutes).
  * 3. Seller nudges: on for everyone, except the sellers picked.
- * 4. Alert me when…: an enquiry waits past the first-call limit (live);
- *    a seller idles an hour, a call has no recording (coming).
- * 5. Daily summary at 7 PM (coming).
+ * 4. Alert me when an enquiry waits past the first-call limit.
+ * 5. The month's revenue target.
  *
- * Only what the server already does is a live switch; what is coming says
- * so and changes nothing.
+ * Only what works is here (the owner's rule, no dead ends; Dipak, ph1-19,
+ * 1 Nov 2026): the idle and no-recording alerts and the 7 PM summary come
+ * back when the server does them.
  */
 
 import {
@@ -23,7 +23,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
-  FileBarChart,
   PhoneIncoming,
   Plus,
   Settings2,
@@ -45,13 +44,7 @@ import { Sheet } from "../ui/sheet";
 import { RevenueTargetCard, RevenueTargetDetail } from "./revenue-target-card";
 import styles from "./team-controls.module.css";
 
-type Card =
-  | "hours"
-  | "first_call"
-  | "nudges"
-  | "alerts"
-  | "summary"
-  | "revenue";
+type Card = "hours" | "first_call" | "nudges" | "alerts" | "revenue";
 type Loaded = { team: Team; sla: Sla | null };
 
 const TITLES: Record<Card, string> = {
@@ -59,7 +52,6 @@ const TITLES: Record<Card, string> = {
   first_call: "First call on new enquiries",
   nudges: "Seller nudges",
   alerts: "Alert me when…",
-  summary: "Daily summary",
   revenue: "Monthly revenue target",
 };
 
@@ -126,21 +118,10 @@ function Toggle({
   );
 }
 
-function Row({
-  label,
-  children,
-  soon = false,
-}: {
-  label: string;
-  children: ReactNode;
-  soon?: boolean;
-}) {
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className={styles.row} data-soon={soon || undefined}>
-      <span className={styles.rowLabel}>
-        {label}
-        {soon ? <span className={styles.soon}>Soon</span> : null}
-      </span>
+    <div className={styles.row}>
+      <span className={styles.rowLabel}>{label}</span>
       {children}
     </div>
   );
@@ -474,9 +455,12 @@ function NudgesDetail({
 function AlertsDetail({
   sla,
   onSaved,
+  onFirstCall,
 }: {
   sla: Sla | null;
   onSaved: (next: Sla) => void;
+  /** Opens First call on new enquiries, where the limit is set. */
+  onFirstCall: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const live = !!sla?.on;
@@ -511,45 +495,17 @@ function AlertsDetail({
         />
       </Row>
       {sla && !live ? (
-        <p className={styles.hint}>Set a first-call limit to use this.</p>
+        <p className={styles.hint}>
+          <button
+            type="button"
+            className={styles.hintLink}
+            onClick={onFirstCall}
+          >
+            Set a first-call limit
+          </button>{" "}
+          to use this.
+        </p>
       ) : null}
-      <Row label="A seller is idle over an hour in work hours" soon>
-        <Toggle
-          label="A seller is idle over an hour in work hours"
-          on={false}
-          disabled
-          onChange={() => undefined}
-        />
-      </Row>
-      <Row label="A call has no recording" soon>
-        <Toggle
-          label="A call has no recording"
-          on={false}
-          disabled
-          onChange={() => undefined}
-        />
-      </Row>
-    </div>
-  );
-}
-
-function SummaryDetail() {
-  return (
-    <div className={styles.detail}>
-      <Row label="One message at 7:00 PM" soon>
-        <Toggle
-          label="One message at 7:00 PM"
-          on={false}
-          disabled
-          onChange={() => undefined}
-        />
-      </Row>
-      <ul className={styles.includes} aria-label="It brings">
-        <li>Calls and connects</li>
-        <li>Talk time</li>
-        <li>The longest breaks</li>
-        <li>Who fell behind</li>
-      </ul>
     </div>
   );
 }
@@ -579,7 +535,7 @@ export function TeamControls() {
     key: Card;
     icon: ReactNode;
     value: string;
-    tone?: "off" | "soon";
+    tone?: "off";
   }[] = [
     {
       key: "hours",
@@ -612,14 +568,8 @@ export function TeamControls() {
     {
       key: "alerts",
       icon: <AlarmClock size={20} />,
-      value: `${alertsOn} of 3 on`,
+      value: alertsOn ? "On" : "Off",
       tone: alertsOn ? undefined : "off",
-    },
-    {
-      key: "summary",
-      icon: <FileBarChart size={20} />,
-      value: "7:00 PM · Soon",
-      tone: "soon",
     },
   ];
   return (
@@ -700,11 +650,13 @@ export function TeamControls() {
             ) : card === "nudges" ? (
               <NudgesDetail team={shownTeam} onSaved={setTeam} />
             ) : card === "alerts" ? (
-              <AlertsDetail sla={shownSla} onSaved={setSla} />
-            ) : card === "revenue" ? (
-              <RevenueTargetDetail />
+              <AlertsDetail
+                sla={shownSla}
+                onSaved={setSla}
+                onFirstCall={() => setCard("first_call")}
+              />
             ) : (
-              <SummaryDetail />
+              <RevenueTargetDetail />
             )}
           </div>
         )}
