@@ -91,6 +91,35 @@ export function GuideOverlay({
   // the target sits over the card's column, the card's top stays below it
   // (guide.module.css --guide-clear caps its height; Close, Skip and Next stay
   // pinned while the words scroll).
+  // The page keeps room for the card at the bottom too, as for the corner
+  // cards (--sx-guide-h; shell/lightbox-shell.module.css), so what lies
+  // under it scrolls clear while the tour is open (the test robot, 1 Nov
+  // 2026: Share with your admins was out of reach at 360 px).
+  useEffect(() => {
+    const node = card.current;
+    const root = document.documentElement;
+    if (!node || above || typeof ResizeObserver === "undefined") {
+      root.style.removeProperty("--sx-guide-h");
+      return;
+    }
+    const publish = () =>
+      root.style.setProperty(
+        "--sx-guide-h",
+        `${Math.ceil(window.innerHeight - node.getBoundingClientRect().top)}px`,
+      );
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(node);
+    window.addEventListener("resize", publish);
+    // It glides when the corner cards fold; measure again once it lands.
+    node.addEventListener("transitionend", publish);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", publish);
+      node.removeEventListener("transitionend", publish);
+      root.style.removeProperty("--sx-guide-h");
+    };
+  }, [above]);
   useLayoutEffect(() => {
     const node = card.current;
     if (!node) return;

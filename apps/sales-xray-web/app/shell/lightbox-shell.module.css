@@ -1080,14 +1080,15 @@
 
   /* r17: on phones and tablets the shell owns one 16 px gutter. The end
      keeps room for the corner cards above the tab bar (notice-center.tsx;
-     the bar's own room is in .content), so content scrolls clear of them. */
+     the bar's own room is in .content) or the first-run tour's card,
+     whichever reaches higher (guide-overlay.tsx), so content scrolls clear. */
   .main {
     padding: 12px max(16px, env(safe-area-inset-right, 0px))
       max(
         24px,
         calc(
-          var(--sx-corner-h, 0px) - var(--lx-bottom-nav-h) -
-            env(safe-area-inset-bottom, 0px) + 16px
+          max(var(--sx-corner-h, 0px), var(--sx-guide-h, 0px)) -
+            var(--lx-bottom-nav-h) - env(safe-area-inset-bottom, 0px) + 16px
         )
       )
       max(16px, env(safe-area-inset-left, 0px));
@@ -1185,11 +1186,14 @@
   }
   /* Pages scroll down only; the gutter is kept, so a scrollbar appearing
      (a page taller than the window) never narrows the page sideways. The end
-     keeps room for the corner cards (notice-center.tsx), so content scrolls
-     clear of them. */
+     keeps room for the corner cards (notice-center.tsx) or the first-run
+     tour's card (guide-overlay.tsx), so content scrolls clear of them. */
   .main {
     min-height: 0;
-    padding-bottom: max(24px, calc(var(--sx-corner-h, 0px) + 16px));
+    padding-bottom: max(
+      24px,
+      calc(max(var(--sx-corner-h, 0px), var(--sx-guide-h, 0px)) + 16px)
+    );
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
