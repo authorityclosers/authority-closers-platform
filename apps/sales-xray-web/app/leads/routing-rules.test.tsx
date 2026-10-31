@@ -130,6 +130,23 @@ const type = async (input: HTMLInputElement, value: string) =>
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 
+// A picker found by its name; then the row with this key.
+const pick = async (name: string, key: string) => {
+  const picker = [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      'button[aria-haspopup="listbox"]',
+    ),
+  ].find((item) => item.textContent?.startsWith(name))!;
+  await act(async () => picker.click());
+  await act(async () =>
+    picker
+      .parentElement!.querySelector<HTMLElement>(
+        `[role="option"][data-key="${key}"]`,
+      )!
+      .click(),
+  );
+};
+
 const show = async () => {
   await act(async () => root.render(<RoutingRules />));
   await settle();
@@ -209,13 +226,7 @@ it("keeps both amounts across value choices, and saves a new rule with no id", a
     )!,
     "Middle budgets",
   );
-  const what = document.querySelector<HTMLSelectElement>(
-    'select[aria-label="What to check"]',
-  )!;
-  await act(async () => {
-    what.value = "value";
-    what.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  await pick("What to check", "value");
   const from = () =>
     document.querySelector<HTMLInputElement>(
       'input[aria-label="From, in rupees"]',

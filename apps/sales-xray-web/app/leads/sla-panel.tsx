@@ -11,6 +11,7 @@ import { Timer } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { notify } from "../notice-center";
+import { Picker } from "../ui/picker";
 import {
   AppCard,
   AppCardSkeleton,
@@ -176,19 +177,19 @@ export function SlaPanel({
               <span className={cardStyles.fieldLabel}>
                 <strong>A person answers within</strong>
               </span>
-              <select
-                aria-label="Target"
-                value={draft.minutes}
-                onChange={(event) =>
-                  change({ ...draft, minutes: Number(event.target.value) })
-                }
-              >
-                {draft.targets.map((minutes) => (
-                  <option key={minutes} value={minutes}>
-                    {targetWords(minutes)}
-                  </option>
-                ))}
-              </select>
+              <Picker
+                title="Target"
+                ariaLabel="Target"
+                value={String(draft.minutes)}
+                options={draft.targets.map((minutes) => ({
+                  key: String(minutes),
+                  label: targetWords(minutes),
+                }))}
+                onChange={(key) => {
+                  if (key === null) return;
+                  change({ ...draft, minutes: Number(key) });
+                }}
+              />
             </label>
             <SwitchRow
               label="Alert owners and admins too"

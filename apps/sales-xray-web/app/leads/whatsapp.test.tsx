@@ -197,6 +197,16 @@ const type = async (
     field.dispatchEvent(new Event("input", { bubbles: true }));
   });
 };
+const pick = async (picker: HTMLButtonElement, key: string) => {
+  await act(async () => picker.click());
+  await act(async () =>
+    (
+      picker.parentElement?.querySelector(
+        `[role="option"][data-key="${key}"]`,
+      ) as HTMLElement
+    ).click(),
+  );
+};
 
 it("says how long free replies last, fills templates, and shows the share in time", () => {
   expect(windowLine(chat(), NOW)).toBe(
@@ -320,11 +330,10 @@ it("sets the first-response target and shows each seller's week", async () => {
   expect(host.textContent).toContain("4 min");
   const on = host.querySelector('input[type="checkbox"]') as HTMLInputElement;
   await act(async () => on.click());
-  const select = host.querySelector("select") as HTMLSelectElement;
-  await act(async () => {
-    select.value = "5";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  await pick(
+    host.querySelector('button[aria-haspopup="listbox"]') as HTMLButtonElement,
+    "5",
+  );
   await act(async () => button("Save").click());
   expect(calls.find((call) => call.method === "PUT")?.body).toEqual({
     on: true,
@@ -357,13 +366,12 @@ it("greets every new lead only once the manager confirms people agreed to WhatsA
   ) as HTMLInputElement;
   await act(async () => greet.click());
   expect(host.textContent).toContain("The WhatsApp question on your form");
-  const who = Array.from(host.querySelectorAll("select")).find((select) =>
-    Array.from(select.options).some((option) => option.value === "every_lead"),
-  ) as HTMLSelectElement;
-  await act(async () => {
-    who.value = "every_lead";
-    who.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  await pick(
+    host.querySelector(
+      'button[aria-haspopup="listbox"][data-value="form_yes"]',
+    ) as HTMLButtonElement,
+    "every_lead",
+  );
   expect(host.textContent).not.toContain("The WhatsApp question on your form");
   expect(host.textContent).toContain(
     "People who reach us agreed to hear from us on WhatsApp",

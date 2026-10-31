@@ -17,7 +17,12 @@ import wave
 from pathlib import Path
 from urllib.parse import urlparse
 
-from playwright.sync_api import expect, sync_playwright
+from playwright.sync_api import Locator, Page, expect, sync_playwright
+
+
+def _pick(page: Page, picker: Locator, key: str) -> None:
+    picker.click()
+    page.locator(f'[role="option"][data-key="{key}"]').click()
 
 
 def synthetic_audio() -> bytes:
@@ -134,9 +139,9 @@ def run() -> None:
             page.get_by_role("button", name="Review notes", exact=True).click()
             page.get_by_label("Proposed correction", exact=True).fill("Synthetic reproduction: inspect the unavailable level window.")
             expect(page.get_by_role("button", name="Prepare local proposal")).to_be_disabled()
-            page.get_by_label("Measurement series", exact=True).select_option("0")
+            _pick(page, page.get_by_label("Measurement series", exact=True), "0")
             expect(page.get_by_role("button", name="Prepare local proposal")).to_be_disabled()
-            page.get_by_label("Exact measurement point", exact=True).select_option("1")
+            _pick(page, page.get_by_label("Exact measurement point", exact=True), "1")
             page.get_by_role("button", name="Prepare local proposal").click()
             with page.expect_download() as event:
                 page.get_by_role("link", name="Download JSON").click()

@@ -21,6 +21,7 @@ import { ArrowLeft, Check, ChevronDown, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 
 import { Button, Skeleton } from "../../ui/kit";
+import { Picker } from "../../ui/picker";
 import styles from "./builder.module.css";
 import {
   applyTemplate,
@@ -407,19 +408,18 @@ export function TemplateBuilder({
                 <span className={styles.srOnly}>
                   {`Where the ${row.fromLabel} leads go`}
                 </span>
-                <select
-                  value={places[row.fromKey]}
-                  onChange={(event) => {
-                    const value = event.target.value;
+                <Picker
+                  title={`Where the ${row.fromLabel} leads go`}
+                  value={places[row.fromKey] || null}
+                  options={row.choices.map((key) => ({
+                    key,
+                    label: labels.get(key) ?? key,
+                  }))}
+                  onChange={(key) => {
+                    const value = key ?? "";
                     setChoices((items) => ({ ...items, [row.fromKey]: value }));
                   }}
-                >
-                  {row.choices.map((key) => (
-                    <option key={key} value={key}>
-                      {labels.get(key) ?? key}
-                    </option>
-                  ))}
-                </select>
+                />
               </label>
             </li>
           ))}

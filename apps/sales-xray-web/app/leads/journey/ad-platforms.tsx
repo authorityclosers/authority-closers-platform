@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { notify } from "../../notice-center";
 import { Button, Skeleton } from "../../ui/kit";
+import { Picker } from "../../ui/picker";
 import { useAppConnect, type ConnectProvider } from "../app-connect";
 import {
   AppCard,
@@ -528,23 +529,22 @@ function Matches({
               />
               {editing && provider.options?.length ? (
                 <span className={styles.matchEdit}>
-                  <select
-                    value={name ?? ""}
-                    aria-label={`What ${provider.name} hears for ${item.stageLabel}`}
-                    onChange={(event) =>
+                  <Picker
+                    title={`What ${provider.name} hears`}
+                    value={name || null}
+                    ariaLabel={`What ${provider.name} hears for ${item.stageLabel}`}
+                    all={{ label: "Not sent" }}
+                    options={provider.options.map((option) => ({
+                      key: option.id,
+                      label: option.words,
+                    }))}
+                    onChange={(key) =>
                       setNames((all) => ({
                         ...all,
-                        [item.stageKey]: event.target.value || null,
+                        [item.stageKey]: key,
                       }))
                     }
-                  >
-                    <option value="">Not sent</option>
-                    {provider.options.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.words}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </span>
               ) : editing ? (
                 <span className={styles.matchEdit}>
@@ -704,16 +704,15 @@ function DestinationChooser({
           {found.adAccounts.length > 1 ? (
             <label>
               <span>Ad account</span>
-              <select
-                value={account}
-                onChange={(event) => setAccount(event.target.value)}
-              >
-                {found.adAccounts.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
+              <Picker
+                title="Ad account"
+                value={account || null}
+                options={found.adAccounts.map((item) => ({
+                  key: item.id,
+                  label: item.name,
+                }))}
+                onChange={(key) => setAccount(key ?? "")}
+              />
             </label>
           ) : null}
           <Button

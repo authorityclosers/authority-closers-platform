@@ -23,6 +23,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { displayName } from "../display-name";
 import { useFlow } from "../telemetry-flows";
 import { Button, Dialog, Field, kitStyles, Segmented } from "../ui/kit";
+import { Picker } from "../ui/picker";
 import { Sheet } from "../ui/sheet";
 import { several, usePipelines } from "./use-pipelines";
 import {
@@ -175,16 +176,19 @@ function PipelinePick({
   if (!several(pipes)) return null;
   return (
     <Field label="Pipeline">
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
-        <option value="">
-          {plural ? "Where file imports go" : "Where added leads go"}
-        </option>
-        {pipes.pipelines.map((item) => (
-          <option key={item.key} value={item.key}>
-            {item.name}
-          </option>
-        ))}
-      </select>
+      <Picker
+        title="Pipeline"
+        mode="inline"
+        value={value || null}
+        all={{
+          label: plural ? "Where file imports go" : "Where added leads go",
+        }}
+        options={pipes.pipelines.map((item) => ({
+          key: item.key,
+          label: item.name,
+        }))}
+        onChange={(key) => onChange(key ?? "")}
+      />
     </Field>
   );
 }
@@ -1213,25 +1217,24 @@ export function ImportDialog({
                   {[...MAPPABLE, "stage", ...(canManage ? ["owner"] : [])].map(
                     (field) => (
                       <Field key={field} label={COLUMN_LABELS[field]}>
-                        <select
-                          value={mapping[field] ?? ""}
-                          onChange={(event) =>
+                        <Picker
+                          title={COLUMN_LABELS[field] ?? field}
+                          mode="inline"
+                          value={mapping[field] || null}
+                          all={{ label: "Not in this file" }}
+                          options={preview.headers.map((header) => ({
+                            key: header,
+                            label: header,
+                          }))}
+                          onChange={(key) =>
                             setMapping((current) => {
                               const next = { ...current };
-                              if (event.target.value)
-                                next[field] = event.target.value;
+                              if (key) next[field] = key;
                               else delete next[field];
                               return next;
                             })
                           }
-                        >
-                          <option value="">Not in this file</option>
-                          {preview.headers.map((header) => (
-                            <option key={header} value={header}>
-                              {header}
-                            </option>
-                          ))}
-                        </select>
+                        />
                       </Field>
                     ),
                   )}

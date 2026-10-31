@@ -63,12 +63,9 @@
   align-items: center;
   font-size: 13px;
 }
-.select select {
-  background: var(--surface, white);
-  color: inherit;
-  border: 1px solid var(--border, #d9e0e8);
-  padding: 8px;
-  border-radius: 6px;
+.channelPicker {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .switcher {
   display: inline-flex;
@@ -151,7 +148,7 @@
   line-height: 1.6;
   margin: 12px 0 0;
 }
-.panel :is(button, select, summary, input):focus-visible {
+.panel :is(button, summary, input):focus-visible {
   outline: 3px solid var(--blue, #3150c8);
   outline-offset: 3px;
 }

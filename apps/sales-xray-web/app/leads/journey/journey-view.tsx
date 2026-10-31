@@ -51,6 +51,7 @@ import {
 import { notify } from "../../notice-center";
 import { Sheet } from "../../ui/sheet";
 import { Button, Segmented, Skeleton } from "../../ui/kit";
+import { Picker } from "../../ui/picker";
 import { SaveBar } from "../app-card";
 import { LeadsError } from "../leads-client";
 import { AdPlatforms } from "./ad-platforms";
@@ -977,21 +978,19 @@ function StageSheet({
           {fixed ? null : (
             <label className={styles.sheetField}>
               <span>What it means</span>
-              <select
+              <Picker
+                title="What it means"
+                mode="inline"
                 value={item.milestone ?? "other"}
-                onChange={(event) =>
+                options={options.map(([key, words]) => ({ key, label: words }))}
+                onChange={(key) => {
+                  if (key === null) return;
                   onChange({
-                    milestone: event.target.value,
-                    meaning: meanings[event.target.value],
-                  })
-                }
-              >
-                {options.map(([key, words]) => (
-                  <option key={key} value={key}>
-                    {words}
-                  </option>
-                ))}
-              </select>
+                    milestone: key,
+                    meaning: meanings[key],
+                  });
+                }}
+              />
               <small>
                 Sales X-Ray uses this to tell your ad platforms what happened.
               </small>

@@ -1951,10 +1951,8 @@ a.repName {
 
 .waCompose textarea,
 .waTemplate input,
-.waTemplate select,
 .waOptIn input,
-.waRules textarea,
-.slaPanel select {
+.waRules textarea {
   min-width: 0;
   min-height: var(--sx-control-h);
   padding: 6px 8px;
@@ -3959,10 +3957,10 @@ a.repName {
   gap: 6px;
 }
 
-.messageField :is(textarea, select) {
+.messageField textarea {
   box-sizing: border-box;
   width: 100%;
-  min-height: 44px;
+  min-height: 104px;
   padding: 10px 12px;
   border: 1px solid var(--sx-line-strong);
   border-radius: var(--sx-radius-sm);
@@ -3971,10 +3969,6 @@ a.repName {
   font: inherit;
   font-size: var(--sx-text-md);
   line-height: 1.45;
-}
-
-.messageField textarea {
-  min-height: 104px;
   resize: vertical;
 }
 
@@ -5664,50 +5658,19 @@ a.repName {
   flex: none;
 }
 
-/* To call's pipeline (several pipelines only): a compact chip menu, so Start
-   calling works one pipeline at a time (orchestrator, 23 Oct 2026). */
+/* To call's pipeline (several pipelines only): the shared picker, so Start
+   calling works one pipeline at a time (orchestrator, 23 Oct 2026; picker
+   sweep, 31 Oct 2026). A phone gives it the row; a computer keeps it beside
+   the row's other tools. */
 .pipelineChip {
-  position: relative;
-  display: inline-flex;
-  /* It gives way (with an ellipsis) before the row wraps at 360 px. */
-  flex: 1 1 0;
-  align-items: center;
+  flex: 1 1 100%;
   min-width: 0;
-  max-width: max-content;
-  min-height: 32px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-pill);
-  background: var(--sx-surface);
-  color: var(--sx-ink);
-  font-size: var(--sx-text-sm);
-  font-weight: 600;
 }
 
-.pipelineChip select {
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  min-height: 32px;
-  padding: 0 28px 0 12px;
-  overflow: hidden;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  appearance: none;
-  cursor: pointer;
-}
-
-.pipelineChip > svg {
-  position: absolute;
-  right: 10px;
-  pointer-events: none;
-}
-
-.pipelineChip:focus-within {
-  box-shadow: var(--sx-focus-ring);
+@media (min-width: 900px) {
+  .pipelineChip {
+    flex: 0 1 280px;
+  }
 }
 
 /* ---------- The lead sheet on one grid (owner, 25 Oct 2026) ----------
@@ -6033,19 +5996,6 @@ button.leadTags {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* More pipelines: the menu takes the row's whole width on a phone. */
-@media (max-width: 899.98px) {
-  .pipelineChip {
-    flex: 1 1 100%;
-    max-width: none;
-    min-height: 44px;
-  }
-
-  .pipelineChip select {
-    min-height: 44px;
-  }
 }
 
 /* ---------- The note composer (owner, #30, 26 Oct 2026) ----------

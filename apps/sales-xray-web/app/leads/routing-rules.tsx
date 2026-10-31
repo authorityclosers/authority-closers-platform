@@ -23,6 +23,7 @@ import { useEffect, useId, useState } from "react";
 
 import { PersonAvatar } from "../people/person-avatar";
 import { Button, Field, Segmented } from "../ui/kit";
+import { Picker } from "../ui/picker";
 import { Sheet } from "../ui/sheet";
 import { SaveBar } from "./app-card";
 import {
@@ -392,22 +393,17 @@ function RuleSheet({
           {draft.when.map((condition, at) => (
             <div key={at} className={styles.condition}>
               <div className={styles.conditionHead}>
-                <select
-                  aria-label="What to check"
+                <Picker
+                  title="What to check"
+                  ariaLabel="What to check"
+                  mode="inline"
                   value={condition.field}
-                  onChange={(event) =>
-                    setCondition(
-                      at,
-                      blank(event.target.value as ConditionField, routing),
-                    )
-                  }
-                >
-                  {FIELDS.map((field) => (
-                    <option key={field.key} value={field.key}>
-                      {field.label}
-                    </option>
-                  ))}
-                </select>
+                  options={FIELDS}
+                  onChange={(key) => {
+                    if (key === null) return;
+                    setCondition(at, blank(key as ConditionField, routing));
+                  }}
+                />
                 <button
                   type="button"
                   className={styles.remove}
@@ -547,19 +543,19 @@ function ConditionEditor({
     );
     return (
       <div className={styles.answer}>
-        <select
-          aria-label="Which question"
-          value={condition.key}
-          onChange={(event) =>
-            onChange({ field: "answer", key: event.target.value, values: [] })
+        <Picker
+          title="Which question"
+          ariaLabel="Which question"
+          mode="inline"
+          value={condition.key || null}
+          options={routing.questions.map((item) => ({
+            key: item.key,
+            label: item.label,
+          }))}
+          onChange={(key) =>
+            onChange({ field: "answer", key: key ?? "", values: [] })
           }
-        >
-          {routing.questions.map((item) => (
-            <option key={item.key} value={item.key}>
-              {item.label}
-            </option>
-          ))}
-        </select>
+        />
         {question?.examples.length ? (
           <div className={styles.options}>
             {question.examples.map((example) => {
@@ -613,18 +609,18 @@ function ConditionEditor({
     const { op, low, high } = condition;
     return (
       <div className={styles.value}>
-        <select
-          aria-label="The form question with the lead's value"
-          value={valueAnswer ?? ""}
-          onChange={(event) => onValueAnswer(event.target.value || null)}
-        >
-          <option value="">Which form answer is the value?</option>
-          {routing.questions.map((item) => (
-            <option key={item.key} value={item.key}>
-              {item.label}
-            </option>
-          ))}
-        </select>
+        <Picker
+          title="The form question with the lead's value"
+          ariaLabel="The form question with the lead's value"
+          mode="inline"
+          value={valueAnswer || null}
+          placeholder="Which form answer is the value?"
+          options={routing.questions.map((item) => ({
+            key: item.key,
+            label: item.label,
+          }))}
+          onChange={(key) => onValueAnswer(key || null)}
+        />
         <Segmented
           label="Value"
           value={op}
@@ -730,18 +726,17 @@ function TryLead({ routing, draft }: { routing: Routing; draft: boolean }) {
           : "See who a lead like this would go to now."}
       </p>
       <div className={styles.tryFields}>
-        <select
-          aria-label="Source"
+        <Picker
+          title="Source"
+          ariaLabel="Source"
           className={styles.trySource}
-          value={source}
-          onChange={(event) => setSource(event.target.value)}
-        >
-          {Object.entries(routing.sources).map(([key, words]) => (
-            <option key={key} value={key}>
-              {words}
-            </option>
-          ))}
-        </select>
+          value={source || null}
+          options={Object.entries(routing.sources).map(([key, words]) => ({
+            key,
+            label: words,
+          }))}
+          onChange={(key) => setSource(key ?? "")}
+        />
         <input
           aria-label="City"
           placeholder="City"

@@ -126,7 +126,9 @@ it("the mounted page displays observed upload controls without applying consent 
   expect(consent.checked).toBe(true);
   expect(consent.disabled).toBe(true);
   expect(
-    container.querySelector<HTMLSelectElement>("#report-language")?.value,
+    container
+      .querySelector<HTMLButtonElement>("#report-language")
+      ?.getAttribute("data-value"),
   ).toBe("hi-Deva+en");
   const privacy = [...container.querySelectorAll("details")].find(
     (element) =>

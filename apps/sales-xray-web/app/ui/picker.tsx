@@ -11,16 +11,22 @@
  * the row that clears the choice ("All stages") comes first. A listbox: the
  * arrows, Home and End move, Enter or Space picks, Escape closes. Reduce
  * motion: fades only.
+ *
+ * It stands in for every native select (picker sweep, 31 Oct 2026): it can be
+ * disabled, show a placeholder, carry a form field's value and sit inside a
+ * label, where a tap on a row must not reach the label and reopen the list.
  */
 import { Check, ChevronDown } from "lucide-react";
 import {
   useEffect,
   useId,
+  useImperativeHandle,
   useRef,
   useState,
   useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent,
+  type Ref,
 } from "react";
 
 import styles from "./picker.module.css";
@@ -139,6 +145,7 @@ function Options({
         <li
           key={row.key ?? ""}
           role="option"
+          data-key={row.key ?? ""}
           aria-selected={row.key === value}
           tabIndex={index === active ? 0 : -1}
           className={styles.option}
@@ -170,6 +177,14 @@ export function Picker({
   onChange,
   mode = "auto",
   className,
+  id,
+  ariaLabel,
+  describedBy,
+  invalid,
+  disabled,
+  placeholder,
+  name,
+  buttonRef,
 }: {
   /** The list's name: the sheet's title and the listbox's label. */
   title: string;
@@ -184,11 +199,24 @@ export function Picker({
   /** "inline": the list opens in place, for a picker inside a sheet. */
   mode?: "auto" | "inline";
   className?: string;
+  /** The button's id, for a label elsewhere (`htmlFor`). */
+  id?: string;
+  /** The button's name for screen readers when no words show before the choice. */
+  ariaLabel?: string;
+  describedBy?: string;
+  invalid?: boolean;
+  disabled?: boolean;
+  /** Shown, muted, while no row is chosen and there is no `all` row. */
+  placeholder?: string;
+  /** A form field's name: a hidden input carries the chosen key. */
+  name?: string;
+  buttonRef?: Ref<HTMLButtonElement | null>;
 }) {
   const phone = usePhone();
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
+  useImperativeHandle(buttonRef, () => button.current as HTMLButtonElement, []);
   const listId = useId();
   const inline = mode === "inline";
   const sheet = !inline && phone;
@@ -196,8 +224,14 @@ export function Picker({
     ...(all ? [{ key: null, label: all.label, count: all.count }] : []),
     ...options,
   ];
-  const chosen: Partial<Row> = rows.find((row) => row.key === value) ??
-    (value ? { key: value, label: value } : rows[0]) ?? { label: "" };
+  const chosen: Partial<Row> & { empty?: boolean } = rows.find(
+    (row) => row.key === value,
+  ) ??
+    (placeholder !== undefined
+      ? { label: placeholder, empty: true }
+      : value
+        ? { key: value, label: value }
+        : rows[0]) ?? { label: "" };
 
   const close = (refocus = true) => {
     setOpen(false);
@@ -249,6 +283,12 @@ export function Picker({
       ref={root}
       className={[styles.root, className].filter(Boolean).join(" ")}
       data-mode={inline ? "inline" : undefined}
+      onClick={(event) => {
+        // Inside a label, a tap on a row would reach the label, which clicks
+        // the button and opens the list again.
+        if (!button.current?.contains(event.target as Node))
+          event.preventDefault();
+      }}
       onBlur={(event) => {
         // Tabbing away closes a popover.
         if (
@@ -263,11 +303,17 @@ export function Picker({
     >
       <button
         ref={button}
+        id={id}
         type="button"
         className={styles.button}
+        data-value={value ?? ""}
+        disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
+        aria-describedby={describedBy}
+        // A button can't carry aria-invalid; the words it points at say what's wrong.
+        data-invalid={invalid ? "" : undefined}
         onClick={() => setOpen((now) => !now)}
         onKeyDown={(event) => {
           if (!open && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
@@ -276,13 +322,22 @@ export function Picker({
           }
         }}
       >
+        {ariaLabel ? (
+          <span className={styles.srOnly}>{`${ariaLabel} `}</span>
+        ) : null}
         {label ? <span className={styles.label}>{label}</span> : null}
         <span className={styles.value}>
           {chosen.tone ? <Dot tone={chosen.tone} /> : null}
-          <span className={styles.valueWords}>{chosen.label}</span>
+          <span
+            className={styles.valueWords}
+            data-empty={chosen.empty ? "" : undefined}
+          >
+            {chosen.label}
+          </span>
         </span>
         <ChevronDown size={18} aria-hidden="true" className={styles.mark} />
       </button>
+      {name ? <input type="hidden" name={name} value={value ?? ""} /> : null}
       {inline ? (
         <div
           className={styles.drawer}

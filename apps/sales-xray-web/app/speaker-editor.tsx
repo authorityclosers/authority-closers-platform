@@ -21,6 +21,7 @@ import {
 } from "./speaker-profiles";
 import styles from "./speaker.module.css";
 import { useBackClose } from "./ui/back-close";
+import { Picker } from "./ui/picker";
 
 const ROLES = [
   { key: "you", label: "You", Icon: CircleUser },
@@ -316,31 +317,28 @@ export function SpeakerEditor({
                 {speakerLabels?.[speakerId] ||
                   profile.name ||
                   `Other speaker ${index + 1}`}{" "}
-                <select
-                  aria-label={`Role for ${profile.name || speakerId}`}
-                  value={profile.role ?? ""}
+                <Picker
+                  title="Role"
+                  ariaLabel={`Role for ${profile.name || speakerId}`}
+                  value={profile.role ?? null}
+                  placeholder="Choose a role"
                   disabled={saving || speakerId === "unattributed"}
-                  onChange={(event) =>
+                  options={ROLES.filter(
+                    (option) => option.key !== "you" || role !== "you",
+                  ).map((option) => ({
+                    key: option.key,
+                    label: option.label,
+                  }))}
+                  onChange={(key) =>
                     setOthers((current) => ({
                       ...current,
                       [speakerId]: {
                         ...profile,
-                        role: event.target.value as SpeakerRole,
+                        role: key as SpeakerRole,
                       },
                     }))
                   }
-                >
-                  <option value="" disabled>
-                    Choose a role
-                  </option>
-                  {ROLES.filter(
-                    (option) => option.key !== "you" || role !== "you",
-                  ).map((option) => (
-                    <option key={option.key} value={option.key}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                />
               </label>
             ))}
           </div>

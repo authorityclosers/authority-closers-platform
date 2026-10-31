@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 
 import { chatHref } from "../chats/chats-client";
 import { Badge, Button } from "../ui/kit";
+import { Picker } from "../ui/picker";
 import { AiHelp, useLeadAi } from "./ai-replies";
 import { ago, LeadsError } from "./leads-client";
 import styles from "./leads.module.css";
@@ -77,27 +78,23 @@ function TemplatePicker({
     );
   return (
     <div className={styles.waTemplate}>
-      <select
-        aria-label="Template"
-        value={picked ? `${picked.name}|${picked.language}` : ""}
-        onChange={(event) => {
-          const [name, language] = event.target.value.split("|");
+      <Picker
+        title="Template"
+        ariaLabel="Template"
+        value={picked ? `${picked.name}|${picked.language}` : null}
+        options={templates.map((template) => ({
+          key: `${template.name}|${template.language}`,
+          label: `${template.name} (${template.language})`,
+        }))}
+        onChange={(key) => {
+          const [name, language] = (key ?? "").split("|");
           setPicked(
             templates.find((t) => t.name === name && t.language === language) ??
               null,
           );
           setValues([]);
         }}
-      >
-        {templates.map((template) => (
-          <option
-            key={`${template.name}|${template.language}`}
-            value={`${template.name}|${template.language}`}
-          >
-            {template.name} ({template.language})
-          </option>
-        ))}
-      </select>
+      />
       {picked
         ? Array.from({ length: picked.parts }, (_, index) => (
             <input

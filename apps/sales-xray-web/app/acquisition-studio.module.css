@@ -706,26 +706,11 @@
   font-size: 13px;
   font-weight: 650;
 }
-.reportLanguage select {
-  min-width: 0;
-  width: 100%;
-  min-height: 44px;
-  padding: 10px 12px;
-  background: var(--surface);
-  color: var(--ink);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font: inherit;
-}
 .reportLanguage p {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.5;
-}
-.reportLanguage select:focus-visible {
-  outline: 3px solid var(--action);
-  outline-offset: 3px;
 }
 .uploadActions {
   display: grid;
@@ -2437,42 +2422,6 @@
   color: var(--lx-ink);
   font: 600 13.5px/1.3 var(--lx-font-ui);
 }
-.app.app[data-stage="upload"][data-selected="true"] .reportLanguage select {
-  width: auto;
-  min-width: 132px;
-  height: 32px;
-  min-height: 0;
-  margin: 0;
-  padding: 0 30px 0 12px;
-  border: 1px solid var(--lx-line-strong);
-  border-radius: 8px;
-  background-color: var(--lx-surface);
-  background-image:
-    linear-gradient(45deg, transparent 50%, var(--lx-muted) 50%),
-    linear-gradient(135deg, var(--lx-muted) 50%, transparent 50%);
-  background-position:
-    calc(100% - 15px) 55%,
-    calc(100% - 10px) 55%;
-  background-size: 5px 5px;
-  background-repeat: no-repeat;
-  box-shadow: var(--lx-shadow-1);
-  color: var(--lx-ink);
-  font: 600 13px/1 var(--lx-font-ui);
-  appearance: none;
-  cursor: pointer;
-  transition: border-color var(--lx-dur-quick) var(--lx-ease-quick);
-}
-.app.app[data-stage="upload"][data-selected="true"]
-  .reportLanguage
-  select:hover {
-  border-color: var(--lx-muted-2);
-}
-.app.app[data-stage="upload"][data-selected="true"]
-  .reportLanguage
-  select:focus-visible {
-  outline: 2px solid var(--lx-teal);
-  outline-offset: 2px;
-}
 .app.app[data-stage="upload"][data-selected="true"] .reportLanguage p {
   grid-column: 1 / -1;
   margin: 0;
@@ -2707,7 +2656,7 @@
 .app.app[data-stage="upload"][data-selected="true"] .reportLanguage {
   grid-template-columns: minmax(0, 1fr);
 }
-.app.app[data-stage="upload"][data-selected="true"] .reportLanguage select {
+.app.app[data-stage="upload"][data-selected="true"] .languagePicker {
   flex: 1 1 auto;
   min-width: 0;
 }
