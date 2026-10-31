@@ -1087,3 +1087,85 @@
     flex: 1 0 12rem;
   }
 }
+
+/* Each stage with its colour dot and a check on the one picked; what the move
+   asks opens in place under it, about 220 ms (owner, 31 Oct 2026). */
+.targets .target {
+  display: grid;
+  grid-template-areas:
+    "dot label check"
+    "dot hint check";
+  grid-template-columns: 10px minmax(0, 1fr) 18px;
+  column-gap: 12px;
+  align-items: center;
+  text-align: left;
+}
+
+.targetDot {
+  grid-area: dot;
+  width: 10px;
+  height: 10px;
+  fill: var(--stage);
+}
+
+.targets .target .targetLabel {
+  grid-area: label;
+}
+
+.targets .target .targetHint {
+  grid-area: hint;
+}
+
+.targetCheck {
+  grid-area: check;
+  color: var(--lx-teal);
+  visibility: hidden;
+}
+
+.target[aria-pressed="true"] .targetCheck {
+  visibility: visible;
+}
+
+.asksRow {
+  scroll-margin-block: 16px 120px;
+}
+
+.asks {
+  display: grid;
+  grid-template-rows: 1fr;
+  animation: asks-open 220ms var(--sx-ease-out) both;
+}
+
+.asks > * {
+  min-height: 0;
+  overflow: hidden;
+  padding: 2px;
+}
+
+@keyframes asks-open {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+
+  to {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+}
+
+@keyframes asks-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asks {
+    animation-name: asks-fade;
+  }
+}

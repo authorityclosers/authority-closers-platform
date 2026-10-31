@@ -37,7 +37,7 @@ const reads = () => ({
   },
   "/v1/lead-desk": { status: 200, body: desk },
 });
-const load = (query: Record<string, string> = { tab: "all", stage: "new" }) =>
+const load = (query: Record<string, string> = {}) =>
   serverLeads(Promise.resolve(query));
 beforeEach(() => {
   vi.mocked(serverApiOrigin).mockReturnValue("http://api.example.test");
@@ -45,7 +45,10 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValueOnce(reads())
     .mockResolvedValueOnce({
-      "/v1/lead-desk/leads?scope=team&stage=new": { status: 200, body: page },
+      "/v1/lead-desk/leads?scope=team&side=inbound&view=to_call": {
+        status: 200,
+        body: page,
+      },
     });
 });
 it("reads only the first page through the existing bounded private server reader", async () => {
@@ -85,6 +88,9 @@ it.each<Record<string, string>>([
   { tab: "all", who: "mine" },
   { tab: "all", q: "fictional" },
   { tab: "all", stage: "won" },
+  { side: "cold" },
+  { view: "all" },
+  { view: "follow_ups", when: "today" },
 ])(
   "leaves other views, saved filters and their scope to the normal reader (%j)",
   async (query) => {
@@ -134,7 +140,10 @@ it("uses mine for a seller, leaving team permission to the ordinary API", async 
       },
     })
     .mockResolvedValueOnce({
-      "/v1/lead-desk/leads?scope=mine&stage=new": { status: 200, body: page },
+      "/v1/lead-desk/leads?scope=mine&side=inbound&view=to_call": {
+        status: 200,
+        body: page,
+      },
     });
   expect(await load()).toMatchObject({ firstPage: { scope: "mine", page } });
 });
@@ -144,19 +153,24 @@ it("a server page never answers another identity, scope, pipeline or filter", ()
     desk,
     firstPage: { scope: "team", page },
   } as unknown as ServerLeads;
-  const ask = { scope: "team", stage: "new", query: "" };
+  const opening = { side: "inbound", view: "to_call" };
+  const ask = { scope: "team", stage: "all", query: "", more: opening };
   expect(firstPageFor(seed, identity, ask)).toBe(page);
   expect(firstPageFor(null, undefined, ask)).toBeNull();
   expect(firstPageFor(seed, "other-identity", ask)).toBeNull();
   for (const change of [
     { scope: "mine" },
     { stage: "won" },
-    // All is a tab, not where Leads opens: the server read is the first stage's.
-    { stage: "open" },
+    { stage: "new" },
+    // Leads opens on Inbound, To Call (Dipak's handoff, 31 Oct 2026).
+    { more: { ...opening, side: "cold" } },
+    { more: { ...opening, view: "follow_ups" } },
+    { more: { ...opening, step: "new" } },
+    { more: null },
     { query: "test" },
     { pipeline: "other" },
     { owner: "other" },
-    { more: { due: "today" } },
+    { more: { ...opening, due: "today" } },
   ])
     expect(firstPageFor(seed, identity, { ...ask, ...change })).toBeNull();
 });

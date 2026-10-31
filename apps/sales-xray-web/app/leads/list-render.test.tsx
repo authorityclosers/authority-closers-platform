@@ -175,8 +175,9 @@ it("hydrates the server's first rows without replacing them with a loading outli
       initial={initial}
       cacheIdentity={cacheIdentity}
       canManage={false}
-      stage="new"
-      stageLabel="New"
+      stage="all"
+      stageLabel="Inbound leads to call"
+      more={{ side: "inbound", view: "to_call" }}
       scope="mine"
       query=""
       version={0}

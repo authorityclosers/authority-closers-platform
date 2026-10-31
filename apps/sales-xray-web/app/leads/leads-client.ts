@@ -251,6 +251,8 @@ export type LeadPage = {
   next_offset: number | null;
   /** Every stage's count for the same people and search (the stage tabs). */
   stage_counts?: Record<string, number>;
+  /** Each of the owner's stages' count before the stage pick (a side's first page). */
+  step_counts?: Record<string, number>;
   /** Leads per seller ("none": nobody's) for the same filters, without the seller picked. */
   owner_counts?: Record<string, number>;
 };
@@ -683,7 +685,18 @@ export type ListSort = "next_action" | "last_contact" | "name" | "created";
 export type ListDue = "late" | "today" | "week" | "none";
 export type ListSince = "today" | "week" | "month" | "never";
 export type ListMade = "today" | "week" | "month";
+/** Inbound Leads or Cold Leads (Dipak's Home + Leads handoff, 31 Oct 2026). */
+export type LeadSide = "inbound" | "cold";
+/** A work view, not a stage: To Call, Follow-ups or All Leads. */
+export type WorkView = "to_call" | "follow_ups" | "all";
+/** Follow-ups due today, overdue or upcoming. */
+export type FollowUpWhen = "today" | "overdue" | "upcoming";
 export type ListMore = {
+  side?: LeadSide | null;
+  view?: WorkView | null;
+  /** One of the organisation's stages (its key). */
+  step?: string | null;
+  when?: FollowUpWhen | null;
   source?: string | null;
   due?: ListDue | null;
   contact?: ListSince | null;
@@ -699,6 +712,10 @@ export function moreParams(
   if (!more) return [];
   return (
     [
+      ["side", more.side],
+      ["view", more.view],
+      ["step", more.step],
+      ["when", more.when],
       ["source", more.source],
       ["due", more.due],
       ["contact", more.contact],
@@ -736,7 +753,9 @@ export function readLeads(
   signal?: AbortSignal,
 ) {
   const params = new URLSearchParams({ scope });
-  for (const [key, value] of moreParams(more)) params.set(key, value);
+  // All Leads is the list with no work view.
+  for (const [key, value] of moreParams(more))
+    if (key !== "view" || value !== "all") params.set(key, value);
   if (owner) params.set("owner", owner);
   if (pipeline) params.set("pipeline", pipeline);
   if (stage) params.set("stage", stage);
@@ -744,6 +763,18 @@ export function readLeads(
   if (offset) params.set("offset", String(offset));
   if (test) params.set("test", "only");
   return request<LeadPage>(`/leads?${params}`, { signal });
+}
+
+/** Each side's numbers: every Inbound lead and the Cold leads imported tell
+ *  whether someone has both lead types. */
+export type SideNumbers = {
+  inbound: { leads: number; new: number; to_call: number; follow_ups: number };
+  cold: { imported: number; unworked: number; attempted: number };
+};
+
+/** Both sides' numbers for the seller's own leads, or the team's. */
+export function readSides(scope: "mine" | "team", signal?: AbortSignal) {
+  return request<SideNumbers>(`/sides?scope=${scope}`, { signal });
 }
 
 /** My work: what the seller did, today, yesterday or this week. */
@@ -1050,6 +1081,8 @@ export type Disposition = {
   follow_up_at?: string;
   remark?: string;
   deal_value?: string;
+  /** Why an open lead is still open (Open Leads: Discussion Incomplete, Call Later). */
+  outcome_reason?: string;
 };
 
 /** A move the lists and To call follow at once (lead-moves.ts). */

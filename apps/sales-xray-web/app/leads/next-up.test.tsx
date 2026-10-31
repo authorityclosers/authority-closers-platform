@@ -101,17 +101,23 @@ const tile = (label: string) =>
     button.textContent?.startsWith(label),
   )!;
 
-// The ease-of-use wave, 22 Oct 2026: "Call next" after any saved outcome.
-it("says who is next after a save, and calls them in one tap", async () => {
+// Dipak's Home + Leads handoff (31 Oct 2026, items 16-17): a one-off call
+// saves and closes; from Call Next, Save & Next Lead goes on through the list.
+it.each([
+  [false, "Save & Close"],
+  [true, "Save & Next Lead"],
+])("after a call opened with queue %s, saves with %s", async (queue, label) => {
   const onNext = vi.fn();
+  const onClose = vi.fn();
   await act(async () =>
     root.render(
       <LeadSheet
         leadId={ONE}
         me={null}
-        onClose={() => undefined}
+        onClose={onClose}
         onChanged={() => undefined}
         onNext={onNext}
+        queue={queue}
       />,
     ),
   );
@@ -120,12 +126,16 @@ it("says who is next after a save, and calls them in one tap", async () => {
   await act(async () => tile("Log a call").click());
   await act(async () => tile("Didn't get through").click());
   await act(async () => tile("No answer").click());
-  await act(async () => tile("Save").click());
+  await act(async () => tile(label).click());
   await flush();
-  const bar = document.querySelector('[role="status"][class*="nextUp"]');
-  expect(bar?.textContent).toContain("Saved. Next up: Asha Fictional");
-  await act(async () => tile("Call Asha").click());
-  expect(onNext).toHaveBeenCalledWith(TWO);
+  if (queue) {
+    expect(onNext).toHaveBeenCalledWith(ONE);
+    expect(onClose).not.toHaveBeenCalled();
+  } else {
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onNext).not.toHaveBeenCalled();
+  }
+  expect(document.querySelector('[class*="nextUp"]')).toBeNull();
 });
 
 // One shared "Call next" (Liquid Glass split, 22 Oct 2026): the same card wherever it sits.

@@ -5087,6 +5087,23 @@ a.repName {
   border-bottom: 1px solid var(--sx-line);
 }
 
+/* A compact row (the work views) keeps "Stage · Source" on a phone too. */
+.leadFace[data-quick][data-compact] .leadSub {
+  display: -webkit-box;
+}
+
+/* The work views' own line over the count: "Inbound leads to call". */
+.listHeading {
+  margin: 0;
+  padding: 12px 16px 0;
+  overflow: hidden;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .listTotal {
   flex: none;
   color: var(--sx-muted);
@@ -7272,5 +7289,200 @@ fieldset.form {
 
   .listHead .listFilter button .filterCount {
     font-size: var(--sx-text-xs);
+  }
+}
+
+/* The work views pin their own head (work-views.module.css); the list's count
+   row scrolls with the rows, so nothing scrolls above the pinned head. */
+.root[data-tab="all"] .listHead:has(.syncChip) {
+  position: static;
+}
+
+/* No box around the work views' list (owner, 31 Oct 2026: no container
+   layers): rows sit on the page with their dividers. */
+.root[data-tab="all"] .listPanel {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* Prospect's Information beside the list on a wide screen. */
+.leadPane {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding-bottom: 8px;
+}
+
+.leadPaneClose {
+  position: absolute;
+  z-index: 2;
+  top: 4px;
+  right: 4px;
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-muted);
+  cursor: pointer;
+}
+
+.leadPaneClose:hover {
+  background: var(--sx-fill-soft);
+}
+
+.leadPaneClose:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.leadPaneDock {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding-top: 8px;
+  background: var(--sx-paper);
+}
+
+/* Leads uses the computer's full width (owner, 31 Oct 2026): the list and the
+   lead beside it, not a centred column. */
+@media (min-width: 900px) {
+  .root {
+    max-width: none;
+  }
+}
+
+/* A narrow phone shows the Filter as its icon, so the search's words fit. */
+@media (max-width: 479.98px) {
+  .filterWords {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .statusChip:has(.filterWords) {
+    justify-content: center;
+    min-width: 44px;
+  }
+}
+
+/* A row's source: its mark and short name (owner, 31 Oct 2026). */
+.leadSource {
+  white-space: nowrap;
+}
+
+.sourceMark {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  margin-right: 4px;
+  color: var(--sx-muted);
+  vertical-align: -2px;
+}
+
+.sourceMark[data-kind="meta"] {
+  color: var(--lx-closing);
+}
+
+.sourceMark[data-kind="sheet"] {
+  color: var(--xr-green-mark);
+}
+
+/* The lead's stage: one row, "Stage", its coloured chip and a chevron
+   (owner, 31 Oct 2026). */
+.stageRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 8px 0 0;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  cursor: pointer;
+}
+
+.stageRow:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.stageChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--sx-radius-pill);
+  background: color-mix(in oklab, var(--stage) 14%, transparent);
+  color: var(--sx-ink);
+  font-weight: 600;
+}
+
+.stageChip::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--stage);
+  content: "";
+}
+
+/* An owner's tick beside a row on a computer (bug report 130): shown on hover
+   or focus, over the initials, it starts picking leads for the bulk bar. */
+.leadFace[data-compact] {
+  position: relative;
+}
+
+.hoverPick {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 12px;
+  display: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--sx-surface);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.hoverPick::before {
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--sx-line-strong);
+  border-radius: 5px;
+  content: "";
+}
+
+.hoverPick:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .hoverPick {
+    display: grid;
+    opacity: 0;
+  }
+
+  .leadLine:hover .hoverPick,
+  .hoverPick:focus-visible {
+    opacity: 1;
   }
 }

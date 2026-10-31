@@ -30,7 +30,8 @@ import {
   type ReactNode,
 } from "react";
 
-import { inStageList, useLeadMoves, withMoves } from "./lead-moves";
+import { inStageList, inWorkView, useLeadMoves, withMoves } from "./lead-moves";
+import { OPENING_STAGE } from "./opening";
 import { cachedLeadPage, readFirstLeads } from "./list-cache";
 import { firstPageFor, type ServerLeads } from "./leads-seed";
 import { notify } from "../notice-center";
@@ -89,6 +90,11 @@ function storedLayout(owner: string | undefined): Layout {
   }
 }
 
+/** The stage the server is asked for: none for test leads and for the work
+ *  views' list (its view and stage pick are in `more`). */
+const askedStage = (stage: string) =>
+  stage === TEST || stage === OPENING_STAGE ? null : stage;
+
 export function ListView({
   canManage,
   initial = null,
@@ -104,6 +110,8 @@ export function ListView({
   actions,
   onChanged,
   onCounts,
+  onTable,
+  onStepCounts,
   pipeline = null,
   tools = null,
   filtered = false,
@@ -117,10 +125,25 @@ export function ListView({
   more: refine = null,
   onSort,
   onTopLead,
+  onOrder,
+  stageWord,
+  quietLate = false,
+  heading = null,
+  empty = null,
 }: {
   canManage: boolean;
+  /** A lead's stage, named for the side shown (compact rows). */
+  stageWord?: (row: LeadRow) => string | undefined;
+  /** Rows never turn red: Cold Leads for a seller (owner, 31 Oct 2026). */
+  quietLate?: boolean;
+  /** The list's own line ("Inbound leads to call"), its count beside it. */
+  heading?: string | null;
+  /** What an empty list says, when the page knows better than its stage. */
+  empty?: { title: string; text: string } | null;
   /** The list's first lead, or null: Start calling opens it. */
   onTopLead?: (leadId: string | null) => void;
+  /** The leads in the list's order, as shown: Call Next goes through them. */
+  onOrder?: (leadIds: readonly string[]) => void;
   initial?: ServerLeads | null;
   cacheIdentity?: string | null;
   /** "open", a stage kind, or "test". */
@@ -141,6 +164,10 @@ export function ListView({
   onChanged?: () => void;
   /** Every stage's count for this scope and search, for the tabs. */
   onCounts?: (counts: Record<string, number>) => void;
+  /** Whether the rows show as the table: the page gives it the whole width. */
+  onTable?: (table: boolean) => void;
+  /** Each of the owner's stages' count, for the Pipeline stage picker. */
+  onStepCounts?: (counts: Record<string, number>) => void;
   /** One pipeline's leads; none: every pipeline's. */
   pipeline?: string | null;
   /** Beside Select on the list's head: the saved views. */
@@ -178,6 +205,14 @@ export function ListView({
   if (layout.owner !== layoutOwner)
     setLayout({ owner: layoutOwner, value: storedLayout(layoutOwner) });
   const asTable = hydrated && layout.value === "table";
+  // The page gives a table the whole width until a lead opens (owner, 31 Oct 2026).
+  const tableTold = useRef(onTable);
+  useLayoutEffect(() => {
+    tableTold.current = onTable;
+  });
+  useEffect(() => {
+    tableTold.current?.(asTable);
+  }, [asTable]);
   const chooseLayout = (value: Layout) => {
     setLayout({ owner: layoutOwner, value });
     if (!layoutOwner) return;
@@ -190,7 +225,7 @@ export function ListView({
   const tableKeys = useRef<HTMLDivElement>(null);
   // Quick add where a new lead lands: All leads and New (owner P0, 23 Oct 2026).
   const quickAdd =
-    stage === "open" || stage === "new"
+    stage === "open" || stage === "new" || stage === OPENING_STAGE
       ? { pipeline, onAdded: () => onChanged?.(), onPasteRows }
       : null;
   // Counts and sync update the parent callbacks. Keep unchanged rows reusable,
@@ -292,7 +327,7 @@ export function ListView({
       cachedLeadPage(cacheIdentity, {
         scope,
         owner: owner ?? undefined,
-        stage: stage === TEST ? null : stage,
+        stage: askedStage(stage),
         search: query,
         test: stage === TEST,
         pipeline,
@@ -323,11 +358,14 @@ export function ListView({
   const rows = useMemo(
     () =>
       withMoves(read, moves, {
-        belongs: stage === TEST ? null : (row) => inStageList(row, stage),
+        belongs:
+          stage === TEST
+            ? null
+            : (row) => inStageList(row, stage) && inWorkView(row, refine),
         join,
         readAt,
       }),
-    [read, moves, stage, join, readAt],
+    [read, moves, stage, join, readAt, refine],
   );
   // ...and the next lead is on top: no scrolling for the next call.
   const panel = useRef<HTMLElement>(null);
@@ -350,6 +388,14 @@ export function ListView({
   useEffect(() => {
     topLead.current?.(top);
   }, [top]);
+  const orderTo = useRef(onOrder);
+  useEffect(() => {
+    orderTo.current = onOrder;
+  });
+  const order = rows.map((row) => row.lead_id).join(" ");
+  useEffect(() => {
+    orderTo.current?.(order ? order.split(" ") : []);
+  }, [order]);
   // Paint the visible phone rows first. Building 50 gesture-enabled rows at
   // once monopolises a mid-range phone even when the data is already cached.
   const [revealed, setRevealed] = useState({ question: "", count: 8 });
@@ -371,8 +417,10 @@ export function ListView({
   const chosen = picked?.question === question ? picked.leads : NONE;
   // The page's latest counts setter, without reading the list again for it.
   const counts = useRef(onCounts);
+  const stepCounts = useRef(onStepCounts);
   useEffect(() => {
     counts.current = onCounts;
+    stepCounts.current = onStepCounts;
   });
   // Keys on a computer: J/K, Enter, C (asks before calling), L. Not while ticking.
   const list = useRef<HTMLUListElement>(null);
@@ -410,7 +458,7 @@ export function ListView({
   const ask = {
     scope,
     owner: owner ?? undefined,
-    stage: stage === TEST ? null : stage,
+    stage: askedStage(stage),
     search: query,
     test: stage === TEST,
     pipeline,
@@ -427,7 +475,7 @@ export function ListView({
     const parameters = {
       scope,
       owner: owner ?? undefined,
-      stage: stage === TEST ? null : stage,
+      stage: askedStage(stage),
       search: query,
       test: stage === TEST,
       pipeline,
@@ -458,6 +506,8 @@ export function ListView({
         setLoaded({ key, question, page: next, rows: fresh, at: asked });
         if (first.stage_counts && stage !== TEST)
           counts.current?.(first.stage_counts);
+        if (first.step_counts && stage !== TEST)
+          stepCounts.current?.(first.step_counts);
         const owners = first.owner_counts;
         if (owners && Object.keys(owners).length) ownerCounts.current?.(owners);
       })
@@ -557,6 +607,31 @@ export function ListView({
       else if (next.size < DELETE_LIMIT) next.set(row.lead_id, row.name);
       return { question, leads: next };
     });
+  // Owner, 31 Oct 2026 (bug report 130): a long press on a phone, or the tick
+  // beside a row on a computer, starts picking leads for the bulk bar.
+  // Sellers keep the long press's quick actions.
+  const pickFrom = useRef<(row: LeadRow) => void>(() => undefined);
+  // The finger lifting after a long press lands on the row it just picked:
+  // that tap doesn't untick it.
+  const pickedBy = useRef<{ id: string; at: number } | null>(null);
+  useLayoutEffect(() => {
+    pickFrom.current = (row) => {
+      pickedBy.current = { id: row.lead_id, at: Date.now() };
+      setSelecting(true);
+      toggle(row);
+    };
+  });
+  const tapToggle = (row: LeadRow) => {
+    const held = pickedBy.current;
+    if (held && held.id === row.lead_id && Date.now() - held.at < 700) return;
+    toggle(row);
+  };
+  const startPicking = useCallback((row: LeadRow) => pickFrom.current(row), []);
+  const ownerActions = useMemo<RowActions>(
+    () => ({ ...rowActions, onHold: startPicking }),
+    [rowActions, startPicking],
+  );
+  const picksHere = canManage && stage === OPENING_STAGE;
 
   // Select all: the rest of the list is read first (up to the delete limit).
   const selectAll = async () => {
@@ -621,6 +696,7 @@ export function ListView({
   return (
     <>
       <section ref={panel} className={styles.listPanel} aria-label={stageLabel}>
+        {heading ? <h2 className={styles.listHeading}>{heading}</h2> : null}
         <div className={styles.listHead}>
           <span className={styles.listTotal} aria-live="polite">
             {page
@@ -641,8 +717,8 @@ export function ListView({
           <span className={styles.listTools}>
             {selecting ? null : tools}
             {rows.length && !selecting ? (
-              // One switch with both choices in words (owner, 25 Oct 2026:
-              // "Done next to Table" read as one control).
+              // List and Table as two small icons (owner, 31 Oct 2026), each named
+              // on hover and to screen readers.
               <span
                 className={styles.layoutSwitch}
                 role="group"
@@ -652,23 +728,23 @@ export function ListView({
                   type="button"
                   aria-pressed={!asTable}
                   title="Show as a list"
+                  aria-label="List"
                   onClick={() => chooseLayout("list")}
                 >
-                  <List size={14} aria-hidden="true" />
-                  List
+                  <List size={16} aria-hidden="true" />
                 </button>
                 <button
                   type="button"
                   aria-pressed={asTable}
                   title="Show as a table"
+                  aria-label="Table"
                   onClick={() => chooseLayout("table")}
                 >
-                  <Table2 size={14} aria-hidden="true" />
-                  Table
+                  <Table2 size={16} aria-hidden="true" />
                 </button>
               </span>
             ) : null}
-            {canManage && rows.length ? (
+            {canManage && (selecting || stage === TEST) ? (
               <button
                 type="button"
                 className={`${styles.statusChip} ${styles.selectToggle}`}
@@ -743,6 +819,7 @@ export function ListView({
           <EmptyList
             stage={stage}
             stageLabel={stageLabel}
+            empty={empty}
             query={query}
             filtered={filtered || !!query}
             onClearFilters={onClearFilters}
@@ -758,8 +835,9 @@ export function ListView({
                 showOwner={scope !== "mine"}
                 pipelineNames={pipeline ? null : pipelineNames}
                 selecting={selecting}
+                ticks={canManage}
                 chosen={chosen}
-                onToggle={toggle}
+                onToggle={startPicking}
                 keysRef={tableKeys}
                 columnsSlot={columnsSlot}
                 quickAdd={selecting ? null : quickAdd}
@@ -780,26 +858,35 @@ export function ListView({
               />
             ) : (
               <ul className={styles.leadList} aria-label="Leads" ref={list}>
-                {rows
-                  .slice(0, visibleCount)
-                  .map((row) =>
-                    selecting ? (
-                      <SelectLine
-                        key={row.lead_id}
-                        row={row}
-                        selected={chosen.has(row.lead_id)}
-                        onToggle={toggle}
-                      />
-                    ) : (
-                      <CachedLeadLine
-                        key={row.lead_id}
-                        row={row}
-                        onOpen={openRow}
-                        showOwner={scope !== "mine"}
-                        actions={actions ? rowActions : undefined}
-                      />
-                    ),
-                  )}
+                {rows.slice(0, visibleCount).map((row) =>
+                  selecting ? (
+                    <SelectLine
+                      key={row.lead_id}
+                      row={row}
+                      selected={chosen.has(row.lead_id)}
+                      onToggle={tapToggle}
+                    />
+                  ) : (
+                    <CachedLeadLine
+                      key={row.lead_id}
+                      row={row}
+                      onOpen={openRow}
+                      // The owner's name only on someone else's lead.
+                      showOwner={scope !== "mine" && row.owner_person_id !== me}
+                      actions={
+                        actions
+                          ? picksHere
+                            ? ownerActions
+                            : rowActions
+                          : undefined
+                      }
+                      onPick={picksHere ? startPicking : undefined}
+                      compact={stage === OPENING_STAGE}
+                      stageWord={stageWord?.(row)}
+                      quietLate={quietLate}
+                    />
+                  ),
+                )}
               </ul>
             )}
             {page.next_offset !== null &&
@@ -908,6 +995,7 @@ export function ListView({
 function EmptyList({
   stage,
   stageLabel,
+  empty,
   query,
   filtered,
   onClearFilters,
@@ -916,6 +1004,7 @@ function EmptyList({
 }: {
   stage: string;
   stageLabel: string;
+  empty?: { title: string; text: string } | null;
   query: string;
   filtered: boolean;
   onClearFilters?: () => void;
@@ -948,6 +1037,15 @@ function EmptyList({
         title="No test leads"
         text="Test and sample leads show here, ready to clear."
         action={action("See open leads", onShowOpen)}
+      />
+    );
+  if (empty)
+    return (
+      <InlineEmpty
+        icon={Users}
+        title={empty.title}
+        text={empty.text}
+        action={stage === OPENING_STAGE ? action("Add lead", onAdd) : null}
       />
     );
   if (stage === "open")

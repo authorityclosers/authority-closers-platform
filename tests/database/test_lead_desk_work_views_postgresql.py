@@ -121,6 +121,20 @@ def test_work_views_and_the_stage_filter(postgres_harness: Any, tmp_path: Path) 
                 "Fictional new newer",
             ]
             assert await names(scope="mine", side="inbound", step="no_such_stage") == []
+
+            # The stage picker's numbers: each stage's leads before the stage pick, filed
+            # as the stage filter files them, on a side's first page only.
+            async def counted(**query: str) -> dict[str, int]:
+                answer = await here.client.get(f"{BASE}/leads", params=query)
+                assert answer.status_code == 200, answer.text
+                return dict(answer.json()["step_counts"])
+
+            counts = await counted(scope="mine", side="inbound")
+            assert counts[new_key] == 2
+            assert sum(counts.values()) == 7
+            assert await counted(scope="mine", side="inbound", step=new_key) == counts
+            assert await counted(scope="mine", side="inbound", offset="1") == {}
+            assert await counted(scope="mine") == {}
             refused = await here.client.get(
                 f"{BASE}/leads", params={"scope": "mine", "view": "today"}
             )

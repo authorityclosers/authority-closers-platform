@@ -1,5 +1,5 @@
 import type { Desk, LeadPage } from "./leads-client";
-import { OPENING_STAGE } from "./opening";
+import { OPENING_STAGE, OPENING_WORK } from "./opening";
 
 /** The normal API's first answers for this document, bound to its identity. */
 export type ServerLeads = {
@@ -28,7 +28,16 @@ export function firstPageFor(
     !ask.query &&
     !ask.pipeline &&
     !ask.owner &&
-    !Object.values(ask.more ?? {}).some(Boolean)
+    opening(ask.more)
     ? seed.firstPage.page
     : null;
+}
+
+/** Exactly the opening list's side and view, no other filter. */
+function opening(more: object | null | undefined): boolean {
+  const on = Object.entries(more ?? {}).filter(([, value]) => !!value);
+  return (
+    on.length === Object.keys(OPENING_WORK).length &&
+    on.every(([key, value]) => OPENING_WORK[key] === value)
+  );
 }

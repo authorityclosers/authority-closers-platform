@@ -358,6 +358,8 @@ class LeadPage(Model):
     # Leads per stage for the same people, search and test filter, every stage
     # at once: the Leads page's stage tabs show real counts (owner, 22 Oct 2026).
     stage_counts: dict[str, int] = Field(default_factory=dict)
+    # Each of the owner's stages' count before the stage pick, on a side's first page.
+    step_counts: dict[str, int] = Field(default_factory=dict)
     # Owners and admins on the team's list: leads per seller ("none": nobody's) for the
     # same filters, without the seller picked, for the per-seller chips (25 Oct 2026).
     owner_counts: dict[str, int] = Field(default_factory=dict)

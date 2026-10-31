@@ -96,12 +96,13 @@ it("keeps the count, layout and Select together while preserving layout and sele
   const header = count.parentElement!;
   expect(count.textContent).toBe("7 leads");
   expect(header.querySelector('[aria-label="Show leads as"]')).not.toBeNull();
-  expect(header.querySelector('[aria-label="Select"]')).not.toBeNull();
+  // Owner, 31 Oct 2026: no Select button; an owner ticks a row instead.
+  expect(header.querySelector('[aria-label="Select"]')).toBeNull();
   expect(header.textContent).toContain("Views");
   expect(host.textContent).toContain("Views");
   await click(
     Array.from(header.querySelectorAll("button")).find(
-      (button) => button.textContent === "Table",
+      (button) => button.getAttribute("aria-label") === "Table",
     )!,
   );
   await vi.waitFor(async () => {
@@ -113,7 +114,11 @@ it("keeps the count, layout and Select together while preserving layout and sele
   expect(localStorage.getItem("sx:leads-layout:sample-workspace")).toBe(
     "table",
   );
-  await click(header.querySelector('[aria-label="Select"]')!);
+  await act(async () =>
+    host
+      .querySelector<HTMLInputElement>('tbody input[aria-label^="Select "]')!
+      .click(),
+  );
   expect(
     header.querySelector('[aria-label="Cancel"]')?.getAttribute("aria-pressed"),
   ).toBe("true");

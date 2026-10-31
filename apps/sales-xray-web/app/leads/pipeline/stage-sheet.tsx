@@ -8,14 +8,23 @@
  * The same lead record moves; its history keeps the step.
  */
 
-import { ArrowLeft, ArrowRight } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowRight, Check } from "lucide-react";
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 
 import { notify } from "../../notice-center";
 import { track, waitBand } from "../../telemetry";
 import { tick } from "../../ui/haptics";
 import { Button } from "../../ui/kit";
 import { Sheet } from "../../ui/sheet";
+import type { Kind } from "../journey/journey-client";
+import { stageTone } from "../journey/stage-look";
 import {
   LeadsError,
   readLead,
@@ -164,6 +173,23 @@ export function StageSheet({
     if (open) opened.current = Date.now();
   }, [open, initial]);
   const move = moves.find((item) => item.step === target) ?? null;
+  // A picked stage's questions come into view above the button.
+  const asksRow = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (!open || !target) return;
+    const timer = window.setTimeout(
+      () =>
+        asksRow.current?.scrollIntoView?.({
+          block: "nearest",
+          behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")
+            .matches
+            ? "auto"
+            : "smooth",
+        }),
+      230,
+    );
+    return () => window.clearTimeout(timer);
+  }, [open, target]);
   const grouped = useMemo(
     () =>
       (["active", "won", "lost", "junk"] as const)
@@ -245,7 +271,59 @@ export function StageSheet({
     }
   };
 
-  const title = move ? `Move ${lead.name}` : `Move ${lead.name} to…`;
+  // What the picked move asks, in place under its stage (owner, 31 Oct 2026).
+  const questions = move ? (
+    <div className={styles.sheetBody}>
+      <p className={styles.fromTo}>
+        <span>{lead.stage_label}</span>
+        <ArrowRight size={16} aria-hidden="true" />
+        <strong>{move.label}</strong>
+      </p>
+      {asks.has("meeting") ? (
+        <MeetingBlock
+          draft={draft.meeting}
+          onChange={(meeting) => set({ meeting })}
+        />
+      ) : null}
+      {asks.has("nc_reason") ? (
+        <NcReasonBlock
+          value={draft.ncReason}
+          onPick={(ncReason) => set({ ncReason })}
+        />
+      ) : null}
+      {asks.has("reason") ? (
+        <ReasonBlock
+          label={
+            move.group === "junk"
+              ? "Why is it junk?"
+              : move.group === "active"
+                ? "Why is it still open?"
+                : "Why was it lost?"
+          }
+          reasons={move.reasons}
+          value={draft.reason}
+          note={draft.reasonNote}
+          required={move.needs.includes("reason")}
+          onPick={(reason) => set({ reason })}
+          onNote={(reasonNote) => set({ reasonNote })}
+        />
+      ) : null}
+      {asks.has("next_action") && !asks.has("meeting") ? (
+        <WhenBlock
+          label={move.kind === "not_connected" ? "Try again" : "Next follow-up"}
+          pick={draft.when}
+          custom={draft.custom}
+          required={move.needs.includes("next_action")}
+          onPick={(when) => set({ when })}
+          onCustom={(custom) => set({ custom })}
+        />
+      ) : null}
+      {asks.has("note") ? (
+        <NoteBlock value={draft.note} onChange={(note) => set({ note })} />
+      ) : null}
+    </div>
+  ) : null;
+  const title = `Move ${lead.name} to…`;
   const footer = move ? (
     <div className={styles.sheetFooter}>
       {finalLine(move) ? (
@@ -265,73 +343,8 @@ export function StageSheet({
   ) : null;
 
   return (
-    <Sheet
-      open={open}
-      onClose={onClose}
-      title={title}
-      lead={
-        move && !initial ? (
-          <button
-            type="button"
-            className={styles.backStep}
-            aria-label="Back to the stages"
-            onClick={() => setTarget(null)}
-          >
-            <ArrowLeft size={18} aria-hidden="true" />
-          </button>
-        ) : undefined
-      }
-      footer={footer}
-    >
-      {move ? (
-        <div className={styles.sheetBody}>
-          <p className={styles.fromTo}>
-            <span>{lead.stage_label}</span>
-            <ArrowRight size={16} aria-hidden="true" />
-            <strong>{move.label}</strong>
-          </p>
-          {asks.has("meeting") ? (
-            <MeetingBlock
-              draft={draft.meeting}
-              onChange={(meeting) => set({ meeting })}
-            />
-          ) : null}
-          {asks.has("nc_reason") ? (
-            <NcReasonBlock
-              value={draft.ncReason}
-              onPick={(ncReason) => set({ ncReason })}
-            />
-          ) : null}
-          {asks.has("reason") ? (
-            <ReasonBlock
-              label={
-                move.group === "junk" ? "Why is it junk?" : "Why was it lost?"
-              }
-              reasons={move.reasons}
-              value={draft.reason}
-              note={draft.reasonNote}
-              required={move.needs.includes("reason")}
-              onPick={(reason) => set({ reason })}
-              onNote={(reasonNote) => set({ reasonNote })}
-            />
-          ) : null}
-          {asks.has("next_action") && !asks.has("meeting") ? (
-            <WhenBlock
-              label={
-                move.kind === "not_connected" ? "Try again" : "Next follow-up"
-              }
-              pick={draft.when}
-              custom={draft.custom}
-              required={move.needs.includes("next_action")}
-              onPick={(when) => set({ when })}
-              onCustom={(custom) => set({ custom })}
-            />
-          ) : null}
-          {asks.has("note") ? (
-            <NoteBlock value={draft.note} onChange={(note) => set({ note })} />
-          ) : null}
-        </div>
-      ) : grouped.length ? (
+    <Sheet open={open} onClose={onClose} title={title} footer={footer}>
+      {grouped.length ? (
         <div className={styles.sheetBody}>
           {grouped.map((part) => (
             <section key={part.group} aria-label={GROUP_WORDS[part.group]}>
@@ -340,17 +353,49 @@ export function StageSheet({
               </h3>
               <ul className={styles.targets}>
                 {part.moves.map((item) => (
-                  <li key={item.step}>
-                    <button
-                      type="button"
-                      className={styles.target}
-                      data-group={item.group}
-                      onClick={() => setTarget(item.step)}
-                    >
-                      <span className={styles.targetLabel}>{item.label}</span>
-                      <span className={styles.targetHint}>{hintFor(item)}</span>
-                    </button>
-                  </li>
+                  <Fragment key={item.step}>
+                    <li>
+                      <button
+                        type="button"
+                        className={styles.target}
+                        data-group={item.group}
+                        aria-pressed={item.step === target}
+                        onClick={() =>
+                          setTarget(item.step === target ? null : item.step)
+                        }
+                      >
+                        <svg
+                          className={styles.targetDot}
+                          viewBox="0 0 10 10"
+                          aria-hidden="true"
+                          style={
+                            {
+                              "--stage": stageTone({
+                                kind: item.kind as Kind,
+                                milestone: item.milestone,
+                              }),
+                            } as CSSProperties
+                          }
+                        >
+                          <circle cx="5" cy="5" r="5" />
+                        </svg>
+                        <span className={styles.targetLabel}>{item.label}</span>
+                        <span className={styles.targetHint}>
+                          {hintFor(item)}
+                        </span>
+                        <Check
+                          size={18}
+                          aria-hidden="true"
+                          className={styles.targetCheck}
+                        />
+                      </button>
+                    </li>
+                    {item.step === target && questions ? (
+                      <li className={styles.asksRow} ref={asksRow}>
+                        <div className={styles.asks}>{questions}</div>
+                      </li>
+                    ) : null}
+                  </Fragment>
                 ))}
               </ul>
             </section>

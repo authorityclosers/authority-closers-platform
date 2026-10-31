@@ -8,6 +8,7 @@ out of the list. Reads only."""
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
@@ -63,3 +64,16 @@ def in_step(journey: journeys.Journey, key: str) -> Any:
             or_(Lead.step.is_(None), Lead.step.not_in(list(journey.by_key))),
         ),
     )
+
+
+def count_steps(journey: journeys.Journey, rows: Iterable[Any]) -> dict[str, int]:
+    """Leads per owner's stage from (kind, step, count) rows, filed as in_step files them:
+    by their own step, else in their kind's stage."""
+    counts: dict[str, int] = {}
+    for kind, own, count in rows:
+        stage = journey.by_key.get(own) if own else None
+        if stage is None:
+            stage = journey.resolve(kind, None)
+        if stage is not None:
+            counts[stage.key] = counts.get(stage.key, 0) + int(count)
+    return counts

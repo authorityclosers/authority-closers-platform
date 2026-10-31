@@ -9,7 +9,7 @@
 import { useSyncExternalStore } from "react";
 
 import { onWorkspaceChange } from "../workspace-change";
-import type { Desk, LeadRow } from "./leads-client";
+import type { Desk, LeadRow, ListMore } from "./leads-client";
 
 export type Moves = ReadonlyMap<string, { row: LeadRow; at: number }>;
 type Follower = (row: LeadRow, moves: Moves) => void;
@@ -33,7 +33,37 @@ export function inStageList(
   row: Pick<LeadRow, "stage">,
   list: string,
 ): boolean {
+  if (list === "all") return true;
   return list === "open" ? !CLOSED.has(row.stage) : row.stage === list;
+}
+
+/** Whether a lead still fits a work view, its follow-up split and its stage
+ *  pick (Dipak's handoff, items 56-73): To Call is open and due before today
+ *  ends, or new and never called; Follow-ups has a planned contact. */
+export function inWorkView(
+  row: Pick<LeadRow, "stage" | "step" | "next_action_at">,
+  more: ListMore | null | undefined,
+  now = Date.now(),
+): boolean {
+  if (!more) return true;
+  if (more.step && row.step && row.step !== more.step) return false;
+  const at = row.next_action_at ? Date.parse(row.next_action_at) : null;
+  const start = new Date(now).setHours(0, 0, 0, 0);
+  const end = start + 24 * 60 * 60 * 1000;
+  if (more.view === "to_call") {
+    if (CLOSED.has(row.stage)) return false;
+    if (at === null ? row.stage !== "new" : at >= end) return false;
+  }
+  if (
+    more.view === "follow_ups" &&
+    (at === null || (row.stage !== "follow_up" && row.stage !== "interested"))
+  )
+    return false;
+  if (!more.when) return true;
+  if (at === null) return false;
+  if (more.when === "overdue") return at < start;
+  if (more.when === "upcoming") return at >= end;
+  return at >= start && at < end;
 }
 
 /** What a list knows about itself to place the person's moves in it. */

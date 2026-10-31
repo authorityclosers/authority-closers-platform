@@ -7,7 +7,7 @@ import {
 } from "../server-reads";
 import type { Desk, LeadPage } from "./leads-client";
 import type { ServerLeads } from "./leads-seed";
-import { OPENING_STAGE } from "./opening";
+import { OPENING_QUERY, OPENING_WORK } from "./opening";
 
 const DESK = "/v1/lead-desk";
 const NAMES = new Set(["name", "owner_name", "actor_name"]);
@@ -27,9 +27,11 @@ export async function serverLeads(
   // To call may remember a pipeline in this browser. Keep that existing path;
   // this seed covers only the unfiltered All leads entry reported in #67.
   if (
-    params.tab !== "all" ||
-    (params.stage !== undefined && params.stage !== OPENING_STAGE) ||
-    Object.keys(params).some((key) => !["tab", "stage", "theme"].includes(key))
+    (params.tab !== undefined && params.tab !== "all") ||
+    Object.entries(params).some(
+      ([key, value]) =>
+        key !== "theme" && key !== "tab" && OPENING_WORK[key] !== value,
+    )
   )
     return null;
   // Both reads share one budget: the page never waits longer for them.
@@ -64,7 +66,7 @@ export async function serverLeads(
     tenant,
   ]);
   const scope = desk.me.can_manage ? "team" : "mine";
-  const path = `/v1/lead-desk/leads?scope=${scope}&stage=${OPENING_STAGE}`;
+  const path = `/v1/lead-desk/leads?scope=${scope}&${OPENING_QUERY}`;
   const left = deadline - Date.now();
   // None left: the desk comes with the page and the browser reads the list.
   const list = left > 0 ? await serverReads([path], left) : null;

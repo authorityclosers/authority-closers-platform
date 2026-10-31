@@ -174,7 +174,14 @@ from ac_platform.lead_desk.vocabulary import (
     stage_after_connected,
     stage_after_not_connected,
 )
-from ac_platform.lead_desk.work_views import FollowUpWhen, WorkView, in_step, in_view, in_when
+from ac_platform.lead_desk.work_views import (
+    FollowUpWhen,
+    WorkView,
+    count_steps,
+    in_step,
+    in_view,
+    in_when,
+)
 from ac_platform.tenancy.models import Membership
 from ac_platform.tenancy.roles import roles_with
 
@@ -1481,14 +1488,21 @@ class LeadDesk:
         if when is not None:
             # Follow-ups due today, overdue or upcoming.
             where.append(in_when(when, self._day_start()))
-        if step is not None:
-            # One of the owner's stages; a lead with no step counts in its kind's stage.
+        # The stage picker's numbers come with a side's first page (owner, 31 Oct 2026).
+        counting = side is not None and offset == 0
+        journey: journeys.Journey | None = None
+        if step is not None or counting:
             journey_key = (
                 (await self._pipeline(pipeline)).key
                 if pipeline is not None
                 else journeys.MAIN_PIPELINE
             )
-            where.append(in_step(await self._labels(journey_key), step))
+            journey = await self._labels(journey_key)
+        step_clause: Any = None
+        if step is not None and journey is not None:
+            # One of the owner's stages; a lead with no step counts in its kind's stage.
+            step_clause = in_step(journey, step)
+            where.append(step_clause)
         if pipeline is not None:
             # One pipeline's leads: its stage tabs, counts and calling queue.
             where.append(journeys.lead_in((await self._pipeline(pipeline)).key))
@@ -1520,6 +1534,20 @@ class LeadDesk:
                 terms.append(Lead.phone.like(f"%{digits}%"))
             where.append(or_(*terms))
         where.extend(self._list_filters(source=source, due=due, contact=contact, created=created))
+        # Each of the owner's stages' count for the same filters, before the stage pick:
+        # the Pipeline stage picker's numbers (owner, 31 Oct 2026).
+        step_counts: dict[str, int] = {}
+        if counting and journey is not None:
+            step_counts = count_steps(
+                journey,
+                (
+                    await self.db.execute(
+                        select(Lead.stage, Lead.step, func.count())
+                        .where(*(item for item in where if item is not step_clause))
+                        .group_by(Lead.stage, Lead.step)
+                    )
+                ).all(),
+            )
         # Every stage's count for the same people and search, before the stage
         # filter: the stage tabs' numbers (owner, 22 Oct 2026).
         stage_counts = {
@@ -1566,6 +1594,7 @@ class LeadDesk:
             total=total,
             next_offset=offset + limit if offset + limit < total else None,
             stage_counts=stage_counts,
+            step_counts=step_counts,
             owner_counts=owner_counts,
         )
 

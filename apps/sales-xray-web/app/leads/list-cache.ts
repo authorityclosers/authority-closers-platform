@@ -4,8 +4,13 @@
  * + workspace is required, and every filter is part of the key. One identity,
  * a day, six answers; signing out forgets them (list-cache-slot.ts). Storage
  * being unavailable must never stop a network read. */
-import { deskWithMoves, inStageList, onLeadMoved } from "./lead-moves";
-import type { Desk, LeadPage, LeadRow } from "./leads-client";
+import {
+  deskWithMoves,
+  inStageList,
+  inWorkView,
+  onLeadMoved,
+} from "./lead-moves";
+import type { Desk, LeadPage, LeadRow, ListMore } from "./leads-client";
 import { readLeads } from "./leads-client";
 import { LEADS_CACHE_SLOT as SLOT } from "./list-cache-slot";
 
@@ -146,15 +151,17 @@ export function preloadFirstLeads(
  * list it no longer fits; elsewhere it is the newer row. */
 function keptPage(key: string, page: LeadPage, row: LeadRow): LeadPage {
   let list: unknown;
+  let more: unknown;
   try {
-    list = (JSON.parse(key.slice("list:".length)) as unknown[])[2];
+    [, , list, , , , more] = JSON.parse(key.slice("list:".length)) as unknown[];
   } catch {
     return page;
   }
   const at = page.leads.findIndex((lead) => lead.lead_id === row.lead_id);
   if (at < 0 || page.leads[at].revision >= row.revision) return page;
   const leads =
-    typeof list !== "string" || inStageList(row, list)
+    (typeof list !== "string" || inStageList(row, list)) &&
+    inWorkView(row, more as ListMore | null)
       ? page.leads.map((lead, index) => (index === at ? row : lead))
       : page.leads.filter((_, index) => index !== at);
   return { ...page, leads };
