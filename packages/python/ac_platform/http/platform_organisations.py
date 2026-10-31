@@ -61,7 +61,13 @@ from ac_platform.organisations.workspace_kinds import (
     classify_workspaces,
     ordered,
 )
-from ac_platform.tenancy.models import Membership, Organisation, OrganisationInvite, Tenant
+from ac_platform.tenancy.models import (
+    Membership,
+    Organisation,
+    OrganisationInvite,
+    Tenant,
+    TenantStatus,
+)
 from ac_platform.tenancy.roles import AssignableRoleName
 
 READ_CAPABILITY = "platform_tenants_read"
@@ -263,7 +269,9 @@ def install_platform_organisations_http(
                 select(Organisation.tenant_id, Tenant.name, member_count, Organisation.created_at)
                 .join(Tenant, Tenant.id == Organisation.tenant_id)
                 .where(
-                    Organisation.tenant_id.not_in([item for item in protected if item is not None])
+                    Organisation.tenant_id.not_in([item for item in protected if item is not None]),
+                    # A deleted organisation (owner-approved deletion) drops out of the directory.
+                    Tenant.status != TenantStatus.DELETED.value,
                 )
                 .order_by(Organisation.created_at.desc(), Organisation.tenant_id)
             )
