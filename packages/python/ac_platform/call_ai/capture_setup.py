@@ -131,6 +131,27 @@ def phone_name(model: str, family: str) -> str | None:
     return model
 
 
+def phone_label(device: str | None, family: str | None, found: Setup | None) -> str:
+    """A seller's phone by the name people know: the model its setup finished with,
+    else its maker ("Xiaomi phone"), else "phone"."""
+    for phone in found.phones if found else ():
+        if device and phone.device == device and (name := phone_name(phone.model, phone.family)):
+            return name
+    maker = MAKERS.get((family or "").strip().lower())
+    return f"{maker} phone" if maker else "phone"
+
+
+def call_log_off(entry: Any) -> bool:
+    """A phone that can log work calls and has it off: the one rule Connections and Team
+    share (phone personas ph1-23, 1 Nov 2026: Connections said a phone had call logging
+    off while Team said everyone was set up). A build without call history (the Play
+    build) never reports call logging, so it never counts as off."""
+    if not isinstance(entry, dict) or not isinstance(entry.get("reported_at"), str):
+        return False
+    checks = entry.get("checks")
+    return isinstance(checks, dict) and checks.get("callLog") is False
+
+
 def _fold(rows: list[Any]) -> Setup:
     """Rows newest first: each phone's newest finish and the last word."""
     phones: dict[str, Phone] = {}

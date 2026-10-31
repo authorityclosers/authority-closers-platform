@@ -10,7 +10,7 @@ personal workspace is never required. Fictional people only.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -25,6 +25,9 @@ from ac_platform.call_ai.capture_setup_http import install_capture_setup_http
 from ac_platform.call_ai.http import install_call_ai_http
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.sales_xray_profile_models import SalesXrayProfile
+from ac_platform.lead_desk import connected_apps
+from ac_platform.lead_desk.models import LeadDeskSettings
+from ac_platform.lead_desk.store import PHONES_KEY
 from ac_platform.tenancy.models import Membership
 from tests.database.test_conversation_account_library_postgresql import _session
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
@@ -189,10 +192,58 @@ def test_a_seller_agrees_finishes_on_a_phone_and_team_sees_it(
                     "at",
                     "phone",
                     "missing_today",
+                    "call_log_off",
                 }
                 # No lead calls today: nothing without a recording, each or in all.
                 assert team.json()["missing_today"] == 0
                 assert rows[str(seller.person_id)]["missing_today"] == 0
+                assert team.json()["call_log_off"] == 0
+
+                # ph1-23: one rule for Team and Connections. A Play build never reports
+                # call logging (never "off"); a phone that can and has it off is named.
+                name = rows[str(seller.person_id)]["name"]
+                for checks, off in (({"calls": True}, None), ({"callLog": False}, "Redmi 13")):
+                    async with setup.sessions() as db, db.begin():
+                        desk = await db.get(LeadDeskSettings, setup.state.tenant_id)
+                        report = {
+                            str(seller.person_id): {
+                                "device_id": PHONE["device"],
+                                "family": "xiaomi",
+                                "checks": checks,
+                                "reported_at": datetime.now(UTC).isoformat(),
+                            }
+                        }
+                        if desk is None:
+                            db.add(
+                                LeadDeskSettings(
+                                    tenant_id=setup.state.tenant_id,
+                                    revision=1,
+                                    config={PHONES_KEY: report},
+                                    updated_by_person_id=None,
+                                    updated_at=datetime.now(UTC),
+                                )
+                            )
+                        else:
+                            desk.config = {**desk.config, PHONES_KEY: report}
+                    team = await client.get(SETUP + "/team")
+                    row = next(
+                        row
+                        for row in team.json()["people"]
+                        if row["person_id"] == str(seller.person_id)
+                    )
+                    assert row["call_log_off"] == off
+                    assert team.json()["call_log_off"] == (1 if off else 0)
+                    async with setup.sessions() as db:
+                        health = await connected_apps._phones(db, setup.state.tenant_id)
+                    assert health.state == ("problem" if off else "ready")
+                    line = health.connections[0]
+                    assert line.label == f"{name} · Redmi 13"
+                    if off:
+                        assert health.words == f"Call logging is off on {name}'s Redmi 13."
+                        assert line.fix is not None and line.fix.path == "/settings/selling"
+                    else:
+                        assert health.words == "1 phone logging calls."
+                        assert line.fix is None
                 as_(seller_token)
                 mine = await client.get(SETUP + "/missing")
                 assert mine.status_code == 200, mine.text

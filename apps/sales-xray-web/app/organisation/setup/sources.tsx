@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { notify } from "../../notice-center";
 import { useAppConnect } from "../../leads/app-connect";
+import { readGoogleFiles } from "../../leads/google-files-client";
 import {
   SourcesView,
   alreadyHere,
@@ -60,6 +61,19 @@ export function OrganisationSources() {
   const params = useSearchParams();
   const router = useRouter();
   const [showOther, setShowOther] = useState(false);
+  // Import from Google Sheet (Drive's picker) only where Google is set up, as
+  // Connected apps says (phone personas ph1-23, 1 Nov 2026); a Sheet's link
+  // (Google Sheet) works either way.
+  const [googlePicker, setGooglePicker] = useState(false);
+  useEffect(() => {
+    if (!showOther) return;
+    const controller = new AbortController();
+    readGoogleFiles(controller.signal).then(
+      (files) => setGooglePicker(files.configured && files.picker),
+      () => setGooglePicker(false),
+    );
+    return () => controller.abort();
+  }, [showOther]);
   const [catalogue, setCatalogue] = useState<MetaCatalogue | null>(null);
   const [forms, setForms] = useState<Record<string, MetaForm[] | null>>({});
   const [loadingForms, setLoadingForms] = useState(false);
@@ -577,7 +591,11 @@ export function OrganisationSources() {
                 sandbox={false}
                 onChanged={() => undefined}
                 onImport={() => router.push("/leads?import=file")}
-                onImportGoogle={() => router.push("/leads?import=google")}
+                onImportGoogle={
+                  googlePicker
+                    ? () => router.push("/leads?import=google")
+                    : undefined
+                }
               />
             </div>
           ) : null}

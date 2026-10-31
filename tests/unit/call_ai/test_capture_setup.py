@@ -143,3 +143,22 @@ def test_a_finished_install_counts_once_newest_first_and_a_no_never() -> None:
             "not a payload",
         ]
     ) == ["install-b", "install-a"]
+
+
+def test_call_logging_is_off_only_on_a_phone_that_says_so() -> None:
+    # Phone personas ph1-23, 1 Nov 2026: a Play build (no call history) showed as "off".
+    reported = "2026-11-01T09:00:00+00:00"
+    assert capture_setup.call_log_off({"reported_at": reported, "checks": {"callLog": False}})
+    assert not capture_setup.call_log_off({"reported_at": reported, "checks": {"callLog": True}})
+    assert not capture_setup.call_log_off({"reported_at": reported, "checks": {"calls": True}})
+    assert not capture_setup.call_log_off({"checks": {"callLog": False}})  # never reported
+    assert not capture_setup.call_log_off(None)
+
+
+def test_a_phone_is_named_by_its_finished_setup_else_its_maker() -> None:
+    found = capture_setup._fold(
+        [_row(1, outcome="completed", device="install-a", model="2406ERN9CI", family="xiaomi")]
+    )
+    assert capture_setup.phone_label("install-a", "xiaomi", found) == "Redmi 13 5G"
+    assert capture_setup.phone_label("install-b", "xiaomi", found) == "Xiaomi phone"
+    assert capture_setup.phone_label(None, None, None) == "phone"

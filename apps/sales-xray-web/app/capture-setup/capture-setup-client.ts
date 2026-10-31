@@ -53,6 +53,8 @@ export type CaptureTeamRow = Readonly<{
   phone: string | null;
   /** Their connected lead calls today with no recording (owner, fix 5). */
   missing_today?: number;
+  /** The phone, by name, with work-call logging off: Connections' rule (ph1-23). */
+  call_log_off?: string | null;
 }>;
 
 export type CaptureTeam = Readonly<{
