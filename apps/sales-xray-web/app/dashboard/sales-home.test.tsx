@@ -425,6 +425,45 @@ it("leaves out Open leads where the organisation has no such stage", async () =>
   expect(asked.some((path) => path.includes("open_leads"))).toBe(false);
 });
 
+// QA robot 331fa263 (1 Nov 2026): offline, Home said nothing. It says so
+// calmly, keeps the numbers it had, and reads again once back online.
+it("says it is offline, keeps what it had, and reads again when back", async () => {
+  answer({
+    "/v1/lead-desk": owner(desk([])),
+    "/v1/lead-desk/reports/performance*": performance(),
+    "/v1/lead-desk/team": team({ new: 4 }),
+    "/v1/lead-desk/performance/sellers*": effort(true),
+    ...counts("inbound", 4, 7, 2),
+  });
+  await mount(true);
+  await act(async () => Promise.resolve());
+  await act(async () => Promise.resolve());
+  let online = false;
+  Object.defineProperty(navigator, "onLine", {
+    configurable: true,
+    get: () => online,
+  });
+  try {
+    await act(async () => {
+      window.dispatchEvent(new Event("offline"));
+    });
+    expect(host.textContent).toContain(
+      "You're offline. Showing what was saved.",
+    );
+    expect(figures()[0]).toEqual(["new", "4", true]);
+    const asked = vi.mocked(fetch).mock.calls.length;
+    online = true;
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await act(async () => Promise.resolve());
+    expect(host.textContent).not.toContain("You're offline");
+    expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThan(asked);
+  } finally {
+    delete (navigator as { onLine?: boolean }).onLine;
+  }
+});
+
 it("keeps every figure calm when nothing waits", async () => {
   answer({
     "/v1/lead-desk": owner(desk([])),

@@ -22,7 +22,7 @@
  * Only real numbers: nothing here is estimated or invented.
  */
 
-import { FileText, Gauge, UsersRound } from "lucide-react";
+import { FileText, Gauge, UsersRound, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
@@ -34,7 +34,7 @@ import type { Side } from "../ui/side-selector";
 import { SetupStart } from "./home-v2";
 import { TodayBar } from "./home-today";
 import { TeamFloor, type StageKeys } from "./team-floor";
-import { HomeLoadWatch, useHomeRead } from "./home-load";
+import { HomeLoadWatch, useHomeRead, useOnline } from "./home-load";
 import { RevenueBar } from "./revenue-bar";
 import { TeamControls } from "./team-controls";
 import {
@@ -333,6 +333,7 @@ export function SalesHome({
 }) {
   const desk = useDesk();
   const [view, setView] = useHomeView();
+  const online = useOnline();
   const person = desk.status === "ready" ? desk.desk.me.person_id : null;
   // Remembered per person on this device; the address still says which, so
   // Back returns to it.
@@ -383,6 +384,12 @@ export function SalesHome({
   return (
     <div className={styles.home} data-home="">
       <HomeLoadWatch />
+      {online ? null : (
+        <p className={styles.offline} role="status">
+          <WifiOff size={16} aria-hidden="true" />
+          You&apos;re offline. Showing what was saved.
+        </p>
+      )}
       {/* The month's revenue against its target (capture-setup's bar). */}
       <RevenueBar scope={shown === "team" ? "team" : "mine"} />
       {/* The month's revenue bar goes here, above both modes (capture-setup

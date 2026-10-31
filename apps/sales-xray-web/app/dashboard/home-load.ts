@@ -9,6 +9,8 @@
  * - After 8 s with a read still missing or failed, one calm corner card says
  *   so with Retry, which reads everything again; it goes once all is in.
  * - A workspace switch forgets every answer (workspace-change.ts).
+ * - Offline, Home says so (useOnline) and the card stays quiet; back online,
+ *   everything is read again (QA robot 331fa263, 1 Nov 2026).
  */
 
 import { useEffect, useState, useSyncExternalStore } from "react";
@@ -112,7 +114,31 @@ const NOTICE = "home-load";
 
 /** The corner card: 8 s after Home (or Retry) asked, if anything is still
  *  missing or failed. */
+function watchOnline(listener: () => void) {
+  window.addEventListener("online", listener);
+  window.addEventListener("offline", listener);
+  return () => {
+    window.removeEventListener("online", listener);
+    window.removeEventListener("offline", listener);
+  };
+}
+
+/** Whether the browser has a connection (it says so on "online" and "offline"). */
+export function useOnline(): boolean {
+  return useSyncExternalStore(
+    watchOnline,
+    () => navigator.onLine,
+    () => true,
+  );
+}
+
 export function HomeLoadWatch() {
+  const online = useOnline();
+  // Back online: read everything again.
+  useEffect(() => {
+    window.addEventListener("online", retryHome);
+    return () => window.removeEventListener("online", retryHome);
+  }, []);
   // Every change in a read's health draws this again.
   useSyncExternalStore(
     subscribe,
@@ -130,7 +156,9 @@ export function HomeLoadWatch() {
     return () => window.clearTimeout(timer);
   }, [tick]);
   const states = [...health.values()];
+  // Offline, Home's own line says why; no "Couldn't load" card on top of it.
   const stuck =
+    online &&
     late === tick &&
     states.some((state) => state === "failed" || state === "pending");
   useEffect(() => {
