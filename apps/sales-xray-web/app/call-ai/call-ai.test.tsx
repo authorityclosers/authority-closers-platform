@@ -88,7 +88,7 @@ it("lets an owner or admin choose the organisation's default", async () => {
   await act(async () => root.render(<CallAiSettingsSection />));
   expect(host.textContent).toContain("Default: Full");
   expect(host.textContent).toContain("Asha Fictional");
-  expect(host.querySelector('a[href="/leads?tab=team"]')).not.toBeNull();
+  expect(host.querySelector('a[href="/organisation?tab=team"]')).not.toBeNull();
   const save = [...host.querySelectorAll("button")].find(
     (item) => item.textContent === "Save default",
   )!;
@@ -128,7 +128,7 @@ it("lists the levels as one list of rows, the default checked", async () => {
   ).toEqual(["Full"]);
   // The way to a seller's own level is one row, not a sentence.
   const way = host.querySelector<HTMLAnchorElement>(
-    'a[href="/leads?tab=team"]',
+    'a[href="/organisation?tab=team"]',
   );
   expect(way?.textContent).toContain("Set one seller's level");
 });
