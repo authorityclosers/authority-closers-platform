@@ -15,7 +15,7 @@
  * the card for a call with no recording.
  */
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import type { CaptureSetup } from "../../capture-setup/capture-setup-client";
 import { CaptureSetupFlow } from "../../capture-setup/capture-setup-flow";
@@ -25,7 +25,8 @@ import type {
   PermissionItem,
   PermissionKey,
 } from "../../capture-setup/permissions-rules";
-import { RecordingCheckCard } from "../../capture-setup/recording-check";
+import { recordingNotice } from "../../capture-setup/recording-check";
+import { NoticeCenter, notify } from "../../notice-center";
 import { CaptureSetupPanel } from "../../organisation/capture-setup-panel";
 import onboarding from "../../leads/phone-onboarding.module.css";
 
@@ -289,13 +290,8 @@ export function CaptureSetupPreview() {
   if (params.get("view") === "missing")
     return (
       <main data-capture-setup-fixture="" style={{ minHeight: "100dvh" }}>
-        <RecordingCheckCard
-          calls={2}
-          family={null}
-          inApp
-          onOpen={() => undefined}
-          onDone={() => undefined}
-        />
+        <MissingCard />
+        <NoticeCenter />
       </main>
     );
   if (params.get("view") === "team")
@@ -326,4 +322,10 @@ export function CaptureSetupPreview() {
       />
     </main>
   );
+}
+
+/** The no-recording corner card, as the app posts it (fictional count). */
+function MissingCard() {
+  useEffect(() => notify(recordingNotice(2, null, () => undefined)), []);
+  return null;
 }

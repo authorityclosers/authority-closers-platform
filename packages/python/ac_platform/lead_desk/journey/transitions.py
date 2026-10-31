@@ -9,8 +9,8 @@ now, never through every stage. A business's stage list says, per stage:
   stage, as before Lead OS, so a list saved before it behaves exactly as it did;
 - ``needs``: what the seller must give on the way in: when to follow up
   (``next_action``), the meeting (``meeting``), why it was lost or is junk (``reason``),
-  or why a call didn't connect (``nc_reason``). Without ``needs``, Junk needs a reason
-  and Couldn't reach a not-connected reason; nothing else is required;
+  or why a call didn't connect (``nc_reason``). A list that never set ``needs`` asks what
+  the stage means (:func:`default_needs`); an explicit list, even an empty one, stands;
 - ``reasons``: the reasons offered for Lost and Junk; "Other" always needs a note.
 
 Everything here is pure: the store's one stage writer (``LeadDesk._move``) checks every
@@ -159,16 +159,27 @@ def reasons_of(stage: Stage) -> tuple[tuple[str, str], ...]:
     return LOST_REASONS if stage.kind == "lost" else JUNK_REASONS
 
 
+def default_needs(stage: Stage) -> tuple[str, ...]:
+    """What a stage needs when its list never said (``needs`` is None), by what it means
+    (Dipak's handoff; persona QA, 31 Oct 2026: Move to Meeting Scheduled asked nothing): a
+    booked meeting or visit its date and time, Lost and Junk a reason, Couldn't reach why.
+    Won's amount is asked of every Won (:func:`needs_of`). Read time only: no saved list
+    changes."""
+    if stage.milestone == "appointment_booked":
+        return (MEETING,)
+    if stage.kind in ("lost", "junk"):
+        return (REASON,)
+    if stage.kind == "not_connected":
+        return (NC_REASON,)
+    return ()
+
+
 def needs_of(stage: Stage) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """What a lead entering ``stage`` must have (needs), and what the sheet offers (asks)."""
     if stage.needs is not None:
         needs = tuple(n for n in stage.needs if n != REASON or stage.kind in ("lost", "junk"))
-    elif stage.kind == "junk":
-        needs = (REASON,)
-    elif stage.kind == "not_connected":
-        needs = (NC_REASON,)
     else:
-        needs = ()
+        needs = default_needs(stage)
     if stage.kind == "won" and AMOUNT not in needs:
         # Whatever the stage list says: a Won deal always says what it was worth.
         needs = (*needs, AMOUNT)

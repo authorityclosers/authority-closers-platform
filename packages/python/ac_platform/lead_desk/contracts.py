@@ -82,6 +82,8 @@ class Numbers(Model):
     new_assigned: int
     # Attempted minus connected.
     not_connected: int = 0
+    # Call-button dials' time away from the app: an estimate, never talk time.
+    talk_estimated_seconds: int = 0
 
 
 class Counts(Model):
@@ -188,6 +190,8 @@ class SideEffort(Model):
     attempted: int = 0
     connected: int = 0
     talk_seconds: int = 0
+    # Call-button dials' time away from the app: an estimate, never talk time.
+    talk_estimated_seconds: int = 0
     # Different leads called, and different leads spoken to.
     leads_attempted: int = 0
     reached: int = 0

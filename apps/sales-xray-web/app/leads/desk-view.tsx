@@ -69,6 +69,12 @@ export function whyLine(row: LeadRow, now: Date = new Date()): string {
 export function nextLine(row: LeadRow, now: Date = new Date()): string {
   if (!row.missed_at && row.why_kind === "new")
     return `Added ${ago(row.created_at, now)}`;
+  // Late is said by its colour, so the time stays short and is never cut.
+  if (
+    row.next_action_at &&
+    (row.why_kind === "due" || row.why_kind === "retry")
+  )
+    return `${row.why} · ${when(row.next_action_at, now)}`;
   return whyLine(row, now);
 }
 

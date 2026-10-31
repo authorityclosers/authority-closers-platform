@@ -1,25 +1,4 @@
 /* Compatibility classes; all rules live in the shared kit. */
-.banner {
-  composes: banner from "../../../../packages/typescript/ui/src/kit/alerts.module.css";
-}
-.bannerUrgent {
-  composes: bannerUrgent from "../../../../packages/typescript/ui/src/kit/alerts.module.css";
-}
-.bannerStacked {
-  composes: bannerStacked from "../../../../packages/typescript/ui/src/kit/alerts.module.css";
-}
-.bannerIcon {
-  composes: bannerIcon from "../../../../packages/typescript/ui/src/kit/alerts.module.css";
-}
-.bannerAction {
-  composes: bannerAction from "../../../../packages/typescript/ui/src/kit/alerts.module.css";
-}
-.words {
-  composes: words from "../../../../packages/typescript/ui/src/kit/alerts.module.css";
-}
-.close {
-  composes: close from "../../../../packages/typescript/ui/src/kit/alerts.module.css";
-}
 .urgentLayer {
   composes: urgentLayer from "../../../../packages/typescript/ui/src/kit/alerts.module.css";
 }

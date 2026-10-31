@@ -57,14 +57,21 @@ describe("task words", () => {
       "hour",
       "evening",
       "tomorrow",
+      "afternoon",
     ]);
     expect(morning[0].at.getHours()).toBe(10);
     expect(morning[0].at.getMinutes()).toBe(5);
     expect(morning[1].at.getHours()).toBe(18);
     expect(morning[2].at.getDate()).toBe(25);
     expect(morning[2].at.getHours()).toBe(10);
+    expect(morning[3].at.getDate()).toBe(25);
+    expect(morning[3].at.getHours()).toBe(16);
     const late = quickTimes(at(24, 17, 10));
-    expect(late.map((time) => time.key)).toEqual(["hour", "tomorrow"]);
+    expect(late.map((time) => time.key)).toEqual([
+      "hour",
+      "tomorrow",
+      "afternoon",
+    ]);
   });
 
   it("keeps an hour that rounds up into the next hour whole", () => {

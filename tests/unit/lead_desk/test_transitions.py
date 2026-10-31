@@ -408,13 +408,17 @@ def test_a_list_without_rules_lets_a_lead_go_anywhere_as_before() -> None:
     journey = default_journey()
     new = journey.by_key["new"]
     for key in ("follow_up", "interested", "won", "lost"):
-        move = t.check(journey, new, key, t.Given(amount=key == "won"), can_manage=False)
-        # Won asks the deal amount even in a list without rules (revenue targets).
-        assert move.needs == (("amount",) if key == "won" else ())
+        given = t.Given(amount=key == "won", reason=LOST_REASONS[0][0] if key == "lost" else None)
+        move = t.check(journey, new, key, given, can_manage=False)
+        # Won asks the deal amount even in a list without rules (revenue targets), Lost a
+        # reason (Dipak's handoff, 31 Oct 2026); nothing else is required.
+        assert move.needs == {"won": ("amount",), "lost": ("reason",)}.get(key, ())
     won = journey.by_key["won"]
     # Today's rule stands: whoever works the lead moves it back from Won.
     assert t.check(journey, won, "interested", t.Given(), can_manage=False).action == "reopen"
-    assert t.check(journey, won, "lost", t.Given(), can_manage=False).action == "reclassify"
+    # Back to Lost says why, as every Lost does.
+    lost = t.Given(reason=LOST_REASONS[0][0])
+    assert t.check(journey, won, "lost", lost, can_manage=False).action == "reclassify"
 
 
 def test_every_list_can_mark_a_lead_junk_with_a_reason() -> None:
@@ -452,3 +456,23 @@ def test_an_unanswered_call_never_makes_a_lead_junk_or_reopens_it(stage: str) ->
     assert after != "junk" or stage == "junk"
     if stage in CLOSED_STAGES:
         assert after == stage
+
+
+def test_a_stage_whose_list_never_said_asks_by_its_meaning() -> None:
+    """Persona QA (31 Oct 2026): an organisation whose list never set its rules asked
+    nothing on Move to Meeting Scheduled. Never set, a stage asks what it means; the owner's
+    own list, even an empty one, stands."""
+    ruled = from_template("recommended", default_journey(), {})
+    unset = Journey(1, None, tuple(replace(s, needs=None, moves=None) for s in ruled))
+    meeting = next(s for s in unset.stages if s.milestone == "appointment_booked")
+    assert t.needs_of(meeting)[0] == ("meeting",)
+    assert t.needs_of(unset.by_key["lost"])[0] == ("reason",)
+    assert t.needs_of(unset.by_key.get("junk", JUNK))[0] == ("reason",)
+    assert t.needs_of(unset.by_key["won"])[0] == ("amount",)
+    assert t.needs_of(unset.by_key["interested"])[0] == ()
+    with pytest.raises(t.MoveRefused) as refused:
+        t.check(unset, unset.by_key["interested"], meeting.key, t.Given(), can_manage=False)
+    assert refused.value.needs == ("meeting",)
+    t.check(unset, unset.by_key["interested"], meeting.key, t.Given(meeting=True), can_manage=False)
+    # The owner's own list stands, even when it asks nothing.
+    assert t.needs_of(replace(meeting, needs=()))[0] == ()

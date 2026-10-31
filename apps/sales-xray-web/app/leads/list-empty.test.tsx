@@ -12,7 +12,10 @@ import { ListView, TEST } from "./list-view";
 vi.mock("next/link", () => ({
   default: ({ children }: { children: unknown }) => children,
 }));
-vi.mock("../notice-center", () => ({ notify: vi.fn() }));
+vi.mock("../notice-center", () => ({
+  notify: vi.fn(),
+  dismissNotice: () => undefined,
+}));
 
 // The ease-of-use wave #9, 22 Oct 2026: every empty list has one way on.
 let host: HTMLDivElement;

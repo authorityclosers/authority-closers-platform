@@ -23,7 +23,8 @@ vi.mock("@ac/ui/kit/haptics", () => ({
   haptic: (kind: string) => haptic(kind),
 }));
 
-import { AlertHost, clearAlert, raiseAlert } from "./alerts";
+import { NoticeCenter } from "../notice-center";
+import { clearAlert, raiseAlert } from "./alerts";
 import { resetBackCloseForTests } from "./back-close";
 
 (
@@ -38,7 +39,9 @@ beforeEach(async () => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  await act(async () => root.render(<AlertHost />));
+  // The corner stack hosts both: a normal alert as its card, the urgent one
+  // as the centre card.
+  await act(async () => root.render(<NoticeCenter />));
 });
 
 afterEach(async () => {
@@ -49,12 +52,15 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   resetBackCloseForTests();
+  window.sessionStorage.clear();
   haptic.mockClear();
   vi.useRealTimers();
 });
 
-// Owner program, 25 Oct 2026: normal is a banner up top with a light haptic.
-it("shows a normal alert as a banner that leaves by itself", async () => {
+// Owner program, 25 Oct 2026: normal comes with a light haptic and leaves by
+// itself. Since 31 Oct it is a corner card, never a banner over the top of the
+// page (one notification system, owner via the orchestrator).
+it("shows a normal alert as a corner card that leaves by itself", async () => {
   await act(async () =>
     raiseAlert({
       id: "lead",
@@ -64,9 +70,9 @@ it("shows a normal alert as a banner that leaves by itself", async () => {
       action: { label: "Call", href: "/leads" },
     }),
   );
-  const banner = host.querySelector('[role="status"]');
-  expect(banner?.textContent).toContain("New lead: Priya Sample");
-  expect(banner?.querySelector('a[href="/leads"]')?.textContent).toBe("Call");
+  const card = host.querySelector('[aria-live="polite"] [role="status"]');
+  expect(card?.textContent).toContain("New lead: Priya Sample");
+  expect(card?.querySelector('a[href="/leads"]')?.textContent).toBe("Call");
   expect(haptic).toHaveBeenCalledWith("tap");
   await act(async () => vi.advanceTimersByTime(8_000));
   expect(host.querySelector('[role="status"]')).toBeNull();

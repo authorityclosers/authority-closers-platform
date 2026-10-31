@@ -17,12 +17,20 @@ import styles from "./ask-deepak.module.css";
 export function AskDipakSheet({
   open,
   onClose,
+  about = null,
 }: {
   open: boolean;
   onClose: () => void;
+  /** The customer it is about, from their Prospect's Information (item 97). */
+  about?: string | null;
 }) {
   return (
-    <Sheet open={open} onClose={onClose} title="Ask Dipak" wide="center">
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={about ? `Ask Dipak about ${about}` : "Ask Dipak"}
+      wide="center"
+    >
       <div className={styles.body}>
         <span className={styles.face} aria-hidden="true" />
         <p className={styles.lead}>

@@ -86,7 +86,8 @@ export function bucketLabel(
 
 export type QuickTime = { key: string; label: string; at: Date };
 
-/** Remind's quick times: in an hour, this evening (before 5 PM), tomorrow morning. */
+/** Remind's quick times: in an hour, this evening (before 5 PM), tomorrow
+    morning and tomorrow afternoon (persona QA 8417b4d1, 31 Oct 2026). */
 export function quickTimes(now: Date = new Date()): QuickTime[] {
   const hour = new Date(now.getTime() + 60 * 60_000);
   hour.setSeconds(0, 0);
@@ -96,12 +97,15 @@ export function quickTimes(now: Date = new Date()): QuickTime[] {
   const tomorrow = dayStart(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
   tomorrow.setHours(10);
+  const afternoon = new Date(tomorrow);
+  afternoon.setHours(16);
   return [
     { key: "hour", label: "In 1 hour", at: hour },
     ...(now.getHours() < 17
       ? [{ key: "evening", label: "This evening", at: evening }]
       : []),
     { key: "tomorrow", label: "Tomorrow 10 AM", at: tomorrow },
+    { key: "afternoon", label: "Tomorrow 4 PM", at: afternoon },
   ];
 }
 

@@ -10,6 +10,7 @@ vi.mock("next/link", () => ({
 }));
 
 import type { Performance, Period } from "../leads/leads-client";
+import { countedTo } from "./metric-pager";
 import { changeWords, OutcomeTiles, TILE_SETS } from "./outcome-tiles";
 
 (
@@ -121,6 +122,15 @@ async function draw(
   );
   return onPeriod;
 }
+
+it("never counts below zero or past the number, whatever a frame's time", () => {
+  // QA 73c90cfa: the first frame's time was from before the count began.
+  expect(countedTo(0, 2343, -300, 600)).toBe(0);
+  expect(countedTo(50, 10, -300, 600)).toBe(50);
+  expect(countedTo(0, 2343, 300, 600)).toBeGreaterThan(0);
+  expect(countedTo(0, 2343, 300, 600)).toBeLessThan(2343);
+  expect(countedTo(0, 2343, 900, 600)).toBe(2343);
+});
 
 const tile = (key: string) =>
   host.querySelector<HTMLButtonElement>(`button[data-tile="${key}"]`)!;

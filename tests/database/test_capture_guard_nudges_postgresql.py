@@ -1,10 +1,15 @@
-"""A persisted, deduplicated in-app nudge without FCM or a new notification kind."""
+"""A persisted, deduplicated in-app nudge without FCM or a new notification kind.
+
+Since 31 Oct 2026 (orchestrator, persona QA reports): counted from Home's own calls, in the
+bell only (never urgent, so never a pop-up), and named by its own day, older rows too.
+"""
 
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -13,6 +18,7 @@ from sqlalchemy import Engine, select
 
 from ac_platform.http.product_updates import install_product_updates_http
 from ac_platform.lead_desk.capture_guard_nudges import collect
+from ac_platform.lead_desk.capture_reminder import reminder_key, words
 from ac_platform.lead_desk.models import LeadEvent
 from ac_platform.product_updates.models import Notification
 from tests.database.conversation_harness import conversation_harness
@@ -74,10 +80,26 @@ def test_daily_capture_nudge_persists_once_and_excludes_private_and_simulated(
                     ).all()
                 )
                 assert len(notes) == 1
-                assert notes[0].title == "2 calls today have no recording: fix"
-                assert notes[0].kind == "analysis_paused" and notes[0].urgent
+                day = due.astimezone(ZoneInfo("Asia/Kolkata")).date()
+                assert notes[0].title == words(2, day)[0]
+                assert notes[0].kind == "analysis_paused" and not notes[0].urgent
                 assert notes[0].href == "/settings/privacy#calls-setup"
                 assert notes[0].read_at is None
+                # Yesterday's reminder, written before the rule: urgent and "today".
+                older_id = uuid4()
+                older = Notification(
+                    id=older_id,
+                    person_id=here.seller.person_id,
+                    tenant_id=here.tenant_id,
+                    kind="analysis_paused",
+                    dedupe_key=reminder_key(here.tenant_id, day - timedelta(days=1)),
+                    title="5 calls today have no recording: fix",
+                    body=notes[0].body,
+                    href=notes[0].href,
+                    urgent=True,
+                    created_at=due - timedelta(days=1),
+                )
+                db.add(older)
             # Mount the real notification routes before this separate app starts.
             bell_app = FastAPI()
             install_product_updates_http(
@@ -93,7 +115,14 @@ def test_daily_capture_nudge_persists_once_and_excludes_private_and_simulated(
                 entry = next(
                     note for note in bell.json()["notifications"] if note["id"] == str(notes[0].id)
                 )
-                assert entry["urgent"] and entry["read"] is False
+                assert entry["title"] == words(2, day)[0]
+                assert not entry["urgent"] and entry["read"] is False
+                # The older row reads as not urgent, named by its day; nothing stored changes.
+                before = next(
+                    note for note in bell.json()["notifications"] if note["id"] == str(older_id)
+                )
+                assert before["title"] == words(5, day - timedelta(days=1))[0]
+                assert not before["urgent"]
                 unread = bell.json()["unread_count"]
                 acknowledged = await client.post(
                     "/v1/notifications/read", json={"ids": [entry["id"]]}, headers=WRITE
@@ -106,5 +135,47 @@ def test_daily_capture_nudge_persists_once_and_excludes_private_and_simulated(
                 )["read"]
             async with here.setup.sessions() as db, db.begin():
                 assert await collect(db, due + timedelta(minutes=2)) == 0
+                stored = await db.get(Notification, older_id)
+                assert stored is not None and stored.urgent
+                assert stored.title == "5 calls today have no recording: fix"
+
+    run(exercise())
+
+
+def test_no_reminder_when_every_call_has_its_recording(postgres_harness: Any, tmp_path: Path):
+    """Nothing missing, nothing sent: the bell never says "0 calls"."""
+
+    async def exercise():
+        async with world(postgres_harness, tmp_path) as here:
+            lead = UUID(await here.add("Alex Example", "+12025550123"))
+            due = datetime.now(UTC).replace(hour=13, minute=30, second=0, microsecond=0)
+            call = uuid4()
+            async with here.setup.sessions() as db, db.begin():
+                for eid, data in [
+                    (call, {"via": "phone", "duration_seconds": 40}),
+                    (uuid4(), {"for_call": str(call), "recording": True}),
+                ]:
+                    db.add(
+                        LeadEvent(
+                            id=eid,
+                            tenant_id=here.tenant_id,
+                            lead_id=lead,
+                            kind="call",
+                            actor_person_id=here.seller.person_id,
+                            command_id=uuid4(),
+                            data=data,
+                            created_at=due - timedelta(hours=1),
+                        )
+                    )
+                await db.flush()
+                assert await collect(db, due) == 0
+                assert not (
+                    await db.scalars(
+                        select(Notification).where(
+                            Notification.person_id == here.seller.person_id,
+                            Notification.dedupe_key.like("capture-missing:%"),
+                        )
+                    )
+                ).all()
 
     run(exercise())

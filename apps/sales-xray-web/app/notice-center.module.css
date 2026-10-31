@@ -33,6 +33,10 @@
   animation: enter var(--sx-dur-sheet) var(--sx-spring) both;
 }
 
+.card:focus {
+  outline: none;
+}
+
 .card::before {
   position: absolute;
   top: 12px;
@@ -44,15 +48,29 @@
   content: "";
 }
 
-.card[data-tone="error"] {
+.card[data-tone="error"],
+.pill[data-tone="error"] {
   --tone: var(--lx-danger);
 }
 
-.card[data-tone="info"] {
+.card[data-tone="info"],
+.pill[data-tone="info"] {
   --tone: var(--lx-teal);
 }
 
-.card[data-tone="success"] {
+.card[data-tone="work"],
+.pill[data-tone="work"] {
+  --tone: var(--lx-teal);
+}
+
+/* Work due within the hour (leads/due-soon.tsx): the urgent colour. */
+.card[data-tone="due"],
+.pill[data-tone="due"] {
+  --tone: var(--lx-danger);
+}
+
+.card[data-tone="success"],
+.pill[data-tone="success"] {
   --tone: var(--lx-strength-ink);
 }
 
@@ -102,6 +120,7 @@
   font: inherit;
   font-size: 12.5px;
   font-weight: 650;
+  text-decoration: none;
   cursor: pointer;
   transition:
     background var(--sx-dur-fast) var(--sx-ease-out),
@@ -151,7 +170,8 @@
 
 .action:focus-visible,
 .reference:focus-visible,
-.close:focus-visible {
+.close:focus-visible,
+.pillOpen:focus-visible {
   outline: 2px solid transparent;
   box-shadow: var(--lx-ring-focus);
 }
@@ -187,6 +207,71 @@
   box-shadow: var(--sx-focus-ring);
 }
 
+/* Once seen, a card folds to a one-line pill: its icon, its title and the X
+   (owner via the orchestrator, 31 Oct 2026: a corner card may never cover
+   content). A tap opens it again. */
+.pill {
+  display: flex;
+  max-width: 100%;
+  min-height: 40px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-self: end;
+  gap: 2px;
+  padding-right: 6px;
+  border: 1px solid var(--sx-glass-edge);
+  border-radius: 999px;
+  background: var(--sx-glass-thick);
+  -webkit-backdrop-filter: var(--sx-glass-blur);
+  backdrop-filter: var(--sx-glass-blur);
+  box-shadow: var(--sx-glass-shine), var(--sx-glass-shadow);
+  color: var(--lx-ink);
+  pointer-events: auto;
+  animation: fold var(--sx-dur-base) var(--sx-ease-out) both;
+}
+
+.pillOpen {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  margin-block: -2px;
+  padding: 0 6px 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.pillOpen .icon {
+  flex: none;
+  margin-top: 0;
+}
+
+.pillText {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pill .close {
+  flex: none;
+  margin: 0;
+}
+
+@keyframes fold {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
 /* A computer: above the corner's Report a problem button. */
 @media (min-width: 900px) and (hover: hover) {
   .stack {
@@ -194,20 +279,27 @@
   }
 }
 
-/* Phone: full width, above the bottom tab bar. */
-@media (max-width: 760px) {
+/* Phones and tablets: above the bottom tab bar, which shows below 900 px. */
+@media (max-width: 899.98px) {
   .stack {
-    right: 12px;
     bottom: calc(
       var(--lx-bottom-nav-h, 56px) + 8px + env(safe-area-inset-bottom, 0px)
     );
+  }
+}
+
+/* Phone: full width. */
+@media (max-width: 760px) {
+  .stack {
+    right: 12px;
     left: 12px;
     width: auto;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card {
+  .card,
+  .pill {
     animation: none;
   }
 }

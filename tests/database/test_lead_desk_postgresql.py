@@ -986,7 +986,9 @@ def test_calls_the_phone_logged_by_itself_reach_their_leads(
                 assert desk["numbers"]["calls"] == dialled + 2
                 assert desk["numbers"]["connected"] == dialled + 1
                 assert desk["numbers"]["not_connected"] == 1
-                assert desk["numbers"]["talk_seconds"] == 192 * dialled + 40
+                # The app's own call (40 s away from the app) is an estimate, not talk time.
+                assert desk["numbers"]["talk_seconds"] == 192 * dialled
+                assert desk["numbers"]["talk_estimated_seconds"] == 40
 
                 as_(setup.token)
                 team = (await client.get(f"{BASE}/team")).json()

@@ -170,7 +170,9 @@ def test_numbers_count_the_calls_recent_calls_lists(postgres_harness: Any, tmp_p
             week = desk["numbers_week"]
             assert week["calls"] == 3, week
             assert week["connected"] == 2 and week["not_connected"] == 1, week
-            assert week["talk_seconds"] == 95 + 120, week
+            # Talk time is the phone's own; the app's dial is time away, an estimate.
+            assert week["talk_seconds"] == 120, week
+            assert week["talk_estimated_seconds"] == 95, week
             assert week["follow_ups_done"] == 2, week
             # Another person's numbers never count these calls.
             here.as_admin()

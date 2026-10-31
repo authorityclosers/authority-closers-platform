@@ -13,6 +13,8 @@ export type SideEffort = {
   attempted: number;
   connected: number;
   talk_seconds: number;
+  /** Call-button dials' time away from the app: an estimate, never talk time. */
+  talk_estimated_seconds?: number;
   /** Different leads called, and different leads spoken to. */
   leads_attempted: number;
   reached: number;

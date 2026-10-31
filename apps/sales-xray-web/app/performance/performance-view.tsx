@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 
 import { BreakRow, breakLength } from "../dashboard/home-today";
 import { Segmented } from "../ui/kit";
+import { SectionBoundary } from "../ui/section-boundary";
 import {
   readEffort,
   type Effort,
@@ -21,7 +22,9 @@ import {
   type SellerEffort,
   type SideEffort,
 } from "./performance-client";
+import { RevenueSplit } from "./revenue-split";
 import styles from "./performance.module.css";
+import { talkOrDash } from "../dashboard/talk-time";
 
 const PERIODS: { key: string; label: string; days: EffortDays }[] = [
   { key: "1", label: "Today", days: 1 },
@@ -58,7 +61,9 @@ export function measures(inbound: SideEffort, cold: SideEffort): Measure[] {
     row("Connection rate", inbound, cold, (side) =>
       percent(side.connected, side.attempted),
     ),
-    row("Talk time", inbound, cold, (side) => talk(side.talk_seconds)),
+    row("Talk time", inbound, cold, (side) =>
+      talkOrDash(side.talk_seconds, side.talk_estimated_seconds, talk),
+    ),
     row("Leads reached", inbound, cold, (side) => String(side.reached)),
     row("Contact coverage", inbound, cold, (side) =>
       percent(side.leads_attempted, side.eligible),
@@ -130,10 +135,13 @@ export function sellerLine(seller: SellerEffort): string {
   const attempted = seller.inbound.attempted + seller.cold.attempted;
   const connected = seller.inbound.connected + seller.cold.connected;
   const seconds = seller.inbound.talk_seconds + seller.cold.talk_seconds;
+  const estimated =
+    (seller.inbound.talk_estimated_seconds ?? 0) +
+    (seller.cold.talk_estimated_seconds ?? 0);
   return [
     `${attempted} ${attempted === 1 ? "call" : "calls"}`,
     `${percent(connected, attempted)} connected`,
-    `${talk(seconds)} talk`,
+    `${talkOrDash(seconds, estimated, talk)} talk`,
   ].join(" · ");
 }
 
@@ -284,10 +292,6 @@ export function PerformanceView() {
           {effort.team ? (
             <section className={styles.card} aria-labelledby="team-title">
               <h2 id="team-title">Team</h2>
-              <p className={styles.sub}>
-                Inbound and Cold leads are counted apart, so an uploaded list
-                doesn&apos;t change the Inbound numbers.
-              </p>
               <MeasureTable
                 rows={measures(effort.inbound, effort.cold)}
                 label="The team's work, Inbound and Cold"
@@ -316,6 +320,12 @@ export function PerformanceView() {
               />
             ))}
           </section>
+          {/* Revenue by side and by seller, once a deal is won (7 or 30 days). */}
+          {days === 7 || days === 30 ? (
+            <SectionBoundary name="Revenue" resetKey={days}>
+              <RevenueSplit days={days} />
+            </SectionBoundary>
+          ) : null}
           {approximate ? (
             <p className={styles.quiet}>
               ≈ Next to a call from the app&apos;s Call button: its time is when

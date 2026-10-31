@@ -7,65 +7,78 @@
  * steps first)").
  *
  * The server counts the seller's connected lead calls today with no recording
- * two minutes after they ended (call_ai/missing_recordings.py). The card shows
- * this phone's Phone-app steps when the app knows the phone's make, else
- * Xiaomi's first, and in the app it opens the call recording settings. Done
- * hides it until another call is missing. It waits while a setup screen covers
- * the page, and reads again on return to the app and every two minutes.
+ * two minutes after they ended, from the same calls Home counts as Tried
+ * (call_ai/missing_recordings.py). It is a corner card in the app's corner
+ * stack, never fixed over the page (persona QA and the test robot, 31 Oct
+ * 2026), and never on Home, whose Tried row already carries the count:
+ * - the day's first sight is the full card: how many ("28 calls not
+ *   recorded"), where the Phone app's switch is, and "See which" to Calls;
+ * - after that it comes folded: the corner stack's one-line pill with the same
+ *   title, which a tap opens (notice-center.tsx);
+ * - closing it hides it for the rest of the day.
+ * It never shows over a setup screen, or when Home tried nothing today.
  */
 
-import { MicOff } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
-import { RECORDER_STEPS, recorderSteps } from "../leads/phone-setup-words";
-import {
-  inPhoneApp,
-  onPhoneSignal,
-  setupOpen,
-  setupStatus,
-} from "../leads/native-phone";
-import { Button } from "../ui/kit";
+import { setupStatus, inPhoneApp, onPhoneSignal } from "../leads/native-phone";
+import { dismissNotice, notify, type Notice } from "../notice-center";
 import { useWorkspaceAccess } from "../workspace-access";
 import {
   readMissingRecordings,
   type MissingRecordings,
 } from "./capture-setup-client";
 import { CAPTURE_SETUP_ATTRIBUTE } from "./capture-setup-rules";
-import own from "./capture-setup.module.css";
 import { PERMISSIONS_ATTRIBUTE } from "./permissions-rules";
-import { named } from "./product-name";
 
 const EVERY_MS = 120_000;
-const SEEN_KEY = "sx-recording-check-seen";
+// The full card shows this long the first time each day, then comes folded.
+const FULL_MS = 12_000;
+const DAY_KEY = "sx-recording-check-day";
+export const RECORDING_NOTICE = "recording-check";
 const COVERS = [
   "data-sx-consent",
   PERMISSIONS_ATTRIBUTE,
   CAPTURE_SETUP_ATTRIBUTE,
 ] as const;
+const HOME = new Set(["/", "/dashboard"]);
 
-const BRANDS: Record<string, string> = {
-  xiaomi: "Xiaomi, Redmi and POCO (HyperOS)",
-  samsung: "Samsung",
-  vivo: "Vivo",
-  oppo: "Oppo",
-  realme: "Realme",
-  oneplus: "OnePlus",
-  huawei: "Huawei",
+/** Where the Phone app's switch is, by make: Xiaomi's when the make is unknown. */
+const WHERE: Record<string, string> = {
+  xiaomi: "Phone, Settings, Call recording: record automatically, all numbers.",
+  samsung: "Phone, Settings, Record calls: auto record calls, all calls.",
+  vivo: "Phone, Settings, Call recording: auto record all calls.",
+  oppo: "Phone, Settings, Call recording: record all calls.",
+  realme: "Phone, Settings, Call recording: record all calls.",
+  oneplus: "Phone, Settings, Call recording: record all calls.",
 };
 
-function seen(): string | null {
+type DayState = "full_seen" | "closed";
+
+/** Today in India, the day the server counts. */
+function today(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+}
+
+function readDay(): DayState | null {
   try {
-    return window.sessionStorage.getItem(SEEN_KEY);
+    const [day, state] = (window.localStorage.getItem(DAY_KEY) ?? "").split(
+      ":",
+    );
+    return day === today() && (state === "full_seen" || state === "closed")
+      ? state
+      : null;
   } catch {
     return null;
   }
 }
 
-function markSeen(latest: string) {
+function writeDay(state: DayState) {
   try {
-    window.sessionStorage.setItem(SEEN_KEY, latest);
+    window.localStorage.setItem(DAY_KEY, `${today()}:${state}`);
   } catch {
-    // Without storage the card can show again on the next read; Done still closes it.
+    // Without storage the day's first card can show again; closing still hides it now.
   }
 }
 
@@ -81,73 +94,31 @@ function watchCovers(changed: () => void) {
 const coveredNow = () =>
   COVERS.some((name) => document.documentElement.hasAttribute(name));
 
-/** The card itself, for the banner and the review fixture. */
-export function RecordingCheckCard({
-  calls,
-  family,
-  inApp,
-  onOpen,
-  onDone,
-}: {
-  calls: number;
-  /** The phone's make when the app knows it; Xiaomi's steps otherwise. */
-  family: string | null;
-  inApp: boolean;
-  onOpen: () => void;
-  onDone: () => void;
-}) {
-  const brand =
-    family && family !== "other" && Object.hasOwn(RECORDER_STEPS, family)
-      ? family
-      : "xiaomi";
-  return (
-    <aside
-      className={own.check}
-      role="status"
-      aria-label="Calls without a recording"
-    >
-      <span className={own.checkIcon}>
-        <MicOff size={20} aria-hidden="true" />
-      </span>
-      <div className={own.checkBody}>
-        <strong>
-          {calls === 1
-            ? "A call today has no recording"
-            : `${calls} calls today have no recording`}
-        </strong>
-        <small>
-          Your Phone app didn&apos;t save {calls === 1 ? "it" : "them"}. Turn on
-          automatic call recording so every call gets its report.
-        </small>
-        <b className={own.checkBrand}>On {BRANDS[brand] ?? "your phone"}:</b>
-        <ol className={own.checkSteps}>
-          {recorderSteps(brand).map((line) => (
-            <li key={line}>{named(line)}</li>
-          ))}
-        </ol>
-        {brand === "xiaomi" && !family ? (
-          <small>
-            Other phones: open the Phone app&apos;s settings and turn on call
-            recording for all calls.
-          </small>
-        ) : null}
-        <div className={own.checkActions}>
-          {inApp ? (
-            <Button variant="primary" onClick={onOpen}>
-              Open call recording settings
-            </Button>
-          ) : null}
-          <Button variant="ghost" onClick={onDone}>
-            Done
-          </Button>
-        </div>
-      </div>
-    </aside>
-  );
+/** The corner card: how many calls, where the Phone app's switch is, See which.
+    Folded, it is one line with the same title; a tap opens it. */
+export function recordingNotice(
+  calls: number,
+  family: string | null,
+  onSeeWhich: () => void,
+  onClosed: () => void = () => undefined,
+  folded = false,
+): Notice {
+  return {
+    id: RECORDING_NOTICE,
+    tone: "info",
+    title: calls === 1 ? "1 call not recorded" : `${calls} calls not recorded`,
+    message: `Turn on call recording: ${WHERE[family ?? ""] ?? WHERE.xiaomi}`,
+    action: { label: "See which", run: onSeeWhich, icon: "open" },
+    ...(folded ? { slim: true } : {}),
+    // Stays until closed; closing hides it for the rest of the day.
+    onDismiss: async () => onClosed(),
+  };
 }
 
 export function RecordingCheck() {
   const access = useWorkspaceAccess();
+  const router = useRouter();
+  const pathname = usePathname();
   const ready =
     access?.authenticated === true &&
     access.status === "ready" &&
@@ -155,13 +126,12 @@ export function RecordingCheck() {
   const tenant = access?.context?.tenantId ?? "";
   const [missing, setMissing] = useState<MissingRecordings | null>(null);
   const [family, setFamily] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
+  const [day, setDay] = useState<DayState | null>(null);
 
   const read = useCallback(async () => {
     if (document.visibilityState === "hidden") return;
     try {
-      const next = await readMissingRecordings();
-      setMissing(next);
+      setMissing(await readMissingRecordings());
     } catch {
       // A failed read shows nothing; the next one tries again.
     }
@@ -174,7 +144,7 @@ export function RecordingCheck() {
       const status = inPhoneApp() ? await setupStatus() : null;
       if (!alive) return;
       setFamily(status?.family ?? null);
-      setDone(seen());
+      setDay(readDay());
       await read();
     })();
     const timer = window.setInterval(() => void read(), EVERY_MS);
@@ -190,26 +160,38 @@ export function RecordingCheck() {
 
   // Never over the Terms card or a setup screen.
   const covered = useSyncExternalStore(watchCovers, coveredNow, () => true);
+  const onHome = HOME.has((pathname ?? "/").replace(/\/$/, "") || "/");
+  // Never when Home says nothing was tried today: the two always agree.
+  const calls = missing?.calls ?? 0;
+  const show =
+    ready &&
+    !covered &&
+    !onHome &&
+    calls > 0 &&
+    (missing?.tried ?? 0) > 0 &&
+    day !== "closed";
 
-  if (
-    !ready ||
-    covered ||
-    !missing?.calls ||
-    !missing.latest_at ||
-    done === missing.latest_at
-  )
-    return null;
-  const latest = missing.latest_at;
-  return (
-    <RecordingCheckCard
-      calls={missing.calls}
-      family={family}
-      inApp={inPhoneApp()}
-      onOpen={() => void setupOpen("recorder")}
-      onDone={() => {
-        markSeen(latest);
-        setDone(latest);
-      }}
-    />
-  );
+  useEffect(() => {
+    if (!show) {
+      dismissNotice(RECORDING_NOTICE);
+      return;
+    }
+    const close = () => {
+      writeDay("closed");
+      setDay("closed");
+    };
+    const seeWhich = () => router.push("/calls");
+    notify(recordingNotice(calls, family, seeWhich, close, day !== null));
+    if (day !== null) return;
+    // The day's first full card comes folded after a while, and for the rest of the day.
+    const later = window.setTimeout(() => {
+      writeDay("full_seen");
+      setDay("full_seen");
+    }, FULL_MS);
+    return () => window.clearTimeout(later);
+  }, [show, calls, family, day, router]);
+
+  useEffect(() => () => dismissNotice(RECORDING_NOTICE), []);
+
+  return null;
 }

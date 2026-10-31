@@ -135,7 +135,6 @@ import {
   CallNext,
   FollowUpTabs,
   LeadSearch,
-  PaneEmpty,
   StagePicker,
   ViewTabs,
   WorkHead,
@@ -617,6 +616,9 @@ export function LeadsRoute({
       if (!handed) return;
       setHolding(null);
       setIntent(handed.call ? "call" : null);
+      // A call handed over from Home starts a round: Save & Next Lead goes on
+      // through this list (Dipak's handoff, items 16-17).
+      if (handed.call) setQueue(new Set([handed.leadId]));
       setFocusAt(handed.at ?? null);
       setOpenLead(handed.leadId);
       refresh();
@@ -1847,9 +1849,9 @@ export function LeadsRoute({
               refreshKey={version}
             />
           ) : stageView ? (
-            <WorkSplit
-              pane={paneShown ? (leadSheet(true) ?? <PaneEmpty />) : null}
-            >
+            // The list takes the whole width until a lead is open (persona QA,
+            // 31 Oct 2026: an empty pane left 1,000 px of nothing at 1920).
+            <WorkSplit pane={paneShown ? leadSheet(true) : null}>
               <ListView
                 onTopLead={setTopLead}
                 onOrder={(leadIds) => {

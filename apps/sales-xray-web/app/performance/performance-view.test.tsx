@@ -109,6 +109,10 @@ function answer(value: Effort) {
     "fetch",
     vi.fn<typeof fetch>(async (input) => {
       asked.push(String(input));
+      // Nothing won yet: the revenue split stays out of the way.
+      if (String(input).includes("/revenue/")) {
+        return new Response("{}", { status: 404 });
+      }
       return new Response(JSON.stringify(value));
     }),
   );
@@ -228,5 +232,7 @@ it("shows a seller only their own, and reads 7 days on request", async () => {
   );
   await act(async () => week?.click());
   await act(async () => Promise.resolve());
-  expect(asked.at(-1)).toBe("/v1/lead-desk/performance/sellers?days=7");
+  expect(asked).toContain("/v1/lead-desk/performance/sellers?days=7");
+  // The revenue split reads its own numbers for the same 7 days.
+  expect(asked).toContain("/v1/lead-desk/revenue/breakdown?days=7");
 });
