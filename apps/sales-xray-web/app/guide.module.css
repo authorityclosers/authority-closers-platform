@@ -1,16 +1,21 @@
 /* The guide sits above the corner: the corner cards (notice-center.tsx
    publishes their height as --sx-corner-h) and, on a computer, the Report a
    problem button stay in sight below it (the test robot, 31 Oct 2026: the
-   guide covered both). It glides when the cards fold. */
+   guide covered both). Its bottom stays at its own place (--guide-base); it
+   rises over the cards by a transform, which never shifts the page's layout
+   (Home's check of aaa4f3bc, 1 Nov 2026: moving its bottom counted 0.108),
+   and glides when they come or fold. */
 .card {
-  --guide-bottom: max(
-    20px,
-    env(safe-area-inset-bottom),
-    calc(var(--sx-corner-h, 0px) + 12px)
+  --guide-base: max(20px, env(safe-area-inset-bottom));
+  --guide-lift: max(
+    0px,
+    calc(var(--sx-corner-h, 0px) + 12px - var(--guide-base))
   );
+  --guide-bottom: calc(var(--guide-base) + var(--guide-lift));
   position: fixed;
   right: max(20px, env(safe-area-inset-right));
-  bottom: var(--guide-bottom);
+  bottom: var(--guide-base);
+  translate: 0 calc(-1 * var(--guide-lift));
   z-index: 350;
   width: min(360px, calc(100vw - 32px));
   max-height: calc(
@@ -24,13 +29,13 @@
   color: var(--lx-ink);
   font-family: var(--lx-font-ui);
   animation: arrive 220ms ease-out both;
-  transition: bottom var(--sx-dur-base, 200ms) var(--sx-ease-out, ease-out);
+  transition: translate var(--sx-dur-base, 200ms) var(--sx-ease-out, ease-out);
 }
 
 /* A computer: above the corner's Report a problem button too. */
 @media (min-width: 900px) and (hover: hover) {
   .card {
-    --guide-bottom: max(72px, calc(var(--sx-corner-h, 0px) + 12px));
+    --guide-base: 72px;
   }
 }
 
@@ -244,11 +249,7 @@
     right: 12px;
     left: 12px;
     width: auto;
-    --guide-bottom: max(
-      68px,
-      calc(60px + env(safe-area-inset-bottom)),
-      calc(var(--sx-corner-h, 0px) + 12px)
-    );
+    --guide-base: max(68px, calc(60px + env(safe-area-inset-bottom)));
     max-height: min(
       300px,
       calc(
@@ -273,6 +274,7 @@
   .card[data-position="top"] {
     top: max(72px, calc(60px + env(safe-area-inset-top)));
     bottom: auto;
+    translate: none;
   }
   .visual {
     padding: 10px 12px;
@@ -286,11 +288,7 @@
    so Prospects, Coaching and More stay reachable while the guide is open. */
 @media (min-width: 620.02px) and (max-width: 899.98px) and (min-height: 560.02px) {
   .card {
-    --guide-bottom: max(
-      76px,
-      calc(64px + env(safe-area-inset-bottom)),
-      calc(var(--sx-corner-h, 0px) + 12px)
-    );
+    --guide-base: max(76px, calc(64px + env(safe-area-inset-bottom)));
     max-height: calc(
       100dvh - var(--guide-bottom) - max(84px, var(--guide-clear, 0px) + 12px)
     );
