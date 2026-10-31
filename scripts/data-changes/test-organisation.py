@@ -278,7 +278,8 @@ async def _place(
             ),
         )
         if spot.place == "won":
-            await move(later, "won")
+            # What the deal was worth (fictional): every move to Won asks for it.
+            await move(later, "won", amount=185000)
     else:
         raise SystemExit(json.dumps({"refused": "unknown_place", "place": spot.place}))
 

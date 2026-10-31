@@ -326,7 +326,7 @@ def test_at02_to_at07_one_lead_moves_through_every_stage_on_the_same_record(
             )
 
             # 7. The deal closes: Closed / Won, out of the follow-ups.
-            won = await here.move(lead_id, "won")
+            won = await here.move(lead_id, "won", amount=95000)
             assert won.status_code == 200, won.text
             row = (await here.detail(lead_id))["lead"]
             assert (row["step"], row["group"], row["next_action_at"]) == ("won", "won", None)

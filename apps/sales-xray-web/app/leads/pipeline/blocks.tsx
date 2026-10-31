@@ -333,6 +333,67 @@ export function NoteBlock({
   );
 }
 
+/* ---------- the deal amount (revenue targets, owner meeting 28 Oct 2026) ---------- */
+
+const AMOUNT_MAX = 1_000_000_000_000;
+const UNITS: Record<string, number> = {
+  k: 1_000,
+  l: 100_000,
+  lac: 100_000,
+  lakh: 100_000,
+  lakhs: 100_000,
+  cr: 10_000_000,
+  crore: 10_000_000,
+  crores: 10_000_000,
+};
+
+/** Whole rupees from what a seller types: "60,000", "₹1.5 L", "2 lakh", "1cr". */
+export function amountOf(text: string): number | null {
+  const plain = text
+    .toLowerCase()
+    .replace(/[₹,\s]/g, "")
+    .replace(/^rs\.?/, "");
+  const match = /^(\d+(?:\.\d+)?)([a-z]*)$/.exec(plain);
+  if (!match) return null;
+  const unit = match[2] ? UNITS[match[2]] : 1;
+  if (!unit) return null;
+  const value = Math.round(Number(match[1]) * unit);
+  return value >= 1 && value <= AMOUNT_MAX ? value : null;
+}
+
+const RUPEES = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 0,
+});
+
+export function AmountBlock({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const amount = amountOf(value);
+  return (
+    <label className={`${styles.block} ${styles.field}`}>
+      <span className={styles.blockLabel}>Deal amount</span>
+      <input
+        inputMode="decimal"
+        autoComplete="off"
+        placeholder="₹60,000 or 1.5 L"
+        maxLength={24}
+        value={value}
+        aria-invalid={value.trim() !== "" && amount === null}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {amount !== null ? (
+        <span className={styles.optional}>{RUPEES.format(amount)}</span>
+      ) : null}
+    </label>
+  );
+}
+
 export function capital(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }

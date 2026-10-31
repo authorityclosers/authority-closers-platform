@@ -32,6 +32,8 @@ import {
   type LeadRow,
 } from "../leads-client";
 import {
+  AmountBlock,
+  amountOf,
   EMPTY_MEETING,
   MeetingBlock,
   NcReasonBlock,
@@ -76,6 +78,8 @@ export type Draft = {
   ncReason: string | null;
   note: string;
   meeting: MeetingDraft;
+  /** What a Won deal was worth, as typed ("60,000", "1.5 L"). */
+  amount: string;
 };
 
 const BLANK: Draft = {
@@ -86,6 +90,7 @@ const BLANK: Draft = {
   ncReason: null,
   note: "",
   meeting: EMPTY_MEETING,
+  amount: "",
 };
 
 /** What the move still lacks (the server refuses it without these). */
@@ -97,6 +102,7 @@ export function missing(move: MoveOption, draft: Draft): string[] {
     if (need === "meeting" && !meetingReady(draft.meeting)) out.push(need);
     if (need === "reason" && !draft.reason) out.push(need);
     if (need === "nc_reason" && !draft.ncReason) out.push(need);
+    if (need === "amount" && amountOf(draft.amount) === null) out.push(need);
   }
   if (draft.reason === "other" && !draft.reasonNote.trim())
     out.push("reason_note");
@@ -116,6 +122,9 @@ export function moveInput(move: MoveOption, draft: Draft): MoveInput {
         ? draft.reasonNote.trim() || undefined
         : undefined,
     ncReason: asks.has("nc_reason") ? (draft.ncReason ?? undefined) : undefined,
+    amount: asks.has("amount")
+      ? (amountOf(draft.amount) ?? undefined)
+      : undefined,
     nextActionAt: at ? at.toISOString() : undefined,
     meeting:
       start && draft.meeting.mode
@@ -138,6 +147,7 @@ const GROUP_WORDS = {
 
 function hintFor(move: MoveOption): string {
   if (move.action === "reopen") return "Back to work, history kept";
+  if (move.needs.includes("amount")) return "Asks the deal amount";
   if (move.needs.includes("meeting")) return "Asks for the meeting";
   if (move.needs.includes("reason")) return "Asks why";
   if (move.needs.includes("nc_reason")) return "Asks why it didn't connect";
@@ -279,6 +289,12 @@ export function StageSheet({
         <ArrowRight size={16} aria-hidden="true" />
         <strong>{move.label}</strong>
       </p>
+      {asks.has("amount") ? (
+        <AmountBlock
+          value={draft.amount}
+          onChange={(amount) => set({ amount })}
+        />
+      ) : null}
       {asks.has("meeting") ? (
         <MeetingBlock
           draft={draft.meeting}

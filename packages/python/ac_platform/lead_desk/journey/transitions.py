@@ -46,6 +46,9 @@ NEXT_ACTION: Final[str] = "next_action"
 MEETING: Final[str] = "meeting"
 REASON: Final[str] = "reason"
 NC_REASON: Final[str] = "nc_reason"
+# What the deal was worth: every move to Won asks for it (revenue targets, owner meeting
+# 28 Oct 2026). Imports and merges place a lead without it: its amount is not set.
+AMOUNT: Final[str] = "amount"
 # A move made because the stage list changed (the template's map): it puts a lead
 # where it already stood, under the new list's names. Ad platforms and the
 # pipeline's numbers never count it as progress.
@@ -63,6 +66,7 @@ NEED_WORDS: Final[dict[str, str]] = {
     REASON: "Pick a reason.",
     NC_REASON: "Pick why the call didn't connect.",
     REASON_NOTE: "Add a short note for Other.",
+    AMOUNT: "Add the deal amount.",
 }
 # Where a move may come from (the stage event's ``source``).
 SOURCES: Final[frozenset[str]] = frozenset(
@@ -129,6 +133,7 @@ class Given:
     nc_reason: str | None = None
     next_action: bool = False
     meeting: bool = False
+    amount: bool = False
 
 
 def group(kind: str) -> Group:
@@ -164,6 +169,9 @@ def needs_of(stage: Stage) -> tuple[tuple[str, ...], tuple[str, ...]]:
         needs = (NC_REASON,)
     else:
         needs = ()
+    if stage.kind == "won" and AMOUNT not in needs:
+        # Whatever the stage list says: a Won deal always says what it was worth.
+        needs = (*needs, AMOUNT)
     asks: list[str] = []
     if stage.kind == "lost" and REASON not in needs:
         asks.append(REASON)
@@ -292,6 +300,8 @@ def _has(need: str, given: Given) -> bool:
         return bool(given.reason)
     if need == NC_REASON:
         return bool(given.nc_reason)
+    if need == AMOUNT:
+        return given.amount
     return True
 
 
