@@ -486,9 +486,15 @@ def test_the_ac_organisation_and_the_sandbox_organisations_have_it_unless_taken_
                     ("elsewhere", theirs, "active"),
                     ("left", ours, "inactive"),
                 ):
+                    # An ended membership carries its end, as the app ends one
+                    # (ck_memberships_inactive_has_end).
                     db.add(
                         Membership(
-                            tenant_id=tenant, person_id=people[name], role="member", status=status
+                            tenant_id=tenant,
+                            person_id=people[name],
+                            role="member",
+                            status=status,
+                            ended_at=now if status == "inactive" else None,
                         )
                     )
 
