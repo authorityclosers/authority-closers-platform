@@ -140,7 +140,7 @@ function needs(
           key: "gaps",
           count: effort.sellers.filter(longGap).length,
           label: "sellers with a 1h+ unexplained break",
-          href: "/performance",
+          href: "/growth",
         }
       : null,
     effort
@@ -306,7 +306,7 @@ function Sellers({ effort, side }: { effort: Effort | null; side: Side }) {
             key={seller.person_id}
             className={styles.row}
             role="row"
-            href="/performance"
+            href="/growth"
           >
             <span role="cell" className={styles.name}>
               {seller.name}
@@ -413,7 +413,7 @@ function FloorHero({ effort, side }: { effort: Effort | null; side: Side }) {
   return (
     <Link
       className={styles.hero}
-      href="/performance"
+      href="/growth"
       aria-label={
         day
           ? `Today on ${side === "cold" ? "Cold" : "Inbound"}: ${day.attempted} calls tried, ${day.connected} connected, ${Math.round(done * 100)}% of the day's leads called; ${live} of ${sellers.length} sellers on calls now`
@@ -547,7 +547,7 @@ export function TeamFloor({
         >
           <div className={styles.head}>
             <h2 id="sellers-title">Each seller today</h2>
-            <Link className={styles.seeAll} href="/performance">
+            <Link className={styles.seeAll} href="/growth">
               See details
               <ChevronRight size={16} aria-hidden="true" />
             </Link>

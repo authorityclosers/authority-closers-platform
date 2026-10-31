@@ -184,7 +184,7 @@ function TeamHome({
             tone="neutral"
             title="Performance"
             note="Each seller's calls, talk time and breaks"
-            href="/performance"
+            href="/growth"
           />
           <ActionRow
             icon={<UsersRound size={20} />}

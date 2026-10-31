@@ -33,6 +33,7 @@ from ac_platform.lead_desk import (
     choices,
     deletion,
     duplicate_queue,
+    owner_words,
     reports,
     routing_rules,
 )
@@ -151,6 +152,7 @@ from ac_platform.lead_desk.models import (
     LeadMeeting,
     LeadRep,
 )
+from ac_platform.lead_desk.scheduler import OVERDUE_FROM as TASK_OVERDUE_FROM
 from ac_platform.lead_desk.sides import Side, is_cold, on_side
 from ac_platform.lead_desk.vocabulary import (
     CHANNEL_LABELS,
@@ -3407,7 +3409,8 @@ class LeadDesk:
             f"New from {lead.source_label}."
             if lead.source_label and event.kind == "assigned"
             else "",
-            lead.owner_reason or "",
+            # Why, in plain words to the seller: never the rules' "(fewest)".
+            owner_words.note(lead.owner_reason, you=True) or "",
         ]
         self.db.add(
             Notification(
@@ -4896,7 +4899,8 @@ class LeadDesk:
                     .where(
                         LeadTask.tenant_id == self.tenant_id,
                         LeadTask.status == "open",
-                        LeadTask.starts_at < self.now - OVERDUE_AFTER,
+                        # As Tasks' Overdue counts them: a minute past due.
+                        LeadTask.starts_at <= self.now - TASK_OVERDUE_FROM,
                         *(() if team else (LeadTask.owner_person_id == me,)),
                     )
                     .group_by(LeadTask.owner_person_id)

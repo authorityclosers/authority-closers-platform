@@ -368,7 +368,13 @@ export function NextCall({ side, own }: { side: Side; own: HomeSide | null }) {
               {displayName(lead.name)}
             </Link>
             <p className={styles.nextWhy}>
-              {[lead.source_label, lead.why].filter(Boolean).join(" · ")}
+              {[
+                lead.source_label,
+                // A Cold lead nobody has called is Unworked (QA, 31 Oct 2026).
+                cold && lead.why === "New lead" ? "Unworked" : lead.why,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </p>
             <Link
               className={styles.callNow}
@@ -452,7 +458,7 @@ export function LongestBreaks({
   return (
     <section className={styles.block} aria-labelledby="breaks-title">
       <Head id="breaks-title" title="Your longest breaks">
-        <Link className={styles.seeAll} href="/performance">
+        <Link className={styles.seeAll} href="/growth">
           See all
           <ChevronRight size={16} aria-hidden="true" />
         </Link>
@@ -649,7 +655,7 @@ export function TodayPerformance({
       value: numbers
         ? breakLength(Math.round(numbers.talk_seconds / 60))
         : null,
-      href: "/performance",
+      href: "/growth",
     },
     {
       label: "F/U done",
@@ -660,7 +666,7 @@ export function TodayPerformance({
   return (
     <section className={styles.block} aria-labelledby="performance-title">
       <Head id="performance-title" title="Today's performance">
-        <Link className={styles.seeAll} href="/performance">
+        <Link className={styles.seeAll} href="/growth">
           See details
           <ChevronRight size={16} aria-hidden="true" />
         </Link>

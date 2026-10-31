@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { dispose, LeadsError } from "../leads/leads-client";
 import {
   confirmLogOutWithUnsent,
+  discardWrite,
   replayWrites,
   resetWrites,
   sendWrite,
@@ -295,6 +296,19 @@ describe("the IndexedDB copy", () => {
     expect(sentBodies(fetchMock).map((body) => body.command_id)).toEqual([
       "c-1",
     ]);
+    expect(unsentWrites()).toEqual([]);
+  });
+
+  it("never brings back a change the person closed (persona QA, 31 Oct 2026)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
+    await sendWrite(DISPOSE, post("c-1"));
+    await writesMirrored();
+    const copy = disk;
+    discardWrite("c-1");
+    await writesMirrored();
+    // The IndexedDB copy lagged and still holds it.
+    disk = copy;
+    await loadWriteMirror();
     expect(unsentWrites()).toEqual([]);
   });
 

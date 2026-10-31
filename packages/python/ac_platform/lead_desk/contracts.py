@@ -222,7 +222,7 @@ class SellerEffort(Model):
     # Today: their first call's start and their last call's end.
     first_call_at: datetime | None = None
     last_call_at: datetime | None = None
-    # Open tasks more than an hour past their time, now.
+    # Open tasks past their time, now: the count Tasks' Overdue shows.
     tasks_late: int = 0
     # Today's connected lead calls with no recording yet.
     missing_recordings: int = 0

@@ -98,6 +98,40 @@ const isWrite = (value: unknown): value is QueuedWrite => {
   );
 };
 
+/** Changes the person closed, by id and when: the IndexedDB copy may still hold
+ *  one for a moment, and must never bring it back (persona QA, 31 Oct 2026). */
+const CLOSED_KEY = `${KEY}:closed`;
+
+function closedIds(): Map<string, number> {
+  try {
+    const raw = window.localStorage.getItem(CLOSED_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return new Map(
+      Array.isArray(parsed)
+        ? parsed.filter(
+            (pair): pair is [string, number] =>
+              Array.isArray(pair) &&
+              typeof pair[0] === "string" &&
+              typeof pair[1] === "number",
+          )
+        : [],
+    );
+  } catch {
+    return new Map();
+  }
+}
+
+function rememberClosed(id: string) {
+  const now = Date.now();
+  const kept = [...closedIds()].filter(([, at]) => now - at < WRITE_MAX_AGE_MS);
+  kept.push([id, now]);
+  try {
+    window.localStorage.setItem(CLOSED_KEY, JSON.stringify(kept.slice(-200)));
+  } catch {
+    // Not remembered: the mirror may show it once more.
+  }
+}
+
 function items(): QueuedWrite[] {
   if (cache) return cache;
   try {
@@ -220,7 +254,10 @@ export async function loadWriteMirror(): Promise<void> {
   if (!copy?.length) return;
   const mine = items();
   const known = new Set(mine.map((item) => item.id));
-  const missing = copy.filter((item) => !known.has(item.id));
+  const closed = closedIds();
+  const missing = copy.filter(
+    (item) => !known.has(item.id) && !closed.has(item.id),
+  );
   if (missing.length) store([...mine, ...missing]);
 }
 
@@ -481,8 +518,9 @@ export function retryStorage(): Promise<void> {
   return replayWrites({ force: true });
 }
 
-/** The person closed a change that needs a look. */
+/** The person closed a change that needs a look: gone for good. */
 export function discardWrite(id: string) {
+  rememberClosed(id);
   remove(id);
 }
 
@@ -610,6 +648,7 @@ export function resetWrites() {
   replaying = null;
   try {
     window.localStorage.removeItem(KEY);
+    window.localStorage.removeItem(CLOSED_KEY);
   } catch {
     // Nothing kept.
   }
