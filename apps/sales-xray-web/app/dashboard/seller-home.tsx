@@ -372,7 +372,7 @@ export function NextCall({ side, own }: { side: Side; own: HomeSide | null }) {
             </p>
             <Link
               className={styles.callNow}
-              href={cold ? "/leads?side=cold" : "/leads"}
+              href={leadsHref(side, { view: "to_call" })}
               onClick={() => handOverLead(lead.lead_id, true)}
             >
               <PhoneCall size={18} aria-hidden="true" />
@@ -611,7 +611,7 @@ export function UpcomingFollowUps({
               </Link>
               <Link
                 className={styles.phone}
-                href={side === "cold" ? "/leads?side=cold" : "/leads"}
+                href={leadsHref(side, { view: "follow_ups", when: "upcoming" })}
                 aria-label={`Call ${displayName(lead.name)}`}
                 onClick={() => handOverLead(lead.lead_id, true)}
               >

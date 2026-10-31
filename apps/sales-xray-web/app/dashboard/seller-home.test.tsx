@@ -270,7 +270,8 @@ it("is Dipak's Home: the work in six blocks, each opening its exact place", asyn
   const call = Array.from(host.querySelectorAll("a")).find(
     (link) => link.textContent === "Call Amit now",
   );
-  expect(call?.getAttribute("href")).toBe("/leads");
+  // To Call by name: a bare /leads opens the person's last view (31 Oct).
+  expect(call?.getAttribute("href")).toBe("/leads?view=to_call");
   // Today's tasks: three at most; a task with no lead is General.
   const tasks = Array.from(
     host.querySelectorAll('[aria-labelledby="tasks-title"] li'),
@@ -319,7 +320,7 @@ it("switches to Cold at once, with no second read", async () => {
   const start = Array.from(host.querySelectorAll("a")).find(
     (link) => link.textContent === "Start cold calling",
   );
-  expect(start?.getAttribute("href")).toBe("/leads?side=cold");
+  expect(start?.getAttribute("href")).toBe("/leads?view=to_call&side=cold");
   // Fresh enquiries waiting on Inbound, one tap to them.
   const alert = Array.from(host.querySelectorAll("a")).find((link) =>
     link.textContent?.startsWith("8 fresh inbound enquiries need attention"),
