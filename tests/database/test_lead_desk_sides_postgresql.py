@@ -16,7 +16,7 @@ from sqlalchemy import Engine, inspect, update
 from ac_platform.lead_desk.models import Lead
 from tests.database.conversation_harness import conversation_harness
 from tests.database.test_conversation_postgresql import run
-from tests.database.test_lead_os_acceptance_postgresql import BASE, ROOT, World, world
+from tests.database.test_lead_os_acceptance_postgresql import BASE, ROOT, WRITE, World, world
 
 
 @pytest.fixture(scope="module")
@@ -107,16 +107,56 @@ def test_each_side_lists_counts_and_numbers_its_own_leads(
             }
             assert numbers.json()["cold"] == {"imported": 3, "unworked": 1, "attempted": 2}
 
+            # The Leads badge is the Inbound To Call list, late as its rows are: a seller's
+            # Cold leads are never due or late on it (persona QA, 31 Oct 2026: "99+").
+            badge = (await here.client.get(f"{BASE}/badge")).json()
+            assert badge["to_call"] == numbers.json()["inbound"]["to_call"]
+            assert badge["overdue"] == sum(row["overdue"] for row in inbound["leads"])
+
             refused = await here.client.get(
                 f"{BASE}/leads", params={"scope": "mine", "side": "warm"}
             )
             assert refused.status_code == 422
 
-            # An admin still sees the cold lead late.
+            # An admin still sees a worked cold lead late; an untouched one is late for no one.
             here.as_admin()
             team_cold = await page(scope="team", stage="open", side="cold")
-            assert {row["name"]: row["overdue"] for row in team_cold["leads"]}[
-                "Fictional Cold tried"
-            ] is True
+            seen = {row["name"]: row["overdue"] for row in team_cold["leads"]}
+            assert seen["Fictional Cold tried"] is True
+            assert seen["Fictional Cold untouched"] is False
+
+    run(exercise())
+
+
+def test_a_cold_leads_first_stage_says_its_cold_name(postgres_harness: Any, tmp_path: Path) -> None:
+    """Persona QA (31 Oct 2026): a Cold lead said "Unworked" in the list and "New Lead" in its
+    sheet. The sheet now says the first stage's Cold name too; an Inbound lead's is unchanged."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            here.as_admin()
+            picked = await here.client.post(
+                f"{BASE}/journey/template",
+                json={"expectedVersion": 1, "template": "recommended"},
+                headers=WRITE,
+            )
+            assert picked.status_code == 200, picked.text
+            await both_sides(here)
+            here.as_seller()
+            ids: dict[str, str] = {}
+            for side in ("inbound", "cold"):
+                answer = await here.client.get(
+                    f"{BASE}/leads", params={"scope": "mine", "stage": "open", "side": side}
+                )
+                assert answer.status_code == 200, answer.text
+                ids.update({row["name"]: row["lead_id"] for row in answer.json()["leads"]})
+
+            async def label(name: str) -> str:
+                detail = await here.client.get(f"{BASE}/leads/{ids[name]}")
+                assert detail.status_code == 200, detail.text
+                return str(detail.json()["lead"]["stage_label"])
+
+            assert await label("Fictional Cold untouched") == "Unworked"
+            assert await label("Fictional Inbound no side") == "New Lead"
 
     run(exercise())

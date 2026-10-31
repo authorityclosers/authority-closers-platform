@@ -426,13 +426,33 @@ def call_out(data: Mapping[str, Any]) -> bool:
     return data.get("direction") not in NOT_OUT
 
 
+def away_seconds(data: Mapping[str, Any]) -> int:
+    """A Call-button dial's seconds (``/calls/phone``): the seller's time away from the app
+    while the phone's dialer was open. Never talk time (owner via the orchestrator, 31 Oct
+    2026: "Talk time 1 min" with no phone duration behind it). New dials say so
+    (``estimated``); older ones are known by their shape when read: no ``via`` or
+    ``direction``, not simulated, no recording. No saved row changes."""
+    dial = data.get("estimated") is True or (
+        "via" not in data
+        and "direction" not in data
+        and data.get("simulated") is False
+        and not data.get("submission_id")
+        and not data.get("recording")
+    )
+    return max(0, int(data.get("duration_seconds") or 0)) if dial else 0
+
+
 def call_seconds(data: Mapping[str, Any]) -> int:
+    """Talk time: the phone's own call duration, never a dial's time away."""
+    if away_seconds(data):
+        return 0
     return max(0, int(data.get("duration_seconds") or 0))
 
 
 def call_answered(data: Mapping[str, Any]) -> bool:
-    """Connected: talk time above 0, or the phone's log said so."""
-    return call_seconds(data) > 0 or data.get("connected") is True
+    """Connected: talk time above 0, or the phone's log said so. A dial's time away still
+    reads as connected, as before; only talk time leaves it out."""
+    return call_seconds(data) > 0 or away_seconds(data) > 0 or data.get("connected") is True
 
 
 # Deal amounts and revenue targets are whole rupees for now (migration 0150 keeps the code).
@@ -776,9 +796,14 @@ class LeadDesk:
             raise DeskError(422, str(error)) from None
 
     def _stage_label(self, lead: Lead) -> str:
-        """The business's own name for the lead's stage (in its pipeline), else the desk's."""
+        """The business's own name for the lead's stage (in its pipeline), else the desk's. A
+        Cold lead's first stage says its Cold name (Unworked), in its sheet as in the lists
+        (persona QA, 31 Oct 2026)."""
         journey = self._journeys.get(journeys.pipeline_of(lead))
         if journey is not None:
+            stage = journey.resolve(lead.stage, lead.step)
+            if is_cold(lead) and lead.stage == "new" and stage and stage.cold_label:
+                return stage.cold_label
             label = journey.label(lead.stage, lead.step)
             if label:
                 return label
@@ -863,9 +888,10 @@ class LeadDesk:
             last_result_label=result_label,
             test_data=lead.test_data,
             # A cold lead is never late for a seller: a 1,000-lead list would be all red
-            # (Dipak, 30 Oct 2026). Owners and admins still see it.
+            # (Dipak, 30 Oct 2026). Owners and admins still see a worked one late; an untouched
+            # one is late for no one (persona QA, 31 Oct 2026: "Late follow-ups 232").
             overdue=lead.owner_person_id is not None
-            and (self.viewer.can_manage or not is_cold(lead))
+            and not (is_cold(lead) and (lead.stage == "new" or not self.viewer.can_manage))
             and is_overdue(lead.stage, lead.next_action_at, lead.created_at, self.now),
             stage_at=lead.stage_at,
             group=transitions.group(lead.stage),
@@ -1230,6 +1256,7 @@ class LeadDesk:
                     connected=len(connected),
                     not_connected=len(rows) - len(connected),
                     talk_seconds=sum(call_seconds(row.data) for row in connected),
+                    talk_estimated_seconds=sum(away_seconds(row.data) for row in connected),
                     follow_ups_done=sum(
                         1
                         for row in rows
@@ -1417,11 +1444,13 @@ class LeadDesk:
     async def badge(self) -> Badge:
         """What is due for me now: the Leads tab's badge and the phone's icon count. A lead
         who called and wasn't reached counts too, once (Redmi check, 23 Oct 2026: the badge,
-        the To call tab and its rows tell the same story)."""
+        the To call tab and its rows tell the same story). Inbound leads only, as on Home: a
+        Cold lead is never late or due on it (persona QA, 31 Oct 2026: "99+" over 7 leads)."""
         mine = and_(
             Lead.tenant_id == self.tenant_id,
             Lead.owner_person_id == self.viewer.person_id,
             Lead.stage.in_(OPEN_STAGES),
+            func.coalesce(Lead.pipeline, "live") != "cold",
         )
         due = or_(
             Lead.next_action_at <= self.now,
@@ -4251,6 +4280,7 @@ class LeadDesk:
         simulated: bool,
         duration_seconds: int | None,
         sample: str | None = None,
+        away: bool = False,
     ) -> LeadDetail:
         seen = await self._command_seen(command_id)
         if seen is not None:
@@ -4271,6 +4301,8 @@ class LeadDesk:
                 "simulated": simulated,
                 "duration_seconds": duration_seconds,
                 "sample": sample,
+                # A Call-button dial's seconds are time away from the app, never talk time.
+                **({"estimated": True} if away else {}),
             },
             actor=self.viewer.person_id,
             command_id=command_id,
@@ -4833,6 +4865,7 @@ class LeadDesk:
                     "attempted": 0,
                     "connected": 0,
                     "talk": 0,
+                    "away": 0,
                     "tried": set(),
                     "reached": set(),
                     "interested": set(),
@@ -4883,6 +4916,7 @@ class LeadDesk:
             if call_answered(row.data):
                 into["connected"] += 1
                 into["talk"] += call_seconds(row.data)
+                into["away"] += away_seconds(row.data)
                 into["reached"].add(row.lead_id)
         for actor, lead_id, kind, raw, _ in moves:
             data = raw if isinstance(raw, dict) else {}
@@ -4919,6 +4953,7 @@ class LeadDesk:
                 attempted=sum(part["attempted"] for part in parts),
                 connected=sum(part["connected"] for part in parts),
                 talk_seconds=sum(part["talk"] for part in parts),
+                talk_estimated_seconds=sum(part["away"] for part in parts),
                 leads_attempted=len(tried),
                 reached=len(union("reached")),
                 interested=len(union("interested")),
@@ -5253,7 +5288,7 @@ class LeadDesk:
                 cell["calls"] += 1
                 cell["connected"] += 1 if data.get("connected") else 0
             if kind == "call":
-                cell["talk_seconds"] += int(data.get("duration_seconds") or 0)
+                cell["talk_seconds"] += call_seconds(data)
                 cell["missed"] += 1 if missed_call(kind, data) else 0
         sellers = []
         for rep in await self._reps():

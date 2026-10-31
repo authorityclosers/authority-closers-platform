@@ -82,6 +82,8 @@ class LeadFact:
     # When it reached the business (0139), when that differs from created_at: what counts
     # as come in during a period. How fast it was called still reads created_at.
     received_at: datetime | None = None
+    # On the Cold side (an imported list): never overdue, as on Home.
+    cold: bool = False
 
     @property
     def arrived_at(self) -> datetime:
@@ -150,8 +152,9 @@ def is_active(stage: str) -> bool:
 
 
 def overdue(fact: LeadFact, now: datetime) -> bool:
-    """More than an hour late: a follow-up time, or a new lead's arrival."""
-    if not is_active(fact.stage) or fact.owner_id is None:
+    """More than an hour late: a follow-up time, or a new lead's arrival. Inbound leads only,
+    as on Home (persona QA, 31 Oct 2026: 950 untouched Cold leads read "overdue")."""
+    if not is_active(fact.stage) or fact.owner_id is None or fact.cold:
         return False
     due = fact.next_action_at or (fact.created_at if fact.stage == "new" else None)
     return due is not None and due < now - OVERDUE_AFTER
@@ -387,6 +390,7 @@ async def pipeline_report(
             row.next_action_at,
             row.outcome_reason,
             row.received_at,
+            row.pipeline == "cold",
         )
         for row in (
             await db.execute(
@@ -401,6 +405,7 @@ async def pipeline_report(
                     Lead.next_action_at,
                     Lead.outcome_reason,
                     Lead.received_at,
+                    Lead.pipeline,
                 )
                 .where(*where)
                 .limit(MAX_LEADS)

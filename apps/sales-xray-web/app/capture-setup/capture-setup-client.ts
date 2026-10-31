@@ -62,6 +62,8 @@ export type CaptureTeam = Readonly<{
 /** The seller's own connected lead calls today with no recording after two minutes. */
 export type MissingRecordings = Readonly<{
   calls: number;
+  /** Calls the seller tried today, as Home counts them (its Tried). */
+  tried: number;
   latest_at: string | null;
 }>;
 
@@ -138,6 +140,7 @@ export function parseMissing(body: unknown): MissingRecordings {
     throw new Error("Calls without recordings could not be read.");
   return {
     calls: count(body.calls),
+    tried: count(body.tried),
     latest_at: typeof body.latest_at === "string" ? body.latest_at : null,
   };
 }

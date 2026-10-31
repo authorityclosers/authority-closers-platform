@@ -138,7 +138,7 @@ it("adds a task for the picked lead at the picked time, reminding early", async 
   expect(calls.add).toHaveBeenCalledWith(
     "lead-1",
     {
-      kind: "call_back",
+      kind: "whatsapp",
       starts_at: TOMORROW_10.toISOString(),
       title: "Call about the site visit",
       remind_before_minutes: EARLY_MINUTES,
@@ -242,5 +242,30 @@ it("adds a task of your own when no lead is picked", async () => {
   expect(calls.notify.mock.calls.at(-1)?.[0]).toMatchObject({
     tone: "success",
     message: "On your list",
+  });
+});
+
+// Persona QA 8417b4d1 (31 Oct 2026): tasks are the non-calling work, the
+// time reads day first, tomorrow afternoon is one tap, and no helper lines.
+it("offers non-calling kinds, tomorrow at 4 PM and the time day first", async () => {
+  calls.own.mockResolvedValue({});
+  await open();
+  expect(button("Call back")).toBeUndefined();
+  expect(button("WhatsApp")?.getAttribute("aria-pressed")).toBe("true");
+  expect(host.textContent).not.toContain("A reminder on");
+  await act(async () => button("Tomorrow 4 PM")!.click());
+  expect(host.textContent).toMatch(/Tomorrow, 4:00\spm/i);
+  await act(async () =>
+    type(
+      host.querySelector<HTMLInputElement>('input[type="datetime-local"]')!,
+      "2026-11-03T16:00",
+    ),
+  );
+  expect(host.textContent).toContain("3 Nov");
+  expect(host.textContent).not.toContain("Nov 3");
+  await act(async () => button("Add task")!.click());
+  expect(calls.own.mock.calls[0][0]).toMatchObject({
+    kind: "whatsapp",
+    starts_at: new Date(2026, 10, 3, 16, 0).toISOString(),
   });
 });

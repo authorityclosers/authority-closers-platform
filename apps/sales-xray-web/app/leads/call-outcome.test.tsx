@@ -175,3 +175,90 @@ describe("the after-call sheet (UX study item 6)", () => {
     expect(missedReason("no_network")).toBe("out_of_coverage");
   });
 });
+
+describe("what the next stage asks after a call (persona QA, 31 Oct 2026)", () => {
+  const withMoves = () =>
+    ({
+      ...lead("new"),
+      stage_choices: [
+        {
+          key: "meeting_scheduled",
+          kind: "interested",
+          label: "Meeting Scheduled",
+          meaning: "A meeting is booked",
+        },
+        {
+          key: "lost",
+          kind: "lost",
+          label: "Closed / Lost",
+          meaning: "They said no",
+        },
+      ],
+      moves: [
+        {
+          step: "meeting_scheduled",
+          label: "Meeting Scheduled",
+          kind: "interested",
+          milestone: "appointment_booked",
+          group: "active",
+          action: "move",
+          needs: ["meeting"],
+          asks: [],
+          reasons: [],
+        },
+        {
+          step: "lost",
+          label: "Closed / Lost",
+          kind: "lost",
+          group: "lost",
+          action: "close",
+          needs: ["reason"],
+          asks: [],
+          reasons: [{ key: "price", label: "Price or budget" }],
+        },
+      ],
+    }) as unknown as LeadDetail;
+
+  it("asks when the meeting is, and why it was lost, before Save", async () => {
+    await show(withMoves());
+    await act(async () => tile("We talked").click());
+    await act(async () => tile("Meeting Scheduled").click());
+    expect(host.textContent).toContain("When is the meeting?");
+    expect(host.textContent).toContain("Pick when the meeting is to save");
+    await act(async () => tile("Closed / Lost").click());
+    expect(host.textContent).toContain("Why was it lost?");
+    expect(host.textContent).not.toContain("When is the meeting?");
+    expect(host.textContent).toContain("Pick why to save");
+    await act(async () => tile("Price or budget").click());
+    expect(host.textContent).not.toContain("Pick why to save");
+  });
+});
+
+describe("a Won deal after a call (revenue targets, with the asks above)", () => {
+  it("still asks for the deal amount before Save", async () => {
+    await show({
+      ...lead("new"),
+      stage_choices: [
+        { key: "won", kind: "won", label: "Won", meaning: "They bought" },
+      ],
+      moves: [
+        {
+          step: "won",
+          label: "Won",
+          kind: "won",
+          milestone: "won",
+          group: "won",
+          action: "close",
+          needs: ["amount"],
+          asks: [],
+          reasons: [],
+        },
+      ],
+    } as unknown as LeadDetail);
+    await act(async () => tile("We talked").click());
+    await act(async () => tile("Won").click());
+    expect(host.textContent).toContain("Deal amount (₹)");
+    expect(host.textContent).toContain("Add the deal amount to save");
+    expect(host.textContent).not.toContain("When is the meeting?");
+  });
+});

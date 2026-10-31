@@ -47,6 +47,7 @@ import {
 } from "./metric-pager";
 import type { HomeBreak, HomeDesk, HomeSide } from "./my-day-client";
 import styles from "./seller-home.module.css";
+import { talkOrDash } from "./talk-time";
 
 /** Which lead types this seller works: GET /sides (Leads session, 31 Oct). */
 type SidesAccess = { inbound: boolean; cold: boolean };
@@ -90,6 +91,28 @@ const CLOCK = new Intl.DateTimeFormat("en-US", {
   timeZone: "Asia/Kolkata",
 });
 const when = (at: string | null) => (at ? CLOCK.format(new Date(at)) : "");
+
+const DAY = new Intl.DateTimeFormat("en-IN", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  timeZone: "Asia/Kolkata",
+});
+const IST_DATE = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" });
+
+/** A time with its day when it isn't today (QA, 31 Oct 2026: "10:00 AM",
+ *  but which day?): "Tomorrow, 10:00 AM", "Mon, 3 Nov, 10:00 AM". */
+const whenDay = (at: string | null) => {
+  if (!at) return "";
+  const date = new Date(at);
+  const day = IST_DATE.format(date);
+  const today = IST_DATE.format(new Date());
+  const tomorrow = IST_DATE.format(new Date(Date.now() + 86_400_000));
+  const time = CLOCK.format(date);
+  if (day === today) return time;
+  if (day === tomorrow) return `Tomorrow, ${time}`;
+  return `${DAY.format(date)}, ${time}`;
+};
 
 /** A task's type tag: its lead's side, or General for a task of your own. */
 type TaskTag = Side | "general";
@@ -333,7 +356,13 @@ export function TodayCards({
                   },
                   {
                     label: "Talk time",
-                    value: own ? minutes(own.numbers.talk_seconds) : null,
+                    value: own
+                      ? talkOrDash(
+                          own.numbers.talk_seconds,
+                          own.numbers.talk_estimated_seconds,
+                          minutes,
+                        )
+                      : null,
                   },
                   {
                     label: "Called today",
@@ -632,7 +661,7 @@ export function UpcomingFollowUps({
                 <span>
                   {[
                     lead.next_action_note || lead.stage_label,
-                    when(lead.next_action_at),
+                    whenDay(lead.next_action_at),
                   ]
                     .filter(Boolean)
                     .join(" · ")}
@@ -676,7 +705,11 @@ export function TodayPerformance({
     {
       label: "Talk time",
       value: numbers
-        ? breakLength(Math.round(numbers.talk_seconds / 60))
+        ? talkOrDash(
+            numbers.talk_seconds,
+            numbers.talk_estimated_seconds,
+            (seconds) => breakLength(Math.round(seconds / 60)),
+          )
         : null,
       href: "/growth",
     },

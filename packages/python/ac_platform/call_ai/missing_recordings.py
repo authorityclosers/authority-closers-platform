@@ -48,11 +48,84 @@ def _utc(at: datetime) -> datetime:
 
 
 def is_missing(at: datetime, data: dict[str, Any], now: datetime) -> bool:
-    """A connected lead call that ended at least WAIT ago and expects a recording."""
-    if not expects_recording(data):
+    """A connected lead call the seller made that ended at least WAIT ago and expects a
+    recording. Calls in are left out: Home's Tried counts the calls a seller makes."""
+    from ac_platform.lead_desk.store import call_out  # the store imports half the app
+
+    if not expects_recording(data) or not call_out(data):
         return False
     ended = _utc(at) + timedelta(seconds=float(data.get("duration_seconds") or 0))
     return now - ended >= WAIT
+
+
+@dataclass(frozen=True, slots=True)
+class Today:
+    """Home's own calls today (persona QA, 31 Oct 2026: the banner said "2 calls have no
+    recording" while Home said "Tried 0"): how many each seller tried, and the connected
+    ones still without a recording."""
+
+    tried: dict[UUID, int] = field(default_factory=dict)
+    missing: Missing = field(default_factory=Missing)
+
+
+def tally(rows: Any, recorded: set[str], now: datetime) -> Today:
+    """From the calls Home lists (``LeadDesk._call_rows``): tried per seller, and the
+    connected ones that ended two minutes ago with no recording attached."""
+    from ac_platform.lead_desk.store import call_answered, call_out
+
+    tried: Counter[UUID] = Counter()
+    by_person: Counter[UUID] = Counter()
+    latest: dict[UUID, datetime] = {}
+    for row in rows:
+        if row.actor is None or not call_out(row.data):
+            continue
+        tried[row.actor] += 1
+        if (
+            str(row.event_id) in recorded
+            or not call_answered(row.data)
+            or not is_missing(row.at, row.data, now)
+        ):
+            continue
+        by_person[row.actor] += 1
+        at = _utc(row.at)
+        if row.actor not in latest or at > latest[row.actor]:
+            latest[row.actor] = at
+    return Today(
+        tried=dict(tried),
+        missing=Missing(total=sum(by_person.values()), by_person=dict(by_person), latest=latest),
+    )
+
+
+async def calls_today(
+    database: Any,
+    *,
+    tenant_id: UUID,
+    person_id: UUID,
+    role: str,
+    now: datetime,
+    team: bool = False,
+) -> Today:
+    """Today's calls exactly as Home and Recent Calls read them (the same rows, the same
+    privacy and undo rules): the person's own, or the team's for those who see it."""
+    from ac_platform.lead_desk.store import LeadDesk, Viewer
+
+    desk = LeadDesk(
+        database, Viewer(person_id=person_id, tenant_id=tenant_id, role=role, name=""), now=now
+    )
+    rows = await desk._call_rows(day_start(now), now + timedelta(microseconds=1), team=team)
+    ids = [str(row.event_id) for row in rows]
+    recorded: set[str] = set()
+    if ids:
+        found = await database.scalars(
+            select(LeadEvent.data["for_call"].as_string()).where(
+                LeadEvent.tenant_id == tenant_id,
+                LeadEvent.kind == "call",
+                LeadEvent.data["for_call"].as_string().in_(ids),
+                LeadEvent.data["recording"].as_boolean().is_(True),
+            )
+        )
+        recorded = {value for value in found.all() if value}
+    return tally(rows, recorded, now)
 
 
 async def missing_today(

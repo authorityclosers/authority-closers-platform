@@ -11,6 +11,9 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("./profile-menu", () => ({ ProfileMenu: () => null }));
+vi.mock("./capture-setup/recording-check", () => ({
+  RecordingCheck: () => null,
+}));
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;

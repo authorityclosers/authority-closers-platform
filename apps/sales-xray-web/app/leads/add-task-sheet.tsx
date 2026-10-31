@@ -14,7 +14,7 @@
  * the task, otherwise at its time.
  */
 
-import { Check, Search } from "lucide-react";
+import { CalendarClock, Check, Search } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 
 import { displayName } from "../display-name";
@@ -32,14 +32,22 @@ import {
   type NewTask,
   type TaskKind,
 } from "./leads-client";
-import { dueWords, kindOf, localInput, quickTimes } from "./task-words";
+import {
+  daysFrom,
+  dueWords,
+  kindOf,
+  localInput,
+  quickTimes,
+} from "./task-words";
 import styles from "./add-task-sheet.module.css";
 
-/** The kinds a seller adds by hand, the most used first. */
+/** The kinds a seller adds by hand, the most used first. Tasks are the
+    non-calling work (lead_desk/tasks.py CALLING_KINDS): a call back is booked
+    as a follow-up, so it is not one of them (persona QA 8417b4d1, 31 Oct 2026). */
 const KINDS: readonly TaskKind[] = [
-  "call_back",
   "whatsapp",
   "meeting",
+  "send_file",
   "other",
 ];
 
@@ -48,6 +56,24 @@ export const EARLY_MINUTES = 15;
 
 /** The most leads a search shows. */
 const FOUND = 6;
+
+/** The picked time with the day first ("Sat, 1 Nov, 4:00 pm"), whatever the
+    phone's language: the native field wrote 11/01/2026 on some phones. */
+function whenWords(at: Date, now: Date): string {
+  const clock = at.toLocaleTimeString("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const days = daysFrom(at, now);
+  if (days === 0) return `Today, ${clock}`;
+  if (days === 1) return `Tomorrow, ${clock}`;
+  const day = at.toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+  return `${day}, ${clock}`;
+}
 
 export type TaskLead = {
   lead_id: string;
@@ -198,7 +224,7 @@ export function AddTaskSheet({
   const [command] = useState(commandId);
   const [times] = useState(() => quickTimes(now()));
   const [title, setTitle] = useState("");
-  const [kind, setKind] = useState<TaskKind>("call_back");
+  const [kind, setKind] = useState<TaskKind>(KINDS[0]);
   const [lead, setLead] = useState<TaskLead | null>(given);
   const [at, setAt] = useState<Date>(times[0].at);
   const [early, setEarly] = useState(true);
@@ -265,7 +291,6 @@ export function AddTaskSheet({
         if (!busy) onClose();
       }}
       title="Add task"
-      description="A reminder on a lead, on its day."
       wide="center"
       footer={
         <Button
@@ -286,7 +311,7 @@ export function AddTaskSheet({
             value={title}
             maxLength={200}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="Call about the site visit"
+            placeholder="Send the brochure"
             autoComplete="off"
           />
         </label>
@@ -333,26 +358,33 @@ export function AddTaskSheet({
               </button>
             ))}
           </div>
-          <input
-            type="datetime-local"
-            className={styles.when}
-            aria-label="Date and time"
-            value={localInput(at)}
-            onChange={(event) => {
-              const picked = new Date(event.target.value);
-              if (!Number.isNaN(picked.getTime())) setAt(picked);
-            }}
-          />
+          {/* Our words over the phone's own picker: a tap opens its calendar. */}
+          <label className={styles.when}>
+            <CalendarClock size={16} aria-hidden="true" />
+            <span>{whenWords(at, now())}</span>
+            <input
+              type="datetime-local"
+              className={styles.whenInput}
+              aria-label="Date and time"
+              value={localInput(at)}
+              onClick={(event) => {
+                try {
+                  event.currentTarget.showPicker();
+                } catch {
+                  // Older phones have no showPicker; they open it on the tap.
+                }
+              }}
+              onChange={(event) => {
+                const picked = new Date(event.target.value);
+                if (!Number.isNaN(picked.getTime())) setAt(picked);
+              }}
+            />
+          </label>
         </div>
 
         <label className={styles.switch}>
           <span className={styles.switchWords}>
             <strong>Remind me {EARLY_MINUTES} minutes early</strong>
-            <small>
-              {early
-                ? "A reminder on your phone before it's due."
-                : "A reminder on your phone when it's due."}
-            </small>
           </span>
           <input
             type="checkbox"

@@ -100,6 +100,8 @@ export type Desk = {
     calls: number;
     connected: number;
     talk_seconds: number;
+    /** Call-button dials' time away from the app: an estimate, never talk time. */
+    talk_estimated_seconds?: number;
     follow_ups_done: number;
     new_assigned: number;
   };
@@ -1094,8 +1096,18 @@ export type Disposition = {
   follow_up_at?: string;
   remark?: string;
   deal_value?: string;
-  /** Why an open lead is still open (Open Leads: Discussion Incomplete, Call Later). */
+  /** Why an open lead is still open (Open Leads: Discussion Incomplete, Call Later),
+   *  or why it was lost or is junk. */
   outcome_reason?: string;
+  /** The words for an "Other" reason. */
+  reason_note?: string;
+  /** The meeting the call booked (Meeting Scheduled asks when and how). */
+  meeting?: {
+    starts_at: string;
+    mode: string;
+    link?: string;
+    location?: string;
+  };
 };
 
 /** A move the lists and To call follow at once (lead-moves.ts). */

@@ -37,6 +37,7 @@ import { firstPageFor, type ServerLeads } from "./leads-seed";
 import { notify } from "../notice-center";
 import { useRowKeys } from "../ui/row-keys";
 import { withoutRepeats } from "./page-merge";
+import { useListLoadWatch } from "./load-watch";
 import { Button, Skeleton } from "../ui/kit";
 import {
   DeleteLeadsSheet,
@@ -415,6 +416,13 @@ export function ListView({
   }, [question, rows.length, visibleCount, asTable]);
   const syncing = loaded?.key !== key;
   const error = failed?.key === key ? failed.message : null;
+  useListLoadWatch({
+    question: key,
+    waiting: syncing,
+    failed: error !== null,
+    showing: page !== null,
+    onRetry: () => setAttempt((count) => count + 1),
+  });
   const chosen = picked?.question === question ? picked.leads : NONE;
   // The page's latest counts setter, without reading the list again for it.
   const counts = useRef(onCounts);
@@ -499,13 +507,6 @@ export function ListView({
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
-        if (remembered)
-          notify({
-            id: "leads-sync",
-            tone: "error",
-            title: "Couldn't sync leads",
-            message: "Showing your last list. Try again shortly.",
-          });
         setFailed({
           key,
           message:

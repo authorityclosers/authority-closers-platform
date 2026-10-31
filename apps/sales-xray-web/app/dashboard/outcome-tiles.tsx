@@ -27,6 +27,7 @@ import type {
 } from "../leads/leads-client";
 import { Avatar, Segmented } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
+import { countedTo } from "./metric-pager";
 import { OutcomesSkeleton } from "./sales-home-skeleton";
 import styles from "./outcome-tiles.module.css";
 
@@ -70,13 +71,10 @@ function useCountUp(value: number): number {
     }
     const began = performance.now();
     const tick = (now: number) => {
-      const progress = Math.min(1, (now - began) / 600);
-      const next = Math.round(
-        start + (value - start) * (1 - (1 - progress) ** 3),
-      );
+      const next = countedTo(start, value, now - began, 600);
       setShown(next);
       from.current = next;
-      if (progress < 1) frame = requestAnimationFrame(tick);
+      if (now - began < 600) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
@@ -95,7 +93,16 @@ export function changeWords(value: number, previous: number): string {
   return diff > 0 ? `${diff} more` : `${-diff} fewer`;
 }
 
-function Change({ value, previous }: { value: number; previous: number }) {
+function Change({
+  value,
+  previous,
+  before = true,
+}: {
+  value: number;
+  previous: number;
+  /** "than before" after it; off where the period is named next to it. */
+  before?: boolean;
+}) {
   const diff = value - previous;
   const Icon = diff > 0 ? ArrowUpRight : diff < 0 ? ArrowDownRight : Minus;
   return (
@@ -104,7 +111,8 @@ function Change({ value, previous }: { value: number; previous: number }) {
       data-trend={diff > 0 ? "up" : diff < 0 ? "down" : "flat"}
     >
       <Icon size={13} aria-hidden="true" />
-      {changeWords(value, previous)}
+      {/* More than what? The period before, as the footnote says (QA, 31 Oct). */}
+      {`${changeWords(value, previous)}${diff && before ? " than before" : ""}`}
     </span>
   );
 }
@@ -528,7 +536,11 @@ function TileDetail({ tile, data }: { tile: TileSpec; data: TileData }) {
       </p>
       {tile.compare && was !== undefined ? (
         <p className={styles.detailChange}>
-          <Change value={tile.compare(data.now)} previous={was} />
+          <Change
+            value={tile.compare(data.now)}
+            previous={was}
+            before={false}
+          />
           {` than ${beforeWords(data.period)} (${was})`}
         </p>
       ) : null}

@@ -136,8 +136,10 @@ def test_lead_stages_go_back_to_the_organisations_meta_dataset(
                             "expected_revision": lead.revision,
                             "connected": True,
                             "stage": stage,
-                            # A Won deal says what it was worth (revenue targets).
+                            # A Won deal says what it was worth (revenue targets), and a
+                            # Lost one why.
                             **({"deal_value": "150000"} if stage == "won" else {}),
+                            **({"outcome_reason": "not_interested"} if stage == "lost" else {}),
                         },
                         headers=WRITE,
                     )

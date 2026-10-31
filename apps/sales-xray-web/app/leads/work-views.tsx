@@ -190,13 +190,6 @@ export function WorkSplit({
   );
 }
 
-/** The detail pane before a lead is chosen. */
-export function PaneEmpty() {
-  return (
-    <p className={styles.paneEmpty}>Choose a lead to see their details here.</p>
-  );
-}
-
 function Tabs<T extends string>({
   label,
   items,

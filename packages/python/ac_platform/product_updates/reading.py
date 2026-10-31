@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.lead_desk.capture_reminder import as_bell
 from ac_platform.product_updates.models import Notification, ProductUpdate, UpdateSeen
 from ac_platform.tenancy.models import Membership, Organisation
 from ac_platform.tenancy.roles import roles_with
@@ -208,19 +209,21 @@ class ProductUpdatesReading:
                 .limit(50)
             )
         ).all()
-        entries.extend(
-            {
-                "id": str(event.id),
-                "kind": event.kind,
-                "title": event.title,
-                "body": event.body,
-                "href": event.href,
-                "urgent": event.urgent,
-                "created_at": utc(event.created_at),
-                "read": event.read_at is not None,
-            }
-            for event in events
-        )
+        for event in events:
+            # The capture reminder stays in the bell and names its day, older rows too.
+            title, urgent = as_bell(event.dedupe_key, event.title, event.urgent)
+            entries.append(
+                {
+                    "id": str(event.id),
+                    "kind": event.kind,
+                    "title": title,
+                    "body": event.body,
+                    "href": event.href,
+                    "urgent": urgent,
+                    "created_at": utc(event.created_at),
+                    "read": event.read_at is not None,
+                }
+            )
         entries.sort(key=lambda entry: (entry["created_at"], entry["id"]), reverse=True)
         return {"notifications": entries[:50], "unread_count": unread}
 

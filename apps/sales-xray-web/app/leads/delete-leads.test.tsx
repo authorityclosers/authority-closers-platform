@@ -17,7 +17,10 @@ vi.mock("next/link", () => ({
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
-vi.mock("../notice-center", () => ({ notify: vi.fn() }));
+vi.mock("../notice-center", () => ({
+  notify: vi.fn(),
+  dismissNotice: () => undefined,
+}));
 
 const NAMES = [
   "Asha Fictional",

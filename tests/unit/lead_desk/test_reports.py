@@ -4,6 +4,7 @@ a Lost lead that was never a deal (junk, or merged into another lead) counts as 
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
@@ -231,3 +232,13 @@ def test_lost_leads_that_were_never_deals_count_as_junk() -> None:
     assert report.lost_moves == [("Price or budget", 1)]
     assert (report.junk_now, report.junk_moves) == (2, 2)
     assert report.sources["meta"].junk == 2
+
+
+def test_a_cold_lead_is_never_overdue() -> None:
+    """Overdue counts Inbound leads only, as Home does (persona QA, 31 Oct 2026: 950 untouched
+    Cold leads made the owner's report say 950 overdue)."""
+    inbound = fact("new", None, days_ago=2)
+    late = fact("new", None, next_in_hours=-5)
+    assert reports.overdue(inbound, NOW) and reports.overdue(late, NOW)
+    assert not reports.overdue(replace(inbound, cold=True), NOW)
+    assert not reports.overdue(replace(late, cold=True), NOW)
