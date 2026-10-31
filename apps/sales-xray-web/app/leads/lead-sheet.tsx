@@ -88,6 +88,7 @@ import {
   type LeadDetail,
   type LeadEvent,
   type Stage,
+  undoResult,
 } from "./leads-client";
 import { PersonAvatar } from "../people/person-avatar";
 import { LastCallBrief } from "./call-brief-card";
@@ -575,6 +576,55 @@ export function CallOutcome({
       });
       buzz("done");
       flow.done({ step: "save" });
+      // Says where the lead went and when the next call is (persona QA, 31 Oct
+      // 2026: "All changes saved" didn't say where the lead went).
+      const moved =
+        saved.lead.step !== current.lead.step ||
+        saved.lead.stage !== current.lead.stage;
+      notify({
+        id: `outcome-${saved.lead.lead_id}`,
+        tone: "success",
+        title: [
+          `${moved ? "Moved to" : "Still"} ${saved.lead.stage_label}`,
+          saved.lead.next_action_at
+            ? `next call ${when(saved.lead.next_action_at)}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        message: saved.lead.name,
+        timeout: saved.undo_result ? 10000 : 6000,
+        // A moment to take it back (the server's undo supersedes; 5 minutes, its seller).
+        action: saved.undo_result
+          ? {
+              label: "Undo",
+              run: () => {
+                const answer = saved.undo_result;
+                if (!answer) return;
+                void undoResult(saved.lead, answer.event_id).then(
+                  (back) =>
+                    notify({
+                      id: `outcome-${saved.lead.lead_id}`,
+                      tone: "info",
+                      title: `Undone: back to ${back.lead.stage_label}`,
+                      message: back.lead.name,
+                      timeout: 6000,
+                    }),
+                  (failure: unknown) =>
+                    notify({
+                      id: `outcome-${saved.lead.lead_id}`,
+                      tone: "error",
+                      title:
+                        failure instanceof LeadsError
+                          ? failure.message
+                          : "Can't undo now.",
+                      message: saved.lead.name,
+                    }),
+                );
+              },
+            }
+          : undefined,
+      });
       after(saved);
       // Reviews engine (owner, 23 Oct 2026): asks later, when nothing is in the way.
       askFeedback("call_outcome");
@@ -1205,6 +1255,14 @@ export function eventText(event: LeadEvent): {
         }`,
       };
     case "edited":
+      // An after-call answer its seller took back (31 Oct 2026).
+      if ((event.changed ?? []).includes("call_answer"))
+        return {
+          title: `${who} undid the call's answer`,
+          detail: event.stage_label
+            ? `Back to ${event.stage_label}`
+            : undefined,
+        };
       return {
         title: `${who} changed ${(event.changed ?? [])
           .map((name) => (FIELD_LABELS[name] ?? name).toLowerCase())

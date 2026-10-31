@@ -110,10 +110,8 @@ import {
   type ListMore,
   type ListSince,
   type ListSort,
-  readSides,
   type FollowUpWhen,
   type LeadSide,
-  type SideNumbers,
   type WorkView,
 } from "./leads-client";
 import { MessageSetup } from "./message-context";
@@ -170,6 +168,8 @@ import {
   type LeadFilters,
 } from "./lead-filters";
 import styles from "./leads.module.css";
+import { OPEN_ADD_EVENT } from "../shell/shell-store";
+import { useSideNumbers } from "./side-numbers";
 
 type Manage = "team" | "sources" | "stages" | "numbers";
 
@@ -844,19 +844,13 @@ export function LeadsRoute({
   // only then; someone with Cold Leads only works Cold.
   const sidesScope = warmManager ? "team" : "mine";
   const sidesKey = JSON.stringify([identity, sidesScope]);
-  const [sideNumbers, setSideNumbers] = useState<{
-    key: string;
-    value: SideNumbers;
-  } | null>(null);
-  useEffect(() => {
-    if (!authenticated || !role) return;
-    const controller = new AbortController();
-    readSides(sidesScope, controller.signal)
-      .then((value) => setSideNumbers({ key: sidesKey, value }))
-      .catch(() => undefined);
-    return () => controller.abort();
-  }, [authenticated, role, sidesScope, sidesKey, version]);
-  const numbers = sideNumbers?.key === sidesKey ? sideNumbers.value : null;
+  // The page waits for them before it draws (side-numbers.ts).
+  const { numbers, settled: sidesSettled } = useSideNumbers({
+    ready: !!authenticated && !!role,
+    scope: sidesScope,
+    keyed: sidesKey,
+    version,
+  });
   const coldOnly =
     !!numbers && numbers.inbound.leads === 0 && numbers.cold.imported > 0;
   const bothSides =
@@ -1218,7 +1212,8 @@ export function LeadsRoute({
     );
   }
 
-  if (!current || !desk || legacySettings) return <LeadsSkeleton />;
+  if (!current || !desk || legacySettings || !sidesSettled)
+    return <LeadsSkeleton />;
 
   // A phone alert's lead opens once; closing it leaves the desk.
   const fromLink = linked && linkDone !== hash ? linked : null;
@@ -1737,16 +1732,32 @@ export function LeadsRoute({
                     />
                   }
                   call={
-                    // Call Next Lead or Start Cold Calling: the list's first lead.
-                    <CallNext
-                      side={side}
-                      disabled={!topLead}
-                      onStart={() => {
-                        if (!topLead) return;
-                        setQueue(new Set([topLead]));
-                        open(topLead, "call");
-                      }}
-                    />
+                    <>
+                      {/* + on a computer (Dipak's handoff, item 41): the phone's
+                          + sheet, Add a lead, a call or a task. */}
+                      <button
+                        type="button"
+                        className={styles.headAdd}
+                        aria-label="Add a lead, a call or a task"
+                        aria-haspopup="dialog"
+                        onClick={() =>
+                          window.dispatchEvent(new Event(OPEN_ADD_EVENT))
+                        }
+                      >
+                        <Plus size={16} strokeWidth={2.5} aria-hidden="true" />
+                        Add
+                      </button>
+                      {/* Call Next Lead or Start Cold Calling: the list's first lead. */}
+                      <CallNext
+                        side={side}
+                        disabled={!topLead}
+                        onStart={() => {
+                          if (!topLead) return;
+                          setQueue(new Set([topLead]));
+                          open(topLead, "call");
+                        }}
+                      />
+                    </>
                   }
                   views={
                     <ViewTabs

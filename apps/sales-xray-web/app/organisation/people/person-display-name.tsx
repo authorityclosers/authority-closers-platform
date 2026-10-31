@@ -37,9 +37,14 @@ export function PersonDisplayName({ name }: { name: string }) {
     observer.observe(box.current);
     return () => observer.disconnect();
   }, [full, short, initials]);
+  // A screen reader hears the full name: the label as it is, or, when it is
+  // shortened to fit, the full name in hidden text. aria-label isn't allowed
+  // on a plain span (axe aria-prohibited-attr; the test robot, 31 Oct 2026).
+  const shortened = label !== full;
   return (
-    <span ref={box} className={styles.name} aria-label={full} title={full}>
-      <span aria-hidden="true">{label}</span>
+    <span ref={box} className={styles.name} title={full}>
+      <span aria-hidden={shortened || undefined}>{label}</span>
+      {shortened ? <span className={styles.spoken}>{full}</span> : null}
       <span ref={probe} className={styles.probe} aria-hidden="true" />
     </span>
   );

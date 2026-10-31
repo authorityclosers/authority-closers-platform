@@ -69,15 +69,20 @@ def span(at: datetime, data: Any) -> Span | None:
 def working_day(
     day: date, spans: Sequence[Span], hours: WorkHours | None, now: datetime
 ) -> tuple[datetime, datetime] | None:
-    """Where the gaps are looked for: the team's work hours that day (up to now), else
-    the first call's start to the last call's end. None: nothing to look at yet."""
-    if hours is not None and day.weekday() in hours.days:
-        start = datetime.combine(day, hours.start, tzinfo=IST)
-        end = min(datetime.combine(day, hours.end, tzinfo=IST), now)
-        return (start, end) if end > start else None
-    if not spans:
+    """Where the gaps are looked for: the team's work hours on one of its work days, from
+    the seller's first call inside them, up to now. None: no work hours set, a day off,
+    or no call inside the hours yet. A night, a day off or the time before the first
+    call is never a break (Persona QA, 31 Oct 2026: 17 h 18 min in red came from the
+    first-call-to-last-call window taking in the night)."""
+    if hours is None or day.weekday() not in hours.days:
         return None
-    return min(item.start for item in spans), max(item.end for item in spans)
+    opens = datetime.combine(day, hours.start, tzinfo=IST)
+    closes = min(datetime.combine(day, hours.end, tzinfo=IST), now)
+    inside = [item.start for item in spans if item.end > opens and item.start < closes]
+    if not inside:
+        return None
+    start = max(opens, min(inside))
+    return (start, closes) if closes > start else None
 
 
 def set_breaks(day: date, hours: WorkHours | None) -> list[tuple[datetime, datetime]]:

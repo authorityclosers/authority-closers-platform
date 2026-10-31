@@ -145,7 +145,10 @@ export function PersonView({ id }: { id: string }) {
                 : { label: "Sign in", href: "/login" }
             }
           />
-        ) : !authenticated || !access?.context ? (
+        ) : !authenticated || !access?.context || !access.workspaces ? (
+          // Until the workspace's role is known the page waits and asks
+          // nothing (the test robot, 31 Oct 2026: a seller's visit read a
+          // teammate's coaching, a 404, before the role arrived).
           <PersonSkeleton />
         ) : !inOrganisation ? (
           <Empty

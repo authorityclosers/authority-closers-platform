@@ -182,10 +182,40 @@ export function WorkSplit({
   pane: ReactNode;
   children: ReactNode;
 }) {
+  // The lead's pane ends just above the window's bottom wherever it sits: lower
+  // at rest, pinned under the head once the page scrolls (owner, 31 Oct 2026:
+  // at rest it ran 28 px past the window and half-hid the after-call Save).
+  const box = useRef<HTMLDivElement>(null);
+  const open = pane !== null && pane !== undefined && pane !== false;
+  useLayoutEffect(() => {
+    const node = box.current;
+    if (!open || !node) return;
+    let frame = 0;
+    const fit = () => {
+      frame = 0;
+      const top = Math.max(0, Math.round(node.getBoundingClientRect().top));
+      node.style.setProperty("--pane-top", `${top}px`);
+    };
+    const ask = () => {
+      if (!frame) frame = window.requestAnimationFrame(fit);
+    };
+    fit();
+    document.addEventListener("scroll", ask, { passive: true, capture: true });
+    window.addEventListener("resize", ask);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("scroll", ask, { capture: true });
+      window.removeEventListener("resize", ask);
+    };
+  }, [open]);
   return (
     <div className={styles.split} data-pane={pane ? "" : undefined}>
       <div className={styles.splitList}>{children}</div>
-      {pane ? <div className={styles.splitPane}>{pane}</div> : null}
+      {pane ? (
+        <div ref={box} className={styles.splitPane}>
+          {pane}
+        </div>
+      ) : null}
     </div>
   );
 }

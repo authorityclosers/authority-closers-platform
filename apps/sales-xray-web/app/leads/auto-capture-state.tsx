@@ -164,8 +164,16 @@ export function trackFor(
       stuck: true,
       fix: setupFix,
     };
+  // No recording 30 minutes on: a call that ended without one, said calmly with its way to
+  // add it, never "Stuck" in red (persona QA, 31 Oct 2026: it shouted two days later).
   if (server?.state === "missing")
-    return { done: 0, label: labels.missing, stuck: true, fix: setupFix };
+    return {
+      done: 0,
+      label: labels.missing,
+      stuck: false,
+      ended: true,
+      fix: setupFix,
+    };
   if (native?.state === "report_ready")
     return { done: 6, label: "Report ready", stuck: false };
   if (native?.state === "analysing")

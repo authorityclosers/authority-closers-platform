@@ -53,6 +53,9 @@ AMOUNT: Final[str] = "amount"
 # where it already stood, under the new list's names. Ad platforms and the
 # pipeline's numbers never count it as progress.
 STAGES_CHANGED: Final[str] = "template"
+# The history line its seller adds to undo a call's answer (store.undo_result, kind
+# "edited"): it names the answer, which stays; the answer then reached no stage.
+UNDONE_RESULT: Final[str] = "undone_result"
 
 # Asked by the sheet when the reason is "Other"; the server refuses Other without it.
 REASON_NOTE: Final[str] = "reason_note"

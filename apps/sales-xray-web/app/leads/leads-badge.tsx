@@ -100,7 +100,36 @@ const serverSnapshot = () => null;
 /** Not live: no reads, no timer, no listeners. */
 const idle = () => () => undefined;
 
-/** The Leads icon with its badge, for the rail and the phone tab bar. */
+/** The counts the badge shows: late calls, else calls due and unread chats. */
+function useLeadsCounts(live: boolean, withChats: boolean) {
+  const latest = useSyncExternalStore(
+    live ? subscribe : idle,
+    snapshot,
+    serverSnapshot,
+  );
+  const badge = live ? latest : null;
+  const unread = useUnreadChats(live && withChats);
+  const late = badge?.overdue ?? 0;
+  const due = badge?.to_call ?? 0;
+  return { late, due, unread, count: late || due + unread };
+}
+
+/**
+ * What the badge says, for its link's name after the label ("Leads, 3 late"):
+ * a screen reader hears the place first, then what waits there (the test
+ * robot, 31 Oct 2026: it said "3, 3 late Leads"). The badge itself is hidden.
+ */
+export function useLeadsBadgeWords(live: boolean, withChats = false): string {
+  const { late, due, unread } = useLeadsCounts(live, withChats);
+  if (late) return `, ${late} late`;
+  return [
+    due ? `, ${due} to call` : "",
+    unread ? `, ${unread} unread chats` : "",
+  ].join("");
+}
+
+/** The Leads icon with its badge, for the rail and the phone tab bar; its
+    link carries the words (useLeadsBadgeWords). */
 export function LeadsTabIcon({
   size = 20,
   strokeWidth,
@@ -114,31 +143,18 @@ export function LeadsTabIcon({
   /** Phones: Chats lives inside Leads, so unread chats count here too. */
   withChats?: boolean;
 }) {
-  const latest = useSyncExternalStore(
-    live ? subscribe : idle,
-    snapshot,
-    serverSnapshot,
-  );
-  const badge = live ? latest : null;
-  const unread = useUnreadChats(live && withChats);
-  const late = badge?.overdue ?? 0;
-  const due = badge?.to_call ?? 0;
   // Late calls first (red); otherwise what waits: calls due and unread chats.
-  const count = late || due + unread;
+  const { late, count } = useLeadsCounts(live, withChats);
   return (
     <span className={styles.tabIcon}>
       <Contact size={size} strokeWidth={strokeWidth} aria-hidden="true" />
       {count ? (
-        <span className={styles.tabBadge} data-tone={late ? "bad" : "accent"}>
-          <span aria-hidden="true">{count > 99 ? "99+" : count}</span>
-          <span className={styles.srOnly}>
-            {late
-              ? `, ${late} late`
-              : [
-                  due ? `, ${due} to call` : "",
-                  unread ? `, ${unread} unread chats` : "",
-                ].join("")}
-          </span>
+        <span
+          className={styles.tabBadge}
+          data-tone={late ? "bad" : "accent"}
+          aria-hidden="true"
+        >
+          {count > 99 ? "99+" : count}
         </span>
       ) : null}
     </span>

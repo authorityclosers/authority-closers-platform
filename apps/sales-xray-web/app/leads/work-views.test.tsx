@@ -295,3 +295,46 @@ it("gives the list the whole width until a lead is open (persona QA, 31 Oct 2026
   expect(split.hasAttribute("data-pane")).toBe(true);
   expect(split.textContent).toBe("RowsLead");
 });
+
+it("sizes the lead beside the list from where it sits, so it ends above the window's bottom (owner, 31 Oct 2026)", async () => {
+  let top = 202;
+  const real = HTMLElement.prototype.getBoundingClientRect;
+  HTMLElement.prototype.getBoundingClientRect = function () {
+    return {
+      top,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      width: 0,
+      height: 0,
+      x: 0,
+      y: top,
+      toJSON: () => ({}),
+    } as DOMRect;
+  };
+  try {
+    await act(async () =>
+      root.render(
+        <WorkSplit pane={<p>Lead</p>}>
+          <p>Rows</p>
+        </WorkSplit>,
+      ),
+    );
+    const pane = Array.from(host.querySelectorAll("p")).find(
+      (line) => line.textContent === "Lead",
+    )!.parentElement!;
+    // At rest, lower on the page.
+    expect(pane.style.getPropertyValue("--pane-top")).toBe("202px");
+    // Scrolled: pinned under the head.
+    top = 102;
+    await act(async () => {
+      document.dispatchEvent(new Event("scroll"));
+      await new Promise((done) =>
+        window.requestAnimationFrame(() => done(null)),
+      );
+    });
+    expect(pane.style.getPropertyValue("--pane-top")).toBe("102px");
+  } finally {
+    HTMLElement.prototype.getBoundingClientRect = real;
+  }
+});

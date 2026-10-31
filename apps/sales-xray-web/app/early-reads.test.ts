@@ -9,6 +9,7 @@ import {
   EARLY_READ_TTL_MS,
   earlyFetch,
   earlyLeadsList,
+  earlyPersonWeeks,
   earlyReadsFor,
   earlyReadsScript,
   forgetSharedReads,
@@ -66,14 +67,17 @@ it("names each page's first reads, exactly as the page asks for them", () => {
     `${A}/submissions/${id.toLowerCase()}/transcript`,
     `${A}/submissions/${id.toLowerCase()}/report`,
   ]);
-  // A person's profile: the directory and their twelve weeks.
+  // A person's profile: the directory first; their twelve weeks wait for the
+  // viewer's role (the inline script, below).
   const person = "0000000A-0000-4000-8000-000000000003";
   expect(earlyReadsFor(`/organisation/people/${person}`)).toEqual([
     "/v1/me/workspaces",
     "/v1/me/sales-xray-workspaces",
     "/v1/organisation/members",
-    `/v1/organisation/members/${person.toLowerCase()}/activity?weeks=${PERSON_WEEKS}`,
   ]);
+  expect(earlyPersonWeeks(person)).toBe(
+    `/v1/organisation/members/${person.toLowerCase()}/activity?weeks=${PERSON_WEEKS}`,
+  );
   expect(earlyReadsFor("/organisation/people/someone")).toEqual([]);
   // Leads: the session, then To call's desk.
   expect(earlyReadsFor("/leads")).toEqual([
@@ -392,4 +396,39 @@ it("names All leads' first page exactly as the list asks for it", async () => {
     earlyLeadsList("owner"),
     earlyLeadsList("member"),
   ]);
+});
+
+it("starts a teammate's twelve weeks only for a role that sees the team (ux-audit, 31 Oct 2026)", async () => {
+  const person = "0000000a-0000-4000-8000-000000000003";
+  let directory: unknown = null;
+  network.mockImplementation(async (url: string) =>
+    Response.json(url === "/v1/me/sales-xray-workspaces" ? directory : { url }),
+  );
+  const workspace = (role: string) => ({
+    selected_tenant_id: "cedar",
+    workspaces: [
+      { tenant_id: "maple", role: "owner", sales_xray_enabled: true },
+      { tenant_id: "cedar", role, sales_xray_enabled: true },
+    ],
+  });
+  const start = async (conversation = true) => {
+    network.mockClear();
+    forgetSharedReads();
+    delete (window as EarlyWindow).__sxEarly;
+    boot(`/organisation/people/${person}`, conversation);
+    for (let n = 0; n < 5; n++) await new Promise((r) => setTimeout(r, 0));
+    return network.mock.calls
+      .map(([url]) => String(url))
+      .filter((url) => url === earlyPersonWeeks(person));
+  };
+  // A seller's teammate page: the server would refuse it, so it is never asked.
+  directory = workspace("member");
+  expect(await start()).toEqual([]);
+  for (const role of ["owner", "admin", "manager", "viewer"]) {
+    directory = workspace(role);
+    expect(await start()).toEqual([earlyPersonWeeks(person)]);
+  }
+  // This device's first visit: nothing past the session, as before.
+  directory = workspace("owner");
+  expect(await start(false)).toEqual([]);
 });
