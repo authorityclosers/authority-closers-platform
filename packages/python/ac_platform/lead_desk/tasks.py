@@ -51,6 +51,10 @@ OPEN: Final = "open"
 LATEST: Final = timedelta(days=366)
 EARLIEST: Final = timedelta(days=1)
 LIST_LIMIT: Final = 200
+# Tasks are the non-calling work (Dipak's handoff: Home item 5, "up to three due non-calling
+# tasks"; the metrics table: "do not double-count follow-up tasks"): a call-back lives in
+# Follow-ups and To Call. One rule for the Tasks page and Home, list and counts alike.
+CALLING_KINDS: Final[tuple[str, ...]] = ("call_back",)
 # A task of your own without words of its own is named by its kind.
 OWN_TITLES: Final[Mapping[str, str]] = {
     "call_back": "Call back",
@@ -209,6 +213,7 @@ class TaskBook:
             LeadTask.tenant_id == self.tenant_id,
             LeadTask.owner_person_id == who,
             LeadTask.status == OPEN,
+            LeadTask.kind.not_in(CALLING_KINDS),
         )
         late = self.now - scheduler.OVERDUE_FROM
         today_end = datetime.combine(
