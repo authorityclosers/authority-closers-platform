@@ -1,24 +1,52 @@
 #!/usr/bin/env bash
 # Dispatch signed staging QA after each newly observed staging web deploy, including rollback.
-# Timer pattern follows ac-play-after-release; this never dispatches a Play workflow or approves a gate.
+# Timer pattern follows ac-play-after-release; this never dispatches a Play workflow.
+# Owner, 31 Oct 2026 (orchestrator chat, "Yes, auto-approve"): the run this hook dispatched approves its own
+# android-release gate (an internal QA artifact, never published). Staging QA runs still waiting at that gate are
+# cancelled before a dispatch: the newer deploy supersedes them, and one left waiting held the staging-qa
+# concurrency group from 29 to 31 Oct 2026, so every later run was cancelled while pending.
 set -euo pipefail
 STATE_DIR=${AC_STAGING_APP_STATE:-/var/lib/ac-staging-app-after-release}
 RELEASE=${AC_STAGING_APP_RELEASE:-/usr/local/sbin/ac-release}
 GH=${AC_STAGING_APP_GH:-/home/acdev/.local/bin/gh}
+PAUSE=${AC_STAGING_APP_PAUSE:-10}
+REPO=authorityclosers/sales-xray-apps
 mkdir -p "$STATE_DIR"
 exec 9>"$STATE_DIR/lock"
 flock -n 9 || exit 0
+gh() {
+  if [ "$(id -u)" -eq 0 ] && [ -z "${AC_STAGING_APP_GH:-}" ]; then sudo -u acdev -H "$GH" "$@"; else "$GH" "$@"; fi
+}
 # status reads deployed state, not main's latest build. A failed status never dispatches.
 status=$("$RELEASE" status --json)
 sha=$(printf '%s' "$status" | python3 -c 'import json,sys; print(json.load(sys.stdin)["environments"]["staging"]["web"])')
 [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo 'No exact deployed staging web SHA; not dispatched' >&2; exit 1; }
 [ "$(cat "$STATE_DIR/last" 2>/dev/null || true)" != "$sha" ] || exit 0
-if [ "$(id -u)" -eq 0 ] && [ -z "${AC_STAGING_APP_GH:-}" ]; then
-  sudo -u acdev -H "$GH" workflow run staging-android.yml -R authorityclosers/sales-xray-apps --ref main -f "web_ref=$sha"
-else
-  "$GH" workflow run staging-android.yml -R authorityclosers/sales-xray-apps --ref main -f "web_ref=$sha"
-fi
-# Failed dispatches retry next tick. GitHub environment approval remains the existing signed_only boundary.
+for stale in $(gh run list -R "$REPO" --workflow staging-android.yml --status waiting --json databaseId --jq '.[].databaseId' 2>/dev/null || true); do
+  gh run cancel "$stale" -R "$REPO" >/dev/null 2>&1 && echo "Cancelled staging QA run $stale, still waiting at its gate"
+done
+before=$(gh run list -R "$REPO" --workflow staging-android.yml --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+gh workflow run staging-android.yml -R "$REPO" --ref main -f "web_ref=$sha"
+# Failed dispatches retry next tick.
 printf '%s\n' "$sha" > "$STATE_DIR/last.tmp"
 mv "$STATE_DIR/last.tmp" "$STATE_DIR/last"
 echo "Staging QA dispatched for platform web $sha (artifact only)"
+run=""
+for _ in $(seq 1 12); do
+  sleep "$PAUSE"
+  run=$(gh run list -R "$REPO" --workflow staging-android.yml --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+  [ -n "$run" ] && [ "$run" != "$before" ] && break
+  run=""
+done
+[ -n "$run" ] || { echo "Staging QA run did not show up; its gate waits for a hand approval" >&2; exit 0; }
+env_id=$(gh api "repos/$REPO/environments/android-release" --jq .id 2>/dev/null || true)
+for _ in $(seq 1 30); do
+  if [ -n "$env_id" ] && gh api "repos/$REPO/actions/runs/$run/pending_deployments" --jq '.[0].environment.id' 2>/dev/null | grep -qx "$env_id"; then
+    if gh api -X POST "repos/$REPO/actions/runs/$run/pending_deployments" -F "environment_ids[]=$env_id" -f state=approved \
+         -f comment="Automatic: staging QA build for web ${sha:0:9} (owner's standing approval, 31 Oct 2026)" >/dev/null; then
+      echo "Staging QA run $run approved (android-release)"; exit 0
+    fi
+  fi
+  sleep "$PAUSE"
+done
+echo "Staging QA run $run: no android-release gate seen; nothing approved"
