@@ -47,6 +47,7 @@ import {
   recordingId,
   transcript,
 } from "../tests/acquisition-fixture";
+import { OPEN_ADD_EVENT } from "./shell/shell-store";
 
 const secondSubmissionId = "22222222-2222-4222-8222-222222222222";
 const secondReportSummary =
@@ -3815,4 +3816,21 @@ it("can forget a saved selector when owner-authorized deletion is denied", async
   expect(
     container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled,
   ).toBe(false);
+});
+
+it("a page's own + (the Leads header on a computer) opens the same Add sheet (Dipak's handoff, item 41)", async () => {
+  await mount();
+  const signedIn = container.querySelector(
+    'header button[aria-label="Add a lead, a call or a task"]',
+  );
+  await act(async () => {
+    window.dispatchEvent(new Event(OPEN_ADD_EVENT));
+  });
+  const addCall = Array.from(
+    document.querySelectorAll<HTMLAnchorElement>("dialog a"),
+  ).find((link) => link.textContent?.includes("Add a call"));
+  // Signed out there is no Add sheet to open.
+  expect(addCall?.getAttribute("href") ?? null).toBe(
+    signedIn ? "/analysis/new" : null,
+  );
 });

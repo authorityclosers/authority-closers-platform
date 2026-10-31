@@ -18,7 +18,7 @@ from typing import Any, Literal, NamedTuple
 from uuid import UUID, uuid4, uuid5
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, case, delete, false, func, or_, select, true
+from sqlalchemy import and_, case, delete, false, func, or_, select, text, true
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -119,6 +119,7 @@ from ac_platform.lead_desk.contracts import (
     RepOption,
     RepRules,
     RepView,
+    ResultUndo,
     SellerCalls,
     SellerEffort,
     SellerOutcome,
@@ -135,6 +136,7 @@ from ac_platform.lead_desk.contracts import (
     Team,
     TeamPool,
     ToCallToday,
+    UndoResultView,
     WorkDay,
     WorkHoursCommand,
     WorkHoursView,
@@ -147,6 +149,7 @@ from ac_platform.lead_desk.journey import pipelines, signals, transitions
 from ac_platform.lead_desk.journey.templates import MILESTONE_WORDS
 from ac_platform.lead_desk.models import (
     Lead,
+    LeadConversion,
     LeadDealAmount,
     LeadDeskSettings,
     LeadDevice,
@@ -426,33 +429,59 @@ def call_out(data: Mapping[str, Any]) -> bool:
     return data.get("direction") not in NOT_OUT
 
 
-def away_seconds(data: Mapping[str, Any]) -> int:
-    """A Call-button dial's seconds (``/calls/phone``): the seller's time away from the app
-    while the phone's dialer was open. Never talk time (owner via the orchestrator, 31 Oct
+def is_dial(data: Mapping[str, Any]) -> bool:
+    """A Call-button dial (``/calls/phone``): its seconds are the seller's time away from the
+    app while the phone's dialer was open, never talk time (owner via the orchestrator, 31 Oct
     2026: "Talk time 1 min" with no phone duration behind it). New dials say so
     (``estimated``); older ones are known by their shape when read: no ``via`` or
     ``direction``, not simulated, no recording. No saved row changes."""
-    dial = data.get("estimated") is True or (
+    return data.get("estimated") is True or (
         "via" not in data
         and "direction" not in data
         and data.get("simulated") is False
         and not data.get("submission_id")
         and not data.get("recording")
     )
-    return max(0, int(data.get("duration_seconds") or 0)) if dial else 0
 
 
-def call_seconds(data: Mapping[str, Any]) -> int:
-    """Talk time: the phone's own call duration, never a dial's time away."""
-    if away_seconds(data):
+def away_seconds(data: Mapping[str, Any]) -> int:
+    """A dial's time away from the app while the phone hasn't timed it: an estimate."""
+    if not is_dial(data) or PHONE_SECONDS in data:
         return 0
     return max(0, int(data.get("duration_seconds") or 0))
 
 
+def call_seconds(data: Mapping[str, Any]) -> int:
+    """Talk time: the phone's own duration (for a dial, the one its call log matched later),
+    never a dial's time away."""
+    if is_dial(data):
+        return max(0, int(data.get(PHONE_SECONDS) or 0))
+    return max(0, int(data.get("duration_seconds") or 0))
+
+
 def call_answered(data: Mapping[str, Any]) -> bool:
-    """Connected: talk time above 0, or the phone's log said so. A dial's time away still
-    reads as connected, as before; only talk time leaves it out."""
-    return call_seconds(data) > 0 or away_seconds(data) > 0 or data.get("connected") is True
+    """Connected: talk time above 0, or the phone's log said so. A dial reads as connected as
+    before (its time away above 0), whatever the phone timed later: one call, counted once."""
+    dialled = is_dial(data) and int(data.get("duration_seconds") or 0) > 0
+    return call_seconds(data) > 0 or dialled or data.get("connected") is True
+
+
+def dial_start(at: datetime, data: Mapping[str, Any]) -> datetime:
+    """When a Call-button dial began: its row is written on the way back, its seconds later."""
+    return at - timedelta(seconds=max(0, int(data.get("duration_seconds") or 0)))
+
+
+def dial_for(
+    start: datetime, calls: Sequence[tuple[datetime, UUID, Mapping[str, Any]]]
+) -> UUID | None:
+    """The one Call-button dial among ``calls`` (time, id, data) that started within two
+    minutes of a phone-logged call at ``start``; none when there is none or more than one."""
+    near = [
+        event_id
+        for at, event_id, data in calls
+        if is_dial(data) and abs(dial_start(at, data) - start) <= DIAL_MATCH
+    ]
+    return near[0] if len(near) == 1 else None
 
 
 # Deal amounts and revenue targets are whole rupees for now (migration 0150 keeps the code).
@@ -488,6 +517,17 @@ def break_view(gap: call_breaks.Gap) -> BreakView:
 
 # The marker a seller adds when they hide a phone-logged call (kind "edited").
 PRIVATE_CALL = "private_call"
+# The marker a phone's call log adds beside a Call-button dial it matched later (kind
+# "edited"): the dial's id and the phone's own seconds. The dial itself never changes.
+TIMED_CALL = "timed_call"
+# Read beside a dial's data, never saved into it: the phone's own seconds for that dial.
+PHONE_SECONDS = "phone_seconds"
+# A phone-logged call matches the app's dial that started within this of it.
+DIAL_MATCH = timedelta(minutes=2)
+# How long the seller who saved a call's answer may undo it (undo_result).
+RESULT_UNDO = timedelta(minutes=5)
+# History lines that set where a lead stands: the newest of them is the one an undo may take back.
+STANDING_KINDS = ("result", "stage", "meeting", "captured", "repeat")
 
 
 def missed_call(kind: str, data: Any) -> bool:
@@ -1156,7 +1196,7 @@ class LeadDesk:
             )
         ).all()
         hidden = await self._private_calls(start)
-        return [
+        rows = [
             CallRow(
                 event_id,
                 actor,
@@ -1167,6 +1207,13 @@ class LeadDesk:
             )
             for event_id, actor, lead_id, at, data, pipeline in found
             if str(event_id) not in hidden
+        ]
+        timed = await self._call_timings([row.event_id for row in rows if is_dial(row.data)])
+        return [
+            row._replace(data={**row.data, PHONE_SECONDS: timed[str(row.event_id)]})
+            if str(row.event_id) in timed
+            else row
+            for row in rows
         ]
 
     async def _to_call_today(
@@ -1209,8 +1256,8 @@ class LeadDesk:
         return found
 
     async def _breaks_today(self, today: Sequence[CallRow]) -> tuple[BreakView, ...]:
-        """My three longest breaks today: the gaps between my calls inside the working
-        day (the team's work hours when set, else my first call to my last)."""
+        """My three longest breaks today: the gaps between my calls inside the team's
+        work hours on a work day, from my first call inside them (none without hours)."""
         hours = work_hours.parse((await self.settings())[1])
         spans = [found for row in today if (found := call_breaks.span(row.at, row.data))]
         day = self.now.astimezone(IST).date()
@@ -1984,6 +2031,7 @@ class LeadDesk:
                 )
                 for event in events
                 if not (event.kind == "edited" and event.data.get(PRIVATE_CALL))
+                and not (event.kind == "edited" and event.data.get(TIMED_CALL))
                 and not (event.kind == "edited" and UNDO_OF in event.data)
                 and not (event.kind == "note" and str(event.id) in undone)
                 # A field the call filled and someone undid (call_data undo-fill).
@@ -2019,6 +2067,7 @@ class LeadDesk:
             duplicates=await duplicate_queue.hints(self, lead),
             merged_into=await duplicate_queue.merged_into(self, lead),
             worked_before=worked_before,
+            undo_result=await self._undoable(lead),
         )
 
     @staticmethod
@@ -3653,6 +3702,16 @@ class LeadDesk:
         was_due = lead.next_action_at is not None and lead.next_action_at <= self.now
         previous_stage = lead.stage
         previous_step = lead.step
+        # Where the lead stood, so its seller can undo the answer for a moment (undo_result).
+        before = {
+            "stage": lead.stage,
+            "step": lead.step,
+            "stage_at": lead.stage_at.isoformat() if lead.stage_at else None,
+            "next_action_at": lead.next_action_at.isoformat() if lead.next_action_at else None,
+            "next_action_note": lead.next_action_note,
+            "last_result": lead.last_result,
+            "outcome_reason": lead.outcome_reason,
+        }
         chosen: journeys.Stage | None = None
         journey = await self._labels(journeys.pipeline_of(lead))
         current = journey.resolve(lead.stage, lead.step)
@@ -3743,6 +3802,7 @@ class LeadDesk:
             "remark": command.remark,
             "deal_value": command.deal_value,
             "was_due": was_due,
+            "before": before,
         }
         if move is not None:
             # The call moved the lead: the same record, one history line (the result).
@@ -3785,6 +3845,159 @@ class LeadDesk:
                 actor=self.viewer.person_id,
                 command_id=command.command_id,
             )
+        await self.db.flush()
+        return await self.detail(lead.id)
+
+    async def _answer_undone(self, event_id: UUID) -> bool:
+        return (
+            await self.db.scalar(
+                select(LeadEvent.id)
+                .where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.kind == "edited",
+                    LeadEvent.data[transitions.UNDONE_RESULT].as_string() == str(event_id),
+                )
+                .limit(1)
+            )
+            is not None
+        )
+
+    @staticmethod
+    def _undo_never(data: Mapping[str, Any]) -> str | None:
+        """Why an answer can never be undone here, or None (orchestrator, 31 Oct 2026)."""
+        if not isinstance(data.get("before"), dict):
+            return "Can't undo this answer."
+        if data.get("meeting_id"):
+            return "Can't undo: the meeting is booked. Change it from the meeting card."
+        if data.get("stage") == "won" and data.get("from_stage") != "won":
+            return "Can't undo a Won: reopen the lead instead."
+        return None
+
+    async def _undoable(self, lead: Lead) -> UndoResultView | None:
+        """The lead's latest call answer, while the person who saved it may still undo it."""
+        latest = await self.db.scalar(
+            select(LeadEvent)
+            .where(
+                LeadEvent.tenant_id == self.tenant_id,
+                LeadEvent.lead_id == lead.id,
+                LeadEvent.kind.in_(STANDING_KINDS),
+                LeadEvent.created_at >= self.now - RESULT_UNDO,
+            )
+            .order_by(LeadEvent.created_at.desc(), LeadEvent.id.desc())
+            .limit(1)
+        )
+        if (
+            latest is None
+            or latest.kind != "result"
+            or latest.actor_person_id != self.viewer.person_id
+            or self._undo_never(latest.data if isinstance(latest.data, dict) else {})
+            or await self._answer_undone(latest.id)
+        ):
+            return None
+        return UndoResultView(event_id=latest.id, until=latest.created_at + RESULT_UNDO)
+
+    async def undo_result(self, lead_id: UUID, event_id: UUID, command: ResultUndo) -> LeadDetail:
+        """Undo an after-call answer (orchestrator for the owner, 31 Oct 2026): the lead's
+        latest, by the seller who saved it, within 5 minutes. It supersedes, never deletes:
+        the lead's previous stage, next call and its note come back with a history line, and
+        the call stays counted. Refused, calmly, once anything went or will go outward."""
+        seen = await self._command_seen(command.command_id)
+        if seen is not None:
+            return await self.detail(seen.lead_id)
+        lead = await self._lead(lead_id, lock=True)
+        event = await self.db.scalar(
+            select(LeadEvent).where(
+                LeadEvent.tenant_id == self.tenant_id,
+                LeadEvent.lead_id == lead.id,
+                LeadEvent.id == event_id,
+                LeadEvent.kind == "result",
+            )
+        )
+        if event is None:
+            raise DeskError(404, "That call answer isn't on this lead.")
+        data = event.data if isinstance(event.data, dict) else {}
+        if event.actor_person_id != self.viewer.person_id:
+            raise DeskError(403, "Only the seller who saved this answer can undo it.")
+        if self.now - event.created_at > RESULT_UNDO:
+            raise DeskError(409, "Can't undo: it was saved more than 5 minutes ago.")
+        never = self._undo_never(data)
+        if never is not None:
+            raise DeskError(409, never)
+        if await self._answer_undone(event.id):
+            raise DeskError(409, "This answer was undone already.")
+        newer = await self.db.scalar(
+            select(LeadEvent.id)
+            .where(
+                LeadEvent.tenant_id == self.tenant_id,
+                LeadEvent.lead_id == lead.id,
+                LeadEvent.kind.in_(STANDING_KINDS),
+                LeadEvent.id != event.id,
+                LeadEvent.created_at >= event.created_at,
+            )
+            .limit(1)
+        )
+        if newer is not None:
+            raise DeskError(409, "Can't undo: the lead moved again since.")
+        if lead.revision != command.expected_revision:
+            raise DeskError(409, "This lead changed. Check it and try again.")
+        heard = await self.db.scalar(
+            select(LeadConversion.id)
+            .where(
+                LeadConversion.tenant_id == self.tenant_id,
+                LeadConversion.source_event_id == event.id,
+            )
+            .limit(1)
+        )
+        if heard is not None:
+            raise DeskError(409, "Can't undo: an ad platform already heard about it.")
+        told = await self.db.scalar(
+            text(
+                "SELECT 1 FROM partner_lead_events"
+                " WHERE tenant_id = :tenant AND source_event_id = :event"
+                " UNION ALL"
+                " SELECT 1 FROM partner_webhook_endpoints p"
+                " WHERE p.tenant_id = :tenant AND p.status = 'active' AND p.events_since <= :at"
+                " AND (jsonb_exists(CAST(p.events AS jsonb), 'lead.stage_changed')"
+                " OR jsonb_exists(CAST(p.events AS jsonb), 'lead.closed'))"
+                " LIMIT 1"
+            ),
+            {"tenant": self.tenant_id, "event": event.id, "at": event.created_at},
+        )
+        if told is not None:
+            raise DeskError(409, "Can't undo: a partner app hears about stage changes.")
+        before: dict[str, Any] = data["before"]
+
+        def moment(key: str) -> datetime | None:
+            value = before.get(key)
+            return datetime.fromisoformat(value) if isinstance(value, str) else None
+
+        undone_stage = lead.stage
+        lead.stage = str(before.get("stage") or lead.stage)
+        lead.step = before.get("step") if isinstance(before.get("step"), str) else None
+        if data.get("v") == 2:
+            lead.stage_at = moment("stage_at") or lead.stage_at
+        lead.next_action_at = moment("next_action_at")
+        lead.next_action_note = before.get("next_action_note")
+        lead.last_result = before.get("last_result")
+        lead.outcome_reason = before.get("outcome_reason")
+        lead.revision += 1
+        lead.updated_at = self.now
+        journey = await self._labels(journeys.pipeline_of(lead))
+        self._event(
+            lead,
+            "edited",
+            {
+                "changed": ["call_answer"],
+                transitions.UNDONE_RESULT: str(event.id),
+                "stage": lead.stage,
+                "from_stage": undone_stage,
+                "step": lead.step,
+                "step_label": journey.label(lead.stage, lead.step),
+                "follow_up_at": lead.next_action_at.isoformat() if lead.next_action_at else None,
+            },
+            actor=self.viewer.person_id,
+            command_id=command.command_id,
+        )
         await self.db.flush()
         return await self.detail(lead.id)
 
@@ -4556,12 +4769,14 @@ class LeadDesk:
                 )
             ).all()
             leads = {lead.phone: lead for lead in found if lead.phone}
-        in_app: dict[UUID, list[datetime]] = {}
+        in_app: dict[UUID, list[tuple[datetime, UUID, dict[str, Any]]]] = {}
         if leads:
             starts = [call.started_at for _, call, _ in fresh]
             rows = (
                 await self.db.execute(
-                    select(LeadEvent.lead_id, LeadEvent.created_at, LeadEvent.data).where(
+                    select(
+                        LeadEvent.lead_id, LeadEvent.created_at, LeadEvent.data, LeadEvent.id
+                    ).where(
                         LeadEvent.tenant_id == self.tenant_id,
                         LeadEvent.lead_id.in_([lead.id for lead in leads.values()]),
                         LeadEvent.actor_person_id == self.viewer.person_id,
@@ -4572,11 +4787,13 @@ class LeadDesk:
                     )
                 )
             ).all()
-            for lead_id, at, data in rows:
+            for lead_id, at, data, event_id in rows:
                 if isinstance(data, dict) and not (
                     data.get("via") == "phone" or data.get("recording") or data.get("simulated")
                 ):
-                    in_app.setdefault(lead_id, []).append(at)
+                    in_app.setdefault(lead_id, []).append((at, event_id, data))
+        # Log calls that are the app's own dials: the phone's seconds go beside the dial.
+        timing: list[tuple[UUID, PhoneLogCall, Lead, UUID]] = []
         logged = 0
         for key, call, phone in fresh:
             lead = leads.get(phone)
@@ -4611,9 +4828,13 @@ class LeadDesk:
                 continue
             end = start + timedelta(seconds=call.duration_seconds)
             if call.direction == "outgoing" and any(
-                start - IN_APP_BEFORE <= at <= end + IN_APP_AFTER for at in in_app.get(lead.id, ())
+                start - IN_APP_BEFORE <= at <= end + IN_APP_AFTER
+                for at, _, _ in in_app.get(lead.id, ())
             ):
                 already += 1
+                dial = dial_for(start, in_app.get(lead.id, ()))
+                if dial is not None:
+                    timing.append((key, call, lead, dial))
                 continue
             talked = call.duration_seconds > 0 and call.direction in {"outgoing", "incoming"}
             if call.direction == "outgoing" or talked:
@@ -4642,12 +4863,55 @@ class LeadDesk:
                 )
             )
             logged += 1
+        if timing:
+            per_dial: dict[UUID, list[tuple[UUID, PhoneLogCall, Lead]]] = {}
+            for key, call, lead, dial in timing:
+                per_dial.setdefault(dial, []).append((key, call, lead))
+            timed = await self._call_timings(list(per_dial))
+            for dial, matched in per_dial.items():
+                # Two log calls for one dial, or a dial already timed: none is attached.
+                if len(matched) != 1 or str(dial) in timed:
+                    continue
+                key, call, lead = matched[0]
+                self._event(
+                    lead,
+                    "edited",
+                    {
+                        "changed": ["call_timing"],
+                        TIMED_CALL: str(dial),
+                        "duration_seconds": call.duration_seconds,
+                        "device_id": str(command.device_id),
+                    },
+                    actor=self.viewer.person_id,
+                    command_id=key,
+                )
         try:
             await self.db.flush()
         except IntegrityError:
             raise DeskError(409, "These calls are being logged already. Try again.") from None
         await self._phone_seen(command.device_id)
         return PhoneLogResult(logged=logged, already=already, skipped=skipped, calls=tuple(refs))
+
+    async def _call_timings(self, event_ids: list[UUID]) -> dict[str, int]:
+        """The phone's own seconds for Call-button dials its call log matched later, by the
+        dial's id: the first marker beside each dial (``TIMED_CALL``)."""
+        ids = sorted({str(event_id) for event_id in event_ids})
+        found: dict[str, int] = {}
+        for at in range(0, len(ids), 1000):
+            markers = await self.db.scalars(
+                select(LeadEvent.data)
+                .where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.kind == "edited",
+                    LeadEvent.data[TIMED_CALL].as_string().in_(ids[at : at + 1000]),
+                )
+                .order_by(LeadEvent.created_at)
+            )
+            for data in markers.all():
+                seconds = data.get("duration_seconds") if isinstance(data, dict) else None
+                if isinstance(seconds, int):
+                    found.setdefault(str(data[TIMED_CALL]), max(0, seconds))
+        return found
 
     async def _private_calls(
         self, since: datetime | None = None, *, lead_id: UUID | None = None
@@ -5280,6 +5544,13 @@ class LeadDesk:
         empty = {"calls": 0, "connected": 0, "talk_seconds": 0, "missed": 0}
         tally: dict[UUID, dict[date, dict[str, int]]] = {}
         hidden = await self._private_calls(begin)
+        timed = await self._call_timings(
+            [
+                event_id
+                for event_id, _, kind, data, _ in rows
+                if kind == "call" and isinstance(data, dict) and is_dial(data)
+            ]
+        )
         for event_id, actor, kind, data, at in rows:
             if not isinstance(data, dict) or str(event_id) in hidden:
                 continue
@@ -5288,7 +5559,11 @@ class LeadDesk:
                 cell["calls"] += 1
                 cell["connected"] += 1 if data.get("connected") else 0
             if kind == "call":
-                cell["talk_seconds"] += call_seconds(data)
+                cell["talk_seconds"] += call_seconds(
+                    {**data, PHONE_SECONDS: timed[str(event_id)]}
+                    if str(event_id) in timed
+                    else data
+                )
                 cell["missed"] += 1 if missed_call(kind, data) else 0
         sellers = []
         for rep in await self._reps():

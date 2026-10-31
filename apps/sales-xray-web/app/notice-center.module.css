@@ -297,6 +297,39 @@
   }
 }
 
+/* A finger-sized target on touch screens: each button keeps its slim look
+   and reaches 44 px (the test robot measured See which at 103 x 28 px; asked
+   by the capture-setup session, 31 Oct 2026). */
+@media (pointer: coarse) {
+  .action,
+  .reference,
+  .close,
+  .more {
+    position: relative;
+  }
+
+  /* inset counts from inside the 1 px border: 26 + 2 x 9 = 44 px. */
+  .action::after,
+  .reference::after {
+    position: absolute;
+    inset: -9px -3px;
+    content: "";
+  }
+
+  .close::after {
+    position: absolute;
+    inset: -8px;
+    border-radius: 999px;
+    content: "";
+  }
+
+  .more::after {
+    position: absolute;
+    inset: -7px 0;
+    content: "";
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .card,
   .pill {

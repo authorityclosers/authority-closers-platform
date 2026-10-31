@@ -1372,11 +1372,13 @@ it("uses the shared measured display name in People rows without rewriting ident
   const link = host.querySelector<HTMLAnchorElement>(
     `[aria-label="People"] a[href="/organisation/people/${ownerId}"]`,
   )!;
-  expect(
-    link.querySelector(
-      '[aria-label="Alexandria Fictional Longfamilyname"][title]',
-    ),
-  ).not.toBeNull();
+  // The name itself is what a screen reader hears; no aria-label on a plain
+  // span (axe aria-prohibited-attr; the test robot, 31 Oct 2026).
+  const shown = link.querySelector(
+    '[title="Alexandria Fictional Longfamilyname"]',
+  );
+  expect(shown?.textContent).toContain("Alexandria Fictional Longfamilyname");
+  expect(shown?.hasAttribute("aria-label")).toBe(false);
   expect(link.querySelectorAll("span")).toHaveLength(3);
   expect(writes()).toHaveLength(0);
 });

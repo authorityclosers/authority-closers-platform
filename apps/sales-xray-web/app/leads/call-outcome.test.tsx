@@ -2,6 +2,15 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const notices = vi.hoisted(() => ({
+  shown: [] as Array<{ title: string; message?: string }>,
+}));
+vi.mock("../notice-center", async (load) => ({
+  ...(await load<typeof import("../notice-center")>()),
+  notify: (notice: { title: string; message?: string }) =>
+    notices.shown.push(notice),
+}));
+
 import { CallOutcome, stageAfterTalk } from "./lead-sheet";
 import type { LeadDetail, Stage } from "./leads-client";
 import { missedReason, type NativeCall } from "./native-phone";
@@ -260,5 +269,57 @@ describe("a Won deal after a call (revenue targets, with the asks above)", () =>
     expect(host.textContent).toContain("Deal amount (₹)");
     expect(host.textContent).toContain("Add the deal amount to save");
     expect(host.textContent).not.toContain("When is the meeting?");
+  });
+});
+
+describe("where the lead went after Save (persona QA, 31 Oct 2026)", () => {
+  it("says the stage it moved to and its next call, under the lead's name", async () => {
+    const after = {
+      ...lead("interested"),
+      lead: {
+        ...lead("interested").lead,
+        next_action_at: "2026-11-03T05:30:00.000Z",
+      },
+    } as LeadDetail;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify(after))),
+    );
+    notices.shown.length = 0;
+    await show(lead("new"));
+    await act(async () => tile("We talked").click());
+    await act(async () => tile("Interested").click());
+    await act(async () => tile("Save").click());
+    const said = notices.shown.at(-1);
+    expect(said?.title).toMatch(
+      new RegExp(`^Moved to ${after.lead.stage_label} · next call `),
+    );
+    expect(said?.message).toBe(after.lead.name);
+  });
+});
+
+describe("Undo on the Save card (31 Oct 2026)", () => {
+  it("takes it back with Undo while the server offers it", async () => {
+    const after = {
+      ...lead("interested"),
+      undo_result: { event_id: "answer-1", until: "2026-11-03T05:35:00.000Z" },
+    } as LeadDetail;
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response(JSON.stringify(after)),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    notices.shown.length = 0;
+    await show(lead("new"));
+    await act(async () => tile("We talked").click());
+    await act(async () => tile("Interested").click());
+    await act(async () => tile("Save").click());
+    const card = notices.shown.at(-1) as {
+      action?: { label: string; run: () => void };
+    };
+    expect(card.action?.label).toBe("Undo");
+    await act(async () => card.action?.run());
+    const asked = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(asked.at(-1)).toContain("/results/answer-1/undo");
+    expect(notices.shown.at(-1)?.title).toMatch(/^Undone: back to /);
   });
 });

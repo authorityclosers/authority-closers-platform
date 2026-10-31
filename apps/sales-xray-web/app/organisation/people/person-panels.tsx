@@ -762,6 +762,8 @@ export function CoachingPanel({
   // and no link to it.
   const teamCoaching = useTeamCoachingHere();
   const closed = !isYou && teamCoaching === false;
+  // Nothing is read for a teammate until the server is known to answer.
+  const asks = isYou || teamCoaching === true;
   const [attempt, setAttempt] = useState(0);
   const [coaching, setCoaching] = useState<
     | { status: "loading" }
@@ -769,7 +771,7 @@ export function CoachingPanel({
     | { status: "unavailable"; message: string }
   >({ status: "loading" });
   useEffect(() => {
-    if (closed) return;
+    if (!asks) return;
     const controller = new AbortController();
     void readCoaching(isYou ? null : `person:${personId}`, {
       signal: controller.signal,
@@ -790,7 +792,7 @@ export function CoachingPanel({
         });
     });
     return () => controller.abort();
-  }, [closed, isYou, personId, tenantId, sessionId, attempt]);
+  }, [asks, isYou, personId, tenantId, sessionId, attempt]);
   const value = coaching.status === "ready" ? coaching.value : null;
   return (
     <Panel

@@ -17,7 +17,7 @@
  * The desk carries both sides, so the selector switches with no second read.
  */
 
-import { ChevronRight, Phone, PhoneCall } from "lucide-react";
+import { Check, ChevronRight, Phone, PhoneCall } from "lucide-react";
 import Link from "next/link";
 import {
   useCallback,
@@ -587,6 +587,9 @@ export function TodayTasks({
                   checked={task.status === "done"}
                   onChange={() => onDone(task)}
                 />
+                <span className={styles.box} aria-hidden="true">
+                  <Check size={14} strokeWidth={3} />
+                </span>
               </label>
               <span className={styles.rowText}>
                 <strong>{task.title}</strong>

@@ -327,9 +327,12 @@ it("tracks each call from dialled to its report, or where it is stuck", () => {
   expect(trackFor(held, serverCall({ state: "missing" }))?.label).toBe(
     "Waiting for call minutes",
   );
+  // A call with no recording 30 minutes on ended without one: calm, with its fix, never
+  // "Stuck" in red (persona QA, 31 Oct 2026).
   expect(trackFor(null, serverCall({ state: "missing" }))).toMatchObject({
     done: 0,
-    stuck: true,
+    stuck: false,
+    ended: true,
     fix: { href: "/settings/privacy#calls-setup" },
   });
   expect(trackFor({ eventId: "event", state: "waiting" }, null)).toMatchObject({

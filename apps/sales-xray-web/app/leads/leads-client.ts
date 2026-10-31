@@ -226,6 +226,8 @@ export type LeadDetail = {
   stage_suggestion?: StageSuggestion | null;
   /** Lead OS: where it may go now, for this person, and what each asks. */
   moves?: MoveOption[];
+  /** The after-call answer this person saved a moment ago and may still undo. */
+  undo_result?: { event_id: string; until: string } | null;
   /** Its scheduled meeting, if one is booked. */
   meeting?: MeetingView | null;
   /** Its open tasks, the next one first (work-memory engine). */
@@ -1133,6 +1135,19 @@ export function dispose(
       expected_revision: lead.revision,
       ...body,
     }),
+  ).then(moved);
+}
+
+/** Undo the lead's latest after-call answer (its seller, within 5 minutes): the
+ *  server puts back the stage and next call, or says why it can't. */
+export function undoResult(
+  lead: Pick<LeadRow, "lead_id" | "revision">,
+  eventId: string,
+  command = commandId(),
+) {
+  return request<LeadDetail>(
+    `/leads/${encodeURIComponent(lead.lead_id)}/results/${encodeURIComponent(eventId)}/undo`,
+    json("POST", { command_id: command, expected_revision: lead.revision }),
   ).then(moved);
 }
 

@@ -118,10 +118,10 @@ export function ChatsTabIcon({
         strokeWidth={strokeWidth}
         aria-hidden="true"
       />
+      {/* Hidden: the link says it after its label ("Chats, 2 unread"). */}
       {count ? (
-        <span className={styles.tabBadge}>
-          <span aria-hidden="true">{count > 99 ? "99+" : count}</span>
-          <span className={styles.srOnly}>{`, ${count} unread`}</span>
+        <span className={styles.tabBadge} aria-hidden="true">
+          {count > 99 ? "99+" : count}
         </span>
       ) : null}
     </span>

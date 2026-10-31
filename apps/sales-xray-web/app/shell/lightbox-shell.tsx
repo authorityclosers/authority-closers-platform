@@ -107,6 +107,7 @@ import {
   CREATE_ORGANISATION_EVENT,
   getShellState,
   markSidebar,
+  OPEN_ADD_EVENT,
   OPEN_SWITCHER_EVENT,
   recentCallsForContext,
   RECENTS_CHANGED_EVENT,
@@ -137,14 +138,14 @@ import {
   isRelativeUpdateHref,
   type UpdateNotification,
 } from "./updates-client";
-import { ChatsTabIcon } from "../chats/chats-badge";
+import { ChatsTabIcon, useUnreadChats } from "../chats/chats-badge";
 import type { Command } from "../ui/command-bar";
 import { useRegisteredCommands } from "../ui/command-registry";
 import { handOverLead } from "../leads/lead-handoff";
 import { leavingOverlay } from "../ui/back-close";
 import { haptic, tick } from "../ui/haptics";
 import { DueSoonWatch } from "../leads/due-soon";
-import { LeadsTabIcon } from "../leads/leads-badge";
+import { LeadsTabIcon, useLeadsBadgeWords } from "../leads/leads-badge";
 import { ReviewBarChip, ReviewRailLink } from "../review/review-badge";
 import {
   cancelSwitch,
@@ -412,6 +413,12 @@ function LightboxShellFrame({
   // quick form over the current screen (owner, 22 Oct). Each opening of the
   // form is a new round, so it always starts empty.
   const [addOpen, setAddOpen] = useState(false);
+  // A page's own + (the Leads header on a computer) opens this same sheet.
+  useEffect(() => {
+    const open = () => setAddOpen(true);
+    window.addEventListener(OPEN_ADD_EVENT, open);
+    return () => window.removeEventListener(OPEN_ADD_EVENT, open);
+  }, []);
   // Ask Dipak (28 Oct 2026 meeting): the tab bar's middle slot.
   const [askOpen, setAskOpen] = useState(false);
   const [leadForm, setLeadForm] = useState({ open: false, round: 0 });
@@ -1004,6 +1011,11 @@ function LightboxShellFrame({
   // organisation: elsewhere every read answered 403, every 20-40 s (Lead OS,
   // 27 Oct 2026, from the bug radar's chats 4xx).
   const leadsLive = leadsBadgeLive && inOrganisation;
+  // Each link is named label first, then what waits ("Leads, 3 late"); the
+  // badges are hidden from screen readers (the test robot, 31 Oct 2026).
+  const workWords = useLeadsBadgeWords(leadsLive, true);
+  const leadsWords = useLeadsBadgeWords(leadsLive);
+  const unreadChats = useUnreadChats(leadsLive);
   useEffect(() => {
     if (!invites.live) return;
     const open = () => setCreateOpen(true);
@@ -1446,6 +1458,11 @@ function LightboxShellFrame({
                   href={item.href}
                   data-area={item.key}
                   aria-current={lit ? "true" : undefined}
+                  aria-label={
+                    item.key === "work"
+                      ? `${item.label}${workWords}`
+                      : undefined
+                  }
                 >
                   <span className={styles.areaLabel}>{item.label}</span>
                   <span className={styles.areaIcon}>
@@ -1850,7 +1867,9 @@ function LightboxShellFrame({
               <ScreenLink
                 className={styles.barSearch}
                 href="/chats"
-                aria-label="Chats"
+                aria-label={
+                  unreadChats ? `Chats, ${unreadChats} unread` : "Chats"
+                }
               >
                 <ChatsTabIcon size={20} live={leadsLive} />
               </ScreenLink>
@@ -2019,6 +2038,7 @@ function LightboxShellFrame({
             href="/leads"
             onClick={tapTab("leads")}
             aria-current={phoneTab === "leads" ? "page" : undefined}
+            aria-label={`Leads${leadsWords}`}
           >
             <LeadsTabIcon size={20} live={leadsLive} />
             <span className={styles.tabPill} aria-hidden="true" />

@@ -899,3 +899,29 @@ it("offers the self-service rename pencil and a capped display-name form only on
   ).toBe(40);
   expect(document.body.textContent).toContain("Use 1–40 characters");
 });
+
+// The test robot, 31 Oct 2026: a seller's visit to a teammate's page read their
+// coaching (a 404) before the workspace's role arrived. Until it is known the
+// page waits and asks nothing.
+it("asks nothing for a person's page until the workspace's role is known", async () => {
+  await act(async () =>
+    root.render(
+      <WorkspaceAccessContext.Provider
+        value={{
+          status: "ready",
+          authenticated: true,
+          context: { personId: ownerId, sessionId, tenantId },
+          retry: () => {},
+        }}
+      >
+        <PersonView id={ashaId} />
+      </WorkspaceAccessContext.Provider>,
+    ),
+  );
+  for (let index = 0; index < 6; index += 1)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  expect(calls).toEqual([]);
+  expect(host.textContent).not.toContain("Asha Menon");
+});

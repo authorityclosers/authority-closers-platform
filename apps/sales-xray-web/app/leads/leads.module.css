@@ -4873,7 +4873,7 @@ a.repName {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 14px 0 10px;
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-pill);
@@ -7486,4 +7486,70 @@ fieldset.form {
   min-width: 0;
   overflow-wrap: anywhere;
   white-space: normal;
+}
+
+/* Every control on a lead is 44 px to tap on a touch screen (QA robot, 31 Oct
+   2026: Call 40 px, Stage 40 px, the City line 21 px, Add note 36 px). */
+@media (pointer: coarse) {
+  .quickAct {
+    width: 44px;
+    height: 44px;
+  }
+
+  .stageRow,
+  button.leadSub {
+    min-height: 44px;
+  }
+
+  .noteSend {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* The lead's actions wrap to rows of four on a phone (eight in one row were
+   39 px wide at 390). */
+@media (max-width: 599.98px) {
+  .actionGrid {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* + on a computer (Dipak's handoff, item 41): Add a lead, a call or a task, as the
+   phone's + in the top bar. Phones keep theirs; with the panel collapsed the top
+   bar's + is back, so this one hides. */
+.headAdd {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .headAdd {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 16px;
+    border: 1px solid var(--sx-line);
+    border-radius: var(--sx-radius-pill);
+    background: var(--sx-surface);
+    color: var(--sx-ink);
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer;
+  }
+
+  .headAdd:hover {
+    background: var(--sx-sunken);
+  }
+
+  .headAdd:focus-visible {
+    outline: none;
+    box-shadow: var(--sx-focus-ring);
+  }
+
+  :global(html[data-sx-sidebar="collapsed"]) .headAdd {
+    display: none;
+  }
 }
