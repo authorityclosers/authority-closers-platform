@@ -34,8 +34,35 @@
   padding: 0 12px;
 }
 
+/* The picked time in our words; the phone's own field lies over it, unseen,
+   so a tap anywhere opens its calendar. */
+.when {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.when svg {
+  flex: none;
+  color: var(--sx-muted);
+}
+
+.whenInput {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .field input[type="text"]:focus-visible,
-.when:focus-visible,
+.when:focus-within,
 .search:focus-within {
   outline: none;
   box-shadow: var(--sx-focus-ring);
