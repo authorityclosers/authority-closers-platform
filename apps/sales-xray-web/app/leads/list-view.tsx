@@ -441,21 +441,6 @@ export function ListView({
     },
     !selecting && !asTable,
   );
-  useRowKeys(
-    tableKeys,
-    {
-      open: onOpen,
-      call: (id) => {
-        const row = byId(id);
-        if (row?.phone_last4) actions?.onCall?.(row);
-      },
-      log: (id) => {
-        const row = byId(id);
-        if (row) actions?.onLog?.(row);
-      },
-    },
-    !selecting && asTable,
-  );
   const ask = {
     scope,
     owner: owner ?? undefined,
@@ -633,6 +618,30 @@ export function ListView({
     [rowActions, startPicking],
   );
   const picksHere = canManage && stage === OPENING_STAGE;
+  // The table's keys: J/K or arrows, Enter opens the lead beside it, C, L, and
+  // Space ticks for an owner (also while leads are picked).
+  useRowKeys(
+    tableKeys,
+    {
+      open: onOpen,
+      // Space ticks the focused row for an owner; the bar follows.
+      tick: canManage
+        ? (id) => {
+            const row = byId(id);
+            if (row) startPicking(row);
+          }
+        : undefined,
+      call: (id) => {
+        const row = byId(id);
+        if (row?.phone_last4) actions?.onCall?.(row);
+      },
+      log: (id) => {
+        const row = byId(id);
+        if (row) actions?.onLog?.(row);
+      },
+    },
+    asTable,
+  );
 
   // Select all: the rest of the list is read first (up to the delete limit).
   const selectAll = async () => {
