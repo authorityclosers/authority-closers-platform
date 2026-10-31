@@ -23,6 +23,7 @@ import {
   Tiles,
 } from "../../ui/kit";
 import { useWorkspaceAccess } from "../../workspace-access";
+import { useTeamCoachingHere } from "../../coaching/team-coaching-access";
 import type { OrgMember, OrgRole } from "../organisation-api";
 import { ROLE_LABEL, rolesToGive } from "../roles";
 import type { TeamPatterns } from "../team-patterns";
@@ -756,6 +757,11 @@ export function CoachingPanel({
   const context = useWorkspaceAccess()?.context;
   const tenantId = context?.tenantId;
   const sessionId = context?.sessionId;
+  // A teammate's coaching only where the server answers it
+  // (team-coaching-access.ts): anyone else reads one line, with no read
+  // and no link to it.
+  const teamCoaching = useTeamCoachingHere();
+  const closed = !isYou && teamCoaching === false;
   const [attempt, setAttempt] = useState(0);
   const [coaching, setCoaching] = useState<
     | { status: "loading" }
@@ -763,6 +769,7 @@ export function CoachingPanel({
     | { status: "unavailable"; message: string }
   >({ status: "loading" });
   useEffect(() => {
+    if (closed) return;
     const controller = new AbortController();
     void readCoaching(isYou ? null : `person:${personId}`, {
       signal: controller.signal,
@@ -783,26 +790,32 @@ export function CoachingPanel({
         });
     });
     return () => controller.abort();
-  }, [isYou, personId, tenantId, sessionId, attempt]);
+  }, [closed, isYou, personId, tenantId, sessionId, attempt]);
   const value = coaching.status === "ready" ? coaching.value : null;
   return (
     <Panel
       title="Current focus"
       tools={
-        <Link
-          className={styles.actionLink}
-          href={
-            isYou
-              ? "/coaching"
-              : `/coaching?person=${encodeURIComponent(personId)}`
-          }
-          prefetch={false}
-        >
-          Open Coaching
-        </Link>
+        closed ? null : (
+          <Link
+            className={styles.actionLink}
+            href={
+              isYou
+                ? "/coaching"
+                : `/coaching?person=${encodeURIComponent(personId)}`
+            }
+            prefetch={false}
+          >
+            Open Coaching
+          </Link>
+        )
       }
     >
-      {coaching.status === "loading" ? (
+      {closed ? (
+        <div className={styles.focusUnavailable}>
+          <p>Only owners and admins can see a teammate&apos;s coaching.</p>
+        </div>
+      ) : coaching.status === "loading" ? (
         <div
           className={styles.focusLoading}
           role="status"

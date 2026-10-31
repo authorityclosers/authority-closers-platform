@@ -93,6 +93,8 @@ def test_a_lead_given_to_a_seller_rings_their_bell_once(
                 bells = await lead_bells(seller.person_id)
                 assert len(bells) == 1, bells
                 assert bells[0].title == "Asha Fictional is your lead now"
+                # Why, in plain words: never the lead rules' shorthand.
+                assert "(fewest)" not in (bells[0].body or "")
                 assert bells[0].href == f"/leads?lead={lead['lead_id']}"
                 assert bells[0].urgent is True
                 assert bells[0].read_at is None

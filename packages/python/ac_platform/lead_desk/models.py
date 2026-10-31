@@ -415,6 +415,80 @@ class LeadTarget(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class LeadDealAmount(Base):
+    """What a Won lead was worth (revenue targets, migration 0150): one row per move to Won,
+    credited to the lead's owner, with the lead's side. A correction is a new row; the
+    newest row per lead stands. A lead won before 0150 has none: its amount is not set."""
+
+    __tablename__ = "lead_desk_deal_amounts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["lead_id"], ["lead_desk_leads.id"], name="fk_lead_desk_deal_lead", ondelete="CASCADE"
+        ),
+        ForeignKeyConstraint(
+            ["credited_person_id"], ["persons.id"], name="fk_lead_desk_deal_credited"
+        ),
+        ForeignKeyConstraint(["actor_person_id"], ["persons.id"], name="fk_lead_desk_deal_actor"),
+        CheckConstraint("amount BETWEEN 1 AND 1000000000000", name="lead_desk_deal_amount"),
+        CheckConstraint(
+            "length(currency) = 3 AND currency = upper(currency)", name="lead_desk_deal_currency"
+        ),
+        CheckConstraint("side IN ('inbound', 'cold')", name="lead_desk_deal_side"),
+        Index("ix_lead_desk_deal_won", "tenant_id", "won_at"),
+        Index("ix_lead_desk_deal_lead", "tenant_id", "lead_id", "created_at"),
+        Index(
+            "uq_lead_desk_deal_command",
+            "tenant_id",
+            "command_id",
+            unique=True,
+            postgresql_where=text("command_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    event_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    amount: Mapped[int] = mapped_column(BigInteger)
+    currency: Mapped[str] = mapped_column(String(3))
+    won_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    credited_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    side: Mapped[str] = mapped_column(String(8))
+    actor_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    command_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadRevenueTarget(Base):
+    """A monthly revenue target (migration 0150): the organisation's (no person) or a
+    seller's. Append-only; the newest row per month and person stands, and 0 clears it."""
+
+    __tablename__ = "lead_desk_revenue_targets"
+    __table_args__ = (
+        ForeignKeyConstraint(["person_id"], ["persons.id"], name="fk_lead_desk_rev_target_person"),
+        ForeignKeyConstraint(
+            ["set_by_person_id"], ["persons.id"], name="fk_lead_desk_rev_target_setter"
+        ),
+        CheckConstraint("amount BETWEEN 0 AND 1000000000000", name="lead_desk_rev_target_amount"),
+        CheckConstraint(
+            "length(currency) = 3 AND currency = upper(currency)",
+            name="lead_desk_rev_target_currency",
+        ),
+        Index("ix_lead_desk_rev_target_month", "tenant_id", "month", "person_id", "created_at"),
+        Index("uq_lead_desk_rev_target_command", "tenant_id", "command_id", unique=True),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    month: Mapped[date] = mapped_column(Date)
+    person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    amount: Mapped[int] = mapped_column(BigInteger)
+    currency: Mapped[str] = mapped_column(String(3))
+    set_by_person_id: Mapped[UUID] = mapped_column(Uuid)
+    command_id: Mapped[UUID] = mapped_column(Uuid)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class LeadDigest(Base):
     """The digest and sweep ledger (demo notifications, migration 0137): one row per seller,
     kind and slot, written before the push is sent, so each goes once."""

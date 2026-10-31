@@ -184,9 +184,9 @@ function answer(sides: {
         return Response.json({ tasks: [], counts: {} });
       if (path === "/v1/lead-desk/tasks?view=today")
         return Response.json({
+          // One overdue, on Tasks' Overdue.
           tasks: [
             task("5", "Send proposal to Neha"),
-            task("6", "Call back Ravi", { kind: "call_back" }),
             task("7", "Prepare tomorrow's demo", {
               lead_id: null,
               lead_name: null,
@@ -194,7 +194,7 @@ function answer(sides: {
             task("8", "Share brochure"),
             task("9", "Fourth task"),
           ],
-          counts: { today: 5 },
+          counts: { today: 4, overdue: 1 },
         });
       if (path.endsWith("/done") || path.endsWith("/undo")) {
         if (doneFails) return new Response("{}", { status: 503 });
@@ -256,7 +256,8 @@ it("is Dipak's Home: the work in six blocks, each opening its exact place", asyn
     "/leads?view=follow_ups&when=today",
   );
   expect(card("follow_ups")?.querySelector("strong")?.textContent).toBe("7");
-  // Tasks today: never a call (a follow-up counts under Follow-ups).
+  // Tasks today: the Tasks page's Today, the non-calling work (Dipak's
+  // handoff; one truth with Tasks, persona QA, 31 Oct 2026).
   expect(card("tasks")?.querySelector("strong")?.textContent).toBe("4");
   // Next to call: one customer, opening the lead; Call now calls them.
   const name = host.querySelector(

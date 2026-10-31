@@ -109,3 +109,30 @@ it("leaves keys alone while typing, with a modifier, or under an overlay", async
   await press("c");
   expect(actions.call).not.toHaveBeenCalled();
 });
+
+it("ticks the focused row with Space (an owner's table)", () => {
+  expect(rowKeyStep(" ")).toBe("tick");
+  expect(rowKeyStep("Enter")).toBe("open");
+});
+
+it("ticks with Space only when the row itself has focus", async () => {
+  const tick = vi.fn();
+  function Row() {
+    const list = useRef<HTMLUListElement>(null);
+    useRowKeys(list, { tick });
+    return (
+      <ul ref={list}>
+        <li data-row-key="a" tabIndex={-1}>
+          Lead a <button type="button">Edit</button>
+        </li>
+      </ul>
+    );
+  }
+  await act(async () => root.render(<Row />));
+  host.querySelector("ul")!.getClientRects = () =>
+    [{}] as unknown as DOMRectList;
+  await press(" ", host.querySelector("button")!);
+  expect(tick).not.toHaveBeenCalled();
+  await press(" ", host.querySelector("li")!);
+  expect(tick).toHaveBeenCalledWith("a");
+});

@@ -14,11 +14,18 @@ export const SETUP_TABS: ReadonlySet<string> = new Set([
   "plan",
 ]);
 
-/** The hub's tabs a role sees: the managers' ones with team.view, setup with leads.manage too. */
+/**
+ * The hub's tabs a role sees: the managers' ones with team.view, setup with
+ * leads.manage too, and Plan & billing only for those who see billing.
+ */
 export function hubTabsFor(role: string | null | undefined): HubTab[] {
   const manager = can(role, "team.view");
   const manages = can(role, "leads.manage");
+  const billing = can(role, "billing.view");
   return HUB_TABS.filter(
-    (tab) => (manager || !tab.managers) && (manages || !SETUP_TABS.has(tab.id)),
+    (tab) =>
+      (manager || !tab.managers) &&
+      (manages || !SETUP_TABS.has(tab.id)) &&
+      (billing || tab.id !== "plan"),
   );
 }

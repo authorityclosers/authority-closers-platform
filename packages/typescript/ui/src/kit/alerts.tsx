@@ -10,6 +10,7 @@
  * One of each at a time: a newer alert of a level replaces the older one.
  * A banner may carry the urgent emphasis (red, the urgent haptic) for work due
  * within the hour (leads/due-soon.tsx): still up top, still leaving by itself.
+ * Mounted `stacked`, the banner joins the corner cards instead (31 Oct 2026).
  */
 
 import { BellRing, Siren, X } from "./icons";
@@ -103,7 +104,15 @@ function Act({
   );
 }
 
-function Banner({ alert, link }: { alert: AppAlert; link?: KitLink }) {
+function Banner({
+  alert,
+  link,
+  stacked,
+}: {
+  alert: AppAlert;
+  link?: KitLink;
+  stacked: boolean;
+}) {
   const held = useRef(false);
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -119,7 +128,7 @@ function Banner({ alert, link }: { alert: AppAlert; link?: KitLink }) {
   };
   return (
     <div
-      className={`${styles.banner} ${alert.emphasis === "urgent" ? styles.bannerUrgent : ""}`}
+      className={`${styles.banner} ${stacked ? styles.bannerStacked : ""} ${alert.emphasis === "urgent" ? styles.bannerUrgent : ""}`}
       role="status"
       data-emphasis={alert.emphasis}
       data-capture-skip=""
@@ -196,8 +205,20 @@ function Urgent({ alert, link }: { alert: AppAlert; link?: KitLink }) {
   );
 }
 
-/** Where alerts appear; mounted once, beside the corner cards. */
-export function AlertHost({ link }: { link?: KitLink } = {}) {
+/**
+ * Where alerts appear; mounted once, beside the corner cards. `only` mounts one
+ * kind; `stacked` puts the banner in the corner stack, so nothing covers the
+ * page header or the top bar (owner via the orchestrator, 31 Oct 2026).
+ */
+export function AlertHost({
+  link,
+  only,
+  stacked = false,
+}: {
+  link?: KitLink;
+  only?: "banner" | "urgent";
+  stacked?: boolean;
+} = {}) {
   const now = useSyncExternalStore(
     subscribe,
     () => shown,
@@ -205,10 +226,15 @@ export function AlertHost({ link }: { link?: KitLink } = {}) {
   );
   return (
     <>
-      {now.banner ? (
-        <Banner link={link} key={now.banner.id} alert={now.banner} />
+      {now.banner && only !== "urgent" ? (
+        <Banner
+          link={link}
+          key={now.banner.id}
+          alert={now.banner}
+          stacked={stacked}
+        />
       ) : null}
-      {now.urgent ? (
+      {now.urgent && only !== "banner" ? (
         <Urgent link={link} key={now.urgent.id} alert={now.urgent} />
       ) : null}
     </>

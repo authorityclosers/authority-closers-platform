@@ -165,3 +165,11 @@
   font-size: var(--sx-text-xs);
   font-weight: 700;
 }
+
+/* My Growth's section title over the view (Analytics now, Coaching later). */
+.section {
+  margin: 0 0 12px;
+  color: var(--sx-ink);
+  font: var(--sx-text-headline);
+  letter-spacing: -0.01em;
+}

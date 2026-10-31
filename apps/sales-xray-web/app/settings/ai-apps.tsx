@@ -37,6 +37,7 @@ import {
 import { AiWritesPanel, AppChangesPanel } from "./ai-changes";
 import { CopyButton } from "./copy-button";
 import { useOrigin } from "./use-origin";
+import { useCanHere } from "../workspace-role";
 import styles from "./ai-apps.module.css";
 
 type Host = "chatgpt" | "claude" | "other";
@@ -76,15 +77,19 @@ const STEPS: Record<Host, { steps: string[]; note?: string }> = {
 };
 
 const RETRY_MS = 5000;
+const ASK_OWNER = "Ask your workspace owner about the plan.";
 
 /**
  * What this workspace's plan lets AI apps, the API and the CLI do (owner, 27 Oct 2026).
  * Shown once plans apply (not while billing is off). What it doesn't include names the
  * plan that adds it, never a price; on the web a link to the plans, in the Play app
- * only "Ask your workspace owner" (PurchaseGate).
+ * and for a member of an organisation only "Ask your workspace owner".
  */
 function PlanPanel() {
   const [plan, setPlan] = useState<AppPlan | null>(null);
+  // Plans belong to whoever pays (roles.ts "billing.view", workspace-role.ts).
+  const canHere = useCanHere();
+  const pays = canHere("billing.view") !== false;
   useEffect(() => {
     const control = new AbortController();
     readAppPlan(control.signal).then(setPlan, () => undefined);
@@ -116,9 +121,13 @@ function PlanPanel() {
       </List>
       {missing ? (
         <p className={styles.planNote}>
-          <PurchaseGate fallback="Ask your workspace owner about the plan.">
-            <a href="/plans">See plans</a>
-          </PurchaseGate>
+          {pays ? (
+            <PurchaseGate fallback={ASK_OWNER}>
+              <a href="/plans">See plans</a>
+            </PurchaseGate>
+          ) : (
+            ASK_OWNER
+          )}
         </p>
       ) : null}
     </Panel>

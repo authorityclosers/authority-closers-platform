@@ -66,12 +66,14 @@ function hubPages(
   organisation: boolean,
   manager: boolean,
   manages: boolean,
+  billing: boolean,
 ): SidebarPage[] {
   return HUB_TABS.filter(
     (tab) =>
       (organisation || tab.id === "overview") &&
       (manager || !tab.managers) &&
-      (manages || !SETUP_TABS.has(tab.id)),
+      (manages || !SETUP_TABS.has(tab.id)) &&
+      (billing || tab.id !== "plan"),
   ).map((tab) =>
     tab.id === "overview"
       ? {
@@ -101,6 +103,7 @@ export function sidebarAreas({
   team,
   manager,
   manages = manager,
+  billing = manages,
 }: {
   /** An organisation is the selected workspace. */
   organisation: boolean;
@@ -110,6 +113,9 @@ export function sidebarAreas({
   manager: boolean;
   /** May change how leads work (roles.ts "leads.manage"): the setup tabs. */
   manages?: boolean;
+  /** May see billing (roles.ts "billing.view"): Plan & billing (persona QA,
+      31 Oct 2026: a sales manager saw it). */
+  billing?: boolean;
 }): SidebarArea[] {
   const areas: SidebarArea[] = [
     {
@@ -170,7 +176,7 @@ export function sidebarAreas({
       label: "Team",
       href: "/organisation",
       icon: UsersRound,
-      pages: hubPages(organisation, manager, manages),
+      pages: hubPages(organisation, manager, manages, billing),
     });
   areas.push({
     key: "results",

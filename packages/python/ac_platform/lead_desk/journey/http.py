@@ -53,6 +53,7 @@ from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk import meetings as meeting_rows
 from ac_platform.lead_desk import routing_rules
 from ac_platform.lead_desk.contracts import (
+    DEAL_AMOUNT_MAX,
     Board,
     Contact,
     LeadDetail,
@@ -298,6 +299,8 @@ class MoveCommand(_Command):
     source: Literal["seller", "ai_suggestion"] = "seller"
     suggestion_ref: str | None = Field(default=None, alias="suggestionRef", max_length=120)
     via: MoveVia | None = None
+    # Whole rupees; every move to Won needs it (revenue targets, migration 0150).
+    amount: int | None = Field(default=None, ge=1, le=DEAL_AMOUNT_MAX)
 
     def as_move(self) -> StageMove:
         return StageMove(
@@ -315,6 +318,7 @@ class MoveCommand(_Command):
             source=self.source,
             suggestion_ref=self.suggestion_ref,
             via=self.via,
+            amount=self.amount,
         )
 
 

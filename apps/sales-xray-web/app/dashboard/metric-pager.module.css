@@ -45,27 +45,40 @@
   font-weight: 650;
 }
 
-/* The dots: the current page is a short pill. */
+/* The dots: the current page is a short pill. Each is a 44 px target (QA,
+   31 Oct 2026); the row sits close under the cards all the same. */
 .dots {
   display: flex;
   justify-content: center;
-  gap: 6px;
+  margin: -14px 0 -12px;
 }
 
 .dot {
-  width: 6px;
-  height: 6px;
+  position: relative;
+  width: 32px;
+  height: 44px;
   padding: 0;
   border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.dot::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
   border-radius: 999px;
   background: color-mix(in oklab, var(--sx-ink) 22%, transparent);
-  cursor: pointer;
+  content: "";
+  transform: translate(-50%, -50%);
   transition:
     width var(--sx-dur-base) var(--sx-spring),
     background-color var(--sx-dur-base) var(--sx-ease-out);
 }
 
-.dot[aria-selected="true"] {
+.dot[aria-selected="true"]::before {
   width: 18px;
   background: var(--sx-accent);
 }
@@ -234,7 +247,7 @@ a.figure:focus-visible {
     animation: none;
   }
 
-  .dot,
+  .dot::before,
   .figure {
     transition: none;
   }

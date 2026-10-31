@@ -344,3 +344,11 @@ textarea.input {
 .row[data-static] {
   cursor: default;
 }
+
+/* The view's own title (persona QA, 31 Oct 2026: the tab showed a blank heading). */
+.title {
+  margin: 0 0 10px;
+  color: var(--sx-ink);
+  font: var(--sx-text-headline);
+  letter-spacing: -0.01em;
+}

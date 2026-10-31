@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import type { Allowance, LibrarySubmission } from "../acquisition-client";
+import { useTeamCoachingHere } from "../coaching/team-coaching-access";
 import { Delta, Meter, Spark } from "../ui/kit";
 import { SectionBoundary } from "../ui/section-boundary";
 import { useWorkspaceAccess } from "../workspace-access";
@@ -169,7 +170,9 @@ export function DashboardBody({
         </header>
       )}
 
-      {sandbox?.sandbox ? <SandboxCard facts={sandbox} /> : null}
+      {sandbox?.sandbox ? (
+        <SandboxCard facts={sandbox} team={team === true} />
+      ) : null}
 
       {showGetStarted && !sales ? (
         <FirstRun team={team ? "invite" : "create"} />
@@ -500,9 +503,23 @@ function NotLoaded() {
 }
 
 /** A brand-new account: one panel in place of zero figures and empty charts. */
-/** Why there is a made-up team here, what it holds, and where to look at it. */
-function SandboxCard({ facts }: { facts: SandboxFacts }) {
+/**
+ * Why there is a made-up team here, what it holds, and where to look at it.
+ * Insights only for those who see the team (`team`), Team coaching only where
+ * the server answers it (team-coaching-access.ts).
+ */
+function SandboxCard({ facts, team }: { facts: SandboxFacts; team: boolean }) {
+  const teamCoaching = useTeamCoachingHere() === true;
   const n = (value: number) => value.toLocaleString("en-IN");
+  // Only what is there: no zeros under a promise of full numbers.
+  const shown = [
+    ["Fictional businesses", facts.businesses],
+    ["Fictional reps", facts.representatives],
+    ["Calls with reports", facts.calls],
+    ["Recorded outcomes", facts.outcomes],
+    ["Call history since 2017", facts.historySummaries],
+  ].filter(([, value]) => Number(value) > 0) as [string, number][];
+  if (!shown.length) return null;
   return (
     <section className={styles.sandbox} aria-labelledby="sandbox-title">
       <div className={styles.sandboxCopy}>
@@ -512,42 +529,30 @@ function SandboxCard({ facts }: { facts: SandboxFacts }) {
         <h2 id="sandbox-title">
           A made-up sales team, so you can see Sales X-Ray at scale
         </h2>
-        <p>
-          Nobody here is real. Every call has a report, coaching and a recorded
-          outcome, so you can show team analytics to investors, check People and
-          Insights with full numbers, read coaching examples, and test the
-          pipeline without touching customer data.
-        </p>
       </div>
       <dl className={styles.sandboxFacts} aria-label="What the sandbox holds">
-        <div>
-          <dt>Fictional businesses</dt>
-          <dd>{n(facts.businesses)}</dd>
-        </div>
-        <div>
-          <dt>Fictional reps</dt>
-          <dd>{n(facts.representatives)}</dd>
-        </div>
-        <div>
-          <dt>Calls with reports</dt>
-          <dd>{n(facts.calls)}</dd>
-        </div>
-        <div>
-          <dt>Recorded outcomes</dt>
-          <dd>{n(facts.outcomes)}</dd>
-        </div>
-        {facts.historySummaries > 0 ? (
-          <div>
-            <dt>Call history since 2017</dt>
-            <dd>{n(facts.historySummaries)}</dd>
+        {shown.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{n(value)}</dd>
           </div>
-        ) : null}
+        ))}
       </dl>
       <nav className={styles.sandboxLinks} aria-label="Sandbox views">
-        <Link href="/organisation/insights?range=all">Insights, all time</Link>
-        <Link href="/coaching?view=team">Team coaching</Link>
-        <Link href="/organisation?tab=members">People</Link>
-        <Link href="/analysis/calls">All calls</Link>
+        {team ? (
+          <Link href="/organisation/insights?range=all">
+            Insights, all time
+          </Link>
+        ) : null}
+        {teamCoaching ? (
+          <Link href="/coaching?view=team">Team coaching</Link>
+        ) : null}
+        {team ? (
+          <>
+            <Link href="/organisation?tab=members">People</Link>
+            <Link href="/analysis/calls">All calls</Link>
+          </>
+        ) : null}
       </nav>
     </section>
   );

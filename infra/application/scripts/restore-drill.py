@@ -872,7 +872,18 @@ BUG_REPORTER_PARITY_TABLES = OWN_TASKS_PARITY_TABLES + (
     "bug_report_files",
     "bug_reporter_access",
 )
+# 0150 adds what Won leads were worth and monthly revenue targets (two tables).
+REVENUE_PARITY_MIGRATION_HEAD = "20261031_0150"
+REVENUE_PARITY_CONTRACT = "ac-postgres-parity-v116"
+REVENUE_PARITY_TABLES = BUG_REPORTER_PARITY_TABLES + (
+    "lead_desk_deal_amounts",
+    "lead_desk_revenue_targets",
+)
 VERSIONED_PARITY_CONTRACTS = {
+    REVENUE_PARITY_MIGRATION_HEAD: (
+        REVENUE_PARITY_CONTRACT,
+        REVENUE_PARITY_TABLES,
+    ),
     BUG_REPORTER_PARITY_MIGRATION_HEAD: (
         BUG_REPORTER_PARITY_CONTRACT,
         BUG_REPORTER_PARITY_TABLES,

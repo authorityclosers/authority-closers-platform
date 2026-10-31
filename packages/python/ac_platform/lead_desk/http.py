@@ -44,6 +44,7 @@ from ac_platform.lead_desk import (
     simulation,
     spool,
 )
+from ac_platform.lead_desk import revenue as revenue_engine
 from ac_platform.lead_desk import tasks as task_book
 from ac_platform.lead_desk import team as team_engine
 from ac_platform.lead_desk.activity_summary import ActivitySummary, summarize
@@ -56,6 +57,7 @@ from ac_platform.lead_desk.contracts import (
     CallPrivacy,
     CallRecord,
     CallReport,
+    DealAmountCommand,
     DeleteLead,
     DeleteLeads,
     Desk,
@@ -105,6 +107,11 @@ from ac_platform.lead_desk.contracts import (
     RecordingCall,
     RecordingCommand,
     RepRules,
+    RevenueBreakdownView,
+    RevenueSettingsCommand,
+    RevenueTargetsCommand,
+    RevenueTargetsView,
+    RevenueView,
     SearchResult,
     SeedCommand,
     SellerTargets,
@@ -541,6 +548,66 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         """An owner or manager sets a seller's daily and weekly targets from a day on."""
         async with desk_for(request, response, write=True) as lead_desk:
             return await team_engine.set_targets(lead_desk, command)
+
+    # ----- revenue targets (owner meeting 28 Oct 2026; migration 0150) ------------------
+
+    @router.get("/revenue", response_model=RevenueView, response_model_by_alias=True)
+    async def read_revenue(
+        request: Request, response: Response, scope: Literal["mine", "team"] = "mine"
+    ) -> RevenueView:
+        """This month's revenue against target, mine or the team's, and what it takes."""
+        no_query(request, frozenset({"scope"}))
+        async with desk_for(request, response) as lead_desk:
+            return await revenue_engine.revenue(lead_desk, scope)
+
+    @router.get("/revenue/targets", response_model=RevenueTargetsView, response_model_by_alias=True)
+    async def read_revenue_targets(
+        request: Request, response: Response, month: date | None = None
+    ) -> RevenueTargetsView:
+        """A month's revenue targets and the workspace's two revenue settings."""
+        no_query(request, frozenset({"month"}))
+        async with desk_for(request, response) as lead_desk:
+            return await revenue_engine.targets_view(lead_desk, month)
+
+    @router.put("/revenue/targets", response_model=RevenueTargetsView, response_model_by_alias=True)
+    async def write_revenue_targets(
+        command: RevenueTargetsCommand, request: Request, response: Response
+    ) -> RevenueTargetsView:
+        """The organisation's and sellers' monthly targets (0 clears one)."""
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await revenue_engine.set_targets(lead_desk, command)
+
+    @router.put(
+        "/revenue/settings", response_model=RevenueTargetsView, response_model_by_alias=True
+    )
+    async def write_revenue_settings(
+        command: RevenueSettingsCommand, request: Request, response: Response
+    ) -> RevenueTargetsView:
+        """Whether sellers set their own target, and the typical deal size."""
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await revenue_engine.save_settings(lead_desk, command)
+
+    @router.get(
+        "/revenue/breakdown", response_model=RevenueBreakdownView, response_model_by_alias=True
+    )
+    async def read_revenue_breakdown(
+        request: Request, response: Response, days: int = 30
+    ) -> RevenueBreakdownView:
+        """Revenue won in 7, 30 or 90 days by seller and by Inbound or Cold."""
+        no_query(request, frozenset({"days"}))
+        async with desk_for(request, response) as lead_desk:
+            return await revenue_engine.breakdown(lead_desk, days)
+
+    @router.put(
+        "/leads/{lead_id}/deal-amount", response_model=LeadDetail, response_model_by_alias=True
+    )
+    async def write_deal_amount(
+        lead_id: UUID, command: DealAmountCommand, request: Request, response: Response
+    ) -> LeadDetail:
+        """Add or correct what a Won lead was worth."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await revenue_engine.set_amount(lead_desk, lead_id, command)
 
     @router.get("/my-day", response_model=MyDayView, response_model_by_alias=True)
     async def read_my_day(

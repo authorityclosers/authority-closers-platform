@@ -238,9 +238,11 @@ export function AnalyticsView({
                   </div>
                 </>
               );
+              // A teammate's People page is for those who see the team;
+              // everyone opens their own.
               return (
                 <li key={person.id ?? "unattributed"}>
-                  {person.id ? (
+                  {person.id && (team || person.id === personId) ? (
                     <Link
                       href={`/organisation/people/${encodeURIComponent(person.id)}`}
                       aria-label={`Open ${person.name}’s People page: ${coveredCount(person.current[metric], data.currentComplete)} ${label}`}

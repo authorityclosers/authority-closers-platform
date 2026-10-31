@@ -81,7 +81,7 @@ afterEach(async () => {
 });
 
 const render = async (
-  role: "owner" | "admin" | "member" | "viewer",
+  role: "owner" | "admin" | "manager" | "member" | "viewer",
   kind: "organisation" | "personal" = "organisation",
   tenant = TENANT,
 ) => {
@@ -173,6 +173,42 @@ it("shows a Viewer the team, the numbers and insights, and none of the setup", a
     host.querySelector('nav[aria-label="Organisation"] a[aria-current="page"]')
       ?.textContent,
   ).toBe("Overview");
+});
+
+// Roles B: a Sales manager sets up leads, but billing is for whoever pays and
+// API keys and Pulse for those who manage the organisation (roles.ts; the
+// servers' guards), so neither shows.
+it("shows a Sales manager no Plan & billing, and only the connections they may change", async () => {
+  await render("manager");
+  expect(tabs().map(([label]) => label)).toEqual([
+    "Overview",
+    "Team",
+    "Analytics",
+    "Insights",
+    "Leads setup",
+    "Connections",
+    "AI on calls",
+    "Company",
+  ]);
+  query = "tab=connections";
+  await render("manager");
+  expect(
+    [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        '[aria-label="Connections"] button',
+      ),
+    ].map((button) => button.textContent),
+  ).toEqual(["Connected apps", "AI replies"]);
+  expect(host.querySelector('[data-section="apps"]')).not.toBeNull();
+  query = "tab=leads";
+  await render("manager");
+  expect(
+    [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        '[aria-label="Leads setup"] button',
+      ),
+    ].map((button) => button.textContent),
+  ).toEqual(["Lead rules", "Stages", "Sources"]);
 });
 
 it("opens each tab here, with the hub's header only", async () => {

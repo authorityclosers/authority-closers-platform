@@ -73,6 +73,7 @@ import {
 } from "./open";
 import { flush, keepNow, type OutboxItem } from "./outbox";
 import { recentErrors } from "./recent-errors";
+import { ReportButton } from "./report-button";
 import { recentSteps } from "../telemetry";
 import { scrubRoute } from "./scrub";
 import { setShakeToReport, useShakeSetting, useShakeToReport } from "./shake";
@@ -110,7 +111,9 @@ type Picture =
   | { state: "ready"; picture: ReportPicture; url: string; marked: boolean };
 
 type Step = "write" | "markup" | "sent" | "mine";
-type Outcome = "sent" | "queued";
+/** "bare": sent, but without the picture it should have carried (persona QA,
+    31 Oct 2026: never "Sent" when the picture didn't go). */
+type Outcome = "sent" | "bare" | "queued";
 
 // What was typed stays for the next opening until it is sent, cleared or
 // discarded (X, Back or the scrim keep it; Cancel asks first).
@@ -246,6 +249,8 @@ export function BugReportSheet({
   const form = useRef<HTMLFormElement>(null);
   const textArea = useRef<HTMLTextAreaElement>(null);
   const opening = useRef(0);
+  // The picture being taken for this opening, so Send can wait for it.
+  const capturing = useRef<Promise<Blob | null> | null>(null);
   const wordsId = useId();
   const formId = useId();
   const askSendId = useId();
@@ -282,25 +287,26 @@ export function BugReportSheet({
       area.focus();
       area.setSelectionRange(area.value.length, area.value.length);
     }, 320);
+    capturing.current = null;
     if (sensitive) return () => window.clearTimeout(focus);
     // The phone app's own picture when it took one; otherwise a copy of the page.
     const start = window.setTimeout(
       () => {
-        void (preset ? Promise.resolve(preset) : captureScreen()).then(
-          (blob) => {
-            if (round !== opening.current) return;
-            setPicture(
-              blob
-                ? {
-                    state: "ready",
-                    picture: { blob, source: "auto" },
-                    url: URL.createObjectURL(blob),
-                    marked: false,
-                  }
-                : { state: "failed" },
-            );
-          },
-        );
+        const taking = preset ? Promise.resolve(preset) : captureScreen();
+        capturing.current = taking;
+        void taking.then((blob) => {
+          if (round !== opening.current) return;
+          setPicture(
+            blob
+              ? {
+                  state: "ready",
+                  picture: { blob, source: "auto" },
+                  url: URL.createObjectURL(blob),
+                  marked: false,
+                }
+              : { state: "failed" },
+          );
+        });
       },
       preset ? 0 : 360,
     );
@@ -397,6 +403,13 @@ export function BugReportSheet({
     const id = command.current;
     let request: Record<string, unknown> | null = null;
     try {
+      // A picture still being taken goes with the report: Send waits for it
+      // (taking one gives up after 10 s) instead of going without it.
+      let shot = include && picture.state === "ready" ? picture.picture : null;
+      if (include && picture.state === "taking") {
+        const blob = await (capturing.current ?? captureScreen());
+        if (blob) shot = { blob, source: "auto" };
+      }
       request = await bugReportRequest({
         commandId: id,
         words: about
@@ -406,24 +419,24 @@ export function BugReportSheet({
         route,
         context: { ...(await reportContext()), trail: recentSteps() },
         errors: recentErrors(),
-        picture: include && picture.state === "ready" ? picture.picture : null,
+        picture: shot,
         voice: voice ? { blob: voice.blob, seconds: voice.seconds } : null,
       });
       const sent = await postBugReport(request);
       rememberSent(sent.bugId);
       tick();
       cleared();
-      setOutcome("sent");
+      // Left out on purpose, or a private screen: plain "Sent". Otherwise a
+      // report whose picture didn't go says so.
+      const pictured = shot !== null && sent.picture !== "skipped";
+      setOutcome(include && !sensitive && !pictured ? "bare" : "sent");
       setStep("sent");
-      if (sent.picture === "skipped" || sent.voice === "skipped") {
+      if (sent.voice === "skipped") {
         notify({
           id: "bug-report-partial",
           tone: "info",
           title: "Your report went without one part",
-          message:
-            sent.picture === "skipped"
-              ? "The picture didn't go with it."
-              : "The voice note didn't go with it.",
+          message: "The voice note didn't go with it.",
         });
       }
     } catch (error) {
@@ -564,21 +577,25 @@ export function BugReportSheet({
             data-outcome={outcome}
             aria-hidden="true"
           >
-            {outcome === "sent" ? (
-              <CheckCircle2 size={28} />
-            ) : (
+            {outcome === "queued" ? (
               <CloudOff size={26} />
+            ) : (
+              <CheckCircle2 size={28} />
             )}
           </span>
           <strong>
             {outcome === "sent"
               ? "Sent. We'll tell you when it's fixed."
-              : "Saved on this phone."}
+              : outcome === "bare"
+                ? "Sent without a picture."
+                : "Saved on this phone."}
           </strong>
           <p>
             {outcome === "sent"
               ? "The team sees it now. When it's fixed, a note appears here in the app."
-              : "It goes by itself as soon as you're back online. You can keep working."}
+              : outcome === "bare"
+                ? "A picture of the screen couldn't be taken this time, so your words went on their own. When it's fixed, a note appears here in the app."
+                : "It goes by itself as soon as you're back online. You can keep working."}
           </p>
         </div>
       ) : step === "mine" ? (
@@ -1043,6 +1060,7 @@ export function BugReportHost() {
           onSent={() => keepDraft("", false)}
         />
       ) : null}
+      {inApp || open || advanced ? null : <ReportButton />}
     </>
   );
 }

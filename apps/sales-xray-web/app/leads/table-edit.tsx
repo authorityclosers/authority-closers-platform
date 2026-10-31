@@ -21,6 +21,7 @@ import {
 
 import { displayName } from "../display-name";
 import { notify } from "../notice-center";
+import { Picker } from "../ui/picker";
 import { readJourney } from "./journey/journey-client";
 import {
   LeadsError,
@@ -415,8 +416,10 @@ export function TextEditor({
   );
 }
 
-/** A picked cell: the stage, owner or pipeline. A click's pick saves at once;
-    arrow keys only choose, and Enter or Tab saves. Returns null when unchanged. */
+/** A picked cell: the stage, owner or pipeline, in the app's picker (no native
+    select, 31 Oct 2026). A click's pick saves at once; arrow keys only choose,
+    and Enter or Tab saves what they reached; Escape leaves it as it was, and
+    leaving the cell saves. Returns null when unchanged. */
 export function PickEditor({
   value,
   options,
@@ -432,59 +435,74 @@ export function PickEditor({
   label: string;
   onDone: Done;
 }) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const keyed = useRef(false);
   const finished = useRef(false);
-  const box = useRef<HTMLSelectElement>(null);
+  const cell = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLButtonElement>(null);
+  // The row the arrows last reached: what Enter, Tab or leaving saves.
+  const reached = useRef<string | null>(null);
   const ready = options !== null;
   useEffect(() => {
     box.current?.focus();
-  }, []);
-  useEffect(() => {
-    if (!open || !ready) return;
-    try {
-      (box.current as { showPicker?: () => void } | null)?.showPicker?.();
-    } catch {
-      // No picker without a fresh tap (or in this browser): the box is focused.
-    }
-  }, [open, ready]);
-  const chosen = draft ?? value;
+  }, [ready]);
   const finish = (next: string | null, move: Move, refocus: boolean) => {
     if (finished.current) return;
     finished.current = true;
     onDone(next !== null && next !== value ? next : null, move, refocus);
   };
+  // Leaving the cell (a click, or focus anywhere else) saves what was reached.
+  useEffect(() => {
+    const away = (event: Event) => {
+      if (!cell.current?.contains(event.target as Node))
+        finish(reached.current ?? value, null, false);
+    };
+    document.addEventListener("pointerdown", away, true);
+    document.addEventListener("focusin", away, true);
+    return () => {
+      document.removeEventListener("pointerdown", away, true);
+      document.removeEventListener("focusin", away, true);
+    };
+  });
   return (
-    <select
-      ref={box}
-      className={styles.cellInput}
-      value={ready ? chosen : ""}
-      onChange={(event) => {
-        setDraft(event.target.value);
-        if (!keyed.current) finish(event.target.value, null, true);
+    <div
+      ref={cell}
+      className={styles.cellPick}
+      onFocusCapture={(event) => {
+        const row = (event.target as Element).closest<HTMLElement>(
+          '[role="option"]',
+        );
+        if (row) reached.current = row.dataset.key ?? null;
+      }}
+      onKeyDownCapture={(event) => {
+        const move = keyMove(event);
+        if (!move && event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        finish(move ? (reached.current ?? value) : null, move ?? null, true);
       }}
       onKeyDown={(event) => {
-        const move = keyMove(event);
-        if (move) {
-          event.preventDefault();
-          finish(chosen, move, true);
-        } else if (event.key === "Escape") {
-          event.preventDefault();
-          finish(null, null, true);
-        } else keyed.current = true;
+        // Plain keys belong to the cell while it is open, as in a select: the
+        // table's moves between cells and the rows' keys (Space ticks) stay out.
+        // Shortcuts with Ctrl, Cmd or Alt still reach the app.
+        if (!event.ctrlKey && !event.metaKey && !event.altKey)
+          event.stopPropagation();
       }}
-      onBlur={() => finish(chosen, null, false)}
-      aria-label={label}
     >
-      {ready ? (
-        options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))
-      ) : (
-        <option value="">Loading…</option>
-      )}
-    </select>
+      <Picker
+        key={ready ? "ready" : "loading"}
+        mode="cell"
+        defaultOpen={open && ready}
+        className={styles.cellPicker}
+        title={label}
+        ariaLabel={label}
+        buttonRef={box}
+        value={ready ? value : null}
+        placeholder={ready ? "Choose" : "Loading…"}
+        options={(options ?? []).map((option) => ({
+          key: option.value,
+          label: option.label,
+        }))}
+        onChange={(key) => finish(key, null, true)}
+      />
+    </div>
   );
 }

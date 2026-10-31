@@ -26,7 +26,7 @@ import {
 } from "../leads/settings-panes";
 import { OrganisationView } from "../organisation/organisation-view";
 import { PulsePanel } from "../organisation/pulse/pulse-panel";
-import { useApkLinksAllowed } from "../purchase-policy";
+import { BILLING_WITH_OWNER, useApkLinksAllowed } from "../purchase-policy";
 import { Panel } from "../ui/kit";
 import { AiAppsSection } from "./ai-apps";
 import { ConnectedApps } from "./connected-apps";
@@ -37,6 +37,7 @@ import { PrivacySettings } from "./privacy";
 import { ProfileDetailsPanel } from "./profile-details";
 import { SellingSettings } from "./selling";
 import type { SettingsSectionId } from "./settings-sections";
+import { useCanHere } from "../workspace-role";
 import styles from "./sections.module.css";
 
 function Note({
@@ -141,6 +142,19 @@ function PhoneAndAlerts() {
   );
 }
 
+/**
+ * Plan & usage for whoever pays. A member of an organisation reads one calm
+ * line instead: no plan, no price, no top-up (roles.ts "billing.view"). It
+ * waits while your role is unknown, so a price never shows first.
+ */
+function PlanSection({ billing }: { billing?: SettingsBillingProps }) {
+  const canHere = useCanHere();
+  const pays = canHere("billing.view");
+  if (pays === null) return null;
+  if (!pays) return <p className={styles.hint}>{BILLING_WITH_OWNER}</p>;
+  return <AccountSettings only={["usage", "billing"]} billing={billing} />;
+}
+
 export function SettingsSectionView({
   id,
   billing,
@@ -167,7 +181,7 @@ export function SettingsSectionView({
     case "ai-apps":
       return <AiAppsSection />;
     case "plan":
-      return <AccountSettings only={["usage", "billing"]} billing={billing} />;
+      return <PlanSection billing={billing} />;
     case "privacy":
       return <PrivacySettings />;
     case "help":

@@ -6,6 +6,7 @@
  *   J or ↓   the next row          K or ↑   the previous row
  *   Enter/E  open it               C        its call step ("Call <name>")
  *   L        log how its call went
+ *   Space    tick it (an owner's table, 31 Oct 2026)
  * C never dials by itself: it opens the same step a tap on Call opens.
  *
  * A row marks itself `data-row-key="<id>"` (and stays reachable by Tab or is
@@ -23,15 +24,16 @@ export type RowKeyActions = {
   open?: (id: string) => void;
   call?: (id: string) => void;
   log?: (id: string) => void;
+  tick?: (id: string) => void;
 };
 
 const TYPING =
-  "input, textarea, select, [contenteditable=''], [contenteditable='true']";
+  "input, textarea, select, [contenteditable=''], [contenteditable='true'], [aria-haspopup='listbox'], [role='listbox']";
 
 /** Which step a key asks for, or null when the key is not ours. */
 export function rowKeyStep(
   key: string,
-): "next" | "previous" | "open" | "call" | "log" | null {
+): "next" | "previous" | "open" | "call" | "log" | "tick" | null {
   switch (key) {
     case "j":
     case "J":
@@ -51,6 +53,8 @@ export function rowKeyStep(
     case "l":
     case "L":
       return "log";
+    case " ":
+      return "tick";
     default:
       return null;
   }
@@ -105,6 +109,9 @@ export function useRowKeys(
         return;
       }
       if (at < 0) return;
+      // Space ticks the focused row itself; a control inside the row keeps its
+      // own Space (a button, a cell's picker).
+      if (step === "tick" && target !== rows[at]) return;
       const id = rows[at].dataset.rowKey!;
       const run = latest.current[step];
       if (!run) return;

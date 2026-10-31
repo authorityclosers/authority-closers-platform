@@ -143,7 +143,7 @@ it("measures Inbound and Cold apart, as Dipak's table does", () => {
   // First-call speed is Inbound's: a Cold list's import time says nothing.
   expect(work["First call in"]).toEqual(["7 min", "Not measured"]);
   const gone = table(missed(inbound, cold));
-  expect(gone["Late now (over an hour)"]).toEqual(["2", "1"]);
+  expect(gone["Late now (over an hour)"]).toEqual(["2", "–"]);
   expect(gone["Missed calls"]).toEqual(["3", "0"]);
   expect(gone["Not called back"]).toEqual(["1", "0"]);
   expect(gone["Not called yet"]).toEqual(["3", "900"]);
@@ -155,9 +155,9 @@ it("measures Inbound and Cold apart, as Dipak's table does", () => {
 
 it("flags only what needs the owner's eye", () => {
   expect(flags(seller())).toEqual([
-    "3 leads late",
+    "2 leads late",
     "1 not called back",
-    "1 task late",
+    "1 task overdue",
     "2 calls without a recording",
   ]);
   const calm = side();
@@ -198,9 +198,9 @@ it("shows an owner the team and each seller, flags first", async () => {
       (item) => item.textContent,
     ),
   ).toEqual([
-    "3 leads late",
+    "2 leads late",
     "1 not called back",
-    "1 task late",
+    "1 task overdue",
     "2 calls without a recording",
   ]);
   // Breaks: red unless set; ≈ next to a call from the app's Call button.

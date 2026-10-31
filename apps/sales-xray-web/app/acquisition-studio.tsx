@@ -128,6 +128,7 @@ import {
 import { startAnalysis } from "./analysis-start";
 import { reconcileSource, sendSource } from "./new-analysis/source-upload";
 import { useWorkspaceAccess } from "./workspace-access";
+import { useCanHere } from "./workspace-role";
 import { scoringPending } from "./xray-report/structure";
 import { autoCallTitle, fallbackCallTitle } from "./call-auto-title";
 import {
@@ -269,7 +270,11 @@ export function AcquisitionStudio({
   const embedded = variant === "embedded";
   // The standalone shell owns the page landmark; embedded mounts inherit one.
   const access = useWorkspaceAccess();
-  const purchasesAllowed = usePurchasesAllowed();
+  // Plans are for whoever pays: nobody inside the Play app (purchase-policy),
+  // and in an organisation only the roles that see billing (workspace-role).
+  const canHere = useCanHere();
+  const purchasesAllowed =
+    usePurchasesAllowed() && canHere("billing.view") !== false;
   const resolvedTheme = useTheme()?.resolved ?? "light";
   const accessStatus = access?.status ?? null;
   const accessAuthenticated = access?.authenticated ?? null;

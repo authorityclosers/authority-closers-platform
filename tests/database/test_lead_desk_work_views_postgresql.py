@@ -116,9 +116,10 @@ def test_work_views_and_the_stage_filter(postgres_harness: Any, tmp_path: Path) 
             assert journey.status_code == 200, journey.text
             stages = journey.json()["stages"]
             new_key = next(stage["key"] for stage in stages if stage["kind"] == "new")
-            assert await names(scope="mine", side="inbound", step=new_key) == [
-                "Fictional new older",
+            # Which leads, not their order: these two share their times.
+            assert sorted(await names(scope="mine", side="inbound", step=new_key)) == [
                 "Fictional new newer",
+                "Fictional new older",
             ]
             assert await names(scope="mine", side="inbound", step="no_such_stage") == []
 

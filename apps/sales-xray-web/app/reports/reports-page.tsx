@@ -11,7 +11,12 @@ import { ReportsHub, useReportsData } from "./reports-hub";
 
 export function ReportsSkeleton() {
   return (
-    <AcquisitionShell authenticated={false} loading active="dashboard">
+    <AcquisitionShell
+      authenticated={false}
+      loading
+      active="dashboard"
+      pageName="Reports"
+    >
       <PageHeader title="Reports" titleInBar />
       {Array.from({ length: 6 }, (_, index) => (
         <SkeletonRow key={index} />
@@ -41,6 +46,7 @@ export function ReportsRoute() {
       <AcquisitionShell
         authenticated={access?.authenticated === true}
         active="dashboard"
+        pageName="Reports"
       >
         <SignedOutWelcome
           title="Sign in to see your reports"
@@ -50,7 +56,7 @@ export function ReportsRoute() {
     );
   }
   return (
-    <AcquisitionShell authenticated active="dashboard">
+    <AcquisitionShell authenticated active="dashboard" pageName="Reports">
       <PageHeader title="Reports" titleInBar />
       <Hub key={`${access.context?.personId}:${access.context?.tenantId}`} />
     </AcquisitionShell>

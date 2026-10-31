@@ -1,17 +1,28 @@
 "use client";
 
-/** Performance, /performance: Home's Performance button (performance-view.tsx). */
+/** Performance, /performance, and My Growth, /growth (its Analytics; Dipak's
+ *  tab bar, 31 Oct 2026): the same engine view under each title. */
 
 import { AcquisitionShell } from "../acquisition-shell";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
 import { PageHeader, SkeletonRow } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
+import styles from "./performance.module.css";
 import { PerformanceView } from "./performance-view";
 
-export function PerformanceSkeleton() {
+export function PerformanceSkeleton({
+  title = "Performance",
+}: {
+  title?: string;
+}) {
   return (
-    <AcquisitionShell authenticated={false} loading active="dashboard">
-      <PageHeader title="Performance" titleInBar />
+    <AcquisitionShell
+      authenticated={false}
+      loading
+      active="dashboard"
+      pageName={title}
+    >
+      <PageHeader title={title} titleInBar />
       {Array.from({ length: 6 }, (_, index) => (
         <SkeletonRow key={index} />
       ))}
@@ -19,7 +30,14 @@ export function PerformanceSkeleton() {
   );
 }
 
-export function PerformanceRoute() {
+export function PerformanceRoute({
+  title = "Performance",
+  section,
+}: {
+  title?: string;
+  /** A heading over the view: "Analytics" on My Growth. */
+  section?: string;
+}) {
   const access = useWorkspaceAccess();
   const authenticated =
     access?.authenticated === true &&
@@ -29,11 +47,12 @@ export function PerformanceRoute() {
     const loading =
       !access || access.authenticated === null || access.status === "loading";
     return loading ? (
-      <PerformanceSkeleton />
+      <PerformanceSkeleton title={title} />
     ) : (
       <AcquisitionShell
         authenticated={access?.authenticated === true}
         active="dashboard"
+        pageName={title}
       >
         <SignedOutWelcome
           title="Sign in to see performance"
@@ -43,8 +62,9 @@ export function PerformanceRoute() {
     );
   }
   return (
-    <AcquisitionShell authenticated active="dashboard">
-      <PageHeader title="Performance" titleInBar />
+    <AcquisitionShell authenticated active="dashboard" pageName={title}>
+      <PageHeader title={title} titleInBar />
+      {section ? <h2 className={styles.section}>{section}</h2> : null}
       <PerformanceView
         key={`${access.context?.personId}:${access.context?.tenantId}`}
       />

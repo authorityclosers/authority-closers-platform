@@ -91,3 +91,13 @@
   background: var(--sx-accent-soft);
   color: var(--sx-accent);
 }
+
+/* For a moment after a row hands over to its form: takes the taps a double
+   tap would send to the tab bar. Clear; a modal form opens above it. */
+.shield {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  background: transparent;
+  touch-action: none;
+}

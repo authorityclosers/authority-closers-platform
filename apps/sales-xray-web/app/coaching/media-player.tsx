@@ -21,6 +21,7 @@ import {
 import { CLIP, MEDIA, THEIR } from "./coaching-copy";
 import { timeLabel } from "./coaching-format";
 import { useTheirCoaching } from "./coaching-voice";
+import { useCanHere } from "../workspace-role";
 import styles from "./coaching.module.css";
 
 type ClipState =
@@ -85,7 +86,11 @@ export function ClipOfferCard({
   clip: CoachingClip;
   finished: boolean;
 }) {
-  const purchasesAllowed = usePurchasesAllowed();
+  // Buying is for whoever pays: not inside the Play app, and in an
+  // organisation only for the roles that see billing (workspace-role.ts).
+  const canHere = useCanHere();
+  const purchasesAllowed =
+    usePurchasesAllowed() && canHere("billing.view") !== false;
   const offer = clip.offer;
   return (
     <div className={styles.offer} role="group" aria-label={CLIP.offer}>

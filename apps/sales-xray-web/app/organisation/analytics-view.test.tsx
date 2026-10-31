@@ -42,6 +42,24 @@ it("sorts people, shows seven at first, and opens their People page", () => {
   expect(host.querySelectorAll("ul li")).toHaveLength(8);
   expect(host.querySelectorAll('svg[role="img"]')).toHaveLength(8);
 });
+// A teammate's People page is for those who see the team (roles.ts
+// "team.view"): without it, only your own row opens your page.
+it("opens only your own People page when you don't see the team", () => {
+  const own = analyticsFixture.members[3].personId!;
+  act(() =>
+    root.render(
+      <AnalyticsView team={false} personId={own} initial={analyticsFixture} />,
+    ),
+  );
+  expect(
+    host.querySelectorAll('ul[aria-label="People sorted by calls"] li'),
+  ).toHaveLength(7);
+  expect(
+    [...host.querySelectorAll<HTMLAnchorElement>("ul a")].map((link) =>
+      link.getAttribute("href"),
+    ),
+  ).toEqual([`/organisation/people/${encodeURIComponent(own)}`]);
+});
 it("shows a seller who only works leads when comparing notes", () => {
   act(() => root.render(<AnalyticsView team initial={analyticsFixture} />));
   const notes = [

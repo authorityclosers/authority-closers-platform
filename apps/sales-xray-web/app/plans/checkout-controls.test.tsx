@@ -509,6 +509,44 @@ it("confirms renewal at checkout when no server quote exists", async () => {
   expect(row.textContent).not.toContain("₹0");
 });
 
+// Plans and prices are for whoever pays (roles.ts "billing.view"): a Seller of
+// an organisation who opens /plans reads one calm line, with nothing to buy.
+it("shows a Seller of an organisation no plans, prices or buttons to pay", async () => {
+  await act(async () =>
+    root.render(
+      <WorkspaceAccessContext.Provider
+        value={{
+          status: "ready",
+          authenticated: true,
+          context: {
+            personId: "fictional-person",
+            sessionId: "fictional-session",
+            tenantId: "fictional-workspace",
+          },
+          workspaces: [
+            {
+              tenant_id: "fictional-workspace",
+              kind: "organisation",
+              name: "Fictional Homes",
+              role: "member",
+              sales_xray_enabled: true,
+            },
+          ],
+          retry: () => {},
+        }}
+      >
+        <PlansPurchase client={fixtureBilling} />
+      </WorkspaceAccessContext.Provider>,
+    ),
+  );
+  expect(host.querySelector('[role="status"]')?.textContent).toBe(
+    "Only your organisation's owner can see billing.",
+  );
+  expect(host.textContent).not.toContain("₹");
+  expect(button("Get Personal")).toBeUndefined();
+  expect(host.querySelector('[role="dialog"]')).toBeNull();
+});
+
 it("Settings treats subscription and invoice 404 as billing-off when canonical reads succeed", async () => {
   await render(
     <SettingsBilling

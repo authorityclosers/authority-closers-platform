@@ -86,7 +86,8 @@ import { can, ROLE_HINT, ROLE_LABEL, rolesToGive } from "./roles";
 import styles from "./organisation.module.css";
 import { ReceiptActivitySection } from "./receipt-activity";
 import { CaptureSetupPanel } from "./capture-setup-panel";
-import { SeatsPanel, SeatUsePanel, type SeatUse } from "./seats-panel";
+import { SeatsPanel, SeatUsePanel, seatUseFrom } from "./seats-panel";
+import { readEffort, type Effort } from "../performance/performance-client";
 import { TeamPatternsSection } from "./team-patterns-section";
 import {
   IntegrationsPanel,
@@ -396,17 +397,22 @@ export function OrganisationView({
   // Owners, admins and Finance see seats; a member change reads them again.
   const seesSeats = live && (canManage || can(myRole, "billing.view"));
   const [seatsVersion, setSeatsVersion] = useState(0);
+  // Seat use counts the calls Analytics counts: the lead desk's own, last 30
+  // days (persona QA, 31 Oct 2026: 0 here, 343 in Analytics).
+  const [deskCalls, setDeskCalls] = useState<Effort | null>(null);
+  useEffect(() => {
+    if (!seesSeats) return;
+    const controller = new AbortController();
+    readEffort(30, controller.signal).then(setDeskCalls, () => undefined);
+    return () => controller.abort();
+  }, [seesSeats, tenantId]);
   const seatUse = useMemo(
     () =>
-      activity.status === "ready"
-        ? new Map<string, SeatUse>(
-            activity.value.members.map((member) => [
-              member.personId,
-              { calls: member.calls, minutes: member.minutes },
-            ]),
-          )
-        : null,
-    [activity],
+      seatUseFrom(
+        activity.status === "ready" ? activity.value.members : null,
+        deskCalls,
+      ),
+    [activity, deskCalls],
   );
   const personal =
     base.status === "ready" &&

@@ -36,6 +36,7 @@ import { cachedLeadPage, readFirstLeads } from "./list-cache";
 import { firstPageFor, type ServerLeads } from "./leads-seed";
 import { notify } from "../notice-center";
 import { useRowKeys } from "../ui/row-keys";
+import { withoutRepeats } from "./page-merge";
 import { Button, Skeleton } from "../ui/kit";
 import {
   DeleteLeadsSheet,
@@ -440,21 +441,6 @@ export function ListView({
     },
     !selecting && !asTable,
   );
-  useRowKeys(
-    tableKeys,
-    {
-      open: onOpen,
-      call: (id) => {
-        const row = byId(id);
-        if (row?.phone_last4) actions?.onCall?.(row);
-      },
-      log: (id) => {
-        const row = byId(id);
-        if (row) actions?.onLog?.(row);
-      },
-    },
-    !selecting && asTable,
-  );
   const ask = {
     scope,
     owner: owner ?? undefined,
@@ -491,7 +477,7 @@ export function ListView({
         // A minute refresh must not throw away the pages already scrolled.
         // Keep them usable while the same loaded window is revalidated.
         let next = first;
-        const fresh = [...first.leads];
+        let fresh = withoutRepeats([], first.leads);
         while (
           fresh.length < Math.min(keep, first.total) &&
           next.next_offset !== null
@@ -501,7 +487,7 @@ export function ListView({
             controller.signal,
           );
           if (controller.signal.aborted) return;
-          fresh.push(...next.leads);
+          fresh = withoutRepeats(fresh, next.leads);
         }
         setLoaded({ key, question, page: next, rows: fresh, at: asked });
         if (first.stage_counts && stage !== TEST)
@@ -553,7 +539,7 @@ export function ListView({
               key,
               question,
               page: next,
-              rows: [...current.rows, ...next.leads],
+              rows: withoutRepeats(current.rows, next.leads),
               at: current.at,
             }
           : current,
@@ -632,6 +618,30 @@ export function ListView({
     [rowActions, startPicking],
   );
   const picksHere = canManage && stage === OPENING_STAGE;
+  // The table's keys: J/K or arrows, Enter opens the lead beside it, C, L, and
+  // Space ticks for an owner (also while leads are picked).
+  useRowKeys(
+    tableKeys,
+    {
+      open: onOpen,
+      // Space ticks the focused row for an owner; the bar follows.
+      tick: canManage
+        ? (id) => {
+            const row = byId(id);
+            if (row) startPicking(row);
+          }
+        : undefined,
+      call: (id) => {
+        const row = byId(id);
+        if (row?.phone_last4) actions?.onCall?.(row);
+      },
+      log: (id) => {
+        const row = byId(id);
+        if (row) actions?.onLog?.(row);
+      },
+    },
+    asTable,
+  );
 
   // Select all: the rest of the list is read first (up to the delete limit).
   const selectAll = async () => {

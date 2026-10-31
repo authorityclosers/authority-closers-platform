@@ -156,7 +156,8 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
     mobileNav?.querySelectorAll<HTMLAnchorElement>(
       'a[data-next-client-link="true"]',
     ) ?? [],
-  ).find((link) => link.textContent?.trim() === "Calls");
+  ).find((link) => link.textContent?.trim() === "Reports");
+  // Reports opens on All Calls (Dipak's handoff, 31 Oct 2026).
   expect(mobileCalls?.getAttribute("href")).toBe("/analysis/calls");
   expect(
     desktopNav?.querySelector(
@@ -238,7 +239,7 @@ it("lists Results' pages on Coaching", () => {
   ]);
 });
 
-// The new map (owner, 22 Oct 2026): Home, Leads, + (Add), Chats, Calls.
+// Dipak's handoff (31 Oct 2026): Home, Leads, Ask Dipak, Reports, Growth.
 it("keeps the phone tab bar to its five tabs, plus a dev settings control", () => {
   for (const liveData of [false, true]) {
     const shell = (
@@ -257,14 +258,15 @@ it("keeps the phone tab bar to its five tabs, plus a dev settings control", () =
       Array.from(nav.children, (item) => item.textContent?.trim()),
     ).toEqual(
       liveData
-        ? ["Home", "Leads", "Ask Dipak", "Chats", "Calls", "Settings"]
-        : ["Home", "Leads", "Ask Dipak", "Chats", "Calls"],
+        ? ["Home", "Leads", "Ask Dipak", "Reports", "Growth", "Settings"]
+        : ["Home", "Leads", "Ask Dipak", "Reports", "Growth"],
     );
     // Prospects and Coaching open from You, not from the tab bar.
     expect(nav.querySelector('a[href="/prospects"]')).toBeNull();
     expect(nav.querySelector('a[href="/coaching"]')).toBeNull();
-    // Chats is its own tab now.
-    expect(nav.querySelector('a[href="/chats"]')).not.toBeNull();
+    // Chats is an icon in the Leads header, not a tab.
+    expect(nav.querySelector('a[href="/chats"]')).toBeNull();
+    expect(nav.querySelector('a[href="/growth"]')).not.toBeNull();
     // Ask Dipak is the only tab that is a button: it opens his sheet (the
     // dev settings control is the other button, and only with live data).
     expect(
@@ -295,7 +297,7 @@ it("keeps the five tabs for an unconfirmed session; signed out offers Home, New 
         <p>Dashboard</p>
       </AcquisitionShell>,
     ),
-  ).toEqual(["Home", "Leads", "Ask Dipak", "Chats", "Calls"]);
+  ).toEqual(["Home", "Leads", "Ask Dipak", "Reports", "Growth"]);
   // B22: Leads and Calls only lead to a sign-in prompt for a visitor.
   expect(
     tabs(
@@ -413,4 +415,18 @@ it("keeps the Team panel to its pages, without recent calls", () => {
   expect(rows?.length).toBeGreaterThan(1);
   for (const row of rows ?? [])
     expect(row.firstElementChild?.getAttribute("aria-hidden")).toBe("true");
+});
+
+it("puts Chats in the Leads header only (Dipak's handoff, 31 Oct 2026)", () => {
+  const header = (active: "leads" | "dashboard") => {
+    const host = document.createElement("div");
+    host.innerHTML = renderToStaticMarkup(
+      <AcquisitionShell authenticated active={active}>
+        <p>Page</p>
+      </AcquisitionShell>,
+    );
+    return host.querySelector('header a[aria-label="Chats"]');
+  };
+  expect(header("leads")?.getAttribute("href")).toBe("/chats");
+  expect(header("dashboard")).toBeNull();
 });

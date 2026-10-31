@@ -25,7 +25,9 @@ export type Need =
   | "nc_reason"
   | "reason_note"
   | "note"
-  | "confirm";
+  | "confirm"
+  /** What a Won deal was worth (revenue targets): every move to Won needs it. */
+  | "amount";
 
 export type Reason = { key: string; label: string };
 
@@ -164,6 +166,8 @@ export type MoveInput = {
   contact?: "call" | "reply" | "seller_said";
   source?: "seller" | "ai_suggestion";
   suggestionRef?: string;
+  /** What a Won deal was worth, whole rupees: every move to Won needs it. */
+  amount?: number;
   via?:
     | "board"
     | "sheet"
