@@ -13,9 +13,10 @@ it("keeps a capitalised full name accessible while fitting the available line", 
   await act(async () =>
     root.render(<PersonDisplayName name="alexandria fictional sampleworth" />),
   );
-  expect(
-    host.querySelector('[aria-label="Alexandria Fictional Sampleworth"]'),
-  ).not.toBeNull();
+  // The name itself, not an aria-label on a plain span (axe
+  // aria-prohibited-attr; the test robot, 31 Oct 2026).
+  expect(host.textContent).toContain("Alexandria Fictional Sampleworth");
+  expect(host.querySelector("[aria-label]")).toBeNull();
   expect(
     host.querySelector('[title="Alexandria Fictional Sampleworth"]'),
   ).not.toBeNull();
