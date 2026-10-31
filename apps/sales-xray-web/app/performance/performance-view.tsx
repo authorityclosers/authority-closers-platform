@@ -83,7 +83,11 @@ export function measures(inbound: SideEffort, cold: SideEffort): Measure[] {
 /** What was missed, Inbound and Cold apart. */
 export function missed(inbound: SideEffort, cold: SideEffort): Measure[] {
   return [
-    row("Late now (over an hour)", inbound, cold, (side) => String(side.late)),
+    {
+      label: "Late now (over an hour)",
+      inbound: String(inbound.late),
+      cold: "–",
+    },
     row("Missed calls", inbound, cold, (side) => String(side.missed_calls)),
     row("Not called back", inbound, cold, (side) =>
       String(side.not_called_back),
@@ -138,13 +142,14 @@ const count = (value: number, one: string, many: string) =>
 
 /** What needs the owner's eye, shown before the card opens: only what isn't 0. */
 export function flags(seller: SellerEffort): string[] {
-  const late = seller.inbound.late + seller.cold.late;
+  // Inbound's: a Cold list has no promised time to be late against (QA, 31 Oct).
+  const late = seller.inbound.late;
   const back = seller.inbound.not_called_back + seller.cold.not_called_back;
   return [
     late ? count(late, "lead late", "leads late") : "",
     back ? `${back} not called back` : "",
     seller.tasks_late
-      ? count(seller.tasks_late, "task late", "tasks late")
+      ? count(seller.tasks_late, "task overdue", "tasks overdue")
       : "",
     seller.missing_recordings
       ? count(
@@ -190,8 +195,8 @@ function SellerCard({ seller, own }: { seller: SellerEffort; own: boolean }) {
           data-red={seller.tasks_late ? "" : undefined}
         >
           {seller.tasks_late
-            ? `${count(seller.tasks_late, "task", "tasks")} more than an hour late`
-            : "No tasks late"}
+            ? `${count(seller.tasks_late, "task", "tasks")} overdue`
+            : "No tasks overdue"}
         </p>
         <p
           className={styles.line}
@@ -209,7 +214,10 @@ function SellerCard({ seller, own }: { seller: SellerEffort; own: boolean }) {
             {`Today: first call ${CLOCK.format(new Date(seller.first_call_at))}, last call ends ${CLOCK.format(new Date(seller.last_call_at))}`}
           </p>
         ) : null}
-        {seller.breaks.length ? (
+        {/* A break is time between calls: none before the first call. */}
+        {!(seller.inbound.attempted + seller.cold.attempted) ? (
+          <p className={styles.quiet}>No calls yet.</p>
+        ) : seller.breaks.length ? (
           <ol className={styles.breaks} aria-label="3 longest breaks">
             {seller.breaks.map((gap) => (
               <BreakRow key={gap.start} gap={gap} />

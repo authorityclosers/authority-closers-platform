@@ -587,3 +587,74 @@
     transition: none;
   }
 }
+
+/* The reporter's corner button, on computers only (orchestrator for the owner,
+   31 Oct 2026); a small x on hover or focus hides it. */
+.corner {
+  display: none;
+}
+
+@media (min-width: 900px) and (hover: hover) {
+  .corner {
+    position: fixed;
+    z-index: 40;
+    right: 20px;
+    bottom: 20px;
+    display: block;
+  }
+}
+
+.cornerButton {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--sx-line);
+  border-radius: 50%;
+  background: var(--sx-elevated);
+  color: var(--sx-muted);
+  box-shadow: var(--sx-shadow-float);
+  cursor: pointer;
+  transition: color var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.cornerButton:hover {
+  color: var(--sx-ink);
+}
+
+.cornerButton:focus-visible,
+.cornerHide:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.cornerHide {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--sx-line);
+  border-radius: 50%;
+  background: var(--sx-surface);
+  color: var(--sx-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.corner:hover .cornerHide,
+.corner:focus-within .cornerHide {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cornerButton,
+  .cornerHide {
+    transition: none;
+  }
+}

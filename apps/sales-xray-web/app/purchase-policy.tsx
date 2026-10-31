@@ -15,6 +15,13 @@ import { phoneStatus, setupStatus } from "./leads/native-phone";
  */
 export const PLANS_ON_WEB = "Your workspace owner manages plans on the web.";
 
+/**
+ * What a member of an organisation sees where plans and prices would be:
+ * billing belongs to whoever pays (roles.ts "billing.view"), never a price.
+ */
+export const BILLING_WITH_OWNER =
+  "Only your organisation's owner can see billing.";
+
 type Store = "direct" | "play";
 let store: Store | null = null;
 let asked = false;

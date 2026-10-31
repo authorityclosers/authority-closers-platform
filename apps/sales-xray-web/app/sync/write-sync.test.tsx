@@ -19,9 +19,9 @@ vi.mock("../workspace-access", () => ({
   }),
 }));
 
-const { resetWrites, sendWrite, setWriteIdentity, unsentWrites } = await import(
-  "./write-queue"
-);
+const { discardWrite, resetWrites, sendWrite, setWriteIdentity, unsentWrites } =
+  await import("./write-queue");
+const { announceWorkspaceChange } = await import("../workspace-change");
 const { WriteSync, WAITING_NOTICE } = await import("./write-sync");
 
 (
@@ -118,4 +118,68 @@ it("shows a change the server refused, with the words typed and the way back to 
   expect(refused.action.label).toBe("Open lead");
   // Not "saved": the change is still waiting for a look.
   expect(titles()).not.toContain("All changes saved");
+});
+
+// Persona QA, 31 Oct 2026 (production): a card for another workspace's lead in a
+// new empty organisation, back after closing, its Open lead across workspaces.
+it("never shows another workspace's change", async () => {
+  setWriteIdentity("p-asha:t-other");
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("offline"))
+      .mockResolvedValue(answer(409)),
+  );
+  await sendWrite(DISPOSE, body("c-9"));
+  await act(async () => root.render(<WriteSync />));
+  await settle();
+  expect(mocks.notices.some((notice) => notice.id === "writes-check-c-9")).toBe(
+    false,
+  );
+});
+
+it("offers no Open lead for a lead this workspace doesn't have", async () => {
+  setWriteIdentity("p-asha:t-homes");
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("offline"))
+      .mockResolvedValue(answer(404)),
+  );
+  await sendWrite(DISPOSE, body("c-4"));
+  await act(async () => root.render(<WriteSync />));
+  await settle();
+  const refused = mocks.notices.find(
+    (notice) => notice.id === "writes-check-c-4",
+  );
+  expect(refused).toBeDefined();
+  expect(refused?.action).toBeUndefined();
+});
+
+it("takes a card away when its change is closed or the workspace changes", async () => {
+  setWriteIdentity("p-asha:t-homes");
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("offline"))
+      .mockRejectedValueOnce(new TypeError("offline"))
+      .mockResolvedValue(answer(409)),
+  );
+  await sendWrite(DISPOSE, body("c-5"));
+  await sendWrite(`/v1/lead-desk/leads/${LEAD}/notes`, {
+    method: "POST",
+    body: JSON.stringify({ command_id: "c-6", text: "Call after Diwali" }),
+  });
+  await act(async () => root.render(<WriteSync />));
+  await settle();
+  // Closed elsewhere: its card goes.
+  await act(async () => discardWrite("c-5"));
+  await settle();
+  expect(mocks.dismissed).toContain("writes-check-c-5");
+  // A switch in place: the rest go at once.
+  await act(async () => announceWorkspaceChange("leaving"));
+  expect(mocks.dismissed).toContain("writes-check-c-6");
 });

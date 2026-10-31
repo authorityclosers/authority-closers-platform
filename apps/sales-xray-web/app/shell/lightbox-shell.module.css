@@ -2516,3 +2516,31 @@
 .bottomAsk > span:last-child {
   white-space: nowrap;
 }
+
+/* The workspace line gives way to the header's icons (31 Oct 2026: Chats
+   joined the Leads header): its name ends in "…", the chevron stays. */
+.mobilePlace,
+.mobileWorkspace > span {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.mobilePlace .contextRow,
+.mobileWorkspace > span .contextRow {
+  max-width: 100%;
+}
+
+.mobileContext {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.mobileContext > svg {
+  flex: none;
+}
+
+.contextName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

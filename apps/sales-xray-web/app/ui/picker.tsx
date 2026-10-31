@@ -21,6 +21,7 @@ import {
   useEffect,
   useId,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -176,6 +177,7 @@ export function Picker({
   all,
   onChange,
   mode = "auto",
+  defaultOpen = false,
   className,
   id,
   ariaLabel,
@@ -196,8 +198,12 @@ export function Picker({
   /** The first row, which clears the choice ("All stages"). */
   all?: { label: string; count?: number | null };
   onChange: (key: string | null) => void;
-  /** "inline": the list opens in place, for a picker inside a sheet. */
-  mode?: "auto" | "inline";
+  /** "inline": the list opens in place, for a picker inside a sheet. "cell": a
+      table cell's editor, whose list floats above the page (no table box clips
+      it) and is never a sheet. */
+  mode?: "auto" | "inline" | "cell";
+  /** Open from the start, as when a click opened the editor holding it. */
+  defaultOpen?: boolean;
   className?: string;
   /** The button's id, for a label elsewhere (`htmlFor`). */
   id?: string;
@@ -213,13 +219,15 @@ export function Picker({
   buttonRef?: Ref<HTMLButtonElement | null>;
 }) {
   const phone = usePhone();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
   useImperativeHandle(buttonRef, () => button.current as HTMLButtonElement, []);
   const listId = useId();
   const inline = mode === "inline";
-  const sheet = !inline && phone;
+  const cell = mode === "cell";
+  const sheet = !inline && !cell && phone;
   const rows: Row[] = [
     ...(all ? [{ key: null, label: all.label, count: all.count }] : []),
     ...options,
@@ -266,6 +274,34 @@ export function Picker({
     return () => window.clearTimeout(timer);
   }, [open, inline]);
 
+  // A cell's list floats in the top layer, under its cell (or above it when
+  // the screen has no room below), and closes when the page scrolls under it.
+  useLayoutEffect(() => {
+    const floating = pop.current;
+    const anchor = button.current;
+    if (!open || !cell || !floating || !anchor) return;
+    floating.showPopover?.();
+    const box = anchor.getBoundingClientRect();
+    floating.style.minWidth = `${box.width}px`;
+    const below = window.innerHeight - box.bottom - 8;
+    const up = floating.offsetHeight > below && box.top > below;
+    const left = Math.min(
+      box.left,
+      window.innerWidth - floating.offsetWidth - 8,
+    );
+    floating.style.left = `${Math.max(8, left)}px`;
+    floating.style.top = `${
+      up ? Math.max(8, box.top - floating.offsetHeight - 6) : box.bottom + 6
+    }px`;
+    const scrolled = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Node && floating.contains(target)) return;
+      setOpen(false);
+    };
+    window.addEventListener("scroll", scrolled, true);
+    return () => window.removeEventListener("scroll", scrolled, true);
+  }, [open, cell]);
+
   const list = (
     <Options
       key={open ? "open" : "shut"}
@@ -282,7 +318,7 @@ export function Picker({
     <div
       ref={root}
       className={[styles.root, className].filter(Boolean).join(" ")}
-      data-mode={inline ? "inline" : undefined}
+      data-mode={inline ? "inline" : cell ? "cell" : undefined}
       onClick={(event) => {
         // Inside a label, a tap on a row would reach the label, which clicks
         // the button and opens the list again.
@@ -351,7 +387,13 @@ export function Picker({
           {list}
         </Sheet>
       ) : open ? (
-        <div className={styles.pop}>{list}</div>
+        <div
+          ref={pop}
+          className={styles.pop}
+          popover={cell ? "manual" : undefined}
+        >
+          {list}
+        </div>
       ) : null}
     </div>
   );

@@ -16,6 +16,7 @@ import { useEffect, useRef } from "react";
 import { dismissNotice, notify } from "../notice-center";
 import { telemetry } from "../telemetry";
 import { useWorkspaceAccess } from "../workspace-access";
+import { onWorkspaceChange } from "../workspace-change";
 import {
   discardWrite,
   loadWriteMirror,
@@ -165,30 +166,58 @@ export function WriteSync() {
     });
   }, [who, waiting, check.length, oldestAt]);
 
+  // Each card belongs to its person and workspace (persona QA, 31 Oct 2026): it
+  // shows only while its change is theirs, goes the moment it isn't, and its Open
+  // lead never leads into another workspace.
+  const cards = useRef(new Set<string>());
+  const current = useRef(who);
   useEffect(() => {
-    for (const item of check) {
+    current.current = who;
+  }, [who]);
+  useEffect(() => {
+    const mine = check.filter((item) => item.identity === who);
+    const keep = new Set(mine.map((item) => `writes-check-${item.id}`));
+    for (const id of cards.current)
+      if (!keep.has(id)) {
+        dismissNotice(id);
+        cards.current.delete(id);
+      }
+    for (const item of mine) {
       const id = `writes-check-${item.id}`;
+      cards.current.add(id);
+      // A lead this workspace doesn't have (404) has nothing to open here.
+      const lead = item.lead && item.status !== 404 ? item.lead : null;
       notify({
         id,
         tone: "error",
         noReport: true,
         title: `${item.label} wasn't saved`,
         message: refusedMessage(item),
-        action: item.lead
+        action: lead
           ? {
               label: "Open lead",
               icon: "open",
               run: () => {
                 discardWrite(item.id);
                 dismissNotice(id);
-                window.location.assign(leadHref(item.lead as string));
+                if (current.current === item.identity)
+                  window.location.assign(leadHref(lead));
               },
             }
           : undefined,
         onDismiss: async () => discardWrite(item.id),
       });
     }
-  }, [check]);
+  }, [check, who]);
+  // A workspace switch in place: every card of the one left goes at once.
+  useEffect(
+    () =>
+      onWorkspaceChange(() => {
+        for (const id of cards.current) dismissNotice(id);
+        cards.current.clear();
+      }),
+    [],
+  );
 
   return null;
 }

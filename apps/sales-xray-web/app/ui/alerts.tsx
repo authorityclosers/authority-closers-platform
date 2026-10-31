@@ -6,6 +6,12 @@ import Link from "next/link";
 
 export * from "@ac/ui/kit/alerts";
 
-export function AlertHost() {
-  return <Alerts.AlertHost link={Link} />;
+export function AlertHost({
+  only,
+  stacked,
+}: {
+  only?: "banner" | "urgent";
+  stacked?: boolean;
+} = {}) {
+  return <Alerts.AlertHost link={Link} only={only} stacked={stacked} />;
 }

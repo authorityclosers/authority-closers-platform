@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { Picker } from "./picker";
+import { SHEET_PHONE_QUERY } from "./sheet";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -254,4 +255,44 @@ it("inside a label, a tap on a row stops there, so the label can't reopen the li
   expect(tap.defaultPrevented).toBe(true);
   expect(onChange).toHaveBeenCalledWith("dark");
   expect(options()).toHaveLength(0);
+});
+
+it("as a table cell's editor opens at once above the page, never as a sheet, and shuts when the page scrolls", async () => {
+  const real = window.matchMedia;
+  // A phone: still no sheet for a cell.
+  window.matchMedia = ((query: string) => ({
+    matches: query === SHEET_PHONE_QUERY,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  })) as unknown as typeof window.matchMedia;
+  try {
+    await act(async () =>
+      root.render(
+        <Picker
+          mode="cell"
+          defaultOpen
+          title="Stage of Meera Fictional"
+          value="new"
+          options={OPTIONS}
+          onChange={vi.fn()}
+        />,
+      ),
+    );
+    expect(host.querySelector("dialog")).toBeNull();
+    expect(button().getAttribute("aria-expanded")).toBe("true");
+    expect(options()).toHaveLength(3);
+    const floating = host.querySelector('[role="listbox"]')!.parentElement!;
+    expect(floating.getAttribute("popover")).toBe("manual");
+    // The list's own scroll keeps it; the page scrolling under it shuts it.
+    await act(async () => {
+      floating.dispatchEvent(new Event("scroll"));
+    });
+    expect(options()).toHaveLength(3);
+    await act(async () => {
+      window.dispatchEvent(new Event("scroll"));
+    });
+    expect(options()).toHaveLength(0);
+  } finally {
+    window.matchMedia = real;
+  }
 });

@@ -1,13 +1,14 @@
 import { CALLS_PATH, NEW_ANALYSIS_PATH } from "../analysis-routes";
 
 /**
- * The five phone tabs of the new map (owner, 22 Oct 2026: "Approved: the new
- * map"): Home, Leads, + (Add), Chats and Calls. More is gone: your avatar
- * opens You, with your settings and the organisation's. A page that is not a
- * tab lights the place it belongs to (Prospects under Leads, Coaching under
- * Calls, the organisation's pages under Home); Settings lights none.
+ * The five phone tabs (Dipak's handoff, 31 Oct 2026): Home, Leads, Ask Dipak,
+ * Reports and Growth; the + is in the top bar and your avatar opens You. A
+ * page that is not a tab lights the place it belongs to: Chats and Prospects
+ * under Leads, the calls and a call's report under Reports (it opens on All
+ * Calls), Coaching under Growth, the organisation's pages under Home.
+ * Settings lights none.
  */
-export type PhoneTab = "dashboard" | "leads" | "chats" | "calls" | "new";
+export type PhoneTab = "dashboard" | "leads" | "reports" | "growth" | "new";
 
 export type ShellActive =
   | "dashboard"
@@ -25,11 +26,11 @@ export type ShellActive =
 const FROM_ACTIVE: Record<ShellActive, PhoneTab | null> = {
   dashboard: "dashboard",
   leads: "leads",
-  chats: "chats",
+  chats: "leads",
   analyse: "new",
-  calls: "calls",
+  calls: "reports",
   prospects: "leads",
-  coaching: "calls",
+  coaching: "growth",
   account: null,
   organisation: "dashboard",
   insights: "dashboard",
@@ -51,13 +52,14 @@ export function phoneTabFor(
   if (pathname) {
     if (under(pathname, "/dashboard")) return "dashboard";
     if (under(pathname, "/leads")) return "leads";
-    if (under(pathname, "/chats")) return "chats";
+    if (under(pathname, "/chats")) return "leads";
     if (under(pathname, CALLS_PATH) || under(pathname, "/calls"))
-      return "calls";
+      return "reports";
+    if (under(pathname, "/reports")) return "reports";
+    if (under(pathname, "/growth")) return "growth";
     if (under(pathname, "/prospects")) return "leads";
-    if (under(pathname, "/coaching")) return "calls";
+    if (under(pathname, "/coaching")) return "growth";
     if (under(pathname, "/organisation")) return "dashboard";
-    if (under(pathname, "/reports")) return "dashboard";
     if (
       ["/account", "/settings", "/plans"].some((root) => under(pathname, root))
     )
@@ -66,7 +68,7 @@ export function phoneTabFor(
     // address bar already shows the call: once the page says it is that
     // call's report, it is under Calls (owner, 19 Oct).
     if (under(pathname, NEW_ANALYSIS_PATH))
-      return active === "calls" ? "calls" : "new";
+      return active === "calls" ? "reports" : "new";
   }
   return active ? FROM_ACTIVE[active] : null;
 }

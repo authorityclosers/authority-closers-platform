@@ -47,6 +47,8 @@ const SHELL_ROUTES = new Set([
   // Performance: each seller's calls, talk time and breaks (Leads section 6;
   // without it the page never got its workspace and stayed a skeleton).
   "/performance",
+  // My Growth: Analytics, then Coaching (Dipak's tab bar, 31 Oct 2026).
+  "/growth",
 ]);
 
 export function isShellRoute(pathname: string | null) {

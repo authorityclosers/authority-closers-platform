@@ -42,9 +42,16 @@ import {
 import { saveNudges, type NudgeSettings } from "../leads/team-engine-client";
 import { waCall, type Sla } from "../leads/whatsapp-client";
 import { Sheet } from "../ui/sheet";
+import { RevenueTargetCard, RevenueTargetDetail } from "./revenue-target-card";
 import styles from "./team-controls.module.css";
 
-type Card = "hours" | "first_call" | "nudges" | "alerts" | "summary";
+type Card =
+  | "hours"
+  | "first_call"
+  | "nudges"
+  | "alerts"
+  | "summary"
+  | "revenue";
 type Loaded = { team: Team; sla: Sla | null };
 
 const TITLES: Record<Card, string> = {
@@ -53,6 +60,7 @@ const TITLES: Record<Card, string> = {
   nudges: "Seller nudges",
   alerts: "Alert me when…",
   summary: "Daily summary",
+  revenue: "Monthly revenue target",
 };
 
 /** First-call limits an owner picks from (the server takes 5 to 120). */
@@ -664,6 +672,10 @@ export function TeamControls() {
                 </button>
               </li>
             ))}
+            {/* The month's revenue target: capture-setup's card. */}
+            <li>
+              <RevenueTargetCard onOpen={() => setCard("revenue")} />
+            </li>
           </ul>
         ) : (
           <div className={styles.page}>
@@ -689,6 +701,8 @@ export function TeamControls() {
               <NudgesDetail team={shownTeam} onSaved={setTeam} />
             ) : card === "alerts" ? (
               <AlertsDetail sla={shownSla} onSaved={setSla} />
+            ) : card === "revenue" ? (
+              <RevenueTargetDetail />
             ) : (
               <SummaryDetail />
             )}

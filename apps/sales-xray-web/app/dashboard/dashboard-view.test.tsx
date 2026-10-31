@@ -616,7 +616,7 @@ it("explains the fictional AC Sandbox to its owner, with links to its views", as
   expect(fetchMock.mock.calls.map(([path]) => path)).toContain(
     "/v1/organisation/sandbox",
   );
-  expect(host.textContent).toContain("Nobody here is real");
+  expect(host.textContent).toContain("A made-up sales team");
   expect(host.textContent).toContain("3,360");
   expect(host.textContent).toContain("1,77,615");
   const views = [
@@ -645,7 +645,69 @@ it("asks nothing about a sandbox for a plain member or a personal workspace", as
   expect(fetchMock.mock.calls.map(([path]) => path)).not.toContain(
     "/v1/organisation/sandbox",
   );
-  expect(host.textContent).not.toContain("Nobody here is real");
+  expect(host.textContent).not.toContain("A made-up sales team");
+});
+
+// Insights are for those who see the team (roles.ts "team.view"), Team
+// coaching for those the server reads it for (team-coaching-access.ts): a
+// member's sandbox card keeps only what is theirs to open.
+it("offers a member no Team coaching or Insights from the sandbox card", async () => {
+  fetchMock.mockImplementation(() => new Promise<Response>(() => {}));
+  await act(async () => {
+    root.render(
+      <InitialSessionProvider value={SERVED}>
+        <WorkspaceAccessContext.Provider
+          value={{
+            status: "ready",
+            authenticated: true,
+            workspaces: [
+              {
+                tenant_id: "tenant-1",
+                kind: "organisation",
+                name: "AC Sandbox",
+                role: "member",
+                sales_xray_enabled: true,
+              },
+            ],
+            context: {
+              personId: "person-1",
+              sessionId: "session-1",
+              tenantId: "tenant-1",
+            },
+            retry: () => {},
+            requestAccountSignIn: signIn,
+          }}
+        >
+          <DashboardPage
+            initial={{
+              sandbox: {
+                status: 200,
+                body: {
+                  sandbox: true,
+                  businesses: 10,
+                  representatives: 60,
+                  calls: 3360,
+                  reports: 3360,
+                  outcomes: 3360,
+                  history_summaries: 0,
+                  approved_at: "2026-10-11T20:48:00+00:00",
+                },
+              },
+            }}
+          />
+        </WorkspaceAccessContext.Provider>
+      </InitialSessionProvider>,
+    );
+  });
+  expect(host.textContent).toContain("A made-up sales team");
+  const views = [
+    ...host.querySelectorAll<HTMLAnchorElement>(
+      'nav[aria-label="Sandbox views"] a',
+    ),
+  ].map((link) => link.getAttribute("href"));
+  // People and All calls are the team's too: a member's card links nowhere
+  // they can't open (persona QA, 31 Oct 2026).
+  expect(views).toEqual([]);
 });
 
 it("shows the sandbox card from the server's read, from the first paint", async () => {
@@ -688,7 +750,7 @@ it("shows the sandbox card from the server's read, from the first paint", async 
     );
   });
   // Above the figures from the start: it never arrives late and pushes them.
-  expect(host.textContent).toContain("Nobody here is real");
+  expect(host.textContent).toContain("A made-up sales team");
   const card = host.querySelector('[aria-labelledby="sandbox-title"]');
   const figures = host.querySelector('dl[aria-label="Dashboard figures"]');
   expect(card).not.toBeNull();

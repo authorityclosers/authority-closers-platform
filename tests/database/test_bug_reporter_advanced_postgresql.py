@@ -1,11 +1,13 @@
 """The advanced bug reporter on PostgreSQL (owner, 31 Oct 2026; migration 0149).
 
-Who may use it: platform staff, and anyone the owner lets in after they ask; nobody decides
-for themself. Its parts travel with a report from those who may use it and are dropped from
-anyone else; files follow the person's own report in its first half hour, one place each and
-no more than the report said, cleaned (pictures re-encoded, logs scrubbed line by line), and
-the team reads them in Admin. Both tables are append-only; the migration rolls back only
-while they are empty. Disposable loopback PostgreSQL, fictional rows only.
+Who may use it: platform staff, everyone in the AC organisation and the flagged sandbox
+organisations, and anyone the owner lets in after they ask; the owner's take-away holds for
+all but staff, and nobody decides for themself. Its parts travel with a report from those
+who may use it and are dropped from anyone else; files follow the person's own report in
+its first half hour, one place each and no more than the report said, cleaned (pictures
+re-encoded, logs scrubbed line by line), and the team reads them in Admin. Both tables are
+append-only; the migration rolls back only while they are empty. Disposable loopback
+PostgreSQL, fictional rows only.
 """
 
 from __future__ import annotations
@@ -30,9 +32,17 @@ from ac_platform.bug_reports.models import (
     BugReportFile,
     BugReportHistoryError,
 )
+from ac_platform.conversation_intelligence.synthetic_import_models import (
+    ConversationSandboxOrganisation,
+)
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
-from ac_platform.tenancy.models import Membership, Tenant
+from ac_platform.tenancy.models import (
+    Membership,
+    Organisation,
+    OrganisationDomainSetting,
+    Tenant,
+)
 from tests.database.test_bug_reports_postgresql import _Admitted, _report
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run
@@ -404,6 +414,119 @@ def test_the_parts_and_files_follow_a_staff_report_and_admin_reads_them(
                     .where(BugReportFile.bug_id == UUID(bug_id))
                 )
                 assert count == 3
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+async def _organisation(
+    db: Any, *, sandbox_by: UUID | None = None, domains: list[str] | None = None
+) -> UUID:
+    """A fictional organisation: flagged as a sandbox, or with its verified domains."""
+    tenant = uuid4()
+    db.add(Tenant(id=tenant, slug=f"fictional-{tenant.hex[:12]}", name="Fictional Org"))
+    await db.flush()
+    db.add(
+        Organisation(
+            tenant_id=tenant, creation_command_id=uuid4(), domain_verification_token="t" * 43
+        )
+    )
+    await db.flush()
+    if domains is not None:
+        db.add(
+            OrganisationDomainSetting(
+                tenant_id=tenant,
+                version=1,
+                verified_domains=domains,
+                auto_join=False,
+                proof={},
+                command_id=uuid4(),
+            )
+        )
+    if sandbox_by is not None:
+        db.add(
+            ConversationSandboxOrganisation(
+                tenant_id=tenant,
+                approved_by_person_id=sandbox_by,
+                approval_reference="test: a fictional sandbox organisation",
+                created_at=datetime.now(UTC),
+            )
+        )
+    await db.flush()
+    return tenant
+
+
+def test_the_ac_organisation_and_the_sandbox_organisations_have_it_unless_taken_away(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            owner = await _owner(setup)
+            now = datetime.now(UTC)
+            people = {name: uuid4() for name in ("tester", "ac", "elsewhere", "left")}
+            async with setup.sessions() as db, db.begin():
+                for name, person in people.items():
+                    db.add(
+                        Person(
+                            id=person,
+                            email=f"{name}-{person.hex}@example.test",
+                            display_name=f"Fictional {name.title()}",
+                            email_verified_at=now,
+                        )
+                    )
+                await db.flush()
+                sandbox = await _organisation(db, sandbox_by=owner)
+                ours = await _organisation(db, domains=["AuthorityClosers.com"])
+                theirs = await _organisation(db, domains=["example.test"])
+                for name, tenant, status in (
+                    ("tester", sandbox, "active"),
+                    ("ac", ours, "active"),
+                    ("elsewhere", theirs, "active"),
+                    ("left", ours, "inactive"),
+                ):
+                    # An ended membership carries its end, as the app ends one
+                    # (ck_memberships_inactive_has_end).
+                    db.add(
+                        Membership(
+                            tenant_id=tenant,
+                            person_id=people[name],
+                            role="member",
+                            status=status,
+                            ended_at=now if status == "inactive" else None,
+                        )
+                    )
+
+            async def access(name: str) -> str:
+                async with setup.sessions() as db:
+                    return await reporter_access.access_for(db, people[name])
+
+            assert await access("tester") == "on"
+            assert await access("ac") == "on"
+            assert await access("elsewhere") == "off"
+            assert await access("left") == "off"
+
+            # The owner's take-away still holds for one tester.
+            async with setup.sessions() as db, db.begin():
+                await reporter_access.decide(
+                    db, people["tester"], kind="revoked", actor_person_id=owner, note=None, now=now
+                )
+            assert await access("tester") == "off"
+
+            # The organisation's newest domain setting stands: without ours, it is off.
+            async with setup.sessions() as db, db.begin():
+                db.add(
+                    OrganisationDomainSetting(
+                        tenant_id=ours,
+                        version=2,
+                        verified_domains=["example.test"],
+                        auto_join=False,
+                        proof={},
+                        command_id=uuid4(),
+                    )
+                )
+            assert await access("ac") == "off"
         finally:
             await setup.engine.dispose()
 

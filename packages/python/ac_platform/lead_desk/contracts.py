@@ -16,6 +16,8 @@ MoveVia = Literal["board", "sheet", "after_call", "table", "bulk", "meeting", "c
 Contact = Literal["call", "reply", "seller_said"]
 
 SCHEMA: Literal["lead-desk/1"] = "lead-desk/1"
+# A deal amount or revenue target, in whole rupees (migration 0150's checks).
+DEAL_AMOUNT_MAX = 1_000_000_000_000
 # The phone setup checklist (UX study item 7), in the order the app shows it.
 PHONE_CHECKS: tuple[str, ...] = (
     "calls",
@@ -222,7 +224,7 @@ class SellerEffort(Model):
     # Today: their first call's start and their last call's end.
     first_call_at: datetime | None = None
     last_call_at: datetime | None = None
-    # Open tasks more than an hour past their time, now.
+    # Open tasks past their time, now: the count Tasks' Overdue shows.
     tasks_late: int = 0
     # Today's connected lead calls with no recording yet.
     missing_recordings: int = 0
@@ -1260,6 +1262,8 @@ class StageMove(Command):
     source: Literal["seller", "ai_suggestion"] = "seller"
     suggestion_ref: str | None = Field(default=None, max_length=120)
     via: MoveVia | None = None
+    # What the deal was worth, in whole rupees: every move to Won needs it (migration 0150).
+    amount: int | None = Field(default=None, ge=1, le=DEAL_AMOUNT_MAX)
 
 
 class Reopen(Command):
@@ -1774,3 +1778,119 @@ class PhoneLog(Command):
 class SeedCommand(Command):
     command_id: UUID
     count: int = Field(ge=1, le=200)
+
+
+# ----- revenue targets (owner meeting 28 Oct 2026; migration 0150) ----------------------
+
+
+class DealAmountCommand(Command):
+    """The amount of a Won lead, added later or corrected: a new row, the newest stands."""
+
+    command_id: UUID
+    amount: int = Field(ge=1, le=DEAL_AMOUNT_MAX)
+
+
+class SellerRevenueTarget(Command):
+    person_id: UUID
+    # 0 clears the seller's own target: they get the even share again.
+    amount: int = Field(ge=0, le=DEAL_AMOUNT_MAX)
+
+
+class RevenueTargetsCommand(Command):
+    """A month's targets: the organisation's (owners and managers) and sellers' (managers,
+    or a seller their own when the workspace allows it). Left out stays as it is."""
+
+    command_id: UUID
+    month: date
+    organisation: int | None = Field(default=None, ge=0, le=DEAL_AMOUNT_MAX)
+    sellers: tuple[SellerRevenueTarget, ...] = Field(default=(), max_length=500)
+
+
+class RevenueSettingsCommand(Command):
+    expected_revision: int = Field(ge=0)
+    sellers_set_own: bool
+    # Used for "what it takes" until the workspace has enough deals of its own.
+    typical_deal: int | None = Field(default=None, ge=1, le=DEAL_AMOUNT_MAX)
+
+
+class RevenueNeedsView(Model):
+    """What it takes to reach the rest of the target this month."""
+
+    wins: int
+    meetings: int
+    interested: int
+    connected: int
+    calls: int
+    calls_per_day: int
+    working_days_left: int
+    average_deal: int
+    # True while the workspace's own deals or calls are too few: typical rates stand in.
+    estimate: bool
+
+
+class SellerRevenueView(Model):
+    person_id: UUID
+    name: str
+    target: int | None
+    # "own" (set for this seller), "split" (an even share of the organisation's), or None.
+    target_source: Literal["own", "split"] | None
+    won: int
+    deals: int
+    amount_not_set: int
+
+
+class RevenueView(Model):
+    """A month's revenue against target, for one seller (mine) or the team."""
+
+    scope: Literal["mine", "team"]
+    month: date
+    currency: str
+    # How much of the month has gone, 0 to 1 (India time).
+    month_gone: float
+    target: int | None
+    target_source: Literal["own", "split", "organisation", "sellers"] | None
+    won: int
+    deals: int
+    # Won this month with no amount (before amounts were asked, or added by a file).
+    amount_not_set: int
+    needs: RevenueNeedsView | None
+    sellers: tuple[SellerRevenueView, ...] = ()
+
+
+class RevenueTargetLine(Model):
+    person_id: UUID
+    name: str
+    # The seller's own target this month, or None.
+    own: int | None
+    # Their even share of the organisation's target when they have no own target.
+    split: int | None
+
+
+class RevenueTargetsView(Model):
+    month: date
+    currency: str
+    organisation: int | None
+    sellers: tuple[RevenueTargetLine, ...]
+    sellers_set_own: bool
+    typical_deal: int | None
+    revision: int
+    can_manage: bool
+
+
+class RevenueSplitLine(Model):
+    key: str
+    label: str
+    won: int
+    deals: int
+
+
+class RevenueBreakdownView(Model):
+    """Revenue won in a period, by seller and by side (Growth, Analytics)."""
+
+    days: int
+    currency: str
+    won: int
+    deals: int
+    amount_not_set: int
+    by_seller: tuple[RevenueSplitLine, ...]
+    by_side: tuple[RevenueSplitLine, ...]

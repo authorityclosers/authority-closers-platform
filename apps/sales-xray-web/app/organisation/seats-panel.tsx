@@ -24,6 +24,7 @@ import {
   type OrgMember,
   type OrgSeats,
 } from "./organisation-api";
+import type { Effort } from "../performance/performance-client";
 import styles from "./seats.module.css";
 
 /** Where the owner and Finance buy seats (the hub's Plan & billing tab). */
@@ -293,4 +294,38 @@ export function quietestFirst(people: OrgMember[], now: number): OrgMember[] {
         quietSince(b, now) - quietSince(a, now) ||
         (a.name ?? a.email ?? "").localeCompare(b.name ?? b.email ?? ""),
     );
+}
+
+/**
+ * Each member's seat use: the calls and talk minutes Analytics counts (the
+ * lead desk's own, last 30 days), never fewer than their analysed calls
+ * (persona QA, 31 Oct 2026: Seat use said 0 where Analytics said 343).
+ */
+export function seatUseFrom(
+  analysed:
+    | readonly { personId: string; calls: number; minutes: number }[]
+    | null,
+  desk: Effort | null,
+): Map<string, SeatUse> | null {
+  if (!analysed && !desk) return null;
+  const use = new Map<string, SeatUse>(
+    (analysed ?? []).map((member) => [
+      member.personId,
+      { calls: member.calls, minutes: member.minutes },
+    ]),
+  );
+  for (const seller of desk?.sellers ?? []) {
+    const had = use.get(seller.person_id);
+    use.set(seller.person_id, {
+      calls: Math.max(
+        seller.inbound.attempted + seller.cold.attempted,
+        had?.calls ?? 0,
+      ),
+      minutes: Math.max(
+        (seller.inbound.talk_seconds + seller.cold.talk_seconds) / 60,
+        had?.minutes ?? 0,
+      ),
+    });
+  }
+  return use;
 }

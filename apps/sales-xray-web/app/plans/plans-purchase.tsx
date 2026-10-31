@@ -4,8 +4,12 @@ import { useEffect, useState } from "react";
 import { liveBilling, type BillingClient } from "../billing/billing-api";
 import { onSale, type Plan } from "../billing/contract";
 import { useBillingAccount } from "../billing/use-billing-account";
+import { BILLING_WITH_OWNER } from "../purchase-policy";
 import { useWorkspaceAccess } from "../workspace-access";
+import { useCanHere } from "../workspace-role";
+import { PurchaseShell } from "./purchase-shell";
 import { usePurchaseCheckout } from "./use-purchase-checkout";
+import styles from "./plans.module.css";
 import {
   PLANS_CATALOGUE_FIXTURE,
   PLANS_GST_RATE,
@@ -38,6 +42,19 @@ export function PlansPurchase({
   quote?: PurchaseQuote | null;
 }) {
   const access = useWorkspaceAccess();
+  // Plans and prices are for whoever pays (roles.ts "billing.view"): a member
+  // of an organisation reads one calm line, with no price and nothing to buy.
+  const canHere = useCanHere();
+  if (canHere("billing.view") === false)
+    return (
+      <PurchaseShell>
+        <div className={styles.page}>
+          <section className={styles.panel} role="status">
+            <p className={styles.hint}>{BILLING_WITH_OWNER}</p>
+          </section>
+        </div>
+      </PurchaseShell>
+    );
   return (
     <Purchase
       key={JSON.stringify([access?.authenticated, access?.context])}

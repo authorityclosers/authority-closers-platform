@@ -89,6 +89,20 @@ it("adds Team for an organisation, with every hub section by role", () => {
     "Insights",
     "Company",
   ]);
+  // A sales manager sets up leads but doesn't pay: no Plan & billing.
+  const salesManager = sidebarAreas({
+    organisation: true,
+    team: true,
+    manager: true,
+    manages: true,
+    billing: false,
+  });
+  expect(salesManager[2].pages.map((page) => page.label)).not.toContain(
+    "Plan & billing",
+  );
+  expect(salesManager[2].pages.map((page) => page.label)).toContain(
+    "Leads setup",
+  );
   // On the hub outside an organisation: its overview only.
   expect(
     sidebarAreas({ organisation: false, team: true, manager: false })[2].pages,

@@ -420,6 +420,119 @@ describe("Coaching story", () => {
     expect(theirs).not.toContain("Analyse a call");
     expect(theirs).not.toContain("Who sees your coaching");
   });
+  // Team coaching, and a teammate's, only where the server answers it: an
+  // organisation's owners and admins (team-coaching-access.ts). A Seller or a
+  // Sales manager asking for them gets their own coaching, never a 403.
+  const sellerAccess = (role: "member" | "manager" = "member") =>
+    ({
+      status: "ready",
+      authenticated: true,
+      context: {
+        personId: fictionalCoaching.person_id,
+        tenantId: fictionalCoaching.tenant_id,
+        sessionId: "session-a",
+      },
+      workspaces: [
+        {
+          tenant_id: fictionalCoaching.tenant_id,
+          kind: "organisation",
+          name: "Fictional Homes",
+          role,
+          sales_xray_enabled: true,
+        },
+      ],
+      retry: vi.fn(),
+    }) as WorkspaceAccessValue;
+  it("gives a Seller their own coaching for Team coaching or a teammate's, with no way to Team", async () => {
+    mocks.access = sellerAccess();
+    const fetch = vi.fn().mockImplementation(
+      async () =>
+        new Response(JSON.stringify(fictionalCoaching), {
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const urls = () => fetch.mock.calls.map(([url]) => String(url));
+    await act(async () => root.render(<CoachingPage key="team" team />));
+    await act(async () => {});
+    expect(
+      urls().filter((url) => url.endsWith("/v1/me/coaching")),
+    ).toHaveLength(1);
+    expect(host.querySelectorAll("section[data-coaching-pillar]")).toHaveLength(
+      6,
+    );
+    expect(host.querySelector('a[href="/coaching?view=team"]')).toBeNull();
+    expect(host.textContent).not.toContain("Team coaching");
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    await act(async () =>
+      root.render(
+        <CoachingPage
+          key="person"
+          sharedPersonId="00000000-0000-4000-8000-0000000000aa"
+        />,
+      ),
+    );
+    await act(async () => {});
+    expect(
+      urls().filter((url) => url.endsWith("/v1/me/coaching")),
+    ).toHaveLength(2);
+    expect(host.textContent).not.toContain("Back to team");
+    expect(host.querySelector('a[href="/coaching?view=team"]')).toBeNull();
+    // A Sales manager sees the team elsewhere, but the server reads Team
+    // coaching only for owners and admins: their own coaching too.
+    mocks.access = sellerAccess("manager");
+    await act(async () => root.render(<CoachingPage key="manager" team />));
+    await act(async () => {});
+    expect(
+      urls().filter((url) => url.endsWith("/v1/me/coaching")),
+    ).toHaveLength(3);
+    expect(host.querySelector('a[href="/coaching?view=team"]')).toBeNull();
+    // A personal workspace has no team: its own coaching too.
+    mocks.access = {
+      ...sellerAccess(),
+      workspaces: [
+        {
+          tenant_id: fictionalCoaching.tenant_id,
+          kind: "personal",
+          name: "Asha",
+          role: null,
+          sales_xray_enabled: true,
+        },
+      ],
+    };
+    await act(async () => root.render(<CoachingPage key="personal" team />));
+    await act(async () => {});
+    expect(
+      urls().filter((url) => url.endsWith("/v1/me/coaching")),
+    ).toHaveLength(4);
+    expect(
+      urls().some(
+        (url) => url.includes("/coaching/team") || url.includes("/people/"),
+      ),
+    ).toBe(false);
+  });
+  it("offers a Seller no way to the fictional team's coaching", () => {
+    mocks.access = sellerAccess();
+    const html = renderToStaticMarkup(
+      <CoachingStory
+        coaching={{
+          ...fictionalCoaching,
+          state: "not_enough_evidence" as const,
+          analysed_calls: 0,
+          focus: null,
+          mission: null,
+          practice: null,
+          lesson: null,
+          evidence: [],
+          calls: [],
+          sandbox_reps: 60,
+        }}
+      />,
+    );
+    expect(html).not.toContain("fictional reps");
+    expect(html).not.toContain('href="/coaching?view=team"');
+    expect(html).toContain("Analyse a call");
+  });
   it("says “their” across another rep's coaching and “your” on your own", () => {
     const progress = [
       {

@@ -164,6 +164,36 @@
   }
 }
 
+/* Older cards wait under "+N more" (at most two show, 31 Oct 2026). */
+.more {
+  justify-self: end;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-glass-edge);
+  border-radius: 999px;
+  background: var(--sx-glass-thick);
+  -webkit-backdrop-filter: var(--sx-glass-blur);
+  backdrop-filter: var(--sx-glass-blur);
+  color: var(--lx-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.more:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* A computer: above the corner's Report a problem button. */
+@media (min-width: 900px) and (hover: hover) {
+  .stack {
+    bottom: 72px;
+  }
+}
+
 /* Phone: full width, above the bottom tab bar. */
 @media (max-width: 760px) {
   .stack {

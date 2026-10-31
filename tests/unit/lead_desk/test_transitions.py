@@ -88,7 +88,8 @@ NEEDS: dict[str, tuple[str, ...]] = {
     "discussion_incomplete": ("next_action",),
     "meeting_scheduled": ("meeting",),
     "demo_completed": ("next_action",),
-    "won": (),
+    # A Won deal always says what it was worth (revenue targets, 31 Oct 2026).
+    "won": ("amount",),
     "lost": ("reason",),
     "junk": ("reason",),
 }
@@ -97,6 +98,7 @@ EVERYTHING = t.Given(
     nc_reason="did_not_pick",
     next_action=True,
     meeting=True,
+    amount=True,
 )
 
 
@@ -406,8 +408,9 @@ def test_a_list_without_rules_lets_a_lead_go_anywhere_as_before() -> None:
     journey = default_journey()
     new = journey.by_key["new"]
     for key in ("follow_up", "interested", "won", "lost"):
-        move = t.check(journey, new, key, t.Given(), can_manage=False)
-        assert move.needs == ()
+        move = t.check(journey, new, key, t.Given(amount=key == "won"), can_manage=False)
+        # Won asks the deal amount even in a list without rules (revenue targets).
+        assert move.needs == (("amount",) if key == "won" else ())
     won = journey.by_key["won"]
     # Today's rule stands: whoever works the lead moves it back from Won.
     assert t.check(journey, won, "interested", t.Given(), can_manage=False).action == "reopen"

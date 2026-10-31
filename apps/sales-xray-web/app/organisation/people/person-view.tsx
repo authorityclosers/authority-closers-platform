@@ -121,6 +121,12 @@ export function PersonView({ id }: { id: string }) {
       (item) => item.tenant_id === access.context?.tenantId,
     ) ?? null;
   const inOrganisation = authenticated && current?.kind === "organisation";
+  // A teammate's page is for those who see the team (roles.ts "team.view");
+  // anyone else reads one calm line, and nothing is asked of the server.
+  const teammateHidden =
+    inOrganisation &&
+    !can(current?.role, "team.view") &&
+    id !== access?.context?.personId.toLowerCase();
   return (
     <AcquisitionShell
       authenticated={authenticated}
@@ -147,6 +153,13 @@ export function PersonView({ id }: { id: string }) {
             title="People belong to an organisation"
             text="Switch to your organisation to see its people."
             action={{ label: "Open Organisation", href: "/organisation" }}
+          />
+        ) : teammateHidden ? (
+          <Empty
+            icon={UserRound}
+            title="Only owners and managers can see a teammate's page"
+            text="You see your own calls and reports, not a teammate's."
+            action={{ label: "Back to Organisation", href: "/organisation" }}
           />
         ) : (
           <SectionBoundary name="This person" resetKey={id}>

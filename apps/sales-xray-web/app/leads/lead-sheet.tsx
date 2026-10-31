@@ -156,6 +156,7 @@ import {
   type SimulationStep,
 } from "./simulated-call";
 import { SuggestedStage, SuggestionHint } from "./journey/stage-suggestion";
+import { amountOf } from "./pipeline/blocks";
 import { MeetingCard } from "./pipeline/meeting-card";
 import pipe from "./pipeline/pipeline.module.css";
 import { StageSheet } from "./pipeline/stage-sheet";
@@ -434,10 +435,16 @@ export function CallOutcome({
     : talk === "missed"
       ? timeOf(retry, custom)
       : null;
+  // A Won deal says what it was worth (revenue targets, owner meeting 28 Oct 2026).
+  const worth = amountOf(deal);
+  const needsAmount = talk === "talked" && stage === "won" && worth === null;
   const valid =
     talk === "missed"
       ? reason !== null && (retry === null || at !== null)
-      : talk === "talked" && stage !== null && (!needsTime || at !== null);
+      : talk === "talked" &&
+        stage !== null &&
+        (!needsTime || at !== null) &&
+        !needsAmount;
   // Owner, 22 Oct 2026: Save looked dead after "We talked" until a next step
   // was picked, and nothing said so. It now says what is missing, and a tap
   // on it scrolls there.
@@ -449,7 +456,9 @@ export function CallOutcome({
         : "Pick when to try again to save"
       : stage === null
         ? "Pick what happens next to save"
-        : "Pick when to call next to save";
+        : needsAmount
+          ? "Add the deal amount to save"
+          : "Pick when to call next to save";
   // Each Save tap with a step missing lights that step once (Redmi, 22 Oct
   // 2026: the hint was on screen already; the step itself should say "here").
   const [nudges, setNudges] = useState(0);
@@ -488,7 +497,7 @@ export function CallOutcome({
         outcome_reason: stillOpen && openReason ? openReason : undefined,
         follow_up_at: at ? at.toISOString() : undefined,
         remark: note.trim() || undefined,
-        deal_value: deal.trim() || undefined,
+        deal_value: worth !== null ? String(worth) : deal.trim() || undefined,
       });
       buzz("done");
       flow.done({ step: "save" });
@@ -735,12 +744,17 @@ export function CallOutcome({
             </p>
           ) : null}
           {stage === "interested" || stage === "won" ? (
-            <Field label="Deal value (₹, optional)">
+            <Field
+              label={
+                stage === "won" ? "Deal amount (₹)" : "Deal value (₹, optional)"
+              }
+            >
               <input
                 inputMode="decimal"
-                placeholder="60,000"
+                placeholder={stage === "won" ? "60,000 or 1.5 L" : "60,000"}
                 value={deal}
                 maxLength={24}
+                aria-invalid={stage === "won" && needsAmount && deal !== ""}
                 onChange={(event) => setDeal(event.target.value)}
               />
             </Field>

@@ -412,6 +412,82 @@ it.each(["429", "network"] as const)(
 // landed mid-text ("TutoriTutorial demo, please ignoreal demo, please ignore").
 const DEMO = "Tutorial demo, please ignore";
 
+const created = (body: Record<string, unknown>) =>
+  vi.fn<typeof fetch>().mockResolvedValue(
+    new Response(JSON.stringify(body), {
+      status: 201,
+      headers: { "content-type": "application/json" },
+    }),
+  );
+
+it("a send while the picture is still being taken waits for it, and it goes along", async () => {
+  // Persona QA, 31 Oct 2026: quick sends went without their picture, saying "Sent".
+  let finish: (blob: Blob | null) => void = () => undefined;
+  captureScreen.mockReturnValue(
+    new Promise<Blob | null>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const fetcher = created({ bug_id: "b-3", screenshot: "kept" });
+  vi.stubGlobal("fetch", fetcher);
+  await opened();
+  expect(document.querySelector("dialog")?.textContent).toContain(
+    "Taking a picture of this screen",
+  );
+  await act(async () => type("The list went blank after a filter."));
+  await submit();
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(button("Sending…").disabled).toBe(true);
+  await act(async () =>
+    finish(new Blob([new Uint8Array([7, 7])], { type: "image/webp" })),
+  );
+  await pause(20);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  const body = JSON.parse(String(fetcher.mock.calls[0][1]?.body));
+  expect(body.screenshot).toMatchObject({
+    content_type: "image/webp",
+    source: "auto",
+  });
+  expect(document.querySelector("dialog")?.textContent).toContain(
+    "Sent. We'll tell you when it's fixed.",
+  );
+});
+
+it("says so when a report goes without its picture, and not when it was left out", async () => {
+  captureScreen.mockResolvedValue(null);
+  vi.stubGlobal("fetch", created({ bug_id: "b-4" }));
+  await opened();
+  await act(async () => type("Nothing happens on Save."));
+  await submit();
+  expect(document.querySelector("dialog")?.textContent).toContain(
+    "Sent without a picture.",
+  );
+  expect(document.querySelector("dialog")?.textContent).not.toContain(
+    "Sent. We'll",
+  );
+  await act(async () => button("Done").click());
+  await pause(600);
+
+  // Left out on purpose: a plain "Sent".
+  captureScreen.mockResolvedValue(
+    new Blob([new Uint8Array([5])], { type: "image/webp" }),
+  );
+  vi.stubGlobal("fetch", created({ bug_id: "b-5" }));
+  await opened();
+  await act(async () => type("Nothing happens on Save, again."));
+  await act(async () =>
+    document
+      .querySelector<HTMLButtonElement>(
+        'dialog button[aria-label="Leave the picture out"]',
+      )!
+      .click(),
+  );
+  await submit();
+  expect(document.querySelector("dialog")?.textContent).toContain(
+    "Sent. We'll tell you when it's fixed.",
+  );
+});
+
 async function opened() {
   await act(async () => openBugReport());
   await pause(450);
@@ -542,8 +618,9 @@ it("a sent report leaves no draft behind", async () => {
   await opened();
   await act(async () => type(DEMO));
   await submit();
+  // No picture could be taken, and the sheet says so.
   expect(document.querySelector("dialog")?.textContent).toContain(
-    "Sent. We'll tell you when it's fixed.",
+    "Sent without a picture.",
   );
   await act(async () => button("Done").click());
   await pause(600);
@@ -716,8 +793,9 @@ it("Enter asks once before sending, and asks again next time without the tick", 
   await sendAsked();
   expect(fetcher).toHaveBeenCalledTimes(1);
   expect(sentWords(fetcher, 0)).toBe("Save does nothing");
+  // No picture could be taken here, and the sheet says so.
   expect(document.querySelector("dialog")?.textContent).toContain(
-    "Sent. We'll tell you when it's fixed.",
+    "Sent without a picture.",
   );
   expect(window.localStorage.getItem(KEY_SEND_STORE)).toBeNull();
 

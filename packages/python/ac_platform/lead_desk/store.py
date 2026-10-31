@@ -33,6 +33,7 @@ from ac_platform.lead_desk import (
     choices,
     deletion,
     duplicate_queue,
+    owner_words,
     reports,
     routing_rules,
 )
@@ -51,6 +52,7 @@ from ac_platform.lead_desk.capture import (
 )
 from ac_platform.lead_desk.contracts import (
     APP_CHANGE_UNDO_DAYS,
+    DEAL_AMOUNT_MAX,
     PHONE_CHECKS,
     ActivityItem,
     ActivityPage,
@@ -145,12 +147,14 @@ from ac_platform.lead_desk.journey import pipelines, signals, transitions
 from ac_platform.lead_desk.journey.templates import MILESTONE_WORDS
 from ac_platform.lead_desk.models import (
     Lead,
+    LeadDealAmount,
     LeadDeskSettings,
     LeadDevice,
     LeadEvent,
     LeadMeeting,
     LeadRep,
 )
+from ac_platform.lead_desk.scheduler import OVERDUE_FROM as TASK_OVERDUE_FROM
 from ac_platform.lead_desk.sides import Side, is_cold, on_side
 from ac_platform.lead_desk.vocabulary import (
     CHANNEL_LABELS,
@@ -429,6 +433,22 @@ def call_seconds(data: Mapping[str, Any]) -> int:
 def call_answered(data: Mapping[str, Any]) -> bool:
     """Connected: talk time above 0, or the phone's log said so."""
     return call_seconds(data) > 0 or data.get("connected") is True
+
+
+# Deal amounts and revenue targets are whole rupees for now (migration 0150 keeps the code).
+DEAL_CURRENCY = "INR"
+
+
+def deal_amount(text: str | None) -> int | None:
+    """The after-call answer's deal value ("60,000", "₹1.5", digits only by then) in whole
+    rupees, or None."""
+    if not text:
+        return None
+    try:
+        value = round(float(text))
+    except ValueError:
+        return None
+    return value if 1 <= value <= DEAL_AMOUNT_MAX else None
 
 
 def lead_side(pipeline: str | None) -> str:
@@ -1576,10 +1596,12 @@ class LeadDesk:
                 ).all()
             }
         total = int(await self.db.scalar(select(func.count()).where(*where)) or 0)
+        # The lead's id ends every order (owner's bug report, 31 Oct 2026): leads that share
+        # their times, as an import's do, otherwise came back on two pages.
         order: tuple[Any, ...] = (
-            (func.coalesce(Lead.next_action_at, Lead.created_at), Lead.created_at)
+            (func.coalesce(Lead.next_action_at, Lead.created_at), Lead.created_at, Lead.id)
             if stage == "open" or stage in OPEN_STAGES or view is not None
-            else (Lead.updated_at.desc(),)
+            else (Lead.updated_at.desc(), Lead.id)
         )
         if sort is not None:
             order = self._list_order(sort, descending)
@@ -2361,6 +2383,7 @@ class LeadDesk:
         carrier: tuple[str, dict[str, Any]] | None = None,
         desk_step: bool = False,
         actor: UUID | None | Literal["viewer"] = "viewer",
+        amount: int | None = None,
     ) -> LeadEvent:
         """The one place a lead's stage changes (Lead OS). Every move goes through
         ``transitions.check`` (or ``transitions.forced`` for the desk's own) first.
@@ -2369,7 +2392,8 @@ class LeadDesk:
         the Lost or Junk reason while it is there, and no next action once it closes. It
         writes exactly one history line: a ``stage`` event, or the event that carried
         the move (``carrier``: a call's ``result``, a capture's ``repeat``), with the
-        move's fields beside that event's own keys."""
+        move's fields beside that event's own keys. A move to Won with its ``amount``
+        also writes what the deal was worth (migration 0150)."""
         target = move.stage
         before = journey.resolve(lead.stage, lead.step)
         previous_kind, previous_step = lead.stage, lead.step
@@ -2411,6 +2435,10 @@ class LeadDesk:
             "rule_id": rule_id,
             "pipeline": journeys.pipeline_of(lead),
         }
+        won_amount = amount if target.kind == "won" and amount is not None else None
+        if won_amount is not None:
+            moved["amount"] = won_amount
+            moved["currency"] = DEAL_CURRENCY
         if carrier is not None:
             kind, data = carrier[0], {**carrier[1], **moved}
         else:
@@ -2425,13 +2453,39 @@ class LeadDesk:
                 **({"reason": nc_reason} if nc_reason else {}),
                 **moved,
             }
-        return self._event(
-            lead,
-            kind,
-            data,
-            actor=self.viewer.person_id if isinstance(actor, str) else actor,
+        by = self.viewer.person_id if isinstance(actor, str) else actor
+        event = self._event(lead, kind, data, actor=by, command_id=command_id)
+        if won_amount is not None:
+            self._deal_amount(lead, won_amount, at=lead.stage_at or self.now, event=event, by=by)
+        return event
+
+    def _deal_amount(
+        self,
+        lead: Lead,
+        amount: int,
+        *,
+        at: datetime,
+        event: LeadEvent | None,
+        by: UUID | None,
+        command_id: UUID | None = None,
+    ) -> LeadDealAmount:
+        """What a Won lead was worth, credited to its owner (or whoever won it)."""
+        row = LeadDealAmount(
+            id=uuid4(),
+            tenant_id=self.tenant_id,
+            lead_id=lead.id,
+            event_id=event.id if event is not None else None,
+            amount=amount,
+            currency=DEAL_CURRENCY,
+            won_at=at,
+            credited_person_id=lead.owner_person_id or by,
+            side=lead_side(lead.pipeline),
+            actor_person_id=by,
             command_id=command_id,
+            created_at=self.now,
         )
+        self.db.add(row)
+        return row
 
     async def place_leads(
         self,
@@ -2582,6 +2636,7 @@ class LeadDesk:
         meeting: MeetingInput | None = None,
         contact: str | None = None,
         suggestion: str | None = None,
+        amount: int | None = None,
     ) -> LeadEvent:
         """A move a person asked for: checked, with its meeting and next action."""
         if next_action_at is not None and not (
@@ -2601,6 +2656,7 @@ class LeadDesk:
             nc_reason=nc_reason,
             next_action=next_action_at is not None or meeting is not None,
             meeting=meeting is not None,
+            amount=amount is not None,
         )
         move = self._check(journey, lead, step, given, source=source)
         meeting_id, starts = await self._meeting_for(lead, move, meeting, note=note)
@@ -2620,6 +2676,7 @@ class LeadDesk:
             meeting_id=meeting_id,
             suggestion=suggestion,
             nc_reason=nc_reason,
+            amount=amount,
         )
 
     async def _writable(self, lead_id: UUID, command_id: UUID, revision: int) -> Lead | None:
@@ -2658,6 +2715,7 @@ class LeadDesk:
             meeting=command.meeting,
             contact=command.contact,
             suggestion=command.suggestion_ref,
+            amount=command.amount,
         )
         await self.db.flush()
         return lead
@@ -3405,7 +3463,8 @@ class LeadDesk:
             f"New from {lead.source_label}."
             if lead.source_label and event.kind == "assigned"
             else "",
-            lead.owner_reason or "",
+            # Why, in plain words to the seller: never the rules' "(fewest)".
+            owner_words.note(lead.owner_reason, you=True) or "",
         ]
         self.db.add(
             Notification(
@@ -3573,6 +3632,7 @@ class LeadDesk:
         if follow is not None and follow < self.now - timedelta(minutes=5):
             raise DeskError(422, "Pick a follow-up time that's still ahead.")
         move: transitions.Move | None = None
+        worth = deal_amount(command.deal_value)
         if command.connected:
             if command.step is not None:
                 # One of the business's own stages: its kind is the desk's stage. A call
@@ -3606,6 +3666,7 @@ class LeadDesk:
                         reason_note=command.reason_note,
                         next_action=follow is not None,
                         meeting=command.meeting is not None,
+                        amount=worth is not None,
                     ),
                     source="ai_suggestion" if command.suggestion_ref else "seller",
                 )
@@ -3678,6 +3739,7 @@ class LeadDesk:
                 suggestion=command.suggestion_ref,
                 carrier=("result", call),
                 desk_step=chosen is None,
+                amount=worth,
             )
             if lead.stage not in CLOSED_STAGES:
                 lead.next_action_at, lead.next_action_note = follow_now, note_now
@@ -4894,7 +4956,8 @@ class LeadDesk:
                     .where(
                         LeadTask.tenant_id == self.tenant_id,
                         LeadTask.status == "open",
-                        LeadTask.starts_at < self.now - OVERDUE_AFTER,
+                        # As Tasks' Overdue counts them: a minute past due.
+                        LeadTask.starts_at <= self.now - TASK_OVERDUE_FROM,
                         *(() if team else (LeadTask.owner_person_id == me,)),
                     )
                     .group_by(LeadTask.owner_person_id)

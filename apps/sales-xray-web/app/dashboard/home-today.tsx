@@ -297,7 +297,7 @@ export function MyWork({ desk }: { desk: HomeDesk | null }) {
         )}
       </dl>
       {/* One Performance button on Home (Leads redesign, section 6). */}
-      <Link className={styles.workMore} href="/performance">
+      <Link className={styles.workMore} href="/growth">
         Performance
         <ChevronRight size={16} aria-hidden="true" />
       </Link>

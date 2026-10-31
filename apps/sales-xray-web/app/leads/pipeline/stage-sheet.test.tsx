@@ -15,6 +15,7 @@ vi.mock("../lead-moves", async (original) => ({
 
 import { noteLeadMoved } from "../lead-moves";
 
+import { amountOf } from "./blocks";
 import type { MoveOption } from "./pipeline-client";
 import { StageSheet, missing, moveInput, type Draft } from "./stage-sheet";
 
@@ -74,6 +75,7 @@ const BLANK: Draft = {
   ncReason: null,
   note: "",
   meeting: { pick: null, custom: "", mode: null, link: "", location: "" },
+  amount: "",
 };
 
 let container: HTMLDivElement;
@@ -280,4 +282,67 @@ it("asks why an open lead is still open, and never requires it", () => {
   )!;
   expect(save.disabled).toBe(false);
   expect(missing(open, BLANK)).toEqual([]);
+});
+
+it("asks a Won deal's amount and sends it in whole rupees", async () => {
+  // Revenue targets (owner meeting, 28 Oct 2026): every move to Won needs it.
+  const won = option("won", "Closed / Won", "won", ["amount"]);
+  expect(missing(won, BLANK)).toEqual(["amount"]);
+  expect(missing(won, { ...BLANK, amount: "60,000" })).toEqual([]);
+  expect(moveInput(won, { ...BLANK, amount: "₹1.5 L" }).amount).toBe(150000);
+  expect([
+    amountOf("₹60,000"),
+    amountOf("2 lakh"),
+    amountOf("1cr"),
+    amountOf("45k"),
+    amountOf("abc"),
+    amountOf("0"),
+  ]).toEqual([60000, 200000, 10000000, 45000, null, null]);
+
+  const sent: { url: string; body: unknown }[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: RequestInit) => {
+      sent.push({
+        url,
+        body: init?.body ? JSON.parse(String(init.body)) : null,
+      });
+      return new Response(JSON.stringify({ lead: { lead_id: LEAD.lead_id } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }),
+  );
+  act(() =>
+    root.render(
+      <StageSheet
+        open
+        lead={LEAD}
+        moves={[won]}
+        initial="won"
+        onClose={() => {}}
+        onMoved={() => {}}
+      />,
+    ),
+  );
+  expect(document.body.textContent).toContain("Deal amount");
+  const save = document.querySelector<HTMLButtonElement>(
+    'button[data-group="won"]:not([aria-pressed])',
+  )!;
+  expect(save.disabled).toBe(true);
+  const input = document.querySelector<HTMLInputElement>(
+    'input[inputmode="decimal"]',
+  )!;
+  act(() => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, "1.5 L");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(document.body.textContent).toContain("₹1,50,000");
+  expect(save.disabled).toBe(false);
+  await act(async () => save.click());
+  const move = sent.find((item) => item.url.endsWith("/stage"));
+  expect(move?.body).toMatchObject({ step: "won", amount: 150000 });
 });

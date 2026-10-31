@@ -35,7 +35,12 @@ VER=$(grep -oE "v[0-9]+\.[0-9]+\.[0-9]+ is live on production" "$SHIPLOG" 2>/dev
 [ -n "$VER" ] || exit 0
 mkdir -p "$(dirname "$STATE")"
 [ "$(cat "$STATE" 2>/dev/null)" = "$VER" ] && exit 0
-SHORT=$(grep -oE "$VER merged to main as [0-9a-f]+" "$SHIPLOG" | tail -1 | awk '{print $NF}')
+# The web inside the build is the commit ac-ship promoted for $VER ("Promoting vX (sha) from staging to production").
+# The engine names a release by its own next version, so a release can go live under another name than its cut
+# (31 Oct 2026: main's "Release v1.20.0" went live as v1.19.0, and the older "v1.19.0 merged to main" line named
+# v1.19's web). Older logs without a Promoting line fall back to the merge line.
+SHORT=$(grep -oE "Promoting $VER \([0-9a-f]+\) from staging" "$SHIPLOG" | tail -1 | sed -E 's/.*\(([0-9a-f]+)\).*/\1/')
+[ -n "$SHORT" ] || SHORT=$(grep -oE "$VER merged to main as [0-9a-f]+" "$SHIPLOG" | tail -1 | awk '{print $NF}')
 [ -n "$SHORT" ] || { say "$VER is live but its main commit is not in $SHIPLOG; not started"; exit 1; }
 SHA=$(gh api "repos/$PLATFORM/commits/$SHORT" --jq .sha 2>/dev/null)
 [ ${#SHA} -eq 40 ] || { say "$VER: main commit $SHORT unreadable on GitHub; will retry"; exit 1; }

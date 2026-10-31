@@ -183,9 +183,19 @@ const click = async (element: Element | null) => {
 const cell = (leadId: string, column: string) =>
   host.querySelector<HTMLElement>(`[data-cell="${leadId}:${column}"]`);
 const editor = () =>
-  host.querySelector<HTMLInputElement & HTMLSelectElement>(
-    "td[data-editing] input, td[data-editing] select",
+  host.querySelector<HTMLInputElement & HTMLButtonElement>(
+    'td[data-editing] input, td[data-editing] button[aria-haspopup="listbox"]',
   );
+// A typed cell's name is its aria-label; a picked cell's, the picker's hidden
+// words before its choice.
+const nameOf = (box: Element | null) =>
+  box?.getAttribute("aria-label") ??
+  box?.firstElementChild?.textContent?.trim() ??
+  null;
+const rows = () =>
+  [
+    ...host.querySelectorAll<HTMLElement>('td[data-editing] [role="option"]'),
+  ].map((row) => row.textContent);
 const type = async (input: HTMLInputElement, value: string) =>
   act(async () => {
     Object.getOwnPropertyDescriptor(
@@ -194,14 +204,14 @@ const type = async (input: HTMLInputElement, value: string) =>
     )!.set!.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-const choose = async (select: HTMLSelectElement, value: string) => {
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(
-      HTMLSelectElement.prototype,
-      "value",
-    )!.set!.call(select, value);
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+// A click on a row of the picker's list; the list opens first when it is shut.
+const choose = async (box: HTMLButtonElement, value: string) => {
+  const row = () =>
+    host.querySelector<HTMLElement>(
+      `td[data-editing] [role="option"][data-key="${value}"]`,
+    );
+  if (!row()) await act(async () => box.click());
+  await act(async () => row()!.click());
   await settle();
 };
 const press = async (element: Element, key: string, shiftKey = false) => {
@@ -224,13 +234,12 @@ it("picks a stage in place, from the pipeline's own stages, with the lead's revi
   await show([row(1)], { canManage: false });
   await click(cell(id(1), "stage"));
   const pick = editor()!;
-  expect(pick.tagName).toBe("SELECT");
-  expect(pick.getAttribute("aria-label")).toBe("Stage of Meera Fictional");
+  // The app's picker, open at once since a click opened the cell (no native select).
+  expect(pick.tagName).toBe("BUTTON");
+  expect(pick.getAttribute("aria-expanded")).toBe("true");
+  expect(nameOf(pick)).toBe("Stage of Meera Fictional");
   // Archived stages and the one a call sets (nobody picked up) aren't offered.
-  expect(Array.from(pick.options, (option) => option.text)).toEqual([
-    "New enquiry",
-    "Keen to join",
-  ]);
+  expect(rows()).toEqual(["New enquiry", "Keen to join"]);
   await choose(pick, "keen");
   expect(sent).toHaveLength(1);
   expect(sent[0].url).toMatch(new RegExp(`/leads/${id(1)}/stage$`));
@@ -281,10 +290,12 @@ it("goes along the row with Tab, with the lead's whole number to correct", async
     method: "PATCH",
     body: { expected_revision: 1, phone: "+91 98765 00000" },
   });
-  expect(editor()?.getAttribute("aria-label")).toBe("Stage of Meera Fictional");
+  expect(nameOf(editor())).toBe("Stage of Meera Fictional");
+  // Reached by Tab, the list waits shut until it is opened.
+  expect(editor()?.getAttribute("aria-expanded")).toBe("false");
   // Shift+Tab goes back; nothing typed, nothing saved.
   await press(editor()!, "Tab", true);
-  expect(editor()?.getAttribute("aria-label")).toBe("Phone of Meera Fictional");
+  expect(nameOf(editor())).toBe("Phone of Meera Fictional");
   await press(editor()!, "Escape");
   expect(sent).toHaveLength(1);
   expect(host.querySelector("tbody")?.textContent).toContain("•• 0000");
@@ -308,11 +319,7 @@ it("lets a seller change only their own leads, and only owners and admins the ow
   expect(cell(id(2), "stage")).not.toBeNull();
   await click(cell(id(2), "owner"));
   const owner = editor()!;
-  expect(Array.from(owner.options, (option) => option.text)).toEqual([
-    "No owner",
-    "Asha Example",
-    "Swamini Fictional",
-  ]);
+  expect(rows()).toEqual(["No owner", "Asha Example", "Swamini Fictional"]);
   await choose(owner, SELLER);
   expect(sent[0].url).toMatch(new RegExp(`/leads/${id(2)}/assign$`));
   expect(sent[0].body).toMatchObject({
@@ -320,10 +327,37 @@ it("lets a seller change only their own leads, and only owners and admins the ow
     person_id: SELLER,
   });
   await click(cell(id(1), "pipeline"));
-  expect(Array.from(editor()!.options, (option) => option.text)).toEqual([
-    "Enrolment",
-    "Partner outreach",
-  ]);
+  expect(rows()).toEqual(["Enrolment", "Partner outreach"]);
+});
+
+it("keeps a picked cell's arrows in its list; Enter saves the row they reached and goes down", async () => {
+  await show([row(1), row(2, { name: "ravi sample" })], {
+    canManage: false,
+  });
+  await click(cell(id(1), "stage"));
+  const pick = editor()!;
+  const list = () =>
+    host.querySelector<HTMLElement>('td[data-editing] [role="listbox"]')!;
+  // The list opens on the cell's stage; one arrow down reaches Keen to join.
+  await act(async () => {
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  });
+  expect(document.activeElement?.textContent).toBe("New enquiry");
+  // The page's own keys (the rows' Space ticks a row) hear nothing from the cell.
+  const heard = vi.fn();
+  window.addEventListener("keydown", heard);
+  await press(pick, " ");
+  await press(list(), "ArrowDown");
+  window.removeEventListener("keydown", heard);
+  expect(heard).not.toHaveBeenCalled();
+  expect(document.activeElement?.textContent).toBe("Keen to join");
+  // The table's own arrow moves between cells stayed out of it.
+  expect(editor()).toBe(pick);
+  expect(sent).toHaveLength(0);
+  await press(document.activeElement!, "Enter");
+  expect(sent).toHaveLength(1);
+  expect(sent[0].body).toMatchObject({ expectedRevision: 1, step: "keen" });
+  expect(nameOf(editor())).toBe("Stage of Ravi Sample");
 });
 
 it("waits for a lead's last save before the next, and says when someone else changed it", async () => {

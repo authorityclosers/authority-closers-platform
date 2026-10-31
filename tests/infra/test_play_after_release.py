@@ -143,6 +143,21 @@ def test_a_new_release_dispatches_alpha_with_its_full_main_commit_and_waits_for_
     )
 
 
+def test_a_renamed_release_builds_the_commit_that_was_promoted(tmp_path: Path) -> None:
+    # 31 Oct 2026: a cut merged as one version went live under the engine's next version;
+    # the older merge line for that name points at another commit, and only the Promoting
+    # line names the web that went live.
+    ship_log = (
+        "2026-10-30T20:00:00Z v1.2.0 merged to main as 9dee531. Building images.\n"
+        "2026-10-31T09:07:33Z Promoting v1.2.0 (4a6564b) from staging to production.\n"
+        "2026-10-31T09:12:08Z v1.2.0 is live on production and its canary passed: https://sx.example\n"
+    )
+    result = _run(tmp_path, ship_log=ship_log, state="v1.1.0")
+    assert result.returncode == 0, result.stderr
+    call = next(c for c in _calls(tmp_path) if c[:2] == ["workflow", "run"])
+    assert _field(call, "web_ref") == FULL
+
+
 def test_auto_approve_approves_only_its_own_run_in_android_release(tmp_path: Path) -> None:
     result = _run(tmp_path, state="v1.1.0", auto=1)
     assert result.returncode == 0, result.stderr

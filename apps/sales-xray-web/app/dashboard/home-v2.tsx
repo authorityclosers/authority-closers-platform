@@ -435,13 +435,15 @@ export function SetupStart({
                   href={step.href}
                   prefetch={false}
                   data-done={step.done ? "" : undefined}
+                  title={step.hint}
+                  aria-description={step.hint}
                 >
                   <span className={styles.stepIcon} aria-hidden="true">
                     {step.done ? <Check size={18} /> : <Icon size={18} />}
                   </span>
                   <span className={styles.words}>
                     <strong>{step.title}</strong>
-                    <span>{step.done ? "Done" : step.hint}</span>
+                    {step.done ? <span>Done</span> : null}
                   </span>
                   <ChevronRight size={18} aria-hidden="true" />
                 </Link>
@@ -463,9 +465,6 @@ export function SetupStart({
           <span className={styles.words}>
             <small>Sample</small>
             <strong>See what a call report shows</strong>
-            <span>
-              Who talked most, the next step agreed and what to say next time
-            </span>
           </span>
           <ChevronRight size={18} aria-hidden="true" />
         </Link>

@@ -42,45 +42,31 @@ import {
   type More,
 } from "./metric-pager";
 import { leadsHref } from "./seller-home";
+import { useHomeRead } from "./home-load";
 import styles from "./team-floor.module.css";
 
-/** Today's figures from the Performance engine; null until they arrive. */
+/** Today's figures from the Performance engine; the last good ones if a read
+ *  fails; null until the first arrives. */
 function useEffort(): Effort | null {
-  const [effort, setEffort] = useState<Effort | null>(null);
-  useEffect(() => {
-    const controller = new AbortController();
-    readEffort(1, controller.signal).then(setEffort, () => undefined);
-    return () => controller.abort();
-  }, []);
-  return effort;
+  return useHomeRead("effort:1", (signal) => readEffort(1, signal)).value;
 }
 
 type SideCounts = { fresh: number; open: number; unowned: number };
 
-/** The side's three lead counts, each the total of the list its card opens;
- *  read once per side. */
+/** The side's three lead counts, each the total of the list its card opens. */
 function useSideCounts(side: Side): SideCounts | null {
-  const [found, setFound] = useState<Partial<Record<Side, SideCounts>>>({});
-  const known = found[side] !== undefined;
-  useEffect(() => {
-    if (known) return;
-    const controller = new AbortController();
+  return useHomeRead(`counts:${side}`, async (signal) => {
     const total = (query: string) =>
-      deskRequest<LeadPage>(`/leads?${query}`, {
-        signal: controller.signal,
-      }).then((page) => page.total);
-    Promise.all([
+      deskRequest<LeadPage>(`/leads?${query}`, { signal }).then(
+        (page) => page.total,
+      );
+    const [fresh, open, unowned] = await Promise.all([
       total(`scope=team&side=${side}&view=to_call&step=new`),
       total(`scope=team&side=${side}&step=open_leads`),
       total(`scope=unassigned&side=${side}`),
-    ]).then(
-      ([fresh, open, unowned]) =>
-        setFound((was) => ({ ...was, [side]: { fresh, open, unowned } })),
-      () => undefined,
-    );
-    return () => controller.abort();
-  }, [side, known]);
-  return found[side] ?? null;
+    ]);
+    return { fresh, open, unowned };
+  }).value;
 }
 
 const count = (value: number | undefined | null) =>
@@ -107,7 +93,7 @@ function needs(
       ? {
           key: "fresh",
           count: counts.fresh,
-          label: "new enquiries not called yet",
+          label: "new leads not called yet",
           href: leadsHref("inbound", { view: "to_call", step: "new" }),
         }
       : null,
@@ -140,7 +126,7 @@ function needs(
           key: "gaps",
           count: effort.sellers.filter(longGap).length,
           label: "sellers with a 1h+ unexplained break",
-          href: "/performance",
+          href: "/growth",
         }
       : null,
     effort
@@ -273,7 +259,16 @@ const CLOCK = new Intl.DateTimeFormat("en-IN", {
   timeZone: "Asia/Kolkata",
 });
 
-function Sellers({ effort, side }: { effort: Effort | null; side: Side }) {
+function Sellers({
+  effort,
+  side,
+  me,
+}: {
+  effort: Effort | null;
+  side: Side;
+  /** The viewer: their own row reads You. */
+  me: string | null;
+}) {
   if (!effort) return <div className={styles.loading} aria-busy="true" />;
   const sellers = [...effort.sellers].sort(
     (a, b) => b[side].attempted - a[side].attempted,
@@ -300,16 +295,20 @@ function Sellers({ effort, side }: { effort: Effort | null; side: Side }) {
       </div>
       {sellers.map((seller) => {
         const day = seller[side];
-        const gap = seller.breaks[0];
+        // A break is time between calls: none before the first call.
+        const gap =
+          seller.inbound.attempted + seller.cold.attempted
+            ? seller.breaks[0]
+            : undefined;
         return (
           <Link
             key={seller.person_id}
             className={styles.row}
             role="row"
-            href="/performance"
+            href="/growth"
           >
             <span role="cell" className={styles.name}>
-              {seller.name}
+              {seller.person_id === me ? "You" : seller.name}
             </span>
             <span role="cell">{day.attempted}</span>
             <span role="cell">{day.connected}</span>
@@ -413,7 +412,7 @@ function FloorHero({ effort, side }: { effort: Effort | null; side: Side }) {
   return (
     <Link
       className={styles.hero}
-      href="/performance"
+      href="/growth"
       aria-label={
         day
           ? `Today on ${side === "cold" ? "Cold" : "Inbound"}: ${day.attempted} calls tried, ${day.connected} connected, ${Math.round(done * 100)}% of the day's leads called; ${live} of ${sellers.length} sellers on calls now`
@@ -490,6 +489,7 @@ export function TeamFloor({
   outcomes,
   more,
   mine = null,
+  me = null,
 }: {
   side: Side;
   onSide: (side: Side) => void;
@@ -501,6 +501,8 @@ export function TeamFloor({
   more: ReactNode;
   /** The owner's own tasks and follow-ups, for those who work leads. */
   mine?: ReactNode;
+  /** The viewer's person id. */
+  me?: string | null;
 }) {
   const effort = useEffort();
   const counts = useSideCounts(side);
@@ -547,12 +549,12 @@ export function TeamFloor({
         >
           <div className={styles.head}>
             <h2 id="sellers-title">Each seller today</h2>
-            <Link className={styles.seeAll} href="/performance">
+            <Link className={styles.seeAll} href="/growth">
               See details
               <ChevronRight size={16} aria-hidden="true" />
             </Link>
           </div>
-          <Sellers effort={effort} side={side} />
+          <Sellers effort={effort} side={side} me={me} />
         </section>
         <section
           className={`${styles.block} ${styles.sales}`}

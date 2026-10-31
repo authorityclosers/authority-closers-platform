@@ -116,3 +116,33 @@ it("preserves ordinary notice actions and avoids removing a permanent card on na
   );
   expect(host.textContent).not.toContain("Ordinary notice");
 });
+it("shows at most two cards, the older ones under +N more", async () => {
+  // Owner via the orchestrator, 31 Oct 2026: at most two show, in one corner.
+  const ids = ["first", "second", "third", "fourth"];
+  try {
+    for (const id of ids)
+      await act(async () =>
+        notify({ id, tone: "info", title: `Fictional ${id} update` }),
+      );
+    const titles = () =>
+      ids.filter((id) => host.textContent?.includes(`Fictional ${id} update`));
+    expect(titles()).toEqual(["third", "fourth"]);
+    const more = () =>
+      [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
+        /^\+\d+ more$|^Show fewer$/.test(button.textContent ?? ""),
+      );
+    expect(more()?.textContent).toBe("+2 more");
+    await act(async () => more()!.click());
+    expect(titles()).toEqual(ids);
+    expect(more()?.textContent).toBe("Show fewer");
+    await act(async () => more()!.click());
+    expect(titles()).toEqual(["third", "fourth"]);
+    await act(async () => {
+      dismissNotice("first");
+      dismissNotice("second");
+    });
+    expect(more()).toBeUndefined();
+  } finally {
+    await act(async () => ids.forEach((id) => dismissNotice(id)));
+  }
+});

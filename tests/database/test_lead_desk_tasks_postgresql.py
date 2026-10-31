@@ -184,7 +184,7 @@ def test_at20_each_seller_sees_their_own_tasks_and_a_task_follows_its_lead(
     async def exercise() -> None:
         async with world(postgres_harness, tmp_path) as here:
             lead_id = await here.add("Fictional Task Four", "98760 60004")
-            overdue = await task(here, lead_id, starts_at=later(minutes=-30))
+            overdue = await task(here, lead_id, kind="whatsapp", starts_at=later(minutes=-30))
             await task(here, lead_id, kind="email", starts_at=later(days=2))
             today = await here.client.get(f"{BASE}/tasks", params={"view": "overdue"})
             body = today.json()
@@ -280,6 +280,24 @@ def test_a_task_s_time_and_kind_are_checked(postgres_harness: Any, tmp_path: Pat
             assert meeting["title"] == "Meeting with Fictional Task Five"
             assert meeting["location"] == "Baner office" and meeting["bucket"] == "upcoming"
             assert UUID(meeting["task_id"])
+
+    run(exercise())
+
+
+def test_tasks_are_the_non_calling_work(postgres_harness: Any, tmp_path: Path) -> None:
+    """Dipak's handoff (Home item 5; the metrics table: "Tasks Today: non-calling tasks; do
+    not double-count follow-up tasks"): a call-back lives in Follow-ups and To Call, not on
+    Tasks, in its lists and its counts alike."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            lead_id = await here.add("Fictional Task Seven", "98760 60007")
+            call = await task(here, lead_id, starts_at=later(minutes=-30))
+            send = await task(here, lead_id, kind="send_file", starts_at=later(minutes=-30))
+            assert call["kind"] == "call_back"
+            body = (await here.client.get(f"{BASE}/tasks", params={"view": "overdue"})).json()
+            assert [item["task_id"] for item in body["tasks"]] == [send["task_id"]]
+            assert body["counts"]["overdue"] == 1
 
     run(exercise())
 
