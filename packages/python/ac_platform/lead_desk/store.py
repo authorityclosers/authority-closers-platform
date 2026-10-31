@@ -2114,7 +2114,20 @@ class LeadDesk:
             merged_into=await duplicate_queue.merged_into(self, lead),
             worked_before=worked_before,
             undo_result=await self._undoable(lead),
+            won_amount=await self._won_amount(lead),
         )
+
+    async def _won_amount(self, lead: Lead) -> int | None:
+        """A Won lead's newest deal amount: a correction is a newer row (0150)."""
+        if lead.stage != "won":
+            return None
+        amount: int | None = await self.db.scalar(
+            select(LeadDealAmount.amount)
+            .where(LeadDealAmount.tenant_id == self.tenant_id, LeadDealAmount.lead_id == lead.id)
+            .order_by(LeadDealAmount.created_at.desc(), LeadDealAmount.id.desc())
+            .limit(1)
+        )
+        return amount
 
     @staticmethod
     def _move_option(move: transitions.Move) -> MoveOption:
@@ -2281,6 +2294,11 @@ class LeadDesk:
             move_source=text("source") if moved else None,
             outcome_reason=text("outcome_reason") if moved else None,
             outcome_reason_label=text("outcome_reason_label") if moved else None,
+            amount=int(data["amount"])
+            if moved
+            and isinstance(data.get("amount"), int)
+            and not isinstance(data["amount"], bool)
+            else None,
             meeting_action=text("action") if meeting else None,
             task_id=self._uuid(data.get("task_id")) if event.kind == "task" else None,
             task_action=text("action") if event.kind == "task" else None,

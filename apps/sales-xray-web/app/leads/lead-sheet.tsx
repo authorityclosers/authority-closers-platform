@@ -171,6 +171,7 @@ import {
 } from "./simulated-call";
 import { SuggestedStage, SuggestionHint } from "./journey/stage-suggestion";
 import { amountOf, RUPEES } from "./pipeline/blocks";
+import { inr } from "../dashboard/revenue-client";
 import { MeetingCard } from "./pipeline/meeting-card";
 import pipe from "./pipeline/pipeline.module.css";
 import { StageSheet } from "./pipeline/stage-sheet";
@@ -1298,12 +1299,14 @@ export function eventText(event: LeadEvent): {
             : `Stages updated: now in ${to}`,
           detail: detail || undefined,
         };
+      // A move to Won says what the deal was worth (ph1-13, 1 Nov 2026).
+      const worth = event.amount ? ` · ${inr(event.amount)}` : "";
       const title =
         event.action === "reopen"
           ? `${who} reopened this lead in ${to}`
           : event.action === "close" || event.action === "reclassify"
-            ? `${who} closed this lead as ${to}`
-            : `${who} moved this lead to ${to}`;
+            ? `${who} closed this lead as ${to}${worth}`
+            : `${who} moved this lead to ${to}${worth}`;
       const was =
         event.from_label && event.from_label !== to
           ? `It was in ${event.from_label}`
@@ -3043,6 +3046,10 @@ export function LeadCard({
     calls: detail.events.filter((event) => shows("calls", event)).length,
   };
   const canMove = detail.can_edit && (detail.moves?.length ?? 0) > 0;
+  const wonWorth =
+    detail.lead.stage === "won" && detail.won_amount
+      ? inr(detail.won_amount)
+      : null;
   // The lead's chats, read once for the timeline and the chat sections.
   const conversations = useLeadConversations(lead.lead_id);
   const chats = chatDays(lead.lead_id, conversations.wa, conversations.social);
@@ -3159,13 +3166,14 @@ export function LeadCard({
       </header>
       <div className={styles.cardBadges}>
         {/* One "Stage" with its coloured chip (owner, 31 Oct 2026): a tap
-            opens the stages, which ask what the move needs. */}
+            opens the stages, which ask what the move needs. A Won lead says
+            what it was worth once: "Won · ₹2.5 L" (ph1-13, 1 Nov 2026). */}
         {canMove ? (
           <button
             type="button"
             className={styles.stageRow}
             aria-haspopup="dialog"
-            aria-label={`Stage: ${lead.stage_label}. Move this lead`}
+            aria-label={`Stage: ${lead.stage_label}${wonWorth ? `, ${wonWorth}` : ""}. Move this lead`}
             onClick={() => setStaging(true)}
           >
             <small>Stage</small>
@@ -3178,6 +3186,7 @@ export function LeadCard({
               }
             >
               {lead.stage_label}
+              {wonWorth ? ` · ${wonWorth}` : ""}
             </span>
             <ChevronDown size={16} aria-hidden="true" />
           </button>
@@ -3193,6 +3202,7 @@ export function LeadCard({
               }
             >
               {lead.stage_label}
+              {wonWorth ? ` · ${wonWorth}` : ""}
             </span>
           </span>
         )}

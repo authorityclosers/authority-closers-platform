@@ -452,6 +452,8 @@ class LeadEventView(Model):
     move_source: str | None = None
     outcome_reason: str | None = None
     outcome_reason_label: str | None = None
+    # A move to Won: what the deal was worth, in whole rupees, as that move said.
+    amount: int | None = None
     # A meeting's history: scheduled, rescheduled, done, missed or cancelled.
     meeting_action: str | None = None
     starts_at: datetime | None = None
@@ -1012,6 +1014,9 @@ class LeadDetail(Model):
     worked_before: bool = False
     # The after-call answer this person saved a moment ago and may still undo.
     undo_result: UndoResultView | None = None
+    # A Won lead: what the deal was worth, the newest amount (a correction stands), whole
+    # rupees; None while it is not Won or no amount was given (ph1-13, 1 Nov 2026).
+    won_amount: int | None = None
 
 
 class PhoneHealth(Model):

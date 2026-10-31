@@ -59,3 +59,17 @@ it("words a new stage list's moves as the list's, never a person's", () => {
     /moved/,
   );
 });
+
+it("says what a Won deal was worth, once (ph1-13, 1 Nov 2026)", () => {
+  expect(
+    eventText(
+      move({
+        action: "close",
+        stage: "won",
+        stage_label: "Won",
+        from_label: "Interested",
+        amount: 250000,
+      }),
+    ).title,
+  ).toBe("Kavya Fictional closed this lead as Won · ₹2.5 L");
+});
