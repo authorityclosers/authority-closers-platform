@@ -8,7 +8,10 @@ Pictures live in the environment's private Sales X-Ray store (``sales_xray_stora
 in its own ``bug-reports`` folder: one file per report, named by the report's id, written
 once (temporary file, fsync, link) and read back only when its SHA-256 matches the report.
 A voice note sent with a report sits beside it (``<id>.voice.webm|ogg|m4a``), kept as sent
-once its container's first bytes and its size check out.
+once its container's first bytes and its size check out. The files that follow a report
+from the advanced reporter (0149) sit there too (``<id>.f<position>.<ending>``): pictures
+cleaned like the report's own, screen recordings kept once their container checks out, and
+text files with every line scrubbed.
 """
 
 from __future__ import annotations
@@ -24,6 +27,8 @@ from pathlib import Path
 from uuid import UUID
 
 from PIL import Image, ImageOps, UnidentifiedImageError
+
+from ac_platform.bug_reports.scrub import scrub_block
 
 MAX_SCREENSHOT_BYTES = 4 * 1024 * 1024
 MAX_PIXELS = 24_000_000
@@ -101,7 +106,58 @@ VOICE_TYPES: dict[str, tuple[bytes, int, str]] = {
 }
 MAX_VOICE_BYTES = 1536 * 1024
 MAX_VOICE_SECONDS = 120
-_NAME = re.compile(r"^[0-9a-f]{32}(?:\.webp|\.voice\.(?:webm|ogg|m4a))$")
+_NAME = re.compile(
+    r"^[0-9a-f]{32}(?:\.webp|\.voice\.(?:webm|ogg|m4a)"
+    r"|\.f(?:[1-9]|[12][0-9]|30)\.(?:webp|webm|mp4|txt|csv|json|pdf))$"
+)
+
+# The files that follow a report (0149): what each may be, and its ending in the store.
+MAX_VIDEO_BYTES = 20 * 1024 * 1024
+MAX_TEXT_BYTES = 2 * 1024 * 1024
+PICTURE_TYPES = ("image/png", "image/jpeg", "image/webp")
+VIDEO_TYPES: dict[str, tuple[bytes, int, str]] = {
+    "video/webm": (b"\x1a\x45\xdf\xa3", 0, "webm"),
+    "video/mp4": (b"ftyp", 4, "mp4"),
+}
+TEXT_TYPES = {"text/plain": "txt", "text/csv": "csv", "application/json": "json"}
+
+
+@dataclass(frozen=True, slots=True)
+class CleanFile:
+    data: bytes
+    sha256: str
+    content_type: str
+    ending: str
+
+
+def clean_file(body: bytes, content_type: str) -> CleanFile:
+    """A file that may follow a report, made safe to keep, or ScreenshotError."""
+    if content_type in PICTURE_TYPES:
+        picture = clean_screenshot(body, content_type)
+        return CleanFile(picture.data, picture.sha256, picture.content_type, "webp")
+    if content_type in VIDEO_TYPES:
+        magic, offset, ending = VIDEO_TYPES[content_type]
+        if not 0 < len(body) <= MAX_VIDEO_BYTES:
+            raise ScreenshotError("Choose a recording under 20 MB.")
+        if body[offset : offset + len(magic)] != magic:
+            raise ScreenshotError("Choose a WebM or MP4 recording.")
+        return CleanFile(body, hashlib.sha256(body).hexdigest(), content_type, ending)
+    if content_type in TEXT_TYPES or content_type == "application/pdf":
+        if not 0 < len(body) <= MAX_TEXT_BYTES:
+            raise ScreenshotError("Choose a file under 2 MB.")
+        if content_type == "application/pdf":
+            if not body.startswith(b"%PDF-"):
+                raise ScreenshotError("Choose a PDF file.")
+            return CleanFile(body, hashlib.sha256(body).hexdigest(), content_type, "pdf")
+        try:
+            text = body.decode("utf-8")
+        except UnicodeDecodeError:
+            raise ScreenshotError("Choose a text file.") from None
+        data = scrub_block(text).encode("utf-8")
+        return CleanFile(
+            data, hashlib.sha256(data).hexdigest(), content_type, TEXT_TYPES[content_type]
+        )
+    raise ScreenshotError("Add pictures, screen recordings, or text, PDF or log files.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,6 +234,13 @@ class ScreenshotStore:
 
     def put_voice(self, bug_id: UUID, voice: CleanVoice) -> str:
         return self._write_once(self.voice_key_for(bug_id, voice.content_type), voice.data)
+
+    def file_key_for(self, bug_id: UUID, position: int, ending: str) -> str:
+        return f"{FOLDER}/{bug_id.hex}.f{position}.{ending}"
+
+    def put_file(self, bug_id: UUID, position: int, file: CleanFile) -> str:
+        """Write once: a file that follows a report, at its place in the report."""
+        return self._write_once(self.file_key_for(bug_id, position, file.ending), file.data)
 
     def read(self, key: str, *, expected_sha256: str) -> bytes:
         path = self._path(key)

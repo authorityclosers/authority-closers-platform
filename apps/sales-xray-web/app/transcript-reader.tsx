@@ -36,6 +36,7 @@ import {
 import { useSourceWaveform } from "./source-waveform";
 import styles from "./transcript-reader.module.css";
 import { useBackClose } from "./ui/back-close";
+import { Picker } from "./ui/picker";
 
 const TRANSCRIPT_KINDS = [
   "brand",
@@ -534,40 +535,38 @@ export function TranscriptReader({
           </div>
 
           {voices.length > 0 && (
-            <select
+            <Picker
+              title="Filter by speaker"
+              ariaLabel="Filter by speaker"
               className={styles.filterSelect}
-              value={selectedSpeaker}
-              onChange={(e) => filterSpeaker(e.target.value)}
-              aria-label="Filter by speaker"
-            >
-              <option value="all">All speakers ({voices.length})</option>
-              {voices.map((v) => (
-                <option key={v} value={v}>
-                  {getSpeakerLabel(v)}
-                </option>
-              ))}
-            </select>
+              value={selectedSpeaker === "all" ? null : selectedSpeaker}
+              all={{ label: `All speakers (${voices.length})` }}
+              options={voices.map((v) => ({
+                key: v,
+                label: getSpeakerLabel(v),
+              }))}
+              onChange={(key) => filterSpeaker(key ?? "all")}
+            />
           )}
 
           {findings.length > 0 && (
-            <select
+            <Picker
+              title="Jump to moment"
+              ariaLabel="Jump to moment"
               className={styles.jumpSelect}
-              defaultValue=""
-              onChange={(e) => {
-                if (e.target.value) handleJumpToMoment(e.target.value);
-                e.target.value = "";
+              value={null}
+              placeholder={`Jump to moment (${findings.length})...`}
+              options={findings.map((f) => ({
+                key: f.id,
+                label: `[${f.badge}] ${f.title} (${formatClock(f.evidence.start_ms)})`,
+              }))}
+              onChange={(key) => {
+                // Keys are finding ids, since two findings can share a moment.
+                const finding = findings.find((f) => f.id === key);
+                if (finding)
+                  handleJumpToMoment(String(finding.evidence.start_ms));
               }}
-              aria-label="Jump to moment"
-            >
-              <option value="" disabled>
-                Jump to moment ({findings.length})...
-              </option>
-              {findings.map((f) => (
-                <option key={f.id} value={f.evidence.start_ms}>
-                  [{f.badge}] {f.title} ({formatClock(f.evidence.start_ms)})
-                </option>
-              ))}
-            </select>
+            />
           )}
         </div>
       </header>

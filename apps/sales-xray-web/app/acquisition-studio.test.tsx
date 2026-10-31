@@ -132,6 +132,18 @@ async function click(text: string) {
   await act(async () => button(text).click());
   await flush();
 }
+/** Opens the picker with this id and chooses the row with this key. */
+async function pick(id: string, key: string) {
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>(`#${id}`)!.click(),
+  );
+  await act(async () =>
+    container
+      .querySelector<HTMLElement>(`[role="option"][data-key="${key}"]`)!
+      .click(),
+  );
+  await flush();
+}
 async function clickReportSection(text: string) {
   const found = container.querySelector<HTMLAnchorElement>(
     `[aria-label="Explore your sales report"] a[aria-label="${text}"]`,
@@ -2564,12 +2576,9 @@ it.each([
     await mount();
     await select();
     const selectLanguage =
-      container.querySelector<HTMLSelectElement>("#report-language")!;
-    expect(selectLanguage.value).toBe("en");
-    await act(async () => {
-      selectLanguage.value = language;
-      selectLanguage.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+      container.querySelector<HTMLButtonElement>("#report-language")!;
+    expect(selectLanguage.dataset.value).toBe("en");
+    await pick("report-language", language);
     await consent();
     await click("Complete upload check");
     await click("Analyse my call");

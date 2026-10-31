@@ -134,7 +134,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     id: "stages",
     label: "Lead stages",
-    hint: "Your stages and pipelines, and what your ad platforms learn",
+    hint: "What your sellers see",
     icon: Route,
     group: "Organisation",
   },
@@ -241,7 +241,8 @@ const HUB_ADDRESSES: Partial<Record<SettingsSectionId, string>> = {
   organisation: "/organisation?tab=company",
   team: "/organisation?tab=team",
   "lead-rules": "/organisation?tab=leads&part=rules",
-  stages: "/organisation?tab=leads&part=stages",
+  // Its own full-screen page (owner, 31 Oct 2026).
+  stages: "/organisation/stages",
   sources: "/organisation?tab=leads&part=sources",
   "call-ai": "/organisation?tab=call-ai",
   apps: "/organisation?tab=connections&part=apps",

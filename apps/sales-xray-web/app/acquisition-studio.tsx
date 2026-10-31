@@ -153,6 +153,7 @@ import {
 import { track } from "./telemetry";
 import { dismissNotice, notify } from "./notice-center";
 import { usePurchasesAllowed } from "./purchase-policy";
+import { Picker } from "./ui/picker";
 import styles from "./acquisition-studio.module.css";
 import { formatAnalysisTime } from "./analysis-time";
 import type { ScopedSavedReport } from "./report-preload";
@@ -3329,50 +3330,45 @@ export function AcquisitionStudio({
                             >
                               +
                             </span>
-                            <select
+                            <Picker
                               id="report-language"
-                              aria-describedby="report-language-help"
-                              value={displayReportLanguage ?? ""}
+                              describedBy="report-language-help"
+                              title="Report language"
+                              className={styles.languagePicker}
+                              value={displayReportLanguage ?? null}
+                              placeholder={
+                                localObservation
+                                  ? "No language selection observed"
+                                  : undefined
+                              }
                               disabled={
                                 !!busy ||
                                 reviewSelectionActive ||
                                 entry.report_languages.length < 2
                               }
-                              onChange={(event) => {
-                                const selected = parseReportLanguage(
-                                  event.target.value,
-                                );
+                              options={[
+                                ...(displayReportLanguage &&
+                                !entry.report_languages.includes(
+                                  displayReportLanguage,
+                                )
+                                  ? [
+                                      {
+                                        key: displayReportLanguage,
+                                        label: `${reportLanguageLabels[displayReportLanguage]} (observed)`,
+                                      },
+                                    ]
+                                  : []),
+                                ...entry.report_languages.map((language) => ({
+                                  key: language,
+                                  label: secondLanguageLabels[language],
+                                })),
+                              ]}
+                              onChange={(key) => {
+                                const selected = parseReportLanguage(key);
                                 chosenReportLanguage.current = selected;
                                 setReportLanguage(selected);
                               }}
-                            >
-                              {localObservation && (
-                                <option value="">
-                                  No language selection observed
-                                </option>
-                              )}
-                              {displayReportLanguage &&
-                                !entry.report_languages.includes(
-                                  displayReportLanguage,
-                                ) && (
-                                  <option
-                                    value={displayReportLanguage}
-                                    key={displayReportLanguage}
-                                  >
-                                    {
-                                      reportLanguageLabels[
-                                        displayReportLanguage
-                                      ]
-                                    }{" "}
-                                    (observed)
-                                  </option>
-                                )}
-                              {entry.report_languages.map((language) => (
-                                <option key={language} value={language}>
-                                  {secondLanguageLabels[language]}
-                                </option>
-                              ))}
-                            </select>
+                            />
                           </div>
                           <p id="report-language-help">
                             {entry.report_languages.length > 1

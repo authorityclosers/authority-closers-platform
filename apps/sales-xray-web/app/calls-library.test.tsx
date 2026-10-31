@@ -176,6 +176,13 @@ const setInput = (input: HTMLInputElement, value: string) => {
 };
 const renameButton = () =>
   host.querySelector<HTMLButtonElement>('button[aria-label^="Rename call"]');
+// The sort picker's button; its words start with its name.
+const sortPicker = () =>
+  [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      'button[aria-haspopup="listbox"]',
+    ),
+  ].find((button) => button.textContent?.startsWith("Sort calls"));
 const editorInput = () =>
   host.querySelector<HTMLInputElement>("[data-call-label-editor] input")!;
 const submitEditor = () =>
@@ -625,10 +632,7 @@ it("keeps the status, sort and search in the address across a reload", async () 
       ),
     ];
     expect(filters[3].getAttribute("aria-pressed")).toBe("true");
-    expect(
-      host.querySelector<HTMLSelectElement>('select[aria-label="Sort calls"]')
-        ?.value,
-    ).toBe("longest");
+    expect(sortPicker()?.dataset.value).toBe("longest");
     await act(async () => filters[0].click());
     expect(window.location.search).toBe("?sort=longest");
     const search = host.querySelector<HTMLInputElement>(
@@ -1630,12 +1634,12 @@ it("keeps phone rows readable and the module on tokens only", () => {
   );
   const css = readFileSync(cssPath, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
-  // Phone rows: the title wraps to two lines; search and lists never zoom.
+  // Phone rows: the title wraps to two lines; search never zooms.
   expect(css).toMatch(
     /@container calls-page \(max-width: 760px\) \{[\s\S]*?-webkit-line-clamp: 2;/,
   );
   expect(css).toMatch(
-    /@container calls-page \(max-width: 760px\) \{[\s\S]*?\.search input,\s*\.repFilter select,\s*\.sort select \{\s*font-size: 16px;/,
+    /@container calls-page \(max-width: 760px\) \{[\s\S]*?\.search input \{\s*font-size: 16px;/,
   );
   // No raw colours: every colour is a lightbox token.
   expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
@@ -1689,11 +1693,12 @@ it("lists calls with Reports first and names never-analysed calls honestly", asy
     ...host.querySelectorAll<HTMLButtonElement>("[data-chips] button"),
   ].find((button) => button.dataset.tone === "idle")!;
   expect(chip.textContent).toBe("Not analysed yet2");
-  const sort = [...host.querySelectorAll("select")].find((select) =>
-    [...select.options].some((option) => option.value === "reports"),
-  )!;
-  expect(sort.value).toBe("reports");
-  expect(sort.options[0].textContent).toBe("Reports first");
+  const sort = sortPicker()!;
+  expect(sort.dataset.value).toBe("reports");
+  await act(async () => sort.click());
+  expect(
+    sort.parentElement!.querySelector('[role="option"]')?.textContent,
+  ).toBe("Reports first");
 });
 
 // Approved map, slice 7 (22 Oct 2026): a call names the lead it belongs to.

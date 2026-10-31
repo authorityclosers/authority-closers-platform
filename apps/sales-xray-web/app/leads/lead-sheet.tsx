@@ -9,6 +9,7 @@
 
 import { AutoCaptureState } from "./auto-capture-state";
 import {
+  ChevronDown,
   ArrowRightLeft,
   ArrowUp,
   BellPlus,
@@ -30,6 +31,7 @@ import {
   Shuffle,
   Trash2,
   Workflow,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -43,6 +45,7 @@ import {
   useState,
   type KeyboardEvent,
   type ReactNode,
+  type CSSProperties,
 } from "react";
 
 import { createPortal } from "react-dom";
@@ -86,7 +89,6 @@ import {
 import { PersonAvatar } from "../people/person-avatar";
 import { LastCallBrief } from "./call-brief-card";
 import { ReassignSheet } from "./reassign-sheet";
-import { PipelineOverview } from "./pipeline-overview";
 import { CallLink } from "./call-link";
 import type { FirstTapEvent } from "./first-tap";
 import { callStep } from "./phone-call-steps";
@@ -99,11 +101,12 @@ import {
   useLeadConversations,
   type ChatDay,
 } from "./lead-chats";
-import { CallNext } from "./call-next";
 import { chatFacts, chatOrigin } from "./chat-origin";
 import { SocialThread } from "./social-thread";
 import { WhatsAppThread } from "./whatsapp-thread";
-import { whyLine } from "./desk-view";
+import { nextLine, whyLine } from "./desk-view";
+import type { Kind } from "./journey/journey-client";
+import { stageTone as stageDot } from "./journey/stage-look";
 import { firstCallWords, ownerNote } from "./owner-words";
 import { phoneCallText } from "./phone-call-text";
 import { several, usePipelines } from "./use-pipelines";
@@ -350,6 +353,8 @@ export function CallOutcome({
         ? "missed"
         : null,
   );
+  // Open Leads: why it is still open, if the seller says (Dipak's handoff).
+  const [openReason, setOpenReason] = useState<string | null>(null);
   const [reason, setReason] = useState<string | null>(
     heard?.connected === false ? missedReason(heard.result) : null,
   );
@@ -458,6 +463,16 @@ export function CallOutcome({
         ? "No automatic retry for a bad number."
         : `It comes back on the desk ${detail.lead.attempts ? "tomorrow" : "in 1 hour"}.`;
 
+  // The picked stage's own reasons, when it is an open one (Open Leads).
+  const stillOpen =
+    talk === "talked" && step
+      ? (detail.moves ?? []).find(
+          (move) =>
+            move.step === step &&
+            move.group === "active" &&
+            move.reasons.length > 0,
+        )
+      : undefined;
   const openMessage = useContext(OpenMessage);
   const submit = async (after: (next: LeadDetail) => void = onSaved) => {
     if (!valid || saving) return;
@@ -470,6 +485,7 @@ export function CallOutcome({
         reason: talk === "missed" ? (reason ?? undefined) : undefined,
         stage: talk === "talked" ? (stage ?? undefined) : undefined,
         step: talk === "talked" ? (step ?? undefined) : undefined,
+        outcome_reason: stillOpen && openReason ? openReason : undefined,
         follow_up_at: at ? at.toISOString() : undefined,
         remark: note.trim() || undefined,
         deal_value: deal.trim() || undefined,
@@ -683,6 +699,27 @@ export function CallOutcome({
               </button>
             ))}
           </div>
+          {stillOpen ? (
+            <div
+              className={styles.reasonGrid}
+              role="group"
+              aria-label="Why it is still open (optional)"
+            >
+              {stillOpen.reasons.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={styles.reasonTile}
+                  aria-pressed={openReason === item.key}
+                  onClick={() =>
+                    setOpenReason(openReason === item.key ? null : item.key)
+                  }
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
           {needsTime ? (
             <TimePicker
               label="Next call"
@@ -2856,11 +2893,25 @@ export function LeadCard({
   // A lead typed in by hand has no form: its answers are the details above.
   // A lead that began as a chat has no form either: never Meta's raw ids.
   const origin = chatOrigin(lead);
-  const answers = !FORM_SOURCES.has(lead.source)
-    ? []
-    : origin
-      ? chatFacts(detail.source_fields)
-      : detail.source_fields;
+  // The form's answers without what the details above already say (owner,
+  // 31 Oct 2026: City, Language and Interested in showed twice).
+  const said = new Set(
+    [lead.name, detail.email, ...detail.fields.map((field) => field.value)]
+      .filter(Boolean)
+      .map((value) => String(value).trim().toLowerCase()),
+  );
+  const phoneDigits = (detail.phone ?? "").replace(/\D/g, "").slice(-10);
+  const answers = (
+    !FORM_SOURCES.has(lead.source)
+      ? []
+      : origin
+        ? chatFacts(detail.source_fields)
+        : detail.source_fields
+  ).filter((field) => {
+    const value = String(field.value).trim();
+    if (said.has(value.toLowerCase())) return false;
+    return !phoneDigits || value.replace(/\D/g, "").slice(-10) !== phoneDigits;
+  });
 
   const primaryAction = detail.phone ? (
     <CallLink
@@ -2919,19 +2970,45 @@ export function LeadCard({
         </div>
       </header>
       <div className={styles.cardBadges}>
+        {/* One "Stage" with its coloured chip (owner, 31 Oct 2026): a tap
+            opens the stages, which ask what the move needs. */}
         {canMove ? (
           <button
             type="button"
-            className={pipe.stageButton}
+            className={styles.stageRow}
+            aria-haspopup="dialog"
             aria-label={`Stage: ${lead.stage_label}. Move this lead`}
             onClick={() => setStaging(true)}
           >
-            <Badge tone={stageTone(lead.stage)}>{lead.stage_label}</Badge>
+            <small>Stage</small>
+            <span
+              className={styles.stageChip}
+              style={
+                {
+                  "--stage": stageDot({ kind: lead.stage as Kind }),
+                } as CSSProperties
+              }
+            >
+              {lead.stage_label}
+            </span>
+            <ChevronDown size={16} aria-hidden="true" />
           </button>
         ) : (
-          <Badge tone={stageTone(lead.stage)}>{lead.stage_label}</Badge>
+          <span className={styles.stageRow}>
+            <small>Stage</small>
+            <span
+              className={styles.stageChip}
+              style={
+                {
+                  "--stage": stageDot({ kind: lead.stage as Kind }),
+                } as CSSProperties
+              }
+            >
+              {lead.stage_label}
+            </span>
+          </span>
         )}
-        <span className={styles.leadWhy}>{whyLine(lead)}</span>
+        <span className={styles.leadWhy}>{nextLine(lead)}</span>
       </div>
       <SuggestedStage detail={detail} onChanged={onChanged} />
       <MeetingCard detail={detail} onChanged={onChanged} />
@@ -3361,15 +3438,11 @@ function PipelinePanel({
   const [problem, setProblem] = useState<string | null>(null);
   const lead = detail.lead;
   const here = lead.pipeline ?? "main";
-  const name =
-    pipes?.pipelines.find((item) => item.key === here)?.name ?? "Leads";
+  // Only a team with several pipelines moves a lead between them; the stage
+  // is the Stage row above (owner, 31 Oct 2026).
+  if (!detail.can_assign || !several(pipes)) return null;
   return (
     <section className={styles.panel} aria-label="Pipeline">
-      <PipelineOverview
-        key={`${lead.lead_id}:${here}`}
-        lead={lead}
-        name={name}
-      />
       {detail.can_assign && several(pipes) ? (
         <>
           <button
@@ -3437,7 +3510,8 @@ export function LeadSheet({
   onChanged,
   intent = null,
   onNext,
-  pipeline = null,
+  queue = false,
+  inline = false,
   focusAt = null,
 }: {
   leadId: string | null;
@@ -3448,19 +3522,16 @@ export function LeadSheet({
   focusAt?: string | null;
   /** Do this as soon as the lead is open (swipe, hold, an alert's Call). */
   intent?: LeadIntent | null;
-  /** After an outcome is saved: call the next lead on the desk. */
+  /** Call Next's queue: after Save & Next Lead, the list's next lead (given
+   *  this lead's id). */
   onNext?: (leadId: string) => void;
-  /** The pipeline To call shows: the next lead comes from it. */
-  pipeline?: string | null;
+  /** Opened by Call Next (Dipak's handoff, 31 Oct 2026, items 16-17): Save &
+   *  Next Lead goes on through the list; a one-off call is Save & Close. */
+  queue?: boolean;
+  /** A wide screen's detail pane beside the list, not a sheet (owner, 31 Oct 2026). */
+  inline?: boolean;
 }) {
-  // Saved here: who is next on the desk, so one tap calls them (the
-  // ease-of-use wave, 22 Oct 2026: "Call next" everywhere, not only in
-  // Start calling).
   const [primarySlot, setPrimarySlot] = useState<HTMLDivElement | null>(null);
-  const [nextUp, setNextUp] = useState<{
-    after: string;
-    lead: LeadDetail | null;
-  } | null>(null);
   const [loaded, setLoaded] = useState<LeadDetail | null>(null);
   const [failed, setFailed] = useState<{
     leadId: string;
@@ -3570,10 +3641,11 @@ export function LeadSheet({
 
   return (
     <>
-      <Sheet
+      <PaneOrSheet
+        inline={inline}
         open={leadId !== null}
         footer={
-          detail && !questionOpen && !(nextUp && nextUp.after === leadId) ? (
+          detail && !questionOpen ? (
             <div
               className={styles.primaryDock}
               data-sheet-no-drag
@@ -3601,9 +3673,7 @@ export function LeadSheet({
           <>
             <LeadCard
               primarySlot={primarySlot}
-              hidePrimary={
-                questionOpen || !!(nextUp && nextUp.after === leadId)
-              }
+              hidePrimary={questionOpen}
               detail={detail}
               me={me}
               onChanged={update}
@@ -3618,7 +3688,7 @@ export function LeadSheet({
                   <CallOutcome
                     key={`${formKey}-${after?.heard?.startedMs ?? 0}`}
                     detail={detail}
-                    submitLabel="Save"
+                    submitLabel={queue ? "Save & Next Lead" : "Save & Close"}
                     heard={after?.heard ?? null}
                     attention={asking}
                     ask={intent === "log" || logging === leadId}
@@ -3628,13 +3698,10 @@ export function LeadSheet({
                       setLogging(null);
                       if (asked) setAnswered(asked.startedMs);
                       update(next);
-                      if (onNext && leadId) {
-                        const saved = leadId;
-                        readNext(saved, undefined, pipeline).then(
-                          (lead) => setNextUp({ after: saved, lead }),
-                          () => undefined,
-                        );
-                      }
+                      // From Call Next, on to the list's next lead; a one-off
+                      // call closes, saved (Dipak's handoff, items 16-17).
+                      if (queue && onNext && leadId) onNext(leadId);
+                      else onClose();
                     }}
                   />
                 ) : (
@@ -3666,16 +3733,13 @@ export function LeadSheet({
                 </button>
               </div>
             ) : null}
-            {onNext && nextUp && nextUp.after === leadId ? (
-              <CallNext lead={nextUp.lead} saved onCall={onNext} />
-            ) : null}
           </>
         ) : (
           <div className={styles.sheetLoading} aria-busy="true">
             Opening the lead…
           </div>
         )}
-      </Sheet>
+      </PaneOrSheet>
       {removing ? (
         <DeleteLeadsSheet
           key={removing.round}
@@ -3692,6 +3756,45 @@ export function LeadSheet({
         />
       ) : null}
     </>
+  );
+}
+
+/** The lead in a sheet, or in the pane beside the list on a wide screen. */
+function PaneOrSheet({
+  inline,
+  open,
+  footer,
+  label,
+  onClose,
+  children,
+}: {
+  inline: boolean;
+  open: boolean;
+  footer?: ReactNode;
+  label: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  if (!inline)
+    return (
+      <Sheet open={open} footer={footer} label={label} onClose={onClose}>
+        {children}
+      </Sheet>
+    );
+  if (!open) return null;
+  return (
+    <section className={styles.leadPane} aria-label={label}>
+      <button
+        type="button"
+        className={styles.leadPaneClose}
+        aria-label="Close this lead"
+        onClick={onClose}
+      >
+        <X size={18} aria-hidden="true" />
+      </button>
+      {children}
+      {footer ? <div className={styles.leadPaneDock}>{footer}</div> : null}
+    </section>
   );
 }
 

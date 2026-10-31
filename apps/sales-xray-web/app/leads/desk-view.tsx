@@ -32,6 +32,7 @@ import {
 } from "./leads-client";
 import styles from "./leads.module.css";
 import { reportCallPress } from "./phone-call-steps";
+import { SourceMark, shortSource, sourceKind, sourceText } from "./source-mark";
 
 const WHY_TONE: Record<LeadRow["why_kind"], Tone> = {
   due: "warn",
@@ -63,6 +64,18 @@ export function whyLine(row: LeadRow, now: Date = new Date()): string {
   return row.why;
 }
 
+/** A compact row's third line: the next action and its time, never the stage
+ *  again (owner, 31 Oct 2026: "New lead" twice on one row). */
+export function nextLine(row: LeadRow, now: Date = new Date()): string {
+  if (!row.missed_at && row.why_kind === "new")
+    return `Added ${ago(row.created_at, now)}`;
+  return whyLine(row, now);
+}
+
+/** Truly late: its follow-up time has passed. */
+const late = (row: LeadRow, now: number = Date.now()) =>
+  !!row.next_action_at && Date.parse(row.next_action_at) < now;
+
 /** How many calls are due right now: late ones, new leads and retries due. */
 export function dueNow(desk: Pick<Desk, "queue">): number {
   return desk.queue.filter(
@@ -83,17 +96,8 @@ export function toCallNow(desk: Pick<Desk, "queue" | "call_back">): number {
   return leads.size;
 }
 
-/** Where the lead came from, as a seller would say it. */
-export function sourceText(
-  row: Pick<LeadRow, "source" | "source_label">,
-): string {
-  if (row.source === "synthetic") {
-    const kind = row.source_label.split("·").pop()?.trim() ?? "";
-    return kind ? kind[0].toUpperCase() + kind.slice(1) : "Lead";
-  }
-  if (row.source === "csv") return "File upload";
-  return row.source_label.replace(/^Sheet: /, "Sheet · ");
-}
+// Where the lead came from: its words live beside its mark (source-mark.tsx).
+export { sourceText } from "./source-mark";
 
 /** What a list row can do beyond opening: swipe and hold (fingers only). */
 export type RowActions = {
@@ -113,11 +117,24 @@ export function LeadLine({
   onOpen,
   showOwner = false,
   actions,
+  compact = false,
+  stageWord,
+  quietLate = false,
+  onPick,
 }: {
   row: LeadRow;
   onOpen: (leadId: string) => void;
   showOwner?: boolean;
   actions?: RowActions;
+  /** Dipak's handoff (31 Oct 2026, items 74-79): the name, "Stage · Source",
+   *  the next action and one call button; WhatsApp stays on the swipe. */
+  compact?: boolean;
+  /** The stage's name on the side shown (the first is Unworked on Cold Leads). */
+  stageWord?: string;
+  /** Never red, even when late: Cold Leads for a seller (owner, 31 Oct 2026). */
+  quietLate?: boolean;
+  /** An owner's tick beside the row on a computer: start picking (bug report 130). */
+  onPick?: (row: LeadRow) => void;
 }) {
   const reachable = !!row.phone_last4;
   const {
@@ -133,7 +150,20 @@ export function LeadLine({
         : undefined,
     onHold: actions?.onHold ? () => actions.onHold?.(row) : undefined,
   });
-  const sub = [row.interest, row.company, row.city].filter(Boolean).join(" · ");
+  const sub = compact ? (
+    <>
+      {stageWord ?? row.stage_label}
+      {" · "}
+      <span className={styles.leadSource} title={row.source_label || undefined}>
+        <SourceMark kind={sourceKind(row)} />
+        {shortSource(row)}
+      </span>
+      {showOwner ? ` · ${row.owner_name ?? "No owner yet"}` : null}
+    </>
+  ) : (
+    [row.interest, row.company, row.city].filter(Boolean).join(" · ")
+  );
+  const red = compact && late(row) && !quietLate;
   const tap = actions?.onTap;
   // A tap felt at once, while the lead opens to call or message (friction
   // report, 25 Oct 2026: Call showed nothing for about a second).
@@ -165,7 +195,7 @@ export function LeadLine({
       className={styles.leadLine}
       data-lead-row=""
       data-row-key={row.lead_id}
-      data-overdue={row.overdue || undefined}
+      data-overdue={(compact ? red : row.overdue) || undefined}
       {...bind}
     >
       {reachable && actions ? (
@@ -189,7 +219,16 @@ export function LeadLine({
         ref={face}
         className={styles.leadFace}
         data-quick={tap ? "" : undefined}
+        data-compact={compact ? "" : undefined}
       >
+        {onPick ? (
+          <button
+            type="button"
+            className={styles.hoverPick}
+            aria-label={`Select ${row.name}`}
+            onClick={() => onPick(row)}
+          />
+        ) : null}
         <button
           type="button"
           className={styles.leadButton}
@@ -203,18 +242,19 @@ export function LeadLine({
             <span
               className={styles.leadWhy}
               data-tone={
-                row.missed_at
+                row.missed_at || red
                   ? "bad"
-                  : row.overdue
-                    ? "warn"
+                  : compact
+                    ? undefined
                     : WHY_TONE[row.why_kind]
               }
             >
-              {row.overdue ? <b className={styles.lateTag}>Late</b> : null}
-              {whyLine(row)}
+              {compact ? nextLine(row) : whyLine(row)}
             </span>
           </span>
-          {tap ? null : <span className={styles.leadEnd}>{tags}</span>}
+          {tap || compact ? null : (
+            <span className={styles.leadEnd}>{tags}</span>
+          )}
         </button>
         {tap ? (
           // Beside the card's tap area, never inside it: the stage above the
@@ -222,16 +262,18 @@ export function LeadLine({
           <span className={styles.leadEnd} data-quick="">
             {/* The stage and owner beside the card open it too (friction
                 report, 25 Oct 2026: rage taps on this text). Keyboards use the
-                card's own button. */}
-            <button
-              type="button"
-              className={styles.leadTags}
-              tabIndex={-1}
-              aria-label={`Open ${row.name}`}
-              onClick={() => onOpen(row.lead_id)}
-            >
-              {tags}
-            </button>
+                card's own button. A compact row has them in its own lines. */}
+            {compact ? null : (
+              <button
+                type="button"
+                className={styles.leadTags}
+                tabIndex={-1}
+                aria-label={`Open ${row.name}`}
+                onClick={() => onOpen(row.lead_id)}
+              >
+                {tags}
+              </button>
+            )}
             <span className={styles.leadQuick}>
               {/* Call acts on the first touch, even while the list still
                   glides (27 Oct 2026); a mouse, keys and screen readers click. */}
@@ -252,31 +294,35 @@ export function LeadLine({
               >
                 <Phone size={16} aria-hidden="true" />
               </button>
-              <button
-                type="button"
-                className={styles.quickAct}
-                data-channel="whatsapp"
-                aria-label={
-                  reachable
-                    ? `WhatsApp ${row.name}`
-                    : `No number to WhatsApp ${row.name}`
-                }
-                disabled={!reachable}
-                onClick={() => press(row, "whatsapp")}
-              >
-                <ChannelMark channel="whatsapp" size={18} />
-              </button>
-              {row.has_email ? (
-                <button
-                  type="button"
-                  className={styles.quickAct}
-                  data-channel="email"
-                  aria-label={`Email ${row.name}`}
-                  onClick={() => press(row, "email")}
-                >
-                  <Mail size={16} aria-hidden="true" />
-                </button>
-              ) : null}
+              {compact ? null : (
+                <>
+                  <button
+                    type="button"
+                    className={styles.quickAct}
+                    data-channel="whatsapp"
+                    aria-label={
+                      reachable
+                        ? `WhatsApp ${row.name}`
+                        : `No number to WhatsApp ${row.name}`
+                    }
+                    disabled={!reachable}
+                    onClick={() => press(row, "whatsapp")}
+                  >
+                    <ChannelMark channel="whatsapp" size={18} />
+                  </button>
+                  {row.has_email ? (
+                    <button
+                      type="button"
+                      className={styles.quickAct}
+                      data-channel="email"
+                      aria-label={`Email ${row.name}`}
+                      onClick={() => press(row, "email")}
+                    >
+                      <Mail size={16} aria-hidden="true" />
+                    </button>
+                  ) : null}
+                </>
+              )}
             </span>
           </span>
         ) : null}

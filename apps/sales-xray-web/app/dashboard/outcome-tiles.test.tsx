@@ -182,7 +182,9 @@ it("keeps the period in one segmented control", async () => {
   );
   await act(async () => month?.click());
   expect(onPeriod).toHaveBeenCalledWith(30);
-  expect(host.querySelector("select")).toBeNull();
+  expect(
+    host.querySelector('select, button[aria-haspopup="listbox"]'),
+  ).toBeNull();
 });
 
 it("draws no days for today, and a dash when nobody called", async () => {

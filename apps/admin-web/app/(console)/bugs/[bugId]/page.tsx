@@ -17,6 +17,7 @@ import {
   deviceLine,
   eventText,
   normalizeDetail,
+  speedWords,
 } from "@/app/bugs/bugs-data";
 import styles from "@/app/bugs/bugs.module.css";
 import { sellerPath } from "@/app/sellers/seller-data";
@@ -108,6 +109,13 @@ export default async function BugPage({
       ),
     ],
   ];
+  const advanced = bug.advanced;
+  const fileUrl = (position: number) =>
+    `/v1/admin/bugs/${bug.id}/files/${position}`;
+  const original = bug.files.find((file) => file.role === "original");
+  const partPicture = (n: number) =>
+    bug.files.find((file) => file.role === "element" && file.part === n);
+  const attachments = bug.files.filter((file) => file.role === "attachment");
   const deviceFacts = Object.entries(bug.device).filter(
     ([key]) => !["os", "browser", "model", "viewport"].includes(key),
   );
@@ -188,7 +196,176 @@ export default async function BugPage({
                 No picture came with this report.
               </p>
             )}
+            {original ? (
+              <div className={styles.before}>
+                <small className={kitStyles.muted}>Before their marks</small>
+                <a
+                  href={fileUrl(original.position)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={styles.shot}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- a private, same-origin picture */}
+                  <img
+                    src={fileUrl(original.position)}
+                    alt={`The screen before the marks, bug ${bug.number}`}
+                  />
+                </a>
+              </div>
+            ) : null}
           </Panel>
+          {advanced?.comments.length ? (
+            <Panel
+              title="On the screen"
+              sub="Parts they pointed at, numbered as on the picture: where each is, never its text"
+            >
+              <ol className={styles.parts}>
+                {advanced.comments.map((comment) => {
+                  const crop = partPicture(comment.n);
+                  return (
+                    <li key={comment.n} className={styles.part}>
+                      <span className={styles.partNumber}>{comment.n}</span>
+                      {crop ? (
+                        <a
+                          href={fileUrl(crop.position)}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element -- a private, same-origin picture */}
+                          <img
+                            className={styles.partPicture}
+                            src={fileUrl(crop.position)}
+                            alt=""
+                          />
+                        </a>
+                      ) : (
+                        <span className={styles.partPicture} />
+                      )}
+                      <span className={styles.partWords}>
+                        <strong>{comment.note || "No words"}</strong>
+                        <small className={kitStyles.muted}>
+                          {[
+                            comment.components.join(" › "),
+                            comment.testid ? `testid ${comment.testid}` : null,
+                            comment.role ?? comment.tag,
+                            comment.onPicture
+                              ? "on the picture"
+                              : "not on the picture (the page had scrolled)",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </small>
+                        <code className={styles.mono}>{comment.selector}</code>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            </Panel>
+          ) : null}
+          {advanced?.steps.length ? (
+            <Panel
+              title="Steps to reproduce"
+              sub="From their trail in the app, as they edited them"
+            >
+              <ol className={styles.steps}>
+                {advanced.steps.map((step, index) => (
+                  <li key={index}>{step}</li>
+                ))}
+              </ol>
+            </Panel>
+          ) : null}
+          {attachments.length ? (
+            <Panel
+              title="Files they added"
+              sub={`${attachments.length} kept; pictures re-encoded, logs scrubbed`}
+            >
+              <ul className={styles.attachments}>
+                {attachments.map((file) => (
+                  <li key={file.position}>
+                    {file.contentType.startsWith("image/") ? (
+                      <a
+                        href={fileUrl(file.position)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={styles.shot}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element -- a private, same-origin picture */}
+                        <img src={fileUrl(file.position)} alt={file.name} />
+                      </a>
+                    ) : file.contentType.startsWith("video/") ? (
+                      <video
+                        className={styles.recording}
+                        src={fileUrl(file.position)}
+                        controls
+                        preload="metadata"
+                      />
+                    ) : null}
+                    <a
+                      href={fileUrl(file.position)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {file.name}
+                    </a>{" "}
+                    <small className={kitStyles.muted}>
+                      {Math.max(1, Math.round(file.bytes / 1024))} KB
+                    </small>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          ) : null}
+          {advanced &&
+          (advanced.calls.length || Object.keys(advanced.speed).length) ? (
+            <Panel
+              title="Calls and speed"
+              sub="Slow or failed calls to the server, and how fast the page was"
+            >
+              {advanced.calls.length ? (
+                <Table label="Slow or failed calls">
+                  <thead>
+                    <tr>
+                      <th scope="col">Call</th>
+                      <th scope="col">Answer</th>
+                      <th scope="col">Reference</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {advanced.calls.map((call, index) => (
+                      <tr key={index}>
+                        <td className={styles.mono}>
+                          {[call.method, call.path].filter(Boolean).join(" ")}
+                        </td>
+                        <td>
+                          {[
+                            call.failed ? "Failed" : null,
+                            call.status ? String(call.status) : null,
+                            call.ms !== null ? `${call.ms} ms` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </td>
+                        <td className={styles.mono}>
+                          <Fact value={call.reference} missing="None" />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              ) : null}
+              {Object.keys(advanced.speed).length ? (
+                <dl className={styles.facts}>
+                  {Object.entries(advanced.speed).map(([key, value]) => (
+                    <div key={key}>
+                      <dt>{speedWords(key)}</dt>
+                      <dd>{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
+            </Panel>
+          ) : null}
           <Panel
             title="Recent errors on the device"
             sub={`${bug.errors.length} kept, oldest first, scrubbed on the device and again on the server`}
@@ -240,6 +417,7 @@ export default async function BugPage({
                     <th scope="col">When</th>
                     <th scope="col">Step</th>
                     <th scope="col">Page</th>
+                    <th scope="col">Details</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -249,6 +427,11 @@ export default async function BugPage({
                       <td className={styles.mono}>{step.event}</td>
                       <td className={styles.mono}>
                         <Fact value={step.route} missing="None" />
+                      </td>
+                      <td className={styles.mono}>
+                        {Object.entries(step.detail)
+                          .map(([key, value]) => `${key} ${value}`)
+                          .join(" · ")}
                       </td>
                     </tr>
                   ))}

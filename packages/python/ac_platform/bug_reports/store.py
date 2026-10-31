@@ -20,11 +20,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.bug_reports.models import (
     AREAS,
+    MAX_FILES,
     SEVERITIES,
     STATUSES,
     BugReport,
     BugReportAttachment,
     BugReportEvent,
+    BugReportFile,
 )
 from ac_platform.identity.models import Person
 from ac_platform.tenancy.models import Tenant
@@ -130,6 +132,93 @@ class BugReportStore:
             )
         await self.database.flush()
         return row
+
+    async def own(self, bug_id: UUID, person_id: UUID) -> BugReport | None:
+        """A person's own report, or None."""
+        found: BugReport | None = await self.database.scalar(
+            select(BugReport).where(BugReport.id == bug_id, BugReport.person_id == person_id)
+        )
+        return found
+
+    async def next_file_place(self, bug_id: UUID) -> int:
+        """The place the report's next file takes; one file at a time per report."""
+        await self.database.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext('bug_report_files:' || :bug))"),
+            {"bug": str(bug_id)},
+        )
+        count = int(
+            await self.database.scalar(
+                select(func.count())
+                .select_from(BugReportFile)
+                .where(BugReportFile.bug_id == bug_id)
+            )
+            or 0
+        )
+        if count >= MAX_FILES:
+            raise BugReportRefused("This report has all its files.")
+        return count + 1
+
+    async def add_file(
+        self,
+        bug_id: UUID,
+        *,
+        position: int,
+        role: str,
+        part: int | None,
+        name: str,
+        content_type: str,
+        size: int,
+        sha256: str,
+        storage_key: str,
+        now: datetime,
+    ) -> None:
+        self.database.add(
+            BugReportFile(
+                id=uuid4(),
+                bug_id=bug_id,
+                position=position,
+                role=role,
+                part=part,
+                name=name,
+                content_type=content_type,
+                bytes=size,
+                sha256=sha256,
+                storage_key=storage_key,
+                created_at=now,
+            )
+        )
+        await self.database.flush()
+
+    async def files(self, bug_id: UUID) -> list[dict[str, Any]]:
+        rows = (
+            await self.database.scalars(
+                select(BugReportFile)
+                .where(BugReportFile.bug_id == bug_id)
+                .order_by(BugReportFile.position)
+            )
+        ).all()
+        return [
+            {
+                "position": row.position,
+                "role": row.role,
+                "part": row.part,
+                "name": row.name,
+                "content_type": row.content_type,
+                "bytes": row.bytes,
+            }
+            for row in rows
+        ]
+
+    async def file(self, bug_id: UUID, position: int) -> tuple[str, str, str, str]:
+        """One file's key, digest, type and name; BugReportNotFound when there is none."""
+        row: BugReportFile | None = await self.database.scalar(
+            select(BugReportFile).where(
+                BugReportFile.bug_id == bug_id, BugReportFile.position == position
+            )
+        )
+        if row is None:
+            raise BugReportNotFound(f"{bug_id}/{position}")
+        return row.storage_key, row.sha256, row.content_type, row.name
 
     async def voice_kept(self, bug_id: UUID) -> bool:
         return (
@@ -401,6 +490,7 @@ class BugReportStore:
                 else None
             ),
             "from_feedback": (report.context or {}).get("feedback"),
+            "files": await self.files(bug_id),
             "history": history,
         }
 

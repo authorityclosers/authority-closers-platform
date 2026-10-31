@@ -13,6 +13,15 @@
 - POST /v1/admin/bugs/{id}/events          change status, severity or area, or add a note
 - POST /v1/admin/bugs/mcp                  the same work as MCP tools (admin_tools.py)
 
+The advanced reporter (owner, 31 Oct 2026; access.py):
+- GET  /v1/bug-reports/advanced            whether this person may use it: on, requested, off
+- POST /v1/bug-reports/advanced/request    ask the owner to let them in
+- POST /v1/bug-reports/{id}/files          a file that follows the person's own report, sent
+                                           in the half hour after it, the file as the body
+- GET  /v1/admin/bugs/{id}/files/{place}   one of a report's files (same origin, private)
+- GET  /v1/admin/bugs/reporter-access      who asked, who is in, who was turned down
+- POST /v1/admin/bugs/reporter-access/{person}  let someone in, turn them down, take it away
+
 A report is its id or its number (9, #9) on the read and change routes, and a staff key
 holding bugs:read and bugs:write reaches them (v0.93): ac-bugs and agents work without the
 browser. A list for a key masks the words; the change is audited naming the key.
@@ -28,8 +37,9 @@ import base64
 import binascii
 import json
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
+from urllib.parse import unquote
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
@@ -37,16 +47,25 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
+from ac_platform.bug_reports import access as reporter_access
 from ac_platform.bug_reports import admin_tools
 from ac_platform.bug_reports.issues import BugIssueNotFound, BugIssueRefused, IssueStore
-from ac_platform.bug_reports.models import AREAS, SEVERITIES, STATUSES
+from ac_platform.bug_reports.models import AREAS, FILE_ROLES, MAX_FILES, SEVERITIES, STATUSES
 from ac_platform.bug_reports.screenshots import (
     ScreenshotError,
     ScreenshotStore,
     check_voice,
+    clean_file,
     clean_screenshot,
 )
-from ac_platform.bug_reports.scrub import area_for, clean_context, clean_errors, scrub_route
+from ac_platform.bug_reports.scrub import (
+    area_for,
+    clean_advanced,
+    clean_context,
+    clean_errors,
+    scrub_route,
+    scrub_text,
+)
 from ac_platform.bug_reports.store import (
     BugReportNotFound,
     BugReportRefused,
@@ -72,6 +91,8 @@ PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
 MAX_BODY_BYTES = 6 * 1024 * 1024
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _LIST_QUERY = frozenset({"status", "severity", "area", "organisation", "offset"})
+# Files follow a report as it is sent; later, the report is as it was sent.
+FILE_WINDOW = timedelta(minutes=30)
 
 
 class Screenshot(BaseModel):
@@ -102,6 +123,15 @@ class NewBugReport(BaseModel):
     client_errors: list[Any] = Field(default_factory=list, max_length=50)
     screenshot: Screenshot | None = None
     voice: Voice | None = None
+    # The advanced reporter's parts (steps, comments, calls, speed): cleaned in scrub.py.
+    advanced: dict[str, Any] | None = None
+
+
+class AccessDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    decision: Literal["granted", "denied", "revoked"]
+    note: str | None = Field(default=None, max_length=500)
 
 
 class IssueChange(BaseModel):
@@ -192,6 +222,14 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
         }
         if auth.resolved.membership_role:
             context["workspace"] = {"role": str(auth.resolved.membership_role)[:32]}
+        # The advanced reporter's parts, from those who may use it.
+        if (
+            command.advanced is not None
+            and await reporter_access.access_for(auth.database, actor.person_id) == "on"
+        ):
+            advanced = clean_advanced(command.advanced)
+            if advanced is not None:
+                context["advanced"] = advanced
         bug_id = uuid4()
         now = datetime.now(UTC)
         picture: dict[str, Any] | None = None
@@ -259,6 +297,97 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
         # One problem, one issue (v0.93): the report joins the issue it looks like.
         await IssueStore(auth.database).assign(report, now=now)
         return {"bug_id": str(bug_id), "screenshot": kept, "voice": spoken}
+
+    @reports.get("/advanced")
+    async def advanced_state(
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = read_dependency,
+    ) -> dict[str, Any]:
+        response.headers.update(PRIVATE)
+        on_app_host(request)
+        person = auth.resolved.actor.person_id
+        return {"access": await reporter_access.access_for(auth.database, person)}
+
+    @reports.post("/advanced/request")
+    async def advanced_request(
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        response.headers.update(PRIVATE)
+        on_app_host(request)
+        try:
+            require_safe_origin(request, settings)
+        except DomainError:
+            raise HTTPException(403, "Ask from the app.", headers=PRIVATE) from None
+        state = await reporter_access.ask(
+            auth.database, auth.resolved.actor.person_id, now=datetime.now(UTC)
+        )
+        return {"access": state}
+
+    @reports.post("/{bug_id}/files", status_code=201)
+    async def add_file(
+        bug_id: UUID,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        response.headers.update(PRIVATE)
+        on_app_host(request)
+        try:
+            require_safe_origin(request, settings)
+        except DomainError:
+            raise HTTPException(403, "Send this from the app.", headers=PRIVATE) from None
+        actor = auth.resolved.actor
+        store = BugReportStore(auth.database)
+        report = await store.own(bug_id, actor.person_id)
+        if report is None:
+            raise HTTPException(404, "That report is not here.", headers=PRIVATE)
+        now = datetime.now(UTC)
+        if now - report.created_at > FILE_WINDOW:
+            raise HTTPException(409, "Files go with a report as it is sent.", headers=PRIVATE)
+        if await reporter_access.access_for(auth.database, actor.person_id) != "on":
+            raise HTTPException(403, "Files go with the advanced reporter.", headers=PRIVATE)
+        role = request.headers.get("x-file-role", "")
+        if role not in FILE_ROLES:
+            raise HTTPException(422, "Say what the file is.", headers=PRIVATE)
+        part: int | None = None
+        if role == "element":
+            raw_part = request.headers.get("x-file-n", "")
+            part = int(raw_part) if raw_part.isdigit() and 1 <= int(raw_part) <= 50 else None
+            if part is None:
+                raise HTTPException(422, "Say which comment the picture is for.", headers=PRIVATE)
+        name = scrub_text(unquote(request.headers.get("x-file-name", "")), 120) or role
+        content_type = (request.headers.get("content-type") or "").split(";")[0].strip().lower()
+        if not pictures.available:
+            raise HTTPException(503, "Files are not kept here.", headers=PRIVATE)
+        declared = (report.context or {}).get("advanced", {}).get("files", 0)
+        try:
+            position = await store.next_file_place(bug_id)
+        except BugReportRefused as error:
+            raise HTTPException(409, str(error), headers=PRIVATE) from None
+        if position > min(int(declared or 0), MAX_FILES):
+            raise HTTPException(409, "This report has all its files.", headers=PRIVATE)
+        body = await request.body()
+        try:
+            clean = await run_in_threadpool(clean_file, body, content_type)
+            key = await run_in_threadpool(pictures.put_file, bug_id, position, clean)
+        except ScreenshotError as error:
+            raise HTTPException(422, str(error), headers=PRIVATE) from None
+        await store.add_file(
+            bug_id,
+            position=position,
+            role=role,
+            part=part,
+            name=name,
+            content_type=clean.content_type,
+            size=len(clean.data),
+            sha256=clean.sha256,
+            storage_key=key,
+            now=now,
+        )
+        return {"position": position, "content_type": clean.content_type}
 
     @reports.get("/mine")
     async def mine(
@@ -394,6 +523,38 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
         except BugIssueRefused as error:
             raise HTTPException(422, str(error)) from None
 
+    # Who may use the advanced reporter: the owner lets people in or turns them down.
+    @admin.get("/reporter-access")
+    async def access_list(
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = read_dependency,
+    ) -> dict[str, Any]:
+        await admit(request, response, auth, write=False)
+        return {"people": await reporter_access.people(auth.database)}
+
+    @admin.post("/reporter-access/{person_id}")
+    async def access_decide(
+        person_id: UUID,
+        decision: AccessDecision,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        actor = await admit(request, response, auth, write=True)
+        try:
+            await reporter_access.decide(
+                auth.database,
+                person_id,
+                kind=decision.decision,
+                actor_person_id=actor.person_id,
+                note=_words(decision.note)[:500] if decision.note else None,
+                now=datetime.now(UTC),
+            )
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
+        return {"people": await reporter_access.people(auth.database)}
+
     # The same work as MCP tools, for staff and staff keys only (admin_tools.py).
     @admin.get("/mcp")
     async def mcp_no_stream() -> Response:
@@ -455,6 +616,38 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
                 **PRIVATE,
                 "X-Content-Type-Options": "nosniff",
                 "Cross-Origin-Resource-Policy": "same-origin",
+            },
+        )
+
+    @admin.get("/{bug_id}/files/{position}")
+    async def report_file(
+        bug_id: UUID,
+        position: int,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = read_dependency,
+    ) -> Response:
+        await admit(request, response, auth, write=False)
+        try:
+            key, digest, content_type, name = await BugReportStore(auth.database).file(
+                bug_id, position
+            )
+            data = await run_in_threadpool(pictures.read, key, expected_sha256=digest)
+        except (BugReportNotFound, ScreenshotError):
+            raise HTTPException(404, "That file is not here.") from None
+        shown = content_type.startswith(("image/", "video/"))
+        return Response(
+            content=data,
+            media_type=content_type,
+            headers={
+                **PRIVATE,
+                "X-Content-Type-Options": "nosniff",
+                "Cross-Origin-Resource-Policy": "same-origin",
+                # Text and PDFs download; pictures and recordings show in the page.
+                "Content-Disposition": "inline"
+                if shown
+                else f'attachment; filename="report-file-{position}"',
+                "Content-Security-Policy": "sandbox; default-src 'none'",
             },
         )
 

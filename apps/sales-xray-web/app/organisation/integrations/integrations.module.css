@@ -109,16 +109,6 @@
   font-size: var(--sx-text-sm);
 }
 
-.inline select {
-  min-height: var(--sx-control-h);
-  padding: 0 8px;
-  border: 1px solid var(--sx-line-strong);
-  border-radius: var(--sx-radius-sm);
-  background: var(--sx-surface);
-  color: var(--sx-ink);
-  font: inherit;
-}
-
 .actions {
   display: flex;
   flex-wrap: wrap;

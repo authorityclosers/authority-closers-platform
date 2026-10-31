@@ -38,6 +38,9 @@ class WorkHours:
     start: time
     end: time
     pause_leads: bool
+    # Breaks the team takes every work day (lunch), inside the hours: a gap between a
+    # seller's calls there is not red (Leads redesign section 6, 30 Oct 2026).
+    breaks: tuple[tuple[time, time], ...] = ()
 
 
 def _clock(value: Any) -> time | None:
@@ -62,18 +65,30 @@ def parse(config: Mapping[str, Any]) -> WorkHours | None:
     picked = tuple(sorted({day for day in days if isinstance(day, int) and 0 <= day <= 6}))
     if not picked:
         return None
-    return WorkHours(picked, start, end, raw.get("pause_leads") is True)
+    breaks = []
+    for item in raw.get("breaks") or ():
+        if isinstance(item, Mapping):
+            begins, ends = _clock(item.get("start")), _clock(item.get("end"))
+            if begins is not None and ends is not None and start <= begins < ends <= end:
+                breaks.append((begins, ends))
+    return WorkHours(picked, start, end, raw.get("pause_leads") is True, tuple(sorted(breaks)))
 
 
 def as_config(hours: WorkHours | None) -> dict[str, Any] | None:
     if hours is None:
         return None
-    return {
+    config: dict[str, Any] = {
         "days": list(hours.days),
         "start": hours.start.strftime("%H:%M"),
         "end": hours.end.strftime("%H:%M"),
         "pause_leads": hours.pause_leads,
     }
+    if hours.breaks:
+        config["breaks"] = [
+            {"start": begins.strftime("%H:%M"), "end": ends.strftime("%H:%M")}
+            for begins, ends in hours.breaks
+        ]
+    return config
 
 
 def inside(hours: WorkHours | None, at: datetime) -> bool:

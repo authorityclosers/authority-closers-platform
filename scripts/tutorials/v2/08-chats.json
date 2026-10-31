@@ -293,7 +293,7 @@
             {
               "do": "highlight",
               "target": {
-                "role": "combobox",
+                "role": "button",
                 "name": "Whose chats"
               },
               "ms": 1500
@@ -304,7 +304,7 @@
             {
               "do": "highlight",
               "target": {
-                "role": "combobox",
+                "role": "button",
                 "name": "Channel"
               },
               "ms": 1400
@@ -330,7 +330,7 @@
             {
               "do": "select",
               "target": {
-                "role": "combobox",
+                "role": "button",
                 "name": "Whose chats"
               },
               "option": "Mine",
@@ -339,7 +339,7 @@
             {
               "do": "select",
               "target": {
-                "role": "combobox",
+                "role": "button",
                 "name": "Whose chats"
               },
               "option": "Everyone",

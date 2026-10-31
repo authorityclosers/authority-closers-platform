@@ -36,6 +36,7 @@ import {
   type LocalCheckpoint,
   type TranscriptSegment,
 } from "@ac/sales-xray-client";
+import { Picker } from "./ui/picker";
 
 type Tab = "workbench" | "evidence" | "review" | "library";
 type Run = {
@@ -648,18 +649,14 @@ function RunWorkspace({
                     onChange={(e) => setSearch(e.target.value)}
                   />
                 </label>
-                <select
-                  aria-label="Filter speaker"
-                  value={speaker}
-                  onChange={(e) => setSpeaker(e.target.value)}
-                >
-                  <option value="all">All speakers</option>
-                  {speakers.map((v) => (
-                    <option key={v} value={v}>
-                      {v}
-                    </option>
-                  ))}
-                </select>
+                <Picker
+                  title="Filter speaker"
+                  ariaLabel="Filter speaker"
+                  value={speaker === "all" ? null : speaker}
+                  all={{ label: "All speakers" }}
+                  options={speakers.map((v) => ({ key: v, label: v }))}
+                  onChange={(key) => setSpeaker(key ?? "all")}
+                />
               </div>
               <div className="transcript-list" aria-label="Transcript segments">
                 {visible.length === 0 &&
@@ -1249,44 +1246,45 @@ function Review({
             <label className="field-label" htmlFor="measurement-series">
               Measurement series
             </label>
-            <select
+            <Picker
               id="measurement-series"
-              value={measurementSelection.series}
-              onChange={(e) => {
-                setMeasurementSelection({ series: e.target.value, point: "" });
+              title="Measurement series"
+              value={measurementSelection.series || null}
+              placeholder="Choose a channel and measurement"
+              options={
+                run.local?.channels.map((channel, index) => ({
+                  key: String(index),
+                  label: `${channel.label} · ${channel.unit}`,
+                })) ?? []
+              }
+              onChange={(key) => {
+                setMeasurementSelection({ series: key ?? "", point: "" });
                 invalidate();
               }}
-            >
-              <option value="">Choose a channel and measurement</option>
-              {run.local?.channels.map((channel, index) => (
-                <option key={`${channel.label}:${index}`} value={String(index)}>
-                  {channel.label} · {channel.unit}
-                </option>
-              ))}
-            </select>
+            />
             <label className="field-label" htmlFor="measurement-point">
               Exact measurement point
             </label>
-            <select
+            <Picker
               id="measurement-point"
+              title="Exact measurement point"
               disabled={!series}
-              value={measurementSelection.point}
-              onChange={(e) => {
+              value={measurementSelection.point || null}
+              placeholder="Choose a specific point to review"
+              options={
+                series?.points.map((value, index) => ({
+                  key: String(index),
+                  label: `${value.start_ms} ms · ${value.value ?? "Unavailable"} ${series.unit}`,
+                })) ?? []
+              }
+              onChange={(key) => {
                 setMeasurementSelection({
                   ...measurementSelection,
-                  point: e.target.value,
+                  point: key ?? "",
                 });
                 invalidate();
               }}
-            >
-              <option value="">Choose a specific point to review</option>
-              {series?.points.map((value, index) => (
-                <option key={value.start_ms} value={String(index)}>
-                  {value.start_ms} ms · {value.value ?? "Unavailable"}{" "}
-                  {series.unit}
-                </option>
-              ))}
-            </select>
+            />
             {series && point ? (
               <div className="measurement-anchor">
                 <strong>{series.label}</strong>
@@ -1326,20 +1324,19 @@ function Review({
             <label className="field-label" htmlFor="review-evidence">
               Source evidence
             </label>
-            <select
+            <Picker
               id="review-evidence"
-              value={selected}
-              onChange={(e) => {
-                setSelected(e.target.value);
+              title="Source evidence"
+              value={selected || null}
+              options={run.segments.map((v) => ({
+                key: v.id,
+                label: `${time(v.start_ms)} · ${v.speaker_id} · ${v.id}`,
+              }))}
+              onChange={(key) => {
+                setSelected(key ?? "");
                 invalidate();
               }}
-            >
-              {run.segments.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {time(v.start_ms)} · {v.speaker_id} · {v.id}
-                </option>
-              ))}
-            </select>
+            />
             {selectedSegment && (
               <blockquote className="review-quote">
                 {selectedSegment.text}

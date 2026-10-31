@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 REVISION, DOWN = "20261024_0128", "20261023_0127"
 FILE = "20261024_0128_lead_os.py"
 # Migrations after this one that change its tables: unwound around it, then redone.
-LATER = ("20261024_0129_lead_desk_tasks.py",)
+LATER = ("20261024_0129_lead_desk_tasks.py", "20261030_0147_lead_desk_tasks_own.py")
 
 
 @pytest.fixture(scope="module")

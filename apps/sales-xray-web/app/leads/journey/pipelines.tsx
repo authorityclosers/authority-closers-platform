@@ -14,6 +14,7 @@ import { useState } from "react";
 import { notify } from "../../notice-center";
 import { Sheet } from "../../ui/sheet";
 import { Button, Field } from "../../ui/kit";
+import { Picker } from "../../ui/picker";
 import { LeadsError } from "../leads-client";
 import {
   changePipeline,
@@ -273,16 +274,16 @@ export function PipelineSheet({
             label="Kind of business"
             hint="Its stages to start with. Change them any time."
           >
-            <select
-              value={template}
-              onChange={(event) => setTemplate(event.target.value)}
-            >
-              {(templates ?? []).map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
+            <Picker
+              title="Kind of business"
+              mode="inline"
+              value={template || null}
+              options={(templates ?? []).map((item) => ({
+                key: item.id,
+                label: item.name,
+              }))}
+              onChange={(key) => setTemplate(key ?? "")}
+            />
           </Field>
         ) : null}
         {pipeline?.main ? (

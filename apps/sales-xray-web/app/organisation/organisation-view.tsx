@@ -45,6 +45,7 @@ import {
   type SalesXrayWorkspace as Workspace,
 } from "../sales-xray-workspaces";
 import { Meter, Spark } from "../ui/kit";
+import { Picker } from "../ui/picker";
 import { Sheet } from "../ui/sheet";
 import { SectionBoundary } from "../ui/section-boundary";
 import { useWorkspaceAccess } from "../workspace-access";
@@ -1599,19 +1600,18 @@ function MembersPanel({
                 aria-describedby={invalid ? "org-add-error" : undefined}
               />
             </label>
-            <select
+            <Picker
               className={styles.select}
+              title="Role for the new person"
               value={additionRole}
-              onChange={(event) => setNewRole(event.target.value as OrgRole)}
+              options={rolesToGive(isOwner).map((item) => ({
+                key: item,
+                label: ROLE_LABEL[item],
+              }))}
+              onChange={(key) => setNewRole(key as OrgRole)}
               disabled={disabled}
-              aria-label="Role for the new person"
-            >
-              {rolesToGive(isOwner).map((item) => (
-                <option key={item} value={item}>
-                  {ROLE_LABEL[item]}
-                </option>
-              ))}
-            </select>
+              ariaLabel="Role for the new person"
+            />
             <button
               type="submit"
               className={styles.primary}
@@ -1799,26 +1799,25 @@ function MembersPanel({
                   member.status === "active" &&
                   !isYou &&
                   member.role !== "owner" ? (
-                    <select
+                    <Picker
                       className={styles.roleSelect}
+                      title={`Role for ${name}`}
                       value={member.role}
+                      options={rolesToGive(true).map((item) => ({
+                        key: item,
+                        label: ROLE_LABEL[item],
+                      }))}
                       disabled={busy || confirming !== null}
-                      onChange={(event) => {
-                        const nextRole = event.target.value as OrgRole;
+                      onChange={(key) => {
+                        const nextRole = key as OrgRole;
                         setConfirming({
                           message: `Change ${name} to ${ROLE_LABEL[nextRole]}? ${ROLE_HINT[nextRole]}`,
                           verb: "Change role",
                           action: () => changeRole(member.personId, nextRole),
                         });
                       }}
-                      aria-label={`Role for ${name}`}
-                    >
-                      {rolesToGive(true).map((item) => (
-                        <option key={item} value={item}>
-                          {ROLE_LABEL[item]}
-                        </option>
-                      ))}
-                    </select>
+                      ariaLabel={`Role for ${name}`}
+                    />
                   ) : (
                     <span className={styles.role} data-role={member.role}>
                       {member.role === "owner" ? (

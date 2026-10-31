@@ -262,6 +262,6 @@ it("sends the organisation's settings to its hub", async () => {
   expect(
     hub.every((link) => link.closest('section[aria-label="Organisation"]')),
   ).toBe(true);
-  expect(hubAddress("stages")).toBe("/organisation?tab=leads&part=stages");
+  expect(hubAddress("stages")).toBe("/organisation/stages");
   expect(hubAddress("profile")).toBeNull();
 });

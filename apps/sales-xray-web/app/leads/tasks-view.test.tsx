@@ -229,3 +229,25 @@ it("says so when a list is empty", async () => {
   await show();
   expect(container.textContent).toContain("Nothing due today");
 });
+
+// A task of your own (migration 0147) has no lead: its row says so and opens
+// nothing, while Later and Done still work.
+it("shows a task of your own without a lead to open", async () => {
+  calls.read.mockResolvedValue({
+    tasks: [
+      {
+        ...task("t9", {
+          kind: "other",
+          title: "Renew the brochure print order",
+        }),
+        lead_id: null,
+        lead_name: null,
+      },
+    ],
+    counts: { today: 1 },
+  });
+  await show();
+  expect(container.textContent).toContain("Other · Your own");
+  expect(container.querySelector("[data-lead-row]")).toBeNull();
+  expect(button("Done: Renew the brochure print order")).toBeDefined();
+});

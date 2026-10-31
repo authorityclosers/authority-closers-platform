@@ -28,6 +28,7 @@ import { UnlockButton } from "../report-sections/shared";
 import { useCallOutcome } from "../report-outcome-context";
 import type { Line } from "../report-story-model";
 import { PlayChip, type Select } from "../report-visuals/visuals";
+import { Picker } from "../ui/picker";
 import { brain4Highlights, type Brain4View } from "./brain4";
 import { MoneyBag, TargetArrow } from "./icons";
 import {
@@ -363,19 +364,15 @@ function DealOutcomeBar({ example }: { example: OutcomeKind | null }) {
             <label className={styles.srOnly} htmlFor={`${id}-currency`}>
               {OUTCOME_RECORD.currency}
             </label>
-            <select
+            <Picker
               id={`${id}-currency`}
               className={styles.currency}
+              title={OUTCOME_RECORD.currency}
               value={currency}
+              options={CURRENCIES.map((code) => ({ key: code, label: code }))}
               disabled={saving}
-              onChange={(event) => setCurrency(event.target.value)}
-            >
-              {CURRENCIES.map((code) => (
-                <option key={code} value={code}>
-                  {code}
-                </option>
-              ))}
-            </select>
+              onChange={(key) => setCurrency(key ?? "INR")}
+            />
             <label className={styles.srOnly} htmlFor={`${id}-amount`}>
               Deal value amount
             </label>

@@ -370,13 +370,18 @@ it("requires an explicit role for an unresolved third speaker before sending the
   await edit();
   expect(button("Save").disabled).toBe(true);
   expect(puts()).toHaveLength(0);
-  const select = host.querySelector<HTMLSelectElement>(
-    'select[aria-label="Role for Fictional Third"]',
-  )!;
-  await act(async () => {
-    select.value = "other";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  const role = [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      'button[aria-haspopup="listbox"]',
+    ),
+  ].find((b) => b.textContent?.includes("Role for Fictional Third"))!;
+  await act(async () => role.click());
+  await act(async () =>
+    host
+      .querySelector<HTMLElement>('[role="option"][data-key="other"]')!
+      .click(),
+  );
+  expect(role.dataset.value).toBe("other");
   await act(async () => button("Save").click());
   expect(JSON.parse(puts()[0][1]!.body as string).speakers).toHaveLength(3);
   expect(host.querySelector('[role="dialog"]')).toBeNull();

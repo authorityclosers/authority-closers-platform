@@ -8,6 +8,11 @@ services:
     restart: unless-stopped
     read_only: true
     user: "1000:1000"
+    environment:
+      # The internal API pages read their data from while they render
+      # (server-reads.ts), from the source profile. Empty: the browser reads,
+      # as before, with no new image (rollback).
+      AC_CONVERSATION_API_ORIGIN: ${AC_XRAY_WEB_API_ORIGIN:-}
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     tmpfs:

@@ -11,6 +11,7 @@ import { Send } from "lucide-react";
 
 import { notify } from "../notice-center";
 import { Badge, Button, type Tone } from "../ui/kit";
+import { Picker } from "../ui/picker";
 import { CopyButton } from "./copy-button";
 import { useOrigin } from "./use-origin";
 import styles from "./developers.module.css";
@@ -139,20 +140,19 @@ export function TryApi({
       >
         <label className={styles.field} htmlFor={`${ids}-endpoint`}>
           <span>Request</span>
-          <select
+          <Picker
             id={`${ids}-endpoint`}
+            title="Request"
             value={endpointId}
-            onChange={(event) => {
-              setEndpointId(event.target.value);
+            options={ENDPOINTS.map((item) => ({
+              key: item.id,
+              label: item.label,
+            }))}
+            onChange={(key) => {
+              setEndpointId(key ?? ENDPOINTS[0].id);
               setAnswer(null);
             }}
-          >
-            {ENDPOINTS.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
+          />
           {endpoint.scope ? (
             <small>
               The key needs <code>{endpoint.scope}</code>.

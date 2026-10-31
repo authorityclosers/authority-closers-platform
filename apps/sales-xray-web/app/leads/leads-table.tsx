@@ -56,6 +56,7 @@ import {
   type EditRights,
   type Move,
 } from "./table-edit";
+import { SourceMark, shortSource, sourceKind } from "./source-mark";
 import styles from "./leads-table.module.css";
 
 // Wide enough beside the sidebar for every column to read (1000 px left
@@ -296,6 +297,7 @@ export function LeadsTable({
   showOwner,
   pipelineNames = null,
   selecting = false,
+  ticks = false,
   chosen,
   onToggle,
   keysRef,
@@ -312,6 +314,8 @@ export function LeadsTable({
   pipelineNames?: ReadonlyMap<string, string> | null;
   /** Select (owners and admins): a tick column, and a line's tap ticks it. */
   selecting?: boolean;
+  /** An owner's tick column before a lead is picked (owner, 31 Oct 2026). */
+  ticks?: boolean;
   chosen?: ReadonlyMap<string, string>;
   onToggle?: (row: LeadRow) => void;
   /** The list's row keys (J/K, Enter) read the table's rows here. */
@@ -385,7 +389,7 @@ export function LeadsTable({
     paneWidth,
     columns.filter((column) => column !== "name"),
     KEY_ORDER,
-    selecting,
+    selecting || ticks,
   );
   // In a narrow pane: Name and the key columns in the row, the rest under it.
   const rowColumns: Column[] = fit ? ["name", ...fit.keys] : columns;
@@ -601,7 +605,13 @@ export function LeadsTable({
           <span className={styles.quiet}>No owner</span>
         );
       case "source":
-        return row.source_label;
+        // Its mark and short name; the full source in the tooltip.
+        return (
+          <span className={styles.source} title={row.source_label || undefined}>
+            <SourceMark kind={sourceKind(row)} />
+            {shortSource(row)}
+          </span>
+        );
       case "next":
         return row.next_action_at ? (
           <span data-late={row.overdue ? "" : undefined}>
@@ -660,7 +670,8 @@ export function LeadsTable({
     );
   };
 
-  const across = rowColumns.length + (selecting ? 1 : 0) + (fit ? 1 : 0);
+  const across =
+    rowColumns.length + (selecting || ticks ? 1 : 0) + (fit ? 1 : 0);
 
   // A cut cell slides to show its end while the pointer or focus rests on it
   // (owner, 25 Oct 2026: the Pipeline, Owner and Source cells were cut).
@@ -764,7 +775,7 @@ export function LeadsTable({
       >
         <thead>
           <tr>
-            {selecting ? (
+            {selecting || ticks ? (
               <th scope="col" className={styles.pick}>
                 <span className={styles.srOnly}>Select</span>
               </th>
@@ -840,7 +851,7 @@ export function LeadsTable({
                     selecting ? onToggle?.(row) : onOpen(row.lead_id)
                   }
                 >
-                  {selecting ? (
+                  {selecting || ticks ? (
                     <td className={styles.pick}>
                       <input
                         type="checkbox"
@@ -921,7 +932,7 @@ export function LeadsTable({
               pipeline={quickAdd.pipeline}
               onAdded={quickAdd.onAdded}
               onPasteRows={quickAdd.onPasteRows}
-              before={selecting ? 1 : 0}
+              before={selecting || ticks ? 1 : 0}
               after={columns.length - 3}
             />
           </tfoot>

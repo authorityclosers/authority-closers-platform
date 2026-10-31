@@ -422,31 +422,6 @@
   display: inline-flex;
 }
 
-.select {
-  min-height: 36px;
-  padding: 0 32px 0 12px;
-  border: 1px solid var(--lx-line-strong);
-  border-radius: 10px;
-  background: var(--lx-surface)
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
-    no-repeat right 11px center;
-  color: var(--lx-ink);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  appearance: none;
-  cursor: pointer;
-}
-
-.select:hover {
-  background-color: var(--lx-sunken);
-}
-
-.select:focus-visible {
-  outline: 2px solid transparent;
-  box-shadow: var(--lx-ring-focus);
-}
-
 .srOnly {
   position: absolute;
   width: 1px;
@@ -506,8 +481,7 @@
   font-weight: 650;
 }
 
-.form input,
-.form select {
+.form input {
   min-height: 40px;
   box-sizing: border-box;
   padding: 0 12px;
@@ -525,8 +499,7 @@
   font-weight: 500;
 }
 
-.form input:focus-visible,
-.form select:focus-visible {
+.form input:focus-visible {
   outline: 2px solid transparent;
   box-shadow: var(--lx-ring-focus);
 }

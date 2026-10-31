@@ -52,6 +52,17 @@ export type MyDay = {
 
 export type TeamPool = { open: number; unassigned: number; may_take: boolean };
 
+/** A gap between my calls inside the working day (Leads redesign, section 6). */
+export type HomeBreak = {
+  start: string;
+  end: string;
+  minutes: number;
+  /** Inside a break the team set (lunch): not red. */
+  planned: boolean;
+  /** An edge is a call from the app's Call button: its time is approximate. */
+  approximate: boolean;
+};
+
 /** The desk with Home's extras (absent from an older server). */
 export type HomeDesk = Desk & {
   numbers_yesterday?: Desk["numbers"] | null;
@@ -59,6 +70,29 @@ export type HomeDesk = Desk & {
   /** This calendar month so far (Analyse yourself). */
   numbers_month?: Desk["numbers"] | null;
   team_pool?: TeamPool | null;
+  /** Today's work counting down: still to call today, and called today. */
+  to_call_today?: { left: number; called: number } | null;
+  /** My three longest breaks today, longest first. */
+  breaks?: HomeBreak[] | null;
+  /** Each side of my day, for Home's Inbound | Cold selector; absent from an older server. */
+  sides?: { inbound: HomeSide; cold: HomeSide } | null;
+};
+
+/** One side of my day (Dipak's Home + Leads handoff, 31 Oct 2026). */
+export type HomeSide = {
+  /** Home's three side cards, each the count of the Leads list it opens. */
+  counts: { new: number; open_leads: number; follow_ups_today: number };
+  numbers: Desk["numbers"];
+  numbers_week: Desk["numbers"];
+  numbers_month: Desk["numbers"];
+  to_call_today: { left: number; called: number };
+  /** The next lead to call on this side. */
+  next_lead: Desk["queue"][number] | null;
+  /** The next two planned follow-ups. */
+  upcoming: Desk["queue"][number][];
+  /** The stage keys the cards open: the first stage, and Open Leads. */
+  new_key: string | null;
+  open_key: string | null;
 };
 
 export const METRIC_WORDS: Record<Metric, string> = {

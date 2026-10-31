@@ -100,16 +100,32 @@ async function mount(options: Parameters<typeof render>[0] = {}) {
   await act(async () => render(options));
   await flush();
 }
-const select = () => host.querySelector<HTMLSelectElement>("label select")!;
+const picker = () =>
+  host.querySelector<HTMLButtonElement>(
+    'label button[aria-haspopup="listbox"]',
+  )!;
 const visibleIds = () =>
   [...host.querySelectorAll<HTMLElement>(".calls-library-item")].map(
     (item) => item.dataset.submissionId,
   );
-async function choose(value: string, target = select()) {
-  await act(async () => {
-    target.value = value;
-    target.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+async function choose(value: string, target = picker()) {
+  await act(async () => target.click());
+  await act(async () =>
+    target
+      .parentElement!.querySelector<HTMLElement>(
+        `[role="option"][data-key="${value}"]`,
+      )!
+      .click(),
+  );
+}
+// The picker's rows show only while it is open: open it, read, close it.
+async function rows(target = picker()) {
+  await act(async () => target.click());
+  const options = [
+    ...target.parentElement!.querySelectorAll<HTMLElement>('[role="option"]'),
+  ].map((option) => [option.dataset.key, option.textContent]);
+  await act(async () => target.click());
+  return options;
 }
 async function click(selector: string) {
   await act(async () =>
@@ -153,10 +169,10 @@ it("renders rep labels, distinguishes duplicate names, and filters by UUID witho
   fetchMock.mockResolvedValue(ok(page([row(ids[0]), row(ids[1], repB)])));
   // An admin viewing two teammates who share a name.
   await mount({ context: { ...context, personId: repC } });
-  expect(select().closest("label")?.textContent).toContain(
+  expect(picker().closest("label")?.textContent).toContain(
     "Rep (loaded calls)",
   );
-  expect([...select().options].map((o) => [o.value, o.text])).toEqual([
+  expect(await rows()).toEqual([
     ["", "All reps"],
     [repA, "Fictional Rep (1)"],
     [repB, "Fictional Rep (2)"],
@@ -209,13 +225,8 @@ it("adds unique reps from the second page and keeps the selected UUID", async ()
   await choose(repB);
   await click(".calls-library-more");
   expect(fetchMock.mock.calls[1][0]).toBe(`${LIST}&before=${cursor}`);
-  expect([...select().options].map((o) => o.value)).toEqual([
-    "",
-    repC,
-    repA,
-    repB,
-  ]);
-  expect(select().value).toBe(repB);
+  expect((await rows()).map(([key]) => key)).toEqual(["", repC, repA, repB]);
+  expect(picker().dataset.value).toBe(repB);
   expect(visibleIds()).toEqual([ids[1]]);
   await choose(repC);
   expect(visibleIds()).toEqual([ids[2]]);
@@ -257,7 +268,11 @@ it("intersects rep, title and status before sorting, keeping Load more for an em
   await status("ready");
   await choose(
     "longest",
-    host.querySelector<HTMLSelectElement>('[aria-label="Sort calls"]')!,
+    [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        'button[aria-haspopup="listbox"]',
+      ),
+    ].find((button) => button.textContent?.startsWith("Sort calls"))!,
   );
   expect(visibleIds()).toEqual([ids[2], ids[0]]);
   await status("active");
@@ -267,7 +282,7 @@ it("intersects rep, title and status before sorting, keeping Load more for an em
   ).toBe(false);
   expect(host.textContent).toContain("The filter covers loaded calls only");
   await click(".calls-library-filter-empty button");
-  expect(select().value).toBe("");
+  expect(picker().dataset.value).toBe("");
   expect(visibleIds()).toHaveLength(4);
 });
 
@@ -281,7 +296,7 @@ it("retries failed initial and later reads with the same owner flag and cursor",
   await click('[role="alert"] button');
   await choose(repA);
   await click(".calls-library-more");
-  expect(select().value).toBe(repA);
+  expect(picker().dataset.value).toBe(repA);
   await click(".calls-library-inline-error button");
   expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
     LIST,
@@ -289,7 +304,7 @@ it("retries failed initial and later reads with the same owner flag and cursor",
     `${LIST}&before=${cursor}`,
     `${LIST}&before=${cursor}`,
   ]);
-  expect(select().options).toHaveLength(3);
+  expect(await rows()).toHaveLength(3);
   expect(visibleIds()).toEqual([ids[0]]);
 });
 
@@ -368,7 +383,7 @@ it("resets a chosen rep when switching to a different authorised organisation an
   await mount();
   await choose(repB);
   await mount({ context: { ...context, tenantId: "org-two" } });
-  expect(select().value).toBe("");
+  expect(picker().dataset.value).toBe("");
   expect(visibleIds()).toEqual([ids[2]]);
   expect(host.textContent).not.toContain("Fictional Rep");
   await mount({ authenticated: false });
@@ -386,7 +401,7 @@ it("preserves scope on a failed refresh, then clears it on successful withdrawal
   await click(".calls-library-more");
   await choose(repB);
   await click(".calls-library-refresh");
-  expect(select().value).toBe(repB);
+  expect(picker().dataset.value).toBe(repB);
   expect(visibleIds()).toEqual([ids[1]]);
   await click(".calls-library-refresh");
   expect(host.textContent).not.toContain("Rep (loaded calls)");
@@ -400,7 +415,7 @@ it("resets a selected rep when a successful refresh replaces its rows", async ()
   await mount();
   await choose(repA);
   await click(".calls-library-refresh");
-  expect(select().value).toBe("");
+  expect(picker().dataset.value).toBe("");
   expect(visibleIds()).toEqual([ids[1]]);
 });
 
@@ -419,7 +434,7 @@ it("says You on the viewer's own calls and offers Rename only there", async () =
     ok(page([row(ids[0]), row(ids[1], repB, "Asha Menon")])),
   );
   await mount();
-  expect([...select().options].map((o) => o.text)).toEqual([
+  expect((await rows()).map(([, label]) => label)).toEqual([
     "All reps",
     "Asha Menon",
     "You",

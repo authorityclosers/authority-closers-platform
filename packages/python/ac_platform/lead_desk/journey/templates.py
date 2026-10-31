@@ -139,6 +139,8 @@ class TemplateStage:
     needs: tuple[str, ...] | None = None
     reasons: tuple[tuple[str, str], ...] | None = None
     rot_hours: int | None = None
+    # The first stage's name on the Cold Leads side (stages-views-sources.md §2).
+    cold_label: str | None = None
 
     @property
     def kind(self) -> Kind:
@@ -178,6 +180,74 @@ _UNREACHED = _t("not_connected", "Not connected", "unreachable")
 _LOST = _t("lost", "Lost", "lost")
 
 TEMPLATES: Final[tuple[Template, ...]] = (
+    # The recommended nine (Dipak's Home + Leads handoff, 31 Oct 2026, p.10-11, owner's
+    # OK): the same on Inbound and Cold Leads but for the first stage's name. A lead moves
+    # straight to the stage that says where it stands (his transition table); a meeting
+    # needs its date and time, Closed / Lost a reason, and Junk a confirmed invalid or
+    # fake contact (the desk's Junk reasons). Open Leads and Interested ask for the next
+    # call. Won and Lost reopen as the desk allows (reopening Won is a manager's).
+    Template(
+        "recommended",
+        "Recommended",
+        "Nine stages for inbound enquiries and cold calling.",
+        "spark",
+        (
+            TemplateStage(
+                "new",
+                "New Lead",
+                "lead",
+                moves=(
+                    "open_leads",
+                    "not_connected",
+                    "interested",
+                    "meeting_scheduled",
+                    "lost",
+                    "junk",
+                ),
+                cold_label="Unworked",
+            ),
+            _r(
+                "open_leads",
+                "Open Leads",
+                "contacted",
+                ("interested", "meeting_scheduled", "lost"),
+                ("next_action",),
+                reasons=vocabulary.OPEN_REASONS,
+            ),
+            TemplateStage(
+                "not_connected",
+                "Not Connected",
+                "unreachable",
+                moves=("open_leads", "interested", "meeting_scheduled", "lost", "junk"),
+            ),
+            _r(
+                "interested",
+                "Interested",
+                "qualified",
+                ("meeting_scheduled", "won", "lost"),
+                ("next_action",),
+            ),
+            _r(
+                "meeting_scheduled",
+                "Meeting Scheduled",
+                "appointment_booked",
+                ("meeting_done", "interested", "open_leads", "lost"),
+                ("meeting",),
+            ),
+            TemplateStage(
+                "meeting_done", "Meeting Done", "appointment_done", moves=("won", "lost")
+            ),
+            _t("won", "Won", "won"),
+            TemplateStage(
+                "lost",
+                "Closed / Lost",
+                "lost",
+                needs=("reason",),
+                reasons=vocabulary.LOST_REASONS,
+            ),
+            _t("junk", "Junk Lead", "disqualified"),
+        ),
+    ),
     Template(
         "simple",
         "Any business",

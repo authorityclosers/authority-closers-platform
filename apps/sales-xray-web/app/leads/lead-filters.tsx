@@ -13,12 +13,13 @@
  * answered by the server.
  */
 
-import { Check, ChevronDown, SlidersHorizontal, X } from "lucide-react";
+import { ChevronDown, SlidersHorizontal, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import { Button, Field } from "../ui/kit";
+import { Button } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
 import type {
+  FollowUpWhen,
   ListDue,
   ListMade,
   ListMore,
@@ -26,6 +27,7 @@ import type {
   ListSort,
 } from "./leads-client";
 import type { Scope } from "./list-view";
+import { Picker } from "../ui/picker";
 import styles from "./leads.module.css";
 
 export type LeadFilters = {
@@ -50,6 +52,11 @@ export const DUE_WORDS: Record<ListDue, string> = {
   week: "Due this week",
   none: "No next step",
 };
+export const WHEN_WORDS: Record<FollowUpWhen, string> = {
+  today: "Today",
+  overdue: "Overdue",
+  upcoming: "Upcoming",
+};
 export const SINCE_WORDS: Record<ListSince, string> = {
   today: "Talked today",
   week: "Talked this week",
@@ -65,8 +72,22 @@ export const SORT_WORDS: Record<ListSort, string> = {
   next_action: "Next follow-up",
   last_contact: "Last contact",
   name: "Name",
-  created: "Newest",
+  created: "Newest first",
 };
+/** Oldest first: the newest-first order, reversed (owner, 31 Oct 2026). */
+const OLDEST = "oldest";
+const SORT_CHOICES: Record<ListSort | typeof OLDEST, string> = {
+  ...SORT_WORDS,
+  [OLDEST]: "Oldest first",
+};
+
+/** The sort as a filter's words. */
+function sortLabel(more: ListMore): string {
+  if (!more.sort) return "";
+  if (more.sort === "created")
+    return more.order === "asc" ? "Oldest first" : "Newest first";
+  return `By ${SORT_WORDS[more.sort].toLowerCase()}${more.order === "desc" ? ", reversed" : ""}`;
+}
 /** Where leads come from, in the page's words (the lead's source key). */
 export const SOURCE_WORDS: Record<string, string> = {
   meta: "Meta lead form",
@@ -87,6 +108,7 @@ export function filtersOn(filters: LeadFilters, defaultWho: Scope): number {
     (filters.pipeline ? 1 : 0) +
     (more.source ? 1 : 0) +
     (more.due ? 1 : 0) +
+    (more.when && more.view !== "follow_ups" ? 1 : 0) +
     (more.contact ? 1 : 0) +
     (more.created ? 1 : 0)
   );
@@ -100,9 +122,7 @@ export function moreWords(more: ListMore | undefined): string[] {
     more.contact ? SINCE_WORDS[more.contact] : null,
     more.created ? MADE_WORDS[more.created] : null,
     more.source ? (SOURCE_WORDS[more.source] ?? more.source) : null,
-    more.sort
-      ? `By ${SORT_WORDS[more.sort].toLowerCase()}${more.order === "desc" ? ", reversed" : ""}`
-      : null,
+    more.sort ? sortLabel(more) : null,
   ].filter((word): word is string => !!word);
 }
 
@@ -123,7 +143,7 @@ export function FilterChip({
       onClick={onOpen}
     >
       <SlidersHorizontal size={14} aria-hidden="true" />
-      Filter
+      <span className={styles.filterWords}>Filter</span>
       {count ? (
         <span className={styles.filterCount} aria-hidden="true">
           {count}
@@ -177,6 +197,13 @@ export function ActiveFilters({
       label: DUE_WORDS[more.due],
       clear: without("due"),
     });
+  // In Follow-ups the split is its own row of tabs, not a chip.
+  if (more.when && more.view !== "follow_ups")
+    chips.push({
+      key: "when",
+      label: `Follow-up ${WHEN_WORDS[more.when].toLowerCase()}`,
+      clear: without("when"),
+    });
   if (more.contact)
     chips.push({
       key: "contact",
@@ -198,7 +225,7 @@ export function ActiveFilters({
   if (more.sort)
     chips.push({
       key: "sort",
-      label: `By ${SORT_WORDS[more.sort].toLowerCase()}${more.order === "desc" ? ", reversed" : ""}`,
+      label: sortLabel(more),
       clear: without("sort"),
     });
   if (!chips.length) return null;
@@ -236,37 +263,20 @@ function Choices<T extends string>({
   onChange: (next: T | null) => void;
   any?: string;
 }) {
+  // The one picker, opening in place inside the sheet (owner, 31 Oct 2026).
   return (
-    <details className={styles.pickerGroup} name="lead-filter-choice">
-      <summary>
-        <span>{label}</span>
-        <span className={styles.pickerValue}>{value ? words[value] : any}</span>
-        <ChevronDown size={16} aria-hidden="true" />
-      </summary>
-      <div className={styles.pickerOptions} role="group" aria-label={label}>
-        {[["", any], ...Object.entries(words)].map(([key, word]) => (
-          <button
-            key={key}
-            type="button"
-            className={styles.pickerRow}
-            aria-pressed={(value ?? "") === key}
-            onClick={(event) => {
-              onChange(key ? (key as T) : null);
-              const group = event.currentTarget.closest("details");
-              if (group) {
-                group.open = false;
-                group.querySelector("summary")?.focus();
-              }
-            }}
-          >
-            <span>{String(word)}</span>
-            {(value ?? "") === key ? (
-              <Check size={18} aria-hidden="true" />
-            ) : null}
-          </button>
-        ))}
-      </div>
-    </details>
+    <Picker
+      mode="inline"
+      title={label}
+      label={label}
+      value={value ?? null}
+      all={{ label: any }}
+      options={Object.entries<string>(words).map(([key, word]) => ({
+        key,
+        label: word,
+      }))}
+      onChange={(next) => onChange(next as T | null)}
+    />
   );
 }
 
@@ -306,7 +316,7 @@ export function FilterSheet({
     <Sheet
       open={open}
       onClose={onClose}
-      title="Filter and sort"
+      title="Filter Leads"
       wide="center"
       footer={
         <div className={styles.filterActions}>
@@ -320,10 +330,10 @@ export function FilterSheet({
                 apply({ who: defaultWho, pipeline: null, q: "", more: {} });
             }}
           >
-            Clear all
+            Clear Filters
           </Button>
           <Button variant="primary" onClick={() => apply(draft)}>
-            Show leads
+            Show Results
           </Button>
         </div>
       }
@@ -368,46 +378,40 @@ export function FilterSheet({
             <div className={styles.sellerChoices}>{sellerPicker}</div>
           </details>
         ) : null}
-        <Field label="Name or number">
-          <input
-            type="search"
-            value={draft.q}
-            placeholder="Name, company, city or phone"
-            maxLength={80}
-            enterKeyHint="search"
-            onChange={(event) => setDraft({ ...draft, q: event.target.value })}
-          />
-        </Field>
+        {/* Dipak's handoff (31 Oct 2026, items 50-52): source, date and
+            follow-up; search is on the page. */}
         <Choices
-          label="Sort by"
-          words={SORT_WORDS}
-          value={more.sort}
-          onChange={(sort) => setMore({ sort, order: null })}
+          label="Lead source"
+          words={SOURCE_WORDS}
+          value={more.source}
+          any="Every source"
+          onChange={(source) => setMore({ source })}
         />
         <Choices
-          label="Next follow-up"
-          words={DUE_WORDS}
-          value={more.due}
-          onChange={(due) => setMore({ due })}
-        />
-        <Choices
-          label="Last contact"
-          words={SINCE_WORDS}
-          value={more.contact}
-          onChange={(contact) => setMore({ contact })}
-        />
-        <Choices
-          label="Came in"
+          label="Date"
           words={MADE_WORDS}
           value={more.created}
           onChange={(created) => setMore({ created })}
         />
         <Choices
-          label="Source"
-          words={SOURCE_WORDS}
-          value={more.source}
-          any="Every source"
-          onChange={(source) => setMore({ source })}
+          label="Follow-up"
+          words={WHEN_WORDS}
+          value={more.when}
+          onChange={(when) => setMore({ when, due: null })}
+        />
+        <Choices
+          label="Sort by"
+          words={SORT_CHOICES}
+          value={
+            more.sort === "created" && more.order === "asc" ? OLDEST : more.sort
+          }
+          onChange={(sort) =>
+            setMore(
+              sort === OLDEST
+                ? { sort: "created", order: "asc" }
+                : { sort, order: null },
+            )
+          }
         />
       </form>
     </Sheet>

@@ -205,14 +205,20 @@ const writes = () =>
   );
 const org = () =>
   routes["/v1/organisation"] as { role: string; member_count: number };
+/** A role picker: its button reads its name before the choice. */
+const picker = (label: string) =>
+  [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      'button[aria-haspopup="listbox"]',
+    ),
+  ].find((item) => item.textContent?.startsWith(`${label} `)) ?? null;
 async function select(label: string, value: string) {
-  await act(async () => {
-    const input = host.querySelector<HTMLSelectElement>(
-      `select[aria-label="${label}"]`,
-    )!;
-    input.value = value;
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  await act(async () => picker(label)!.click());
+  await act(async () =>
+    host
+      .querySelector<HTMLElement>(`[role="option"][data-key="${value}"]`)!
+      .click(),
+  );
 }
 /** The ownership sheet asks for the organisation's name (owner, 25 Oct 2026). */
 async function typeOrganisationName(value: string) {
@@ -257,9 +263,7 @@ it("reads the header, zero usage, dates and invite identity from the real contra
   expect(host.textContent).toContain("Last active");
   expect(host.textContent).toContain("Admin (you)");
   expect(button("Revoke invite for new@example.com")).toBeDefined();
-  expect(
-    host.querySelector('select[aria-label="Role for new@example.com"]'),
-  ).toBeNull();
+  expect(picker("Role for new@example.com")).toBeNull();
   // Usage figures live on Overview only, from one source; no zero columns here.
   expect(host.textContent).not.toContain("Minutes");
 });
@@ -368,10 +372,7 @@ it("cancels a role change without writing", async () => {
   await select("Role for Dipak", "admin");
   await click("Cancel");
   expect(writes()).toHaveLength(0);
-  expect(
-    host.querySelector<HTMLSelectElement>('select[aria-label="Role for Dipak"]')
-      ?.value,
-  ).toBe("member");
+  expect(picker("Role for Dipak")?.getAttribute("data-value")).toBe("member");
 });
 it("refreshes ownership permissions and uses member additions after a transfer", async () => {
   await render();
@@ -385,7 +386,7 @@ it("refreshes ownership permissions and uses member additions after a transfer",
     "Your role: Admin",
   );
   expect(button("Make Dipak the owner")).toBeUndefined();
-  expect(host.querySelector('select[aria-label="Role for Dipak"]')).toBeNull();
+  expect(picker("Role for Dipak")).toBeNull();
   await add();
   await confirm();
   expect(JSON.parse(String(writes()[1][1].body)).role).toBe("member");
@@ -398,14 +399,14 @@ it("allows admins to add/remove members and revoke pending invites", async () =>
   list.members[2].role = "admin";
   await render();
   await click("Members");
+  await act(async () => picker("Role for the new person")!.click());
   expect(
-    [
-      ...host.querySelectorAll(
-        'select[aria-label="Role for the new person"] option',
-      ),
-    ].map((item) => item.textContent),
+    [...host.querySelectorAll('[role="option"]')].map(
+      (item) => item.textContent,
+    ),
   ).toEqual(["Sales manager", "Seller", "Viewer", "Finance"]);
-  expect(host.querySelector('select[aria-label="Role for Dipak"]')).toBeNull();
+  await act(async () => picker("Role for the new person")!.click());
+  expect(picker("Role for Dipak")).toBeNull();
   expect(button("Make Dipak the owner")).toBeUndefined();
   expect(button("Remove Admin")).toBeUndefined();
   expect(button("Remove Dipak").disabled).toBe(false);

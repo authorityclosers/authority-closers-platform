@@ -1,0 +1,804 @@
+/*
+ * Lead stages (owner + Dipak, 31 Oct 2026): a small live preview of the seller's Leads
+ * screen, then one plain 48px row per stage in a single grouped list. Tokens only, one
+ * accent; a stage's own colour shows only as its dot (--stage, from stage-look.ts).
+ */
+
+.editor {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.editor :is(p, ol, ul) {
+  margin: 0;
+}
+
+@media (min-width: 900px) {
+  .editor {
+    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+    align-items: start;
+    gap: 24px;
+  }
+
+  .previewPane {
+    position: sticky;
+    top: 16px;
+    order: 0;
+  }
+}
+
+.previewPane,
+.listPane {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* ---------- the preview: Dipak's Leads screen, small; folded on a phone ---------- */
+
+.previewBox {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.previewToggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.previewToggle > svg:first-child {
+  flex: none;
+  color: var(--sx-accent);
+}
+
+.previewToggle span {
+  flex: 1;
+  min-width: 0;
+}
+
+.previewChevron {
+  flex: none;
+  color: var(--sx-muted);
+  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.previewChevron[data-open] {
+  transform: rotate(180deg);
+}
+
+.phone {
+  display: grid;
+  gap: 6px;
+  justify-self: center;
+  box-sizing: border-box;
+  width: min(100%, 320px);
+  padding: 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-xl);
+  background: var(--sx-paper);
+}
+
+.selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+}
+
+.selector button {
+  position: relative;
+  min-height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.selector button::after {
+  content: "";
+  position: absolute;
+  inset: -6px 0;
+}
+
+.selector button[aria-pressed="true"] {
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.views {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  text-align: center;
+}
+
+.views span {
+  padding: 4px 2px;
+  border-radius: var(--sx-radius-pill);
+  color: var(--sx-muted);
+  white-space: nowrap;
+}
+
+.views span[data-on] {
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink);
+}
+
+.dropHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.leadRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.leadLines {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+  min-width: 0;
+}
+
+.leadLines strong {
+  overflow: hidden;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leadLines small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.leadLines small i {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--stage);
+}
+
+.leadLines small span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar {
+  width: 62%;
+  height: 8px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+}
+
+.call {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+/* ---------- the rows ---------- */
+
+.rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  position: relative;
+  min-width: 0;
+  background: var(--sx-surface);
+  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.row + .row {
+  border-top: 1px solid var(--sx-line);
+}
+
+.row[data-dragged] {
+  z-index: 1;
+  box-shadow: var(--sx-shadow-float);
+  transition: none;
+}
+
+.swipeBack {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-right: 16px;
+  background: color-mix(in oklab, var(--sx-bad) 70%, var(--sx-surface));
+  color: var(--sx-surface);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.swipeBack[data-ready] {
+  background: var(--sx-bad);
+}
+
+.rowFront {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 4px;
+  background: var(--sx-surface);
+  touch-action: pan-y;
+  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.rowFront[data-sliding] {
+  transition: none;
+}
+
+.grip,
+.iconButton,
+.dot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-ink-2);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.grip {
+  width: 32px;
+  color: var(--sx-muted);
+  cursor: grab;
+  touch-action: none;
+}
+
+.grip:disabled {
+  visibility: hidden;
+}
+
+.row[data-dragged] .grip {
+  cursor: grabbing;
+}
+
+.dot {
+  width: 32px;
+}
+
+.dot::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--stage);
+}
+
+.iconButton[aria-pressed="false"] {
+  color: var(--sx-muted);
+}
+
+.iconButton:disabled,
+.dot:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.name {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  text-align: left;
+  line-height: 44px;
+  cursor: text;
+}
+
+.name:disabled {
+  cursor: default;
+}
+
+.name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name small {
+  flex: none;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+}
+
+.row[data-hidden] .name {
+  color: var(--sx-muted);
+}
+
+.nameInput {
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  margin: 0 4px;
+  padding: 0 10px;
+  border: 1px solid var(--sx-accent);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* ---------- add stage and recommended ---------- */
+
+.addStage {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.addLabel {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chip::after {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+}
+
+.chip svg {
+  color: var(--sx-accent);
+}
+
+.quiet {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.quiet:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---------- the sheets ---------- */
+
+.sheetBody {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sheetLabel {
+  display: grid;
+  gap: 6px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.field {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: 16px;
+}
+
+/* "Counts as": a compact two-column list of small chips (owner, 31 Oct 2026). */
+.choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.choice {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.choice::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+}
+
+.choice[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+}
+
+.choice:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.swatch {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.swatch::before {
+  content: "";
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--stage);
+}
+
+.swatch[aria-pressed="true"]::before {
+  box-shadow:
+    0 0 0 2px var(--sx-surface),
+    0 0 0 4px var(--stage);
+}
+
+.auto {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: none;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.auto[aria-pressed="true"] {
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink);
+}
+
+.danger {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--sx-bad);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.danger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sheetList {
+  display: grid;
+  min-width: 0;
+}
+
+.sheetRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 16px;
+  border: 0;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sheetRow + .sheetRow {
+  border-top: 1px solid var(--sx-line);
+}
+
+.dotStill {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--stage);
+}
+
+.recommended {
+  display: grid;
+  gap: 6px;
+  padding-left: 22px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+}
+
+.recommended small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.help {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The page around the editor: its title line and the quiet link to the ad platforms. */
+.linkRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.linkRow svg {
+  color: var(--sx-muted);
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Lead stages as its own page (More → Lead stages, Settings → Lead stages): on a phone the
+   whole screen, its own header leading back. */
+.screen {
+  display: grid;
+  gap: 16px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  /* The app frame gives the side gutters; a second pair would clip the names. */
+  padding: 8px 0 32px;
+}
+
+.screenHead {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.screenHead h1 {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-title);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.screenHead p {
+  margin: 2px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.screenBack {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin-left: -10px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-ink);
+  cursor: pointer;
+}
+
+:is(
+  .grip,
+  .iconButton,
+  .dot,
+  .name,
+  .chip,
+  .quiet,
+  .choice,
+  .swatch,
+  .auto,
+  .danger,
+  .sheetRow,
+  .linkRow,
+  .back,
+  .previewToggle,
+  .screenBack,
+  .selector button
+):focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row,
+  .rowFront {
+    transition: none;
+  }
+}

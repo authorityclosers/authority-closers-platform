@@ -583,8 +583,7 @@ button.stageMain:focus-visible {
   font-size: var(--sx-text-xs);
 }
 
-.sheetField input,
-.sheetField select {
+.sheetField input {
   box-sizing: border-box;
   height: var(--sx-control-h);
   padding: 0 12px;
@@ -1134,7 +1133,7 @@ button.templateCard:focus-visible {
   font-weight: 600;
 }
 
-.makeDataset :is(input, select),
+.makeDataset input,
 .testRow input {
   box-sizing: border-box;
   height: var(--sx-control-h);

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "../ui/kit";
+import { Picker } from "../ui/picker";
 import { notify } from "../notice-center";
 import {
   autoCaptureStatus,
@@ -109,19 +110,21 @@ export function AutoCapturePanel({
       </p>
       <label>
         Upload using{" "}
-        <select
-          aria-label="Upload network"
+        <Picker
+          title="Upload network"
+          ariaLabel="Upload network"
           disabled={busy}
           value={status.wifiOnly ? "wifi" : "any"}
-          onChange={(event) => {
-            const wifi = event.target.value === "wifi";
+          options={[
+            { key: "wifi", label: "Wi-Fi only" },
+            { key: "any", label: "Any network" },
+          ]}
+          onChange={(key) => {
+            const wifi = key === "wifi";
             if (status.on) void save(true, wifi);
             else setStatus({ ...status, wifiOnly: wifi });
           }}
-        >
-          <option value="wifi">Wi-Fi only</option>
-          <option value="any">Any network</option>
-        </select>
+        />
       </label>
       <p>
         <Button

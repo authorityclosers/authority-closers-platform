@@ -82,6 +82,12 @@ def _with_view(url: str, view: str) -> str:
     return urlunsplit(parts._replace(query=urlencode([*query, ("view", view)])))
 
 
+async def _pick(page: Any, picker: Any, key: str) -> None:
+    """Choose a row in the shared picker (it replaced the native selects, 31 Oct)."""
+    await picker.click()
+    await page.locator(f'[role="option"][data-key="{key}"]').click()
+
+
 def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletion(
     postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -510,7 +516,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     )
 
                     await page.get_by_label("Full name").fill("Synthetic Browser Learner")
-                    await page.get_by_label("Country or region").select_option("US")
+                    await _pick(page, page.get_by_label("Country or region"), "US")
                     await page.get_by_label("Mobile number").fill("+12025550123")
                     async with page.expect_response(
                         lambda response: (

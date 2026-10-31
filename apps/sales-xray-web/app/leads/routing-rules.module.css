@@ -196,9 +196,7 @@
   align-items: center;
 }
 
-.condition select,
 .condition input:not([type="checkbox"]),
-.try select,
 .try input {
   box-sizing: border-box;
   width: 100%;

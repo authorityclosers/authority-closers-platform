@@ -44,6 +44,9 @@ const links = () =>
   [...host.querySelectorAll("li")].map(
     (row) => row.querySelector<HTMLAnchorElement>("a")!,
   );
+// The findings picker's button (the shared picker).
+const findings = () =>
+  host.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]');
 const findCall = () =>
   host.querySelector<HTMLInputElement>('input[type="search"]')!;
 const searchFor = async (query: string) => {
@@ -91,24 +94,30 @@ describe("calls on the current skill", () => {
           </TheirCoaching.Provider>,
         ),
       );
-      expect(host.querySelector("select")).toBeNull();
+      expect(findings()).toBeNull();
       await act(async () => ref.current!.showSkill());
-      let select = host.querySelector<HTMLSelectElement>(
-        'select[aria-label="What the report found"]',
-      )!;
-      expect([...select.options].map((option) => option.textContent)).toEqual([
+      let picker = findings()!;
+      expect(picker.textContent).toContain("What the report found");
+      // Its rows show while it is open; it closes again before the checks.
+      await act(async () => picker.click());
+      expect(
+        [...host.querySelectorAll('[role="option"]')].map(
+          (option) => option.textContent,
+        ),
+      ).toEqual([
         "All on this skill",
         "Needed work",
         "Skill used, nothing to fix",
       ]);
-      expect(select.getAttribute("aria-controls")).toBe(
-        host.querySelector("ul")!.parentElement!.id,
-      );
-      const choose = async (value: string) =>
-        act(async () => {
-          select.value = value;
-          select.dispatchEvent(new Event("change", { bubbles: true }));
-        });
+      await act(async () => picker.click());
+      const choose = async (value: string) => {
+        await act(async () => picker.click());
+        await act(async () =>
+          host
+            .querySelector<HTMLElement>(`[role="option"][data-key="${value}"]`)!
+            .click(),
+        );
+      };
       const check = (ids: number[]) => {
         expect(links().map((link) => link.textContent)).toEqual(
           ids.map((id) => call(id).call_label),
@@ -136,7 +145,7 @@ describe("calls on the current skill", () => {
         "Try another call name, or show all calls on this skill.",
       );
       await act(async () => button("Clear search").click());
-      expect(select.value).toBe("no_suggestion");
+      expect(picker.dataset.value).toBe("no_suggestion");
       expect(document.activeElement).toBe(findCall());
       check([5, 6]);
       expect(host.querySelector("ul")!.textContent).not.toContain(
@@ -153,22 +162,22 @@ describe("calls on the current skill", () => {
           : [5, 6].map((id) => `/analysis/calls/${call(id).submission_id}`),
       );
       await act(async () => button("All calls").click());
-      expect(host.querySelector("select")).toBeNull();
+      expect(findings()).toBeNull();
       check([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
       await act(async () => button("On this skill").click());
-      select = host.querySelector("select")!;
-      expect(select.value).toBe("all");
+      picker = findings()!;
+      expect(picker.dataset.value).toBe("all");
       check([1, 2, 3, 4, 5, 6]);
       await choose("no_suggestion");
       await searchFor("missing call");
       await act(async () => ref.current!.showSkill());
       expect(findCall().value).toBe("");
-      expect(select.value).toBe("all");
+      expect(picker.dataset.value).toBe("all");
       check([1, 2, 3, 4, 5, 6]);
       expect(document.activeElement).toBe(host.querySelector("section"));
       await choose("suggested");
       await act(async () => ref.current!.showAll());
-      expect(host.querySelector("select")).toBeNull();
+      expect(findings()).toBeNull();
       check([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     }
     // Neither unmatched nor unready progress records create a comparison.
@@ -188,7 +197,7 @@ describe("calls on the current skill", () => {
     );
     await act(async () => button("On this skill").click());
     expect(links()).toHaveLength(1);
-    expect(host.querySelector("select")).toBeNull();
+    expect(findings()).toBeNull();
   });
 
   it("offers the matching Report beside ready personal and fictional calls, preserving shared and unready destinations", async () => {

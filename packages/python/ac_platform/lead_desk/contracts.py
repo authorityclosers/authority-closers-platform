@@ -157,6 +157,123 @@ class MessageTemplate(Model):
     text: str
 
 
+class ToCallToday(Model):
+    """Today's work counting down (Leads redesign section 6, 30 Oct 2026: 20 → 19 → 18)."""
+
+    # My open leads due by tonight, or new and never given a time, not called today.
+    left: int
+    # The leads I called today.
+    called: int
+
+
+class BreakView(Model):
+    """A gap between a seller's calls inside the working day."""
+
+    start: datetime
+    end: datetime
+    minutes: int
+    # Inside a break the team set (lunch): not red.
+    planned: bool
+    # An edge is a call placed with the app's Call button, whose time is the seller's
+    # time away from the app: the gap is approximate.
+    approximate: bool
+
+
+class SideEffort(Model):
+    """Effort on Inbound or on Cold leads, measured apart (Dipak's table, 30 Oct 2026)."""
+
+    # Calls out, those answered, and their talk time.
+    attempted: int = 0
+    connected: int = 0
+    talk_seconds: int = 0
+    # Different leads called, and different leads spoken to.
+    leads_attempted: int = 0
+    reached: int = 0
+    # Different leads moved to Interested, given a meeting, won.
+    interested: int = 0
+    meetings: int = 0
+    won: int = 0
+    # Of the leads called, those moved to Interested or Won: whether the calling makes
+    # real chances (Dipak: "Cold Leads Worked -> Interested").
+    worked_interested: int = 0
+    # Open leads never called: untouched enquiries (Inbound), unworked imports (Cold).
+    backlog: int = 0
+    # Leads open now or called in the period: contact coverage is leads_attempted over this.
+    eligible: int = 0
+    # Inbound only: median minutes from a lead arriving to its first call.
+    first_call_minutes: int | None = None
+    # What was missed. Now: open leads more than an hour late (a follow-up past its
+    # time, or a new lead never called). In the period: calls in that nobody took,
+    # and of those leads, the ones nobody reached afterwards.
+    late: int = 0
+    missed_calls: int = 0
+    not_called_back: int = 0
+
+
+class SellerEffort(Model):
+    person_id: UUID
+    name: str
+    inbound: SideEffort
+    cold: SideEffort
+    # The three longest gaps between their calls in the period, longest first, and all
+    # the time between calls outside set breaks.
+    breaks: tuple[BreakView, ...] = ()
+    unplanned_break_minutes: int = 0
+    # Today: their first call's start and their last call's end.
+    first_call_at: datetime | None = None
+    last_call_at: datetime | None = None
+    # Open tasks more than an hour past their time, now.
+    tasks_late: int = 0
+    # Today's connected lead calls with no recording yet.
+    missing_recordings: int = 0
+
+
+class Effort(Model):
+    """The Performance engine (Leads redesign section 6; owner, 30 Oct 2026: "a great
+    API"): each seller's work done, what they missed and their breaks, Inbound and Cold
+    apart, over today, 7 or 30 days, India time."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    days: int
+    start: datetime
+    end: datetime
+    # Every seller (owners and admins), or the viewer's own.
+    team: bool
+    sellers: tuple[SellerEffort, ...]
+    inbound: SideEffort
+    cold: SideEffort
+    missing_recordings: int = 0
+
+
+class SideCounts(Model):
+    """A side's three Home cards (handoff items 08-11), each the count of the Leads list
+    it opens: To Call in the first stage (New Lead or Unworked), the Open Leads stage, and
+    follow-ups due today."""
+
+    new: int
+    open_leads: int
+    follow_ups_today: int
+
+
+class SideDay(Model):
+    """One side of my day, Inbound or Cold (Dipak's Home, 31 Oct 2026)."""
+
+    counts: SideCounts
+    numbers: Numbers
+    numbers_week: Numbers
+    numbers_month: Numbers
+    to_call_today: ToCallToday
+    # The next lead to call on this side: a follow-up promised for today first, then
+    # fresh enquiries, then the older backlog (handoff p.12's priority rule).
+    next_lead: LeadRow | None = None
+    # The next two planned follow-ups from now.
+    upcoming: tuple[LeadRow, ...] = ()
+    # The owner's stage keys the cards open: the first stage, and Open Leads (or the
+    # follow-up kind's stage on a list not yet on the nine).
+    new_key: str | None = None
+    open_key: str | None = None
+
+
 class Desk(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
     me: Me
@@ -179,6 +296,12 @@ class Desk(Model):
     numbers_month: Numbers | None = None
     # The workspace's open leads beside mine, for a member with none assigned.
     team_pool: TeamPool | None = None
+    # Today's work counting down, and my three longest breaks today, longest first.
+    to_call_today: ToCallToday | None = None
+    breaks: tuple[BreakView, ...] = ()
+    # Each side of my day ("inbound", "cold"), so Home's Inbound | Cold selector switches
+    # with no new read.
+    sides: dict[str, SideDay] | None = None
 
 
 class Badge(Model):
@@ -235,6 +358,8 @@ class LeadPage(Model):
     # Leads per stage for the same people, search and test filter, every stage
     # at once: the Leads page's stage tabs show real counts (owner, 22 Oct 2026).
     stage_counts: dict[str, int] = Field(default_factory=dict)
+    # Each of the owner's stages' count before the stage pick, on a side's first page.
+    step_counts: dict[str, int] = Field(default_factory=dict)
     # Owners and admins on the team's list: leads per seller ("none": nobody's) for the
     # same filters, without the seller picked, for the per-seller chips (25 Oct 2026).
     owner_counts: dict[str, int] = Field(default_factory=dict)
@@ -522,8 +647,9 @@ class TaskView(Model):
     """A task as it stands (work-memory engine, migration 0129)."""
 
     task_id: UUID
-    lead_id: UUID
-    lead_name: str
+    # Both empty for a task of your own, on no lead (migration 0147).
+    lead_id: UUID | None
+    lead_name: str | None
     kind: TaskKind
     title: str
     note: str | None
@@ -545,6 +671,9 @@ class TaskView(Model):
     # Who wrote it (a person; None for the app's own), for their avatar.
     created_by_person_id: UUID | None = None
     created_by_photo_url: str | None = None
+    # Its lead's side, Inbound or Cold (migration 0146), for Home's type tag; None for a
+    # task of your own.
+    lead_side: Literal["inbound", "cold"] | None = None
 
 
 class TaskList(Model):
@@ -900,6 +1029,13 @@ class RepView(Model):
     phone: PhoneHealth | None = None
 
 
+class BreakTime(Model):
+    """A break the team takes every work day (lunch), India time."""
+
+    start: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    end: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
 class WorkHoursView(Model):
     """The team's work days and hours, India time (0 is Monday)."""
 
@@ -909,6 +1045,7 @@ class WorkHoursView(Model):
     pause_leads: bool
     inside: bool
     next_start: datetime | None = None
+    breaks: tuple[BreakTime, ...] = ()
 
 
 class SettingsView(Model):
@@ -1044,6 +1181,14 @@ class ImportPreview(Model):
     importable: int = 0
 
 
+class ImportGiven(Model):
+    """How many new leads a bulk upload gave one salesperson."""
+
+    person_id: UUID
+    name: str
+    leads: int
+
+
 class ImportResult(Model):
     created: int
     repeats: int
@@ -1059,6 +1204,9 @@ class ImportResult(Model):
     # People an import took past their open-lead limit, said plainly (owner, 25 Oct 2026):
     # an import may go over; it never hides it.
     warnings: tuple[str, ...] = ()
+    # Bulk upload (section 5): who got how many of the new leads, and their side.
+    given: tuple[ImportGiven, ...] = ()
+    side: Literal["live", "cold"] = "live"
 
 
 class SourceView(Model):
@@ -1168,6 +1316,9 @@ class NewLead(Command):
     person_id: UUID | None = None
     # A pipeline picked by hand; None: the one that takes added leads.
     pipeline: str | None = Field(default=None, max_length=40)
+    # Inbound ("live") or Cold ("cold") for a new lead (section 5); a number already a lead
+    # keeps its own.
+    side: Literal["live", "cold"] = "live"
 
 
 class Disposition(Command):
@@ -1400,6 +1551,8 @@ class WorkHoursCommand(Command):
     start: str = Field(default="09:30", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     end: str = Field(default="19:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     pause_leads: bool = False
+    # Left out (an older app): the breaks set before stay.
+    breaks: tuple[BreakTime, ...] | None = Field(default=None, max_length=3)
 
     @field_validator("days")
     @classmethod
@@ -1408,13 +1561,34 @@ class WorkHoursCommand(Command):
             raise ValueError("Days are 0 (Monday) to 6 (Sunday).")
         return tuple(sorted(set(days)))
 
+    @field_validator("breaks")
+    @classmethod
+    def _breaks(cls, breaks: tuple[BreakTime, ...] | None) -> tuple[BreakTime, ...] | None:
+        if breaks and any(item.start >= item.end for item in breaks):
+            raise ValueError("A break ends after it starts.")
+        return breaks
+
+
+class ImportShare(Command):
+    """A salesperson the owner picked for a bulk upload and how many new leads they take."""
+
+    person_id: UUID
+    count: int = Field(ge=0, le=2000)
+
 
 class ImportCommand(Command):
     command_id: UUID
     file_name: str = Field(min_length=1, max_length=200)
     mapping: dict[str, str]
     rows: tuple[dict[str, str], ...] = Field(min_length=1, max_length=2000)
-    assign: Literal["rules", "me"] = "rules"
+    # Bulk upload (section 5): "people" gives new leads to the salespeople in `shares`, in
+    # order and as many as each takes, the rest unassigned; "none" leaves them all unassigned.
+    assign: Literal["rules", "me", "people", "none"] = "rules"
+    shares: tuple[ImportShare, ...] = Field(default=(), max_length=50)
+    # Inbound ("live") or Cold ("cold") for the new leads; a number already a lead keeps its own.
+    side: Literal["live", "cold"] = "live"
+    # The stage new leads start in (a stage key); none: the first stage.
+    step: str | None = Field(default=None, max_length=40)
     # A pipeline picked by hand; None: the one that takes file imports.
     pipeline: str | None = Field(default=None, max_length=40)
     # The CRM the preview recognised: the leads' source says "<CRM> export: <file>".

@@ -4,6 +4,7 @@ import { Bug } from "lucide-react";
 import { when } from "@/app/calls/call-data";
 import { adminRead } from "@/app/lib/server-api";
 import { BugFilters } from "@/app/bugs/bug-filters";
+import { ReporterAccess } from "@/app/bugs/reporter-access";
 import {
   AREA_LABEL,
   SEVERITY_LABEL,
@@ -16,6 +17,7 @@ import {
   bugsApiPath,
   ISSUE_LABEL,
   ISSUE_TONE,
+  normalizeAccess,
   normalizeIssues,
   normalizePage,
   type BugIssue,
@@ -139,10 +141,14 @@ export default async function BugsPage({
 }) {
   const params = await searchParams;
   const filters = bugFilters(params);
-  const [result, issues] = await Promise.all([
+  const [result, issues, access] = await Promise.all([
     adminRead(bugsApiPath(filters), normalizePage),
     adminRead("/v1/admin/bugs/issues?which=all", normalizeIssues),
+    adminRead("/v1/admin/bugs/reporter-access", normalizeAccess),
   ]);
+  const asked = access.ok
+    ? access.data.filter((person) => person.state === "requested").length
+    : 0;
   const marked = Number(
     Array.isArray(params.issue) ? params.issue[0] : params.issue,
   );
@@ -178,6 +184,18 @@ export default async function BugsPage({
           { key: "all", label: "All" },
         ]}
       />
+      {access.ok && access.data.length ? (
+        <Panel
+          title="Advanced reporter"
+          sub={
+            asked
+              ? `${asked} waiting: let them in to give them the large editor, element comments and files`
+              : "Who may use the large editor, element comments and files. The team always can."
+          }
+        >
+          <ReporterAccess people={access.data} />
+        </Panel>
+      ) : null}
       {issues.ok ? (
         <Issues
           issues={issues.data}

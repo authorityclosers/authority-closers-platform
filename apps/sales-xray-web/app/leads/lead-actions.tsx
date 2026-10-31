@@ -9,6 +9,7 @@
 import { CalendarClock, MessageCircle, Phone, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { Picker } from "../ui/picker";
 import { ActionSheet } from "./action-sheet";
 import { whyLine } from "./desk-view";
 import {
@@ -166,29 +167,29 @@ export function LeadActions({
       {canManage && detail?.reps.length ? (
         <label className={styles.messageField}>
           <span className={styles.stepLabel}>Reassign</span>
-          <select
-            value=""
+          <Picker
+            title="Reassign"
+            mode="inline"
+            value={null}
             disabled={busy}
-            onChange={(event) => {
-              const value = event.target.value;
-              if (value) void move(value === "__rules" ? null : value);
-            }}
-          >
-            <option value="">
-              {row.owner_name
+            placeholder={
+              row.owner_name
                 ? `Assigned to ${row.owner_name}`
-                : "Not assigned yet"}
-            </option>
-            <option value="__rules">Let the lead rules pick</option>
-            {detail.reps
-              .filter((rep) => rep.person_id !== row.owner_person_id)
-              .map((rep) => (
-                <option key={rep.person_id} value={rep.person_id}>
-                  {rep.name} · {rep.open_leads} open
-                  {rep.available ? "" : " · away"}
-                </option>
-              ))}
-          </select>
+                : "Not assigned yet"
+            }
+            options={[
+              { key: "__rules", label: "Let the lead rules pick" },
+              ...detail.reps
+                .filter((rep) => rep.person_id !== row.owner_person_id)
+                .map((rep) => ({
+                  key: rep.person_id,
+                  label: `${rep.name} · ${rep.open_leads} open${rep.available ? "" : " · away"}`,
+                })),
+            ]}
+            onChange={(key) => {
+              if (key) void move(key === "__rules" ? null : key);
+            }}
+          />
         </label>
       ) : null}
       {done ? (

@@ -92,13 +92,14 @@ def test_errors_are_bounded_and_scrubbed() -> None:
     assert clean_errors("nope") == []
 
 
-def test_the_trail_keeps_twenty_named_steps_and_nothing_else() -> None:
-    """Demo P0 (26 Oct 2026): the last app steps travel with a report, names and times only."""
+def test_the_trail_keeps_fifty_named_steps_and_nothing_else() -> None:
+    """Demo P0 (26 Oct 2026): the last app steps travel with a report, names and times only
+    (fifty since the advanced reporter, 31 Oct 2026)."""
     from ac_platform.bug_reports.scrub import clean_context
 
     steps = [
         {"event": f"step_{n}", "at": "2026-10-26T04:30:00.000Z", "route": "/leads?token=x"}
-        for n in range(25)
+        for n in range(55)
     ]
     steps += [
         {"event": "Has Spaces"},
@@ -107,7 +108,7 @@ def test_the_trail_keeps_twenty_named_steps_and_nothing_else() -> None:
     ]
     context = clean_context({"app": {}, "device": {}, "trail": steps})
     trail = context["trail"]
-    assert len(trail) == 18  # the last twenty items, two of them dropped as malformed
+    assert len(trail) == 48  # the last fifty items, two of them dropped as malformed
     assert trail[0] == {
         "event": "step_8",
         "at": "2026-10-26T04:30:00.000Z",
@@ -115,6 +116,37 @@ def test_the_trail_keeps_twenty_named_steps_and_nothing_else() -> None:
     }
     assert trail[-1] == {"event": "call_logged"}
     assert "trail" not in clean_context({"trail": "nope"})
+
+
+def test_the_trail_keeps_the_apps_own_names_and_their_safe_words() -> None:
+    """The app's steps are named "sx.tap"; the first pattern dropped every one of them."""
+    context = clean_context(
+        {
+            "trail": [
+                {
+                    "event": "sx.lead_stage_moved",
+                    "at": "2026-10-31T04:30:00.000Z",
+                    "detail": {
+                        "via": "sheet",
+                        "to_kind": "interested",
+                        "name": "asha",
+                        "screen": "Has Caps",
+                    },
+                },
+                {"event": "sx.tap", "detail": "not a dict"},
+                {"event": "sx.Tap"},
+                {"event": "sx..tap"},
+            ]
+        }
+    )
+    assert context["trail"] == [
+        {
+            "event": "sx.lead_stage_moved",
+            "at": "2026-10-31T04:30:00.000Z",
+            "detail": {"via": "sheet", "to_kind": "interested"},
+        },
+        {"event": "sx.tap"},
+    ]
 
 
 def test_a_route_is_its_pattern_with_ids_taken_out() -> None:

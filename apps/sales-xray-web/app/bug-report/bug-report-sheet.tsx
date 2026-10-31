@@ -14,7 +14,8 @@
  *   before it goes; none on screens with call details or messages) or one they
  *   choose, which they can mark up or blur, and an optional voice note. With
  *   it, quietly: the screen, app and device, and recent errors (scrubbed,
- *   never call content). Primary: "Send report".
+ *   never call content). Primary: "Send report". Ctrl+Enter (and Enter on a
+ *   computer) sends too, asking "Send this report?" until "Don't ask again".
  * - Mark up: draw or blur on the picture, a step inside the sheet.
  * - Sent: "We'll tell you when it's fixed", or, with no connection, "Saved on
  *   this phone, it goes when you're back online".
@@ -29,11 +30,13 @@ import {
   CheckCircle2,
   CloudOff,
   ImagePlus,
+  Maximize2,
   PenLine,
   TriangleAlert,
   Vibrate,
   X,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { postFeedbackRequest } from "../feedback/feedback-client";
@@ -74,6 +77,20 @@ import { recentSteps } from "../telemetry";
 import { scrubRoute } from "./scrub";
 import { setShakeToReport, useShakeSetting, useShakeToReport } from "./shake";
 import { VoiceNoteRow, type VoiceNote } from "./voice-note";
+import {
+  advancedAccess,
+  advancedServer,
+  requestAdvanced,
+  type AdvancedAccess,
+} from "./advanced-access";
+import { enterSends, keySendAsks, stopAskingOnKeySend } from "./key-send";
+import type { AdvancedSeed } from "./advanced-reporter";
+
+// The large editor loads only when someone opens it.
+const AdvancedReporter = dynamic(
+  () => import("./advanced-reporter").then((module) => module.AdvancedReporter),
+  { ssr: false },
+);
 
 /** Screens that can show call details or messages: no picture unless chosen. */
 const PRIVATE_SCREENS = [
@@ -106,6 +123,10 @@ function keepDraft(words: string, blocksWork: boolean) {
 export function forgetDraftForTests() {
   keepDraft("", false);
 }
+
+// Sending from the keyboard asks once, until "Don't ask again" (key-send.ts,
+// shared with the advanced reporter).
+export { KEY_SEND_STORE } from "./key-send";
 
 const TITLES: Record<Step, string> = {
   write: "Report a problem",
@@ -180,12 +201,21 @@ export function BugReportSheet({
   about,
   preset = null,
   onClose,
+  advanced = "off",
+  onAdvanced,
+  onRequestAdvanced,
 }: {
   open: boolean;
   about: ReportAbout | null;
   /** A picture the phone app took of the screen before the sheet opened. */
   preset?: Blob | null;
   onClose: () => void;
+  /** Whether this person may use the advanced reporter. */
+  advanced?: AdvancedAccess;
+  /** Opens the advanced reporter with what is written and taken so far. */
+  onAdvanced?: (seed: AdvancedSeed) => void;
+  /** Asks the owner to let this person use the advanced reporter. */
+  onRequestAdvanced?: () => void;
 }) {
   const inApp = useInApp();
   const shakeOn = useShakeSetting();
@@ -208,6 +238,9 @@ export function BugReportSheet({
   const [restored, setRestored] = useState(false);
   const [tapToEnd, setTapToEnd] = useState(false);
   const [discarding, setDiscarding] = useState(false);
+  // Sending from the keyboard asks first, until "Don't ask again" is ticked.
+  const [asking, setAsking] = useState(false);
+  const [dontAsk, setDontAsk] = useState(false);
   const command = useRef(commandId());
   const fileInput = useRef<HTMLInputElement>(null);
   const form = useRef<HTMLFormElement>(null);
@@ -215,6 +248,7 @@ export function BugReportSheet({
   const opening = useRef(0);
   const wordsId = useId();
   const formId = useId();
+  const askSendId = useId();
 
   // Each opening notes the screen it opened on (state follows the open prop).
   if (open !== shownOpen) {
@@ -233,6 +267,7 @@ export function BugReportSheet({
       setRestored(kept);
       setTapToEnd(kept);
       setDiscarding(false);
+      setAsking(false);
     }
   }
 
@@ -275,6 +310,11 @@ export function BugReportSheet({
     };
   }, [open, sensitive, preset]);
 
+  // The question takes the focus, so Enter again (or Space) sends.
+  useEffect(() => {
+    if (asking) document.getElementById(askSendId)?.focus();
+  }, [asking, askSendId]);
+
   // A picture's address is released when it is replaced or the sheet closes.
   useEffect(() => {
     const url = picture.state === "ready" ? picture.url : null;
@@ -311,6 +351,7 @@ export function BugReportSheet({
     setRestored(false);
     setTapToEnd(false);
     setDiscarding(false);
+    setAsking(false);
     command.current = commandId();
   };
 
@@ -322,6 +363,30 @@ export function BugReportSheet({
     }
     cleared();
     onClose();
+  };
+
+  // Enter or Ctrl+Enter: the same send as the button, asking first unless the
+  // person said not to. Nothing written, nothing sent.
+  const sendFromKeys = () => {
+    if (!words.trim() || sending) return;
+    setDiscarding(false);
+    if (!keySendAsks()) {
+      setAsking(false);
+      form.current?.requestSubmit();
+      return;
+    }
+    if (asking) {
+      document.getElementById(askSendId)?.focus();
+      return;
+    }
+    setDontAsk(false);
+    setAsking(true);
+  };
+
+  const sendAsked = () => {
+    if (dontAsk) stopAskingOnKeySend();
+    setAsking(false);
+    form.current?.requestSubmit();
   };
 
   const send = async () => {
@@ -393,7 +458,35 @@ export function BugReportSheet({
 
   const ready = picture.state === "ready";
   const footer =
-    step === "write" && discarding ? (
+    step === "write" && asking ? (
+      <div className={styles.discardAsk} role="alert">
+        <span>Send this report?</span>
+        <label className={styles.askAgain}>
+          <input
+            type="checkbox"
+            checked={dontAsk}
+            onChange={(event) => setDontAsk(event.target.checked)}
+          />
+          Don&apos;t ask again
+        </label>
+        <Button
+          onClick={() => {
+            setAsking(false);
+            textArea.current?.focus();
+          }}
+        >
+          Keep editing
+        </Button>
+        <Button
+          id={askSendId}
+          variant="primary"
+          disabled={!words.trim() || sending}
+          onClick={sendAsked}
+        >
+          Send
+        </Button>
+      </div>
+    ) : step === "write" && discarding ? (
       <div className={styles.discardAsk} role="alert">
         <span>Discard this report?</span>
         <Button onClick={() => setDiscarding(false)}>Keep editing</Button>
@@ -548,7 +641,18 @@ export function BugReportSheet({
                 setWords(event.target.value);
                 setTapToEnd(false);
                 setDiscarding(false);
+                setAsking(false);
                 keepDraft(event.target.value, blocksWork);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || event.shiftKey || event.altKey)
+                  return;
+                // Enter that picks a word (Hindi, Marathi) is the keyboard's.
+                if (event.nativeEvent.isComposing || event.keyCode === 229)
+                  return;
+                if (!event.ctrlKey && !event.metaKey && !enterSends()) return;
+                event.preventDefault();
+                sendFromKeys();
               }}
             />
           </div>
@@ -662,6 +766,25 @@ export function BugReportSheet({
                 event.target.value = "";
               }}
             />
+            {advanced === "on" && onAdvanced ? (
+              <button
+                type="button"
+                className={styles.chip}
+                onClick={() =>
+                  onAdvanced({
+                    words,
+                    blocksWork,
+                    about,
+                    picture: ready && include ? picture.picture.blob : null,
+                    source: ready ? picture.picture.source : "auto",
+                    sensitive,
+                  })
+                }
+              >
+                <Maximize2 size={15} aria-hidden="true" />
+                Open advanced reporter
+              </button>
+            ) : null}
             {inApp ? (
               <button
                 type="button"
@@ -689,6 +812,20 @@ export function BugReportSheet({
             >
               Your reports
             </button>
+            {advanced === "off" && onRequestAdvanced ? (
+              <>
+                {" · "}
+                <button
+                  type="button"
+                  className={styles.inlineAction}
+                  onClick={onRequestAdvanced}
+                >
+                  Request advanced reporter
+                </button>
+              </>
+            ) : advanced === "requested" ? (
+              " · Advanced reporter asked for"
+            ) : null}
           </p>
         </form>
       )}
@@ -737,7 +874,37 @@ export function BugReportHost() {
   const [open, setOpen] = useState(false);
   const [about, setAbout] = useState<ReportAbout | null>(null);
   const [preset, setPreset] = useState<Blob | null>(null);
+  const [access, setAccess] = useState<AdvancedAccess>("off");
+  const [advanced, setAdvanced] = useState<AdvancedSeed | null>(null);
   useEffect(() => reporterMounted(), []);
+  useEffect(() => {
+    void advancedAccess().then(setAccess);
+  }, []);
+  // Ctrl Shift B (⌘⇧B) opens the advanced reporter straight away.
+  useEffect(() => {
+    if (access !== "on") return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        !(event.ctrlKey || event.metaKey) ||
+        !event.shiftKey ||
+        event.altKey ||
+        event.key.toLowerCase() !== "b"
+      )
+        return;
+      event.preventDefault();
+      setOpen(false);
+      setAdvanced({
+        words: draft.words,
+        blocksWork: draft.blocksWork,
+        about: null,
+        picture: null,
+        source: "auto",
+        sensitive: privateScreen(window.location.pathname),
+      });
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [access]);
   useEffect(() => {
     let latest = 0;
     const show = (event: Event) => {
@@ -787,7 +954,7 @@ export function BugReportHost() {
     openBugReport();
   }, []);
   // Over a menu or another sheet too (bug #5, 25 Oct 2026); not over the reporter.
-  useShakeToReport(inApp && !open, onShake);
+  useShakeToReport(inApp && !open && !advanced, onShake);
 
   useEffect(() => {
     const send = () => {
@@ -830,11 +997,52 @@ export function BugReportHost() {
   }, []);
 
   return (
-    <BugReportSheet
-      open={open}
-      about={about}
-      preset={preset}
-      onClose={() => setOpen(false)}
-    />
+    <>
+      <BugReportSheet
+        open={open}
+        about={about}
+        preset={preset}
+        onClose={() => setOpen(false)}
+        advanced={access}
+        onAdvanced={(seed) => {
+          setOpen(false);
+          setAdvanced(seed);
+        }}
+        onRequestAdvanced={
+          advancedServer()
+            ? () => {
+                void requestAdvanced().then(
+                  (state) => {
+                    setAccess(state);
+                    notify({
+                      id: "bug-report-advanced",
+                      tone: "success",
+                      title:
+                        "Asked. The owner decides; it shows here once you're in.",
+                    });
+                  },
+                  (error: unknown) =>
+                    notify({
+                      id: "bug-report-advanced",
+                      tone: "error",
+                      title:
+                        error instanceof BugReportError
+                          ? error.message
+                          : "Your request didn't go. Try again in a moment.",
+                    }),
+                );
+              }
+            : undefined
+        }
+      />
+      {advanced ? (
+        <AdvancedReporter
+          open
+          seed={advanced}
+          onClose={() => setAdvanced(null)}
+          onSent={() => keepDraft("", false)}
+        />
+      ) : null}
+    </>
   );
 }

@@ -77,6 +77,7 @@ import {
 } from "../settings/auto-analysis-client";
 import { useBackClose } from "../ui/back-close";
 import { Button, Skeleton } from "../ui/kit";
+import { Picker } from "../ui/picker";
 import { recordCaptureSetup, type CaptureSetup } from "./capture-setup-client";
 import {
   phoneFacts,
@@ -634,6 +635,12 @@ function BackgroundStep({
   const facts = phone.facts;
   if (!facts) return null;
   const autostartLeft = facts.autostartNeeded && !facts.autostart;
+  // HyperOS opens its own Battery saver list instead of Android's question
+  // (Redmi 13, 31 Oct 2026), and leaves the app on "Battery saver".
+  const choose =
+    facts.family === "xiaomi"
+      ? "choose Allow, or No restrictions if your phone shows a list"
+      : "choose Allow in Android's question";
   const afterBattery = async () => {
     const next = (await refresh()).facts;
     if (next?.battery && !(next.autostartNeeded && !next.autostart)) onDone();
@@ -645,7 +652,11 @@ function BackgroundStep({
         icon={BatteryCharging}
         title="Let Sales X-Ray run in the background"
         titleId={titleId}
-        line="So calls upload when the app is closed, not only when you open it. It uses very little battery."
+        line={
+          facts.family === "xiaomi"
+            ? "So calls upload when the app is closed, not only when you open it. On the next screen, choose No restrictions."
+            : "So calls upload when the app is closed, not only when you open it. It uses very little battery."
+        }
         actions={
           <>
             <Button
@@ -682,8 +693,7 @@ function BackgroundStep({
       >
         {tried ? (
           <p className={own.note} role="status">
-            Still restricted. Tap Allow, then choose Allow in Android&apos;s
-            question.
+            Still restricted. Tap Allow, then {choose}.
           </p>
         ) : null}
       </Screen>
@@ -801,14 +811,16 @@ function UploadsStep({
     >
       <label className={own.choice}>
         <span>Upload using</span>
-        <select
+        <Picker
+          title="Upload using"
           value={wifiOnly ? "wifi" : "any"}
+          options={[
+            { key: "any", label: "Wi-Fi or mobile data" },
+            { key: "wifi", label: "Wi-Fi only" },
+          ]}
           disabled={busy}
-          onChange={(event) => setWifiOnly(event.target.value === "wifi")}
-        >
-          <option value="any">Wi-Fi or mobile data</option>
-          <option value="wifi">Wi-Fi only</option>
-        </select>
+          onChange={(key) => setWifiOnly(key === "wifi")}
+        />
       </label>
       {note ? (
         <p className={own.issue} role="status">

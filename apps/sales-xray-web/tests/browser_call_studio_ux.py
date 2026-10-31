@@ -7,12 +7,13 @@ private audio is used; the WAV is generated as four seconds of silence.
 import hashlib
 import json
 import os
+import re
 import wave
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlparse
 
-from playwright.sync_api import Page, sync_playwright
+from playwright.sync_api import Locator, Page, sync_playwright
 
 BASE_URL = os.environ.get("SALES_XRAY_BASE_URL", "http://127.0.0.1:3016")
 AUDIT_DIR = Path(
@@ -332,6 +333,11 @@ def open_report(page: Page) -> None:
     page.wait_for_timeout(250)
 
 
+def _pick(page: Page, picker: Locator, key: str) -> None:
+    picker.click()
+    page.locator(f'[role="option"][data-key="{key}"]').click()
+
+
 def assert_mobile_header_contained(page: Page) -> None:
     header = page.locator(".studio-header").bounding_box()
     brand = page.locator(".studio-header > a").bounding_box()
@@ -431,7 +437,7 @@ def main() -> None:
         page.get_by_role("tab", name="Sound", exact=True).click()
         page.locator("summary").filter(has_text="Sound of the recording").click()
         page.get_by_text("-18.0 dBFS", exact=True).wait_for()
-        page.get_by_role("combobox", name="Audio channel", exact=True).select_option("1")
+        _pick(page, page.get_by_role("button", name=re.compile(r"^Audio channel")), "1")
         page.get_by_role("button", name="Pitch estimate", exact=True).click()
         assert page.get_by_role("slider", name="Inspect pitch estimate over time").is_visible()
         page.get_by_role("slider").fill("2")
@@ -459,12 +465,13 @@ def main() -> None:
         assert page.get_by_role("searchbox", name="Search transcript phrases").input_value() == ""
         page.get_by_role("tab", name="Sound", exact=True).click()
         assert "190.0 Hz" in page.locator("output").inner_text()
-        assert page.get_by_role("combobox", name="Audio channel", exact=True).input_value() == "1"
+        channel = page.get_by_role("button", name=re.compile(r"^Audio channel"))
+        assert channel.get_attribute("data-value") == "1"
         page.emulate_media(media="print")
         assert not page.locator(".studio-header").is_visible()
         assert not page.locator(".studio-report-actions").is_visible()
         assert not page.get_by_role("searchbox", name="Search transcript phrases").is_visible()
-        assert not page.get_by_role("combobox", name="Audio channel", exact=True).is_visible()
+        assert not channel.is_visible()
         assert not page.get_by_role("tablist").is_visible()
         assert report.is_visible()
         assert "AI draft · Dipak has not reviewed this" not in report.inner_text()

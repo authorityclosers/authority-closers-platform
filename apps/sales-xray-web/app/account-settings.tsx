@@ -74,6 +74,7 @@ import {
   type CallSummary,
 } from "./dashboard/dashboard-data";
 import { displayName } from "./display-name";
+import { Picker } from "./ui/picker";
 import styles from "./account-view.module.css";
 
 type Loaded<T> =
@@ -838,17 +839,16 @@ function ThemeRow() {
     <Row label="Theme" hint="Light is the default.">
       <label className={styles.selectWrap}>
         <span className={styles.srOnly}>Theme</span>
-        <select
-          className={styles.select}
+        <Picker
+          title="Theme"
           value={theme.preference}
-          onChange={(event) =>
-            theme.setPreference(parseThemePreference(event.target.value))
-          }
-        >
-          <option value="system">System</option>
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-        </select>
+          options={[
+            { key: "system", label: "System" },
+            { key: "light", label: "Light" },
+            { key: "dark", label: "Dark" },
+          ]}
+          onChange={(key) => theme.setPreference(parseThemePreference(key))}
+        />
       </label>
     </Row>
   );
@@ -1028,16 +1028,15 @@ function ProfileForm({
       </label>
       <label>
         <span>Country or region</span>
-        <select
+        <Picker
+          title="Country or region"
           value={country}
-          onChange={(event) => setCountry(event.target.value as Country)}
-        >
-          {COUNTRIES.map((choice) => (
-            <option key={choice.value} value={choice.value}>
-              {choice.label}
-            </option>
-          ))}
-        </select>
+          options={COUNTRIES.map((choice) => ({
+            key: choice.value,
+            label: choice.label,
+          }))}
+          onChange={(key) => setCountry(key as Country)}
+        />
       </label>
       <label>
         <span>Phone number</span>

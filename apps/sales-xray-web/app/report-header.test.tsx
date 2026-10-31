@@ -233,6 +233,12 @@ it("names the call's lead and links to its sheet in Leads", async () => {
   expect(host.querySelector("[data-report-lead]")!.textContent).toContain(
     "Interested",
   );
+  // And a clear button to the lead's page among the report's actions (bug 128).
+  const action = host.querySelector<HTMLAnchorElement>(
+    "[data-report-lead-action]",
+  )!;
+  expect(action.textContent).toBe("Prospect’s Information");
+  expect(action.getAttribute("href")).toBe(link.getAttribute("href"));
 });
 
 it("shows no lead line when the call has none", () => {

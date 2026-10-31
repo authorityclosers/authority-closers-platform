@@ -612,38 +612,36 @@
   min-width: 0;
 }
 
-/* My day (or Team) as one tap, the way to your own calls (owner Home v3). */
-.viewShortcut {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 44px;
-  padding: 0 12px 0 16px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-pill);
-  background: var(--sx-surface);
-  color: var(--sx-ink);
-  font: inherit;
-  font-size: var(--sx-text-sm);
-  font-weight: 650;
-  cursor: pointer;
-  transition: transform 150ms var(--sx-ease-out);
+/* Team | Me: the whole screen slides in from its side (owner, 31 Oct 2026). */
+.mode {
+  display: grid;
+  gap: inherit;
+  min-width: 0;
+  animation: home-mode-in var(--sx-dur-page) var(--sx-ease-out) both;
 }
 
-.viewShortcut:active {
-  transform: scale(var(--sx-press-scale, 0.98));
+.mode[data-mode="team"] {
+  --mode-from: -24px;
 }
 
-.viewShortcut svg {
-  color: var(--sx-muted);
+.mode[data-mode="mine"] {
+  --mode-from: 24px;
+}
+
+@keyframes home-mode-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--mode-from));
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .viewShortcut {
-    transition: none;
-  }
-
-  .viewShortcut:active {
-    transform: none;
+  .mode {
+    animation: none;
   }
 }

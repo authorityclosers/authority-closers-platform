@@ -8,18 +8,12 @@
  * 2026: "hard to tell which chat is which").
  */
 
-import {
-  ChevronDown,
-  Hourglass,
-  Inbox,
-  ListFilter,
-  UserRound,
-  X,
-} from "lucide-react";
+import { Hourglass, Inbox, ListFilter, UserRound, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { shortName } from "../display-name";
+import { Picker } from "../ui/picker";
 import { useRowKeys } from "../ui/row-keys";
 import { ChannelMark, ChatAvatar } from "./channel-mark";
 import {
@@ -114,20 +108,15 @@ export function ThreadFilters({
         {showScopes ? (
           <label className={styles.pickChip}>
             <UserRound size={13} aria-hidden="true" />
-            <select
-              aria-label="Whose chats"
+            <Picker
+              title="Whose chats"
+              ariaLabel="Whose chats"
               value={filter.scope}
-              onChange={(event) =>
-                onChange({ ...filter, scope: event.target.value as Scope })
-              }
-            >
-              {SCOPES.map((scope) => (
-                <option key={scope.key} value={scope.key}>
-                  {scope.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={13} aria-hidden="true" />
+              options={SCOPES}
+              onChange={(key) => {
+                if (key) onChange({ ...filter, scope: key as Scope });
+              }}
+            />
           </label>
         ) : null}
         <button
@@ -146,24 +135,22 @@ export function ThreadFilters({
             {filter.channel === "all" ? null : (
               <ChannelMark channel={filter.channel} size={14} />
             )}
-            <select
-              aria-label="Channel"
+            <Picker
+              title="Channel"
+              ariaLabel="Channel"
               value={filter.channel}
-              onChange={(event) =>
-                onChange({
-                  ...filter,
-                  channel: event.target.value as ChatChannel | "all",
-                })
-              }
-            >
-              <option value="all">All channels</option>
-              {shown.map((channel) => (
-                <option key={channel} value={channel}>
-                  {CHANNEL_LABEL[channel]}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={13} aria-hidden="true" />
+              options={[
+                { key: "all", label: "All channels" },
+                ...shown.map((channel) => ({
+                  key: channel,
+                  label: CHANNEL_LABEL[channel],
+                })),
+              ]}
+              onChange={(key) => {
+                if (key)
+                  onChange({ ...filter, channel: key as ChatChannel | "all" });
+              }}
+            />
           </label>
         ) : null}
       </div>
