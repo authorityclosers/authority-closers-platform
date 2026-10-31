@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy import Engine
 
-from ac_platform.call_ai.missing_recordings import day_start, missing_today
+from ac_platform.call_ai.missing_recordings import calls_today, day_start, missing_today
 from ac_platform.lead_desk.models import LeadEvent
 from ac_platform.lead_desk.store import PRIVATE_CALL
 from tests.database.conversation_harness import conversation_harness
@@ -82,5 +82,19 @@ def test_missing_calls_are_todays_connected_unrecorded_and_not_private(
             assert mine.by_person == {here.seller.person_id: 1}
             assert mine.latest[here.seller.person_id] == earlier
             assert someone_else.total == 0
+
+            # The banner reads the calls Home lists (persona QA, 31 Oct 2026): the same
+            # missing call, and Home's Tried beside it; private calls and the recording
+            # row itself never count.
+            async with here.setup.sessions() as db:
+                today = await calls_today(
+                    db,
+                    tenant_id=here.tenant_id,
+                    person_id=here.seller.person_id,
+                    role="member",
+                    now=now,
+                )
+            assert today.missing.by_person == {here.seller.person_id: 1}
+            assert today.tried == {here.seller.person_id: 3}
 
     run(exercise())

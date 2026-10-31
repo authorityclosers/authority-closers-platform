@@ -4,6 +4,7 @@ import {
   AlertCircle,
   Bug,
   CheckCircle2,
+  ChevronRight,
   Copy,
   ExternalLink,
   Info,
@@ -41,6 +42,8 @@ export type Notice = Readonly<{
   dismissLabel?: string;
   /** Permanent dismissal: retain the card until the API acknowledges it. */
   onDismiss?: () => Promise<void>;
+  /** One line: the title is the action's button, with ›; the X still closes it. */
+  slim?: boolean;
   /** Error cards offer "Report" (the bug reporter); not on the reporter's own. */
   noReport?: boolean;
 }>;
@@ -111,6 +114,41 @@ function NoticeCard({ notice }: { notice: Notice }) {
     const timer = window.setTimeout(() => dismissNotice(notice.id), timeout);
     return () => window.clearTimeout(timer);
   }, [notice]);
+  // A failed dismissal shows the full card, with its message.
+  if (notice.slim && notice.action && !dismissFailed) {
+    const action = notice.action;
+    return (
+      <div
+        className={styles.card}
+        data-tone={notice.tone}
+        data-slim=""
+        role="status"
+      >
+        <Icon className={styles.icon} size={18} aria-hidden="true" />
+        <button
+          type="button"
+          className={styles.slim}
+          aria-label={`${notice.title}. ${action.label}`}
+          onClick={() => {
+            if (!notice.onDismiss) dismissNotice(notice.id);
+            action.run();
+          }}
+        >
+          <span className={styles.title}>{notice.title}</span>
+          <ChevronRight size={16} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className={styles.close}
+          aria-label="Dismiss"
+          disabled={dismissing}
+          onClick={() => void dismiss()}
+        >
+          <X size={15} aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
   return (
     <div
       className={styles.card}

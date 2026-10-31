@@ -116,6 +116,31 @@ it("preserves ordinary notice actions and avoids removing a permanent card on na
   );
   expect(host.textContent).not.toContain("Ordinary notice");
 });
+it("shows a slim card as one line whose title opens the rest", async () => {
+  const run = vi.fn();
+  const onDismiss = vi.fn(async () => {});
+  await act(async () =>
+    notify({
+      id: "fictional",
+      tone: "info",
+      title: "Fictional line",
+      action: { label: "Details", run },
+      slim: true,
+      onDismiss,
+    }),
+  );
+  const line = host.querySelector<HTMLButtonElement>(
+    '[aria-label="Fictional line. Details"]',
+  )!;
+  expect(line.textContent).toBe("Fictional line");
+  expect(host.querySelector("[data-slim]")).not.toBeNull();
+  await act(async () => line.click());
+  expect(run).toHaveBeenCalledTimes(1);
+  expect(host.textContent).toContain("Fictional line");
+  await act(async () => close().click());
+  expect(onDismiss).toHaveBeenCalledTimes(1);
+  expect(host.textContent).not.toContain("Fictional line");
+});
 it("shows at most two cards, the older ones under +N more", async () => {
   // Owner via the orchestrator, 31 Oct 2026: at most two show, in one corner.
   const ids = ["first", "second", "third", "fourth"];

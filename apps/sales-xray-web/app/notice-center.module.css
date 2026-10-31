@@ -156,6 +156,59 @@
   box-shadow: var(--lx-ring-focus);
 }
 
+/* One line (slim): the title is the button that opens the rest. */
+.card[data-slim] {
+  align-items: center;
+  padding-block: 6px;
+}
+
+.card[data-slim]::before {
+  top: 8px;
+  bottom: 8px;
+}
+
+.card[data-slim] .icon {
+  margin-top: 0;
+}
+
+.card[data-slim] .close {
+  margin: 0 -2px 0 0;
+}
+
+.slim {
+  display: flex;
+  min-width: 0;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.slim .title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slim svg {
+  flex: none;
+  color: var(--lx-muted);
+}
+
+.slim:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--lx-ring-focus);
+}
+
 /* A corner card springs up from the corner it lives in. */
 @keyframes enter {
   from {

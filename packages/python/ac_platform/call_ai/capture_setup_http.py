@@ -245,9 +245,17 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
                 )
             ).all()
             found = await capture_setup.team(auth.database, tenant_id, [row[0].id for row in rows])
-            missing = await missing_recordings.missing_today(
-                auth.database, tenant_id=tenant_id, now=datetime.now(UTC)
-            )
+            # The same calls Home counts (its Tried), never more.
+            missing = (
+                await missing_recordings.calls_today(
+                    auth.database,
+                    tenant_id=tenant_id,
+                    person_id=auth.resolved.actor.person_id,
+                    role=role,
+                    now=datetime.now(UTC),
+                    team=True,
+                )
+            ).missing
             people: list[dict[str, Any]] = []
             for person, member_role in rows:
                 consent = await consent_of(request, auth, tenant_id, person.id)
@@ -280,23 +288,29 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
 
     @router.get("/missing")
     async def read_missing(request: Request, response: Response) -> dict[str, Any]:
-        """The caller's own connected lead calls today with no recording after two minutes:
-        the banner that says how to turn the Phone app's call recording on."""
+        """The caller's own connected lead calls today with no recording after two minutes,
+        from the calls Home counts, and how many they tried (Home's Tried): the banner
+        that says how to turn the Phone app's call recording on."""
         try:
-            async with member(request, response) as (auth, tenant_id, person_id, _):
-                found = await missing_recordings.missing_today(
-                    auth.database, tenant_id=tenant_id, now=datetime.now(UTC), person_id=person_id
+            async with member(request, response) as (auth, tenant_id, person_id, role):
+                today = await missing_recordings.calls_today(
+                    auth.database,
+                    tenant_id=tenant_id,
+                    person_id=person_id,
+                    role=role,
+                    now=datetime.now(UTC),
                 )
-                latest = found.latest.get(person_id)
+                latest = today.missing.latest.get(person_id)
                 return {
                     "schema": MISSING_SCHEMA,
-                    "calls": found.by_person.get(person_id, 0),
+                    "calls": today.missing.by_person.get(person_id, 0),
+                    "tried": today.tried.get(person_id, 0),
                     "latest_at": latest.isoformat() if latest else None,
                 }
         except HTTPException as error:
             # A personal workspace: its calls are checked on the phone, not here.
             if error.status_code == 403 and error.detail == OUTSIDE:
-                return {"schema": MISSING_SCHEMA, "calls": 0, "latest_at": None}
+                return {"schema": MISSING_SCHEMA, "calls": 0, "tried": 0, "latest_at": None}
             raise
 
     application.include_router(router)

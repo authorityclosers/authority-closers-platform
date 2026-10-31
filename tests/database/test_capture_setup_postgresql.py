@@ -196,6 +196,7 @@ def test_a_seller_agrees_finishes_on_a_phone_and_team_sees_it(
                 assert mine.json() == {
                     "schema": "sales-xray-missing-recordings/1",
                     "calls": 0,
+                    "tried": 0,
                     "latest_at": None,
                 }
         finally:
