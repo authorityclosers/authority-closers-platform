@@ -18,6 +18,7 @@ vi.mock("next/link", () => ({
 }));
 
 import { SalesHome } from "./sales-home";
+import { resetHomeReads } from "./home-load";
 import type { LibrarySubmission } from "../acquisition-client";
 
 (
@@ -128,6 +129,7 @@ async function mount(
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/dashboard");
+  resetHomeReads();
 });
 afterEach(async () => {
   await act(async () => root.unmount());

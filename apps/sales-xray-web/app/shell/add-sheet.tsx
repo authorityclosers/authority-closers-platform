@@ -18,7 +18,8 @@
 
 import { AudioLines, ChevronRight, ListChecks, UserPlus } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { Sheet } from "../ui/sheet";
 import styles from "./add-sheet.module.css";
@@ -80,45 +81,76 @@ export function AddSheet({
   /** False outside an organisation: Add lead then opens Leads instead. */
   leadsHere: boolean;
 }) {
+  // Handing over to a form: the + sheet closes while the form loads, so a
+  // clear shield takes the moment's taps (a double tap's second one fell
+  // through to the tab bar's Ask Dipak), and the row takes one tap only.
+  const [shield, setShield] = useState(false);
+  const handing = useRef<string | null>(null);
+  useEffect(() => {
+    if (!shield) return;
+    const timer = window.setTimeout(() => {
+      setShield(false);
+      handing.current = null;
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [shield]);
+  const handOver = (row: string, open: () => void) => {
+    if (handing.current === row) return;
+    handing.current = row;
+    setShield(true);
+    open();
+  };
   return (
-    <Sheet open={open} onClose={onClose} title="Add" wide="center">
-      <div className={styles.choices}>
-        {leadsHere ? (
+    <>
+      {shield && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className={styles.shield}
+              data-tap-shield=""
+              aria-hidden="true"
+            />,
+            document.body,
+          )
+        : null}
+      <Sheet open={open} onClose={onClose} title="Add" wide="center">
+        <div className={styles.choices}>
+          {leadsHere ? (
+            <Choice
+              icon={<UserPlus size={22} />}
+              tone="lead"
+              title="Add lead"
+              text="A name and a number is enough"
+              onClick={() => handOver("lead", onAddLead)}
+            />
+          ) : (
+            <Choice
+              icon={<UserPlus size={22} />}
+              tone="lead"
+              title="Add lead"
+              text="Leads live in your organisation"
+              href="/leads"
+              onClick={onClose}
+            />
+          )}
           <Choice
-            icon={<UserPlus size={22} />}
-            tone="lead"
-            title="Add lead"
-            text="A name and a number is enough"
-            onClick={onAddLead}
-          />
-        ) : (
-          <Choice
-            icon={<UserPlus size={22} />}
-            tone="lead"
-            title="Add lead"
-            text="Leads live in your organisation"
-            href="/leads"
+            icon={<AudioLines size={22} />}
+            tone="call"
+            title="Add a call"
+            text="Record or upload a call for analysis"
+            href={callHref}
             onClick={onClose}
           />
-        )}
-        <Choice
-          icon={<AudioLines size={22} />}
-          tone="call"
-          title="Add a call"
-          text="Record or upload a call for analysis"
-          href={callHref}
-          onClick={onClose}
-        />
-        {leadsHere ? (
-          <Choice
-            icon={<ListChecks size={22} />}
-            tone="task"
-            title="Add task"
-            text="A reminder on a lead, on its day"
-            onClick={onAddTask}
-          />
-        ) : null}
-      </div>
-    </Sheet>
+          {leadsHere ? (
+            <Choice
+              icon={<ListChecks size={22} />}
+              tone="task"
+              title="Add task"
+              text="A reminder on a lead, on its day"
+              onClick={() => handOver("task", onAddTask)}
+            />
+          ) : null}
+        </div>
+      </Sheet>
+    </>
   );
 }

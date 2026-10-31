@@ -42,45 +42,31 @@ import {
   type More,
 } from "./metric-pager";
 import { leadsHref } from "./seller-home";
+import { useHomeRead } from "./home-load";
 import styles from "./team-floor.module.css";
 
-/** Today's figures from the Performance engine; null until they arrive. */
+/** Today's figures from the Performance engine; the last good ones if a read
+ *  fails; null until the first arrives. */
 function useEffort(): Effort | null {
-  const [effort, setEffort] = useState<Effort | null>(null);
-  useEffect(() => {
-    const controller = new AbortController();
-    readEffort(1, controller.signal).then(setEffort, () => undefined);
-    return () => controller.abort();
-  }, []);
-  return effort;
+  return useHomeRead("effort:1", (signal) => readEffort(1, signal)).value;
 }
 
 type SideCounts = { fresh: number; open: number; unowned: number };
 
-/** The side's three lead counts, each the total of the list its card opens;
- *  read once per side. */
+/** The side's three lead counts, each the total of the list its card opens. */
 function useSideCounts(side: Side): SideCounts | null {
-  const [found, setFound] = useState<Partial<Record<Side, SideCounts>>>({});
-  const known = found[side] !== undefined;
-  useEffect(() => {
-    if (known) return;
-    const controller = new AbortController();
+  return useHomeRead(`counts:${side}`, async (signal) => {
     const total = (query: string) =>
-      deskRequest<LeadPage>(`/leads?${query}`, {
-        signal: controller.signal,
-      }).then((page) => page.total);
-    Promise.all([
+      deskRequest<LeadPage>(`/leads?${query}`, { signal }).then(
+        (page) => page.total,
+      );
+    const [fresh, open, unowned] = await Promise.all([
       total(`scope=team&side=${side}&view=to_call&step=new`),
       total(`scope=team&side=${side}&step=open_leads`),
       total(`scope=unassigned&side=${side}`),
-    ]).then(
-      ([fresh, open, unowned]) =>
-        setFound((was) => ({ ...was, [side]: { fresh, open, unowned } })),
-      () => undefined,
-    );
-    return () => controller.abort();
-  }, [side, known]);
-  return found[side] ?? null;
+    ]);
+    return { fresh, open, unowned };
+  }).value;
 }
 
 const count = (value: number | undefined | null) =>

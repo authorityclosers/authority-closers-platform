@@ -97,3 +97,19 @@ it("sends Add lead to Leads outside an organisation", async () => {
   expect(addLead?.getAttribute("href")).toBe("/leads");
   expect(addLead?.textContent).toContain("Leads live in your organisation");
 });
+
+// Persona QA, 31 Oct 2026: a double tap on Add task fell through to Ask Dipak.
+it("takes one tap on Add task and shields the next", async () => {
+  const { dialog, onAddTask } = await mount(true);
+  const task = Array.from(dialog.querySelectorAll("button")).find((button) =>
+    button.textContent?.includes("Add task"),
+  )!;
+  // Taps right after opening are the opening tap's echo; wait them out.
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  await act(async () => {
+    task.click();
+    task.click();
+  });
+  expect(onAddTask).toHaveBeenCalledTimes(1);
+  expect(document.querySelector("[data-tap-shield]")).not.toBeNull();
+});

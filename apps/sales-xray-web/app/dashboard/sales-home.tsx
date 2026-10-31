@@ -34,13 +34,13 @@ import type { Side } from "../ui/side-selector";
 import { SetupStart } from "./home-v2";
 import { TodayBar } from "./home-today";
 import { TeamFloor } from "./team-floor";
+import { HomeLoadWatch, useHomeRead } from "./home-load";
 import { TeamControls } from "./team-controls";
 import {
   readDesk,
   readPerformance,
   readTeam,
   type Desk,
-  type Performance,
   type Period,
 } from "../leads/leads-client";
 import { ActionList, ActionRow } from "../ui/kit";
@@ -83,22 +83,17 @@ function usePeriod(): [Period, (next: Period) => void] {
   ];
 }
 
-function useDesk() {
-  const [state, setState] = useState<
-    | { status: "loading" }
-    | { status: "ready"; desk: Desk }
-    | { status: "error" }
-  >({ status: "loading" });
-  useEffect(() => {
-    const controller = new AbortController();
-    readDesk(controller.signal)
-      .then((desk) => setState({ status: "ready", desk }))
-      .catch(() => {
-        if (!controller.signal.aborted) setState({ status: "error" });
-      });
-    return () => controller.abort();
-  }, []);
-  return state;
+/** The desk, read once (and again on Retry); the last good one if a read fails. */
+function useDesk():
+  | { status: "loading" }
+  | { status: "ready"; desk: Desk }
+  | { status: "error" } {
+  const { value, failed } = useHomeRead("desk", (signal) => readDesk(signal));
+  return value
+    ? { status: "ready", desk: value }
+    : failed
+      ? { status: "error" }
+      : { status: "loading" };
 }
 
 /** All the organisation's leads, for an owner or admin; null until read, and
@@ -124,29 +119,10 @@ function useTeamLeadCount(enabled: boolean): number | null {
 /** The period's report for the team, with the period kept in the address. */
 function usePerformance() {
   const [period, setPeriod] = usePeriod();
-  const [report, setReport] = useState<{
-    period: Period;
-    value: Performance;
-  } | null>(null);
-  const [failed, setFailed] = useState<Period | null>(null);
-  useEffect(() => {
-    const controller = new AbortController();
-    readPerformance(period, controller.signal)
-      .then((value) => {
-        setReport({ period, value });
-        setFailed(null);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setFailed(period);
-      });
-    return () => controller.abort();
-  }, [period]);
-  return {
-    period,
-    setPeriod,
-    shown: report?.period === period ? report.value : null,
-    failed: failed === period,
-  };
+  const { value, failed } = useHomeRead(`performance:${period}`, (signal) =>
+    readPerformance(period, signal),
+  );
+  return { period, setPeriod, shown: value, failed: failed && !value };
 }
 
 /** The team's Home: the floor, on the side the address names; the
@@ -387,6 +363,7 @@ export function SalesHome({
     manager && (view === "team" || !works) ? "team" : "mine";
   return (
     <div className={styles.home} data-home="">
+      <HomeLoadWatch />
       {/* The month's revenue bar goes here, above both modes (capture-setup
           session, 31 Oct 2026). */}
       {manager && works ? (
