@@ -120,5 +120,9 @@ export const RECENTS_CHANGED_EVENT = "sales-xray:recents-changed";
 /** Pages dispatch this to open the sidebar's account switcher. */
 export const OPEN_SWITCHER_EVENT = "sales-xray:open-switcher";
 
+/** Pages dispatch this to open the + sheet (Add a lead, a call or a task), as the phone's
+ *  + does: the Leads header's + on a computer (Dipak's handoff, item 41). */
+export const OPEN_ADD_EVENT = "sales-xray:open-add";
+
 /** Pages dispatch this to open "Create an organisation" (where it is offered). */
 export const CREATE_ORGANISATION_EVENT = "sales-xray:create-organisation";

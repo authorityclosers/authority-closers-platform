@@ -170,6 +170,7 @@ import {
   type LeadFilters,
 } from "./lead-filters";
 import styles from "./leads.module.css";
+import { OPEN_ADD_EVENT } from "../shell/shell-store";
 
 type Manage = "team" | "sources" | "stages" | "numbers";
 
@@ -1737,16 +1738,32 @@ export function LeadsRoute({
                     />
                   }
                   call={
-                    // Call Next Lead or Start Cold Calling: the list's first lead.
-                    <CallNext
-                      side={side}
-                      disabled={!topLead}
-                      onStart={() => {
-                        if (!topLead) return;
-                        setQueue(new Set([topLead]));
-                        open(topLead, "call");
-                      }}
-                    />
+                    <>
+                      {/* + on a computer (Dipak's handoff, item 41): the phone's
+                          + sheet, Add a lead, a call or a task. */}
+                      <button
+                        type="button"
+                        className={styles.headAdd}
+                        aria-label="Add a lead, a call or a task"
+                        aria-haspopup="dialog"
+                        onClick={() =>
+                          window.dispatchEvent(new Event(OPEN_ADD_EVENT))
+                        }
+                      >
+                        <Plus size={16} strokeWidth={2.5} aria-hidden="true" />
+                        Add
+                      </button>
+                      {/* Call Next Lead or Start Cold Calling: the list's first lead. */}
+                      <CallNext
+                        side={side}
+                        disabled={!topLead}
+                        onStart={() => {
+                          if (!topLead) return;
+                          setQueue(new Set([topLead]));
+                          open(topLead, "call");
+                        }}
+                      />
+                    </>
                   }
                   views={
                     <ViewTabs

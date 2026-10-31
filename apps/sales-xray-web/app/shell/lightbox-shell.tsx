@@ -107,6 +107,7 @@ import {
   CREATE_ORGANISATION_EVENT,
   getShellState,
   markSidebar,
+  OPEN_ADD_EVENT,
   OPEN_SWITCHER_EVENT,
   recentCallsForContext,
   RECENTS_CHANGED_EVENT,
@@ -412,6 +413,12 @@ function LightboxShellFrame({
   // quick form over the current screen (owner, 22 Oct). Each opening of the
   // form is a new round, so it always starts empty.
   const [addOpen, setAddOpen] = useState(false);
+  // A page's own + (the Leads header on a computer) opens this same sheet.
+  useEffect(() => {
+    const open = () => setAddOpen(true);
+    window.addEventListener(OPEN_ADD_EVENT, open);
+    return () => window.removeEventListener(OPEN_ADD_EVENT, open);
+  }, []);
   // Ask Dipak (28 Oct 2026 meeting): the tab bar's middle slot.
   const [askOpen, setAskOpen] = useState(false);
   const [leadForm, setLeadForm] = useState({ open: false, round: 0 });
