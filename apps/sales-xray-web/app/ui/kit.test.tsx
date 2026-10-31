@@ -437,3 +437,18 @@ it("slides one pill to the chosen segment", async () => {
         ];
   }
 });
+
+it("gives a page header's back link a 44 px tap target (robot row f2773fe5)", () => {
+  const css = readFileSync(
+    join(
+      dirname(fileURLToPath(import.meta.url)),
+      "../../../../packages/typescript/ui/src/kit/kit.module.css",
+    ),
+    "utf8",
+  );
+  const back = css.slice(
+    css.indexOf(".back {"),
+    css.indexOf("}", css.indexOf(".back {")),
+  );
+  expect(back).toContain("min-height: 44px");
+});

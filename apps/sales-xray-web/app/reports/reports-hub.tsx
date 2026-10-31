@@ -382,9 +382,15 @@ export function ReportsHub({
             What stands out
           </h2>
           {!loaded ? (
+            // Two fact rows, at its rows' own height: the sections below
+            // never move when the facts arrive (ux-audit, 1 Nov 2026).
             <div className={styles.standoutSkeleton} aria-hidden="true">
-              <Skeleton width="80%" height={14} />
-              <Skeleton width="60%" height={14} />
+              <span>
+                <Skeleton width="80%" height={14} />
+              </span>
+              <span>
+                <Skeleton width="60%" height={14} />
+              </span>
             </div>
           ) : facts.length ? (
             <ul>

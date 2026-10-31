@@ -339,3 +339,79 @@ describe("Undo on the Save card (31 Oct 2026)", () => {
     expect(notices.shown.at(-1)?.title).toMatch(/^Undone: back to /);
   });
 });
+
+// ph2-16 (phone personas, 1 Nov 2026): plain answers over the organisation's
+// own stages, and "I didn't call".
+describe("plain answers after a call", () => {
+  const ownStages = () =>
+    ({
+      ...lead("new"),
+      stage_choices: [
+        {
+          key: "discussion_incomplete",
+          kind: "follow_up",
+          label: "Discussion incomplete",
+          meaning: "Talk again",
+        },
+        { key: "lost", kind: "lost", label: "Lost", meaning: "They said no" },
+      ],
+      moves: [
+        {
+          step: "discussion_incomplete",
+          label: "Discussion incomplete",
+          kind: "follow_up",
+          group: "active",
+          action: "move",
+          needs: ["next_action"],
+          asks: [],
+          reasons: [],
+        },
+        {
+          step: "lost",
+          label: "Lost",
+          kind: "lost",
+          group: "lost",
+          action: "close",
+          needs: ["reason"],
+          asks: [],
+          reasons: [{ key: "not_interested", label: "Not interested" }],
+        },
+      ],
+    }) as unknown as LeadDetail;
+
+  it("lands Not interested and Call back on the organisation's own stages", async () => {
+    await show(ownStages());
+    await act(async () => tile("We talked").click());
+    const quick = host.querySelector('[aria-label="Quick answers"]')!;
+    expect(
+      [...quick.querySelectorAll("button")].map((b) => b.textContent),
+    ).toEqual(["Not interested", "Call back", "Send details"]);
+    await act(async () => tile("Not interested").click());
+    expect(tile("Lost").getAttribute("aria-pressed")).toBe("true");
+    await act(async () => tile("Call back").click());
+    expect(tile("Discussion incomplete").getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+  });
+
+  it("closes the question with I didn't call, saving nothing", async () => {
+    const onSkip = vi.fn();
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+    await act(async () =>
+      root.render(
+        <CallOutcome
+          detail={ownStages()}
+          submitLabel="Save"
+          attention={false}
+          beforeSave={async () => ownStages()}
+          onSaved={() => undefined}
+          onSkip={onSkip}
+        />,
+      ),
+    );
+    await act(async () => tile("I didn't call").click());
+    expect(onSkip).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

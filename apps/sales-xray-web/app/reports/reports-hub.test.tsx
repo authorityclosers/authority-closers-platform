@@ -120,3 +120,9 @@ it("draws each line's place while its numbers load", async () => {
   expect(host.textContent).not.toContain("ready");
   expect(host.textContent).not.toContain("Nothing needs you");
 });
+
+it("holds two fact rows while What stands out loads (ux-audit, 1 Nov 2026)", async () => {
+  await render(true, { ...REPORTS_FIXTURE, calls: undefined });
+  const rows = host.querySelectorAll('[class*="standoutSkeleton"] > span');
+  expect(rows).toHaveLength(2);
+});

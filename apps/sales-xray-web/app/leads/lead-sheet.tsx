@@ -359,6 +359,7 @@ export function CallOutcome({
   onStop,
   upNext = null,
   ask = false,
+  onSkip,
 }: {
   detail: LeadDetail;
   submitLabel: string;
@@ -375,6 +376,8 @@ export function CallOutcome({
   /** Logs a call still waiting to be logged; returns the lead as it now is. */
   beforeSave: () => Promise<LeadDetail>;
   onSaved: (next: LeadDetail) => void;
+  /** "I didn't call": close the question, saving nothing (ph2-16). */
+  onSkip?: () => void;
 }) {
   const id = useId();
   const ref = useRef<HTMLElement>(null);
@@ -424,6 +427,56 @@ export function CallOutcome({
   );
   const [note, setNote] = useState("");
   const [deal, setDeal] = useState("");
+  // ph2-16 (1 Nov 2026): plain answers, each on the organisation's own stage,
+  // when What happens next lists its stages (the desk's four say them already).
+  const ownLost = choices.find((item) => item.step && item.key === "lost");
+  const ownLater = choices.find(
+    (item) => item.step && item.key === "follow_up",
+  );
+  const lostReasons =
+    (detail.moves ?? []).find((move) => move.step === ownLost?.step)?.reasons ??
+    [];
+  const answers: {
+    id: string;
+    label: string;
+    tone: string;
+    pick: () => void;
+  }[] = [];
+  if (ownLost)
+    answers.push({
+      id: "not-interested",
+      label: "Not interested",
+      tone: "bad",
+      pick: () => {
+        setStage("lost");
+        setStep(ownLost.step ?? null);
+        if (lostReasons.some((item) => item.key === "not_interested"))
+          setCloseReason("not_interested");
+      },
+    });
+  if (ownLater)
+    answers.push(
+      {
+        id: "call-back",
+        label: "Call back",
+        tone: "later",
+        pick: () => {
+          setStage("follow_up");
+          setStep(ownLater.step ?? null);
+        },
+      },
+      {
+        id: "send-details",
+        label: "Send details",
+        tone: "warm",
+        pick: () => {
+          setStage("follow_up");
+          setStep(ownLater.step ?? null);
+          setNext("morning");
+          setNote((current) => current || "Asked for the details: send them.");
+        },
+      },
+    );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -736,6 +789,11 @@ export function CallOutcome({
           Didn&apos;t get through
         </button>
       </div>
+      {onSkip && talk === null ? (
+        <button type="button" className={styles.skipLink} onClick={onSkip}>
+          I didn&apos;t call
+        </button>
+      ) : null}
 
       {talk === "missed" ? (
         <div
@@ -798,6 +856,26 @@ export function CallOutcome({
           data-nudge={missing ? nudge : undefined}
         >
           <span className={styles.stepLabel}>What happens next?</span>
+          {answers.length ? (
+            // Plain answers over the organisation's own stages (ph2-16).
+            <div
+              className={styles.quickAnswers}
+              role="group"
+              aria-label="Quick answers"
+            >
+              {answers.map((answer) => (
+                <button
+                  key={answer.id}
+                  type="button"
+                  className={styles.quickAnswer}
+                  data-tone={answer.tone}
+                  onClick={answer.pick}
+                >
+                  {answer.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
           {suggested ? (
             <SuggestionHint
               suggestion={suggested}
@@ -3957,6 +4035,13 @@ export function LeadSheet({
                     attention={asking}
                     ask={intent === "log" || logging === leadId}
                     beforeSave={() => logWaitingCall(detail)}
+                    onSkip={() => {
+                      // Nothing saved; in a round, on to the next lead (ph2-16).
+                      setBackFrom(null);
+                      setLogging(null);
+                      if (asked) setAnswered(asked.startedMs);
+                      if (queue && onNext && leadId) onNext(leadId);
+                    }}
                     onSaved={(next) => {
                       setBackFrom(null);
                       setLogging(null);
