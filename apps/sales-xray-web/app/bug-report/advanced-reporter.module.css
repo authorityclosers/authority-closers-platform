@@ -113,7 +113,6 @@
   height: calc(100dvh - 200px);
   min-height: 360px;
   min-width: 0;
-  background: var(--sx-sunken);
 }
 
 .toolbar {
@@ -124,8 +123,6 @@
   gap: 2px 6px;
   min-width: 0;
   padding: 6px 8px;
-  border-bottom: 1px solid var(--sx-line);
-  background: var(--sx-surface);
 }
 
 .toolGroup {
@@ -289,7 +286,7 @@
 .panel {
   display: grid;
   align-content: start;
-  gap: 14px;
+  gap: 20px;
   min-width: 0;
   padding: 16px 16px 24px;
 }
@@ -455,8 +452,7 @@
   justify-items: start;
   gap: 10px;
   min-width: 0;
-  padding-top: 14px;
-  border-top: 1px solid var(--sx-line);
+  padding-top: 10px;
 }
 
 .sectionHead {
@@ -598,8 +594,7 @@
   justify-items: start;
   gap: 10px;
   min-width: 0;
-  padding-top: 14px;
-  border-top: 1px solid var(--sx-line);
+  padding-top: 10px;
 }
 
 .steps {
@@ -757,8 +752,7 @@
 
 .captured {
   width: 100%;
-  border-top: 1px solid var(--sx-line);
-  padding-top: 10px;
+  padding-top: 6px;
 }
 
 .captured summary {
@@ -832,10 +826,8 @@
   gap: 2px;
   max-height: 220px;
   margin: 0;
-  padding: 6px 8px;
+  padding: 0;
   overflow-y: auto;
-  border-radius: var(--sx-radius-sm);
-  background: var(--sx-sunken);
   list-style: none;
 }
 
@@ -863,13 +855,6 @@
 
 /* Computers: a large editor over the dimmed app, picture left, report right. */
 @media (min-width: 900px) {
-  .frame {
-    inset: 16px;
-    border: 1px solid var(--sx-line);
-    border-radius: var(--sx-radius-xl);
-    box-shadow: var(--sx-shadow-float);
-  }
-
   .head {
     padding: 10px 12px 10px 18px;
   }

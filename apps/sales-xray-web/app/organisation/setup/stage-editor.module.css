@@ -245,12 +245,9 @@
 
 .rows {
   display: grid;
+  margin: 0;
   padding: 0;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-lg);
-  background: var(--sx-surface);
   list-style: none;
-  overflow: hidden;
 }
 
 .row {
@@ -632,9 +629,6 @@
 .sheetList {
   display: grid;
   min-width: 0;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-lg);
-  overflow: hidden;
 }
 
 .sheetRow {
@@ -738,9 +732,7 @@
   gap: 16px;
   box-sizing: border-box;
   width: 100%;
-  max-width: 1100px;
   min-width: 0;
-  margin: 0 auto;
   /* The app frame gives the side gutters; a second pair would clip the names. */
   padding: 8px 0 32px;
 }
