@@ -5,6 +5,7 @@ import { dipakTake, FocusHero } from "./coaching-ui";
 import { CoachingMedia, requestClip } from "./media-player";
 import { parseClips, clipSource } from "./media-contract";
 import { fictionalClip } from "./coaching.fixture";
+import { WorkspaceAccessContext } from "../workspace-access";
 
 let root: Root, host: HTMLDivElement;
 beforeEach(() => {
@@ -655,6 +656,50 @@ describe("reviewed placeholder clips", () => {
     ).toEqual(["/plans"]);
     await act(async () => button("Locked coaching clip").click());
     expect(host.querySelector("audio")).toBeNull();
+  });
+  // Buying is for whoever pays (roles.ts "billing.view"): a Seller of an
+  // organisation reads the offer with nothing to buy.
+  it("offers a Seller of an organisation nothing to buy on a locked clip", async () => {
+    const [clip] = parseClips([
+      {
+        ...fictionalClip,
+        access: "locked",
+        entitlement_policy: "future-preview-plan",
+        offer: {
+          full_coaching_href: "/plans",
+          academy: {
+            href: "https://learn.authorityclosers.com/courses/impact",
+            label: "Impact before solution",
+          },
+        },
+      },
+    ]);
+    await act(async () =>
+      root.render(
+        <WorkspaceAccessContext.Provider
+          value={{
+            status: "ready",
+            authenticated: true,
+            context: { personId: "p", sessionId: "s", tenantId: "t" },
+            workspaces: [
+              {
+                tenant_id: "t",
+                kind: "organisation",
+                name: "Fictional Homes",
+                role: "member",
+                sales_xray_enabled: true,
+              },
+            ],
+            retry: () => {},
+          }}
+        >
+          <CoachingMedia clips={[clip]} />
+        </WorkspaceAccessContext.Provider>,
+      ),
+    );
+    expect(host.textContent).toContain("Part of Dipak’s full coaching");
+    expect(host.textContent).not.toContain("Get the full coaching");
+    expect(host.querySelector("a")).toBeNull();
   });
   it("never accepts a full clip outside the open Coaching policy or a bad preview", () => {
     expect(

@@ -25,6 +25,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import type { Capability } from "../organisation/roles";
+
 export type SettingsSectionId =
   | "profile"
   | "selling"
@@ -53,8 +55,11 @@ export type SettingsSection = {
   hint: string;
   icon: LucideIcon;
   group: "Account" | "Organisation" | "Connections" | "This device";
-  /** Shown to organisation owners and admins only (the API decides the rest). */
-  managers?: true;
+  /**
+   * Shown only to roles with this capability (roles.ts), the one its API's
+   * server guard asks for; the API still decides the rest.
+   */
+  needs?: Capability;
   /** Opens inside that section's screen, so it isn't listed on its own (its address still works). */
   within?: SettingsSectionId;
 };
@@ -97,6 +102,9 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     hint: "Your plan and invoices",
     icon: CreditCard,
     group: "Account",
+    // Billing belongs to whoever pays: the person in a personal workspace,
+    // in an organisation the roles that see billing (workspace-role.ts).
+    needs: "billing.view",
   },
   {
     // Owner, 24 Oct 2026: usage analytics on by default, each person can turn it off.
@@ -129,7 +137,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     hint: "Who gets new leads, limits, reassigning and work hours",
     icon: ClipboardList,
     group: "Organisation",
-    managers: true,
+    needs: "leads.manage",
   },
   {
     id: "stages",
@@ -144,7 +152,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     hint: "How much AI reads each seller's recorded calls",
     icon: Sparkles,
     group: "Organisation",
-    managers: true,
+    needs: "leads.manage",
   },
   {
     id: "sources",
@@ -152,7 +160,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     hint: "Lead forms, sheets, webhooks and imports",
     icon: Plug,
     group: "Connections",
-    managers: true,
+    needs: "leads.manage",
   },
   {
     id: "apps",
@@ -160,7 +168,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     hint: "Lead ads, WhatsApp, Messenger and Instagram",
     icon: Blocks,
     group: "Connections",
-    managers: true,
+    needs: "leads.manage",
   },
   {
     id: "ai-replies",
@@ -168,7 +176,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     hint: "Suggested and automatic replies to leads",
     icon: Bot,
     group: "Connections",
-    managers: true,
+    needs: "leads.manage",
   },
   {
     id: "developers",
@@ -176,7 +184,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     hint: "API keys, AI assistants (MCP), webhooks and the docs",
     icon: Code,
     group: "Connections",
-    managers: true,
+    needs: "org.manage",
   },
   {
     // Owner, 25 Oct 2026: an organisation links its Pulse org.
@@ -185,7 +193,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     hint: "Your team's profiles from Pulse, and what you share with it",
     icon: Link2,
     group: "Connections",
-    managers: true,
+    needs: "org.manage",
   },
   {
     id: "notifications",

@@ -45,6 +45,7 @@ import type { SharingView } from "./sharing-client";
 import { requestedSkillLabel, type RequestedSkill } from "./focus-request";
 import { RepCallLinks } from "./rep-call-links";
 import { CallsPanel, callsOnSkill, type CallsPanelHandle } from "./calls-panel";
+import { useTeamCoachingHere } from "./team-coaching-access";
 import styles from "./coaching.module.css";
 
 const JOURNEY: MasteryState[] = [
@@ -134,6 +135,10 @@ function StartCoaching({
   sharing?: SharingView;
 }) {
   const calls = useRef<CallsPanelHandle>(null);
+  // The fictional team's coaching is Team coaching: only where the server
+  // answers it (team-coaching-access.ts).
+  const teamCoaching = useTeamCoachingHere();
+  const sandboxReps = teamCoaching === false ? 0 : (coaching.sandbox_reps ?? 0);
   if (readOnly)
     return (
       <div className={styles.conversation}>
@@ -188,29 +193,27 @@ function StartCoaching({
             onSeeCalls={() => calls.current?.showAll()}
           />
           <div className={styles.actions}>
-            {coaching.sandbox_reps ? (
+            {sandboxReps ? (
               <Link
                 className={kitStyles.button}
                 data-variant="primary"
                 href="/coaching?view=team"
               >
-                {START.sandboxReps(coaching.sandbox_reps)}{" "}
+                {START.sandboxReps(sandboxReps)}{" "}
                 <ArrowRight size={14} aria-hidden="true" />
               </Link>
             ) : null}
             <Link
               className={kitStyles.button}
               data-variant={
-                coaching.analysed_calls || coaching.sandbox_reps
-                  ? undefined
-                  : "primary"
+                coaching.analysed_calls || sandboxReps ? undefined : "primary"
               }
               href="/analysis/new"
             >
               {START.analyse} <ArrowRight size={14} aria-hidden="true" />
             </Link>
           </div>
-          {coaching.sandbox_reps ? (
+          {sandboxReps ? (
             <p className={styles.note}>{START.sandboxNote}</p>
           ) : null}
         </StoryCard>

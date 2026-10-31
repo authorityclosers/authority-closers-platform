@@ -305,19 +305,26 @@ it("asks before changing a role, then saves it through the organisation API", as
   );
 });
 
-it("shows members only their own calls and offers no actions on others", async () => {
+// A teammate's page is for those who see the team (roles.ts "team.view"): a
+// member who follows a link to one reads a calm line with a way back, never a
+// 403, and nothing about the teammate is read.
+it("shows a member a calm line with a way back on a teammate's page, and reads nothing", async () => {
   await show(ashaId, "member");
-  expect(host.querySelector("h1")?.textContent).toContain("Asha Menon");
   expect(host.textContent).toContain(
-    "You see your own calls and reports here, not a teammate's.",
+    "Only owners and managers can see a teammate's page",
   );
+  expect(host.textContent).toContain(
+    "You see your own calls and reports, not a teammate's.",
+  );
+  expect(host.querySelector('a[href="/organisation"]')?.textContent).toBe(
+    "Back to Organisation",
+  );
+  expect(host.textContent).not.toContain("Asha Menon");
   expect(host.querySelector('button[aria-haspopup="listbox"]')).toBeNull();
   expect(host.textContent).not.toContain("Remove");
   expect(host.querySelector('a[href^="/coaching"]')).toBeNull();
-  expect(calls.some((call) => call.url.startsWith("/v1/me/coaching"))).toBe(
-    false,
-  );
-  expect(calls.some((call) => call.url.includes("/activity?"))).toBe(false);
+  expect(calls).toEqual([]);
+  expect(notices.notify).not.toHaveBeenCalled();
 });
 
 it("gives invited people a profile with an honest empty state", async () => {
@@ -836,6 +843,20 @@ it("lets a read-only Viewer see the person's work without settings controls", as
         call.url === `/v1/lead-desk/activity?day=recent&person=${ashaId}`,
     ),
   ).toBe(true);
+});
+
+// Only an organisation's owners and admins read a teammate's coaching
+// (team-coaching-access.ts, after the server's organisation_call_reader): a
+// Viewer gets one line, with no read and no link to it.
+it("tells a Viewer who reads a teammate's coaching, without reading or linking to it", async () => {
+  await show(ashaId, "viewer");
+  expect(host.textContent).toContain(
+    "Only owners and admins can see a teammate's coaching.",
+  );
+  expect(host.querySelector('a[href^="/coaching?person="]')).toBeNull();
+  expect(calls.some((call) => call.url.startsWith("/v1/me/coaching"))).toBe(
+    false,
+  );
 });
 
 it("keeps removal in the sheet until an explicit confirmation, and Cancel does not write", async () => {

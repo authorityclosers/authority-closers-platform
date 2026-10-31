@@ -272,6 +272,33 @@ it("has no guide switch without a signed-in person", async () => {
   expect(document.querySelector('[role="switch"]')).toBeNull();
 });
 
+it("shows Plan & usage only to whoever pays in an organisation", async () => {
+  // Persona QA, 31 Oct 2026: a seller saw Plan & usage, a price and Top up.
+  asPhone(false);
+  const access = (role: "member" | "owner"): WorkspaceAccessValue => ({
+    status: "ready",
+    authenticated: true,
+    context: { personId: "fictional-seller", sessionId: "s", tenantId: "org" },
+    workspaces: [
+      {
+        tenant_id: "org",
+        kind: "organisation",
+        name: "Fictional Org",
+        role,
+        sales_xray_enabled: true,
+      },
+    ],
+    retry: () => {},
+  });
+  const seller = await open({ organisation: true }, access("member"));
+  expect(seller.querySelector('a[href="/settings/plan"]')).toBeNull();
+  expect(seller.textContent).toContain("Settings");
+  await act(async () => root.unmount());
+  host.remove();
+  const owner = await open({ organisation: true }, access("owner"));
+  expect(owner.querySelector('a[href="/settings/plan"]')).not.toBeNull();
+});
+
 it("puts the current workspace first on a phone, others one tap away", async () => {
   asPhone(true);
   const onSelectWorkspace = vi.fn();

@@ -50,6 +50,7 @@ vi.mock("./ai-apps", () => ({
   AiAppsSection: () => <p data-testid="ai-apps">ai apps</p>,
 }));
 
+import { WorkspaceAccessContext } from "../workspace-access";
 import { SettingsSectionView } from "./sections";
 import { SettingsSkeleton } from "./settings-skeleton";
 import { AccountRedirect } from "./account-redirect";
@@ -264,4 +265,85 @@ it("sends the organisation's settings to its hub", async () => {
   ).toBe(true);
   expect(hubAddress("stages")).toBe("/organisation/stages");
   expect(hubAddress("profile")).toBeNull();
+});
+
+// Billing belongs to whoever pays (roles.ts "billing.view"): a Seller of an
+// organisation finds no Plan & usage, and its address says so in one calm
+// line, with no price and no top-up; a personal workspace keeps its plan.
+const inWorkspace = (
+  node: React.ReactNode,
+  kind: "organisation" | "personal",
+  role: "owner" | "member" | null,
+) => (
+  <WorkspaceAccessContext.Provider
+    value={{
+      status: "ready",
+      authenticated: true,
+      context: { personId: "person-1", sessionId: "session-1", tenantId: "t1" },
+      workspaces: [
+        {
+          tenant_id: "t1",
+          kind,
+          name: "Fictional Homes",
+          role,
+          sales_xray_enabled: true,
+        },
+      ],
+      retry: () => {},
+    }}
+  >
+    {node}
+  </WorkspaceAccessContext.Provider>
+);
+
+it("leaves Plan & usage out for a Seller, and says who sees billing at its address", async () => {
+  nav.pathname = "/settings";
+  await act(async () =>
+    root.render(
+      inWorkspace(
+        <SettingsShell>{<SettingsPage />}</SettingsShell>,
+        "organisation",
+        "member",
+      ),
+    ),
+  );
+  expect(host.querySelector('a[href="/settings/plan"]')).toBeNull();
+  expect(host.textContent).not.toContain("Plan & usage");
+  expect(host.querySelector('a[href="/settings/profile"]')).not.toBeNull();
+  await act(async () =>
+    root.render(
+      inWorkspace(<SettingsSectionView id="plan" />, "organisation", "member"),
+    ),
+  );
+  expect(host.textContent).toBe(
+    "Only your organisation's owner can see billing.",
+  );
+  expect(seen.account).toEqual([]);
+  expect(host.querySelector("a, button")).toBeNull();
+});
+
+it("keeps Plan & usage for an organisation's owner and in a personal workspace", async () => {
+  for (const [kind, role] of [
+    ["organisation", "owner"],
+    ["personal", null],
+  ] as const) {
+    seen.account = [];
+    nav.pathname = "/settings";
+    await act(async () =>
+      root.render(
+        inWorkspace(
+          <SettingsShell>{<SettingsPage />}</SettingsShell>,
+          kind,
+          role,
+        ),
+      ),
+    );
+    expect(host.querySelector('a[href="/settings/plan"]')).not.toBeNull();
+    await act(async () =>
+      root.render(inWorkspace(<SettingsSectionView id="plan" />, kind, role)),
+    );
+    expect(seen.account).toContainEqual(
+      expect.objectContaining({ only: ["usage", "billing"] }),
+    );
+  }
 });

@@ -38,6 +38,7 @@ import { parseThemePreference } from "./lightbox/theme";
 import { useTheme } from "./lightbox/theme-provider";
 import { openSettings, opensInPlace } from "./settings-open";
 import { useWorkspaceAccess } from "./workspace-access";
+import { useCanHere } from "./workspace-role";
 import { AccountAvatarImage } from "./speaker-avatar";
 import styles from "./profile-menu.module.css";
 import { useBackClose } from "./ui/back-close";
@@ -112,7 +113,9 @@ export function ProfileMenu({
   pending?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const purchasesAllowed = usePurchasesAllowed();
+  // Prices only for whoever pays (persona QA, 31 Oct 2026): not a seller.
+  const pays = useCanHere()("billing.view") !== false;
+  const purchasesAllowed = usePurchasesAllowed() && pays;
   const reportButtonHidden = useReportButtonHidden();
   // Read once the menu is open: the server has no keys to name.
   const shortcut = open ? reportShortcut() : null;

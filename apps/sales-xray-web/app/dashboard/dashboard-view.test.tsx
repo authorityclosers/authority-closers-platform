@@ -648,6 +648,66 @@ it("asks nothing about a sandbox for a plain member or a personal workspace", as
   expect(host.textContent).not.toContain("Nobody here is real");
 });
 
+// Insights are for those who see the team (roles.ts "team.view"), Team
+// coaching for those the server reads it for (team-coaching-access.ts): a
+// member's sandbox card keeps only what is theirs to open.
+it("offers a member no Team coaching or Insights from the sandbox card", async () => {
+  fetchMock.mockImplementation(() => new Promise<Response>(() => {}));
+  await act(async () => {
+    root.render(
+      <InitialSessionProvider value={SERVED}>
+        <WorkspaceAccessContext.Provider
+          value={{
+            status: "ready",
+            authenticated: true,
+            workspaces: [
+              {
+                tenant_id: "tenant-1",
+                kind: "organisation",
+                name: "AC Sandbox",
+                role: "member",
+                sales_xray_enabled: true,
+              },
+            ],
+            context: {
+              personId: "person-1",
+              sessionId: "session-1",
+              tenantId: "tenant-1",
+            },
+            retry: () => {},
+            requestAccountSignIn: signIn,
+          }}
+        >
+          <DashboardPage
+            initial={{
+              sandbox: {
+                status: 200,
+                body: {
+                  sandbox: true,
+                  businesses: 10,
+                  representatives: 60,
+                  calls: 3360,
+                  reports: 3360,
+                  outcomes: 3360,
+                  history_summaries: 0,
+                  approved_at: "2026-10-11T20:48:00+00:00",
+                },
+              },
+            }}
+          />
+        </WorkspaceAccessContext.Provider>
+      </InitialSessionProvider>,
+    );
+  });
+  expect(host.textContent).toContain("Nobody here is real");
+  const views = [
+    ...host.querySelectorAll<HTMLAnchorElement>(
+      'nav[aria-label="Sandbox views"] a',
+    ),
+  ].map((link) => link.getAttribute("href"));
+  expect(views).toEqual(["/organisation?tab=members", "/analysis/calls"]);
+});
+
 it("shows the sandbox card from the server's read, from the first paint", async () => {
   fetchMock.mockImplementation(() => new Promise<Response>(() => {}));
   await act(async () => {

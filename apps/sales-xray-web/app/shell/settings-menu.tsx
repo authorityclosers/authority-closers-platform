@@ -78,6 +78,7 @@ import { WorkspacePicker, type PickerWorkspace } from "./workspace-picker";
 import { accountInitials } from "./account-initials";
 import styles from "./settings-menu.module.css";
 import { useBackClose } from "../ui/back-close";
+import { useCanHere } from "../workspace-role";
 
 type View = "main" | "news";
 
@@ -233,6 +234,9 @@ export function SettingsMenu({
   const guide = useFirstCallGuideSwitch();
   const pathname = usePathname();
   const inApp = useInApp();
+  // Plan & usage only for whoever pays (persona QA, 31 Oct 2026: a seller saw
+  // prices and Top up); hidden while your role is unknown.
+  const pays = useCanHere()("billing.view") === true;
   // The phone app's own setup checklist (calls, alerts, recordings), once its
   // first run has taken the bar off Leads (owner, 19 Oct). Read after
   // hydration, so the first paint matches the server's.
@@ -563,12 +567,14 @@ export function SettingsMenu({
           href="/settings"
           onClick={onClose}
         />
-        <Row
-          icon={<Clock3 size={17} />}
-          label="Plan & usage"
-          href="/settings/plan"
-          onClick={onClose}
-        />
+        {pays ? (
+          <Row
+            icon={<Clock3 size={17} />}
+            label="Plan & usage"
+            href="/settings/plan"
+            onClick={onClose}
+          />
+        ) : null}
         <Row
           icon={<Sparkles size={17} />}
           label="What's new"

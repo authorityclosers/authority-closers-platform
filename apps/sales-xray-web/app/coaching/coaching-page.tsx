@@ -27,6 +27,7 @@ import {
 import { PAGE } from "./coaching-copy";
 import { callDate } from "./coaching-ui";
 import { TeamCoachingStory } from "./team-coaching";
+import { teamCoachingFor, useTeamCoachingHere } from "./team-coaching-access";
 import { CoachingSkeleton } from "./coaching-skeleton";
 import { CoachingStory } from "./my-coaching";
 import { requestedSkill, type RequestedSkill } from "./focus-request";
@@ -160,8 +161,8 @@ export function CoachingPage({
   callId = null,
   initialResult = null,
   invalidCall = false,
-  team = false,
-  sharedPersonId = null,
+  team: teamAsked = false,
+  sharedPersonId: sharedAsked = null,
 }: {
   requestedFocus?: RequestedSkill;
   callId?: string | null;
@@ -172,6 +173,12 @@ export function CoachingPage({
   sharedPersonId?: string | null;
 } = {}) {
   const access = useWorkspaceAccess();
+  // Team coaching, and a teammate's, only where the server answers it
+  // (team-coaching-access.ts): anyone else asking for them, a seller or a
+  // manager following a link, gets their own coaching and no 403.
+  const teamCoaching = useTeamCoachingHere() !== false;
+  const team = teamAsked && teamCoaching;
+  const sharedPersonId = teamCoaching ? sharedAsked : null;
   const ready =
     access?.status === "ready" && access.authenticated && access.context;
   const scope = ready
@@ -181,6 +188,8 @@ export function CoachingPage({
   if (scope !== null && seedScope === null) setSeedScope(scope);
   const seed =
     initialResult &&
+    team === teamAsked &&
+    sharedPersonId === sharedAsked &&
     (!seedScope || seedScope === scope) &&
     (!ready ||
       !initialResult.data ||
@@ -198,10 +207,7 @@ export function CoachingPage({
     ? access?.workspaces?.find((item) => item.tenant_id === ready.tenantId)
     : undefined;
   // A hint only: the server decides Team access on every read.
-  const showTeam =
-    team ||
-    (workspace?.kind === "organisation" &&
-      (workspace.role === "owner" || workspace.role === "admin"));
+  const showTeam = team || teamCoachingFor(workspace) === true;
   const seededCall =
     callId && seed?.data && isCallCoaching(seed.data) ? seed.data : null;
   const seededPerson =

@@ -21,7 +21,10 @@ import { useBranding } from "../shell/branding-store";
 import { WorkspaceTile } from "../shell/workspace-picker";
 import { AcquisitionShell } from "../acquisition-shell";
 import { SettingsSectionView } from "../settings/sections";
-import type { SettingsSectionId } from "../settings/settings-sections";
+import {
+  sectionById,
+  type SettingsSectionId,
+} from "../settings/settings-sections";
 import { ActionList, ActionRow, Segmented } from "../ui/kit";
 import { SideScroll, sideScrollFades, useSideScroll } from "../ui/side-scroll";
 import { useWorkspaceAccess } from "../workspace-access";
@@ -225,6 +228,13 @@ export function OrganisationHub({
   const asked = query?.get("tab") ?? "overview";
   const tab = tabs.find((item) => item.id === asked && !item.href) ?? tabs[0];
   const part = query?.get("part") ?? null;
+  // A part shows only to the roles its server allows (settings-sections.ts
+  // needs): whoever sets up leads gets connected apps and AI replies, and API
+  // keys and Pulse stay with those who manage the organisation.
+  const mayOpen = (item: Part) => {
+    const needs = sectionById(item.section).needs;
+    return !needs || can(current.role, needs);
+  };
 
   let body: ReactNode;
   switch (tab.id) {
@@ -245,7 +255,7 @@ export function OrganisationHub({
         <Parts
           key={current.tenant_id}
           tab={tab}
-          parts={LEAD_PARTS}
+          parts={LEAD_PARTS.filter(mayOpen)}
           part={part}
         />
       );
@@ -255,7 +265,7 @@ export function OrganisationHub({
         <Parts
           key={current.tenant_id}
           tab={tab}
-          parts={CONNECTION_PARTS}
+          parts={CONNECTION_PARTS.filter(mayOpen)}
           part={part}
         />
       );

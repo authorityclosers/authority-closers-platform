@@ -389,6 +389,42 @@ it("keeps the public site's pricing and policy links in Help", async () => {
   );
 });
 
+it("shows no Pricing to a seller in an organisation", async () => {
+  // Persona QA, 31 Oct 2026: prices only for whoever pays.
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(Response.json(profile("Morgan Lee"))),
+  );
+  await act(async () =>
+    root.render(
+      <WorkspaceAccessProvider
+        value={{
+          status: "ready",
+          authenticated: true,
+          context: { personId: "p", sessionId: "s", tenantId: "org" },
+          workspaces: [
+            {
+              tenant_id: "org",
+              kind: "organisation",
+              name: "Fictional Org",
+              role: "member",
+              sales_xray_enabled: true,
+            },
+          ],
+          retry: () => {},
+        }}
+      >
+        <ProfileMenu authenticated accountHref="/calls" />
+      </WorkspaceAccessProvider>,
+    ),
+  );
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>("button[aria-expanded]")!.click(),
+  );
+  expect(host.querySelector('a[href="/pricing"]')).toBeNull();
+  expect(host.textContent).toContain("Report a problem");
+});
+
 it("opens the reporter from Help, and brings the hidden report button back", async () => {
   vi.stubGlobal(
     "fetch",

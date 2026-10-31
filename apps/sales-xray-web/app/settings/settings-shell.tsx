@@ -19,6 +19,7 @@ import {
   sectionById,
   type SettingsSectionId,
 } from "./settings-sections";
+import { useCanHere } from "../workspace-role";
 import styles from "./settings-shell.module.css";
 
 export function currentSection(
@@ -36,6 +37,9 @@ export function SectionList({
   current: SettingsSectionId | null;
   variant: "nav" | "list";
 }) {
+  // A section the server would refuse your role isn't listed (Plan & usage
+  // for a member of an organisation); it stays while your role is unknown.
+  const canHere = useCanHere();
   return (
     <>
       {SETTINGS_GROUPS.map((group) => (
@@ -44,7 +48,10 @@ export function SectionList({
           <ul>
             {SETTINGS_SECTIONS.filter(
               (item) =>
-                item.group === group && !hubAddress(item.id) && !item.within,
+                item.group === group &&
+                !hubAddress(item.id) &&
+                !item.within &&
+                (!item.needs || canHere(item.needs) !== false),
             ).map(({ id, label, hint, icon: Icon }) => (
               <li key={id}>
                 <Link
