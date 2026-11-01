@@ -181,6 +181,14 @@
   text-overflow: ellipsis;
 }
 
+/* The name's own box ends in "…": a flex box's bare text never would (the
+   test robot, 1 Nov 2026: a 300-letter name was cut with no ellipsis). */
+.leadNameText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .leadSub {
   overflow: hidden;
   color: var(--sx-muted);

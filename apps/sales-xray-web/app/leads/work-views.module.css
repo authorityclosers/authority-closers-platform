@@ -83,9 +83,13 @@
     padding: 12px 0 8px;
   }
 
+  /* At large text the row wraps rather than squeezing the stage pick under
+     its own words (the test robot, 1 Nov 2026: at 130 % its "Pipeline stage:"
+     lay over Add). */
   .headTools {
     display: flex;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 8px 12px;
     align-items: center;
     min-width: 0;
   }
@@ -100,11 +104,13 @@
 
   .headStage {
     flex: 1 1 auto;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 8px 12px;
   }
 
   .headStage > .stage {
     flex: 0 1 280px;
+    min-width: min-content;
   }
 
   .headStage > .callNextButton {

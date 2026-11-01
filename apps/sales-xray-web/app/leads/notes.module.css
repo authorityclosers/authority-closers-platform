@@ -85,9 +85,12 @@
   font-size: var(--sx-text-sm);
 }
 
+/* Two lines, then "…"; a word longer than the row breaks instead of running
+   out of sight (the test robot, 1 Nov 2026: a 300-letter word). */
 .text small {
   display: -webkit-box;
   overflow: hidden;
+  overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   color: var(--sx-muted);
