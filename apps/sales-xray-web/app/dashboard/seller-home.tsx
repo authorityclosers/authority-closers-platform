@@ -32,6 +32,7 @@ import { displayName } from "../display-name";
 import { AddTaskSheet } from "../leads/add-task-sheet";
 import { handOverLead } from "../leads/lead-handoff";
 import {
+  ago,
   deskRequest,
   nextCallTime,
   readTasks,
@@ -390,10 +391,24 @@ export function TodayCards({
   );
 }
 
+/** "Missed call 30 min ago · 2 calls · call back", as their row on Leads says it. */
+export function missedLine(
+  at: string,
+  calls: number,
+  now: Date = new Date(),
+): string {
+  return `Missed call ${ago(at, now)}${calls > 1 ? ` · ${calls} calls` : ""} · call back`;
+}
+
 /** 3. One customer to call next, with one clear action (items 13-15). */
 export function NextCall({ side, own }: { side: Side; own: HomeSide | null }) {
   const cold = side === "cold";
   const lead = own?.next_lead ?? null;
+  // One who rang and wasn't reached comes first, and says so, as on Leads
+  // (Leads 2, 1 Nov 2026: a missed call not yet returned is To Call's first row).
+  const missed = lead?.missed_at
+    ? missedLine(lead.missed_at, lead.missed_calls ?? 0)
+    : null;
   return (
     <section className={styles.next} aria-labelledby="next-title">
       <div className={styles.nextBody}>
@@ -412,7 +427,8 @@ export function NextCall({ side, own }: { side: Side; own: HomeSide | null }) {
               {[
                 lead.source_label,
                 // A Cold lead nobody has called is Unworked (QA, 31 Oct 2026).
-                cold && lead.why === "New lead" ? "Unworked" : lead.why,
+                missed ??
+                  (cold && lead.why === "New lead" ? "Unworked" : lead.why),
               ]
                 .filter(Boolean)
                 .join(" · ")}
@@ -423,9 +439,11 @@ export function NextCall({ side, own }: { side: Side; own: HomeSide | null }) {
               onClick={() => handOverLead(lead.lead_id, true)}
             >
               <PhoneCall size={18} aria-hidden="true" />
-              {cold
-                ? "Start cold calling"
-                : `Call ${displayName(lead.name).split(" ")[0]} now`}
+              {missed
+                ? `Call ${displayName(lead.name).split(" ")[0]} back`
+                : cold
+                  ? "Start cold calling"
+                  : `Call ${displayName(lead.name).split(" ")[0]} now`}
             </Link>
           </>
         ) : (

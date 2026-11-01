@@ -1187,7 +1187,7 @@ class LeadDesk:
                 numbers_week=numbers[("week", side)],
                 numbers_month=numbers[("month", side)],
                 to_call_today=to_call[side],
-                next_lead=(await self._rows([first]))[0] if first is not None else None,
+                next_lead=await self._next_row(first, waiting),
                 upcoming=await self._rows(next_up),
                 new_key=new_key,
                 open_key=open_key,
@@ -1496,6 +1496,20 @@ class LeadDesk:
             .limit(1)
         )
         return found
+
+    async def _next_row(
+        self, lead: Lead | None, waiting: Mapping[UUID, tuple[datetime, int]]
+    ) -> LeadRow | None:
+        """Home's next lead as To Call shows it: one who rang and wasn't reached says when
+        and how often (missed_at, missed_calls), as their row on Leads does (Leads 2, 1 Nov
+        2026: a missed call not yet returned is To Call's first row)."""
+        if lead is None:
+            return None
+        row = (await self._rows([lead]))[0]
+        if lead.id in waiting:
+            at, count = waiting[lead.id]
+            row = row.model_copy(update={"missed_at": at, "missed_calls": count})
+        return row
 
     async def _side_cards(
         self, mine: Any, journey: Any, day_start: datetime
