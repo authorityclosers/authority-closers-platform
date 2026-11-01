@@ -23,13 +23,29 @@ def reminder_key(tenant: UUID, day: date) -> str:
     return f"{KEY}{tenant}:{day.isoformat()}"
 
 
+# Honest about when it comes (phone personas ph1-53, 1 Nov 2026: no card for today's five
+# calls without a recording, because it comes only at 19:00).
+BODY = (
+    "Comes at 7 pm for that day's calls, counted again each time you open it. Today's "
+    "calls without a recording show at the top of Calls as they happen."
+)
+
+
 def words(count: int, day: date) -> tuple[str, str]:
+    if count <= 0:
+        return f"{day.day} {day:%b}: every call has its recording now", BODY
     noun = "call" if count == 1 else "calls"
-    return (
-        f"{day.day} {day:%b}: {count} {noun} had no recording",
-        "Pick the missing recordings from your files, or check Calls setup "
-        "so the next call is captured.",
-    )
+    return f"{day.day} {day:%b}: {count} {noun} had no recording", BODY
+
+
+def reminder_day(dedupe_key: str | None) -> date | None:
+    """The India day a capture reminder is about, or None for any other notification."""
+    if not dedupe_key or not dedupe_key.startswith(KEY):
+        return None
+    try:
+        return date.fromisoformat(dedupe_key.rsplit(":", 1)[-1])
+    except ValueError:
+        return None
 
 
 def calls_href(day: date) -> str:
@@ -38,17 +54,24 @@ def calls_href(day: date) -> str:
 
 
 def as_bell(
-    dedupe_key: str | None, title: str, urgent: bool, href: str | None = None
+    dedupe_key: str | None,
+    title: str,
+    urgent: bool,
+    href: str | None = None,
+    count: int | None = None,
 ) -> tuple[str, bool, str | None]:
     """The bell's title, urgency and link for a stored notification: a capture reminder is
     never urgent (urgent ones pop up), always names its own day, and its See why opens
     that day's calls without a recording (phone personas ph1-27, 1 Nov 2026: it went to
-    Settings, which looked like it did nothing)."""
+    Settings, which looked like it did nothing). ``count``, that day's calls without a
+    recording counted now, is the title's number, so the card and the calls it opens
+    agree (ph1-53: the card said 4, the calls it opened none)."""
     if not dedupe_key or not dedupe_key.startswith(KEY):
         return title, urgent, href
-    try:
-        day = date.fromisoformat(dedupe_key.rsplit(":", 1)[-1])
-    except ValueError:
+    day = reminder_day(dedupe_key)
+    if day is None:
         return title, False, href
+    if count is not None:
+        return words(count, day)[0], False, calls_href(day)
     old = OLD.match(title)
     return (words(int(old.group(1)), day)[0] if old else title), False, calls_href(day)

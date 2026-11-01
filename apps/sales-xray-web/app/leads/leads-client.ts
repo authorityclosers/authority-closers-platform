@@ -1391,6 +1391,8 @@ export function reportPhone(report: {
   device_id: string;
   app_version?: string;
   family?: string;
+  /** Android's model, so Team names each of a seller's phones (ph1-55). */
+  model?: string;
   checks: Record<string, boolean>;
 }) {
   return request<PhoneHealth>("/me/phone", json("POST", report));

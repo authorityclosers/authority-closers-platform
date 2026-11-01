@@ -56,7 +56,15 @@ from ac_platform.lead_desk.models import (
 )
 from ac_platform.lead_desk.social import graph
 from ac_platform.lead_desk.social import inbox as social_inbox
-from ac_platform.lead_desk.store import PHONES_KEY, DeskError, LeadDesk, person_name, phone_health
+from ac_platform.lead_desk.store import (
+    PHONE_DEVICES_KEY,
+    PHONES_KEY,
+    DeskError,
+    LeadDesk,
+    person_name,
+    phone_devices,
+    phone_health,
+)
 from ac_platform.lead_desk.whatsapp import cloud
 from ac_platform.lead_desk.whatsapp import inbox as wa_inbox
 
@@ -742,8 +750,18 @@ async def _phones(db: AsyncSession, tenant_id: UUID) -> AppHealth:
     settings = await db.get(LeadDeskSettings, tenant_id)
     stored = (settings.config if settings else None) or {}
     raw = stored.get(PHONES_KEY)
-    phones: dict[str, Any] = raw if isinstance(raw, dict) else {}
-    ids = [UUID(key) for key in phones if _uuid(key)]
+    newest: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    every = stored.get(PHONE_DEVICES_KEY)
+    # Every seller with a phone, each phone a line of its own (ph1-55: a second phone of
+    # the same seller wasn't one, while installs were kept one per seller).
+    sellers = list(dict.fromkeys([*newest, *(every if isinstance(every, dict) else ())]))
+    now = datetime.now(UTC)
+    phones = [
+        (person_id, entry)
+        for person_id in sellers
+        for entry in phone_devices(stored, person_id, now)
+    ]
+    ids = [UUID(key) for key in sellers if _uuid(key)]
     people = (
         {
             str(person.id): person_name(person)
@@ -756,16 +774,18 @@ async def _phones(db: AsyncSession, tenant_id: UUID) -> AppHealth:
     finished = await capture_setup.team(db, tenant_id, ids) if ids else {}
     connections = []
     off: list[str] = []
-    for person_id, entry in phones.items():
+    lines: dict[str, int] = {}
+    for person_id, entry in phones:
         report = phone_health(entry)
         if report is None:
             continue
         who = people.get(person_id, "A teammate")
-        phone = capture_setup.phone_label(
-            entry.get("device_id"),
-            report.family,
-            finished.get(UUID(person_id)) if _uuid(person_id) else None,
+        phone = capture_setup.device_name(
+            entry, finished.get(UUID(person_id)) if _uuid(person_id) else None
         )
+        # The seller's first phone keeps their own id; another is told apart by its install.
+        lines[person_id] = lines.get(person_id, 0) + 1
+        line_id = person_id if lines[person_id] == 1 else f"{person_id}:{entry.get('device_id')}"
         # One rule with Team (ph1-23): a build that can't log calls (Play) never says so.
         is_off = capture_setup.call_log_off(entry)
         if is_off:
@@ -773,7 +793,7 @@ async def _phones(db: AsyncSession, tenant_id: UUID) -> AppHealth:
         synced = f"synced {report.synced_at:%d %b %H:%M} UTC" if report.synced_at else "not synced"
         connections.append(
             Connection(
-                id=person_id,
+                id=line_id,
                 label=f"{who} · {phone}",
                 detail=f"Call log {'on' if report.call_log_on else 'off'} · {synced}"
                 if "callLog" in report.checks
@@ -800,9 +820,8 @@ async def _phones(db: AsyncSession, tenant_id: UUID) -> AppHealth:
         if not connections
         else f"Call logging is off on {', '.join(off)}."
         if off
-        # Counted by person: each seller's newest phone is what reports here, so a
-        # second phone of the same seller isn't a second line (ph1-55).
-        else f"{_count(len(connections), 'seller', 'sellers')} logging calls.",
+        # Counted by phone: each install reports here, a seller's second phone too (ph1-55).
+        else f"{_count(len(connections), 'phone', 'phones')} logging calls.",
         configured=True,
         connections=connections,
         last_event=Event(at=last, kind="call", words="Call logged by a phone") if last else None,

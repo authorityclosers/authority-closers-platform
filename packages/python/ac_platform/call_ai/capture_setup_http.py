@@ -39,7 +39,13 @@ from ac_platform.identity.sales_xray_profile import (
 )
 from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk.models import LeadDeskSettings
-from ac_platform.lead_desk.store import MANAGERS, PHONES_KEY, person_name
+from ac_platform.lead_desk.store import (
+    MANAGERS,
+    PHONE_DEVICES_KEY,
+    keep_device,
+    person_name,
+    phone_devices,
+)
 from ac_platform.tenancy.models import Membership, Organisation
 
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
@@ -60,6 +66,14 @@ class PhoneFinished(BaseModel):
     recordings: bool = False
     background: bool = False
     uploads: bool = False
+
+
+def install_id(device: str) -> str:
+    """An install's id as the phone report keeps it (a UUID's own spelling), else as sent."""
+    try:
+        return str(UUID(device))
+    except ValueError:
+        return device
 
 
 class RecordingHealth(BaseModel):
@@ -271,8 +285,6 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
             # Phones with work-call logging off, by Connections' own rule (ph1-23).
             desk = await auth.database.get(LeadDeskSettings, tenant_id)
             stored = (desk.config if desk else None) or {}
-            reports = stored.get(PHONES_KEY)
-            phones: dict[str, Any] = reports if isinstance(reports, dict) else {}
             # Each phone's newest recording (competitor teardown #7).
             kept = stored.get(capture_setup.RECORDING_KEY)
             recordings: dict[str, Any] = kept if isinstance(kept, dict) else {}
@@ -281,17 +293,36 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
             for person, member_role in rows:
                 consent = await consent_of(request, auth, tenant_id, person.id)
                 setup = found.get(person.id, capture_setup.Setup())
-                report: dict[str, Any] = phones.get(str(person.id)) or {}
-                # Recording on this seller's phone: ok, late or off, and the fix; named
-                # by its phone, since a seller can have more than one (ph1-46).
-                recording = capture_setup.recording_state(
-                    report or None, recordings.get(str(person.id)), now
-                )
-                if recording is not None:
-                    recording["phone"] = capture_setup.phone_label(
-                        report.get("device_id"), report.get("family"), setup
+                # Every phone of this seller's, newest first, each with its own recording
+                # and call logging (phone personas ph1-55 and ph1-46, 1 Nov 2026).
+                devices: list[dict[str, Any]] = []
+                for entry in phone_devices(stored, str(person.id), now):
+                    name = capture_setup.device_name(entry, setup)
+                    recording = capture_setup.recording_state(
+                        entry,
+                        capture_setup.device_recording(entry, recordings.get(str(person.id))),
+                        now,
                     )
-                # Ready only while that phone records (ph1-46).
+                    if recording is not None:
+                        recording["phone"] = name
+                    devices.append(
+                        {
+                            "device": entry.get("device_id"),
+                            "name": name,
+                            "recording": recording,
+                            "call_log_off": capture_setup.call_log_off(entry),
+                        }
+                    )
+                # The line Team shows first: a phone that doesn't record, else the newest.
+                recording = next(
+                    (
+                        device["recording"]
+                        for device in devices
+                        if device["recording"] and device["recording"]["state"] == "off"
+                    ),
+                    devices[0]["recording"] if devices else None,
+                )
+                # Ready only while every phone records (ph1-46).
                 state = capture_setup.team_state(setup, consent.state, recording)
                 # When the line's state began: the phone finished, the no, or the consent.
                 at: datetime | None = None
@@ -309,10 +340,9 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
                     name = capture_setup.phone_name(phone.model, phone.family) or "Phone"
                     if name not in names:
                         names.append(name)
-                log_off = (
-                    capture_setup.phone_label(report.get("device_id"), report.get("family"), setup)
-                    if capture_setup.call_log_off(report)
-                    else None
+                # The first phone with work-call logging off, by name (ph1-23's rule).
+                log_off = next(
+                    (device["name"] for device in devices if device["call_log_off"]), None
                 )
                 people.append(
                     {
@@ -331,6 +361,7 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
                         # The phone with work-call logging off, by name, or None.
                         "call_log_off": log_off,
                         "recording": recording,
+                        "devices": devices,
                     }
                 )
             # Who still needs to set it up first, then by name.
@@ -371,8 +402,24 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
                 "newest_at": newest.isoformat() if newest else None,
                 "reported_at": now.isoformat(),
             }
+            # Kept with its own install too, beside the seller's other phones (ph1-55).
+            stored = (desk.config or {}).get(PHONE_DEVICES_KEY)
+            every: dict[str, Any] = dict(stored) if isinstance(stored, dict) else {}
+            every[str(person_id)] = keep_device(
+                every.get(str(person_id)),
+                {
+                    "device_id": install_id(command.device),
+                    "newest_recording_at": newest.isoformat() if newest else None,
+                    "recording_reported_at": now.isoformat(),
+                },
+                now,
+            )
             # A new dict, so the change is saved; the revision stays (not a manager's edit).
-            desk.config = {**(desk.config or {}), capture_setup.RECORDING_KEY: health}
+            desk.config = {
+                **(desk.config or {}),
+                capture_setup.RECORDING_KEY: health,
+                PHONE_DEVICES_KEY: every,
+            }
             await auth.database.flush()
             return {"schema": RECORDING_SCHEMA, "recorded": True}
 
