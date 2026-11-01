@@ -2904,6 +2904,10 @@ function NotesSection({
 
 type LeadTab = "notes" | "calls" | "story";
 
+/** "tomorrow 10:00 AM" → "Tomorrow 10:00 AM", at the start of a line. */
+const upperFirst = (text: string) =>
+  text.charAt(0).toUpperCase() + text.slice(1);
+
 const LEAD_TABS: { key: LeadTab; label: string }[] = [
   { key: "notes", label: "Notes" },
   { key: "calls", label: "Calls" },
@@ -2986,6 +2990,7 @@ function ActionBox({
   href,
   disabled = false,
   why,
+  fix,
 }: {
   /** The kind's colour: messages violet, notes amber, tasks blue, moves slate. */
   kind: "message" | "note" | "task" | "stage";
@@ -2997,8 +3002,11 @@ function ActionBox({
   onClick?: () => void;
   href?: string;
   disabled?: boolean;
-  /** Why a box can't work now; it stays in its place, greyed. */
+  /** Why a box can't work now; it stays in its place, greyed, and a tap on it
+   *  says so (competitor teardown 10, 2 Nov 2026: a disabled button said
+   *  nothing on a phone), with what fixes it when something does. */
   why?: string;
+  fix?: { label: string; run: () => void };
 }) {
   const inside = (
     <>
@@ -3023,9 +3031,20 @@ function ActionBox({
       data-kind={kind}
       data-channel={channel}
       aria-label={disabled && why ? why : name}
-      title={disabled ? why : undefined}
-      disabled={disabled}
-      onClick={onClick}
+      aria-disabled={disabled || undefined}
+      onClick={
+        disabled
+          ? () => {
+              if (!why) return;
+              notify({
+                id: `why-${channel}`,
+                tone: "info",
+                title: why,
+                ...(fix ? { action: fix } : {}),
+              });
+            }
+          : onClick
+      }
     >
       {inside}
     </button>
@@ -3224,6 +3243,20 @@ export function LeadCard({
     act.current();
   }, [intent, detail.phone, detail.email, detail.can_edit]);
   const [editing, setEditing] = useState(false);
+  // A greyed box's fix (competitor teardown 10): the Details editor, in view.
+  const detailsPanel = useRef<HTMLElement>(null);
+  const editDetails = () => {
+    setEditing(true);
+    window.requestAnimationFrame(() =>
+      detailsPanel.current?.scrollIntoView?.({
+        block: "start",
+        behavior: "smooth",
+      }),
+    );
+  };
+  const numberFix = detail.can_edit
+    ? { label: "Add a number", run: editDetails }
+    : undefined;
   const [testing, setTesting] = useState(false);
   // Reassign: its own sheet (owner, #33, 26 Oct 2026).
   const [picking, setPicking] = useState(false);
@@ -3446,6 +3479,24 @@ export function LeadCard({
               {sub}
             </button>
           ) : null}
+          {/* The next follow-up under the name, a tap from its presets
+              (competitor teardown 10, 2 Nov 2026). */}
+          {detail.can_edit && !["won", "lost", "junk"].includes(lead.stage) ? (
+            <button
+              type="button"
+              className={styles.followLine}
+              aria-haspopup="dialog"
+              onClick={() => setReminding(true)}
+            >
+              <span>
+                Follow-up ·{" "}
+                {lead.next_action_at
+                  ? upperFirst(when(lead.next_action_at))
+                  : "None yet"}
+              </span>
+              <Pencil size={14} aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
       </header>
       <div className={styles.cardBadges}>
@@ -3532,6 +3583,7 @@ export function LeadCard({
             icon={<WhatsAppGlyph />}
             disabled={!detail.phone}
             why="WhatsApp: add a phone number first"
+            fix={numberFix}
             onClick={() => openMessage(null, "whatsapp")}
           />
           <ActionBox
@@ -3541,6 +3593,7 @@ export function LeadCard({
             icon={<MessageSquareText size={20} aria-hidden="true" />}
             disabled={!detail.phone}
             why="SMS: add a phone number first"
+            fix={numberFix}
             onClick={() => openMessage(null, "sms")}
           />
           <ActionBox
@@ -3551,6 +3604,11 @@ export function LeadCard({
             href={detail.email ? `mailto:${detail.email}` : undefined}
             disabled={!detail.email}
             why="No email on this lead"
+            fix={
+              detail.can_edit
+                ? { label: "Add an email", run: editDetails }
+                : undefined
+            }
           />
           {detail.can_edit ? (
             <>
@@ -3803,7 +3861,7 @@ export function LeadCard({
         shared={{ chat: conversations.social }}
       />
 
-      <section className={styles.panel} aria-label="Details">
+      <section ref={detailsPanel} className={styles.panel} aria-label="Details">
         <div className={styles.panelHead}>
           <h3>Details</h3>
           {/* Rare, so here rather than among the stage and source. */}

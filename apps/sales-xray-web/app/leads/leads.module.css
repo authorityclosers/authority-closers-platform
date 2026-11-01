@@ -5846,7 +5846,7 @@ a.repName {
   overflow-wrap: anywhere;
 }
 
-.actionBox:active:not(:disabled) {
+.actionBox:active:not(:disabled, [aria-disabled="true"]) {
   transform: scale(var(--sx-press-scale));
 }
 
@@ -5855,7 +5855,9 @@ a.repName {
   box-shadow: var(--sx-focus-ring);
 }
 
-.actionBox:disabled {
+/* Greyed in its place; a tap says why (competitor teardown 10). */
+.actionBox:disabled,
+.actionBox[aria-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.45;
 }
@@ -6360,6 +6362,51 @@ button.leadTags {
 }
 
 .leadSub:focus-visible {
+  outline: none;
+  border-radius: var(--sx-radius-xs, 4px);
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* "Follow-up · Tomorrow 10:00 AM ✎" under the name: a tap opens its presets
+   (competitor teardown 10). A 44 px band to tap, the line itself one row. */
+.followLine {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.followLine::after {
+  content: "";
+  position: absolute;
+  inset: -12px -4px;
+}
+
+.followLine span {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.followLine svg {
+  flex: none;
+  color: var(--sx-accent);
+}
+
+.followLine:focus-visible {
   outline: none;
   border-radius: var(--sx-radius-xs, 4px);
   box-shadow: var(--sx-focus-ring);
