@@ -16,6 +16,8 @@ refuse any other organisation. They go through the app's own HTTP paths, never t
 | `grade.py` | Scores every call against its key; writes `grades.json` and a Markdown table |
 | `triggers.py` | Fires lead bursts, duplicates, call-log bursts, upload failures, a follow-up falling due and a seller stopping new leads, and reads every effect back |
 | `probe.py` | Read-only: can these sellers capture and analyse right now (consent, allowance, hours)? |
+| `screens.py` | Read-only: what the seller's Home (my day), Performance, call reports, Calls tab and each call's lead page show afterwards |
+| `cost.py` | Read-only: prices the lab's calls with the app's own cost engine (`cost_metrics`), from the metrics store's usage export |
 | `file_bugs.py` | Files misses through the app's own Report a problem, as the sandbox seller |
 
 Tests: `tests/unit/ci/test_simulation_grader.py` (grader maths, the short-call rule, money in
@@ -54,10 +56,13 @@ simlab .venv/bin/python scripts/simulation/synth.py scenarios/S01.json out --voi
   --amr-lib deb/root/usr/lib/x86_64-linux-gnu/libopencore-amrnb.so.0
 # 2. Can the sellers analyse now?
 simlab-probe 3100ddbc-4549-4a5e-85b8-421af6edd588 ac.priya ac.rohan
-# 3. Inject, follow and collect
-simlab-inject out/S01/truth.json results
+# 3. Inject, follow and collect (--seller: run as the one seller who has call minutes)
+simlab-inject out/S01/truth.json results --seller ac.priya --tenant 3100ddbc-4549-4a5e-85b8-421af6edd588
 # 4. Grade
 simlab .venv/bin/python scripts/simulation/grade.py out results --md results/scorecard.md
+# 4b. Cost per call and per minute, and what the screens show
+simlab-cost
+simlab-screens 3100ddbc-4549-4a5e-85b8-421af6edd588 ac.priya results --day 2026-10-31
 # 5. Triggers
 simlab-triggers 3100ddbc-4549-4a5e-85b8-421af6edd588 ac.rohan results/triggers.json --only burst,dupes
 ```
@@ -84,8 +89,9 @@ load is above 6 and resumes them below 4.5.
 
 Two server rules shape the phone path: a call must start inside the organisation's work
 hours, and after its lead was created. Outside work hours the fake phone dates the call inside
-the last working day (a phone that uploads late), and it calls existing sandbox leads (never
-used ones first, registry in `results/leads.json`). The server clock is never touched.
+the last working day (a phone that uploads late), back to back in scenario order with a
+3-minute gap, so one seller never has two calls at once, and it calls existing sandbox leads
+(never used ones first, registry in `results/leads.json`). The server clock is never touched.
 
 ## Grading
 
@@ -99,11 +105,14 @@ used ones first, registry in `results/leads.json`). The server clock is never to
   (plus anything forbidden). Money understands lakh, thousand, k, words and ranges.
 - **Stage and follow-up:** the lead's stage after the call against the allowed stages; the
   next meeting or task against the agreed day and hour (India time).
+- **Over 2 hours (S10X):** a clear refusal (4xx) before any spend passes, and so does a
+  report; the grade records how far the transcript reached.
 - **Pass:** report as expected; where a report is expected, facts recall ≥ 60% and roles
   ≥ 80%; and the stage allowed.
 
 ## Cost
 
 Call analysis spends real AI money (≈ ₹0.27–1.1 per minute of audio). Run five calls first,
-measure the cost per minute, and get a go-ahead before the rest. Never raise an AI or
+measure the cost per minute with `cost.py` (the store refreshes every five minutes), and get
+a go-ahead before the rest. Never raise an AI or
 allowance cap from here.

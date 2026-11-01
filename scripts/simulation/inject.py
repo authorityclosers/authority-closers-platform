@@ -1,6 +1,10 @@
 """Put a synthetic call into Sales X-Ray through the app's own paths, as a sandbox seller.
 
     inject.py <truth.json> <results-dir> [--path phone|web] [--base URL] [--timeout-min N]
+              [--seller ALIAS --tenant ID]
+
+``--seller`` runs the call as another sandbox seller than the script's (when only one
+seller has call minutes); the run records both.
 
 - ``phone``: a fake phone speaking the Android app's own capture API, in its order
   (apps/phone/.../CallLogSync.java, CaptureUploadWorker.java, CaptureApi.java): phone book,
@@ -94,9 +98,20 @@ class Http:
             head["Content-Type"] = "application/json"
         head.update(headers or {})
         started = time.monotonic()
-        conn.request(method, path, body=data, headers=head)
-        response = conn.getresponse()
-        payload = response.read()
+        # The API restarts on a deploy: wait up to three minutes for it, as the phone's
+        # WorkManager would. Every write here carries an idempotency key or command id.
+        for attempt in range(18):
+            try:
+                conn.request(method, path, body=data, headers=head)
+                response = conn.getresponse()
+                payload = response.read()
+                break
+            except (ConnectionRefusedError, ConnectionResetError, http.client.RemoteDisconnected):
+                conn.close()
+                if attempt == 17:
+                    raise
+                time.sleep(10)
+                conn = http.client.HTTPConnection(target, timeout=timeout)
         for key, value in response.getheaders():
             if key.lower() == "set-cookie":
                 pair = value.split(";", 1)[0]
@@ -138,7 +153,18 @@ def sign_in(http_: Http, alias: str, tenant_id: str) -> dict[str, Any]:
     password = os.environ.get(secret_name(alias))
     if not password:
         raise SystemExit(f"refused: {secret_name(alias)} is not in the environment")
-    http_.call("POST", "/v1/auth/password/login", {"email": email_for(alias), "password": password})
+    # Sign-in allows 10 at once and one more a minute (http/rate_limits.py, per address), so
+    # a 429 waits for the next token instead of failing the call.
+    for attempt in range(12):
+        try:
+            http_.call(
+                "POST", "/v1/auth/password/login", {"email": email_for(alias), "password": password}
+            )
+            break
+        except Refused as error:
+            if error.status != 429 or attempt == 11:
+                raise
+            time.sleep(65)
     del password
     http_.call("POST", "/v1/context", {"tenant_id": tenant_id})
     _, me = http_.call("GET", "/v1/me/workspaces")
@@ -167,17 +193,27 @@ def pick_lead(
     stage = FROM_STAGE.get(truth["id"], "new")
     used = _registry(results)
     taken = {v["lead_id"] for k, v in used.items() if k != truth["id"]}
-    query = f"/v1/lead-desk/leads?scope=mine&stage={stage}"
-    if truth["id"] in COLD:
-        query += "&side=cold"
-    rows: list[dict[str, Any]] = []
-    for offset in (0, 50, 100):
-        _, page = http_.call("GET", query + f"&offset={offset}")
-        batch = page.get("leads") or page.get("rows") or page.get("items") or []
-        rows.extend(batch)
-        if len(batch) < 50:
-            break
+    # ``stage`` filters by kind (interested also holds the meeting steps); a pipeline's own
+    # stage key goes in ``step``.
+    # A seller with no unused lead at that step: the interested kind, then a new lead
+    # (the run records the stage the lead really started from).
+    queries = (
+        ["stage=new"] if stage == "new" else [f"step={stage}", "stage=interested", "stage=new"]
+    )
     mine = used.get(truth["id"])
+    rows: list[dict[str, Any]] = []
+    for filter_ in queries:
+        query = f"/v1/lead-desk/leads?scope=mine&{filter_}"
+        if truth["id"] in COLD:
+            query += "&side=cold"
+        for offset in (0, 50, 100):
+            _, page = http_.call("GET", query + f"&offset={offset}")
+            batch = page.get("leads") or page.get("rows") or page.get("items") or []
+            rows.extend(batch)
+            if len(batch) < 50:
+                break
+        if any(str(r["lead_id"]) not in taken for r in rows):
+            break
     ordered = sorted(rows, key=lambda r: str(r["lead_id"]))
     if mine:
         ordered = [r for r in ordered if str(r["lead_id"]) == mine["lead_id"]] + ordered
@@ -198,10 +234,33 @@ def _register(results: Path, sid: str, lead: dict[str, Any]) -> None:
 IST = timedelta(hours=5, minutes=30)
 
 
-def call_start(truth: dict[str, Any], hours: dict[str, Any] | None, now: datetime) -> datetime:
+def scenario_number(scenario_id: str) -> int:
+    return int("".join(ch for ch in scenario_id if ch.isdigit()))
+
+
+def schedule_offset(truth_file: Path, gap_min: float = 3) -> float | None:
+    """Minutes after the first slot when this call starts, when the calls run back to back
+    (each after the one before ends, plus a gap), so one seller never has two calls at once.
+    None when the sibling answer keys are not beside this one."""
+    offset = 0.0
+    for other in sorted(truth_file.parent.parent.glob("S*/truth.json")):
+        data = json.loads(other.read_text(encoding="utf-8"))
+        if other == truth_file:
+            return offset
+        offset += data["duration_seconds"] / 60 + gap_min
+    return None
+
+
+def call_start(
+    truth: dict[str, Any],
+    hours: dict[str, Any] | None,
+    now: datetime,
+    offset_min: float | None = None,
+) -> datetime:
     """When the call happened: just now inside work hours; outside them, inside the last
-    working day's hours (a phone that uploads late), one slot per scenario, so the server
-    sees what a real phone would send. The server clock is never touched."""
+    working day's hours (a phone that uploads late), one slot per scenario (``offset_min``
+    after the first, or every 14 minutes), so the server sees what a real phone would send.
+    The server clock is never touched."""
     seconds = max(1, int(round(truth["duration_seconds"])))
     if not hours or hours.get("inside"):
         return now - timedelta(seconds=seconds + 45)
@@ -221,17 +280,24 @@ def call_start(truth: dict[str, Any], hours: dict[str, Any] | None, now: datetim
     last = datetime(day.year, day.month, day.day, close_h, close_m, tzinfo=UTC) - timedelta(
         seconds=seconds + 300
     )
-    slot = first + timedelta(minutes=14 * (int(truth["id"][1:]) - 1))
+    if offset_min is None:
+        offset_min = 14 * (scenario_number(truth["id"]) - 1)
+    slot = first + timedelta(minutes=offset_min)
     return min(max(slot, first), last) - IST
 
 
 def phone_path(
-    http_: Http, truth: dict[str, Any], file: Path, run: dict[str, Any], results: Path
+    http_: Http,
+    truth: dict[str, Any],
+    file: Path,
+    run: dict[str, Any],
+    results: Path,
+    offset_min: float | None = None,
 ) -> str:
     seconds = max(1, int(round(truth["duration_seconds"])))
     # 1. The phone book, as both CallLogSync and CaptureApi.book() read it.
     _, book = http_.call("GET", "/v1/lead-desk/phone-book")
-    started = call_start(truth, book.get("work_hours"), datetime.now(UTC))
+    started = call_start(truth, book.get("work_hours"), datetime.now(UTC), offset_min)
     stamp = int(started.timestamp() * 1000)
     run["call_started_at"] = started.isoformat()
     identity = (
@@ -412,7 +478,8 @@ def follow(http_: Http, sid: str, run: dict[str, Any], deadline: float) -> dict[
         if not states or states[-1].split("@")[0] != state:
             states.append(f"{state}@{datetime.now(UTC).isoformat(timespec='seconds')}")
         if progress.get("has_report"):
-            run["report_at"] = datetime.now(UTC).isoformat()
+            # A later --collect-only keeps the first time the report was seen (latency).
+            run.setdefault("report_at", datetime.now(UTC).isoformat())
             break
         if (
             progress.get("local_state") in {"failed", "cancelled"}
@@ -431,7 +498,7 @@ def follow(http_: Http, sid: str, run: dict[str, Any], deadline: float) -> dict[
         time.sleep(10)
     else:
         run["timed_out"] = True
-    run["states"] = states
+    run.setdefault("states", states)
     return progress
 
 
@@ -466,9 +533,14 @@ def main() -> None:
     parser.add_argument("--host", default=DEV_HOST)
     parser.add_argument("--timeout-min", type=float, default=40)
     parser.add_argument("--collect-only", help="a submission id already uploaded")
+    parser.add_argument("--seller", help="run as this sandbox seller instead of the script's")
+    parser.add_argument("--tenant", help="that seller's sandbox organisation")
     args = parser.parse_args()
     truth_file = Path(args.truth)
     truth = json.loads(truth_file.read_text(encoding="utf-8"))
+    scripted_seller = truth["seller"]
+    if args.seller:
+        truth = {**truth, "seller": args.seller, "tenant_id": args.tenant or truth["tenant_id"]}
     path = args.path or truth["path"]
     file = truth_file.parent / truth["file"]
     out = Path(args.results)
@@ -477,11 +549,14 @@ def main() -> None:
     run: dict[str, Any] = (
         json.loads(target.read_text()) if args.collect_only and target.exists() else {}
     )
+    if run.get("error"):  # what stopped the first follow, kept apart from this collection
+        run["first_error"] = run.pop("error")
     run.update(
         {
             "id": truth["id"],
             "path": path,
             "seller": truth["seller"],
+            "scripted_seller": scripted_seller,
             "started": datetime.now(UTC).isoformat(),
         }
     )
@@ -492,7 +567,7 @@ def main() -> None:
         if args.collect_only:
             sid = args.collect_only
         elif path == "phone":
-            sid = phone_path(http_, truth, file, run, out)
+            sid = phone_path(http_, truth, file, run, out, schedule_offset(truth_file))
         else:
             sid = web_path(http_, truth, file, run)
         run["submission_id"] = sid
@@ -503,6 +578,8 @@ def main() -> None:
         run["error"] = str(error)
     except SystemExit as error:
         run["error"] = str(error)
+    except OSError as error:  # a dropped connection or timeout: rerun with --collect-only
+        run["error"] = f"network: {error}"
     finally:
         run["http"] = http_.log
         run["finished"] = datetime.now(UTC).isoformat()
