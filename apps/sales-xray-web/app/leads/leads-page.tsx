@@ -204,6 +204,7 @@ import {
   ActiveFilters,
   FilterChip,
   FilterSheet,
+  filterNames,
   filtersOn as countFilters,
   type LeadFilters,
 } from "./lead-filters";
@@ -1126,12 +1127,14 @@ export function LeadsRoute({
     key: string;
     value: Partial<Record<WorkView, number>>;
   } | null>(null);
+  // The follow-up filter counts too; inside Follow-ups it is the tab's own split
+  // (robot J181, 2 Nov 2026).
   const viewCountsKey = JSON.stringify([
     contextKey,
     scope,
     query,
     pipeline,
-    { ...more, view: null, when: null },
+    { ...more, view: null, when: workView === "follow_ups" ? null : more.when },
   ]);
   const onViewCounts = useCallback(
     (value: Partial<Record<WorkView, number>>) =>
@@ -2163,6 +2166,11 @@ export function LeadsRoute({
                   })
                 }
                 filtered={filtersOn}
+                filterNames={filterNames(
+                  { ...shownFilters, q: "" },
+                  defaultWho,
+                  pipes?.pipelines ?? [],
+                )}
                 onClearFilters={clearFilters}
                 onAdd={() => begin("adding", setAdding)}
                 onShowOpen={() =>

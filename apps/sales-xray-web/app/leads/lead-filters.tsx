@@ -153,18 +153,12 @@ export function FilterChip({
   );
 }
 
-/** The filters that are on, each with its own ×. */
-export function ActiveFilters({
-  filters,
-  defaultWho,
-  pipes,
-  onChange,
-}: {
-  filters: LeadFilters;
-  defaultWho: Scope;
-  pipes: Pipe[];
-  onChange: (next: LeadFilters) => void;
-}) {
+/** The filters that are on, each in its chip's words and with what clearing it leaves. */
+function filterChips(
+  filters: LeadFilters,
+  defaultWho: Scope,
+  pipes: Pipe[],
+): { key: string; label: string; clear: LeadFilters }[] {
   const more = filters.more ?? {};
   const without = (key: keyof ListMore): LeadFilters => ({
     ...filters,
@@ -228,6 +222,34 @@ export function ActiveFilters({
       label: sortLabel(more),
       clear: without("sort"),
     });
+  return chips;
+}
+
+/** The filters that narrow the list, in their chips' words: an empty list says which
+ *  hid the leads (robot J181, 2 Nov 2026). A sort hides nothing. */
+export function filterNames(
+  filters: LeadFilters,
+  defaultWho: Scope,
+  pipes: Pipe[] = [],
+): string[] {
+  return filterChips(filters, defaultWho, pipes)
+    .filter((chip) => chip.key !== "sort")
+    .map((chip) => chip.label);
+}
+
+/** The filters that are on, each with its own ×. */
+export function ActiveFilters({
+  filters,
+  defaultWho,
+  pipes,
+  onChange,
+}: {
+  filters: LeadFilters;
+  defaultWho: Scope;
+  pipes: Pipe[];
+  onChange: (next: LeadFilters) => void;
+}) {
+  const chips = filterChips(filters, defaultWho, pipes);
   if (!chips.length) return null;
   return (
     <ul className={styles.activeFilters} aria-label="Filters on">

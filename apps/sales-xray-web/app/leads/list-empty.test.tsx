@@ -47,6 +47,7 @@ async function empty(
   stageLabel: string,
   query = "",
   filtered = false,
+  filterNames: string[] = [],
 ) {
   const calls = { clear: vi.fn(), add: vi.fn(), open: vi.fn() };
   await act(async () =>
@@ -60,6 +61,7 @@ async function empty(
         onOpen={() => undefined}
         version={0}
         filtered={filtered}
+        filterNames={filterNames}
         onClearFilters={calls.clear}
         onAdd={calls.add}
         onShowOpen={calls.open}
@@ -82,9 +84,27 @@ it("a search with no match clears it", async () => {
   expect(calls.clear).toHaveBeenCalledTimes(1);
 });
 
-it("whose leads, picked, with nobody there clears it too", async () => {
+// Robot J181 (2 Nov 2026): it said "Nobody here for whose leads you picked."
+// for any filter; it names the filters that hid the leads.
+it("filters that leave nobody say which, and clear", async () => {
+  const { button } = await empty("open", "Open", "", true, [
+    "Added by hand",
+    "Came in this month",
+    "Follow-up upcoming",
+  ]);
+  expect(host.textContent).toContain("No leads match");
+  expect(host.textContent).toContain(
+    "Filters on: Added by hand · Came in this month · Follow-up upcoming.",
+  );
+  expect(host.textContent).not.toContain("whose leads");
+  expect(button.textContent).toBe("Clear filters");
+});
+
+it("a filter without words still says to clear them", async () => {
   const { button } = await empty("interested", "Interested", "", true);
-  expect(host.textContent).toContain("Nobody here for whose leads you picked.");
+  expect(host.textContent).toContain(
+    "Clear the filters to see every lead here.",
+  );
   expect(button.textContent).toBe("Clear filters");
 });
 

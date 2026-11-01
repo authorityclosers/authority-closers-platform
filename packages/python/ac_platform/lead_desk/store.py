@@ -2067,7 +2067,10 @@ class LeadDesk:
         # a seller's own Inbound To Call is the badge's number (competitor teardown #9).
         view_counts: dict[str, int] = {}
         if counting:
-            rest = [item for item in where if item is not view_clause and item is not when_clause]
+            # The follow-up filter counts as the list applies it (robot J181, 2 Nov 2026: To
+            # Call said 3 over an empty list); only inside Follow-ups is it the tab's own split.
+            split = when_clause if view == "follow_ups" else None
+            rest = [item for item in where if item is not view_clause and item is not split]
             found = (
                 await self.db.execute(
                     select(
