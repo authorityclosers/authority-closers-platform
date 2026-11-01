@@ -109,7 +109,7 @@ const J212 = {
     }
     const wrong = [];
     if (!reminder) wrong.push('no "Pick a time instead" (a reminder) after No answer');
-    if (!/Moved to|saved/i.test(said)) wrong.push(`no confirmation that the attempt was saved: the screen reads "${said.slice(0, 80) || "nothing"}"`);
+    if (!/Moved to .+next call/i.test(said)) wrong.push(`the confirmation should say where the lead went and when the next call is ("Moved to <stage> · next call <when>"): the screen reads "${said.slice(0, 80) || "nothing"}"`);
     if (!undo) wrong.push("the confirmation offers no Undo");
     const calls = st.writes.filter((w) => /dispose|call|attempt/i.test(w));
     if (calls.length !== 1) wrong.push(`${calls.length} call writes were sent (${st.writes.join(", ").slice(0, 100)}), expected 1`);
@@ -120,7 +120,7 @@ const J212 = {
       const expected = undo ? before : before + 1;
       if (after !== expected) wrong.push(`the call count went ${before} -> ${after}${undo ? " after Undo" : ""}, expected ${expected}`);
     }
-    return wrong.length ? fail(wrong.join("; "), "No answer, Save & Close") : pass(`No answer saves one attempt and says "${said.replace(/\s*\|.*/, "").slice(0, 70)}" with Undo, which took it back` + (/Call attempt saved/i.test(said) ? "" : " (the handoff words it \"Call attempt saved - No Answer\")"), "No answer, Save & Close");
+    return wrong.length ? fail(wrong.join("; "), "No answer, Save & Close") : pass(`No answer saves one attempt and says "${said.replace(/\s*\|.*/, "").slice(0, 70)}" with Undo, which took it back`, "No answer, Save & Close");
   },
 };
 
@@ -217,4 +217,74 @@ const J211 = {
   },
 };
 
-module.exports = { plans: { J211, J212, J215, J219 }, pool, pickLead };
+
+// One-off call from the customer: Save & Close returns to the same customer (the panel stays on this lead).
+const J213 = {
+  as: "priya",
+  phoneOnly: true,
+  route: "/dashboard",
+  async run({ tab, row }) {
+    const st = await prepare(tab);
+    const lead = pickLead(row);
+    if (!lead) return blocked("no QA robot pool lead (state/qa-pool.json)", "pool");
+    const err = await openLead(tab, lead);
+    if (err) return failOpen(err);
+    const page = tab.page;
+    const before = await callsCount(page);
+    const problem = await toNoAnswer(page);
+    if (problem) return fail(problem, "after-call panel");
+    st.writes.length = 0;
+    if (!(await press(page, /^Save & Close/, 300))) return fail("no Save & Close after No answer", "after-call panel");
+    let undo = 0;
+    for (let t = 0; t < 8 && !undo; t++) {
+      undo = await page.getByRole("button", { name: /^Undo/ }).filter({ visible: true }).count();
+      if (!undo) await sleep(1000);
+    }
+    await sleep(800);
+    const stillHere = new URL(page.url()).searchParams.get("lead") === lead.id;
+    const heading = await page.getByRole("heading", { name: lead.name }).filter({ visible: true }).count();
+    const wrong = [];
+    if (!stillHere) wrong.push(`Save & Close left the customer: the address is ${new URL(page.url()).pathname + new URL(page.url()).search.slice(0, 40)}`);
+    if (!heading) wrong.push(`the customer "${lead.name}" is not on screen after Save & Close`);
+    if (undo) await press(page, /^Undo/, 2500);
+    return wrong.length ? fail(wrong.join("; "), "Save & Close from a one-off call") : pass("Save & Close returns to the same customer", "Save & Close from a one-off call");
+  },
+};
+
+// Moving to a stage from the after-call panel asks for what is needed first (a reason to close as lost, a time for a meeting). Nothing is saved.
+const J222 = {
+  as: "priya",
+  phoneOnly: true,
+  route: "/dashboard",
+  async run({ tab, row }) {
+    const st = await prepare(tab);
+    const lead = pickLead(row);
+    if (!lead) return blocked("no QA robot pool lead (state/qa-pool.json)", "pool");
+    const err = await openLead(tab, lead);
+    if (err) return failOpen(err);
+    const page = tab.page;
+    const wrong = [];
+    const noted = [];
+    for (const [stage, wants] of [["Closed / Lost", /reason|why/i], ["Meeting Scheduled", /date|when|time|pick/i]]) {
+      const e2 = await openLead(tab, lead);
+      if (e2) return failOpen(e2);
+      if (!(await press(page, /^Log a call/))) return fail("no Log a call button", "after-call panel");
+      if (!(await press(page, "We talked", 1500))) return fail('no "We talked" button', "after-call panel");
+      if (!(await press(page, new RegExp("^" + stage.replace(/[/]/g, "\/")), 1800))) {
+        noted.push(`no "${stage}" choice`);
+        continue;
+      }
+      st.writes.length = 0;
+      await press(page, /^Save & Close/, 1800);
+      const said = await statusText(page);
+      const extra = await page.evaluate(() => [...document.querySelectorAll("dialog[open] textarea, dialog[open] input, dialog[open] select, [role=dialog] input, [role=dialog] select")].filter((e) => e.getBoundingClientRect().width > 0).map((e) => (e.getAttribute("aria-label") || e.placeholder || e.name || e.type || "").slice(0, 30)));
+      const asks = wants.test(said) || extra.some((x) => wants.test(x)) || (await page.getByRole("button", { name: wants }).filter({ visible: true }).count()) > 0;
+      if (st.writes.length) wrong.push(`${stage}: Save & Close with nothing more chosen sent ${st.writes.length} write(s)`);
+      else if (!asks) wrong.push(`${stage}: it does not ask for what is needed first (screen says "${said.slice(0, 60) || "nothing"}", fields: ${extra.join(", ").slice(0, 60) || "none"})`);
+    }
+    if (noted.length && !wrong.length) return blocked(noted.join("; "), "stage choices");
+    return wrong.length ? fail(wrong.join("; "), "move to stage from the after-call panel") : pass("closing as lost asks for a reason and a meeting asks for a time, before anything is saved", "move to stage from the after-call panel");
+  },
+};
+
+module.exports = { plans: { J211, J212, J213, J215, J219, J222 }, pool, pickLead };

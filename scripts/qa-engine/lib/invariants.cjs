@@ -90,6 +90,19 @@ function scan(phone) {
     }
     return null;
   };
+  const scrollerOf = (n) => {
+    for (n = n.parentElement; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+      const s = getComputedStyle(n);
+      if (/(auto|scroll)/.test(s.overflowY) && n.scrollHeight > n.clientHeight + 1) return n;
+    }
+    return null;
+  };
+  const outsideOwnScroller = (el, x, y) => {
+    const sc = scrollerOf(el);
+    if (!sc) return false;
+    const b = sc.getBoundingClientRect();
+    return x < b.left || x > b.right || y < b.top || y > b.bottom;
+  };
   out.covered = [];
   for (const el of inView) {
     if (out.covered.length >= 12) break;
@@ -107,14 +120,17 @@ function scan(phone) {
     if (out.dialog > 0 && !el.closest("[role=dialog],[aria-modal=true],dialog")) continue;
     if (modals.length && !modals.some((m) => m.contains(el))) continue; // under an open :modal dialog
     if (el.closest("[inert]")) continue;
-    if (pinnedOf(top) && !pinnedOf(el)) {
+    if ((pinnedOf(top) && !pinnedOf(el)) || outsideOwnScroller(el, x, y) || (pinnedOf(el) && pinnedOf(el).contains(top))) {
       // under the fixed tab bar or the corner stack: covered only if scrolling it into view does not clear it
       const sx = window.scrollX;
       const sy = window.scrollY;
+      const sc0 = scrollerOf(el);
+      const st0 = sc0 ? sc0.scrollTop : 0;
       el.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
       const r2 = el.getBoundingClientRect();
       const t2 = document.elementFromPoint(Math.min(vw - 1, Math.max(0, r2.left + r2.width / 2)), Math.min(vh - 1, Math.max(0, r2.top + Math.min(r2.height / 2, vh - r2.top - 1))));
       window.scrollTo(sx, sy);
+      if (sc0) sc0.scrollTop = st0;
       if (!t2 || t2 === el || el.contains(t2) || t2.contains(el)) continue;
     }
     out.covered.push(rec(el, { by: sem(top) }));

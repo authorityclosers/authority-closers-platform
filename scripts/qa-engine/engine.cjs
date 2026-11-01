@@ -201,6 +201,8 @@ async function runRow(row) {
   }
   // an offline-state row: console and API errors are the robot's own network cut, not findings
   if (row.state === "offline") probes.splice(0, probes.length, ...probes.filter((p) => !/^(page:|axe:|script:|api:)/.test(p.rule)));
+  // a slow-network row loads dev's unminified bundles for a long time: blank or stuck pages there need the staging build to judge
+  if (row.state === "slow network") probes.splice(0, probes.length, ...probes.filter((p) => !/^page:(blank|stuck-skeleton)/.test(p.rule)));
   // the robot's own browser closed under the row (a restart): nothing to judge
   if (outcome.outcome === "fail" && /has been closed|Target closed|browser has been closed/i.test(String(outcome.reason))) return { result: "held" };
   // dev rebuilding (Next overlay, "compiling", a /_next error burst): a failure now says nothing about the app

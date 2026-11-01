@@ -44,7 +44,8 @@ async function leadFor(tab, owner) {
       const answer = await fetch(`/v1/lead-desk/leads?scope=${scope}`, { credentials: "same-origin" });
       if (!answer.ok) return null;
       const body = await answer.json();
-      return (body.leads && body.leads[0] && body.leads[0].lead_id) || null;
+      const list = body.leads || [];
+      return ((list.find((l) => l.calls > 0) || list[0] || {}).lead_id) || null;
     }, owner ? "team" : "mine")
     .catch(() => null);
 }
@@ -135,6 +136,20 @@ async function check(tab, listed, { lead, owner, slow, onOpened }) {
   const route = start.split("?")[0].replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, ":id");
   // a control that renders after the data arrives gets 15 s on a loaded box before it is called missing
   for (let wait = 0; wait < 15 * factor && !(await control.count()); wait++) await sleep(1000);
+  if (!(await control.count()) && entry.id === "93" && lead) {
+    // the link shows only when the lead has a reported call
+    const calls = await page.evaluate(async (id) => {
+      try {
+        const r = await fetch(`/v1/lead-desk/leads/${id}`, { credentials: "same-origin" });
+        const b = await r.json();
+        const l = b.lead || b;
+        return typeof l.calls === "number" ? l.calls : null;
+      } catch {
+        return null;
+      }
+    }, lead);
+    if (calls === 0) return { outcome: "blocked", reason: "not applicable: this seller's lead has no call, so there is no report to open", route, selector: label };
+  }
   if (!(await control.count())) return { outcome: "missing", reason: "control not on the page", route, selector: label };
   if (entry.kind === "present" || entry.no_press) return { outcome: "pass", reason: "present", route, selector: label };
   if (entry.kind === "option" && entry.control.role === "button") {

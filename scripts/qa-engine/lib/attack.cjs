@@ -1219,24 +1219,45 @@ async function trialDouble(ctx, route, flow) {
     const x = box.x + box.width / 2;
     const y = box.y + box.height / 2;
     tab.holds.clear();
+    // a locator call (evaluate, isEnabled, boundingBox) stalls until the held write settles (about 1.3 s: measured 1 Nov), so nothing but page.evaluate runs between the two presses:
+    // the button is marked before the first press, and the second press is only counted as a double press when it lands within 450 ms of the first
+    await btn.evaluate((el) => { document.querySelectorAll("[data-qa-press]").forEach((e) => e.removeAttribute("data-qa-press")); el.setAttribute("data-qa-press", "1"); }).catch(() => null);
+    const firstAt = Date.now();
     await page.mouse.click(x, y).catch(() => null);
     await sleep(120);
-    const same = await btn
+    const state = await page
       .evaluate(
-        (el, pt) => {
-          const t = document.elementFromPoint(pt.x, pt.y);
-          return !!t && (el === t || el.contains(t) || t.contains(el));
+        ({ pt, label }) => {
+          const marked = document.querySelector("[data-qa-press]");
+          // the button locks itself while it sends ("Sending…", disabled): a second press cannot go through, which is what it should do
+          if (marked && (marked.disabled || marked.getAttribute("aria-disabled") === "true" || marked.getAttribute("aria-busy") === "true")) return "locked";
+          const hit = document.elementFromPoint(pt.x, pt.y);
+          const b = hit && hit.closest('button,[role="button"],a,[role="link"]');
+          return !!b && (b.hasAttribute("data-qa-press") || (b.getAttribute("aria-label") || b.textContent || "").replace(/\s+/g, " ").trim().slice(0, 40) === label) ? "same" : "changed";
         },
-        { x, y },
+        { pt: { x, y }, label: name },
       )
-      .catch(() => false);
-    if (!same) {
+      .catch(() => "changed");
+    if (state === "locked") {
+      await sleep(1600);
+      const sent = [...tab.holds.values()].reduce((a, w) => a + w.n, 0);
+      ctx.note(`"${name}": locked itself while sending, a second press cannot go through (${sent} write sent)`);
+      await sleep(1400);
+      break;
+    }
+    if (state !== "same") {
       ctx.note(`"${name}": the screen changed after the first press, no second press`);
       await sleep(1400);
       continue;
     }
     await page.mouse.click(x, y).catch(() => null);
+    const gapMs = Date.now() - firstAt;
     await sleep(1600);
+    if (gapMs > 450) {
+      ctx.note(`"${name}": the second press landed ${gapMs} ms after the first, not a double press: not judged`);
+      await sleep(1400);
+      break;
+    }
     const entries = [...tab.holds.entries()];
     if (!entries.length) {
       ctx.note(`"${name}": no write was sent (a check refused it first)`);
