@@ -3,44 +3,48 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const route = vi.hoisted(() => ({ path: "/leads", pushed: [] as string[] }));
-vi.mock("next/navigation", () => ({
-  usePathname: () => route.path,
-  useRouter: () => ({ push: (to: string) => route.pushed.push(to) }),
-}));
-const notices = vi.hoisted(() => ({
-  shown: [] as Array<Record<string, unknown>>,
-  dismissed: [] as string[],
-}));
-vi.mock("../notice-center", () => ({
-  notify: (notice: Record<string, unknown>) => notices.shown.push(notice),
-  dismissNotice: (id: string) => notices.dismissed.push(id),
+const opened = vi.hoisted(() => ({ steps: [] as Array<string | undefined> }));
+vi.mock("./capture-setup-gate", () => ({
+  openCaptureSetup: (step?: string) => opened.steps.push(step),
 }));
 
-import type { Notice } from "../notice-center";
 import { WorkspaceAccessContext } from "../workspace-access";
-import { CAPTURE_SETUP_ATTRIBUTE } from "./capture-setup-rules";
-import { RECORDING_NOTICE, RecordingCheck } from "./recording-check";
+import { missingWords, RecordingLine } from "./recording-check";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-// Owner, 30 Oct 2026 (fix 5): "if a connected call has no recording file after
-// 2 minutes, show the rep a banner with the steps to turn on automatic call
-// recording in their phone's dialer (Xiaomi/HyperOS steps first)". Persona QA
-// and the test robot, 31 Oct 2026: a corner card, never on Home, folded to one
-// line after the day's first sight, closed for the day; the same calls as Tried.
+// Competitor teardown #13, 1 Nov 2026: "4 calls today have no recording · Fix"
+// is one line at the top of Calls and Reports, never a floating card, counted
+// from Home's own calls so it never contradicts "Tried 0". Phone personas
+// ph1-27: the bell's See why opens that day's calls and their fix.
+
+const LEAD = "00000000-0000-4000-8000-000000000401";
+const ITEMS = [
+  {
+    event_id: "00000000-0000-4000-8000-000000000501",
+    lead_id: LEAD,
+    lead_name: "Rohan Fictional",
+    at: "2026-10-30T09:05:00+00:00",
+    seconds: 95,
+  },
+  {
+    event_id: "00000000-0000-4000-8000-000000000502",
+    lead_id: "00000000-0000-4000-8000-000000000402",
+    lead_name: null,
+    at: "2026-10-30T06:40:00+00:00",
+    seconds: 42,
+  },
+];
 
 let root: Root;
 let host: HTMLDivElement;
+let asked: string[];
 
 beforeEach(() => {
-  window.localStorage.clear();
-  notices.shown.length = 0;
-  notices.dismissed.length = 0;
-  route.pushed.length = 0;
-  route.path = "/leads";
+  opened.steps.length = 0;
+  asked = [];
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -49,26 +53,26 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
-  vi.useRealTimers();
   vi.unstubAllGlobals();
-  document.documentElement.removeAttribute(CAPTURE_SETUP_ATTRIBUTE);
+  window.history.replaceState(null, "", "/");
 });
 
-async function mount(calls: number, tried = calls ? 54 : 0) {
+async function mount(calls: number, tried: number, items = ITEMS) {
   vi.stubGlobal(
     "fetch",
-    vi.fn(
-      async () =>
-        new Response(
-          JSON.stringify({
-            schema: "sales-xray-missing-recordings/1",
-            calls,
-            tried,
-            latest_at: calls ? "2026-10-30T09:00:00+00:00" : null,
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        ),
-    ),
+    vi.fn(async (input: RequestInfo | URL) => {
+      asked.push(String(input));
+      return new Response(
+        JSON.stringify({
+          schema: "sales-xray-missing-recordings/1",
+          calls,
+          tried,
+          latest_at: calls ? ITEMS[0].at : null,
+          items: calls ? items : [],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }),
   );
   await act(async () =>
     root.render(
@@ -81,79 +85,80 @@ async function mount(calls: number, tried = calls ? 54 : 0) {
           retry: () => {},
         }}
       >
-        <RecordingCheck />
+        <RecordingLine />
       </WorkspaceAccessContext.Provider>,
     ),
   );
   for (let i = 0; i < 8; i++) await act(async () => await Promise.resolve());
 }
 
-const last = () => notices.shown.at(-1) as Notice | undefined;
-
-it("shows the day's first card in full, then folded for the rest of the day", async () => {
-  vi.useFakeTimers({ shouldAdvanceTime: true });
-  await mount(28);
-  expect(host.innerHTML).toBe("");
-  let card = last();
-  expect(card?.id).toBe(RECORDING_NOTICE);
-  expect(card?.title).toBe("28 calls not recorded");
-  expect(card?.slim).toBeUndefined();
-  expect(card?.message).toContain("record automatically, all numbers");
-  expect(card?.action?.label).toBe("See which");
-  card?.action?.run();
-  expect(route.pushed).toEqual(["/calls"]);
-  // After a while it folds to the corner stack's one line (a tap opens it).
-  await act(async () => {
-    vi.advanceTimersByTime(13_000);
-  });
-  card = last();
-  expect(card?.title).toBe("28 calls not recorded");
-  expect(card?.slim).toBe(true);
-  expect(card?.action?.label).toBe("See which");
-  // Back later the same day: folded from the start.
-  await act(async () => root.unmount());
-  root = createRoot(host);
-  notices.shown.length = 0;
-  await mount(28);
-  expect(last()?.slim).toBe(true);
-});
-
-it("says one call in the singular", async () => {
-  await mount(1);
-  expect(last()?.title).toBe("1 call not recorded");
-});
-
-it("closing it hides it for the rest of the day", async () => {
-  await mount(3);
-  await act(async () => last()?.onDismiss?.());
-  expect(window.localStorage.getItem("sx-recording-check-day")).toMatch(
-    /:closed$/,
+const button = (label: string) =>
+  [...host.querySelectorAll("button")].find(
+    (item) => item.textContent?.trim() === label,
   );
-  const before = notices.shown.length;
+
+it("says how many in plain words, today or on the bell's day", () => {
+  expect(missingWords(4, null)).toBe("4 calls today have no recording");
+  expect(missingWords(1, null)).toBe("1 call today has no recording");
+  expect(missingWords(2, "2026-10-30")).toBe(
+    "30 Oct: 2 calls had no recording",
+  );
+});
+
+it("is one line whose count opens the calls and whose Fix opens the failing step", async () => {
+  await mount(2, 9);
+  expect(asked[0]).toMatch(/\/capture-setup\/missing$/);
+  const line = host.querySelector("section");
+  expect(line?.textContent).toBe("2 calls today have no recording·Fix");
+  // The calls stay folded until the count is tapped.
+  expect(host.querySelector("ul")).toBeNull();
+  const count = button("2 calls today have no recording")!;
+  expect(count.getAttribute("aria-expanded")).toBe("false");
+  await act(async () => count.click());
+  const rows = [...host.querySelectorAll("li")];
+  expect(rows).toHaveLength(2);
+  expect(rows[0].querySelector("a")?.getAttribute("href")).toBe(
+    `/leads?lead=${LEAD}`,
+  );
+  expect(rows[0].textContent).toContain("Rohan Fictional");
+  expect(rows[0].textContent).toContain("1:35");
+  // A lead with no name yet, never a number.
+  expect(rows[1].textContent).toContain("A lead");
+  expect(rows[1].textContent).not.toMatch(/\d{10}/);
+  // On the web, Fix opens the setup at "open the app on your phone".
+  await act(async () => button("Fix")!.click());
+  for (let i = 0; i < 4; i++) await act(async () => await Promise.resolve());
+  expect(opened.steps).toEqual(["phone"]);
+});
+
+it("shows nothing when Home tried nothing today, or every call has its recording", async () => {
+  await mount(3, 0);
+  expect(host.innerHTML).toBe("");
   await act(async () => root.unmount());
   root = createRoot(host);
-  await mount(3);
-  expect(notices.shown.length).toBe(before);
+  await mount(0, 12);
+  expect(host.innerHTML).toBe("");
 });
 
-it("never shows on Home, whose Tried row already says it", async () => {
-  route.path = "/dashboard";
-  await mount(28);
-  expect(notices.shown).toEqual([]);
-  expect(notices.dismissed).toContain(RECORDING_NOTICE);
+it("opens at the bell's day, named as the bell names it, with its calls listed", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/analysis/calls?no-recording=2026-10-30",
+  );
+  await mount(2, 6);
+  expect(asked[0]).toMatch(/\/capture-setup\/missing\/2026-10-30$/);
+  expect(button("30 Oct: 2 calls had no recording")).toBeDefined();
+  expect(host.querySelectorAll("li")).toHaveLength(2);
 });
 
-it("never shows when Home tried nothing today, or every call has its recording", async () => {
-  await mount(2, 0);
-  expect(notices.shown).toEqual([]);
-  await act(async () => root.unmount());
-  root = createRoot(host);
-  await mount(0);
-  expect(notices.shown).toEqual([]);
-});
-
-it("never shows over a setup screen", async () => {
-  document.documentElement.setAttribute(CAPTURE_SETUP_ATTRIBUTE, "");
-  await mount(1);
-  expect(notices.shown).toEqual([]);
+it("says the bell's day is fine once its recordings arrived", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/analysis/calls?no-recording=2026-10-30",
+  );
+  await mount(0, 6);
+  expect(host.textContent).toBe("30 Oct: every call has its recording now");
+  expect(button("Fix")).toBeUndefined();
 });

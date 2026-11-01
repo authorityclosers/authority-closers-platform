@@ -39,7 +39,7 @@ import type { BillingViewProps } from "./billing/billing-view";
 import { documentStatus } from "./billing/document-status";
 import { revealAboveTabBar } from "./billing/reveal";
 import { RefundRequest } from "./billing/refund-request";
-import { PLANS_ON_WEB, usePurchasesAllowed } from "./purchase-policy";
+import { usePlansOnWebLine, usePurchasesAllowed } from "./purchase-policy";
 import { useWorkspaceAccess } from "./workspace-access";
 import { useBillingAccount } from "./billing/use-billing-account";
 import { count, day, formatMoney, money } from "./billing/money";
@@ -133,6 +133,11 @@ function minutes(seconds: number) {
   return Math.floor(seconds / 60);
 }
 
+/** Used minutes round up, so they and the available ones add up to the total (ph1-42). */
+function usedMinutes(seconds: number) {
+  return Math.ceil(Math.max(0, seconds) / 60);
+}
+
 function initials(name: string | null) {
   const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
   return parts
@@ -180,6 +185,7 @@ export function AccountSettings({
   );
   const topUp = usePurchaseCheckout(undefined, "/account#billing");
   const purchasesAllowed = usePurchasesAllowed();
+  const plansOnWeb = usePlansOnWebLine();
   useEffect(() => {
     if (!topUp.error) return;
     const id = "topup-checkout-error";
@@ -473,7 +479,7 @@ export function AccountSettings({
               </div>
             </div>
           ) : (
-            <p className={styles.muted}>{PLANS_ON_WEB}</p>
+            <p className={styles.muted}>{plansOnWeb}</p>
           )}
         </Pane>
 
@@ -1170,7 +1176,7 @@ function AllowanceSummary({ allowance }: { allowance: Loaded<Allowance> }) {
       <div className={styles.allowance} data-allowance="unlimited">
         <p className={styles.big}>Unlimited</p>
         <p className={styles.muted}>
-          {minutes(committed_seconds)} min used or reserved by analyses.
+          {usedMinutes(committed_seconds)} min used or reserved by analyses.
         </p>
       </div>
     );
@@ -1205,7 +1211,7 @@ function AllowanceSummary({ allowance }: { allowance: Loaded<Allowance> }) {
         </span>
       ) : null}
       <p className={styles.muted}>
-        {minutes(committed_seconds)} min used or reserved by analyses.
+        {usedMinutes(committed_seconds)} min used or reserved by analyses.
       </p>
     </div>
   );
@@ -1247,6 +1253,7 @@ export function PlanAndBillingPane({
     if (box) requestAnimationFrame(() => revealAboveTabBar(box));
   }, []);
   const purchasesAllowed = usePurchasesAllowed();
+  const plansOnWeb = usePlansOnWebLine();
   const refundable = documents?.find(
     (document) => document.refund?.state === "available",
   );
@@ -1404,7 +1411,7 @@ export function PlanAndBillingPane({
           <p className={styles.muted}>
             {purchasesAllowed
               ? "No subscription yet. View plans when you’re ready to choose one."
-              : PLANS_ON_WEB}
+              : plansOnWeb}
           </p>
         ) : null}
 

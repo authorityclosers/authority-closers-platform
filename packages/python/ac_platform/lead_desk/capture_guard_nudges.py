@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.call_ai.missing_recordings import calls_today
 from ac_platform.lead_desk.capture_guard import IST
-from ac_platform.lead_desk.capture_reminder import reminder_key, words
+from ac_platform.lead_desk.capture_reminder import calls_href, reminder_key, words
 from ac_platform.lead_desk.models import LeadEvent
 from ac_platform.lead_desk.store import SELLER_ROLES
 from ac_platform.product_updates.models import Notification
@@ -96,7 +96,7 @@ async def collect(db: AsyncSession, now: datetime) -> int:
                 dedupe_key=key,
                 title=title,
                 body=body,
-                href="/settings/privacy#calls-setup",
+                href=calls_href(due.date()),
                 # In the bell only: the live corner card is the one that pops up.
                 urgent=False,
                 created_at=now,

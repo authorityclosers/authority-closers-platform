@@ -167,7 +167,7 @@ try {
       ),
       true,
     );
-    for (const name of ["listen", "understand", "practise", "upload"]) {
+    for (const name of ["listen", "upload"]) {
       await card.getByRole("button", { name: "Next", exact: true }).click();
       await step(name).waitFor();
     }

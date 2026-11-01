@@ -290,7 +290,8 @@ export type MePlan = {
 export type UsageCall = {
   submissionId: string;
   createdAt: string;
-  displayName: string;
+  /** Null when the call's title may no longer be shown (its source is gone). */
+  displayName: string | null;
   seconds: number;
   state: "reserved" | "charged" | "not_charged";
 };
@@ -354,7 +355,7 @@ export function parseUsage(value: unknown): Usage {
       return {
         submissionId: text(call, "submission_id", path),
         createdAt: text(call, "created_at", path),
-        displayName: text(call, "display_name", path),
+        displayName: textOrNull(call, "display_name", path),
         seconds: integer(call, "seconds", path),
         state: oneOf(call, "state", path, [
           "reserved",

@@ -286,6 +286,28 @@ describe("plan in effect and usage (AUT-417)", () => {
     });
     expect(usage.allowance.unlimited).toBe(true);
     expect(usage.calls[0].state).toBe("charged");
+    // A call whose title may no longer show still counts (persona QA ph1-42:
+    // one such call left Plan & billing at "Couldn't load" for good).
+    const hidden = parseUsage({
+      allowance: {
+        allowance_seconds: 7200,
+        committed_seconds: 150,
+        available_seconds: 7050,
+      },
+      calls: [
+        {
+          submission_id: "s2",
+          created_at: "2026-10-31T00:00:00Z",
+          display_name: null,
+          seconds: 150,
+          state: "charged",
+        },
+      ],
+      earlier_seconds: 0,
+      truncated: false,
+    });
+    expect(hidden.calls[0].displayName).toBeNull();
+    expect(hidden.calls[0].seconds).toBe(150);
     expect(() =>
       parseUsage({
         allowance: {},

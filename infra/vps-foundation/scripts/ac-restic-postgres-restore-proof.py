@@ -20,6 +20,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import signal
 import stat
 import subprocess
@@ -43,6 +44,11 @@ MAX_CLEANUP_SECONDS = 30
 SNAPSHOT_TIMEOUT_SECONDS = 120
 RESTORE_TIMEOUT_SECONDS = 15 * 60
 DRILL_TIMEOUT_SECONDS = 70 * 60
+# A restore needs room for 1.5 times the snapshot plus this floor, or it is refused
+# before anything is written (1 Nov 2026: a restore drill filled the root disk).
+RESTORE_FREE_FLOOR_BYTES = 10 * 1024 * 1024 * 1024
+NOTIFY_OWNER = "/usr/local/sbin/ac-notify-owner"
+NOTIFY_TIMEOUT_SECONDS = 60
 RELEASE_ID_RE = re.compile(r"^[0-9a-f]{40}$")
 SNAPSHOT_ID_RE = re.compile(r"^[0-9a-f]{64}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -2119,6 +2125,66 @@ def resolve_current_release(environment: str, root: Path = Path("/")) -> Applica
     )
 
 
+def required_restore_free_bytes(restore_size_bytes: int) -> int:
+    """Free space a restore needs: 1.5 times the snapshot plus the fixed floor."""
+
+    return restore_size_bytes * 3 // 2 + RESTORE_FREE_FLOOR_BYTES
+
+
+def parse_restore_size(stats_json: str) -> int:
+    """The snapshot's size from ``restic stats --mode restore-size --json``."""
+
+    try:
+        value = json.loads(stats_json)
+    except json.JSONDecodeError as error:
+        raise RestoreProofError("Restic restore size is unreadable") from error
+    size = value.get("total_size") if isinstance(value, dict) else None
+    if type(size) is not int or size < 0:
+        raise RestoreProofError("Restic restore size is unreadable")
+    return size
+
+
+def _free_bytes(path: Path) -> int:
+    while not path.exists() and path != path.parent:
+        path = path.parent
+    return shutil.disk_usage(path).free
+
+
+def _notify_owner(text: str) -> None:
+    """Tell the owner; a failed notice never hides the refusal itself."""
+
+    with contextlib.suppress(OSError, subprocess.SubprocessError):
+        subprocess.run(  # noqa: S603 - fixed root-owned notifier and plain text
+            [NOTIFY_OWNER, text],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=NOTIFY_TIMEOUT_SECONDS,
+            check=False,
+        )
+
+
+def admit_restore_space(snapshot: Snapshot, environment: str, restore_root: Path) -> None:
+    """Refuse, and tell the owner, unless the restore area has room for the snapshot."""
+
+    stats_json = _run(
+        ("restic", "stats", "--mode", "restore-size", "--json", snapshot.snapshot_id),
+        "Restic snapshot restore size",
+        timeout_seconds=SNAPSHOT_TIMEOUT_SECONDS,
+        capture_stdout=True,
+    )
+    size = parse_restore_size(stats_json)
+    needed = required_restore_free_bytes(size)
+    free = _free_bytes(restore_root)
+    if free < needed:
+        _notify_owner(
+            f"Logical restore proof for {environment} refused: {free} bytes free under "
+            f"{restore_root}, it needs {needed} (1.5 x the {size}-byte snapshot + 10 GiB). "
+            "Nothing was restored; free disk space on ac before the next proof."
+        )
+        raise RestoreProofError("not enough free disk space to restore the snapshot safely")
+
+
 def _restic_path_argument(path: str) -> str:
     return "/" + path
 
@@ -2314,6 +2380,7 @@ def run(
         capture_stdout=True,
     )
     pair = select_snapshot_pair(tree_json, environment, snapshot.snapshot_id)
+    admit_restore_space(snapshot, environment, restore_root)
     restore_dir = create_restore_directory(restore_root)
     stable_dir: Path | None = None
     evidence_dir: Path | None = None

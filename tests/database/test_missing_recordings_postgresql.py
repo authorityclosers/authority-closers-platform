@@ -10,7 +10,13 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy import Engine
 
-from ac_platform.call_ai.missing_recordings import calls_today, day_start, missing_today
+from ac_platform.call_ai.missing_recordings import (
+    INDIA,
+    calls_today,
+    day_start,
+    lead_names,
+    missing_today,
+)
 from ac_platform.lead_desk.models import LeadEvent
 from ac_platform.lead_desk.store import PRIVATE_CALL
 from tests.database.conversation_harness import conversation_harness
@@ -96,5 +102,24 @@ def test_missing_calls_are_todays_connected_unrecorded_and_not_private(
                 )
             assert today.missing.by_person == {here.seller.person_id: 1}
             assert today.tried == {here.seller.person_id: 3}
+            # The calls themselves, by lead (teardown 13): the one missing call.
+            assert [(item.event_id, item.lead_id, item.seconds) for item in today.items] == [
+                (missing, lead, 45)
+            ]
+            async with here.setup.sessions() as db:
+                names = await lead_names(db, here.tenant_id, [lead])
+                assert names == {lead: "Alex Example"}
+                assert await lead_names(db, here.tenant_id, []) == {}
+                # One day's (the bell's reminder, ph1-27): yesterday has its own call.
+                before = await calls_today(
+                    db,
+                    tenant_id=here.tenant_id,
+                    person_id=here.seller.person_id,
+                    role="member",
+                    now=now,
+                    day=(day_start(now) - timedelta(minutes=5)).astimezone(INDIA).date(),
+                )
+            assert [item.event_id for item in before.items] == [yesterday]
+            assert before.tried == {here.seller.person_id: 1}
 
     run(exercise())

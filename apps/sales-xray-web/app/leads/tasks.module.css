@@ -24,21 +24,31 @@
 
 /* The three lists, and + to add a task beside them (owner order, 30 Oct
    2026, fix 4). */
+/* Add task never sits on the list's tabs: at large text the tabs keep their
+   row and Add task wraps below them (robot 31b6b61a, 1 Nov 2026: 360 px at
+   130% put it over Upcoming). */
 .head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
 
 .head > :first-child {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
+}
+
+.head > :first-child > button {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .add {
   display: grid;
   flex: none;
+  margin-inline-start: auto;
   width: 44px;
   height: 44px;
   place-items: center;

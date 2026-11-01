@@ -66,13 +66,16 @@ _ROUTE_AREAS: tuple[tuple[str, str], ...] = (
     ("/auth", "sign_in"),
     ("/dashboard", "home"),
 )
+# Half an emoji: a lone UTF-16 surrogate, left where text was cut mid-character. PostgreSQL
+# refuses it, so a report carrying one answered 500 (orchestrator, 1 Nov 2026); it goes.
+HALF_CHARACTER = re.compile(r"[\ud800-\udfff]")
 
 
 def scrub_text(value: object, limit: int) -> str:
     """One line of plain text, redacted and cut to ``limit`` characters."""
     if not isinstance(value, str):
         return ""
-    text = " ".join(value.split())
+    text = " ".join(HALF_CHARACTER.sub("", value).split())
     for pattern, marker in _REDACTIONS:
         text = pattern.sub(marker, text)
     return text[:limit]
@@ -81,7 +84,7 @@ def scrub_text(value: object, limit: int) -> str:
 def scrub_block(value: str, limit: int = 2 * 1024 * 1024) -> str:
     """Many lines of text (a log a person attached), each redacted; the lines stay."""
     lines = []
-    for line in value[:limit].splitlines():
+    for line in HALF_CHARACTER.sub("", value[:limit]).splitlines():
         for pattern, marker in _REDACTIONS:
             line = pattern.sub(marker, line)
         lines.append(line)

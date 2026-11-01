@@ -6,6 +6,7 @@ import { AcquisitionShell } from "../acquisition-shell";
 import { useSalesRole } from "../dashboard/dashboard-body";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
 import { PageHeader, SkeletonRow } from "../ui/kit";
+import { RecordingLine } from "../capture-setup/recording-check";
 import { useWorkspaceAccess } from "../workspace-access";
 import { ReportsHub, useReportsData } from "./reports-hub";
 
@@ -58,6 +59,9 @@ export function ReportsRoute() {
   return (
     <AcquisitionShell authenticated active="dashboard" pageName="Reports">
       <PageHeader title="Reports" titleInBar />
+      <RecordingLine
+        key={`line:${access.context?.personId}:${access.context?.tenantId}`}
+      />
       <Hub key={`${access.context?.personId}:${access.context?.tenantId}`} />
     </AcquisitionShell>
   );

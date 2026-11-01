@@ -146,6 +146,7 @@ from ac_platform.lead_desk.contracts import (
 from ac_platform.lead_desk.errors import DeskError as DeskError
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.journey import pipelines, signals, transitions
+from ac_platform.lead_desk.journey.engine import not_undone
 from ac_platform.lead_desk.journey.templates import MILESTONE_WORDS
 from ac_platform.lead_desk.models import (
     Lead,
@@ -1336,7 +1337,8 @@ class LeadDesk:
 
     async def _dials_talked(self, dials: list[CallRow]) -> set[UUID]:
         """Call-button dials whose seller answered "We talked" right after (DIAL_ANSWER): the
-        same lead and person. Their answer says the call connected."""
+        same lead and person. Their answer says the call connected; an answer its seller
+        undid says nothing (hardcore phone QA ph1-40, 1 Nov 2026)."""
         if not dials:
             return set()
         answers = (
@@ -1352,6 +1354,7 @@ class LeadDesk:
                     LeadEvent.lead_id.in_({row.lead_id for row in dials}),
                     LeadEvent.created_at >= min(row.at for row in dials) - DIAL_MATCH,
                     LeadEvent.created_at <= max(row.at for row in dials) + DIAL_ANSWER,
+                    not_undone(),
                 )
             )
         ).all()
@@ -5261,6 +5264,8 @@ class LeadDesk:
                     LeadEvent.created_at < until,
                     LeadEvent.actor_person_id.is_not(None),
                     *acted,
+                    # An answer its seller undid moved nobody (ph1-40).
+                    not_undone(),
                 )
                 .limit(CALL_ROWS)
             )
@@ -5402,7 +5407,11 @@ class LeadDesk:
                 talk_seconds=sum(part["talk"] for part in parts),
                 talk_estimated_seconds=sum(part["away"] for part in parts),
                 leads_attempted=len(tried),
-                reached=len(union("reached")),
+                # A lead moved to Interested, given a meeting or won was spoken to: reached
+                # too (ph1-41, 1 Nov 2026: "To Interested 1" beside "Leads reached 0").
+                reached=len(
+                    union("reached") | union("interested") | union("meetings") | union("won")
+                ),
                 interested=len(union("interested")),
                 meetings=len(union("meetings")),
                 won=len(union("won")),
@@ -5818,6 +5827,8 @@ class LeadDesk:
                     LeadEvent.tenant_id == self.tenant_id,
                     LeadEvent.kind.in_(("result", "stage")),
                     LeadEvent.created_at >= before,
+                    # An answer its seller undid moved nobody (ph1-40).
+                    not_undone(),
                 )
             )
         ).all()

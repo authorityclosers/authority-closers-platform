@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -59,6 +59,17 @@ def is_missing(at: datetime, data: dict[str, Any], now: datetime) -> bool:
 
 
 @dataclass(frozen=True, slots=True)
+class MissingCall:
+    """One connected call with no recording: its lead, when, how long (never the number)."""
+
+    event_id: UUID
+    lead_id: UUID
+    person_id: UUID
+    at: datetime
+    seconds: int
+
+
+@dataclass(frozen=True, slots=True)
 class Today:
     """Home's own calls today (persona QA, 31 Oct 2026: the banner said "2 calls have no
     recording" while Home said "Tried 0"): how many each seller tried, and the connected
@@ -66,14 +77,17 @@ class Today:
 
     tried: dict[UUID, int] = field(default_factory=dict)
     missing: Missing = field(default_factory=Missing)
+    # The missing calls themselves, newest first (teardown 13, ph1-27).
+    items: tuple[MissingCall, ...] = ()
 
 
 def tally(rows: Any, recorded: set[str], now: datetime) -> Today:
     """From the calls Home lists (``LeadDesk._call_rows``): tried per seller, and the
     connected ones that ended two minutes ago with no recording attached."""
-    from ac_platform.lead_desk.store import call_answered, call_out
+    from ac_platform.lead_desk.store import call_answered, call_out, call_seconds
 
     tried: Counter[UUID] = Counter()
+    items: list[MissingCall] = []
     by_person: Counter[UUID] = Counter()
     latest: dict[UUID, datetime] = {}
     for row in rows:
@@ -87,12 +101,16 @@ def tally(rows: Any, recorded: set[str], now: datetime) -> Today:
         ):
             continue
         by_person[row.actor] += 1
+        items.append(
+            MissingCall(row.event_id, row.lead_id, row.actor, _utc(row.at), call_seconds(row.data))
+        )
         at = _utc(row.at)
         if row.actor not in latest or at > latest[row.actor]:
             latest[row.actor] = at
     return Today(
         tried=dict(tried),
         missing=Missing(total=sum(by_person.values()), by_person=dict(by_person), latest=latest),
+        items=tuple(sorted(items, key=lambda item: item.at, reverse=True)),
     )
 
 
@@ -104,15 +122,19 @@ async def calls_today(
     role: str,
     now: datetime,
     team: bool = False,
+    day: date | None = None,
 ) -> Today:
     """Today's calls exactly as Home and Recent Calls read them (the same rows, the same
-    privacy and undo rules): the person's own, or the team's for those who see it."""
+    privacy and undo rules): the person's own, or the team's for those who see it. With a
+    day (India), that day's calls instead (the bell's reminder, ph1-27)."""
     from ac_platform.lead_desk.store import LeadDesk, Viewer
 
     desk = LeadDesk(
         database, Viewer(person_id=person_id, tenant_id=tenant_id, role=role, name=""), now=now
     )
-    rows = await desk._call_rows(day_start(now), now + timedelta(microseconds=1), team=team)
+    start = day_start(now) if day is None else datetime.combine(day, time(0), INDIA).astimezone(UTC)
+    end = min(start + timedelta(days=1), now + timedelta(microseconds=1))
+    rows = await desk._call_rows(start, end, team=team)
     ids = [str(row.event_id) for row in rows]
     recorded: set[str] = set()
     if ids:
@@ -188,3 +210,17 @@ async def missing_today(
         if row.actor_person_id not in latest or at > latest[row.actor_person_id]:
             latest[row.actor_person_id] = at
     return Missing(total=len(counted), by_person=dict(by_person), latest=latest)
+
+
+async def lead_names(database: Any, tenant_id: UUID, ids: list[UUID]) -> dict[UUID, str]:
+    """The leads' names, for the seller's own list of calls without a recording."""
+    from ac_platform.lead_desk.models import Lead
+
+    if not ids:
+        return {}
+    rows = (
+        await database.execute(
+            select(Lead.id, Lead.name).where(Lead.tenant_id == tenant_id, Lead.id.in_(ids))
+        )
+    ).all()
+    return {row.id: row.name for row in rows}

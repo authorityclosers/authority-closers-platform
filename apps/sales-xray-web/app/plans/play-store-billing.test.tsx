@@ -27,7 +27,7 @@ vi.mock("../purchase-policy", async (original) => {
 });
 
 import { PlanAndBillingPane } from "../account-settings";
-import { PLANS_ON_WEB } from "../purchase-policy";
+import { YOUR_PLANS_ON_WEB } from "../purchase-policy";
 import {
   fixtureBilling,
   fixtureProviderReports,
@@ -93,7 +93,7 @@ it("Settings shows the plan, renewal date and minutes, never prices, top-ups or 
   );
   const text = host.textContent ?? "";
   expect(text).toContain("Personal");
-  expect(text).toContain(PLANS_ON_WEB);
+  expect(text).toContain(YOUR_PLANS_ON_WEB);
   expect(text).not.toMatch(BUYING);
   expect(text).not.toContain("Invoices");
   expect(host.querySelector('a[href="/plans"], a[href="/pricing"]')).toBeNull();
@@ -102,7 +102,7 @@ it("Settings shows the plan, renewal date and minutes, never prices, top-ups or 
 it("/plans explains that plans are managed on the web, with no checkout", async () => {
   await act(async () => root.render(<PlansPage />));
   const text = host.textContent ?? "";
-  expect(text).toContain(PLANS_ON_WEB);
+  expect(text).toContain(YOUR_PLANS_ON_WEB);
   expect(text).not.toMatch(BUYING);
   expect(host.querySelector('a[href="/settings/plan"]')).not.toBeNull();
   expect(

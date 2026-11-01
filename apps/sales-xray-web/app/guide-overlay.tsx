@@ -87,6 +87,10 @@ export function GuideOverlay({
         ? Target
         : AudioLines;
   const above = target && target.top > window.innerHeight / 2;
+  // A touch screen is tapped, never clicked (phone personas ph2-30, 1 Nov 2026).
+  const touch =
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(pointer: coarse)").matches;
   // The card never covers what it points at (orchestrator, 31 Oct 2026): when
   // the target sits over the card's column, the card's top stays below it
   // (guide.module.css --guide-clear caps its height; Close, Skip and Next stay
@@ -151,7 +155,7 @@ export function GuideOverlay({
             height: target.height,
           }}
         >
-          <span>Click here</span>
+          <span>{touch ? "Tap here" : "Click here"}</span>
         </div>
       ) : null}
       <aside

@@ -44,6 +44,7 @@ import {
   phoneDoneElsewhere,
   phoneFacts,
   setupRequired,
+  type CaptureStep,
 } from "./capture-setup-rules";
 import { PERMISSIONS_ATTRIBUTE } from "./permissions-rules";
 
@@ -58,9 +59,10 @@ const OPEN_EVENT = "sx-capture-setup-open";
 const CONSENT_ATTRIBUTE = "data-sx-consent";
 const READ_TIMEOUT_MS = 10_000;
 
-/** Opens the setup over the page (Settings, Calls), never required. */
-export function openCaptureSetup() {
-  window.dispatchEvent(new Event(OPEN_EVENT));
+/** Opens the setup over the page (Settings, Calls), never required; at a step
+    when a fix asks for one (the no-recording line, competitor teardown #13). */
+export function openCaptureSetup(step?: CaptureStep) {
+  window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: step ?? null }));
 }
 
 const SEEN_KEY = (person: string) => `sx-workspaces-seen:${person}`;
@@ -133,6 +135,7 @@ export function CaptureSetupGate() {
   const [decision, setDecision] = useState<Decision | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [asked, setAsked] = useState(0);
+  const [startAt, setStartAt] = useState<CaptureStep | undefined>();
 
   // Where the seller came from, for "Switch back to …" (ph2-15).
   useEffect(() => {
@@ -141,7 +144,12 @@ export function CaptureSetupGate() {
 
   // Asked for from Settings: read again, then open, never required.
   useEffect(() => {
-    const open = () => setAsked((value) => value + 1);
+    const open = (event: Event) => {
+      setStartAt(
+        (event as CustomEvent<CaptureStep | null>).detail ?? undefined,
+      );
+      setAsked((value) => value + 1);
+    };
     window.addEventListener(OPEN_EVENT, open);
     return () => window.removeEventListener(OPEN_EVENT, open);
   }, []);
@@ -285,6 +293,7 @@ export function CaptureSetupGate() {
       onFinish={settle}
       onDeclined={settle}
       onClose={close}
+      startAt={current.manual ? startAt : undefined}
       switchBack={
         back
           ? {

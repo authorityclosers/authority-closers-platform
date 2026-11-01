@@ -5,7 +5,7 @@
  * settings"). What a salesperson sets for their own selling, in one place:
  * whether new leads come to them, calling and call logging from this phone,
  * lead alerts, and what AI does with their calls. Managers set the team's
- * rules on Leads → Team and in AI on calls; here each person sees their own.
+ * rules in Leads setup and AI on calls; here each person sees their own.
  */
 
 import {
@@ -24,10 +24,10 @@ import {
 } from "react";
 
 import { readCallAi, type CallAiSettings } from "../call-ai/call-ai-client";
+import { openCaptureSetup } from "../capture-setup/capture-setup-gate";
 import { AlertsCard } from "../leads/alerts-card";
 import { readMe, type Desk } from "../leads/leads-client";
 import { inPhoneApp } from "../leads/native-phone";
-import { openPhoneSetup } from "../leads/phone-onboarding";
 import { PhoneLogCard } from "../leads/phone-log-card";
 import { TakingSwitch } from "../leads/taking-switch";
 import { Panel, Skeleton } from "../ui/kit";
@@ -140,10 +140,23 @@ export function SellingSettings() {
             onChanged={() => setVersion((value) => value + 1)}
           />
         )}
-        <p className={styles.hint}>
-          Your languages, areas and how many open leads you hold are set by your
-          owner or admin in Leads → Team.
-        </p>
+        {/* Where they are really set (phone personas ph1-37, 1 Nov 2026: the
+            hint sent an owner to "Leads → Team", which doesn't exist). */}
+        {me.status !== "ready" ? null : me.value.can_manage ? (
+          <p className={styles.hint}>
+            Each seller&apos;s languages, areas and how many open leads they
+            hold, yours too, are set in{" "}
+            <Link href="/organisation?tab=leads&part=rules">
+              Leads setup → Lead rules → Seller rules
+            </Link>
+            .
+          </p>
+        ) : (
+          <p className={styles.hint}>
+            Your languages, areas and how many open leads you hold are set by
+            your owner or admin.
+          </p>
+        )}
       </Panel>
 
       <Panel title="Calling from this phone">
@@ -154,10 +167,12 @@ export function SellingSettings() {
             icon={<PhoneCall size={18} />}
             title="Phone setup"
             action="Set up"
-            onAction={openPhoneSetup}
+            // The checked list that ends with a test call (ph1-37: Set up
+            // opened the older phone flow, which shows nothing once it's done).
+            onAction={() => openCaptureSetup()}
           >
-            Calls, recordings, alerts and battery, checked once so every call
-            lands on its lead.
+            Recording, the recordings folder, background and uploads, checked
+            one by one and proven with a test call.
           </Line>
         ) : null}
         <Line icon={<ShieldCheck size={18} />} title="Private calls">

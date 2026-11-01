@@ -8,13 +8,14 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import case, func, select, update
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as postgres_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.lead_desk.capture_reminder import KEY as CAPTURE_KEY
 from ac_platform.lead_desk.capture_reminder import as_bell
 from ac_platform.product_updates.models import Notification, ProductUpdate, UpdateSeen
 from ac_platform.tenancy.models import Membership, Organisation
@@ -191,12 +192,21 @@ class ProductUpdatesReading:
             for release_id, items in releases.items()
         ]
         unread = sum(not entry["read"] for entry in entries)
+        # A workspace's capture reminder shows only there: one per day, with the count
+        # its own calls say (phone personas ph1-27, 1 Nov 2026: 2 and 4 for one day).
+        here = or_(
+            Notification.dedupe_key.is_(None),
+            ~Notification.dedupe_key.startswith(CAPTURE_KEY),
+            Notification.tenant_id == self.actor.tenant_id,
+        )
         unread += (
             await self.database.scalar(
                 select(func.count())
                 .select_from(Notification)
                 .where(
-                    Notification.person_id == self.actor.person_id, Notification.read_at.is_(None)
+                    Notification.person_id == self.actor.person_id,
+                    Notification.read_at.is_(None),
+                    here,
                 )
             )
             or 0
@@ -204,21 +214,21 @@ class ProductUpdatesReading:
         events = (
             await self.database.scalars(
                 select(Notification)
-                .where(Notification.person_id == self.actor.person_id)
+                .where(Notification.person_id == self.actor.person_id, here)
                 .order_by(Notification.created_at.desc(), Notification.id.desc())
                 .limit(50)
             )
         ).all()
         for event in events:
             # The capture reminder stays in the bell and names its day, older rows too.
-            title, urgent = as_bell(event.dedupe_key, event.title, event.urgent)
+            title, urgent, href = as_bell(event.dedupe_key, event.title, event.urgent, event.href)
             entries.append(
                 {
                     "id": str(event.id),
                     "kind": event.kind,
                     "title": title,
                     "body": event.body,
-                    "href": event.href,
+                    "href": href,
                     "urgent": urgent,
                     "created_at": utc(event.created_at),
                     "read": event.read_at is not None,

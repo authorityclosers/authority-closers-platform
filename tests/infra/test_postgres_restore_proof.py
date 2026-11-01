@@ -539,6 +539,7 @@ def test_run_restores_pair_then_delegates_and_always_cleans_temp(
     monkeypatch.setattr(proof, "_validate_drill_evidence", lambda *_args: None)
     fsynced: list[Path] = []
     monkeypatch.setattr(proof, "_fsync_directory", fsynced.append)
+    monkeypatch.setattr(proof, "_free_bytes", lambda _path: 64 * 1024**3)
     calls: list[list[str]] = []
 
     def fake_run(
@@ -550,6 +551,8 @@ def test_run_restores_pair_then_delegates_and_always_cleans_temp(
             return _snapshot(now)
         if command[1] == "ls":
             return _tree()
+        if command[1] == "stats":
+            return json.dumps({"total_size": 4096, "total_file_count": 2})
         if command[1] == "restore":
             restore_dir = Path(command[command.index("--target") + 1])
             _write_pair(restore_dir)
@@ -576,7 +579,8 @@ def test_run_restores_pair_then_delegates_and_always_cleans_temp(
     assert record["restic_snapshot_id"] == "a" * 64
     assert record["snapshot_pair"]["dump_path"].endswith("/backup.dump")
     assert fsynced == [returned]
-    assert [call[1] for call in calls[:3]] == ["snapshots", "ls", "restore"]
+    assert [call[1] for call in calls[:4]] == ["snapshots", "ls", "stats", "restore"]
+    assert calls[2] == ["restic", "stats", "--mode", "restore-size", "--json", "a" * 64]
     assert calls[0] == [
         "restic",
         "snapshots",
@@ -601,12 +605,15 @@ def test_run_rejects_backup_from_a_different_immutable_release(
         MIGRATION_HEAD_FIXTURE,
     )
     monkeypatch.setattr(proof, "resolve_current_release", lambda _environment: release)
+    monkeypatch.setattr(proof, "_free_bytes", lambda _path: 64 * 1024**3)
 
     def fake_run(command: Sequence[str], *_args, **_kwargs: object) -> str:
         if command[1] == "snapshots":
             return _snapshot(now)
         if command[1] == "ls":
             return _tree()
+        if command[1] == "stats":
+            return json.dumps({"total_size": 4096})
         restore_dir = Path(command[command.index("--target") + 1])
         _write_pair(restore_dir)
         return ""
@@ -615,6 +622,71 @@ def test_run_rejects_backup_from_a_different_immutable_release(
     with pytest.raises(proof.RestoreProofError, match="does not match"):
         proof.run("staging", restore_root=restore_root, evidence_root=evidence_root, now=now)
     assert not list(restore_root.iterdir())
+
+
+def test_restore_needs_one_and_a_half_times_the_snapshot_plus_ten_gib() -> None:
+    gib = 1024**3
+    assert proof.required_restore_free_bytes(0) == 10 * gib
+    assert proof.required_restore_free_bytes(8 * gib) == 22 * gib
+    assert proof.parse_restore_size(json.dumps({"total_size": 123})) == 123
+    for bad in (
+        "",
+        "[]",
+        "{}",
+        '{"total_size": -1}',
+        '{"total_size": 1.5}',
+        '{"total_size": true}',
+    ):
+        with pytest.raises(proof.RestoreProofError, match="restore size"):
+            proof.parse_restore_size(bad)
+
+
+def test_run_refuses_and_tells_the_owner_before_restoring_on_a_full_disk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    now = dt.datetime.now(dt.UTC)
+    restore_root = tmp_path / "restore-root"
+    restore_root.mkdir()
+    release = proof.ApplicationRelease(
+        "staging",
+        tmp_path / ("a" * 40),
+        tmp_path / "restore-drill.py",
+        "sha256:" + "b" * 64,
+        MIGRATION_HEAD_FIXTURE,
+    )
+    monkeypatch.setattr(proof, "resolve_current_release", lambda _environment: release)
+    snapshot_bytes = 4 * 1024**3
+    # One byte short of 1.5 x 4 GiB + 10 GiB.
+    monkeypatch.setattr(
+        proof, "_free_bytes", lambda _path: proof.required_restore_free_bytes(snapshot_bytes) - 1
+    )
+    notices: list[str] = []
+    monkeypatch.setattr(proof, "_notify_owner", notices.append)
+    calls: list[str] = []
+
+    def fake_run(command: Sequence[str], *_args, **_kwargs: object) -> str:
+        calls.append(command[1])
+        if command[1] == "snapshots":
+            return _snapshot(now)
+        if command[1] == "ls":
+            return _tree()
+        if command[1] == "stats":
+            return json.dumps({"total_size": snapshot_bytes})
+        raise AssertionError(f"nothing may run after a refused space check: {command}")
+
+    monkeypatch.setattr(proof, "_run", fake_run)
+    with pytest.raises(proof.RestoreProofError, match="not enough free disk space"):
+        proof.run(
+            "staging",
+            restore_root=restore_root,
+            evidence_root=tmp_path / "evidence-root",
+            now=now,
+        )
+    assert calls == ["snapshots", "ls", "stats"]
+    assert not list(restore_root.iterdir())
+    assert len(notices) == 1
+    assert notices[0].startswith("Logical restore proof for staging refused:")
+    assert "Nothing was restored" in notices[0]
 
 
 def test_units_manifest_and_wrapper_are_narrow_and_hardened() -> None:

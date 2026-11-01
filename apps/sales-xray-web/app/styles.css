@@ -3413,3 +3413,15 @@ html[data-sx-app] .sx-web-only {
 :root[data-sx-input="pointer"] :focus-visible {
   outline-color: transparent;
 }
+
+/* Keyboard focus is never hidden under the phone's bars (robot c18ed243, 1 Nov
+   2026: Home's tiles and links took focus under the tab bar). The page keeps a
+   focused control clear of the tab bar and its gap, and of the bar on top. */
+@media (max-width: 899.98px) and (min-height: 560.02px) {
+  html:has(> body.sales-xray-document) {
+    scroll-padding-top: calc(52px + env(safe-area-inset-top, 0px));
+    scroll-padding-bottom: calc(
+      var(--lx-bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 8px
+    );
+  }
+}

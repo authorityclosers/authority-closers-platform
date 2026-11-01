@@ -1760,3 +1760,103 @@ def test_staging_r2_capture_counts_its_synthetic_rows_and_restores_them_empty(
     assert metadata["row_counts"]["conversation_synthetic_records"] == 0
     assert metadata["row_counts"]["audit_events"] == 7
     assert json.loads(metadata_path.read_text()) == metadata
+
+
+def _restore_space_admission_block() -> str:
+    source = (FOUNDATION / "scripts" / "ac-restic-restore-check-inner").read_text(encoding="utf-8")
+    return source[
+        source.index("# Space admission (1 Nov 2026)") : source.index("# Space admission complete.")
+    ]
+
+
+SNAPSHOT_BYTES = 8_500_000_000
+NEEDED_BYTES = SNAPSHOT_BYTES * 3 // 2 + 10 * 1024**3
+
+
+@pytest.mark.skipif(os.name != "posix", reason="requires Bash, jq, awk and numfmt")
+@pytest.mark.parametrize(
+    ("stats", "free_bytes", "admitted", "noticed"),
+    [
+        (f'{{"total_size":{SNAPSHOT_BYTES},"total_file_count":12}}', NEEDED_BYTES, True, False),
+        (f'{{"total_size":{SNAPSHOT_BYTES},"total_file_count":12}}', NEEDED_BYTES - 1, False, True),
+        ('{"total_file_count":12}', NEEDED_BYTES * 4, False, False),
+    ],
+)
+def test_foundation_restore_refuses_and_tells_the_owner_without_room(
+    tmp_path: Path, stats: str, free_bytes: int, admitted: bool, noticed: bool
+) -> None:
+    """1 Nov 2026: the drill restored about 8.5 GB into /tmp on a 95% full disk and filled it."""
+
+    block = _restore_space_admission_block()
+    assert block.count("restore_root='/srv/authority-closers/recovery-tmp'") == 1
+    assert block.count("/usr/local/sbin/ac-notify-owner") == 1
+    block = block.replace(
+        "restore_root='/srv/authority-closers/recovery-tmp'", f"restore_root='{tmp_path}'"
+    ).replace("/usr/local/sbin/ac-notify-owner", "synthetic_notify")
+    harness = (
+        r"""
+set -euo pipefail
+snapshot_id=abc123
+notices="$1"
+free_bytes="$2"
+stats="$3"
+restic() {
+  [[ "$*" == "stats --mode restore-size --json abc123" ]] || {
+    printf 'unexpected restic %s\n' "$*" >&2
+    return 9
+  }
+  printf '%s\n' "$stats"
+}
+df() { printf 'Avail\n%s\n' "$free_bytes"; }
+synthetic_notify() { printf '%s\n' "$1" >> "$notices"; }
+"""
+        + block
+        + "\necho ADMITTED\n"
+    )
+    notices = tmp_path / "notices"
+    result = subprocess.run(  # noqa: S603 - fixed interpreter and the committed admission block
+        ["/usr/bin/bash", "-c", harness, "harness", str(notices), str(free_bytes), stats],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if admitted:
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "ADMITTED"
+    else:
+        assert result.returncode == 1
+        assert "ADMITTED" not in result.stdout
+    if noticed:
+        assert "FAIL  Restic restore drill refused:" in result.stderr
+        [notice] = notices.read_text(encoding="utf-8").splitlines()
+        assert notice.startswith("Restic restore drill refused:")
+        assert "Nothing was restored" in notice
+    else:
+        assert not notices.exists()
+
+
+def test_foundation_restore_uses_the_bounded_area_never_tmp() -> None:
+    source = (FOUNDATION / "scripts" / "ac-restic-restore-check-inner").read_text(encoding="utf-8")
+    assert "mktemp -d -t" not in source
+    assert 'restore_dir="$(mktemp -d "$restore_root/restore-check.XXXXXX")"' in source
+    assert '"$restore_root"/restore-check.*) rm -rf -- "$restore_dir" ;;' in source
+    admission = source.index("restic stats --mode restore-size --json")
+    assert admission < source.index("# Space admission complete.")
+    restore = source.index('restic restore "$snapshot_id"')
+    assert source.index("# Space admission complete.") < restore
+    unit = (FOUNDATION / "config" / "systemd" / "ac-restic-restore-check.service").read_text(
+        encoding="utf-8"
+    )
+
+    def paths(key: str) -> list[str]:
+        return [
+            path
+            for line in unit.splitlines()
+            if line.strip().startswith(f"{key}=")
+            for path in line.split("=", 1)[1].split()
+        ]
+
+    assert "/srv/authority-closers/recovery-tmp" in paths("ReadWritePaths")
+    # Restored binaries stay inert wherever the drill restores them.
+    no_exec = {"/tmp", "/srv/authority-closers/recovery-tmp"}  # noqa: S108 - unit paths, not files
+    assert no_exec <= set(paths("NoExecPaths"))

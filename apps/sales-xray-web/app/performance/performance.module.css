@@ -2,13 +2,27 @@
    card for the team and one per seller. */
 .page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   padding-bottom: 24px;
+}
+
+/* At any text size the page is the screen's width: the period switch's words
+   wrap inside their segments instead of holding the page wider than the phone
+   (robot d6f8ac2c, 1 Nov 2026: at 200% text the Team table ran off the edge). */
+.page > :first-child {
+  max-width: 100%;
+}
+
+.page > :first-child > button {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .card,
 .seller {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   padding: 14px;
   border: 1px solid var(--sx-line);
@@ -60,9 +74,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A word breaks before a table runs off a phone at very large text. */
 .table {
   width: 100%;
   border-collapse: collapse;
+  overflow-wrap: anywhere;
   font-size: var(--sx-text-sm);
   font-variant-numeric: tabular-nums;
 }
@@ -178,6 +194,7 @@
    each on a phone with Sort; their day as a line of what happened. */
 .tableHead {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -274,15 +291,17 @@
   cursor: pointer;
 }
 
+/* Two columns while each has room for its words; one when the text is large. */
 .sellerCard dl {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10em), 1fr));
   gap: 4px 16px;
   margin: 0;
 }
 
 .sellerCard dl div {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px;
   font-size: var(--sx-text-sm);

@@ -45,6 +45,17 @@ export function maskSecrets(text: string): string {
 const SECRET_KEY =
   /token|code|key|secret|password|state|auth|session|email|phone|mobile|signature|sig/i;
 
+// Half an emoji: a high surrogate with no low one after it, or a low one with
+// no high one before it, as cutting text mid-character leaves (orchestrator,
+// 1 Nov 2026: the server refused such a report with a 500).
+const HALF_CHARACTER =
+  /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+/** Text without half emoji; whole ones stay. */
+export function wholeCharacters(text: string): string {
+  return text.replace(HALF_CHARACTER, "");
+}
+
 /** One line of plain text, redacted and cut to `limit` characters. */
 export function scrubText(value: unknown, limit: number): string {
   if (typeof value !== "string") return "";
@@ -52,7 +63,7 @@ export function scrubText(value: unknown, limit: number): string {
   for (const [pattern, marker] of REDACTIONS) {
     text = text.replace(pattern, marker);
   }
-  return text.slice(0, limit);
+  return wholeCharacters(text.slice(0, limit));
 }
 
 /** One part of a route: an id becomes ":id", anything else is scrubbed like text. */

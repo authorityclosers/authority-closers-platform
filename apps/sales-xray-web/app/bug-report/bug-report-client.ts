@@ -6,6 +6,7 @@
 
 import type { ReportContext } from "./device";
 import type { RecentError } from "./recent-errors";
+import { wholeCharacters } from "./scrub";
 
 export type ReportPicture = Readonly<{
   blob: Blob;
@@ -111,7 +112,8 @@ export async function bugReportRequest(
       : null;
   return {
     command_id: body.commandId,
-    words: body.words,
+    // Never half an emoji: the server once refused one with a 500.
+    words: wholeCharacters(body.words),
     blocks_work: body.blocksWork,
     route: body.route,
     context: body.context,
