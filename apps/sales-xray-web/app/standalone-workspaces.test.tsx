@@ -17,7 +17,7 @@ vi.mock("./notice-center", async (importOriginal) => ({
   notify: vi.fn(),
 }));
 vi.mock("./capture-setup/recording-check", () => ({
-  RecordingCheck: () => null,
+  RecordingLine: () => null,
 }));
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }

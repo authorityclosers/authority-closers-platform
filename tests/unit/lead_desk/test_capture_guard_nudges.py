@@ -2,7 +2,7 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 from ac_platform.lead_desk.capture_guard_nudges import slot
-from ac_platform.lead_desk.capture_reminder import as_bell, reminder_key, words
+from ac_platform.lead_desk.capture_reminder import as_bell, calls_href, reminder_key, words
 
 TENANT = UUID("00000000-0000-4000-8000-000000000001")
 
@@ -28,19 +28,25 @@ def test_the_bell_never_pops_the_reminder_and_names_older_rows_by_their_day():
     key = reminder_key(TENANT, date(2026, 10, 30))
     assert key == f"capture-missing:{TENANT}:2026-10-30"
     # A row written before the rule: urgent, "today". Read as not urgent, with its day.
-    assert as_bell(key, "28 calls today have no recording: fix", True) == (
-        "30 Oct: 28 calls had no recording",
-        False,
-    )
-    assert as_bell(key, "30 Oct: 2 calls had no recording", False) == (
+    # Its See why opens that day's calls without a recording (ph1-27), old rows too.
+    calls = "/analysis/calls?no-recording=2026-10-30"
+    assert calls_href(date(2026, 10, 30)) == calls
+    assert as_bell(
+        key, "28 calls today have no recording: fix", True, "/settings/privacy#calls-setup"
+    ) == ("30 Oct: 28 calls had no recording", False, calls)
+    assert as_bell(key, "30 Oct: 2 calls had no recording", False, calls) == (
         "30 Oct: 2 calls had no recording",
         False,
+        calls,
     )
-    # Every other bell line keeps its own title and urgency.
-    assert as_bell("lead-assigned:x", "New lead", True) == ("New lead", True)
-    assert as_bell(None, "Report ready", False) == ("Report ready", False)
+    # Every other bell line keeps its own title, urgency and link.
+    assert as_bell("lead-assigned:x", "New lead", True, "/leads?lead=x") == (
+        "New lead",
+        True,
+        "/leads?lead=x",
+    )
+    assert as_bell(None, "Report ready", False) == ("Report ready", False, None)
     # A key it can't read still never pops up.
-    assert as_bell("capture-missing:broken", "2 calls today have no recording: fix", True) == (
-        "2 calls today have no recording: fix",
-        False,
-    )
+    assert as_bell(
+        "capture-missing:broken", "2 calls today have no recording: fix", True, "/x"
+    ) == ("2 calls today have no recording: fix", False, "/x")

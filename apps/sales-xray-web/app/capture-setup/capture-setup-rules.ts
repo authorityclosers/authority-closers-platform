@@ -126,6 +126,60 @@ export function recordingProven(phone: PhoneFacts): boolean {
   }
 }
 
+const ORDER: CaptureStep[] = [
+  "profile",
+  "consent",
+  "recordings",
+  "background",
+  "uploads",
+  "phone",
+  "done",
+];
+const PHONE_STEPS = new Set<CaptureStep>([
+  "recordings",
+  "background",
+  "uploads",
+]);
+
+/**
+ * The step a fix opens (Fix on the no-recording line of Calls and Reports,
+ * competitor teardown #13, 1 Nov 2026): what fails on this phone, the
+ * recording check first; on the web, "open the app on your phone".
+ */
+export function failingStep(phone: PhoneFacts | null): CaptureStep {
+  if (!phone?.captureSupported) return "phone";
+  if (
+    phone.privateDialler ||
+    !phone.folderPicked ||
+    phone.recorderOff ||
+    !recordingProven(phone)
+  )
+    return "recordings";
+  if (!phone.battery || (phone.autostartNeeded && !phone.autostart))
+    return "background";
+  if (!phone.uploadsOn || !phone.notifications) return "uploads";
+  // Everything looks on, yet calls have no recording: the check and its test call.
+  return "recordings";
+}
+
+/** The steps, with the phone step a fix asked for in its place, even when this phone looks set. */
+export function stepsWith(
+  steps: CaptureStep[],
+  asked?: CaptureStep,
+): CaptureStep[] {
+  if (
+    !asked ||
+    !PHONE_STEPS.has(asked) ||
+    steps.includes(asked) ||
+    !steps.includes("done")
+  )
+    return steps;
+  const at = steps.findIndex(
+    (step) => ORDER.indexOf(step) > ORDER.indexOf(asked),
+  );
+  return [...steps.slice(0, at), asked, ...steps.slice(at)];
+}
+
 const GATED = new Set([
   "/",
   "/dashboard",

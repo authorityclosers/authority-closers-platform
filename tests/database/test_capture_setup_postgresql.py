@@ -282,7 +282,17 @@ def test_a_seller_agrees_finishes_on_a_phone_and_team_sees_it(
                     "calls": 0,
                     "tried": 0,
                     "latest_at": None,
+                    "items": [],
                 }
+                # One day's (the bell's reminder opens it, ph1-27): the last 31 days only.
+                yesterday = (datetime.now(UTC) + timedelta(hours=5, minutes=30)).date() - timedelta(
+                    days=1
+                )
+                day = await client.get(f"{SETUP}/missing/{yesterday.isoformat()}")
+                assert day.status_code == 200, day.text
+                assert day.json()["items"] == []
+                assert (await client.get(SETUP + "/missing/someday")).status_code == 422
+                assert (await client.get(SETUP + "/missing/2020-01-01")).status_code == 422
         finally:
             await setup.engine.dispose()
 
