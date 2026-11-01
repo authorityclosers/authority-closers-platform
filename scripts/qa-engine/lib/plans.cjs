@@ -221,4 +221,7 @@ function applies(plan, tab, row) {
   return true;
 }
 
+// the after-call journeys (they write, on the QA robot pool only)
+Object.assign(plans, require("./aftercall.cjs").plans);
+
 module.exports = { plans, applies, open };

@@ -123,6 +123,7 @@ export async function reportSetup(status: SetupStatus): Promise<void> {
       device_id: status.device,
       app_version: status.version || undefined,
       family: status.family,
+      model: status.model ? status.model.slice(0, 80) : undefined,
       checks,
     });
     // Its newest call recording (competitor teardown #7); only in an organisation.

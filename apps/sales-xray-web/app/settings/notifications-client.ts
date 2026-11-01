@@ -75,3 +75,14 @@ export const saveNotify = (
 ) => call<NotifyPrefs>("", { method: "PUT", body: JSON.stringify(next) });
 
 export const testNotify = () => call<NotifyTest>("/test", { method: "POST" });
+
+/**
+ * What to do when no phone of this person gets alerts yet. Inside the phone
+ * app that means this phone's notifications, never "sign in on your phone"
+ * (phone personas ph1-57, 1 Nov 2026: the app said so to someone in it).
+ */
+export function noPhoneWords(inApp: boolean): string {
+  return inApp
+    ? "This phone isn't getting alerts yet. Allow notifications for Sales X-Ray on it, then try again."
+    : "Alerts reach the Sales X-Ray app. Sign in to it on your phone to get them.";
+}

@@ -46,7 +46,11 @@ import { useCommandSource, type CommandSource } from "../ui/command-registry";
 
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
 import { settingsPath } from "../settings/settings-sections";
-import { leavingOverlay } from "../ui/back-close";
+import {
+  leavingOverlay,
+  OVERLAY_DEPTH_KEY,
+  OVERLAY_FORWARD_EVENT,
+} from "../ui/back-close";
 import { Badge, Button, Empty, PageHeader, SkeletonRow } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
 import { requestWorkspace } from "../call-ownership";
@@ -163,6 +167,30 @@ import { several, usePipelines } from "./use-pipelines";
 
 /** To call's pipeline, remembered per seller and workspace on this device. */
 const toCallKey = (contextKey: string) => `sx:to-call-pipeline:${contextKey}`;
+
+/** Whether the current history entry is an open overlay's own (back-close). */
+function onOverlayEntry(): boolean {
+  const state: unknown = window.history.state;
+  const depth =
+    state && typeof state === "object"
+      ? (state as Record<string, unknown>)[OVERLAY_DEPTH_KEY]
+      : 0;
+  return typeof depth === "number" && depth > 0;
+}
+
+/** The open lead in the address, ?lead=<id>, or none, on the current entry. */
+function writeLeadAddress(leadId: string | null) {
+  const next = new URLSearchParams(window.location.search);
+  if ((next.get("lead") ?? null) === leadId) return;
+  if (leadId) next.set("lead", leadId);
+  else next.delete("lead");
+  const query = next.toString();
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+  );
+}
 function storedToCall(contextKey: string): string | null {
   if (typeof window === "undefined") return null;
   try {
@@ -651,6 +679,34 @@ export function LeadsRoute({
     window.addEventListener(LEAD_ADDED_EVENT, onAdded);
     return () => window.removeEventListener(LEAD_ADDED_EVENT, onAdded);
   }, [refresh]);
+  // The open lead is in the address (orchestrator, 1 Nov 2026): ?lead=<id> on
+  // the lead's own Back entry, so Back closes it, and Forward or a reload opens
+  // it again with its note draft (the robot: Add a note lost on Back). Written
+  // once that entry is there; the split view (#21) can read the same state.
+  useEffect(() => {
+    if (!openLead) return;
+    // Only on the lead's own entry, never the page's: Back must land clean.
+    // The sheet's code may still be loading, so its entry can come late.
+    let timer = 0;
+    let tries = 0;
+    const write = () => {
+      if (onOverlayEntry()) writeLeadAddress(openLead);
+      else if (++tries < 30) timer = window.setTimeout(write, 100);
+    };
+    timer = window.setTimeout(write, 0);
+    return () => window.clearTimeout(timer);
+  }, [openLead]);
+  useEffect(() => {
+    const claim = (event: Event) => {
+      const id = new URLSearchParams(window.location.search).get("lead") ?? "";
+      const leadId = linkedLead(`lead=${id}`)?.leadId;
+      if (!leadId) return;
+      event.preventDefault();
+      setOpenLead(leadId);
+    };
+    window.addEventListener(OVERLAY_FORWARD_EVENT, claim);
+    return () => window.removeEventListener(OVERLAY_FORWARD_EVENT, claim);
+  }, []);
   const closeShared = () => setSharedDone(true);
   // Pull to refresh waits for the desk to come back before the spinner goes.
   const reload = useCallback(
@@ -1357,7 +1413,6 @@ export function LeadsRoute({
     at: string | null = null,
   ) => {
     setLinkDone(hash);
-    leaveAddressLead();
     setHolding(null);
     arrival.know(leadId);
     setIntent(next);

@@ -26,8 +26,9 @@ from ac_platform.call_ai.http import install_call_ai_http
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.sales_xray_profile_models import SalesXrayProfile
 from ac_platform.lead_desk import connected_apps
+from ac_platform.lead_desk.contracts import PhoneReport
 from ac_platform.lead_desk.models import LeadDeskSettings
-from ac_platform.lead_desk.store import PHONES_KEY
+from ac_platform.lead_desk.store import PHONES_KEY, LeadDesk, Viewer
 from ac_platform.tenancy.models import Membership
 from tests.database.test_conversation_account_library_postgresql import _session
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
@@ -213,6 +214,7 @@ def test_a_seller_agrees_finishes_on_a_phone_and_team_sees_it(
                     "missing_today",
                     "call_log_off",
                     "recording",
+                    "devices",
                 }
                 # No lead calls today: nothing without a recording, each or in all.
                 assert team.json()["missing_today"] == 0
@@ -262,6 +264,7 @@ def test_a_seller_agrees_finishes_on_a_phone_and_team_sees_it(
                         assert health.words == f"Call logging is off on {name}'s Redmi 13."
                         assert line.fix is not None and line.fix.path == "/settings/selling"
                     else:
+                        # Counted by phone (ph1-55): each install is a line of its own.
                         assert health.words == "1 phone logging calls."
                         assert line.fix is None
 
@@ -316,6 +319,49 @@ def test_a_seller_agrees_finishes_on_a_phone_and_team_sees_it(
                 assert row["recording"]["state"] == "off"
                 assert row["recording"]["fix"] == "recorder"
                 assert row["recording"]["phone"] == "Redmi 13"
+                # ph1-55 and ph1-46: the seller's two other phones report, each kept by its
+                # install. Team lists every phone with its own recording; Connections
+                # counts phones, not sellers.
+                now = datetime.now(UTC)
+                viewer = Viewer(
+                    person_id=seller.person_id,
+                    tenant_id=setup.state.tenant_id,
+                    role="member",
+                    name="",
+                )
+                for at, model, family, checks in (
+                    (now - timedelta(minutes=1), "2406ERN9CI", "xiaomi", {"calls": True}),
+                    (now, "SM-A155F", "samsung", {"calls": True, "recorder": False}),
+                ):
+                    async with setup.sessions() as db, db.begin():
+                        await LeadDesk(db, viewer, now=at).report_phone(
+                            PhoneReport(
+                                device_id=uuid4(), family=family, model=model, checks=checks
+                            )
+                        )
+                team = await client.get(SETUP + "/team")
+                row = next(
+                    row
+                    for row in team.json()["people"]
+                    if row["person_id"] == str(seller.person_id)
+                )
+                devices = {device["name"]: device for device in row["devices"]}
+                assert set(devices) == {"Samsung SM-A155F", "Redmi 13 5G", "Redmi 13"}
+                assert row["devices"][0]["name"] == "Samsung SM-A155F"
+                assert devices["Samsung SM-A155F"]["recording"]["state"] == "off"
+                assert devices["Samsung SM-A155F"]["recording"]["phone"] == "Samsung SM-A155F"
+                assert devices["Redmi 13 5G"]["recording"]["state"] == "late"
+                assert devices["Redmi 13"]["recording"]["state"] == "ok"
+                assert row["state"] == "recording_off"
+                assert "number" not in str(row["devices"])
+                async with setup.sessions() as db:
+                    health = await connected_apps._phones(db, setup.state.tenant_id)
+                assert health.words == "2 phones logging calls."
+                assert sorted(line.label for line in health.connections) == [
+                    f"{name} · Redmi 13 5G",
+                    f"{name} · Samsung SM-A155F",
+                ]
+                assert len({line.id for line in health.connections}) == 2
                 as_(seller_token)
                 mine = await client.get(SETUP + "/missing")
                 assert mine.status_code == 200, mine.text

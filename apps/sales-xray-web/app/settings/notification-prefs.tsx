@@ -17,10 +17,12 @@ import {
   summaryWhen,
   type OwnerAlerts,
 } from "../dashboard/owner-alerts-client";
+import { inPhoneApp } from "../leads/native-phone";
 import { notify } from "../notice-center";
-import { Panel } from "../ui/kit";
+import { Panel, Skeleton } from "../ui/kit";
 import {
   NotifyError,
+  noPhoneWords,
   readNotify,
   saveNotify,
   testNotify,
@@ -101,9 +103,55 @@ function Row({
   );
 }
 
+/** A seller's rows while the panel reads, each at its own height. */
+const READING: { title: string; line: ReactNode }[] = [
+  { title: "New enquiry", line: <Skeleton width={170} height={18} /> },
+  {
+    title: "Follow-up due",
+    line: (
+      <span className={styles.chips}>
+        {[96, 114, 88].map((width) => (
+          <Skeleton key={width} width={width} height={32} radius="pill" />
+        ))}
+      </span>
+    ),
+  },
+  { title: "Missed follow-up", line: <Skeleton width={170} height={18} /> },
+  {
+    title: "Quiet outside working hours",
+    line: <Skeleton width={170} height={18} />,
+  },
+];
+
+/**
+ * The panel's place while it reads: Phone & alerts drew nothing here until
+ * the read answered, then the panel pushed everything below it down 471 px
+ * (the test robot, 1 Nov 2026: report 853, 0.10 at 1440).
+ */
+function Reading() {
+  return (
+    <Panel title="Notifications">
+      <ul className={styles.list} aria-busy="true">
+        {READING.map((row) => (
+          <Row key={row.title} title={row.title} line={row.line}>
+            <span className={styles.bone}>
+              <Skeleton width={52} height={32} radius="pill" />
+            </span>
+          </Row>
+        ))}
+      </ul>
+      <div className={styles.foot}>
+        <Skeleton width={232} height={44} radius="pill" />
+      </div>
+    </Panel>
+  );
+}
+
 export function NotificationPrefs() {
   const [prefs, setPrefs] = useState<NotifyPrefs | null>(null);
   const [owner, setOwner] = useState<OwnerAlerts | null>(null);
+  // No Leads in this workspace: the panel stays away.
+  const [away, setAway] = useState(false);
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
   // Held from the first tap: two taps before the button greys out sent two
@@ -111,21 +159,26 @@ export function NotificationPrefs() {
   const sending = useRef(false);
   useEffect(() => {
     const controller = new AbortController();
-    readNotify(controller.signal).then(
-      (value) => {
-        setPrefs(value);
+    const { signal } = controller;
+    readNotify(signal).then(
+      async (value) => {
+        // An owner's Daily summary is read first, so the panel arrives
+        // whole and never grows a row under the page (report 853).
         if (value.manager)
-          readOwnerAlerts(controller.signal).then(setOwner, () => {
-            // The summary row waits for its own read.
+          await readOwnerAlerts(signal).then(setOwner, () => {
+            // Without it the panel shows the rest.
           });
+        if (!signal.aborted) setPrefs(value);
       },
       () => {
         // Not in a workspace with Leads: the panel stays away.
+        if (!signal.aborted) setAway(true);
       },
     );
     return () => controller.abort();
   }, []);
-  if (!prefs) return null;
+  if (away) return null;
+  if (!prefs) return <Reading />;
 
   const save = async (change: Partial<NotifyPrefs>) => {
     const next = { ...prefs, ...change };
@@ -184,7 +237,7 @@ export function NotificationPrefs() {
                 id: "notification-test",
                 tone: "info",
                 title: "No phone yet",
-                message: "Sign in to the Sales X-Ray app on your phone first.",
+                message: noPhoneWords(inPhoneApp()),
               }
             : {
                 id: "notification-test",
@@ -291,10 +344,7 @@ export function NotificationPrefs() {
           {testing ? "Sending…" : "Send me a test notification"}
         </button>
         {prefs.phones === 0 ? (
-          <small>
-            Notifications reach the Sales X-Ray app. Sign in to it on your
-            phone.
-          </small>
+          <small>{noPhoneWords(inPhoneApp())}</small>
         ) : null}
       </div>
     </Panel>

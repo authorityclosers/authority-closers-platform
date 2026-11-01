@@ -249,7 +249,9 @@ async def test_release_grouping_and_event_read_are_recipient_owned(database):
     assert (group["count"], group["title"], group["read"]) == (2, "2 new updates", False)
     assert result["notifications"][2]["title"] == "1 new update"
     await service.mark_seen(["first"])
-    assert not (await service.notifications())["notifications"][1]["read"]
+    group = (await service.notifications())["notifications"][1]
+    # Only what is still unseen is new (phone personas ph1-27/ph1-53, 1 Nov 2026).
+    assert (group["count"], group["title"], group["read"]) == (2, "1 new update", False)
     assert await service.mark_read([str(events[1].id), "updates:unknown", "garbage"]) == {
         "unread_count": 3
     }
@@ -264,6 +266,12 @@ async def test_release_grouping_and_event_read_are_recipient_owned(database):
     assert database.scalars(select(UpdateSeen.note_key).order_by(UpdateSeen.note_key)).all() == [
         "first",
         "second",
+    ]
+    await service.mark_seen(["single"])
+    read = (await service.notifications())["notifications"]
+    assert [(entry["title"], entry["read"]) for entry in read[1:]] == [
+        ("2 updates", True),
+        ("1 update", True),
     ]
 
 

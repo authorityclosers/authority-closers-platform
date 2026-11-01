@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   leavingOverlay,
   OVERLAY_DEPTH_KEY,
+  OVERLAY_FORWARD_EVENT,
   resetBackCloseForTests,
   useBackClose,
 } from "./back-close";
@@ -143,4 +144,24 @@ it("arms again when its owner keeps it open", async () => {
   await settle();
   expect(host.textContent).toContain("First");
   expect(depth()).toBe(1);
+});
+
+// The test robot, 1 Nov 2026 (forward-empty): Forward onto a closed overlay's
+// entry stepped back over it, so a page could never open it again. A page may
+// claim that entry now; unclaimed, it is still stepped over.
+it("lets a page claim Forward onto an overlay's entry, else steps over it", async () => {
+  await mount();
+  await tap("open");
+  await settle();
+  await tap("close");
+  await settle();
+  const back = vi.spyOn(window.history, "back");
+  window.history.pushState({ [OVERLAY_DEPTH_KEY]: 1 }, "", "/leads?lead=one");
+  window.dispatchEvent(new PopStateEvent("popstate"));
+  expect(back).toHaveBeenCalledTimes(1);
+  const claim = (event: Event) => event.preventDefault();
+  window.addEventListener(OVERLAY_FORWARD_EVENT, claim);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+  window.removeEventListener(OVERLAY_FORWARD_EVENT, claim);
+  expect(back).toHaveBeenCalledTimes(1);
 });

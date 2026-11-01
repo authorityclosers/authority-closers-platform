@@ -1559,6 +1559,8 @@ class PhoneReport(Command):
     device_id: UUID
     app_version: str | None = Field(default=None, max_length=40)
     family: str | None = Field(default=None, max_length=20, pattern=r"^[a-z]+$")
+    # The phone's model as Android names it ("2406ERN9CI"), so Team names each phone.
+    model: str | None = Field(default=None, max_length=80)
     checks: dict[str, bool] = Field(max_length=len(PHONE_CHECKS))
 
     @field_validator("checks")

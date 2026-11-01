@@ -2716,11 +2716,14 @@ a.repName {
   margin: 0;
 }
 
+/* 12 px above and below: a link's 12 px tap band (below) stays in its own row,
+   so the phone and the email links never overlap (QA robot, axe
+   target-size, 1 Nov 2026). */
 .detailRows > div {
   display: grid;
   grid-template-columns: 128px minmax(0, 1fr);
   gap: 12px;
-  padding: 9px 0;
+  padding: 12px 0;
   border-top: 1px solid var(--sx-line);
 }
 
@@ -6437,7 +6440,8 @@ button.leadTags {
   border: 0;
   border-radius: calc(var(--sx-radius-sm) - 2px);
   background: transparent;
-  color: var(--sx-muted);
+  /* Muted on the tabs' fill was 4.2:1 in dark (QA robot, 1 Nov 2026). */
+  color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-sm);
   font-weight: 600;

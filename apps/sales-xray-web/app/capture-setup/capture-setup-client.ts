@@ -61,6 +61,16 @@ export type CaptureTeamRow = Readonly<{
   call_log_off?: string | null;
   /** Recording on this seller's phone (competitor teardown #7). */
   recording?: CaptureRecording | null;
+  /** Each of their phones, newest first, with its own recording (ph1-55, ph1-46). */
+  devices?: readonly CaptureTeamDevice[];
+}>;
+
+export type CaptureTeamDevice = Readonly<{
+  /** The install's own id, never a number. */
+  device: string | null;
+  name: string;
+  recording: CaptureRecording | null;
+  call_log_off: boolean;
 }>;
 
 /** "ok": a recording lately; "late": none lately, or none yet; "off": no folder or recorder. */
@@ -177,6 +187,12 @@ export function parseCaptureTeam(body: unknown): CaptureTeam {
           : row.phone
             ? [row.phone]
             : [],
+        devices: Array.isArray(row.devices)
+          ? row.devices.filter(
+              (device): device is CaptureTeamDevice =>
+                record(device) && typeof device.name === "string",
+            )
+          : [],
       })),
     missingToday: count(body.missing_today),
   };

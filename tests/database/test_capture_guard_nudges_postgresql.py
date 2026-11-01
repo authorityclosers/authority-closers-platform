@@ -16,9 +16,10 @@ import pytest
 from fastapi import FastAPI
 from sqlalchemy import Engine, select
 
+from ac_platform.call_ai.missing_recordings import calls_today
 from ac_platform.http.product_updates import install_product_updates_http
 from ac_platform.lead_desk.capture_guard_nudges import collect
-from ac_platform.lead_desk.capture_reminder import calls_href, reminder_key, words
+from ac_platform.lead_desk.capture_reminder import BODY, calls_href, reminder_key, words
 from ac_platform.lead_desk.models import LeadEvent
 from ac_platform.product_updates.models import Notification
 from ac_platform.tenancy.models import Tenant
@@ -137,7 +138,25 @@ def test_daily_capture_nudge_persists_once_and_excludes_private_and_simulated(
                 entry = next(
                     note for note in bell.json()["notifications"] if note["id"] == str(notes[0].id)
                 )
-                assert entry["title"] == words(2, day)[0]
+                # The card says that day's count now, as the Calls line it opens counts it
+                # (phone personas ph1-53: the card said 4, the calls it opened none).
+                async with here.setup.sessions() as db:
+                    line = {
+                        when: (
+                            await calls_today(
+                                db,
+                                tenant_id=here.tenant_id,
+                                person_id=here.seller.person_id,
+                                role="member",
+                                now=datetime.now(UTC),
+                                day=when,
+                            )
+                        ).missing.total
+                        for when in (day, day - timedelta(days=1))
+                    }
+                assert entry["title"] == words(line[day], day)[0]
+                # Honest about 7 pm (ph1-53: no card for today's calls).
+                assert entry["body"] == BODY
                 assert entry["href"] == calls_href(day)
                 assert not entry["urgent"] and entry["read"] is False
                 ids = [note["id"] for note in bell.json()["notifications"]]
@@ -146,9 +165,10 @@ def test_daily_capture_nudge_persists_once_and_excludes_private_and_simulated(
                 before = next(
                     note for note in bell.json()["notifications"] if note["id"] == str(older_id)
                 )
-                assert before["title"] == words(5, day - timedelta(days=1))[0]
+                yesterday = day - timedelta(days=1)
+                assert before["title"] == words(line[yesterday], yesterday)[0]
                 assert not before["urgent"]
-                assert before["href"] == calls_href(day - timedelta(days=1))
+                assert before["href"] == calls_href(yesterday)
                 unread = bell.json()["unread_count"]
                 acknowledged = await client.post(
                     "/v1/notifications/read", json={"ids": [entry["id"]]}, headers=WRITE

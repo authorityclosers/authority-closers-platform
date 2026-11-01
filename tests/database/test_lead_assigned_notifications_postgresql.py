@@ -14,6 +14,8 @@ import pytest
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ac_platform.audit.models import AuditEvent
+from ac_platform.lead_desk import deletion
 from ac_platform.lead_desk.models import Lead
 from ac_platform.product_updates.models import Notification
 from tests.database.test_conversation_account_library_postgresql import _session
@@ -156,6 +158,105 @@ def test_a_lead_given_to_a_seller_rings_their_bell_once(
                 assert handed, items
                 # Everyone's work, not only the admin's: the seller's own lead is there too.
                 assert any(item["lead_name"] == "ravi sample" for item in items), items
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_a_lead_now_line_goes_quiet_once_the_lead_moves_on(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """QA robot bbc3aca3, 1 Nov 2026: a deleted lead's "is your lead now" popped for two
+    days and its Open lead ended on "Try again". Given to someone else or deleted, the line
+    is marked read (never popped again) and stays in the bell's history."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)  # the signed-in person is an admin
+            first = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            second = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            first_token = await _session(setup, first)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+
+                def as_(token: str) -> None:
+                    client.cookies.clear()
+                    client.cookies.set(setup.settings.session_cookie_name, token)
+
+                async def lines(person_id: Any) -> list[Notification]:
+                    async with AsyncSession(setup.engine) as db:
+                        return list(
+                            (
+                                await db.scalars(
+                                    select(Notification).where(
+                                        Notification.kind == "lead_assigned",
+                                        Notification.person_id == person_id,
+                                    )
+                                )
+                            ).all()
+                        )
+
+                async def give(lead_id: str, person_id: Any) -> None:
+                    read = await client.get(f"{BASE}/leads/{lead_id}")
+                    assert read.status_code == 200, read.text
+                    given = await client.post(
+                        f"{BASE}/leads/{lead_id}/assign",
+                        json={
+                            "command_id": str(uuid4()),
+                            "expected_revision": read.json()["lead"]["revision"],
+                            "person_id": str(person_id),
+                        },
+                        headers=WRITE,
+                    )
+                    assert given.status_code == 200, given.text
+
+                as_(setup.token)
+                added = await client.post(
+                    f"{BASE}/leads",
+                    json={"command_id": str(uuid4()), "name": "asha fictional", "assign": "me"},
+                    headers=WRITE,
+                )
+                assert added.status_code == 201, added.text
+                lead_id = added.json()["lead"]["lead_id"]
+                await give(lead_id, first.person_id)
+                [line] = await lines(first.person_id)
+                assert line.read_at is None
+
+                # Given to someone else: the first seller's line goes quiet, the second rings.
+                await give(lead_id, second.person_id)
+                [line] = await lines(first.person_id)
+                assert line.read_at is not None
+                [other] = await lines(second.person_id)
+                assert other.read_at is None and other.href == f"/leads?lead={lead_id}"
+                # The first seller opening the old line hears it is not theirs any more.
+                as_(first_token)
+                gone = await client.get(f"{BASE}/leads/{lead_id}")
+                assert gone.status_code == 404, gone.text
+
+                # Deleted: every line for it goes quiet, kept in the history, counted.
+                as_(setup.token)
+                deleted = await client.post(
+                    f"{BASE}/leads/{lead_id}/delete",
+                    json={"command_id": str(uuid4())},
+                    headers=WRITE,
+                )
+                assert deleted.status_code == 200, deleted.text
+                [other] = await lines(second.person_id)
+                assert other.read_at is not None
+                assert len(await lines(first.person_id)) == 1
+                async with AsyncSession(setup.engine) as db:
+                    audit = await db.scalar(
+                        select(AuditEvent).where(
+                            AuditEvent.tenant_id == setup.state.tenant_id,
+                            AuditEvent.resource_type == deletion.AUDIT_RESOURCE,
+                        )
+                    )
+                assert audit is not None
+                # The second seller's line only: the first one was quiet already.
+                assert audit.payload["retired"] == {"bell_lines": 1}
         finally:
             await setup.engine.dispose()
 

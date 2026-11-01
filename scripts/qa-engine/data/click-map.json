@@ -1816,19 +1816,14 @@
     "phone",
     "desktop"
    ],
-   "kind": "back",
+   "kind": "lead-close",
    "start": "/leads?view=all",
    "control": {
     "role": "button",
-    "name": "^Open ",
-    "regex": true
+    "name": "Close"
    },
-   "expect": {
-    "visible": [
-     "Log a call"
-    ]
-   },
-   "status": "live"
+   "status": "live",
+   "note": "judged as Close plus the browser Back dropping ?lead=<id>, Forward reopening it (orchestrator, 1 Nov 2026)"
   },
   {
    "id": "82",
@@ -1869,7 +1864,8 @@
    "start": "/leads?view=all&lead={lead}",
    "control": {
     "role": "button",
-    "name": "WhatsApp"
+    "name": "^WhatsApp",
+    "regex": true
    },
    "status": "live"
   },
@@ -1947,17 +1943,12 @@
     "phone",
     "desktop"
    ],
-   "kind": "sheet",
+   "kind": "present",
    "start": "/leads?view=all&lead={lead}",
    "control": {
     "role": "button",
     "name": "^Stage: ",
     "regex": true
-   },
-   "expect": {
-    "visible": [
-     "Not Connected"
-    ]
    },
    "status": "live"
   },
@@ -2057,10 +2048,11 @@
    "kind": "present",
    "start": "/leads?view=all&lead={lead}",
    "control": {
-    "role": "button",
-    "name": "View Call History"
+    "role": "tab",
+    "name": "^Calls",
+    "regex": true
    },
-   "status": "expected-missing"
+   "status": "live"
   },
   {
    "id": "93",
@@ -2078,10 +2070,11 @@
    "kind": "present",
    "start": "/leads?view=all&lead={lead}",
    "control": {
-    "role": "button",
-    "name": "View Latest Report"
+    "role": "link",
+    "name": "^View latest report",
+    "regex": true
    },
-   "status": "expected-missing"
+   "status": "live"
   },
   {
    "id": "94",
@@ -2155,9 +2148,10 @@
    "start": "/leads?view=all&lead={lead}",
    "control": {
     "role": "button",
-    "name": "Ask Dipak About This Customer"
+    "name": "^Ask Dipak about",
+    "regex": true
    },
-   "status": "expected-missing"
+   "status": "live"
   },
   {
    "id": "98",

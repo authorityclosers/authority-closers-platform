@@ -136,6 +136,18 @@ export function UpdateNotices({
       clearAlert(id);
       active.current.delete(id);
     }
+    // A line gone from the bell takes its banner too, as a read one does (QA
+    // robot bbc3aca3, 1 Nov 2026: a lead given to someone else or deleted).
+    // Only from a list that loaded: one that failed proves nothing gone.
+    if (updates.notifications_status !== "ready") return;
+    const listed = new Set(
+      updates.notifications.map((item) => `event:${contextKey}:${item.id}`),
+    );
+    for (const id of [...active.current]) {
+      if (!id.startsWith(`event:${contextKey}:`) || listed.has(id)) continue;
+      clearAlert(id);
+      active.current.delete(id);
+    }
   }, [contextKey, updates, openNews, openEvent]);
   return null;
 }

@@ -13,12 +13,14 @@ import {
   readCaptureTeam,
   type CaptureRecording,
   type CaptureTeam,
+  type CaptureTeamDevice,
   type CaptureTeamRow,
   type CaptureTeamState,
 } from "../capture-setup/capture-setup-client";
 import { openCaptureSetup } from "../capture-setup/capture-setup-gate";
 import own from "../capture-setup/capture-setup.module.css";
 import { named } from "../capture-setup/product-name";
+import { inPhoneApp, setupStatus } from "../leads/native-phone";
 import { Sheet } from "../ui/sheet";
 import { useWorkspaceAccess } from "../workspace-access";
 import { PersonDisplayName } from "./people/person-display-name";
@@ -217,12 +219,21 @@ export function CaptureSetupPanel() {
   const [team, setTeam] = useState<CaptureTeam | null>(null);
   const [failed, setFailed] = useState(false);
   const [now] = useState(() => Date.now());
+  // This phone's install, in the phone app: its own fix opens here.
+  const [here, setHere] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     readCaptureTeam(controller.signal).then(setTeam, () => {
       if (!controller.signal.aborted) setFailed(true);
     });
+    if (inPhoneApp())
+      void setupStatus().then(
+        (status) => {
+          if (!controller.signal.aborted) setHere(status?.device ?? null);
+        },
+        () => undefined,
+      );
     return () => controller.abort();
   }, []);
 
@@ -262,12 +273,21 @@ export function CaptureSetupPanel() {
         ) : (
           <ul className={own.team} aria-label="Call capture, not set up first">
             {rows.map((row) => {
-              const parts = recordingParts(row.recording, now);
-              // Which phone, when a seller has more than one (ph1-46).
-              const which =
-                (row.phones?.length ?? 0) > 1 && row.recording?.phone
-                  ? `${row.recording.phone}: `
-                  : "";
+              // Each phone's own recording line (ph1-55, ph1-46); an older server's
+              // one line for the seller otherwise.
+              const lines: readonly CaptureTeamDevice[] = row.devices?.length
+                ? row.devices
+                : row.recording
+                  ? [
+                      {
+                        device: null,
+                        name: row.recording.phone ?? row.phone ?? "Phone",
+                        recording: row.recording,
+                        call_log_off: false,
+                      },
+                    ]
+                  : [];
+              const several = lines.length > 1 || (row.phones?.length ?? 0) > 1;
               return (
                 <li key={row.person_id}>
                   <span>
@@ -275,29 +295,44 @@ export function CaptureSetupPanel() {
                       <PersonDisplayName name={row.name} />
                     </strong>
                     <small>{named(captureLine(row))}</small>
-                    {row.recording && parts ? (
-                      <small
-                        className={own.recording}
-                        data-state={row.recording.state}
-                      >
-                        {/* One run of words, so the fix flows with them. */}
-                        <span>
-                          {which}
-                          {parts.what}
-                          {parts.fix ? (
-                            <>
-                              {" · "}
-                              <RecordingFixButton
-                                row={row}
-                                recording={row.recording}
-                                label={parts.fix}
-                                mine={row.person_id === me}
-                              />
-                            </>
-                          ) : null}
-                        </span>
-                      </small>
-                    ) : null}
+                    {lines.map((line, at) => {
+                      const parts = recordingParts(line.recording, now);
+                      if (!line.recording || !parts) return null;
+                      return (
+                        <small
+                          key={line.device ?? at}
+                          className={own.recording}
+                          data-state={line.recording.state}
+                        >
+                          {/* One run of words, so the fix flows with them. */}
+                          <span>
+                            {several ? `${line.name}: ` : ""}
+                            {parts.what}
+                            {parts.fix ? (
+                              <>
+                                {" · "}
+                                <RecordingFixButton
+                                  row={row}
+                                  recording={{
+                                    ...line.recording,
+                                    phone: line.name,
+                                  }}
+                                  label={parts.fix}
+                                  // This phone's own fix opens here; another phone's
+                                  // steps are said in a sheet.
+                                  mine={
+                                    row.person_id === me &&
+                                    (lines.length === 1 ||
+                                      (line.device !== null &&
+                                        line.device === here))
+                                  }
+                                />
+                              </>
+                            ) : null}
+                          </span>
+                        </small>
+                      );
+                    })}
                   </span>
                   <span className={own.badge} data-state={row.state}>
                     {BADGE[row.state]}

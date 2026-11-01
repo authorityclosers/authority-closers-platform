@@ -2,7 +2,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { LeadCard, LogThis } from "./lead-sheet";
+import { LeadCard, LogThis, latestReportOf } from "./lead-sheet";
 import type { LeadDetail, LeadEvent } from "./leads-client";
 
 (
@@ -265,4 +265,17 @@ it("hides Call while the details are being edited", async () => {
   expect(call()).toBeUndefined();
   await act(async () => button("Cancel").click());
   expect(call()).toBeTruthy();
+});
+
+it("opens the newest report from View latest report (item 93)", () => {
+  // The story comes newest first (QA robot, 1 Nov 2026: it opened the oldest).
+  expect(
+    latestReportOf([
+      event({ kind: "note", note: "Fictional note." }),
+      event({ kind: "call", submission_id: "newest-fictional" }),
+      event({ kind: "call", submission_id: null }),
+      event({ kind: "call", submission_id: "oldest-fictional" }),
+    ]),
+  ).toBe("newest-fictional");
+  expect(latestReportOf([event({ kind: "note" })])).toBeNull();
 });

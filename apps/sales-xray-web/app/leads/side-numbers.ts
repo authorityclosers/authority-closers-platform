@@ -4,15 +4,19 @@
  * Inbound and Cold numbers for the Leads header's selector (Dipak's handoff,
  * items 05-06 and 44-45). The page waits for them before it draws (persona QA,
  * 31 Oct 2026: the selector arriving seconds late pushed Search aside, a layout
- * jump of 0.07 at 1440), at most SIDES_WAIT_MS; the last answer per person and
- * workspace is kept, so coming back to Leads draws at once.
+ * jump of 0.07 at 1440), at most SIDES_WAIT_MS from when they can be asked
+ * for; the last answer per person and workspace is kept, so coming back to
+ * Leads draws at once.
  */
 
 import { useEffect, useState } from "react";
 
 import { readSides, type SideNumbers } from "./leads-client";
 
-export const SIDES_WAIT_MS = 1500;
+/** From the read's start: a slow network answers in about 2 s (QA robot 844,
+ *  1 Nov 2026: a wait that began before sign-in had settled ran out first, and
+ *  the selector arriving moved the head, a layout shift of 0.19 at 1440). */
+export const SIDES_WAIT_MS = 3000;
 
 const kept = new Map<string, SideNumbers>();
 
@@ -57,9 +61,9 @@ export function useSideNumbers({
   }, [ready, scope, keyed, version]);
   const numbers = got?.key === keyed ? got.value : (kept.get(keyed) ?? null);
   useEffect(() => {
-    if (numbers) return;
+    if (!ready || numbers) return;
     const timer = window.setTimeout(() => setGaveUp(keyed), SIDES_WAIT_MS);
     return () => window.clearTimeout(timer);
-  }, [numbers, keyed]);
+  }, [ready, numbers, keyed]);
   return { numbers, settled: !ready || numbers !== null || gaveUp === keyed };
 }
