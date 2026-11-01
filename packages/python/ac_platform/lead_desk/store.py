@@ -564,6 +564,9 @@ DIAL_ANSWER = timedelta(minutes=30)
 RESULT_UNDO = timedelta(minutes=5)
 # History lines that set where a lead stands: the newest of them is the one an undo may take back.
 STANDING_KINDS = ("result", "stage", "meeting", "captured", "repeat")
+# Sources that are not someone asking: a file, a sheet, a row added by hand, test data. A
+# repeat from any other source is an enquiry (teardown #23).
+NOT_ENQUIRIES = frozenset({"manual", "csv", "sheet", "synthetic"})
 
 
 def missed_call(kind: str, data: Any) -> bool:
@@ -2699,6 +2702,7 @@ class LeadDesk:
             change_id=change_id,
             can_undo=can_undo,
             answer_undone=event.kind == "result" and str(event.id) in answers_undone,
+            to_inbound=event.kind == "repeat" and data.get("to_inbound") is True,
         )
 
     # ----- capture ---------------------------------------------------------------
@@ -3898,6 +3902,16 @@ class LeadDesk:
         # A Lost lead who asks again is back to work, on the same record. Won and Junk
         # stay as they are (Lead OS, 24 Oct 2026): the history says they came again.
         reopened = lead.stage == "lost"
+        # Someone on a Cold list who sends an enquiry (an ad's or a website's form, never a
+        # file, a sheet or a row added by hand) is an Inbound lead now: the same record moves
+        # sides, its stage stays (competitor teardown #23, 1 Nov 2026).
+        to_inbound = (
+            source not in NOT_ENQUIRIES
+            and lead_side(lead.pipeline) == "cold"
+            and (lead.stage not in CLOSED_STAGES or reopened)
+        )
+        if to_inbound:
+            lead.pipeline = "live"
         lead.repeats += 1
         lead.updated_at = self.now
         for name in ("email", "company", "city", "language", "interest"):
@@ -3911,6 +3925,7 @@ class LeadDesk:
             "source": source,
             "source_label": source_label or SOURCE_LABELS.get(source, source),
             "reopened": reopened,
+            "to_inbound": to_inbound,
             "payload": payload,
         }
         if reopened:
@@ -3932,9 +3947,24 @@ class LeadDesk:
         else:
             lead.revision += 1
             self._event(lead, "repeat", repeat, actor=actor, command_id=command_id)
-        if reopened or lead.owner_person_id is None:
-            previous = lead.owner_person_id
+        # Back to its seller while they are still on the team; else the lead rules decide.
+        gone = lead.owner_person_id is not None and not await self._on_team(lead.owner_person_id)
+        if reopened or lead.owner_person_id is None or gone:
+            previous = None if gone else lead.owner_person_id
             await self._allocate(lead, previous_owner=previous, reps=reps)
+
+    async def _on_team(self, person_id: UUID) -> bool:
+        """Whether this person is still an active seller here."""
+        found = await self.db.scalar(
+            select(Membership.person_id).where(
+                Membership.tenant_id == self.tenant_id,
+                Membership.person_id == person_id,
+                Membership.status == "active",
+                Membership.ended_at.is_(None),
+                Membership.role.in_(SELLER_ROLES),
+            )
+        )
+        return found is not None
 
     async def _require_seller(self, person_id: UUID) -> None:
         member = await self.db.scalar(

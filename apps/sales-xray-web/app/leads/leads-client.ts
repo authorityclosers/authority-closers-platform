@@ -163,6 +163,8 @@ export type LeadEvent = {
     | "suggestion";
   /** An after-call answer its seller undid: it counts nowhere (ph2-37). */
   answer_undone?: boolean;
+  /** A repeat enquiry that brought a Cold lead back to Inbound (teardown 23). */
+  to_inbound?: boolean;
   at: string;
   actor_name: string | null;
   /** Who did it, for their photo or character (#31), once the server sends it. */

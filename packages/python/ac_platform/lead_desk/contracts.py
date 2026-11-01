@@ -501,6 +501,8 @@ class LeadEventView(Model):
     # An after-call answer its seller undid (store.undo_result): its line stays in the
     # story, and it counts nowhere else (phone QA ph2-37, 1 Nov 2026).
     answer_undone: bool = False
+    # A repeat enquiry that brought a Cold lead back to Inbound (teardown #23).
+    to_inbound: bool = False
 
 
 class RepOption(Model):

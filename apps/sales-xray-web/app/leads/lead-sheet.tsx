@@ -1366,9 +1366,12 @@ export function eventText(event: LeadEvent): {
     case "captured":
       return { title: `Came in from ${event.source_label ?? "a source"}` };
     case "repeat":
+      // A Cold lead who enquires is back on Inbound (competitor teardown 23).
       return {
-        title: `Asked again from ${event.source_label ?? "a source"}`,
-        detail: "Same phone number: kept on this lead, not a new one.",
+        title: `Enquired again · ${event.source_label ?? "a source"}`,
+        detail: event.to_inbound
+          ? "Same phone number: back on Inbound, on this lead."
+          : "Same phone number: kept on this lead, not a new one.",
       };
     case "assigned":
       return event.owner_name
