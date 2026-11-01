@@ -20,6 +20,7 @@ vi.mock("next/link", () => ({
 import type { HomeSide } from "./my-day-client";
 import { SalesHome } from "./sales-home";
 import { NextCall } from "./seller-home";
+import { takeHandedLead } from "../leads/lead-handoff";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -451,4 +452,52 @@ it("says the next lead rang and wasn't reached, and calls them back", async () =
     expect(host.textContent).toContain("Call Meera back");
     expect(host.textContent).not.toContain("Start cold calling");
   }
+});
+
+// Phone personas ph2-33 (1 Nov 2026): Start cold calling opens a round at the
+// card and dials nothing until Call; a call-back or an Inbound lead dials.
+it("starts a cold round at the card, and dials only a call-back or an Inbound lead", async () => {
+  const plain = row("Kunal Fictional", "42");
+  const rang = row("Meera Fictional", "41", {
+    missed_at: new Date(Date.now() - 60_000).toISOString(),
+    missed_calls: 1,
+  });
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  // The links stay on this page: only what they hand over is checked.
+  host.addEventListener("click", (event) => event.preventDefault());
+  const own = (lead: ReturnType<typeof row>) =>
+    side(
+      lead,
+      { new: 1, open_leads: 0, follow_ups_today: 0 },
+      numbers(0, 0, 0, 0),
+    ) as unknown as HomeSide;
+  const press = async (
+    which: "inbound" | "cold",
+    lead: ReturnType<typeof row>,
+  ) => {
+    await act(async () =>
+      root.render(<NextCall side={which} own={own(lead)} />),
+    );
+    takeHandedLead();
+    const link = [...host.querySelectorAll("a")].find((anchor) =>
+      /Start cold calling|Call \S+ (now|back)/.test(anchor.textContent ?? ""),
+    );
+    await act(async () => link?.click());
+    return takeHandedLead();
+  };
+  expect(await press("cold", plain)).toEqual({
+    leadId: plain.lead_id,
+    call: false,
+    round: true,
+  });
+  expect(await press("inbound", plain)).toEqual({
+    leadId: plain.lead_id,
+    call: true,
+  });
+  expect(await press("cold", rang)).toEqual({
+    leadId: rang.lead_id,
+    call: true,
+  });
 });

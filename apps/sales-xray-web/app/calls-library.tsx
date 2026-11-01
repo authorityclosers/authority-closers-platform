@@ -1095,7 +1095,9 @@ function CallsLibraryContent({
   const insightIds = visibleSubmissions
     .filter(
       (submission) =>
-        submission.id === previewId ||
+        // The call in the drawer, when it has a report: one with none has no
+        // report or call record to read (robot 4bd92bb9, f02eecc0: two 404s).
+        (submission.id === previewId && submission.hasReport) ||
         (needsOwnRead(submission) &&
           (rowsSeen === null || rowsSeen.has(submission.id))),
     )

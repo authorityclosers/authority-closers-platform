@@ -30,7 +30,7 @@ import {
 
 import { displayName } from "../display-name";
 import { AddTaskSheet } from "../leads/add-task-sheet";
-import { handOverLead } from "../leads/lead-handoff";
+import { handOverLead, handOverRound } from "../leads/lead-handoff";
 import {
   ago,
   deskRequest,
@@ -438,7 +438,14 @@ export function NextCall({ side, own }: { side: Side; own: HomeSide | null }) {
             <Link
               className={styles.callNow}
               href={leadsHref(side, { view: "to_call" })}
-              onClick={() => handOverLead(lead.lead_id, true)}
+              // Start cold calling opens a round at this card and dials nothing
+              // until Call (ph2-33: backing out of the dialler left a phantom
+              // call); a call-back or an Inbound lead dials at once.
+              onClick={() =>
+                cold && !missed
+                  ? handOverRound(lead.lead_id)
+                  : handOverLead(lead.lead_id, true)
+              }
             >
               <PhoneCall size={18} aria-hidden="true" />
               {missed
