@@ -127,6 +127,36 @@ def test_limits_default_none_and_going_past_said(postgres_harness: Any, tmp_path
             assert done.json()["owned"] == 1, done.text
             assert any("3 over their limit of 1" in line for line in done.json()["warnings"])
 
+            # A Cold list never counts toward the limit, nor reads over it (ph1-17, 1 Nov
+            # 2026): the limit shares new enquiries; a Cold list is handed over on purpose.
+            cold_sheet = f"Name,Phone,Owner\nFictional Cold Listed,98760 76101,{email}\n".encode()
+            looked = await here.client.post(
+                f"{BASE}/imports/preview",
+                content=cold_sheet,
+                headers={
+                    "Origin": WRITE["Origin"],
+                    "Content-Type": "text/csv",
+                    "X-File-Name": "d.csv",
+                },
+            )
+            assert looked.status_code == 200, looked.text
+            seen = looked.json()
+            cold = await here.client.post(
+                f"{BASE}/imports",
+                json={
+                    "command_id": str(uuid4()),
+                    "file_name": "d.csv",
+                    "mapping": seen["mapping"],
+                    "rows": seen["rows"],
+                    "side": "cold",
+                },
+                headers=WRITE,
+            )
+            assert cold.status_code == 200, cold.text
+            assert cold.json()["owned"] == 1, cold.text
+            assert not cold.json()["warnings"]
+            assert (await reps())[seller]["over_capacity"] == 3
+
             # The seller's own No limit: nothing over.
             rev = (await reps())[seller]["revision"]
             free = await here.client.put(

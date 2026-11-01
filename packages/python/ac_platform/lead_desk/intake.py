@@ -86,6 +86,15 @@ STAGE_HEADERS: Final[tuple[str, ...]] = (
     "current_stage",
     "disposition",
 )
+# A file's own list name for its leads (ph1-18, 1 Nov 2026: "Expo list", "Old database").
+SOURCE_HEADERS: Final[tuple[str, ...]] = (
+    "source",
+    "lead_source",
+    "source_name",
+    "list",
+    "list_name",
+    "lead_list",
+)
 OWNER_HEADERS: Final[tuple[str, ...]] = (
     "owner",
     "lead_owner",
@@ -238,10 +247,14 @@ START_KINDS: Final[frozenset[str]] = frozenset({"new", "follow_up", "interested"
 
 
 def suggest_columns(headers: Iterable[str], taken: Mapping[str, str]) -> dict[str, str]:
-    """The stage and owner columns, when a header says which they are."""
+    """The stage, owner and source columns, when a header says which they are."""
     by_key = {header_key(header): header for header in headers}
     found: dict[str, str] = {}
-    for name, aliases in (("stage", STAGE_HEADERS), ("owner", OWNER_HEADERS)):
+    for name, aliases in (
+        ("stage", STAGE_HEADERS),
+        ("owner", OWNER_HEADERS),
+        ("source", SOURCE_HEADERS),
+    ):
         for alias in aliases:
             header = by_key.get(alias)
             if header is not None and header not in (*taken.values(), *found.values()):
@@ -378,8 +391,9 @@ class Intake:
         handed: dict[UUID, int] = {}
         chosen = f"Chosen by {await self.desk._name(self.desk.viewer.person_id)}"
         start = await self._start(command)
-        # A row may name its lead's stage, and (owners and admins) its owner.
+        # A row may name its lead's stage, its list (Source), and (owners and admins) its owner.
         stage_header = command.mapping.get("stage") or None
+        source_header = command.mapping.get("source") or None
         owner_header = (
             (command.mapping.get("owner") or None) if self.desk.viewer.can_manage else None
         )
@@ -411,6 +425,7 @@ class Intake:
         for index, row in enumerate(command.rows):
             record = {str(k)[:120]: str(v)[:1000] for k, v in row.items() if v not in (None, "")}
             named = clean(row.get(owner_header)) if owner_header else None
+            listed = clean(row.get(source_header)) if source_header else None
             person = people.get(header_key(named)) if named else None
             if named and person is None:
                 missing_owners.setdefault(named[:80])
@@ -420,7 +435,7 @@ class Intake:
                 lead, outcome = await self.desk.ingest(
                     record,
                     source="csv",
-                    source_label=label,
+                    source_label=listed[:120] if listed else label,
                     source_ref=content_ref(record),
                     mapping=mapping,
                     assign=way,
@@ -484,7 +499,10 @@ class Intake:
         }
         return _result(outcomes, leads).model_copy(
             update={
-                "warnings": tuple(await self.desk.over_limit(given)) if given else (),
+                # The limit counts Inbound only: a Cold list never says over it (ph1-17).
+                "warnings": tuple(await self.desk.over_limit(given))
+                if given and command.side != "cold"
+                else (),
                 "staged": staged,
                 "owned": owned,
                 "unmatched_stages": tuple(missing_stages)[:UNMATCHED_SHOWN],

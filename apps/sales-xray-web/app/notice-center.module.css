@@ -85,6 +85,13 @@
   --tone: var(--lx-strength-ink);
 }
 
+/* A new enquiry (competitor teardown 12): its Call now is the pill's one
+   filled button. */
+.card[data-tone="lead"],
+.pill[data-tone="lead"] {
+  --tone: var(--lx-teal);
+}
+
 .icon {
   margin-top: 1px;
   color: var(--tone);
@@ -275,6 +282,22 @@
 .pill .close {
   flex: none;
   margin: 0;
+}
+
+/* The action kept in the pill ("Call now"). */
+.pill .action {
+  flex: none;
+  min-height: 30px;
+  border-color: transparent;
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  white-space: nowrap;
+}
+
+.pill .action:hover {
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  filter: brightness(1.06);
 }
 
 @keyframes fold {

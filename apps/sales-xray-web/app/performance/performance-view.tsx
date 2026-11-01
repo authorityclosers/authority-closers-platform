@@ -23,13 +23,24 @@ import {
   type SideEffort,
 } from "./performance-client";
 import { RevenueSplit } from "./revenue-split";
+import { SellerDay } from "./seller-day";
+import { SellerTable } from "./seller-table";
 import styles from "./performance.module.css";
 import { talkOrDash } from "../dashboard/talk-time";
 
-const PERIODS: { key: string; label: string; days: EffortDays }[] = [
-  { key: "1", label: "Today", days: 1 },
-  { key: "7", label: "7 days", days: 7 },
-  { key: "30", label: "30 days", days: 30 },
+type Period = "1" | "7" | "month";
+
+/** Today, 7 days, or this month so far (competitor teardown #18). */
+const PERIODS: {
+  key: Period;
+  label: string;
+  days: EffortDays;
+  month?: boolean;
+  file: string;
+}[] = [
+  { key: "1", label: "Today", days: 1, file: "today" },
+  { key: "7", label: "7 days", days: 7, file: "7-days" },
+  { key: "month", label: "Month", days: 30, month: true, file: "month" },
 ];
 
 /** "42%", or a dash when there is nothing to divide. */
@@ -89,7 +100,7 @@ export function measures(inbound: SideEffort, cold: SideEffort): Measure[] {
 export function missed(inbound: SideEffort, cold: SideEffort): Measure[] {
   return [
     {
-      label: "Late now (over an hour)",
+      label: "Late now (follow-up time passed)",
       inbound: String(inbound.late),
       cold: "–",
     },
@@ -169,11 +180,19 @@ export function flags(seller: SellerEffort): string[] {
   ].filter(Boolean);
 }
 
-function SellerCard({ seller, own }: { seller: SellerEffort; own: boolean }) {
+function SellerCard({
+  seller,
+  own,
+  open = own,
+}: {
+  seller: SellerEffort;
+  own: boolean;
+  open?: boolean;
+}) {
   const red = flags(seller);
   const name = own ? "Your" : `${seller.name}'s`;
   return (
-    <details className={styles.seller} open={own}>
+    <details className={styles.seller} open={open}>
       <summary>
         <strong>{own ? "You" : seller.name}</strong>
         <span>{sellerLine(seller)}</span>
@@ -248,11 +267,14 @@ type State =
   | { status: "ready"; effort: Effort };
 
 export function PerformanceView() {
-  const [days, setDays] = useState<EffortDays>(1);
+  const [period, setPeriod] = useState<Period>("1");
   const [state, setState] = useState<State>({ status: "loading" });
+  const [opened, setOpened] = useState<SellerEffort | null>(null);
+  const chosen = PERIODS.find((item) => item.key === period) ?? PERIODS[0];
   useEffect(() => {
     const controller = new AbortController();
-    readEffort(days, controller.signal).then(
+    const asked = PERIODS.find((item) => item.key === period) ?? PERIODS[0];
+    readEffort(asked.days, controller.signal, asked.month).then(
       (effort) => setState({ status: "ready", effort }),
       (reason: unknown) => {
         if (reason instanceof DOMException && reason.name === "AbortError")
@@ -261,7 +283,7 @@ export function PerformanceView() {
       },
     );
     return () => controller.abort();
-  }, [days]);
+  }, [period]);
 
   const effort = state.status === "ready" ? state.effort : null;
   const approximate = effort?.sellers.some((seller) =>
@@ -271,11 +293,12 @@ export function PerformanceView() {
     <div className={styles.page}>
       <Segmented
         label="Performance for"
-        value={String(days)}
+        value={period}
         onChange={(key) => {
           // Loading until the new period's read lands.
           setState({ status: "loading" });
-          setDays(PERIODS.find((period) => period.key === key)?.days ?? 1);
+          setOpened(null);
+          setPeriod(key as Period);
         }}
         items={PERIODS.map(({ key, label }) => ({ key, label }))}
       />
@@ -308,22 +331,39 @@ export function PerformanceView() {
               </p>
             </section>
           ) : null}
-          <section className={styles.list} aria-label="Sellers">
-            {effort.team && effort.sellers.length === 0 ? (
+          {effort.team ? (
+            effort.sellers.length ? (
+              <>
+                {/* One row a seller, for owners and managers (teardown #18). */}
+                <SellerTable
+                  sellers={effort.sellers}
+                  file={`performance-${chosen.file}.csv`}
+                  onOpen={setOpened}
+                />
+                <SellerDay
+                  key={opened?.person_id ?? "none"}
+                  seller={opened}
+                  onClose={() => setOpened(null)}
+                >
+                  {opened ? (
+                    <SellerCard seller={opened} own={false} open />
+                  ) : null}
+                </SellerDay>
+              </>
+            ) : (
               <p className={styles.quiet}>No sellers yet.</p>
-            ) : null}
-            {effort.sellers.map((seller) => (
-              <SellerCard
-                key={seller.person_id}
-                seller={seller}
-                own={!effort.team}
-              />
-            ))}
-          </section>
-          {/* Revenue by side and by seller, once a deal is won (7 or 30 days). */}
-          {days === 7 || days === 30 ? (
-            <SectionBoundary name="Revenue" resetKey={days}>
-              <RevenueSplit days={days} />
+            )
+          ) : (
+            <section className={styles.list} aria-label="Sellers">
+              {effort.sellers.map((seller) => (
+                <SellerCard key={seller.person_id} seller={seller} own />
+              ))}
+            </section>
+          )}
+          {/* Revenue by side and by seller, once a deal is won (7 days). */}
+          {period === "7" ? (
+            <SectionBoundary name="Revenue" resetKey={period}>
+              <RevenueSplit days={7} />
             </SectionBoundary>
           ) : null}
           {approximate ? (

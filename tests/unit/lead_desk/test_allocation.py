@@ -115,3 +115,10 @@ def test_load_spreads_across_a_batch() -> None:
             for r in reps
         ]
     assert sorted(counts.values()) == [10, 10, 10]
+
+
+def test_a_cold_lead_is_never_held_back_by_the_limit() -> None:
+    """ph1-17 (1 Nov 2026): the open-lead limit counts Inbound only."""
+    full = rep("Ravi", 25)
+    assert allocate(LeadFacts(), [full]).person_id is None
+    assert allocate(LeadFacts(cold=True), [full]).person_id == full.person_id

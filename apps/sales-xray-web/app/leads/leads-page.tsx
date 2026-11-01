@@ -169,7 +169,7 @@ import {
   type LeadFilters,
 } from "./lead-filters";
 import styles from "./leads.module.css";
-import { OPEN_ADD_EVENT } from "../shell/shell-store";
+import { OPEN_ADD_EVENT, setViewedLeadsSide } from "../shell/shell-store";
 import { useSideNumbers } from "./side-numbers";
 
 type Manage = "team" | "sources" | "stages" | "numbers";
@@ -857,6 +857,11 @@ export function LeadsRoute({
   const bothSides =
     !!numbers && numbers.inbound.leads > 0 && numbers.cold.imported > 0;
   const side: LeadSide = more.side ?? (coldOnly ? "cold" : "inbound");
+  // Add lead opens on the side shown here, from the + sheet too (ph2-21).
+  useEffect(() => {
+    setViewedLeadsSide(side);
+    return () => setViewedLeadsSide("inbound");
+  }, [side]);
   // A work view, not a stage (items 56-62); an old stage address is All Leads.
   const workView: WorkView =
     more.view ??
@@ -1960,6 +1965,7 @@ export function LeadsRoute({
         {filtering ? (
           <FilterSheet
             key={filtering.round}
+            fileSources={desk.file_sources ?? []}
             open={filtering.open}
             onClose={() =>
               setFiltering((current) => current && { ...current, open: false })
@@ -2201,6 +2207,14 @@ export function LeadsRoute({
               }
             }}
             onDone={refresh}
+            onLanded={(landed) =>
+              pickWork({
+                side: landed,
+                view: "to_call",
+                when: null,
+                step: null,
+              })
+            }
           />
         ) : null}
       </MessageSetup.Provider>

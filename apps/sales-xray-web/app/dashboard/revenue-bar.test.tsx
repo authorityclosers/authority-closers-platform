@@ -3,7 +3,14 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { RevenueBar, takesLine, toneOf } from "./revenue-bar";
+import {
+  chainLine,
+  daysLeft,
+  goLine,
+  paceLine,
+  RevenueBar,
+  toneOf,
+} from "./revenue-bar";
 import type { Revenue } from "./revenue-client";
 import { inr, REVENUE_CHANGED } from "./revenue-client";
 
@@ -77,16 +84,23 @@ it("says the month in lakhs, where the month is, and the calls a day it takes", 
   await settle();
   expect(asked[0]).toContain("/revenue?scope=mine");
   const text = container.textContent ?? "";
-  expect(text).toContain("₹2 L");
-  expect(text).toContain("of ₹5 L · October");
+  // What is left and the days to do it (competitor teardown #8, 1 Nov 2026).
+  expect(text).toContain("₹3 L to go · 17 days");
+  expect(text).toContain("₹2 L of ₹5 L · October");
   expect(text).toContain("40%");
-  expect(text).toContain("About 18 calls a day to get there");
-  expect(text).toContain("estimate");
   expect(text).toContain("1 won without an amount");
   const tick = container.querySelector<HTMLElement>('[aria-hidden="true"]');
   expect(tick?.style.left).toBe("60%");
   // Behind the month: 40% won with 60% of it gone.
-  expect(container.querySelector("section")?.dataset.tone).toBe("behind");
+  expect(
+    container.querySelector<HTMLElement>("[data-tone]")?.dataset.tone,
+  ).toBe("behind");
+  // A tap shows what it takes, at the team's own rates (typical ones here).
+  await act(async () => container.querySelector("button")?.click());
+  expect(document.body.textContent).toContain("At typical rates");
+  expect(document.body.textContent).toContain(
+    "≈ 3 wins → 9 meetings → 30 interested → 300 calls · 18 a day",
+  );
 });
 
 it("shows nothing without a target, and never a box while it loads", async () => {
@@ -143,7 +157,7 @@ it("opens each seller's month for the team, by name and never ranked", async () 
   await act(async () => root.render(<RevenueBar scope="team" />));
   await settle();
   const bar = container.querySelector<HTMLButtonElement>("button");
-  expect(bar?.textContent).toContain("Each seller");
+  expect(bar?.textContent).toContain("What it takes");
   await act(async () => bar?.click());
   const names = Array.from(document.querySelectorAll("li span")).map(
     (node) => node.textContent,
@@ -159,18 +173,33 @@ it("reads the tone and the line under the bar", () => {
   expect(toneOf(500000, 500000, 0.4)).toBe("done");
   expect(toneOf(250000, 500000, 0.5)).toBe("on");
   expect(toneOf(100000, 500000, 0.5)).toBe("behind");
-  expect(takesLine({ ...MINE, won: 600000 })).toBe("Target reached");
-  expect(takesLine({ ...MINE, needs: null })).toBeNull();
+  expect(goLine({ ...MINE, won: 600000 })).toBe("Target reached");
+  expect(goLine(MINE)).toBe("₹3 L to go · 17 days");
   expect(
-    takesLine({
-      ...MINE,
-      needs: { ...MINE.needs!, calls_per_day: 1 },
-    }),
-  ).toBe("About 1 call a day to get there");
+    goLine({ ...MINE, needs: { ...MINE.needs!, working_days_left: 1 } }),
+  ).toBe("₹3 L to go · 1 day");
+  expect(chainLine({ ...MINE.needs!, wins: 1 })).toBe(
+    "≈ 1 win → 9 meetings → 30 interested → 300 calls · 18 a day",
+  );
+  // Without the team's working days: the month's days left, today included.
+  const october20 = new Date("2026-10-20T06:00:00Z");
+  expect(daysLeft("2026-10-01", october20)).toBe(12);
+  expect(daysLeft("2026-09-01", october20)).toBe(0);
+  expect(daysLeft("2026-11-01", october20)).toBe(30);
   expect([inr(45000), inr(500000), inr(1250000), inr(12000000)]).toEqual([
     "₹45,000",
     "₹5 L",
     "₹12.5 L",
     "₹1.2 Cr",
   ]);
+});
+
+// Competitor teardown #27 (1 Nov 2026): a Monday line with the week's pace.
+it("says the week's pace on a Monday, and nothing on other days", () => {
+  const monday = new Date("2026-11-09T05:00:00Z"); // Monday 9 Nov, India time
+  const month = { ...MINE, month: "2026-11-01", won: 110000, month_gone: 0.3 };
+  expect(paceLine(month, monday)).toBe("Week 2: ₹1.1 L of ₹1.5 L pace");
+  expect(paceLine(month, new Date("2026-11-10T05:00:00Z"))).toBeNull();
+  expect(paceLine({ ...month, won: 500000 }, monday)).toBeNull();
+  expect(paceLine({ ...month, target: null }, monday)).toBeNull();
 });

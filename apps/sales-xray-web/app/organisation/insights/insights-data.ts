@@ -146,6 +146,8 @@ export type Insights = {
   pending: number;
   coverage: {
     calls: boolean;
+    /** The number of sellers behind the calls is known. */
+    people: boolean;
     nextStep: boolean;
     won: boolean;
     previousWon: boolean;
@@ -273,6 +275,7 @@ export function parseInsights(body: unknown): Insights {
     pending: num(raw.pending),
     coverage: {
       calls: maybe(record(raw.totals).calls) !== null,
+      people: maybe(record(raw.totals).people) !== null,
       previousWon: maybe(record(raw.previous).won) !== null,
       pending: maybe(raw.pending) !== null,
       nextStep: maybe(record(raw.totals).next_step) !== null,
@@ -422,6 +425,44 @@ export const activeFilterCount = (filters: Filters) =>
   [filters.person, filters.team, filters.outcome, filters.language].filter(
     Boolean,
   ).length;
+
+/* ---------- Evidence ---------- */
+
+/**
+ * No insight from fewer calls or sellers than these (competitor teardown 14,
+ * 1 Nov 2026; Dipak's walk, ph1-22: "Wins held steady" and 100% from one
+ * call). One seller's calls say nothing about a team.
+ */
+export const MIN_CALLS = 5;
+export const MIN_SELLERS = 2;
+
+/**
+ * What an insight still needs before it may say anything ("Needs 3 more
+ * calls"), or null when it has enough. Looking at one person on purpose (the
+ * person filter) is about that person, so the sellers' floor is off then.
+ * Counts the page doesn't know never hold it back: they show as dashes.
+ */
+export function stillNeeds(data: Insights, onePerson = false): string | null {
+  if (!data.coverage.calls) return null;
+  const calls = MIN_CALLS - data.totals.calls;
+  if (calls > 0) return `Needs ${calls} more ${calls === 1 ? "call" : "calls"}`;
+  const sellers =
+    onePerson || !data.coverage.people ? 0 : MIN_SELLERS - data.totals.people;
+  if (sellers > 0)
+    return `Needs calls from ${sellers} more ${sellers === 1 ? "seller" : "sellers"}`;
+  return null;
+}
+
+/** "Based on 12 calls · 3 sellers"; null when the call count isn't known. */
+export function basedOn(data: Insights): string | null {
+  if (!data.coverage.calls) return null;
+  const { calls, people } = data.totals;
+  return `Based on ${count(calls)} ${calls === 1 ? "call" : "calls"}${
+    data.coverage.people
+      ? ` · ${count(people)} ${people === 1 ? "seller" : "sellers"}`
+      : ""
+  }`;
+}
 
 /* ---------- Formatting ---------- */
 

@@ -340,3 +340,31 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+/* Team: recording on a seller's phone, a dot and one line (competitor teardown, item 7). */
+.team small.recording {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.recording::before {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sx-muted);
+  content: "";
+}
+
+.recording[data-state="ok"]::before {
+  background: var(--sx-good);
+}
+
+.recording[data-state="late"]::before {
+  background: var(--lx-warning);
+}
+
+.recording[data-state="off"]::before {
+  background: var(--sx-bad);
+}

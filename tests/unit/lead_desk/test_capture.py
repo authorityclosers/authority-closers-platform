@@ -35,6 +35,9 @@ from ac_platform.lead_desk.capture import (
         ("", None),
         (None, None),
         ("0000000000", None),
+        # A 10-digit national number is never read as "00" + an international one (ph2-22).
+        ("0000019999", "+910000019999"),
+        ("00000 19999", "+910000019999"),
     ],
 )
 def test_phones_normalise_so_repeats_match(raw: object, phone: str | None) -> None:

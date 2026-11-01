@@ -10,13 +10,13 @@
     "review": "Orchestrator 28 Oct 2026 (v1.3.0 cut): producer run 40724365608 (workbench-checks.yml, push, success, wb-ci --full) on request 5a168c24, whose only parent is the v1.3.0 hold 77b745d3b and which changes only .wb-ci/request.json. Same identity 4db81fe7 (no lockfile change); artifact digest from the API. Replaces the 2e9f74de pin, which passed its 36-hour reuse window at 15:51Z and left e2e unable to admit a new bundle."
   },
   {
-    "artifact_id": 12975829203,
-    "digest": "233af02ab6fdcf7778817c8e17273f402d18dadd595cb1f0264a7e6c51f2102b",
+    "artifact_id": 13064480252,
+    "digest": "ef8f8b9e6c42156dc000cc831c0ecfe17cf35e27172c7811c87e630fa0d79f56",
     "identity": "8fed5c6dc9d51ab364d8a09a7d5f66c7d58d9ba10f20f36f5113d2bee337c733",
     "repository": "authorityclosers/authority-closers-platform",
-    "run_id": 41054854603,
-    "source_sha": "ce3b3f54ac7ff9e729e0f8ce989ce9650c4aff5a",
-    "reviewed_source_sha": "f7fce521d7b4e97d5cd13e5c9b1f3496c2e8d715",
-    "review": "Orchestrator 30 Oct 2026 (v1.16.0 re-cut): producer run 41054854603 (workbench-checks.yml, push, success, targeted py job) on request ce3b3f54, whose only parent is workbench f7fce521d and which changes only .wb-ci/request.json. Same identity 8fed5c6d; artifact digest from the API. Replaces the 12860662070 pin, which passed its 36-hour reuse window at 11:41Z and was deleted; the unpinnable 12973943610 from release PR run 41050026333 was deleted too."
+    "run_id": 41258128399,
+    "source_sha": "7732c0464d07cf58f60322c868c7d75055890a6a",
+    "reviewed_source_sha": "32828411623fcf40e34f9de69d374c1a662579b8",
+    "review": "Orchestrator 1 Nov 2026 (after the v1.23.0 release): producer run 41258128399 (workbench-checks.yml, push, success) on request 7732c046, whose only parent is the Home session's tested tree 328284116 (workbench baf34ac6f plus Home and revenue web/py files; no lockfile, package, workflow or scripts/ci change, checked by diff) and which changes only .wb-ci/request.json. Same identity 8fed5c6d; artifact digest from the API. Replaces the 12975829203 pin, which passed its 36-hour reuse window at about 00:40Z and was deleted with the unpinnable 13063612794 (failed run 41256705383 on a feature tree)."
   }
 ]

@@ -96,7 +96,9 @@ it("server missing and report receipts outrank a stale native queue", async () =
     ],
   });
   await render(<AutoCaptureState eventId="event" />);
-  expect(host.textContent).toContain("No recording after 30 minutes");
+  // Competitor teardown, item 7: the row says where the recording is, then its fix.
+  expect(host.textContent).toContain("Recording: not found");
+  expect(host.textContent).toContain("Fix recording");
 });
 it("keeps an older app's native state when server evidence is unavailable", async () => {
   vi.mocked(autoCaptureStates).mockResolvedValue([
@@ -452,4 +454,37 @@ it("retains measured recording time and ignores invalid timestamps", () => {
   expect(parseRecorder({ ...base, newestMs: 12345 })?.newestMs).toBe(12345);
   expect(parseRecorder({ ...base, newestMs: -1 })?.newestMs).toBeUndefined();
   expect(parseRecorder(base)?.newestMs).toBeUndefined();
+});
+it("says a call's recording arrived, is waiting or wasn't found", async () => {
+  // Competitor teardown, item 7, 1 Nov 2026.
+  expect(trackFor(null, serverCall({ state: "waiting" }))?.recording).toBe(
+    "waiting",
+  );
+  expect(trackFor(null, serverCall({ state: "missing" }))?.recording).toBe(
+    "not found",
+  );
+  expect(trackFor(null, serverCall({ state: "report_ready" }))?.recording).toBe(
+    "arrived",
+  );
+  await render(
+    <CallTrack
+      track={{ done: 0, stuck: false, label: "Waiting", recording: "waiting" }}
+    />,
+  );
+  expect(host.querySelector("small")?.textContent).toBe("Recording: waiting");
+  await act(async () => root?.unmount());
+  host.remove();
+  await render(
+    <CallTrack
+      track={{
+        done: 6,
+        stuck: false,
+        label: "Report ready",
+        recording: "arrived",
+      }}
+    />,
+  );
+  expect(host.querySelector("small")?.textContent).toBe(
+    "Recording: arrived · Report ready",
+  );
 });

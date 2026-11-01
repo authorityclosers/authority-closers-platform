@@ -382,6 +382,15 @@ export async function askCallAccess(): Promise<boolean> {
   return raw.callAccess === true;
 }
 
+/** Opens the phone's own dialer, empty: the setup's test call, to anyone. */
+export function openDialer(): void {
+  try {
+    window.location.href = "tel:";
+  } catch {
+    // No dialer here: the setup says to open the Phone app.
+  }
+}
+
 /** Places the call from the app; it reports back when the call ends. */
 export async function startPhoneCall(lead: {
   leadId: string;
@@ -752,6 +761,8 @@ export type RecorderProfile = {
   switchTo: string | null;
   /** Newest readable recording file timestamp; unknown on older apps. */
   newestMs?: number | null;
+  /** That recording's length, for "Test recording found ✓ 0:10" (newer apps). */
+  newestDurationMs?: number | null;
 };
 
 export function parseRecorder(raw: unknown): RecorderProfile | null {
@@ -791,6 +802,11 @@ export function parseRecorder(raw: unknown): RecorderProfile | null {
     Number.isFinite(value.newestMs) &&
     value.newestMs > 0
       ? { newestMs: value.newestMs }
+      : {}),
+    ...(typeof value.newestDurationMs === "number" &&
+    Number.isFinite(value.newestDurationMs) &&
+    value.newestDurationMs > 0
+      ? { newestDurationMs: value.newestDurationMs }
       : {}),
   };
 }

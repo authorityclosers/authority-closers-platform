@@ -412,3 +412,100 @@ button.bar:focus-visible {
   font-size: var(--sx-text-sm);
   font-variant-numeric: tabular-nums;
 }
+
+/* What it takes, at the team's own rates (competitor teardown #8). */
+.takesBox {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--sx-accent) 8%, transparent);
+}
+
+.takesWhy {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.takesChain {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+/* Targets by month: a row per seller, a column per month. */
+.grid {
+  display: grid;
+  gap: 8px;
+}
+
+.gridRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(2, minmax(76px, 104px));
+  align-items: center;
+  gap: 8px;
+}
+
+.gridRow .input {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.gridName {
+  overflow: hidden;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gridMonth {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  text-align: center;
+}
+
+.gridActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gridAction {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid color-mix(in oklab, var(--sx-ink) 12%, transparent);
+  border-radius: var(--sx-radius-pill);
+  background: none;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.gridAction:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.mismatch {
+  margin: 0;
+  color: color-mix(in oklab, var(--sx-warn) 70%, var(--sx-ink));
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+/* Monday's pace line under the bar (competitor teardown #27). */
+.pace {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}

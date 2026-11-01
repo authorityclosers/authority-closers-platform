@@ -11,6 +11,7 @@ import {
   sellerLine,
 } from "./performance-view";
 import type { Effort, SellerEffort, SideEffort } from "./performance-client";
+import { exportCsv, sortSellers } from "./seller-table";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -147,7 +148,7 @@ it("measures Inbound and Cold apart, as Dipak's table does", () => {
   // First-call speed is Inbound's: a Cold list's import time says nothing.
   expect(work["First call in"]).toEqual(["7 min", "Not measured"]);
   const gone = table(missed(inbound, cold));
-  expect(gone["Late now (over an hour)"]).toEqual(["2", "–"]);
+  expect(gone["Late now (follow-up time passed)"]).toEqual(["2", "–"]);
   expect(gone["Missed calls"]).toEqual(["3", "0"]);
   expect(gone["Not called back"]).toEqual(["1", "0"]);
   expect(gone["Not called yet"]).toEqual(["3", "900"]);
@@ -191,8 +192,17 @@ it("shows an owner the team and each seller, flags first", async () => {
     "The team's missed work, Inbound and Cold",
   ]);
   expect(team?.textContent).toContain("2 calls without a recording today");
-  const card = host.querySelector("details");
-  expect(card?.open).toBe(false);
+  // One row a seller (competitor teardown #18); a tap opens their card and day.
+  const row = host.querySelector('table[aria-label="Each seller"] tbody tr');
+  expect(row?.querySelector("th")?.textContent).toBe("Asha Fictional");
+  await act(async () =>
+    row?.querySelector<HTMLButtonElement>("th button")?.click(),
+  );
+  await act(async () => Promise.resolve());
+  const card = document.querySelector<HTMLDetailsElement>(
+    "dialog[open] details",
+  );
+  expect(card?.open).toBe(true);
   const summary = card?.querySelector("summary");
   expect(summary?.querySelector("strong")?.textContent).toBe("Asha Fictional");
   // The red flags show before the card opens.
@@ -235,4 +245,66 @@ it("shows a seller only their own, and reads 7 days on request", async () => {
   expect(asked).toContain("/v1/lead-desk/performance/sellers?days=7");
   // The revenue split reads its own numbers for the same 7 days.
   expect(asked).toContain("/v1/lead-desk/revenue/breakdown?days=7");
+});
+
+// Competitor teardown #18 (1 Nov 2026): a column's head sorts the sellers,
+// Export takes them as sorted, and Month reads this month so far.
+it("sorts the sellers by a column, exports them, and reads the month", async () => {
+  const two: Effort = {
+    ...effort(true),
+    sellers: [
+      seller({
+        person_id: "00000000-0000-4000-8000-0000000000a1",
+        name: "Asha Fictional",
+        follow_ups_done: 4,
+        won_amount: 250000,
+      }),
+      seller({
+        person_id: "00000000-0000-4000-8000-0000000000b2",
+        name: "Ravi Fictional",
+        inbound: { ...inbound, attempted: 90 },
+        follow_ups_done: 9,
+        won_amount: 0,
+      }),
+    ],
+  };
+  answer(two);
+  await mount();
+  const names = () =>
+    Array.from(
+      host.querySelectorAll('table[aria-label="Each seller"] tbody th'),
+      (cell) => cell.textContent,
+    );
+  const head = (label: string) =>
+    Array.from(
+      host.querySelectorAll<HTMLButtonElement>(
+        'table[aria-label="Each seller"] thead button',
+      ),
+    ).find((button) => button.textContent?.startsWith(label));
+  // By name until a column is picked: never a ranking by default.
+  expect(names()).toEqual(["Asha Fictional", "Ravi Fictional"]);
+  await act(async () => head("Tried")?.click());
+  expect(names()).toEqual(["Ravi Fictional", "Asha Fictional"]);
+  await act(async () => head("Wins ₹")?.click());
+  expect(names()).toEqual(["Asha Fictional", "Ravi Fictional"]);
+  expect(
+    host.querySelector(
+      'table[aria-label="Each seller"] tbody tr td:nth-of-type(5)',
+    )?.textContent,
+  ).toBe("₹2.5 L");
+  const csv = exportCsv(sortSellers(two.sellers, "won", true)).split("\n");
+  expect(csv[0]).toBe(
+    "Seller,Tried,Connected,Talk time (min),Follow-ups done,Wins (₹),Longest break (min),Calls without a recording today",
+  );
+  expect(csv[1].startsWith("Asha Fictional,100,28,110,4,250000,80,2")).toBe(
+    true,
+  );
+  const month = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent === "Month",
+  );
+  await act(async () => month?.click());
+  await act(async () => Promise.resolve());
+  expect(asked).toContain(
+    "/v1/lead-desk/performance/sellers?days=30&month=true",
+  );
 });

@@ -31,7 +31,7 @@ IST: Final = ZoneInfo("Asia/Kolkata")
 
 ReminderKind = Literal["before", "due", "overdue"]
 TaskStatus = Literal["open", "done", "cancelled"]
-Snooze = Literal["15m", "1h", "evening", "tomorrow"]
+Snooze = Literal["15m", "1h", "evening", "tomorrow", "week"]
 
 # A reminder before the due time, by kind (design, 2.4). A meeting in person needs the
 # drive; an online one, a few minutes.
@@ -148,9 +148,14 @@ def snoozed(
     hours: work_hours.WorkHours | None = None,
 ) -> datetime:
     """The new due of a snooze: 15 minutes, an hour, this evening (18:00, or tomorrow's
-    start when the evening has passed) or tomorrow's start of work (10:00 without hours).
-    Always after ``now``."""
+    start when the evening has passed), tomorrow's start of work, or the same day next week
+    at the start of work (10:00 without hours). Always after ``now``."""
     local = now.astimezone(IST)
+    start = hours.start if hours is not None else time(10, 0)
+    if choice == "week":
+        # Home's swipe-left offers the after-call's times (competitor teardown #1).
+        moment = datetime.combine(local.date() + timedelta(days=7), start, tzinfo=IST)
+        return work_hours.next_start(hours, moment) if hours is not None else moment
     if choice == "15m":
         return now + timedelta(minutes=15)
     if choice == "1h":
@@ -160,7 +165,6 @@ def snoozed(
         if evening > local + timedelta(minutes=15):
             return evening
     tomorrow = local.date() + timedelta(days=1)
-    start = hours.start if hours is not None else time(10, 0)
     moment = datetime.combine(tomorrow, start, tzinfo=IST)
     if hours is not None:
         moment = work_hours.next_start(hours, moment)

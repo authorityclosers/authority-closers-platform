@@ -193,6 +193,7 @@ def test_a_seller_agrees_finishes_on_a_phone_and_team_sees_it(
                     "phone",
                     "missing_today",
                     "call_log_off",
+                    "recording",
                 }
                 # No lead calls today: nothing without a recording, each or in all.
                 assert team.json()["missing_today"] == 0
@@ -244,6 +245,35 @@ def test_a_seller_agrees_finishes_on_a_phone_and_team_sees_it(
                     else:
                         assert health.words == "1 phone logging calls."
                         assert line.fix is None
+
+                # Teardown #7: the seller's phone says when it last found a call recording
+                # (never the file or a number), and Team shows the line and its fix.
+                assert row["recording"] == {"state": "late", "last_at": None, "fix": "test"}
+                as_(seller_token)
+                last = datetime.now(UTC) - timedelta(minutes=12)
+                told = await client.post(
+                    SETUP + "/recording-health",
+                    json={"device": PHONE["device"], "newest_recording_at": last.isoformat()},
+                    headers=WRITE,
+                )
+                assert told.status_code == 200, told.text
+                assert (
+                    await client.post(
+                        SETUP + "/recording-health",
+                        json={"device": PHONE["device"], "file": "call.mp3"},
+                        headers=WRITE,
+                    )
+                ).status_code == 422
+                as_(setup.token)
+                team = await client.get(SETUP + "/team")
+                row = next(
+                    row
+                    for row in team.json()["people"]
+                    if row["person_id"] == str(seller.person_id)
+                )
+                assert row["recording"]["state"] == "ok"
+                assert row["recording"]["fix"] is None
+                assert row["recording"]["last_at"].startswith(last.isoformat()[:16])
                 as_(seller_token)
                 mine = await client.get(SETUP + "/missing")
                 assert mine.status_code == 200, mine.text

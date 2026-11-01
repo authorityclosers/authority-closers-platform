@@ -891,8 +891,8 @@ function ListsPanel({
       <fieldset className={styles.form} disabled={readOnly}>
         <LimitField
           id="limit-new-sellers"
-          label="Open-lead limit for new sellers"
-          hint="Sellers without rules of their own use this."
+          label="Open Inbound leads per seller"
+          hint="Sellers without rules of their own use this. Cold leads don't count."
           draft={draft}
           onChange={setDraft}
         />

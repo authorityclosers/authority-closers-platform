@@ -162,3 +162,27 @@ def test_a_phone_is_named_by_its_finished_setup_else_its_maker() -> None:
     assert capture_setup.phone_label("install-a", "xiaomi", found) == "Redmi 13 5G"
     assert capture_setup.phone_label("install-b", "xiaomi", found) == "Xiaomi phone"
     assert capture_setup.phone_label(None, None, None) == "phone"
+
+
+def test_team_says_whether_a_phone_records_and_the_fix() -> None:
+    # Competitor teardown #7, 1 Nov 2026: a dot and a line per seller on Team.
+    now = datetime(2026, 11, 1, 9, 0, tzinfo=UTC)
+    ok = {"checks": {"recordings": True, "recorder": True}}
+    recent = {"newest_at": (now - timedelta(minutes=12)).isoformat()}
+    old = {"newest_at": (now - timedelta(days=5)).isoformat()}
+    assert capture_setup.recording_state(ok, recent, now) == {
+        "state": "ok",
+        "last_at": (now - timedelta(minutes=12)).isoformat(),
+        "fix": None,
+    }
+    assert capture_setup.recording_state(ok, old, now)["state"] == "late"  # type: ignore[index]
+    assert capture_setup.recording_state(ok, {"newest_at": None}, now) == {
+        "state": "late",
+        "last_at": None,
+        "fix": "test",
+    }
+    no_folder = {"checks": {"recordings": False, "recorder": True}}
+    assert capture_setup.recording_state(no_folder, recent, now)["fix"] == "folder"  # type: ignore[index]
+    off = {"checks": {"recordings": True, "recorder": False}}
+    assert capture_setup.recording_state(off, recent, now)["fix"] == "recorder"  # type: ignore[index]
+    assert capture_setup.recording_state(None, None, now) is None

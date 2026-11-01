@@ -389,3 +389,31 @@
     text-decoration: underline;
   }
 }
+
+/* "Based on 12 calls · 3 sellers": an insight's last line, opening its calls
+   (competitor teardown 14). A 44 px tap; text in the accent at reading contrast. */
+.evidence {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  justify-self: start;
+  align-self: flex-start;
+  min-height: 44px;
+  margin: 2px 0 -8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: color-mix(in oklab, var(--sx-accent) 80%, var(--lx-ink));
+  font: 600 12px var(--lx-font-ui);
+  cursor: pointer;
+}
+.evidence:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .evidence:hover {
+    text-decoration: underline;
+  }
+}

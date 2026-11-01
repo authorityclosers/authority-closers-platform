@@ -6,7 +6,6 @@ import {
   Check,
   CircleCheck,
   CircleHelp,
-  FileText,
   Info,
   MessagesSquare,
   Pencil,
@@ -29,6 +28,7 @@ import { useCallOutcome } from "../report-outcome-context";
 import type { Line } from "../report-story-model";
 import { PlayChip, type Select } from "../report-visuals/visuals";
 import { Picker } from "../ui/picker";
+import { AiNotes, type NoteSuggestion, type TalkLine } from "./ai-notes";
 import { brain4Highlights, type Brain4View } from "./brain4";
 import { MoneyBag, TargetArrow } from "./icons";
 import {
@@ -549,11 +549,20 @@ function DealOutcomeBar({ example }: { example: OutcomeKind | null }) {
 export function OverviewScore({
   view,
   onSelect,
+  talk = null,
+  callKey = null,
+  onApply,
 }: {
   view: XrayView;
   onSelect?: Select;
+  /** The call's talk, for the AI notes' numbers line. */
+  talk?: TalkLine | null;
+  /** The call, for the AI notes' feedback. */
+  callKey?: string | null;
+  /** Where the page knows the lead: applies a suggested update. */
+  onApply?: (suggestion: NoteSuggestion) => Promise<void>;
 }) {
-  const { summary, score, stats } = view.overview;
+  const { score, stats } = view.overview;
   const scoring = scoringNote(view.scoring);
   const band = score ? scoreBand(score.value) : null;
   // A report settings version may hide scores; version 1 shows them.
@@ -589,21 +598,6 @@ export function OverviewScore({
         <div>
           <span className={styles.statLabel}>Recorded outcome</span>
           <strong>{resultLabel}</strong>
-          {view.outcome.nextSteps[0] ? (
-            <p className={styles.body}>
-              <span className={styles.statLabel}>Next step heard:</span>{" "}
-              <LineWithClip
-                line={{
-                  text: view.outcome.nextSteps[0].text,
-                  sources: view.outcome.nextSteps[0].source
-                    ? [view.outcome.nextSteps[0].source]
-                    : [],
-                }}
-                title="Next step heard"
-                onSelect={onSelect}
-              />
-            </p>
-          ) : null}
           {state.status === "ready" && state.record.can_edit && !recorded ? (
             <button
               type="button"
@@ -621,28 +615,15 @@ export function OverviewScore({
           ) : null}
         </div>
       </section>
-      <section
-        className={`${styles.card} ${styles.summary}`}
-        aria-label="Call summary"
-      >
-        <span className={styles.square}>
-          <FileText />
-        </span>
-        <div className={styles.summaryText}>
-          <h3 className={styles.cardTitle}>Call Summary</h3>
-          <p className={styles.body}>
-            {summary ? (
-              <LineWithClip
-                line={summary}
-                title="Call summary"
-                onSelect={onSelect}
-              />
-            ) : (
-              <span className={styles.muted}>This report has no summary.</span>
-            )}
-          </p>
-        </div>
-      </section>
+      {/* The summary card is the AI notes: Recap, Next step and Copy, each
+          rated, with the talk line (competitor teardown 24, 1 Nov 2026). */}
+      <AiNotes
+        view={view}
+        talk={talk}
+        callKey={callKey}
+        onSelect={onSelect}
+        onApply={onApply}
+      />
 
       <section
         className={`${styles.card} ${styles.scoreCard}`}

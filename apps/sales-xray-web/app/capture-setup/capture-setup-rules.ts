@@ -59,6 +59,10 @@ export type PhoneFacts = Readonly<{
   wifiOnly: boolean;
   /** Newest readable recording, when the phone says. */
   newestMs: number | null;
+  /** That recording's length, when the phone says (newer apps). */
+  newestDurationMs: number | null;
+  /** A call placed from the app found its recording (the phone's own check). */
+  testCall: boolean;
 }>;
 
 export function phoneFacts(
@@ -88,7 +92,38 @@ export function phoneFacts(
     uploadsOn: capture?.on === true,
     wifiOnly: capture?.wifiOnly !== false,
     newestMs: recorder?.newestMs ?? null,
+    newestDurationMs: recorder?.newestDurationMs ?? null,
+    testCall: setup.checks.testCall === true,
   };
+}
+
+const TEST_CALL_KEY = (device: string) => `sx-test-call:${device}`;
+
+/** The setup's own test call found its recording on this install. */
+export function markTestCall(device: string) {
+  try {
+    window.localStorage.setItem(
+      TEST_CALL_KEY(device),
+      new Date().toISOString(),
+    );
+  } catch {
+    // Private storage off: the next run asks for the test again.
+  }
+}
+
+/**
+ * Recording works on this phone: a call placed from the app found its
+ * recording, the setup's test call did, or the chosen folder already holds a
+ * call recording. Until then the setup ends its recording list with a
+ * 10-second test call (competitor teardown #6, 1 Nov 2026).
+ */
+export function recordingProven(phone: PhoneFacts): boolean {
+  if (phone.testCall || phone.newestMs !== null) return true;
+  try {
+    return window.localStorage.getItem(TEST_CALL_KEY(phone.device)) !== null;
+  } catch {
+    return false;
+  }
 }
 
 const GATED = new Set([
@@ -205,7 +240,12 @@ export function stepsFor(
     steps.push("done");
     return steps;
   }
-  if (!phone.folderPicked || phone.recorderOff || phone.privateDialler)
+  if (
+    !phone.folderPicked ||
+    phone.recorderOff ||
+    phone.privateDialler ||
+    !recordingProven(phone)
+  )
     steps.push("recordings");
   if (!phone.battery || (phone.autostartNeeded && !phone.autostart))
     steps.push("background");

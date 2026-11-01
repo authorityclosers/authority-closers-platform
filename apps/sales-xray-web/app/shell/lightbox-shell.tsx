@@ -2225,6 +2225,7 @@ function LightboxShellFrame({
           open={addOpen}
           onClose={() => setAddOpen(false)}
           leadsHere={inOrganisation}
+          canImport={orgAdmin}
           callHref={newAnalysisHref}
           onAddLead={() => {
             setAddOpen(false);

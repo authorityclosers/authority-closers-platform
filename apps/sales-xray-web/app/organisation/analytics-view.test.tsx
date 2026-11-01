@@ -184,3 +184,167 @@ it("offers a corner-card retry after failure, then renders the complete summary"
   expect(host.textContent).not.toContain("Some older days haven't loaded yet");
   expect(host.textContent).not.toContain("Load older activity");
 });
+
+/** The server's summary for the fixture, as the endpoint sends it. */
+function summaryBody() {
+  const data = activitySummary(analyticsFixture);
+  const iso = (day: number) =>
+    new Date(day * 86400000).toISOString().slice(0, 10);
+  return {
+    ...data,
+    schema: "lead-desk/1",
+    days: 30,
+    now: analyticsFixture.now,
+    start: iso(data.start),
+    prior: iso(data.prior),
+    today: iso(data.today),
+    current: { ...data.current, work: data.currentWork },
+    previous: { ...data.previous, work: 0 },
+    people: data.people.map((p) => ({
+      ...p,
+      current: { ...p.current, work: p.work },
+      previous: { ...p.previous, work: 0 },
+      daily: p.daily.map((d, i) => ({ ...d, day: iso(data.start + i) })),
+    })),
+  };
+}
+
+// Competitor teardown 15 (1 Nov 2026): Today, 7 days or 30 days, kept in
+// the address; every number opens the list behind it; owners export.
+it("reads the period picked, and keeps it in the address", async () => {
+  const thirty = summaryBody();
+  const week = {
+    ...thirty,
+    days: 7,
+    start: thirty.today,
+    prior: thirty.today,
+    people: thirty.people.map((p) => ({ ...p, daily: [] })),
+  };
+  const fetch = vi.fn((input: string) =>
+    Promise.resolve(
+      new Response(JSON.stringify(input.includes("days=7") ? week : thirty)),
+    ),
+  );
+  vi.stubGlobal("fetch", fetch);
+  await act(async () => root.render(<AnalyticsView team />));
+  expect(fetch.mock.calls[0][0]).toContain("days=30");
+  const seven = [
+    ...host.querySelectorAll<HTMLButtonElement>('[aria-label="Period"] button'),
+  ].find((b) => b.textContent === "7 days")!;
+  await act(async () => seven.click());
+  expect(fetch.mock.calls.at(-1)![0]).toContain("days=7");
+  expect(new URL(window.location.href).searchParams.get("days")).toBe("7");
+  // One day draws no daily lines; the bars say it.
+  expect(
+    host.querySelector('ul[aria-label="People sorted by calls"] svg'),
+  ).toBeNull();
+  window.history.replaceState(null, "", "/");
+});
+
+it("opens the calls behind the Calls number, each opening its lead", async () => {
+  const body = summaryBody();
+  const at = new Date(
+    Date.parse(analyticsFixture.now) - 3600_000,
+  ).toISOString();
+  const event = (kind: string, extra: object) => ({
+    kind,
+    at,
+    actor_name: "kiva fictional",
+    connected: null,
+    duration_seconds: null,
+    note: null,
+    stage_label: null,
+    ...extra,
+  });
+  const feed = {
+    items: [
+      {
+        event_id: "e1",
+        lead_id: "lead-1",
+        lead_name: "asha fictional",
+        stage_label: null,
+        event: event("call", { connected: true, duration_seconds: 125 }),
+      },
+      {
+        event_id: "e2",
+        lead_id: "lead-2",
+        lead_name: "ravi sample",
+        stage_label: null,
+        event: event("note", { note: "Wants EMI options" }),
+      },
+      {
+        event_id: "e3",
+        lead_id: "lead-3",
+        lead_name: "meera sample",
+        stage_label: null,
+        event: event("call", { connected: false }),
+      },
+    ],
+    next_before: null,
+    counts: {},
+  };
+  const fetch = vi.fn((input: string) =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify(input.includes("/activity/summary") ? body : feed),
+      ),
+    ),
+  );
+  vi.stubGlobal("fetch", fetch);
+  await act(async () => root.render(<AnalyticsView team />));
+  const calls = host.querySelector<HTMLButtonElement>(
+    'button[aria-label^="Calls, "]',
+  )!;
+  await act(async () => calls.click());
+  expect(fetch.mock.calls.at(-1)![0]).toContain(
+    "/v1/lead-desk/activity?day=recent&team=true",
+  );
+  const rows = [...document.querySelectorAll<HTMLAnchorElement>("dialog li a")];
+  expect(rows.map((row) => row.getAttribute("href"))).toEqual([
+    "/leads#lead=lead-1",
+    "/leads#lead=lead-3",
+  ]);
+  expect(rows[0].textContent).toContain("Asha Fictional");
+  expect(rows[0].textContent).toContain("Kiva Fictional · Connected · 2 min");
+  expect(rows[1].textContent).toContain("Not connected");
+});
+
+it("exports the period's numbers per person for owners", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() => Promise.resolve(new Response(JSON.stringify(summaryBody())))),
+  );
+  const made: Blob[] = [];
+  const create = vi.spyOn(URL, "createObjectURL").mockImplementation((blob) => {
+    made.push(blob as Blob);
+    return "blob:fictional";
+  });
+  const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+  const click = vi
+    .spyOn(HTMLAnchorElement.prototype, "click")
+    .mockImplementation(() => {});
+  await act(async () => root.render(<AnalyticsView team />));
+  const exportButton = host.querySelector<HTMLButtonElement>(
+    'button[aria-label="Export the period as a CSV file"]',
+  )!;
+  act(() => exportButton.click());
+  expect(click).toHaveBeenCalledTimes(1);
+  const text = await made[0].text();
+  expect(text.split("\n")[0]).toBe(
+    'Person,Calls,Conversations,Notes,Stage moves,All updates,"Calls, period before","Conversations, period before","Notes, period before","Stage moves, period before"',
+  );
+  expect(text).toContain('"Calls, period before"');
+  expect(text).toContain("Kiva Fictional,");
+  create.mockRestore();
+  revoke.mockRestore();
+  click.mockRestore();
+});
+
+it("shows no export to someone who sees only their own work", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() => Promise.resolve(new Response(JSON.stringify(summaryBody())))),
+  );
+  await act(async () => root.render(<AnalyticsView team={false} />));
+  expect(host.textContent).not.toContain("Export");
+});

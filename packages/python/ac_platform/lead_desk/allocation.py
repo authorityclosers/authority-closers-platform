@@ -49,6 +49,8 @@ class LeadFacts:
     interest: str | None = None
     previous_owner: UUID | None = None
     exclude: frozenset[UUID] = field(default_factory=frozenset)
+    # A Cold lead: the open-lead limit (Inbound only) never holds it back (ph1-17).
+    cold: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,7 +149,7 @@ def allocate(
         for rep in reps
         if rep.person_id not in lead.exclude
         and rep.available
-        and (rep.max_open is None or rep.open_leads < rep.max_open)
+        and (lead.cold or rep.max_open is None or rep.open_leads < rep.max_open)
     ]
     if not candidates:
         if not any(rep.available for rep in reps if rep.person_id not in lead.exclude):

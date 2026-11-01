@@ -126,8 +126,8 @@ const settings = () =>
     (set) =>
       // A panel's own fieldset, not one inside it (the limit field has its own).
       !set.parentElement?.closest("fieldset") &&
-      ["Minutes before it moves", "Open-lead limit", "Starts"].some((label) =>
-        set.textContent?.includes(label),
+      ["Minutes before it moves", "Open Inbound leads", "Starts"].some(
+        (label) => set.textContent?.includes(label),
       ),
   );
 

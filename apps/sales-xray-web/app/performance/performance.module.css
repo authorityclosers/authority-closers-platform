@@ -173,3 +173,167 @@
   font: var(--sx-text-headline);
   letter-spacing: -0.01em;
 }
+
+/* Each seller, one row (competitor teardown #18): a table on a computer, a card
+   each on a phone with Sort; their day as a line of what happened. */
+.tableHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tableHead h2 {
+  margin: 0;
+}
+
+.export {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in oklab, var(--sx-ink) 12%, transparent);
+  border-radius: var(--sx-radius-pill);
+  background: none;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.sellerTable {
+  display: none;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.sellerTable th,
+.sellerTable td {
+  border-bottom: 1px solid var(--sx-line);
+  text-align: right;
+}
+
+.sellerTable td {
+  padding: 10px 8px;
+}
+
+.sellerTable th[scope="row"],
+.sellerTable thead th:first-child {
+  text-align: left;
+}
+
+.sellerTable thead button,
+.sellerName {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sellerTable thead button {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+}
+
+.sellerTable td[data-red],
+.sellerCard dd[data-red] {
+  color: var(--sx-bad);
+  font-weight: 700;
+}
+
+.sellerCards {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sellerCard {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in oklab, var(--sx-ink) 8%, transparent);
+  border-radius: 16px;
+  background: none;
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sellerCard dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.sellerCard dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--sx-text-sm);
+}
+
+.sellerCard dt {
+  color: var(--sx-ink-2);
+}
+
+.sellerCard dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 768px) {
+  .sellerTable {
+    display: table;
+  }
+
+  .sellerCards,
+  .sortPicker {
+    display: none;
+  }
+}
+
+.dayTitle {
+  margin: 16px 0 4px;
+  font-size: var(--sx-text-md);
+}
+
+.timeline {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline > li {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--sx-line);
+  font-size: var(--sx-text-sm);
+}
+
+.timeline time {
+  flex: none;
+  width: 64px;
+  color: var(--sx-ink-2);
+  font-variant-numeric: tabular-nums;
+}

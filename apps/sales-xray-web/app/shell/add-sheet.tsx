@@ -16,7 +16,13 @@
  * so Add lead says where leads live and opens Leads, which offers the switch.
  */
 
-import { AudioLines, ChevronRight, ListChecks, UserPlus } from "lucide-react";
+import {
+  AudioLines,
+  ChevronRight,
+  FileSpreadsheet,
+  ListChecks,
+  UserPlus,
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -69,6 +75,7 @@ export function AddSheet({
   onAddTask,
   callHref,
   leadsHere,
+  canImport = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -80,6 +87,9 @@ export function AddSheet({
   callHref: string;
   /** False outside an organisation: Add lead then opens Leads instead. */
   leadsHere: boolean;
+  /** Owners and admins import a file of leads from here (ph1-15, 1 Nov 2026:
+   *  it was ten taps deep). */
+  canImport?: boolean;
 }) {
   // Handing over to a form: the + sheet closes while the form loads, so a
   // clear shield takes the moment's taps (a double tap's second one fell
@@ -140,6 +150,16 @@ export function AddSheet({
             href={callHref}
             onClick={onClose}
           />
+          {leadsHere && canImport ? (
+            <Choice
+              icon={<FileSpreadsheet size={22} />}
+              tone="lead"
+              title="Import leads"
+              text="A file of leads, up to 2,000 at once"
+              href="/leads?import=file"
+              onClick={onClose}
+            />
+          ) : null}
           {leadsHere ? (
             <Choice
               icon={<ListChecks size={22} />}

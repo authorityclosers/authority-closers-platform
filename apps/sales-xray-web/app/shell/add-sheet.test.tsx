@@ -113,3 +113,27 @@ it("takes one tap on Add task and shields the next", async () => {
   expect(onAddTask).toHaveBeenCalledTimes(1);
   expect(document.querySelector("[data-tap-shield]")).not.toBeNull();
 });
+
+// ph1-15 (phone personas, 1 Nov 2026): Import leads was ten taps deep.
+it("offers Import leads to owners and admins, opening the file import", async () => {
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <AddSheet
+        open
+        onClose={() => undefined}
+        onAddLead={() => undefined}
+        onAddTask={() => undefined}
+        callHref="/analysis/new"
+        leadsHere
+        canImport
+      />,
+    ),
+  );
+  const link = Array.from(host.querySelectorAll("a")).find((item) =>
+    item.textContent?.includes("Import leads"),
+  );
+  expect(link?.getAttribute("href")).toBe("/leads?import=file");
+});

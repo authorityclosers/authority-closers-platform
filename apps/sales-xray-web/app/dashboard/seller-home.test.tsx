@@ -164,8 +164,10 @@ const task = (
 
 let root: Root;
 let host: HTMLDivElement;
-let calls: { path: string; method: string }[];
+let calls: { path: string; method: string; body?: string }[];
 let doneFails = false;
+let emptyToday = false;
+let lateBrochure = false;
 
 function answer(sides: {
   inbound: { leads: number };
@@ -176,12 +178,23 @@ function answer(sides: {
     "fetch",
     vi.fn<typeof fetch>(async (input, init) => {
       const path = String(input);
-      calls.push({ path, method: init?.method ?? "GET" });
+      calls.push({
+        path,
+        method: init?.method ?? "GET",
+        body: typeof init?.body === "string" ? init.body : undefined,
+      });
       if (path === "/v1/lead-desk") return Response.json(desk);
       if (path === "/v1/lead-desk/sides?scope=mine")
         return Response.json(sides);
       if (path === "/v1/lead-desk/tasks?view=overdue")
         return Response.json({ tasks: [], counts: {} });
+      if (path === "/v1/lead-desk/tasks?view=today" && emptyToday)
+        return Response.json({ tasks: [], counts: { today: 0, overdue: 0 } });
+      if (path.endsWith("/snooze"))
+        return Response.json({
+          ...task("8", "Share brochure"),
+          starts_at: "2026-11-07T04:30:00Z",
+        });
       if (path === "/v1/lead-desk/tasks?view=today")
         return Response.json({
           // One overdue, on Tasks' Overdue.
@@ -191,7 +204,7 @@ function answer(sides: {
               lead_id: null,
               lead_name: null,
             }),
-            task("8", "Share brochure"),
+            task("8", "Share brochure", { overdue: lateBrochure }),
             task("9", "Fourth task"),
           ],
           counts: { today: 4, overdue: 1 },
@@ -220,6 +233,8 @@ async function mount() {
 beforeEach(() => {
   window.history.replaceState(null, "", "/dashboard");
   doneFails = false;
+  emptyToday = false;
+  lateBrochure = false;
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -356,4 +371,57 @@ it("completes a task in one tap, and puts it back if it wasn't saved", async () 
   await act(async () => Promise.resolve());
   // The undo didn't save (a 503 here): the screen keeps what is true.
   expect(box()?.checked).toBe(true);
+});
+
+const tasksBlock = () =>
+  host.querySelector<HTMLElement>('section[aria-labelledby="tasks-title"]');
+
+// Competitor teardown #1 (1 Nov 2026, Pipedrive Focus, Close Inbox): a late
+// task goes first, in red; swipe left, hold or right-click moves it to one of
+// the after-call's times.
+it("puts a late task first in red, and moves it to next week", async () => {
+  lateBrochure = true;
+  answer({ inbound: { leads: 40 }, cold: { imported: 0 } });
+  await mount();
+  const first = tasksBlock()?.querySelector<HTMLLIElement>("ul > li");
+  expect(first?.textContent).toContain("Share brochure");
+  expect(first?.hasAttribute("data-late")).toBe(true);
+  expect(first?.querySelector("[data-late-time]")).not.toBeNull();
+  await act(async () => {
+    first?.dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, cancelable: true }),
+    );
+  });
+  const week = Array.from(document.querySelectorAll("button")).find(
+    (button) => button.textContent === "Next week",
+  );
+  expect(
+    Array.from(
+      document.querySelectorAll("button"),
+      (button) => button.textContent,
+    ).filter((text) =>
+      ["In 1 hour", "This evening", "Tomorrow morning", "Next week"].includes(
+        text ?? "",
+      ),
+    ),
+  ).toHaveLength(4);
+  await act(async () => week?.click());
+  await act(async () => Promise.resolve());
+  const snooze = calls.find(
+    (item) => item.path.endsWith("/snooze") && item.method === "POST",
+  );
+  expect(JSON.parse(snooze?.body ?? "{}").choice).toBe("week");
+});
+
+it("says All clear with the next call when nothing is left, and no helper lines", async () => {
+  emptyToday = true;
+  answer({ inbound: { leads: 40 }, cold: { imported: 0 } });
+  await mount();
+  const block = tasksBlock();
+  expect(block?.textContent).toContain("All clear");
+  expect(
+    block?.querySelector<HTMLAnchorElement>("a[href*='view=to_call']")
+      ?.textContent,
+  ).toContain("Call your next lead");
+  expect(host.textContent).not.toContain("Fresh enquiries from ads");
 });

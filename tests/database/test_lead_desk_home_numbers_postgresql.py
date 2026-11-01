@@ -299,6 +299,134 @@ def test_a_leads_calls_say_connected_as_home_counts_them(
     run(exercise())
 
 
+def test_the_same_day_counts_the_same_calls_everywhere(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Hardcore phone QA ph1-30/31 (1 Nov 2026): Reports, Home and Growth counted the same day
+    differently. One rule (_call_rows) feeds each: two calls out (one answered), a call in
+    nobody took, and an after-call answer with no call behind it make 2 calls, 1 connected."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            lead = await here.add("Fictional Count One", "98760 67041")
+            now = datetime.now(UTC)
+            events: list[tuple[str, int, dict[str, Any]]] = [
+                (
+                    "call",
+                    30,
+                    {
+                        "via": "phone",
+                        "direction": "outgoing",
+                        "duration_seconds": 40,
+                        "connected": True,
+                    },
+                ),
+                (
+                    "call",
+                    20,
+                    {
+                        "via": "phone",
+                        "direction": "outgoing",
+                        "duration_seconds": 0,
+                        "connected": False,
+                    },
+                ),
+                (
+                    "call",
+                    15,
+                    {
+                        "via": "phone",
+                        "direction": "missed",
+                        "duration_seconds": 0,
+                        "connected": False,
+                    },
+                ),
+                ("result", 10, {"connected": True, "stage": "follow_up", "from_stage": "new"}),
+            ]
+            async with here.setup.sessions() as db, db.begin():
+                for kind, minutes, data in events:
+                    db.add(
+                        LeadEvent(
+                            id=uuid4(),
+                            tenant_id=here.tenant_id,
+                            lead_id=UUID(lead),
+                            kind=kind,
+                            actor_person_id=here.seller.person_id,
+                            data=data,
+                            created_at=now - timedelta(minutes=minutes),
+                        )
+                    )
+            # Just after midnight India time the calls are yesterday's.
+            if (now - timedelta(minutes=31)).astimezone(IST).date() != now.astimezone(IST).date():
+                return
+            desk = (await here.client.get(BASE)).json()
+            assert (desk["numbers"]["calls"], desk["numbers"]["connected"]) == (2, 1)
+            mine = (await here.client.get(f"{BASE}/performance/sellers?days=1")).json()
+            seller = mine["sellers"][0]
+            assert seller["inbound"]["attempted"] + seller["cold"]["attempted"] == 2
+            here.as_admin()
+            report = await here.client.get(f"{BASE}/reports/performance", params={"days": 1})
+            assert report.status_code == 200, report.text
+            today = report.json()["current"]
+            assert (today["calls"], today["connected"]) == (2, 1)
+
+    run(exercise())
+
+
+def test_each_sellers_row_has_follow_ups_and_the_month(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Competitor teardown #18 (1 Nov 2026): the Performance table's row for each seller has
+    follow-ups done as Home counts them (a call out to a lead past New) and wins in rupees, and
+    the engine reads this month so far."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            lead = await here.add("Fictional Table One", "98760 67051")
+            now = datetime.now(UTC)
+            events: list[tuple[str, int, dict[str, Any]]] = [
+                ("stage", 60, {"stage": "follow_up", "from_stage": "new"}),
+                (
+                    "call",
+                    30,
+                    {
+                        "via": "phone",
+                        "direction": "outgoing",
+                        "duration_seconds": 40,
+                        "connected": True,
+                    },
+                ),
+            ]
+            async with here.setup.sessions() as db, db.begin():
+                for kind, minutes, data in events:
+                    db.add(
+                        LeadEvent(
+                            id=uuid4(),
+                            tenant_id=here.tenant_id,
+                            lead_id=UUID(lead),
+                            kind=kind,
+                            actor_person_id=here.seller.person_id,
+                            data=data,
+                            created_at=now - timedelta(minutes=minutes),
+                        )
+                    )
+            # Just after midnight India time the move and the call are yesterday's.
+            if (now - timedelta(minutes=61)).astimezone(IST).date() != now.astimezone(IST).date():
+                return
+            today = await here.client.get(f"{BASE}/performance/sellers?days=1")
+            assert today.status_code == 200, today.text
+            row = today.json()["sellers"][0]
+            assert (row["follow_ups_done"], row["won_amount"]) == (1, 0)
+            month = await here.client.get(
+                f"{BASE}/performance/sellers", params={"days": "1", "month": "true"}
+            )
+            assert month.status_code == 200, month.text
+            assert month.json()["days"] == now.astimezone(IST).day
+            assert month.json()["sellers"][0]["follow_ups_done"] == 1
+
+    run(exercise())
+
+
 def test_the_desk_carries_inbound_and_cold_apart(postgres_harness: Any, tmp_path: Path) -> None:
     """Dipak's Home + Leads handoff (31 Oct 2026): the desk carries each side of my day, so
     Home's Inbound | Cold selector switches with no second read. A lead's side is its

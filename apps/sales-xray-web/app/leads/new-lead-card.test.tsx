@@ -3,6 +3,7 @@ import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { NoticeCenter } from "../notice-center";
 import { LEAD_ADDED_EVENT } from "./lead-handoff";
 import type { LeadRow } from "./leads-client";
 import {
@@ -118,30 +119,52 @@ it("waits with what arrived between reads, and never with a lead the seller adde
   expect(latest().lead).toBeNull();
 });
 
-it("offers Call, WhatsApp and Later for the lead that arrived", () => {
+// Competitor teardown 12 (1 Nov 2026): a one-line corner pill with Call now,
+// its X for Later, never a sheet over the list.
+it("arrives as a corner pill with Call now, and its X is Later", async () => {
   const calls: string[] = [];
-  act(() =>
-    root.render(
+  const card = (count: number, open = true) => (
+    <>
+      <NoticeCenter />
       <NewLeadCard
         lead={lead(2)}
-        count={3}
-        open
+        count={count}
+        open={open}
         onCall={(row) => calls.push(`call ${row.lead_id}`)}
         onMessage={(row) => calls.push(`whatsapp ${row.lead_id}`)}
         onLater={() => calls.push("later")}
-      />,
-    ),
+      />
+    </>
   );
-  expect(container.textContent).toContain("New lead: Fictional Lead 2");
-  expect(container.textContent).toContain("2 more waiting in To call.");
-  const buttons = [...container.querySelectorAll("button")];
-  const press = (words: string) =>
-    act(() =>
-      // The WhatsApp button's mark carries its own title: match by what it says.
-      buttons.find((item) => item.textContent?.includes(words))?.click(),
-    );
-  press("Call Fictional");
-  press("WhatsApp");
-  press("Later");
-  expect(calls).toEqual(["call lead-2", "whatsapp lead-2", "later"]);
+  await act(async () => root.render(card(1)));
+  expect(container.querySelector("dialog")).toBeNull();
+  const pill = container.querySelector('[aria-expanded="false"]');
+  expect(pill?.textContent).toBe(
+    "New enquiry · Fictional Lead 2 · Facebook ad",
+  );
+  await act(async () => root.render(card(3)));
+  expect(container.textContent).toContain(
+    "3 new enquiries · Fictional Lead 2 and 2 more",
+  );
+  const now = [...container.querySelectorAll("button")].find(
+    (item) => item.textContent === "Call now",
+  )!;
+  await act(async () => now.click());
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('[aria-label="Dismiss"]')!
+      .click(),
+  );
+  expect(calls).toEqual(["call lead-2", "later"]);
+  // Closed by the page: gone.
+  await act(async () => root.render(card(1, false)));
+  expect(container.textContent).not.toContain("New enquiry");
+});
+
+it("never pops up a Cold lead (ph1-16, 1 Nov 2026: 900 imported)", () => {
+  const seen = new Set<string>();
+  const rows = [lead(1, { side: "cold" }), lead(2)];
+  expect(arrivals(seen, rows, "me", NOW).map((row) => row.lead_id)).toEqual([
+    rows[1].lead_id,
+  ]);
 });
