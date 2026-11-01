@@ -1,0 +1,175 @@
+/* The import's steps, check and skipped rows (competitor teardown 5, 1 Nov 2026). Tokens
+   only. */
+
+/* File · Columns · Check · Who gets them: where you are, in one line that wraps. */
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  list-style: none;
+}
+
+.steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.steps li span {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  font-variant-numeric: tabular-nums;
+}
+
+.steps li[aria-current="step"] {
+  color: var(--sx-ink);
+  font-weight: 600;
+}
+
+.steps li[aria-current="step"] span {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+}
+
+/* A column's picker with up to three of its values under it. */
+.column {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.samples {
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.check {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* What the file's rows become: one line each, the count at the end. */
+.counts {
+  display: grid;
+  margin: 0;
+}
+
+.counts > div {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.counts dt {
+  min-width: 0;
+  color: var(--sx-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.counts dd {
+  margin: 0;
+  color: var(--sx-ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.counts > div[data-check="new"] dt {
+  color: var(--sx-ink);
+  font-weight: 600;
+}
+
+.choice {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.label {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* A 44 px band to tap, the chip itself 36 px. */
+.chip::after {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+}
+
+.chip:focus-visible,
+.download:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.help,
+.warning {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+/* Fill blanks and Replace change leads already here: said beside a warning bar. */
+.warning {
+  padding: 8px 12px;
+  border-left: 3px solid var(--sx-warn);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+}
+
+.download {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  width: fit-content;
+  color: var(--lx-teal);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

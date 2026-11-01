@@ -136,7 +136,11 @@ it("offers the first stage by its Cold name, Open Leads and Interested", async (
 
 it("says where the leads go in a line for each choice", () => {
   const base = firstChoices(true);
-  expect(sharesLine(base, team, 5)).toBe("Given out by the lead rules.");
+  // An even split by default (competitor teardown 5).
+  expect(sharesLine(base, team, 5)).toBe("Asha Example 3 · Ravi Sample 2.");
+  expect(sharesLine({ ...base, assign: "rules" }, team, 5)).toBe(
+    "Given out by the lead rules.",
+  );
   expect(sharesLine({ ...base, assign: "none" }, team, 5)).toBe(
     "All 5 stay unassigned.",
   );

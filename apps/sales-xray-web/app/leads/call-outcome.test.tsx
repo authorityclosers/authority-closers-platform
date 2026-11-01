@@ -11,6 +11,11 @@ vi.mock("../notice-center", async (load) => ({
     notices.shown.push(notice),
 }));
 
+import {
+  replayWrites,
+  resetWrites,
+  setWriteIdentity,
+} from "../sync/write-queue";
 import { CallOutcome, stageAfterTalk } from "./lead-sheet";
 import type { LeadDetail, Stage } from "./leads-client";
 import { missedReason, type NativeCall } from "./native-phone";
@@ -337,6 +342,81 @@ describe("Undo on the Save card (31 Oct 2026)", () => {
     const asked = fetchMock.mock.calls.map((call) => String(call[0]));
     expect(asked.at(-1)).toContain("/results/answer-1/undo");
     expect(notices.shown.at(-1)?.title).toMatch(/^Undone: back to /);
+  });
+});
+
+// QA robot J221 (2 Nov 2026): a save the phone kept and sent later (Send now)
+// kept saying "Not sent yet", with no Undo. It ends as a first-try save does.
+describe("a save the phone kept, sent later", () => {
+  afterEach(() => {
+    resetWrites();
+    window.localStorage.clear();
+  });
+
+  it("says where the lead went, with Undo, once it arrives", async () => {
+    setWriteIdentity("seller-1");
+    const after = {
+      ...lead("interested"),
+      lead: {
+        ...lead("interested").lead,
+        revision: 4,
+        next_action_at: "2026-11-03T05:30:00.000Z",
+      },
+      undo_result: { event_id: "answer-1", until: "2026-11-03T05:35:00.000Z" },
+    } as LeadDetail;
+    let online = false;
+    const fetchMock = vi.fn<typeof fetch>(async () => {
+      if (!online) throw new TypeError("Failed to fetch");
+      return new Response(JSON.stringify(after));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    notices.shown.length = 0;
+    const saved = vi.fn();
+    await act(async () =>
+      root.render(
+        <CallOutcome
+          detail={lead("new")}
+          submitLabel="Save"
+          attention={false}
+          beforeSave={async () => lead("new")}
+          onSaved={saved}
+        />,
+      ),
+    );
+    await act(async () => tile("We talked").click());
+    await act(async () => tile("Interested").click());
+    await act(async () => tile("Save").click());
+    expect(host.textContent).toContain("Not sent yet");
+    expect(saved).not.toHaveBeenCalled();
+    expect(notices.shown.some((notice) => /^Moved to/.test(notice.title))).toBe(
+      false,
+    );
+
+    // Back online: Send now sends what the phone kept.
+    online = true;
+    await act(async () => {
+      await replayWrites({ force: true });
+    });
+    await act(async () => {
+      for (let index = 0; index < 8; index += 1) await Promise.resolve();
+    });
+    const card = notices.shown.at(-1) as {
+      title: string;
+      action?: { label: string };
+    };
+    expect(card.title).toMatch(/^Moved to interested · next call /);
+    expect(card.action?.label).toBe("Undo");
+    expect(host.textContent).not.toContain("Not sent yet");
+    expect(saved).toHaveBeenCalledTimes(1);
+    // One answer: the same command id, refused once and then let through.
+    const sends = fetchMock.mock.calls.filter((call) =>
+      String(call[0]).endsWith("/dispose"),
+    );
+    expect(sends).toHaveLength(2);
+    expect(
+      new Set(sends.map((call) => JSON.parse(String(call[1]?.body)).command_id))
+        .size,
+    ).toBe(1);
   });
 });
 

@@ -286,6 +286,9 @@ async function walk(job) {
         const input = inputFor(r, prof);
         const label = await field.evaluate((el) => (el.getAttribute("aria-label") || el.placeholder || el.name || el.type || "field").slice(0, 30)).catch(() => "field");
         await field.click({ timeout: 5000 }).catch(() => null);
+        // with a sheet or card over the field the keys land elsewhere: judge only when the field really has focus
+        const focused = await field.evaluate((el) => document.activeElement === el).catch(() => false);
+        if (!focused) note(`"${label}" did not take focus (something is over it): not judged`);
         const handle = await field.elementHandle({ timeout: 3000 }).catch(() => null);
         const urlBefore = page.url();
         const text = prof.speed === "slow" ? input.text.slice(0, 40) : input.text;
@@ -302,7 +305,7 @@ async function walk(job) {
         // lost only if it is the same field, still on the page, on the same address, and nobody pressed Enter
         const kept = handle ? await handle.inputValue().catch(() => null) : null;
         const same = handle ? await handle.evaluate((el) => el.isConnected).catch(() => false) : false;
-        if (kept === "" && same && !enter && page.url() === urlBefore && text.length > 2) {
+        if (focused && kept === "" && same && !enter && page.url() === urlBefore && text.length > 2) {
           await file({ rule: "sim:input-lost", selector: `field "${label}"`, severity: "MINOR", summary: "Typed text disappeared from the field", detail: `Typed ${input.kind} text (${text.length} characters); a moment later the field was empty.`, route });
         }
       } else if (x < prof.err + 0.22) {

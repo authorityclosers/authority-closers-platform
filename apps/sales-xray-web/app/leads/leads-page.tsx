@@ -154,6 +154,7 @@ import {
   nextInRound,
   readPaused,
   roundDone,
+  startFrom,
   NO_ROUND,
   type PausedRound,
   type RoundBook,
@@ -203,6 +204,7 @@ import {
   ActiveFilters,
   FilterChip,
   FilterSheet,
+  filterNames,
   filtersOn as countFilters,
   type LeadFilters,
 } from "./lead-filters";
@@ -1125,12 +1127,14 @@ export function LeadsRoute({
     key: string;
     value: Partial<Record<WorkView, number>>;
   } | null>(null);
+  // The follow-up filter counts too; inside Follow-ups it is the tab's own split
+  // (robot J181, 2 Nov 2026).
   const viewCountsKey = JSON.stringify([
     contextKey,
     scope,
     query,
     pipeline,
-    { ...more, view: null, when: null },
+    { ...more, view: null, when: workView === "follow_ups" ? null : more.when },
   ]);
   const onViewCounts = useCallback(
     (value: Partial<Record<WorkView, number>>) =>
@@ -1427,6 +1431,8 @@ export function LeadsRoute({
         served: [...queue],
         skipped: book.skipped,
         start: book.from,
+        // The lead on screen, its answer not saved: Continue opens it first.
+        on: openLead && queue.has(openLead) ? openLead : null,
       });
     setBook(NO_ROUND);
     setLinkDone(hash);
@@ -1749,30 +1755,20 @@ export function LeadsRoute({
   /** Start a round, from the top or where a paused one stopped. */
   const startRound = (paused: PausedRound | null) => {
     setChoosing(null);
-    const served = new Set(paused?.served ?? []);
-    const skipped = [...(paused?.skipped ?? [])];
-    const passOver = paused ? [...tried] : [];
-    const listed = order.current.find(
-      (id) => !served.has(id) && !passOver.includes(id),
-    );
-    const { next, again: fromEnd } = nextInRound({
-      order: listed ? [listed] : [],
-      served,
-      skipped,
-      recent: new Set(passOver),
-    });
+    // Continue opens the lead it paused on first (call-round startFrom).
+    const start = startFrom({ paused, order: order.current, tried });
     if (desk) keepPaused(desk.me.person_id, null);
-    if (!next) return;
+    if (!start.next) return;
     setBook({
       ...NO_ROUND,
       on: true,
-      skipped: fromEnd ? skipped.slice(1) : skipped,
-      again: fromEnd ? [next] : [],
-      passOver,
+      skipped: start.skipped,
+      again: start.again ? [start.next] : [],
+      passOver: start.passOver,
       from: paused?.start ?? deskNumbers(),
     });
-    setQueue(served.add(next));
-    open(next);
+    setQueue(start.served);
+    open(start.next);
   };
   // A wide screen shows the lead beside the list (owner, 31 Oct 2026: the
   // computer's full width, a list and a detail pane); elsewhere a sheet.
@@ -2170,6 +2166,11 @@ export function LeadsRoute({
                   })
                 }
                 filtered={filtersOn}
+                filterNames={filterNames(
+                  { ...shownFilters, q: "" },
+                  defaultWho,
+                  pipes?.pipelines ?? [],
+                )}
                 onClearFilters={clearFilters}
                 onAdd={() => begin("adding", setAdding)}
                 onShowOpen={() =>

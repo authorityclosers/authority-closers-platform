@@ -2067,7 +2067,10 @@ class LeadDesk:
         # a seller's own Inbound To Call is the badge's number (competitor teardown #9).
         view_counts: dict[str, int] = {}
         if counting:
-            rest = [item for item in where if item is not view_clause and item is not when_clause]
+            # The follow-up filter counts as the list applies it (robot J181, 2 Nov 2026: To
+            # Call said 3 over an empty list); only inside Follow-ups is it the tab's own split.
+            split = when_clause if view == "follow_ups" else None
+            rest = [item for item in where if item is not view_clause and item is not split]
             found = (
                 await self.db.execute(
                     select(
@@ -2795,13 +2798,18 @@ class LeadDesk:
         pipeline: str | None = None,
         received_at: datetime | None = None,
         kind: str | None = None,
+        batch: tuple[UUID, str] | None = None,
+        as_is: bool = False,
     ) -> tuple[Lead | None, Literal["created", "repeat", "known", "skipped"]]:
         """Store one record as a lead. The same record again (same source id) is "known"
         and changes nothing; another record with the same phone, or with no phone and the
         same email, is a "repeat". A new lead
         goes to the pipeline picked, else the one that takes its source (pipelines.route).
         ``received_at``: when the person sent it, when the source says (a Meta form's
-        created_time); a time ahead of now is taken as now."""
+        created_time); a time ahead of now is taken as now. ``batch``: the file import
+        (its id and file name) a new lead came in, for Undo import (imports.py). ``as_is``:
+        a lead already here comes back untouched, not counted as asking again (a file
+        import's Skip, Fill blanks and Replace; intake.commit decides)."""
         _, config = await self.settings()
         found = extract(record, mapping, default_country=config["default_country"])
         if not (found.name or found.phone or found.email):
@@ -2837,6 +2845,8 @@ class LeadDesk:
         if existing is not None:
             # A lead merged into another: the record joins the lead it went into.
             existing = await self._live(existing, lock=True)
+            if as_is:
+                return existing, "repeat"
             await self._repeat(
                 existing, found, payload, source, source_label, actor, reps, command_id
             )
@@ -2903,6 +2913,7 @@ class LeadDesk:
                 "source": source,
                 "source_label": source_label or SOURCE_LABELS.get(source, source),
                 "used": found.used,
+                **({"import": str(batch[0]), "import_file": batch[1]} if batch else {}),
             },
             actor=actor,
             command_id=command_id,

@@ -7,6 +7,7 @@ import {
   nextInRound,
   readPaused,
   roundDone,
+  startFrom,
   triedLately,
 } from "./call-round";
 
@@ -42,6 +43,52 @@ it("goes through the list, a new enquiry first, then the skipped at the end", ()
   ).toBe("c");
 });
 
+// QA robot (2 Nov 2026): Continue after Pause skipped the lead paused on, and
+// a round could end without offering it.
+it("continues on the lead it paused on, then carries on; Start from top starts at the top", () => {
+  const order = ["a", "b", "c", "d"];
+  // Paused on b (called, no answer saved, so tried in the last hour too).
+  const paused = {
+    side: "cold",
+    served: ["a", "b"],
+    skipped: [],
+    at: 0,
+    start: null,
+    on: "b",
+  };
+  const resumed = startFrom({ paused, order, tried: ["b"] });
+  expect(resumed.next).toBe("b");
+  expect([...resumed.served]).toEqual(["a", "b"]);
+  // Then the round carries on past it: c, d, and the end.
+  const after = nextInRound({
+    order,
+    served: resumed.served,
+    skipped: resumed.skipped,
+    recent: new Set(resumed.passOver),
+  });
+  expect(after.next).toBe("c");
+  // An answer saved for b since took it off the list: Continue goes on to c.
+  expect(startFrom({ paused, order: ["a", "c", "d"], tried: ["b"] }).next).toBe(
+    "c",
+  );
+  // A round kept before this change has no lead on screen: as before.
+  expect(startFrom({ paused: { ...paused, on: undefined }, order }).next).toBe(
+    "c",
+  );
+  // A skipped lead offered again from the end, paused on: offered again.
+  expect(
+    startFrom({
+      paused: { ...paused, served: order, skipped: ["c"], on: "a" },
+      order,
+    }),
+  ).toMatchObject({ next: "a", skipped: ["c"] });
+  // Start from top: the list's first lead, nothing passed over.
+  expect(startFrom({ paused: null, order, tried: ["b"] })).toMatchObject({
+    next: "a",
+    passOver: [],
+  });
+});
+
 it("says what the round did from the desk's numbers", () => {
   expect(
     roundDone(
@@ -58,10 +105,11 @@ it("keeps a paused round for its side for half a day", () => {
   const at = Date.parse("2026-11-01T10:00:00Z");
   keepPaused(
     "me",
-    { side: "cold", served: ["a", "b"], skipped: ["b"], start: null },
+    { side: "cold", served: ["a", "b"], skipped: ["b"], start: null, on: "a" },
     at,
   );
   expect(readPaused("me", "cold", at + 60_000)?.served).toEqual(["a", "b"]);
+  expect(readPaused("me", "cold", at + 60_000)?.on).toBe("a");
   expect(readPaused("me", "inbound", at)).toBeNull();
   expect(readPaused("me", "cold", at + PAUSE_KEEP_MS + 1)).toBeNull();
   keepPaused("me", null);

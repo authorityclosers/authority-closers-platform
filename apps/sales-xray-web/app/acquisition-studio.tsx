@@ -152,7 +152,12 @@ import {
   type SourcePlaybackRange,
 } from "./source-playback-context";
 import { track } from "./telemetry";
-import { dismissNotice, notify } from "./notice-center";
+import {
+  dismissNotice,
+  notify,
+  NoticeDock,
+  type Notice,
+} from "./notice-center";
 import { usePurchasesAllowed } from "./purchase-policy";
 import { Picker } from "./ui/picker";
 import styles from "./acquisition-studio.module.css";
@@ -232,6 +237,40 @@ export function analysisMinutesOut(
 }
 
 /**
+ * The out-of-minutes notice. The Google Play app never sends a seller to plans
+ * (purchase-policy.tsx). On a phone it is one line in New analysis's dock, at
+ * the top: as a corner card it lifted the first-call guide over Choose a file
+ * (the test robot, a9e8d053, 1 Nov 2026).
+ */
+export function minutesOutNotice(
+  purchasesAllowed: boolean,
+  seePlans: () => void,
+): Notice {
+  const id = "analysis-minutes-out";
+  return purchasesAllowed
+    ? {
+        id,
+        tone: "info",
+        dock: true,
+        title: "Get more analysis minutes",
+        message:
+          "Choose a plan or a top-up to analyse more calls. Your recordings stay private.",
+        action: { label: "See plans", run: seePlans },
+        // Stays until the seller closes it (info cards otherwise leave after 5 s).
+        timeout: 0,
+      }
+    : {
+        id,
+        tone: "info",
+        dock: true,
+        title: "Analysis minutes used up",
+        message:
+          "Ask your workspace owner for more minutes. Your recordings stay private.",
+        timeout: 0,
+      };
+}
+
+/**
  * Whose minutes these are: Personal's, an organisation's for someone who
  * pays there, or for a member, who can only ask the owner.
  */
@@ -273,6 +312,7 @@ export function AcquisitionStudio({
   requestedCallId,
   deferRouteSelection = false,
   initialSavedReport,
+  noticeDock = false,
 }: {
   variant?: CallStudioVariant;
   homeHref?: string;
@@ -280,6 +320,14 @@ export function AcquisitionStudio({
   requestedCallId?: string | null;
   deferRouteSelection?: boolean;
   initialSavedReport?: ScopedSavedReport;
+  /**
+   * New analysis on a phone: new-lead, work and minutes notices are one line
+   * at the top of the studio's own scroller, never corner cards that lift the
+   * first-call guide over Choose a file (the test robot, a9e8d053, 1 Nov
+   * 2026). The page fits the phone and this scroller scrolls, so the dock
+   * lives inside it and the room kept for the guide stays below it.
+   */
+  noticeDock?: boolean;
 }) {
   const embedded = variant === "embedded";
   // The standalone shell owns the page landmark; embedded mounts inherit one.
@@ -527,30 +575,11 @@ export function AcquisitionStudio({
   );
   useEffect(() => {
     if (!minutesOut) return;
-    const id = "analysis-minutes-out";
-    // The Google Play app never sends a seller to plans (purchase-policy.tsx).
-    notify(
-      purchasesAllowed
-        ? {
-            id,
-            tone: "info",
-            title: "Get more analysis minutes",
-            message:
-              "Choose a plan or a top-up to analyse more calls. Your recordings stay private.",
-            action: { label: "See plans", run: () => router.push("/plans") },
-            // Stays until the seller closes it (info cards otherwise leave after 5 s).
-            timeout: 0,
-          }
-        : {
-            id,
-            tone: "info",
-            title: "Analysis minutes used up",
-            message:
-              "Ask your workspace owner for more minutes. Your recordings stay private.",
-            timeout: 0,
-          },
+    const notice = minutesOutNotice(purchasesAllowed, () =>
+      router.push("/plans"),
     );
-    return () => dismissNotice(id);
+    notify(notice);
+    return () => dismissNotice(notice.id);
   }, [minutesOut, purchasesAllowed, router]);
   const [moment, setMoment] = useState<SourcePlaybackRange | null>(null);
   const [transcriptReaderOpen, setTranscriptReaderOpen] = useState(false);
@@ -2808,6 +2837,7 @@ export function AcquisitionStudio({
           </nav>
         )}
         <div className="studio-main">
+          {noticeDock ? <NoticeDock /> : null}
           <AnalysisAvailability onChange={setAnalysisPaused} />
           <nav className="studio-steps" aria-label="Analysis steps">
             {[
@@ -3174,12 +3204,14 @@ export function AcquisitionStudio({
                     {/* Words for a phone too: no dragging, no clicking
                         (phone personas ph2-30, 1 Nov 2026). */}
                     <p className={styles.dropTitle}>Add your audio file</p>
-                    <label
+                    <button
+                      type="button"
                       className={`${styles.dropSelect} ${!policy ? styles.disabled : ""}`}
-                      htmlFor="acquisition-file"
+                      disabled={!policy}
+                      onClick={() => input.current?.click()}
                     >
                       Choose a file
-                    </label>
+                    </button>
                     <span className="visually-hidden">Choose audio file</span>
                     <div className={styles.formatFacts}>
                       <span>
@@ -3299,6 +3331,10 @@ export function AcquisitionStudio({
                     submissionId={submission?.id ?? null}
                   />
                 ) : null}
+                {/* The file picker behind a visible Choose a file: never a
+                    Tab stop of its own that no one can see (the test robot,
+                    a9e8d053, 1 Nov 2026: focus went to a 1 px box under the
+                    drop area). The label stays for the browser journeys. */}
                 <input
                   ref={input}
                   className="visually-hidden"
@@ -3306,6 +3342,8 @@ export function AcquisitionStudio({
                   type="file"
                   accept="audio/*,video/*,.mp3,.mpeg,.wav,.m4a,.m4b,.mp4,.mov,.ogg,.flac,.amr,.awb,.aac,.3gp,.3ga,.webm,.opus,.mkv,.mka,.aiff,.aif,.aifc,.wma,.asf,.wmv,.caf"
                   aria-label="Choose sales call audio"
+                  aria-hidden="true"
+                  tabIndex={-1}
                   disabled={
                     !policy ||
                     !!busy ||

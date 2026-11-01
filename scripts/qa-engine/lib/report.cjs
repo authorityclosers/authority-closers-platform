@@ -227,6 +227,8 @@ async function file(finding, ctx) {
       full,
     })
     .catch((error) => console.log(`  matrix Bugs row failed for ${bugId}: ${error.message}`));
+  // a new report on a fingerprint that has a row: the row takes the new ids, and a closed one is reopened
+  if (!known) await matrix.reopen({ fingerprint: fp, id: bugId, full }).catch((error) => console.log(`  matrix reopen failed for ${bugId}: ${error.message}`));
   stats.filedByCheck[finding.rule] = (stats.filedByCheck[finding.rule] || 0) + 1;
   stats.filedByArea[area] = (stats.filedByArea[area] || 0) + 1;
   if (first) {

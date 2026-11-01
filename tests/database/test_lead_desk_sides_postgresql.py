@@ -122,6 +122,14 @@ def test_each_side_lists_counts_and_numbers_its_own_leads(
             assert listed["view_counts"] == {"to_call": 2, "follow_ups": 1, "all": 3}
             more = await page(scope="mine", side="inbound", view="to_call", offset="2")
             assert more["view_counts"] == {}
+            # The follow-up filter counts as the list applies it (robot J181, 2 Nov 2026: To
+            # Call said 3 over an empty list): To Call's leads are due by today's end, so
+            # "Upcoming" leaves none there, and its tab says so.
+            upcoming = await page(scope="mine", side="inbound", view="to_call", when="upcoming")
+            assert upcoming["total"] == upcoming["view_counts"]["to_call"] == 0
+            # Inside Follow-ups it is the tab's own split: every tab keeps its whole count.
+            split = await page(scope="mine", side="inbound", view="follow_ups", when="today")
+            assert split["view_counts"] == {"to_call": 2, "follow_ups": 1, "all": 3}
 
             # Home's "Follow-ups late" is the Late list it opens, on Inbound (phone personas,
             # 1 Nov 2026: "2 late" over a list of 0).

@@ -113,8 +113,10 @@ def test_a_zoho_export_imports_in_one_click(postgres_harness: Any, tmp_path: Pat
             assert ravi.name == "Ravi Sample" and ravi.stage == "interested"
             assert ravi.owner_person_id == here.seller.person_id
             assert "+919876072099" not in leads
-            # The phone-less row with a known email is that lead again, not a second one.
-            assert len(emailed) == 1 and emailed[0].repeats == 1
+            # The phone-less row with a known email is that lead, not a second one; Skip (the
+            # default) leaves it as it was (competitor teardown 5).
+            assert len(emailed) == 1 and emailed[0].repeats == 0
+            assert result["skipped_rows"] == [{"row": 2, "reason": "Already a lead"}]
 
             # The same file again adds nothing.
             again = await here.client.post(

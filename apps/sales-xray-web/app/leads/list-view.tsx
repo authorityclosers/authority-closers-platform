@@ -120,6 +120,7 @@ export function ListView({
   pipeline = null,
   tools = null,
   filtered = false,
+  filterNames = [],
   onClearFilters,
   onAdd,
   onShowOpen,
@@ -186,6 +187,8 @@ export function ListView({
   tools?: ReactNode;
   /** A search or whose-leads pick narrows the list (an empty list can clear it). */
   filtered?: boolean;
+  /** The filters on, in their chips' words: an empty list names them. */
+  filterNames?: readonly string[];
   onClearFilters?: () => void;
   /** An empty Open list offers Add lead; another stage, the open leads. */
   onAdd?: () => void;
@@ -865,6 +868,7 @@ export function ListView({
             empty={empty}
             query={query}
             filtered={filtered || !!query}
+            filterNames={filterNames}
             onClearFilters={onClearFilters}
             onAdd={onAdd}
             onShowOpen={onShowOpen}
@@ -1043,6 +1047,7 @@ function EmptyList({
   empty,
   query,
   filtered,
+  filterNames = [],
   onClearFilters,
   onAdd,
   onShowOpen,
@@ -1053,6 +1058,7 @@ function EmptyList({
   empty?: { title: string; text: string } | null;
   query: string;
   filtered: boolean;
+  filterNames?: readonly string[];
   onClearFilters?: () => void;
   onAdd?: () => void;
   onShowOpen?: () => void;
@@ -1074,7 +1080,11 @@ function EmptyList({
             ? "Not in this list. It may be in All Leads."
             : query
               ? "Try another name, city or the last digits of a number."
-              : "Nobody here for whose leads you picked."
+              : // Which filters hid the leads (robot J181, 2 Nov 2026: it said
+                // "Nobody here for whose leads you picked" for any filter).
+                filterNames.length
+                ? `Filters on: ${filterNames.join(" · ")}.`
+                : "Clear the filters to see every lead here."
         }
         action={
           query && onSearchAll

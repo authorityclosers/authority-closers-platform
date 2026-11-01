@@ -46,6 +46,7 @@ module.exports = {
     return module.exports._detail;
   },
   annotate: async (o) => lines(await run(MINE, ["annotate", ...flags(o)]))[0],
+  reopen: async (o) => lines(await run(MINE, ["reopen", ...flags(o)]))[0],
   sweep: async (o) => lines(await run(MINE, ["sweep", ...flags(o)]))[0],
   result: async (o) => lines(await run(QA, ["result", "--engine", "script", ...flags(o)]))[0],
   bug: async (o) => lines(await run(QA, ["bug", ...flags(o)]))[0],
