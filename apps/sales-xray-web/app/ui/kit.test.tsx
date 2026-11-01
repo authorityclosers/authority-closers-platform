@@ -116,7 +116,8 @@ it("keeps tabs in the address and marks the current one", () => {
 
 it("gives people stable initials and an empty state one action", () => {
   expect(initials("Dr. Asha Menon")).toBe("AM");
-  expect(initials("समीर जोशी")).toBe("सज");
+  // By grapheme: जो keeps its vowel sign (phone personas ph1-34).
+  expect(initials("समीर जोशी")).toBe("सजो");
   expect(initials("  ")).toBe("?");
   expect(renderToStaticMarkup(<Avatar name="Asha Menon" />)).toContain("AM");
   // A small avatar keeps its initial at 12 px: one letter.

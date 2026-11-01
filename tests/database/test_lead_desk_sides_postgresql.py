@@ -11,7 +11,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import Engine, inspect, update
+from sqlalchemy import Engine, inspect, select, update
 
 from ac_platform.lead_desk.models import Lead
 from tests.database.conversation_harness import conversation_harness
@@ -112,6 +112,13 @@ def test_each_side_lists_counts_and_numbers_its_own_leads(
             badge = (await here.client.get(f"{BASE}/badge")).json()
             assert badge["to_call"] == numbers.json()["inbound"]["to_call"]
             assert badge["overdue"] == sum(row["overdue"] for row in inbound["leads"])
+            # It counts exactly the Inbound To Call list's rows, and the work views' tabs
+            # carry each view's count (#9 option A; competitor teardown #9).
+            listed = await page(scope="mine", side="inbound", view="to_call")
+            assert listed["total"] == badge["to_call"] == listed["view_counts"]["to_call"]
+            assert listed["view_counts"] == {"to_call": 2, "follow_ups": 1, "all": 3}
+            more = await page(scope="mine", side="inbound", view="to_call", offset="2")
+            assert more["view_counts"] == {}
 
             # Home's "Follow-ups late" is the Late list it opens, on Inbound (phone personas,
             # 1 Nov 2026: "2 late" over a list of 0).
@@ -191,13 +198,24 @@ def test_follow_ups_hold_every_planned_call_on_its_side(
     async def exercise() -> None:
         async with world(postgres_harness, tmp_path) as here:
             await both_sides(here)
-            async with here.setup.sessions() as db, db.begin():
-                # A call-back booked on an untouched Cold lead, for tomorrow.
-                await db.execute(
-                    update(Lead)
-                    .where(Lead.name == "Fictional Cold untouched")
-                    .values(next_action_at=datetime.now(UTC) + timedelta(days=1))
+            async with here.setup.sessions() as db:
+                untouched = await db.scalar(
+                    select(Lead.id).where(
+                        Lead.tenant_id == here.tenant_id, Lead.name == "Fictional Cold untouched"
+                    )
                 )
+            # A call-back booked on an untouched Cold lead for tomorrow, through Schedule a
+            # follow-up (phone QA, 1 Nov 2026, ph2-25): the same lead time as after a call.
+            booked = await here.client.post(
+                f"{BASE}/leads/{untouched}/tasks",
+                json={
+                    "command_id": str(uuid4()),
+                    "kind": "call_back",
+                    "starts_at": (datetime.now(UTC) + timedelta(days=1)).isoformat(),
+                },
+                headers=WRITE,
+            )
+            assert booked.status_code == 200, booked.text
             here.as_seller()
 
             async def names(**query: str) -> list[str]:

@@ -22,6 +22,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { displayName } from "../display-name";
+import { notify } from "../notice-center";
 import { useFlow } from "../telemetry-flows";
 import { Button, Dialog, Field, kitStyles, Segmented } from "../ui/kit";
 import { Picker } from "../ui/picker";
@@ -356,6 +357,15 @@ export function AddLeadDialog({
       };
       const detail = await addLead(lead, command.current);
       flow.done({ step: "save" });
+      // A number already a lead joins it (the API's 201): say so, and open it
+      // (simulation lab d208a435; orchestrator, 1 Nov 2026).
+      if (detail.events?.[0]?.kind === "repeat")
+        notify({
+          id: `already-${detail.lead.lead_id}`,
+          tone: "info",
+          title: `Already a lead: ${displayName(detail.lead.name)} · ${detail.lead.stage_label}`,
+          message: "Opened it instead of adding a new one.",
+        });
       onAdded(detail.lead.lead_id);
     } catch (reason) {
       setError(

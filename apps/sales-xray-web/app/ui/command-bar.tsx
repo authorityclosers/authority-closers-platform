@@ -15,6 +15,7 @@
 
 import { CornerDownLeft, Search } from "lucide-react";
 import {
+  Fragment,
   useEffect,
   useId,
   useMemo,
@@ -37,6 +38,9 @@ export type Command = {
   keywords?: string;
   icon: ReactNode;
   run: () => void;
+  /** A small button at the row's end for its quick action, Call beside a lead
+   *  (phone QA, 1 Nov 2026, ph2-27: a full-width Call row was a fat-finger dial). */
+  aside?: { label: string; icon: ReactNode; run: () => void };
 };
 
 /**
@@ -149,7 +153,7 @@ export function CommandBar({
   );
   const shown = Math.min(active, Math.max(results.length - 1, 0));
 
-  const run = (command: Command) => {
+  const run = (command: Pick<Command, "run">) => {
     onClose();
     command.run();
   };
@@ -222,36 +226,52 @@ export function CommandBar({
             <div className={styles.group} aria-hidden="true">
               {group.name}
             </div>
-            {group.items.map(({ command, at }) => (
-              <div
-                key={command.id}
-                id={optionId(at)}
-                role="option"
-                aria-selected={at === shown}
-                className={styles.option}
-                onPointerMove={() => {
-                  if (at !== shown) setActive(at);
-                }}
-                onClick={() => run(command)}
-              >
-                <span className={styles.icon} aria-hidden="true">
-                  {command.icon}
-                </span>
-                <span className={styles.words}>
-                  <span className={styles.label}>{command.label}</span>
-                  {command.hint ? (
-                    <span className={styles.hint}>{command.hint}</span>
+            {group.items.map(({ command, at }) => {
+              const option = (
+                <div
+                  id={optionId(at)}
+                  role="option"
+                  aria-selected={at === shown}
+                  className={styles.option}
+                  onPointerMove={() => {
+                    if (at !== shown) setActive(at);
+                  }}
+                  onClick={() => run(command)}
+                >
+                  <span className={styles.icon} aria-hidden="true">
+                    {command.icon}
+                  </span>
+                  <span className={styles.words}>
+                    <span className={styles.label}>{command.label}</span>
+                    {command.hint ? (
+                      <span className={styles.hint}>{command.hint}</span>
+                    ) : null}
+                  </span>
+                  {at === shown ? (
+                    <CornerDownLeft
+                      size={15}
+                      className={styles.enter}
+                      aria-hidden="true"
+                    />
                   ) : null}
-                </span>
-                {at === shown ? (
-                  <CornerDownLeft
-                    size={15}
-                    className={styles.enter}
-                    aria-hidden="true"
-                  />
-                ) : null}
-              </div>
-            ))}
+                </div>
+              );
+              return command.aside ? (
+                <div key={command.id} className={styles.withAside}>
+                  {option}
+                  <button
+                    type="button"
+                    className={styles.aside}
+                    aria-label={command.aside.label}
+                    onClick={() => command.aside && run(command.aside)}
+                  >
+                    {command.aside.icon}
+                  </button>
+                </div>
+              ) : (
+                <Fragment key={command.id}>{option}</Fragment>
+              );
+            })}
           </div>
         ))}
         {searching ? (

@@ -164,7 +164,7 @@ it("says before the import who it takes past their limit", () => {
     counts: null,
   } as unknown as UploadChoices;
   expect(overLimitLines(choices, [priya], 900)).toEqual([
-    "Priya Fictional would have 902 open leads, 852 over the limit of 50.",
+    "Priya Fictional would have 902 open Inbound leads, 852 over their limit of 50.",
   ]);
   expect(overLimitLines(choices, [{ ...priya, max_open: null }], 900)).toEqual(
     [],

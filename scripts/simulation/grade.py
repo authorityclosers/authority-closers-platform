@@ -25,6 +25,7 @@ import re
 import sys
 import unicodedata
 from datetime import UTC, datetime, timedelta
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
@@ -284,7 +285,7 @@ def grade_facts(key: dict[str, Any], objects: list[dict[str, Any]]) -> dict[str,
         else:
             for group in groups(spec):
                 expected += 1
-                ok = [o for o in found if any(norm(alt) in norm(fact_text(o)) for alt in group)]
+                ok = [o for o in found if _matches([group], fact_text(o), type_key)]
                 hit += bool(ok)
                 right_objects.update(id(o) for o in ok)
                 detail.append(
@@ -312,6 +313,262 @@ def grade_facts(key: dict[str, Any], objects: list[dict[str, Any]]) -> dict[str,
         "forbidden": len(forbidden),
         "detail": detail,
     }
+
+
+# ----- the report's own words ---------------------------------------------------------
+#
+# Where the call data engine does not run (dev's AI spend guard skips sandbox organisations),
+# the report is the only extraction: the key is checked against what the model wrote, never
+# against the transcript quotes it cites.
+
+REPORT_SKIP = {"evidence", "citations", "quote", "quotes", "segment_id", "doc", "sections"}
+OUTCOME_WORDS = {
+    "deal_closed": [
+        "closed the deal",
+        "agreed to buy",
+        "signed",
+        "enrolled",
+        "confirmed the",
+        "agreement achieved",
+        "commercial agreement",
+        "closing a",
+        "closed a",
+        "secured the",
+    ],
+    "follow_up_agreed": ["follow up", "follow-up", "send", "share", "next week"],
+    "meeting_scheduled": ["meeting", "demo", "demonstration", "visit", "scheduled", "booked"],
+    "no_sale": ["not interested", "declined", "rejected", "turned down", "no sale", "refused"],
+    "not_a_fit": ["not a fit", "wrong number", "no need", "not relevant", "mismatch"],
+    "callback_requested": ["call back", "callback", "call again", "call later", "call him back"],
+    "no_conversation": ["voicemail", "no conversation", "not connect", "ivr", "unanswered"],
+}
+WEEKDAY_NAMES = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+MONTHS = [
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december",
+]  # fmt: skip
+
+
+def report_text(payload: Any) -> str:
+    """Everything the model wrote in a report envelope, without the quotes it cites."""
+    if isinstance(payload, dict) and isinstance(payload.get("report"), dict):
+        payload = payload["report"].get("content", payload["report"])
+    parts: list[str] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            for key, child in node.items():
+                if key not in REPORT_SKIP:
+                    walk(child)
+        elif isinstance(node, list):
+            for child in node:
+                walk(child)
+        elif isinstance(node, str) and not re.fullmatch(r"[\w./:-]+", node):
+            parts.append(node)
+
+    walk(payload)
+    return " ".join(parts)
+
+
+def name_heard_as(group: list[str], said: str) -> str | None:
+    """An Indian first name has several spellings (Meenal/Minal, Kavita/Kvita as heard): a
+    word of the report within a small edit of a one-word name counts, and is recorded."""
+    for alt in group:
+        want = norm(alt)
+        if " " in want or len(want) < 4:
+            continue
+        for word in set(said.split()):
+            if word != want and SequenceMatcher(None, want, word).ratio() >= 0.72:
+                return word
+    return None
+
+
+def grade_report_facts(key: dict[str, Any], text: str) -> dict[str, Any]:
+    """Recall of the key's items in the report's own words."""
+    said = norm(text)
+    detail: list[dict[str, Any]] = []
+    for type_key, spec in key.items():
+        if type_key in GRADED_SKIP:
+            continue
+        if isinstance(spec, str):  # an outcome enum, read from its usual words
+            words = OUTCOME_WORDS.get(spec, [spec.replace("_", " ")])
+            detail.append(
+                {"type": type_key, "want": spec, "ok": any(norm(w) in said for w in words)}
+            )
+        elif isinstance(spec, dict):
+            matcher = amount_matches if "amount" in spec else number_matches
+            detail.append(
+                {
+                    "type": type_key,
+                    "want": spec.get("amount", spec.get("number")),
+                    "ok": matcher(spec, text),
+                }
+            )
+        else:
+            for group in groups(spec):
+                ok = any(norm(alt) in said for alt in group)
+                item: dict[str, Any] = {"type": type_key, "want": group[0], "ok": ok}
+                if not ok and type_key == "person.name":
+                    heard = name_heard_as(group, said)
+                    if heard:
+                        item.update(ok=True, heard_as=heard)
+                detail.append(item)
+    hit = sum(d["ok"] for d in detail)
+    return {
+        "expected": len(detail),
+        "hit": hit,
+        "recall": round(hit / len(detail), 3) if detail else None,
+        "detail": detail,
+    }
+
+
+def money_precision(text: str, script: str, key: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Rupee figures (1,000 and up, not a year) the report states, and how many the call
+    really said: in the script's figures and words, or in the key (amounts spoken in Hindi
+    or Marathi words are in the key)."""
+
+    def money(found: list[float]) -> list[float]:
+        return [x for x in found if x >= 1000 and not (1990 <= x <= 2100 and x.is_integer())]
+
+    heard = money(amounts(script))
+    for spec in (key or {}).values():
+        if isinstance(spec, dict) and "amount" in spec:
+            heard += [float(spec[k]) for k in ("amount", "low", "high") if k in spec]
+            heard += [float(x) for x in spec.get("also", [])]
+    stated = sorted(set(money(amounts(text))))
+    right = [x for x in stated if any(abs(x - h) <= 0.05 * h for h in heard)]
+    return {
+        "stated": len(stated),
+        "right": len(right),
+        "precision": round(len(right) / len(stated), 3) if stated else None,
+        "unheard": [x for x in stated if x not in right][:5],
+    }
+
+
+def follow_up_in_text(spec: dict[str, Any] | None, text: str) -> bool | None:
+    """Does the report name the agreed day and hour of the next step?"""
+    if not spec:
+        return None
+    said = norm(text)
+    ok = True
+    if "weekday" in spec:
+        ok &= spec["weekday"] in said
+    if spec.get("day_offset") == 1:
+        ok &= "tomorrow" in said
+    if "month_day" in spec:
+        month, day = spec["month_day"]
+        ok &= MONTHS[month - 1] in said and re.search(rf"\b{day}(st|nd|rd|th)?\b", said) is not None
+    if spec.get("hour") is not None:
+        hour = spec["hour"]
+        twelve = hour - 12 if hour > 12 else hour
+        half = "pm" if hour >= 12 else "am"
+        # norm() has turned "4:00 p.m." into "4 00 pm" and "16:00" into "16 00".
+        word = {v: w for w, v in {**_UNITS, **_TEENS}.items()}.get(twelve, twelve)
+        pattern = rf"\b({twelve}( 00)? ?{half}|{hour} 00|at {twelve}|at {word})\b"
+        ok &= re.search(pattern, said) is not None
+    return bool(ok)
+
+
+# ----- the call data engine's lead work -----------------------------------------------
+#
+# Where the engine runs, it offers a stage only when the call moved the lead forward
+# (lead_desk/journey/signals.py: a meeting, a deal, "spoke to them"); lost, junk, not
+# connected and new are never offered. It fills only empty lead fields, and asks before it
+# sets a follow-up.
+
+NEVER_SUGGESTED = {"new", "lost", "junk", "not_connected"}
+# The lead columns the engine can fill (call_data/taxonomy.py lead_field), from the key.
+FILL_FIELDS = {
+    "name": ("person.name", "Name"),
+    "company": ("company.name", "Company"),
+    "city": ("company.location", "City"),
+    "interest": ("offer.product", "Interested in"),
+}
+NAME_TYPES = {"person.name", "company.name"}
+
+
+def close_spelling(alt: str, text: str) -> bool:
+    """Every word of a name within a small edit of a word of the text (Shaikh/Sheikh,
+    Mehta/Meta as heard): names have several spellings, and the ear writes one."""
+    words = norm(text).split()
+    wanted = norm(alt).split()
+    return bool(wanted) and all(
+        any(SequenceMatcher(None, w, t).ratio() >= 0.75 for t in words) for w in wanted
+    )
+
+
+def _field(lead: dict[str, Any], fields: Any, name: str, label: str) -> Any:
+    if lead.get(name):
+        return lead[name]
+    for item in fields or []:
+        if isinstance(item, dict) and str(item.get("label", "")).casefold() == label.casefold():
+            return item.get("value")
+    return None
+
+
+def _matches(spec: Any, value: Any, type_key: str = "") -> bool:
+    text = str(value or "")
+    if isinstance(spec, dict):
+        matcher = amount_matches if "amount" in spec else number_matches
+        return matcher(spec, text, value)
+    if isinstance(spec, str):
+        return norm(spec) in norm(text)
+    return any(
+        norm(alt) in norm(text) or (type_key in NAME_TYPES and close_spelling(alt, text))
+        for group in groups(spec)
+        for alt in group
+    )
+
+
+def grade_fills(key: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
+    """Each lead field the key has a value for: filled right or wrong by the engine, kept
+    (it already had a value), or missed (empty, and the engine left it)."""
+    before = run.get("lead_before") or {}
+    detail = run.get("lead") or {}
+    row = detail.get("lead") or {}
+    filled = {
+        str(item.get("field")): item.get("value")
+        for item in (run.get("call_data") or {}).get("filled") or []
+        if isinstance(item, dict)
+    }
+    rows = []
+    for name, (type_key, label) in FILL_FIELDS.items():
+        if type_key not in key:
+            continue
+        had = _field(before, before.get("fields"), name, label)
+        now = _field(row, detail.get("fields"), name, label)
+        if name in filled:
+            status = "right" if _matches(key[type_key], filled[name], type_key) else "wrong"
+        else:
+            status = "kept" if had else "missed"
+        rows.append({"field": name, "before": had, "after": now, "status": status})
+    count = {s: sum(r["status"] == s for r in rows) for s in ("right", "wrong", "kept", "missed")}
+    return {
+        **count,
+        "fields": rows,
+        "other_filled": sorted(set(filled) - set(FILL_FIELDS)),
+    }
+
+
+def follow_up_from_facts(call_data: Any) -> datetime | None:
+    """The agreed next talk the engine read (date and time, India time) as UTC."""
+    for obj in objects_from(call_data):
+        value = obj.get("value")
+        if obj["type_key"] != "commitment.follow_up" or not isinstance(value, dict):
+            continue
+        if value.get("date"):
+            hour, minute = (int(x) for x in str(value.get("time") or "10:00").split(":")[:2])
+            day = datetime.fromisoformat(str(value["date"])).replace(tzinfo=UTC)
+            return day + timedelta(hours=hour, minutes=minute) - IST
+    return None
+
+
+def engine_ran(call_data: Any) -> bool:
+    pipes = (call_data or {}).get("pipelines") if isinstance(call_data, dict) else None
+    return any(
+        isinstance(p, dict) and p.get("state") not in (None, "none", "not_started")
+        for p in (pipes or {}).values()
+    )
 
 
 # ----- speakers -----------------------------------------------------------------------
@@ -376,13 +633,22 @@ def speaker_roles(speaker_map_payload: Any) -> dict[str, str]:
 
     def walk(node: Any) -> None:
         if isinstance(node, dict):
-            label = node.get("speaker") or node.get("label") or node.get("speaker_label")
+            label = next(
+                (
+                    node[k]
+                    for k in ("speaker", "speaker_id", "label", "speaker_label")
+                    if node.get(k) is not None
+                ),
+                None,
+            )
             role = node.get("role") or node.get("side") or node.get("name")
             if label is not None and isinstance(role, str):
                 roles[str(label)] = role
             for key, value in node.items():
-                if isinstance(value, str) and re.fullmatch(
-                    r"(spk|speaker)?[ _-]?\w{1,3}", key.casefold()
+                if (
+                    isinstance(value, str)
+                    and key not in ("speaker_id", "segment_id")
+                    and re.fullmatch(r"(spk|speaker)?[ _-]?\w{1,3}", key.casefold())
                 ):
                     roles.setdefault(key, value)
                 walk(value)
@@ -492,8 +758,9 @@ def due_check(spec: dict[str, Any] | None, call_at: datetime, due: datetime | No
         return False
     local, call_local = due + IST, call_at + IST
     ok = True
-    if "weekday" in spec:
-        ok &= WEEKDAYS[local.weekday()] == spec["weekday"] and local.date() > call_local.date()
+    if "weekday" in spec:  # the first such day after the call ("Saturday" said on a Friday)
+        ahead = (local.date() - call_local.date()).days
+        ok &= WEEKDAYS[local.weekday()] == spec["weekday"] and 0 < ahead <= 7
     if "day_offset" in spec:
         ok &= (local.date() - call_local.date()).days == spec["day_offset"]
     if "month_day" in spec:
@@ -550,8 +817,16 @@ def grade(truth: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
         "seconds": truth.get("duration_seconds"),
         "error": run.get("error"),
     }
+    over_limit = bool(truth["expect"].get("over_limit"))
     if run.get("error") and not run.get("submission_id"):
-        out["result"] = "blocked"
+        # Over the 2-hour limit, a clear refusal before any spend is the right answer; the
+        # app refusing the recording of any other call is a miss; anything else stopped the
+        # lab before the app was tested.
+        refused = "/source -> 4" in str(run["error"])
+        if over_limit and " -> 4" in str(run["error"]):
+            out["result"] = "pass"
+        else:
+            out["result"] = "fail" if refused else "blocked"
         return out
     out["report"] = {"want": want_report, "got": has_report, "hold": code}
     report_ok = (
@@ -567,6 +842,12 @@ def grade(truth: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
         round((reported - accepted).total_seconds()) if accepted and reported else None
     )
     segments = segments_from(run.get("transcript"))
+    if over_limit:
+        ends = [s["end"] for s in segments if s["end"] is not None]
+        out["over_limit"] = {
+            "audio_s": round(truth.get("duration_seconds") or 0),
+            "transcript_until_s": round(max(ends)) if ends else None,
+        }
     hyp = " ".join(s["text"] for s in segments)
     ref = " ".join(t[1] for t in truth["turns"] if t[0] != "I")
     if segments and script_of(hyp) == script_of(ref):
@@ -585,23 +866,58 @@ def grade(truth: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
         if o["type_key"].startswith(("money.", "commitment.", "outcome."))
     ]
     out["facts"] = grade_facts(truth["key"], objects)
+    ran = engine_ran(run.get("call_data"))
+    out["engine"] = "ran" if ran else "not run"
+    said = report_text(run.get("report")) if has_report else ""
+    if said:
+        out["report_facts"] = grade_report_facts(truth["key"], said)
+        out["report_money"] = money_precision(said, ref, truth["key"])
+        out["report_follow_up"] = follow_up_in_text(truth["expect"].get("follow_up"), said)
     lead = run.get("lead") or {}
     stage = (lead.get("lead") or {}).get("stage")
+    before = (run.get("lead_before") or {}).get("stage")
+    suggestion = lead.get("stage_suggestion")
+    stage_ok = truth["expect"].get("stage_ok")
+    # Without the call data engine nothing moves a stage by itself: not graded (guarded).
+    guarded = not ran and stage == before and not suggestion
     out["stage"] = {
-        "before": (run.get("lead_before") or {}).get("stage"),
+        "before": before,
         "after": stage,
+        "suggested": suggestion,
         "want": truth["expect"].get("stage"),
-        "ok": None
-        if not lead or truth["expect"].get("stage_ok") is None
-        else stage in truth["expect"]["stage_ok"],
+        "ok": None if not lead or stage_ok is None or guarded else stage in stage_ok,
+        "guarded": guarded,
     }
     call_at = parse_time(run.get("call_started_at")) or accepted or datetime.now(UTC)
     out["follow_up"] = {
         "want": truth["expect"].get("follow_up"),
         "ok": due_check(truth["expect"].get("follow_up"), call_at, next_due(lead))
-        if lead
+        if lead and not guarded
         else None,
     }
+    if ran and lead:
+        # The engine offers a stage with one tap and never moves it itself (Lead OS).
+        step = suggestion.get("step") if isinstance(suggestion, dict) else None
+        moved = stage != before
+        if stage_ok is None:
+            right = None
+        elif step:
+            right = step in stage_ok
+        else:  # nothing offered: right where the app never offers that stage, or it is there
+            right = truth["expect"].get("stage") in NEVER_SUGGESTED or before in stage_ok
+        out["stage"].update(
+            suggested=step,
+            why=suggestion.get("why") if isinstance(suggestion, dict) else None,
+            moved_without_tap=moved,
+            ok=None if right is None else right and not moved,
+        )
+        due = follow_up_from_facts(run.get("call_data"))
+        out["follow_up"] = {
+            "want": truth["expect"].get("follow_up"),
+            "got": due.isoformat() if due else None,
+            "ok": due_check(truth["expect"].get("follow_up"), call_at, due),
+        }
+        out["fills"] = grade_fills(truth["key"], run)
     log = run.get("phone_log") or {}
     if run.get("path") == "phone":
         out["landing"] = {
@@ -610,7 +926,7 @@ def grade(truth: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
         }
     checks = [report_ok]
     if want_report:
-        recall = out["facts"]["recall"]
+        recall = out["facts"]["recall"] if ran else (out.get("report_facts") or {}).get("recall")
         checks.append(recall is not None and recall >= 0.6)
         roles = out["roles"]["accuracy"]
         checks.append(roles is not None and roles >= 0.8)
@@ -634,26 +950,65 @@ def markdown(rows: list[dict[str, Any]]) -> str:
         "|---|---|---|---|---|---|---|---|---|---|---|\n"
     )
     lines = []
+
+    def length(seconds: float | None) -> str:
+        if seconds is None:
+            return "–"
+        return f"{seconds / 60:.1f} min" if seconds >= 600 else f"{round(seconds)} s"
+
     for r in rows:
-        if r["result"] == "blocked":
+        if "report" not in r:  # stopped before an upload: blocked, or refused as it should be
+            said = (r.get("error") or "").split(" -> ", 1)[-1]  # the app's answer, not the URL
             lines.append(
-                f"| {r['id']} {r['title']} | {r['path']} | {r.get('seconds') or '–'} s | "
-                "**blocked** | "
-                f"{(r.get('error') or '')[:90]} | | | | | | |"
+                f"| {r['id']} {r['title']} | {r['path']} | {length(r.get('seconds'))} | "
+                f"**{r['result']}** | refused: {said[:110]} | | | | | | |"
             )
             continue
         rep = r["report"]
         facts = r["facts"]
+        if r.get("engine") == "not run" and r.get("report_facts"):
+            money = (r.get("report_money") or {}).get("precision")
+            facts = {"recall": r["report_facts"]["recall"], "precision": money}
         st = r["stage"]
         fu = r["follow_up"]["ok"]
+        if fu is None and r.get("report_follow_up") is not None:
+            fu = r["report_follow_up"]
         follow = "–" if fu is None else ("ok" if fu else "wrong")
         lines.append(
-            f"| {r['id']} {r['title']} | {r['path']} | {r['seconds']} s | **{r['result']}** | "
+            f"| {r['id']} {r['title']} | {r['path']} | {length(r['seconds'])} | "
+            f"**{r['result']}** | "
             f"{rep['want']}/{rep['got']}/{rep['hold'] or '–'} | {_pct(r['roles']['accuracy'])} | "
             f"{_pct(r['wer']) if r['wer'] is not None else r.get('wer_note', '–')} | "
             f"{_pct(facts['recall'])} / {_pct(facts['precision'])} | "
-            f"{st['before']}→{st['after']} ({st['want']}) | {follow} | "
+            f"{st['before'] or '–'}→{st['after'] or '–'} ({st['want'] or '–'})"
+            f"{' guarded' if st.get('guarded') else ''}"
+            f" | {follow} | "
             f"{r['latency_s'] if r['latency_s'] is not None else '–'} s |"
+        )
+    return head + "\n".join(lines) + "\n"
+
+
+def engine_markdown(rows: list[dict[str, Any]]) -> str:
+    """Round two: what the call data engine did with each call's lead."""
+    head = (
+        "| Scenario | Result | Stage offered (want) | Moved without a tap | Lead fills "
+        "(right/wrong/kept/missed) | Facts R/P (objects) | Follow-up read |\n"
+        "|---|---|---|---|---|---|---|\n"
+    )
+    lines = []
+    for r in rows:
+        st = r.get("stage") or {}
+        fills = r.get("fills") or {}
+        facts = r.get("facts") or {}
+        fu = (r.get("follow_up") or {}).get("ok")
+        offered = st.get("suggested") or "none"
+        lines.append(
+            f"| {r['id']} {r['title']} | **{r['result']}** | {offered} ({st.get('want') or '–'})"
+            f" | {'yes' if st.get('moved_without_tap') else 'no'} | "
+            f"{fills.get('right', 0)}/{fills.get('wrong', 0)}/{fills.get('kept', 0)}/"
+            f"{fills.get('missed', 0)} | {_pct(facts.get('recall'))} / "
+            f"{_pct(facts.get('precision'))} ({facts.get('extracted', 0)}) | "
+            f"{'–' if fu is None else ('ok' if fu else 'wrong')} |"
         )
     return head + "\n".join(lines) + "\n"
 
@@ -663,9 +1018,10 @@ def main() -> None:
     parser.add_argument("out")
     parser.add_argument("results")
     parser.add_argument("--md")
+    parser.add_argument("--engine-md", help="the call data engine table (round two)")
     args = parser.parse_args()
     rows = []
-    for truth_file in sorted(Path(args.out).glob("S??/truth.json")):
+    for truth_file in sorted(Path(args.out).glob("S*/truth.json")):
         truth = json.loads(truth_file.read_text(encoding="utf-8"))
         result_file = Path(args.results) / f"{truth['id']}.json"
         if not result_file.exists():
@@ -676,6 +1032,9 @@ def main() -> None:
     )
     if args.md:
         Path(args.md).write_text(markdown(rows), "utf-8")
+    if args.engine_md:
+        ran = [r for r in rows if r.get("engine") == "ran"]
+        Path(args.engine_md).write_text(engine_markdown(ran), "utf-8")
     for r in rows:
         print(
             r["id"],

@@ -5,15 +5,17 @@ side's three header numbers. A lead's side is ``lead_desk_leads.pipeline`` (migr
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Final, Literal
 
 from pydantic import Field
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import func, or_, select
 
 from ac_platform.lead_desk.contracts import SCHEMA, Model
 from ac_platform.lead_desk.errors import DeskError
 from ac_platform.lead_desk.models import Lead
-from ac_platform.lead_desk.vocabulary import NEEDS_FOLLOW_UP, OPEN_STAGES
+from ac_platform.lead_desk.vocabulary import NEEDS_FOLLOW_UP
+from ac_platform.lead_desk.work_views import in_view
 
 if TYPE_CHECKING:
     from ac_platform.lead_desk.store import LeadDesk
@@ -35,7 +37,7 @@ def is_cold(lead: Lead) -> bool:
 
 class InboundNumbers(Model):
     """Every inbound lead (with Cold's Imported: whether someone has both lead types), new
-    enquiries, the leads due a call now, and the follow-ups booked."""
+    enquiries, the To Call list's rows (the badge's number), and the follow-ups booked."""
 
     leads: int
     new: int
@@ -67,17 +69,15 @@ async def side_numbers(desk: LeadDesk, *, scope: Literal["mine", "team"]) -> Sid
     if scope == "mine":
         where.append(Lead.owner_person_id == desk.viewer.person_id)
     inbound, cold = on_side("inbound"), on_side("cold")
-    # Due now: a time that has come, or a new lead nobody has called yet.
-    due = or_(
-        Lead.next_action_at <= desk.now,
-        and_(Lead.stage == "new", Lead.next_action_at.is_(None)),
-    )
+    # To Call's rows, as the list and the badge count them (#9 option A).
+    waiting = await desk._waiting_call_back(team=scope != "mine")
+    to_call = in_view("to_call", desk._day_start() + timedelta(days=1), waiting)
     row = (
         await desk.db.execute(
             select(
                 func.count().filter(inbound),
                 func.count().filter(inbound, Lead.stage == "new"),
-                func.count().filter(inbound, Lead.stage.in_(OPEN_STAGES), due),
+                func.count().filter(inbound, to_call),
                 func.count().filter(
                     inbound, Lead.stage.in_(NEEDS_FOLLOW_UP), Lead.next_action_at.is_not(None)
                 ),

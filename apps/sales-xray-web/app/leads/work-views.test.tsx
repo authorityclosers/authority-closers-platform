@@ -19,6 +19,7 @@ import {
   listTitle,
   pickableStages,
   rememberView,
+  tabCount,
 } from "./work-views";
 
 (
@@ -91,6 +92,24 @@ it("shows To Call, Follow-ups and All Leads as views, and switches once per tap"
   expect(onChange).not.toHaveBeenCalled();
   await act(async () => followUps.click());
   expect(onChange).toHaveBeenCalledWith("follow_ups");
+});
+
+it("puts each view's count on its tab once the list has counted (one count rule, #9)", async () => {
+  await act(async () =>
+    root.render(
+      <ViewTabs
+        value="to_call"
+        onChange={vi.fn()}
+        counts={{ to_call: 7, follow_ups: 0, all: 1178 }}
+      />,
+    ),
+  );
+  expect(tabs()).toEqual([
+    ["To Call 7", "true"],
+    ["Follow-ups 0", "false"],
+    ["All Leads 1.2K", "false"],
+  ]);
+  expect([999, 117800].map(tabCount)).toEqual(["999", "1.2L"]);
 });
 
 it("splits Follow-ups into Due Today, Overdue and Upcoming", async () => {

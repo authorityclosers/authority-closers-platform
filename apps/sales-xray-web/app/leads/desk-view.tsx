@@ -258,7 +258,9 @@ export function LeadLine({
         >
           <Avatar name={row.name} size={34} />
           <span className={styles.leadMain}>
-            <span className={styles.leadName}>{row.name}</span>
+            <span className={styles.leadName}>
+              <span className={styles.leadNameText}>{row.name}</span>
+            </span>
             {sub ? <span className={styles.leadSub}>{sub}</span> : null}
             {line ? (
               <span

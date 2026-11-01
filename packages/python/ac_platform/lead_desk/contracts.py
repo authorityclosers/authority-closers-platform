@@ -287,6 +287,15 @@ class SideDay(Model):
     open_key: str | None = None
 
 
+class Badge(Model):
+    """The Leads tab's badge and the phone's icon count: what is due for me now."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    overdue: int
+    to_call: int
+    generated_at: datetime
+
+
 class Desk(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
     # The organisation's own lists from files' Source columns, for the source filter (ph1-18).
@@ -317,15 +326,9 @@ class Desk(Model):
     # Each side of my day ("inbound", "cold"), so Home's Inbound | Cold selector switches
     # with no new read.
     sides: dict[str, SideDay] | None = None
-
-
-class Badge(Model):
-    """The Leads tab's badge and the phone's icon count: what is due for me now."""
-
-    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
-    overdue: int
-    to_call: int
-    generated_at: datetime
+    # The Leads badge, counted as GET /badge counts it (the whole day's desk only), so the
+    # Leads page hands the badge the same number (#9 option A).
+    badge: Badge | None = None
 
 
 # Leads sorted and filtered on the server, so a long list sorts as a whole, not
@@ -378,6 +381,9 @@ class LeadPage(Model):
     # Owners and admins on the team's list: leads per seller ("none": nobody's) for the
     # same filters, without the seller picked, for the per-seller chips (25 Oct 2026).
     owner_counts: dict[str, int] = Field(default_factory=dict)
+    # Each work view's count ("to_call", "follow_ups", "all") for the same filters, on a
+    # side's first page: the work views' tabs (competitor teardown #9).
+    view_counts: dict[str, int] = Field(default_factory=dict)
 
 
 class BulkDone(Model):

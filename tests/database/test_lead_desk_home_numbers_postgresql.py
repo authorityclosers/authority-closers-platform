@@ -480,3 +480,40 @@ def test_the_desk_carries_inbound_and_cold_apart(postgres_harness: Any, tmp_path
             assert cool["to_call_today"] == {"left": 0, "called": 1}
 
     run(exercise())
+
+
+def test_the_next_lead_who_rang_says_so(postgres_harness: Any, tmp_path: Path) -> None:
+    """Leads 2 (1 Nov 2026): a missed call not yet returned is To Call's first row, so Home's
+    next lead can be one; its row says when they rang and how often, as on Leads."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            await here.add("Fictional Waiting First", "98760 67051")
+            rang = await here.add("Fictional Rang Twice", "98760 67052")
+            desk = (await here.client.get(f"{BASE}")).json()
+            # Nobody has rung yet: the next lead says nothing of a missed call.
+            assert desk["sides"]["inbound"]["next_lead"]["missed_at"] is None, desk["sides"]
+            now = datetime.now(UTC)
+            async with here.setup.sessions() as db, db.begin():
+                for minutes in (20, 10):
+                    db.add(
+                        LeadEvent(
+                            id=uuid4(),
+                            tenant_id=here.tenant_id,
+                            lead_id=UUID(rang),
+                            kind="call",
+                            actor_person_id=here.seller.person_id,
+                            data={
+                                "via": "phone",
+                                "direction": "missed",
+                                "duration_seconds": 0,
+                                "connected": False,
+                            },
+                            created_at=now - timedelta(minutes=minutes),
+                        )
+                    )
+            first = (await here.client.get(f"{BASE}")).json()["sides"]["inbound"]["next_lead"]
+            assert first["lead_id"] == rang, first
+            assert first["missed_calls"] == 2 and first["missed_at"] is not None, first
+
+    run(exercise())

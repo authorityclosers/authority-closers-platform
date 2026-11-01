@@ -17,7 +17,9 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+import type { HomeSide } from "./my-day-client";
 import { SalesHome } from "./sales-home";
+import { NextCall } from "./seller-home";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -424,4 +426,29 @@ it("says All clear with the next call when nothing is left, and no helper lines"
       ?.textContent,
   ).toContain("Call your next lead");
   expect(host.textContent).not.toContain("Fresh enquiries from ads");
+});
+
+// Leads 2 (1 Nov 2026): a missed call not yet returned is To Call's first row,
+// so it can be Home's next lead; Home says so, and its button calls them back.
+it("says the next lead rang and wasn't reached, and calls them back", async () => {
+  const rang = row("Meera Fictional", "41", {
+    missed_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    missed_calls: 2,
+  });
+  const own = side(
+    rang,
+    { new: 1, open_leads: 0, follow_ups_today: 0 },
+    numbers(0, 0, 0, 0),
+  ) as unknown as HomeSide;
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  for (const which of ["inbound", "cold"] as const) {
+    await act(async () => root.render(<NextCall side={which} own={own} />));
+    expect(host.textContent).toContain(
+      "Meta Ads · Missed call 30 min ago · 2 calls · call back",
+    );
+    expect(host.textContent).toContain("Call Meera back");
+    expect(host.textContent).not.toContain("Start cold calling");
+  }
 });

@@ -9,7 +9,7 @@
  * "Send me a test notification" proves the phone hears.
  */
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import {
   readOwnerAlerts,
@@ -106,6 +106,9 @@ export function NotificationPrefs() {
   const [owner, setOwner] = useState<OwnerAlerts | null>(null);
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
+  // Held from the first tap: two taps before the button greys out sent two
+  // tests (the test robot, 1 Nov 2026: 14836c51).
+  const sending = useRef(false);
   useEffect(() => {
     const controller = new AbortController();
     readNotify(controller.signal).then(
@@ -164,6 +167,8 @@ export function NotificationPrefs() {
     }
   };
   const test = async () => {
+    if (sending.current) return;
+    sending.current = true;
     setTesting(true);
     try {
       const sent = await testNotify();
@@ -193,6 +198,7 @@ export function NotificationPrefs() {
     } catch (error) {
       failed(error);
     } finally {
+      sending.current = false;
       setTesting(false);
     }
   };

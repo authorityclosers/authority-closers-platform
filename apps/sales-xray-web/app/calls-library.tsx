@@ -28,6 +28,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   type ReactNode,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -423,6 +424,16 @@ function CallsLibraryContent({
   );
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  // In a workspace Calls starts with "Your calls" (the phone's): what follows
+  // waits for its answer, so the list filling in pushes nothing down (robot
+  // f543ab73, 1 Nov 2026: 0.20 to 0.26 at 360 and 390 px on a slow network).
+  // A read that never answers holds it back no longer than the list's own.
+  const [phoneSettled, setPhoneSettled] = useState(false);
+  const settlePhone = useCallback(() => setPhoneSettled(true), []);
+  useEffect(() => {
+    const timer = window.setTimeout(settlePhone, libraryReadTimeoutMs);
+    return () => window.clearTimeout(timer);
+  }, [settlePhone]);
   // Only the call being opened says so; the others are just unavailable.
   const [openingId, setOpeningId] = useState<string | null>(null);
   const opening = openingId !== null;
@@ -1042,6 +1053,11 @@ function CallsLibraryContent({
   const currentWorkspace = access?.workspaces?.find(
     (item) => item.tenant_id === access?.context?.tenantId,
   );
+  const phoneShown =
+    insights &&
+    access?.authenticated === true &&
+    currentWorkspace?.kind === "organisation";
+  const phoneWaiting = phoneShown && !phoneSettled;
   const personalWorkspace = access?.workspaces?.find(
     (item) => item.kind === "personal" && item.sales_xray_enabled,
   );
@@ -1631,11 +1647,14 @@ function CallsLibraryContent({
       access?.authenticated === true &&
       currentWorkspace?.kind === "organisation" ? (
         <SectionBoundary name="Your calls" resetKey={identityKey}>
-          <PhoneCalls key={identityKey} />
+          <PhoneCalls key={identityKey} onSettled={settlePhone} />
         </SectionBoundary>
       ) : null}
       {/* One page heading; New analysis lives in the shell, not here too. */}
-      <header className={styles.header}>
+      <header
+        className={styles.header}
+        style={phoneWaiting ? { display: "none" } : undefined}
+      >
         <div className={styles.headerCopy}>
           <h1 id="calls-library-title">Calls</h1>
           <p className="calls-library-summary">
@@ -1697,7 +1716,7 @@ function CallsLibraryContent({
         </div>
       </header>
 
-      {access?.authenticated === false ? (
+      {phoneWaiting ? null : access?.authenticated === false ? (
         <section
           className={styles.empty}
           aria-labelledby="calls-library-sign-in"
@@ -1738,7 +1757,9 @@ function CallsLibraryContent({
           <span className={styles.emptyIcon} aria-hidden="true">
             <AudioLines size={20} />
           </span>
-          <h2 id="calls-library-empty">No calls yet</h2>
+          <h2 id="calls-library-empty">
+            {phoneShown ? "No call reports yet" : "No calls yet"}
+          </h2>
           <p>Upload a sales call recording to get its report here.</p>
           <Link href={newCallHref(studioHref)} className={styles.primary}>
             Analyse a call <ArrowRight size={15} aria-hidden="true" />

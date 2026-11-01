@@ -530,7 +530,8 @@ export function SellerSheet({
       }
       description={
         view === "main" && rep
-          ? `${rep.open_leads} open leads · ${rep.due_now} due now`
+          ? // The limit's own count: Inbound only (ph1-17, ph1-33).
+            `${rep.open_leads} open Inbound leads · ${rep.due_now} due now`
           : undefined
       }
       onClose={onClose}

@@ -91,12 +91,24 @@ async function settle(ms = 0) {
 
 it("answers about the lead it opened from: its last call and its notes", async () => {
   calls.read.mockResolvedValue(
-    detail([
-      event("note", { note: "Wife decides; call after 6" }),
-      event("call", { submission_id: CALL }),
-      event("result", { note: "Asked for the brochure" }),
-      event("stage"),
-    ]),
+    detail(
+      [
+        event("note", { note: "Wife decides; call after 6" }),
+        event("call", { submission_id: CALL }),
+        event("result", { note: "Asked for the brochure" }),
+        event("stage"),
+      ],
+      // The follow-up was saved with the newest note: its words show once.
+      {
+        next_action_note: "Wife decides; call after 6",
+        lead: {
+          lead_id: "lead-1",
+          name: "asha fictional",
+          stage_label: "Interested",
+          next_action_at: "2026-11-03T05:30:00+00:00",
+        },
+      },
+    ),
   );
   await act(async () =>
     root.render(
@@ -117,6 +129,8 @@ it("answers about the lead it opened from: its last call and its notes", async (
   expect(page()).toContain("The price is above their budget");
   expect(page()).toContain("Send the floor plan");
   expect(page()).toContain("Wife decides; call after 6");
+  expect(page().split("Wife decides; call after 6")).toHaveLength(2);
+  expect(page()).toContain("Follow-up");
   expect(page()).toContain("Asked for the brochure");
   expect(page()).toContain("Ravi Fictional");
   expect(page()).not.toMatch(/soon/i);

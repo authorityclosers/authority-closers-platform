@@ -249,7 +249,10 @@ function LeadAnswer({
   const brief = read?.call?.brief ?? null;
   const notes = read?.detail ? leadNotes(read.detail) : [];
   const next = read?.detail?.lead.next_action_at ?? null;
-  const nextNote = read?.detail?.next_action_note?.trim() || null;
+  // A follow-up saved with a note: its words show once, under Notes.
+  const said = read?.detail?.next_action_note?.trim() || null;
+  const nextNote =
+    said && !notes.some((note) => note.note?.trim() === said) ? said : null;
   const nothing = read !== null && !brief && notes.length === 0 && !next;
 
   return (

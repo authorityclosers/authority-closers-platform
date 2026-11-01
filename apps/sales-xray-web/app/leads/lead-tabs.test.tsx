@@ -248,3 +248,21 @@ it("keeps a note draft on the phone until it is saved", async () => {
   box.remove();
   localStorage.removeItem("sx-draft:note:lead-1");
 });
+
+// ph2-32 (phone QA, 1 Nov 2026): Cancel in Edit sat under the Call bar and dialled.
+it("hides Call while the details are being edited", async () => {
+  await show();
+  const call = () =>
+    [...host.querySelectorAll("a, button")].find((item) =>
+      /^Call\+91/.test(item.textContent ?? ""),
+    );
+  const button = (text: string) =>
+    [...host.querySelectorAll("button")].find(
+      (item) => item.textContent?.trim() === text,
+    )!;
+  expect(call()).toBeTruthy();
+  await act(async () => button("Edit").click());
+  expect(call()).toBeUndefined();
+  await act(async () => button("Cancel").click());
+  expect(call()).toBeTruthy();
+});

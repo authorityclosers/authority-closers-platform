@@ -83,9 +83,13 @@
     padding: 12px 0 8px;
   }
 
+  /* At large text the row wraps rather than squeezing the stage pick under
+     its own words (the test robot, 1 Nov 2026: at 130 % its "Pipeline stage:"
+     lay over Add). */
   .headTools {
     display: flex;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 8px 12px;
     align-items: center;
     min-width: 0;
   }
@@ -100,11 +104,13 @@
 
   .headStage {
     flex: 1 1 auto;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 8px 12px;
   }
 
   .headStage > .stage {
     flex: 0 1 280px;
+    min-width: min-content;
   }
 
   .headStage > .callNextButton {
@@ -220,6 +226,32 @@
     background-color var(--sx-dur-fast) var(--sx-ease-out),
     color var(--sx-dur-fast) var(--sx-ease-out);
   -webkit-tap-highlight-color: transparent;
+}
+
+/* A count beside a view's name ("To Call 7"); where both don't fit (360 px at
+   large text) the count drops under the name instead of being cut. */
+.tabs .tab {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  column-gap: 4px;
+  line-height: 1.15;
+  white-space: normal;
+}
+
+.tabWord,
+.tabCount {
+  white-space: nowrap;
+}
+
+.tabCount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.tab[aria-selected="true"] .tabCount {
+  font-weight: 700;
 }
 
 .subTabs .tab {

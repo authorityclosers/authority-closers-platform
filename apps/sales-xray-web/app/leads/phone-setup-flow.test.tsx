@@ -2,6 +2,12 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const notify = vi.hoisted(() => vi.fn());
+vi.mock("../notice-center", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../notice-center")>()),
+  notify,
+}));
+
 import { resetBackCloseForTests } from "../ui/back-close";
 import { parseSetup } from "./native-phone";
 import { flowScreen, flowSteps, PhoneSetupFlow } from "./phone-setup-flow";
@@ -305,6 +311,41 @@ describe("PhoneSetupFlow", () => {
     await settle();
     expect(closed).toHaveBeenCalledTimes(1);
     expect(closed.mock.calls[0][0]?.checks.battery).toBe(false);
+  });
+
+  // Phone personas ph1-37 (1 Nov 2026): Phone setup on a phone with nothing
+  // left closed before it showed anything, so the tap looked dead.
+  it("says the phone is set up when nothing is left, never closing silently", async () => {
+    notify.mockClear();
+    const all = Object.fromEntries(Object.keys(NONE).map((key) => [key, true]));
+    fakePhone(({ method }) =>
+      method === "callRecorderStatus"
+        ? { available: false, enabled: false }
+        : setup(all),
+    );
+    const closed = vi.fn();
+    await act(async () => root.render(<PhoneSetupFlow onClose={closed} />));
+    await settle();
+    expect(closed).toHaveBeenCalledTimes(1);
+    expect(title()).toBeUndefined();
+    expect(notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tone: "success",
+        title: "Your phone is set up",
+      }),
+    );
+  });
+
+  it("asks for an app update when the phone app can't say how it is set up", async () => {
+    notify.mockClear();
+    fakePhone(() => null);
+    const closed = vi.fn();
+    await act(async () => root.render(<PhoneSetupFlow onClose={closed} />));
+    await settle();
+    expect(closed).toHaveBeenCalledWith(null);
+    expect(notify).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Update the Sales X-Ray app" }),
+    );
   });
 });
 

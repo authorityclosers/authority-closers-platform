@@ -125,6 +125,25 @@ def test_unnamed_speaker_labels_take_the_better_assignment() -> None:
     assert grade.grade_roles(timeline, turns, segments, {})["accuracy"] == 1.0
 
 
+def test_the_apps_speaker_map_names_each_speaker_by_id() -> None:
+    answer = {
+        "schema": "ac.sales-xray.speaker-map/1",
+        "speakers": [
+            {"speaker_id": "speaker_0", "role": "you", "name_evidence": [{"segment_id": "s1"}]},
+            {"speaker_id": "speaker_1", "role": "prospect"},
+        ],
+    }
+    roles = grade.speaker_roles(answer)
+    assert roles == {"speaker_0": "you", "speaker_1": "prospect"}
+    timeline = [{"who": "S", "start": 0, "end": 2}, {"who": "P", "start": 2, "end": 4}]
+    segments = [
+        {"start": 0, "end": 2, "speaker": "speaker_1", "text": "a b"},
+        {"start": 2, "end": 4, "speaker": "speaker_0", "text": "c d"},
+    ]
+    swapped = grade.grade_roles(timeline, [["S", "a b"], ["P", "c d"]], segments, roles)
+    assert swapped == {"accuracy": 0.0, "labels": 2, "mapped": True}
+
+
 def test_transcript_segments_are_read_from_ms_or_seconds() -> None:
     payload = {"segments": [{"speaker": "A", "start_ms": 1500, "end_ms": 3000, "text": "hi"}]}
     assert grade.segments_from(payload) == [
@@ -183,12 +202,14 @@ def test_a_whole_scenario_grades_pass_and_blocked() -> None:
             ]
         },
         "call_data": {
+            "pipelines": {"fast": {"state": "done"}, "deep": {"state": "not_started"}},
             "objects": [
                 {"type_key": "person.name", "display": "Anil"},
                 {"type_key": "money.budget", "display": "₹2 lakh"},
-            ]
+            ],
         },
-        "lead": {"lead": {"stage": "interested"}},
+        "lead_before": {"stage": "new"},
+        "lead": {"lead": {"stage": "new"}, "stage_suggestion": {"step": "interested"}},
         "phone_log": {"logged": 0, "already": 1},
         "attached": True,
     }
@@ -196,9 +217,147 @@ def test_a_whole_scenario_grades_pass_and_blocked() -> None:
     assert graded["result"] == "pass"
     assert graded["wer"] == 0.0 and graded["latency_s"] == 150
     assert graded["landing"] == {"one_call_on_lead": True, "attached": True}
-    blocked = grade.grade(truth, {"error": "PUT -> 409 allowance"})
+    blocked = grade.grade(truth, {"error": "GET /v1/lead-desk/leads -> 422 'stage'"})
     assert blocked["result"] == "blocked"
-    assert "| S99 t | phone | 120.0 s | **pass** |" in grade.markdown([graded])
+    refused = grade.grade(truth, {"error": "PUT /v1/x/source -> 403 'longer than 60 minutes'"})
+    assert refused["result"] == "fail"
+    assert "| S99 t | phone | 120 s | **pass** |" in grade.markdown([graded])
+    assert "refused: 403 'longer than 60 minutes'" in grade.markdown([refused])
+    # Where the engine never ran (dev's spend guard), an unmoved stage is not a miss.
+    run["call_data"] = {"pipelines": {"fast": {"state": "none"}}}
+    run["lead_before"] = {"stage": "new"}
+    run["lead"] = {"lead": {"stage": "new"}, "stage_suggestion": None}
+    run["report"] = {"report": {"content": {"summary": "Anil said his budget is ₹2 lakh."}}}
+    guarded = grade.grade(truth, run)
+    assert guarded["stage"]["guarded"] and guarded["stage"]["ok"] is None
+    assert guarded["report_facts"]["recall"] == 1.0 and guarded["result"] == "pass"
+
+
+def test_the_report_is_read_in_its_own_words_never_its_quotes() -> None:
+    envelope = {
+        "report": {
+            "content": {
+                "summary": "You booked a demo with Anil of Deshmukh Auto for Tuesday at 4 PM.",
+                "objection_analysis": [
+                    {
+                        "explanation": "Budget of 2 to 2.5 lakh fits; you quoted ₹45,000.",
+                        "evidence": [{"segment_id": "s9", "quote": "We are in Nashik."}],
+                    }
+                ],
+                "overview": {"version": "dipak-14-point-v1"},
+            }
+        }
+    }
+    text = grade.report_text(envelope)
+    assert "Deshmukh Auto" in text and "Nashik" not in text and "dipak-14" not in text
+    key = {
+        "person.name": ["anil"],
+        "company.location": ["nashik"],
+        "money.budget": {"amount": 250000, "low": 200000, "high": 250000},
+        "outcome.call_outcome": "meeting_scheduled",
+        "forbid": ["money.price_quoted"],
+    }
+    facts = grade.grade_report_facts(key, text)
+    assert (facts["expected"], facts["hit"]) == (4, 3)
+    money = grade.money_precision(
+        text, "two lakh, maybe two and a half lakh. it is 45,000 per seat"
+    )
+    assert money["precision"] == 1.0
+    assert grade.money_precision("a ₹9,00,000 deal", "45,000")["unheard"] == [900000]
+    assert grade.money_precision("before Diwali 2026", "45,000")["stated"] == 0
+    heard = grade.grade_report_facts({"person.name": ["meenal"]}, "When Minal asked for a discount")
+    assert heard["detail"][0]["ok"] and heard["detail"][0]["heard_as"] == "minal"
+    assert grade.grade_report_facts({"person.name": ["anil"]}, "Sunil asked")["hit"] == 0
+    assert grade.follow_up_in_text({"weekday": "tuesday", "hour": 16}, text) is True
+    assert grade.follow_up_in_text({"weekday": "tuesday", "hour": 11}, text) is False
+    assert grade.follow_up_in_text({"weekday": "friday", "hour": 17}, "a call Friday at five")
+    assert grade.engine_ran({"pipelines": {"fast": {"state": "none"}}}) is False
+    assert grade.engine_ran({"pipelines": {"fast": {"state": "done"}}}) is True
+
+
+def test_the_engine_offers_a_stage_fills_empty_fields_and_never_moves_the_lead() -> None:
+    truth = {
+        "id": "S01",
+        "title": "Demo booked",
+        "language": "english",
+        "path": "phone",
+        "duration_seconds": 175.0,
+        "turns": [["S", "hello anil"]],
+        "key": {
+            "company.name": ["deshmukh auto"],
+            "company.location": ["nashik"],
+            "money.budget": {"amount": 250000},
+        },
+        "expect": {
+            "report": True,
+            "stage": "meeting_scheduled",
+            "stage_ok": ["meeting_scheduled"],
+            "follow_up": {"weekday": "tuesday", "hour": 16},
+        },
+    }
+    follow_up = {
+        "type": "commitment.follow_up",
+        "value": {"text": "Tuesday 4 PM", "date": "2026-11-03", "time": "16:00"},
+        "display": "Tuesday 4 PM",
+    }
+    run = {
+        "path": "phone",
+        "submission_id": "x",
+        "call_started_at": "2026-10-30T07:30:00+00:00",
+        "progress": {"has_report": True},
+        "call_data": {
+            "pipelines": {"fast": {"state": "done"}},
+            "facts": [follow_up, {"type": "company.name", "display": "Deshmukh Auto Spares"}],
+            "filled": [{"field": "company", "value": "Deshmukh Auto Spares"}],
+        },
+        "lead_before": {"stage": "new", "city": "Delhi", "company": None, "fields": []},
+        "lead": {
+            "lead": {"stage": "new", "company": "Deshmukh Auto Spares", "city": "Delhi"},
+            "stage_suggestion": {"step": "meeting_scheduled", "why": "Demo on Tuesday 4 PM"},
+            "fields": [],
+        },
+    }
+    graded = grade.grade(truth, run)
+    assert graded["stage"]["suggested"] == "meeting_scheduled"
+    assert graded["stage"]["moved_without_tap"] is False and graded["stage"]["ok"] is True
+    # Company filled right, the city kept; the budget is no lead column, so not graded.
+    assert (graded["fills"]["right"], graded["fills"]["kept"], graded["fills"]["missed"]) == (
+        1,
+        1,
+        0,
+    )
+    friday = datetime(2026, 10, 30, 7, 30, tzinfo=UTC)
+    saturday_11 = datetime(2026, 10, 31, 5, 30, tzinfo=UTC)
+    spec = {"weekday": "saturday", "hour": 11}
+    assert grade.due_check(spec, friday, saturday_11)
+    assert not grade.due_check(spec, friday, saturday_11 + grade.timedelta(days=7))
+    assert grade.close_spelling("mehta insurance", "Meta Insurance Point")
+    assert grade.close_spelling("shaikh pharma", "Sheikh Pharma Distributors")
+    assert not grade.close_spelling("anil", "Sunil")
+    assert graded["follow_up"]["ok"] is True
+    run["lead"]["lead"]["stage"] = "meeting_scheduled"  # moved by itself: a miss
+    assert grade.grade(truth, run)["stage"]["ok"] is False
+    assert "meeting_scheduled (meeting_scheduled) | yes" in grade.engine_markdown(
+        [grade.grade(truth, run)]
+    )
+
+
+def test_a_call_over_two_hours_passes_on_a_clear_refusal_before_spend() -> None:
+    truth = {
+        "id": "S10X",
+        "title": "Over the limit",
+        "language": "en",
+        "path": "phone",
+        "duration_seconds": 7579,
+        "turns": [["S", "hello"]],
+        "key": {},
+        "expect": {"report": "either", "over_limit": True},
+    }
+    refused = grade.grade(truth, {"error": "PUT /v1/x/source -> 413 'Calls up to 2 hours.'"})
+    assert refused["result"] == "pass"
+    dropped = grade.grade(truth, {"error": "network: timed out"})
+    assert dropped["result"] == "blocked"
+    assert "S10X" in grade.markdown([refused, dropped])
 
 
 def test_the_library_is_thirty_fictional_calls_covering_the_brief() -> None:
@@ -248,3 +407,31 @@ def test_calls_outside_work_hours_move_into_the_last_working_day() -> None:
     assert start == datetime(2026, 10, 31, 5, 20, tzinfo=UTC)  # Saturday 10:50 IST
     long_call = inject.call_start({"id": "S30", "duration_seconds": 7200}, hours, sunday_morning)
     assert long_call + inject.timedelta(seconds=7200) <= datetime(2026, 10, 31, 13, 30, tzinfo=UTC)
+    over_limit = inject.call_start({"id": "S10X", "duration_seconds": 60}, hours, sunday_morning)
+    assert over_limit == start + inject.timedelta(minutes=14 * 9)
+
+
+def test_a_second_round_goes_a_working_day_back_from_its_own_hour(tmp_path: Path) -> None:
+    hours = {"days": [0, 1, 2, 3, 4, 5], "start": "10:30", "end": "19:00", "inside": False}
+    sunday_noon = datetime(2026, 11, 1, 7, 12, tzinfo=UTC)
+    start = inject.call_start(
+        {"id": "S01", "duration_seconds": 175}, hours, sunday_noon, 0, 1, "13:00"
+    )
+    assert start == datetime(2026, 10, 30, 7, 30, tzinfo=UTC)  # Friday 13:00 India time
+    for scenario_id, seconds in (("S02", 120), ("S06", 60)):
+        (tmp_path / scenario_id).mkdir()
+        (tmp_path / scenario_id / "truth.json").write_text(f'{{"duration_seconds": {seconds}}}')
+    assert inject.round_offset(tmp_path, ["S06", "S02"], "S02") == 1 + 3
+    assert inject._created_after({"created_at": "2026-10-30T08:00:00Z"}, start)
+    assert not inject._created_after({"created_at": "2026-10-30T05:50:00Z"}, start)
+
+
+def test_one_sellers_calls_run_back_to_back(tmp_path: Path) -> None:
+    for scenario_id, seconds in (("S01", 120), ("S02", 600), ("S10X", 60)):
+        (tmp_path / scenario_id).mkdir()
+        (tmp_path / scenario_id / "truth.json").write_text(
+            f'{{"id": "{scenario_id}", "duration_seconds": {seconds}}}'
+        )
+    offsets = [inject.schedule_offset(tmp_path / s / "truth.json") for s in ("S01", "S02", "S10X")]
+    assert offsets == [0, 2 + 3, 2 + 3 + 10 + 3]
+    assert inject.schedule_offset(tmp_path / "S99" / "truth.json") is None
