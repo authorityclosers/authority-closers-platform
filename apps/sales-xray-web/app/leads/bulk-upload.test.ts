@@ -14,10 +14,12 @@ const rep = (person_id: string) => ({ person_id, name: person_id }) as RepView;
 const team = [rep("asha"), rep("ravi"), rep("meera")];
 
 describe("bulk upload's choices", () => {
-  it("starts on Cold Leads; owners pick who, sellers keep theirs", () => {
+  it("starts on Cold Leads, split evenly among the salespeople; sellers keep theirs", () => {
     expect(firstChoices(true)).toMatchObject({
       side: "cold",
-      assign: "rules",
+      assign: "people",
+      counts: null,
+      off: [],
       step: "",
     });
     expect(firstChoices(false).assign).toBe("me");

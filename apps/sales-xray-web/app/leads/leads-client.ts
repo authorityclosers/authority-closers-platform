@@ -376,7 +376,15 @@ export type ImportPreview = {
   detected?: string | null;
   /** Rows that make a lead with the columns matched. */
   importable?: number;
+  /** Rows whose number can't be read and that have no email: skipped (teardown 5). */
+  bad_numbers?: number;
 };
+
+/** A row an import didn't use, by its index in the preview's rows, and why. */
+export type ImportSkip = { row: number; reason: string };
+
+/** What an import does with a row whose number is already a lead (teardown 5). */
+export type Duplicates = "skip" | "fill" | "replace";
 
 export type ImportResult = {
   created: number;
@@ -398,6 +406,10 @@ export type ImportResult = {
   /** Undo import (competitor teardown 22): owners and admins, until this time. */
   import_id?: string | null;
   undo_until?: string | null;
+  /** Leads already here that Fill blanks or Replace changed. */
+  updated?: number;
+  /** Every row that made no lead and changed none, with why. */
+  skipped_rows?: ImportSkip[];
 };
 
 /** Undo import: the untouched leads went; the worked ones stayed, each with why. */
@@ -423,6 +435,7 @@ export type ImportOptions = {
   side?: "live" | "cold";
   shares?: { person_id: string; count: number }[];
   step?: string;
+  duplicates?: Duplicates;
 };
 
 export type SourceView = {

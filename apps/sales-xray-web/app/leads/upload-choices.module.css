@@ -65,11 +65,12 @@
   background: var(--sx-accent-soft);
 }
 
+/* The ring token is a shadow, not a colour: as an outline colour it drew nothing. */
 .chip:focus-visible,
 .count:focus-visible,
 .personName input:focus-visible {
-  outline: 2px solid var(--sx-focus-ring);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
 }
 
 .people {

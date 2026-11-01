@@ -24,7 +24,8 @@ const RECIPIENTS: { key: Recipients; label: string }[] = [
 
 /**
  * Bulk upload's choices (stages-views-sources.md section 5): where the new leads go, who
- * receives them and how many each (owners and admins), and the stage they start in.
+ * receives them and how many each (owners and admins), and the stage they start in. The
+ * import's steps (competitor teardown 5) show where on the first, the rest on the last.
  */
 export function UploadChoicesFields({
   canManage,
@@ -33,7 +34,10 @@ export function UploadChoicesFields({
   pipeline,
   value,
   onChange,
+  part = "all",
 }: {
+  /** "side": where they go only; "who": who receives them and the stage. */
+  part?: "all" | "side" | "who";
   canManage: boolean;
   /** The team, for owners and admins; null while it is read. */
   team: RepView[] | null;
@@ -45,6 +49,8 @@ export function UploadChoicesFields({
 }) {
   const [stages, setStages] = useState<StageView[] | null>(null);
   useEffect(() => {
+    // Where they go needs no stages.
+    if (part === "side") return;
     let live = true;
     readJourney(pipeline || undefined).then(
       (next) => {
@@ -55,7 +61,7 @@ export function UploadChoicesFields({
     return () => {
       live = false;
     };
-  }, [pipeline]);
+  }, [pipeline, part]);
 
   const starts = stages ? startStages(stages) : [];
   const counts = team ? countsFor(value, team, fresh) : {};
@@ -64,163 +70,177 @@ export function UploadChoicesFields({
 
   return (
     <div className={styles.choices}>
-      <div className={styles.choice}>
-        <span className={styles.label} aria-hidden="true">
-          Where should these leads go?
-        </span>
-        <Segmented
-          label="Where should these leads go?"
-          value={value.side}
-          onChange={(side) => onChange({ ...value, side })}
-          items={[
-            { key: "cold", label: "Cold Leads" },
-            { key: "live", label: "Inbound Leads" },
-          ]}
-        />
-        <small className={styles.help}>
-          {value.side === "cold"
-            ? "For bulk cold databases."
-            : "Only for records that came from real enquiries."}
-        </small>
-      </div>
-
-      {canManage ? (
+      {part === "who" ? null : (
         <div className={styles.choice}>
           <span className={styles.label} aria-hidden="true">
-            Who should receive them?
+            Where should these leads go?
           </span>
-          <div
-            className={styles.chips}
-            role="group"
-            aria-label="Who should receive them?"
-          >
-            {RECIPIENTS.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                className={styles.chip}
-                aria-pressed={value.assign === item.key}
-                onClick={() => onChange({ ...value, assign: item.key })}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-          {value.assign === "people" ? (
-            team === null ? (
-              <small className={styles.help}>Reading your team…</small>
-            ) : team.length === 0 ? (
-              <small className={styles.help}>
-                Nobody on your team takes leads yet.
-              </small>
-            ) : (
-              <>
-                <ul className={styles.people} aria-label="Salespeople">
-                  {team.map((rep) => {
-                    const on = !value.off.includes(rep.person_id);
-                    const name = displayName(rep.name);
-                    return (
-                      <li key={rep.person_id} className={styles.person}>
-                        <label className={styles.personName}>
-                          <input
-                            type="checkbox"
-                            checked={on}
-                            onChange={(event) =>
-                              onChange({
-                                ...value,
-                                // Turning someone on or off splits evenly again.
-                                counts: null,
-                                off: event.target.checked
-                                  ? value.off.filter(
-                                      (id) => id !== rep.person_id,
-                                    )
-                                  : [...value.off, rep.person_id],
-                              })
-                            }
-                          />
-                          <span>{name}</span>
-                        </label>
-                        <input
-                          className={styles.count}
-                          type="number"
-                          inputMode="numeric"
-                          min={0}
-                          max={fresh}
-                          aria-label={`New leads for ${name}`}
-                          disabled={!on}
-                          value={on ? (counts[rep.person_id] ?? 0) : ""}
-                          onChange={(event) =>
-                            onChange({
-                              ...value,
-                              counts: {
-                                ...counts,
-                                [rep.person_id]: Math.max(
-                                  0,
-                                  Math.floor(Number(event.target.value) || 0),
-                                ),
-                              },
-                            })
-                          }
-                        />
-                      </li>
-                    );
-                  })}
-                </ul>
-                <small
-                  className={left < 0 ? styles.problem : styles.help}
-                  role={left < 0 ? "alert" : undefined}
-                >
-                  {left < 0
-                    ? `That's ${-left} more than the ${fresh} new leads.`
-                    : left > 0
-                      ? `${left} stay unassigned.`
-                      : "Every new lead has a salesperson."}
-                </small>
-              </>
-            )
-          ) : null}
-        </div>
-      ) : (
-        <small className={styles.help}>They go on your desk.</small>
-      )}
-
-      {starts.length > 1 ? (
-        <div className={styles.choice}>
-          <span className={styles.label} aria-hidden="true">
-            Starting stage
-          </span>
-          <div
-            className={styles.chips}
-            role="group"
-            aria-label="Starting stage"
-          >
-            {starts.map((stage, index) => {
-              const key = index === 0 ? "" : stage.key;
-              return (
-                <button
-                  key={stage.key}
-                  type="button"
-                  className={styles.chip}
-                  aria-pressed={value.step === key}
-                  onClick={() => onChange({ ...value, step: key })}
-                >
-                  {stageName(stage, value.side === "cold" ? "cold" : "inbound")}
-                </button>
-              );
-            })}
-          </div>
+          <Segmented
+            label="Where should these leads go?"
+            value={value.side}
+            onChange={(side) => onChange({ ...value, side })}
+            items={[
+              { key: "cold", label: "Cold Leads" },
+              { key: "live", label: "Inbound Leads" },
+            ]}
+          />
           <small className={styles.help}>
-            {/* Only the stages on offer here (ph1-48: it named Open Leads,
-                which this list didn't offer). */}
-            {`${starts
-              .slice(1)
-              .map((stage) =>
-                stageName(stage, value.side === "cold" ? "cold" : "inbound"),
-              )
-              .join(" or ")} only when the file has real past talks.`}
+            {value.side === "cold"
+              ? "For bulk cold databases."
+              : "Only for records that came from real enquiries."}
           </small>
         </div>
-      ) : null}
+      )}
+
+      {part === "side" ? null : (
+        <>
+          {canManage ? (
+            <div className={styles.choice}>
+              <span className={styles.label} aria-hidden="true">
+                Who should receive them?
+              </span>
+              <div
+                className={styles.chips}
+                role="group"
+                aria-label="Who should receive them?"
+              >
+                {RECIPIENTS.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    className={styles.chip}
+                    aria-pressed={value.assign === item.key}
+                    onClick={() => onChange({ ...value, assign: item.key })}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              {value.assign === "people" ? (
+                team === null ? (
+                  <small className={styles.help}>Reading your team…</small>
+                ) : team.length === 0 ? (
+                  <small className={styles.help}>
+                    Nobody on your team takes leads yet.
+                  </small>
+                ) : (
+                  <>
+                    <ul className={styles.people} aria-label="Salespeople">
+                      {team.map((rep) => {
+                        const on = !value.off.includes(rep.person_id);
+                        const name = displayName(rep.name);
+                        return (
+                          <li key={rep.person_id} className={styles.person}>
+                            <label className={styles.personName}>
+                              <input
+                                type="checkbox"
+                                checked={on}
+                                onChange={(event) =>
+                                  onChange({
+                                    ...value,
+                                    // Turning someone on or off splits evenly again.
+                                    counts: null,
+                                    off: event.target.checked
+                                      ? value.off.filter(
+                                          (id) => id !== rep.person_id,
+                                        )
+                                      : [...value.off, rep.person_id],
+                                  })
+                                }
+                              />
+                              <span>{name}</span>
+                            </label>
+                            <input
+                              className={styles.count}
+                              type="number"
+                              inputMode="numeric"
+                              min={0}
+                              max={fresh}
+                              aria-label={`New leads for ${name}`}
+                              disabled={!on}
+                              value={on ? (counts[rep.person_id] ?? 0) : ""}
+                              onChange={(event) =>
+                                onChange({
+                                  ...value,
+                                  counts: {
+                                    ...counts,
+                                    [rep.person_id]: Math.max(
+                                      0,
+                                      Math.floor(
+                                        Number(event.target.value) || 0,
+                                      ),
+                                    ),
+                                  },
+                                })
+                              }
+                            />
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <small
+                      className={left < 0 ? styles.problem : styles.help}
+                      role={left < 0 ? "alert" : undefined}
+                    >
+                      {left < 0
+                        ? `That's ${-left} more than the ${fresh} new leads.`
+                        : left > 0
+                          ? `${left} stay unassigned.`
+                          : "Every new lead has a salesperson."}
+                    </small>
+                  </>
+                )
+              ) : null}
+            </div>
+          ) : (
+            <small className={styles.help}>They go on your desk.</small>
+          )}
+
+          {starts.length > 1 ? (
+            <div className={styles.choice}>
+              <span className={styles.label} aria-hidden="true">
+                Starting stage
+              </span>
+              <div
+                className={styles.chips}
+                role="group"
+                aria-label="Starting stage"
+              >
+                {starts.map((stage, index) => {
+                  const key = index === 0 ? "" : stage.key;
+                  return (
+                    <button
+                      key={stage.key}
+                      type="button"
+                      className={styles.chip}
+                      aria-pressed={value.step === key}
+                      onClick={() => onChange({ ...value, step: key })}
+                    >
+                      {stageName(
+                        stage,
+                        value.side === "cold" ? "cold" : "inbound",
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <small className={styles.help}>
+                {/* Only the stages on offer here (ph1-48: it named Open Leads,
+                which this list didn't offer). */}
+                {`${starts
+                  .slice(1)
+                  .map((stage) =>
+                    stageName(
+                      stage,
+                      value.side === "cold" ? "cold" : "inbound",
+                    ),
+                  )
+                  .join(" or ")} only when the file has real past talks.`}
+              </small>
+            </div>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

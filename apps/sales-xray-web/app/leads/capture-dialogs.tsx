@@ -29,6 +29,8 @@ import { Picker } from "../ui/picker";
 import { Sheet } from "../ui/sheet";
 import { several, usePipelines } from "./use-pipelines";
 import { ImportHistory, UndoImportButton } from "./import-undo";
+import { ImportCheck, resultLines, SkippedDownload } from "./import-check";
+import checkStyles from "./import-check.module.css";
 import {
   addLead,
   matchLead,
@@ -42,6 +44,7 @@ import {
   previewImport,
   readTeam,
   SAMPLE_CSV,
+  type Duplicates,
   type ImportPreview,
   type ImportResult,
   type LeadMatch,
@@ -794,6 +797,38 @@ const COLUMN_LABELS: Record<string, string> = {
   source: "Source",
 };
 
+/** The import's steps (competitor teardown 5, 1 Nov 2026). */
+type ImportStep = "file" | "columns" | "check" | "who";
+const IMPORT_STEPS: { key: ImportStep; label: string }[] = [
+  { key: "file", label: "File" },
+  { key: "columns", label: "Columns" },
+  { key: "check", label: "Check" },
+  { key: "who", label: "Who gets them" },
+];
+
+/** The columns matched and nearly every row makes a lead: the file opens on
+ *  Check, its column list one tap away (universal intake, 25 Oct 2026). */
+function columnsMatched(
+  preview: ImportPreview,
+  mapping: Record<string, string>,
+): boolean {
+  return (
+    preview.importable !== undefined &&
+    Boolean(mapping.name || mapping.phone) &&
+    preview.importable >= Math.ceil(preview.total_rows * 0.9)
+  );
+}
+
+/** Up to three of a column's values, to see it is the right one. */
+function samplesOf(preview: ImportPreview, header: string | undefined) {
+  if (!header) return "";
+  return preview.rows
+    .map((row) => row[header]?.trim())
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(" · ");
+}
+
 export function ImportDialog({
   open,
   canManage,
@@ -846,7 +881,17 @@ export function ImportDialog({
   // Rows pasted from a sheet, a CSV or a chat (owner P0, 23 Oct 2026).
   const [text, setText] = useState("");
   const [dropped, setDropped] = useState(0);
-  const [columns, setColumns] = useState(false);
+  // File, Columns, Check, Who gets them (competitor teardown 5): a file whose
+  // columns matched opens on Check, Import there with the defaults (the owner's
+  // one click, 25 Oct 2026); otherwise Columns first. Numbers already leads are
+  // skipped unless an owner or admin picks Fill blanks or Replace.
+  const [step, setStep] = useState<ImportStep>("file");
+  const [duplicates, setDuplicates] = useState<Duplicates>("skip");
+  const landed = (next: ImportPreview) => {
+    setPreview(next);
+    setMapping(next.mapping);
+    setStep(columnsMatched(next, next.mapping) ? "check" : "columns");
+  };
 
   // A Sheet picked in Google's Picker (Lead OS, 27 Oct 2026): owners and
   // admins, once Google Sheets and Drive is connected.
@@ -876,10 +921,7 @@ export function ImportDialog({
     try {
       sheet = await pickGoogleSheet();
       if (!sheet) return;
-      const next = await previewGoogleSheet(sheet);
-      setPreview(next);
-      setMapping(next.mapping);
-      setColumns(false);
+      landed(await previewGoogleSheet(sheet));
     } catch (reason) {
       // 409 from the Picker's setup: Google isn't connected (any more).
       if (
@@ -926,10 +968,7 @@ export function ImportDialog({
     setBusy(true);
     setError(null);
     try {
-      const next = await previewImport(file);
-      setPreview(next);
-      setMapping(next.mapping);
-      setColumns(false);
+      landed(await previewImport(file));
     } catch (reason) {
       setError(
         reason instanceof LeadsError
@@ -964,14 +1003,6 @@ export function ImportDialog({
     reading.current(pasted);
   }, [open, pasted]);
 
-  // One click (universal intake, 25 Oct 2026): when the columns are matched and nearly
-  // every row makes a lead, the column list waits behind "Change columns".
-  const matched =
-    preview !== null &&
-    preview.importable !== undefined &&
-    Boolean(mapping.name || mapping.phone) &&
-    preview.importable >= Math.ceil(preview.total_rows * 0.9);
-  const showColumns = !matched || columns;
   const fresh = preview ? freshRows(preview) : 0;
   const overGiven =
     choices.assign === "people" &&
@@ -980,10 +1011,14 @@ export function ImportDialog({
       (sum, count) => sum + count,
       0,
     ) > fresh;
+  // An even split needs the team: Import waits for it.
+  const teamPending = canManage && choices.assign === "people" && team === null;
+  const noColumn = !mapping.name && !mapping.phone;
+  const limits = canManage ? overLimitLines(choices, team, fresh) : [];
 
   const run = async () => {
     if (!preview) return;
-    if (!mapping.name && !mapping.phone) {
+    if (noColumn) {
       setError("Choose the column with the name or the phone number.");
       return;
     }
@@ -1003,6 +1038,7 @@ export function ImportDialog({
               ? { shares: sharesFor(choices, team, fresh) }
               : {}),
             ...(choices.step ? { step: choices.step } : {}),
+            ...(duplicates !== "skip" ? { duplicates } : {}),
           },
         ),
       );
@@ -1020,11 +1056,46 @@ export function ImportDialog({
     }
   };
 
+  const back = () => {
+    setError(null);
+    if (step === "who") setStep("check");
+    else if (step === "check") setStep("columns");
+    else {
+      // Back from Columns: choose another file.
+      setPreview(null);
+      setMapping({});
+      setDropped(0);
+      setStep("file");
+    }
+  };
+
+  // The file in a line: whose export, its name and how many rows.
+  const fileLine = preview ? (
+    <p className={styles.hint}>
+      {preview.detected ? `${preview.detected} export. ` : ""}
+      {preview.file_name === PASTED_FILE ? "Pasted" : preview.file_name}:{" "}
+      {preview.total_rows} rows
+      {preview.truncated || dropped ? " (only the first 2,000)" : ""}.
+    </p>
+  ) : null;
+  const limitBox = limits.length ? (
+    // Said before the import, never only after (ph1-17).
+    <div className={styles.importWarnings} role="status" data-import-limit="">
+      {limits.map((line) => (
+        <p key={line}>{line}</p>
+      ))}
+    </div>
+  ) : null;
+
   return (
     <Dialog
       open={open}
       title="Import leads"
-      description="An Excel (.xlsx) or CSV file, or rows pasted from a sheet or a chat, up to 2,000 leads. We match the columns for you, and every column is kept on the lead."
+      description={
+        step === "file" && !result
+          ? "An Excel (.xlsx) or CSV file, or rows pasted from a sheet or a chat, up to 2,000 leads. We match the columns for you, and every column is kept on the lead."
+          : undefined
+      }
       onClose={onClose}
       actions={
         result ? (
@@ -1038,35 +1109,61 @@ export function ImportDialog({
           >
             Done
           </Button>
+        ) : step === "file" || !preview ? (
+          <Button onClick={onClose}>Cancel</Button>
         ) : (
           <>
-            <Button onClick={onClose}>Cancel</Button>
-            {preview ? (
+            <Button onClick={back} disabled={busy}>
+              Back
+            </Button>
+            {step === "columns" ? (
+              <Button
+                variant="primary"
+                onClick={() => setStep("check")}
+                disabled={noColumn}
+              >
+                Next
+              </Button>
+            ) : (
               <Button
                 variant="primary"
                 onClick={run}
-                disabled={busy || overGiven}
+                disabled={busy || overGiven || teamPending || noColumn}
               >
                 {busy
                   ? "Importing…"
-                  : `Import ${preview.total_rows} lead${preview.total_rows === 1 ? "" : "s"}`}
+                  : fresh
+                    ? `Import ${fresh} lead${fresh === 1 ? "" : "s"}`
+                    : "Import"}
               </Button>
-            ) : null}
+            )}
           </>
         )
       }
     >
       <div className={styles.form}>
+        {result ? null : (
+          <ol className={checkStyles.steps} aria-label="Import steps">
+            {IMPORT_STEPS.map((item, index) => (
+              <li
+                key={item.key}
+                aria-current={item.key === step ? "step" : undefined}
+              >
+                <span aria-hidden="true">{index + 1}</span>
+                {item.label}
+              </li>
+            ))}
+          </ol>
+        )}
         {result ? (
           <dl className={styles.result}>
-            <div>
-              <dt>New leads</dt>
-              <dd>{result.created}</dd>
-            </div>
-            <div>
-              <dt>Already leads</dt>
-              <dd>{result.repeats}</dd>
-            </div>
+            {/* The rows by what became of them, in the check's words. */}
+            {resultLines(result, duplicates).map((line) => (
+              <div key={line.key} data-result={line.key}>
+                <dt>{line.label}</dt>
+                <dd>{line.count}</dd>
+              </div>
+            ))}
             <div>
               <dt>Given an owner</dt>
               <dd>{result.assigned}</dd>
@@ -1075,12 +1172,6 @@ export function ImportDialog({
               <dt>Waiting for an owner</dt>
               <dd>{result.waiting}</dd>
             </div>
-            {result.skipped ? (
-              <div>
-                <dt>Skipped (no name or phone)</dt>
-                <dd>{result.skipped}</dd>
-              </div>
-            ) : null}
             {result.staged ? (
               <div>
                 <dt>Given their stage</dt>
@@ -1135,12 +1226,34 @@ export function ImportDialog({
             those leads went by the lead rules.
           </p>
         ) : null}
+        {/* The rows it didn't use, with why, to fix and import again. */}
+        {result && preview ? (
+          <SkippedDownload preview={preview} result={result} />
+        ) : null}
         {/* Undo import for 48 hours, owners and admins (competitor teardown 22). */}
         {result?.import_id && result.undo_until ? (
           <UndoImportButton importId={result.import_id} onUndone={onDone} />
         ) : null}
-        {result ? null : !preview ? (
+        {result ? null : step === "file" || !preview ? (
           <>
+            {/* Cold Leads unless picked otherwise (section 5). */}
+            <UploadChoicesFields
+              part="side"
+              canManage={canManage}
+              team={team}
+              fresh={fresh}
+              pipeline={pipeline}
+              value={choices}
+              onChange={setChoices}
+            />
+            {canManage ? (
+              <PipelinePick
+                open={open}
+                value={pipeline}
+                onChange={setPipeline}
+                plural
+              />
+            ) : null}
             {googleMissing ? (
               <p className={styles.hint} role="status">
                 Connect Google Sheets and Drive first:{" "}
@@ -1212,123 +1325,117 @@ export function ImportDialog({
             </a>
             {canManage ? <ImportHistory onChanged={onDone} /> : null}
           </>
+        ) : step === "columns" ? (
+          <>
+            {fileLine}
+            {/* Each column with up to three of its values (HubSpot's three
+                rows under each column; teardown 5). */}
+            <div className={styles.formGrid}>
+              {[
+                ...MAPPABLE,
+                "stage",
+                "source",
+                ...(canManage ? ["owner"] : []),
+              ].map((field) => (
+                <div key={field} className={checkStyles.column}>
+                  <Field label={COLUMN_LABELS[field]}>
+                    <Picker
+                      title={COLUMN_LABELS[field] ?? field}
+                      mode="inline"
+                      value={mapping[field] || null}
+                      all={{ label: "Not in this file" }}
+                      options={preview.headers.map((header) => ({
+                        key: header,
+                        label: header,
+                      }))}
+                      onChange={(key) =>
+                        setMapping((current) => {
+                          const next = { ...current };
+                          if (key) next[field] = key;
+                          else delete next[field];
+                          return next;
+                        })
+                      }
+                    />
+                  </Field>
+                  {mapping[field] ? (
+                    <small className={checkStyles.samples} data-samples={field}>
+                      {samplesOf(preview, mapping[field]) ||
+                        "Empty in this file"}
+                    </small>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+            {mapping.stage || (canManage && mapping.owner) ? (
+              <p className={styles.hint}>
+                Stages are matched by name to the pipeline&apos;s stages, and
+                owners to your team. One that doesn&apos;t match stays New, or
+                goes by the lead rules.
+              </p>
+            ) : null}
+            <p className={styles.hint}>
+              {noColumn
+                ? "Choose the column with the name or the phone number."
+                : "Every other column is kept on the lead."}
+            </p>
+          </>
+        ) : step === "check" ? (
+          <>
+            {fileLine}
+            <p className={styles.hint}>
+              Columns matched:{" "}
+              {Object.keys(mapping)
+                .filter((field) => mapping[field])
+                .map((field) => COLUMN_LABELS[field] ?? field)
+                .join(", ")}
+              .{" "}
+              <button
+                type="button"
+                className={styles.linkButton}
+                onClick={() => setStep("columns")}
+              >
+                Change columns
+              </button>
+            </p>
+            {/* The first rows as they will be leads, before Import (phone
+                personas ph1-48 and competitor teardown 5). */}
+            <ul className={styles.hint} aria-label="The first rows, as leads">
+              {preview.rows.slice(0, 3).map((row, index) => (
+                <li key={index}>
+                  {[mapping.name, mapping.phone, mapping.source]
+                    .map((column) => (column ? row[column]?.trim() : ""))
+                    .filter(Boolean)
+                    .join(" · ") || "No name or phone in this row"}
+                </li>
+              ))}
+            </ul>
+            <ImportCheck
+              preview={preview}
+              fresh={fresh}
+              canManage={canManage}
+              duplicates={duplicates}
+              onDuplicates={setDuplicates}
+            />
+            {/* Who gets them, in a line; Change opens the last step. */}
+            <p className={styles.hint} data-import-who="">
+              {canManage
+                ? `About ${fresh} new ${fresh === 1 ? "lead" : "leads"}: ${sharesLine(choices, team, fresh)}`
+                : "They go on your desk."}{" "}
+              <button
+                type="button"
+                className={styles.linkButton}
+                onClick={() => setStep("who")}
+              >
+                Change
+              </button>
+            </p>
+            {limitBox}
+          </>
         ) : (
           <>
-            <p className={styles.hint}>
-              {preview.detected ? `${preview.detected} export. ` : ""}
-              {preview.file_name === PASTED_FILE ? "Pasted" : preview.file_name}
-              : {preview.total_rows} rows
-              {preview.truncated || dropped
-                ? " (only the first 2,000)"
-                : ""}, {preview.with_phone} with a phone
-              {preview.repeats_in_file
-                ? `, ${preview.repeats_in_file} repeated in the file`
-                : ""}
-              {preview.known_leads
-                ? `, ${preview.known_leads} already ${preview.known_leads === 1 ? "a lead" : "leads"} (kept as they are, not added again)`
-                : ""}
-              .
-            </p>
-            {showColumns ? null : (
-              // The first rows as they will be leads, before Import (phone
-              // personas ph1-48 and competitor teardown 5).
-              <ul className={styles.hint} aria-label="The first rows, as leads">
-                {preview.rows.slice(0, 3).map((row, index) => (
-                  <li key={index}>
-                    {[mapping.name, mapping.phone, mapping.source]
-                      .map((column) => (column ? row[column]?.trim() : ""))
-                      .filter(Boolean)
-                      .join(" · ") || "No name or phone in this row"}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {showColumns ? null : (
-              <p className={styles.hint}>
-                Columns matched:{" "}
-                {Object.keys(mapping)
-                  .filter((field) => mapping[field])
-                  .map((field) => COLUMN_LABELS[field] ?? field)
-                  .join(", ")}
-                .{" "}
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={() => setColumns(true)}
-                >
-                  Change columns
-                </button>
-              </p>
-            )}
-            {showColumns ? (
-              <>
-                <div className={styles.formGrid}>
-                  {[
-                    ...MAPPABLE,
-                    "stage",
-                    "source",
-                    ...(canManage ? ["owner"] : []),
-                  ].map((field) => (
-                    <Field key={field} label={COLUMN_LABELS[field]}>
-                      <Picker
-                        title={COLUMN_LABELS[field] ?? field}
-                        mode="inline"
-                        value={mapping[field] || null}
-                        all={{ label: "Not in this file" }}
-                        options={preview.headers.map((header) => ({
-                          key: header,
-                          label: header,
-                        }))}
-                        onChange={(key) =>
-                          setMapping((current) => {
-                            const next = { ...current };
-                            if (key) next[field] = key;
-                            else delete next[field];
-                            return next;
-                          })
-                        }
-                      />
-                    </Field>
-                  ))}
-                </div>
-                {mapping.stage || (canManage && mapping.owner) ? (
-                  <p className={styles.hint}>
-                    Stages are matched by name to the pipeline&apos;s stages,
-                    and owners to your team. One that doesn&apos;t match stays
-                    New, or goes by the lead rules.
-                  </p>
-                ) : null}
-                <div className={styles.previewTable}>
-                  <table className={styles.table}>
-                    <thead>
-                      <tr>
-                        {preview.headers.slice(0, 6).map((header) => (
-                          <th key={header}>{header}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {preview.rows.slice(0, 3).map((row, index) => (
-                        <tr key={index}>
-                          {preview.headers.slice(0, 6).map((header) => (
-                            <td key={header}>{row[header] ?? ""}</td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            ) : null}
-            {canManage ? (
-              <PipelinePick
-                open={open}
-                value={pipeline}
-                onChange={setPipeline}
-                plural
-              />
-            ) : null}
             <UploadChoicesFields
+              part="who"
               canManage={canManage}
               team={team}
               fresh={fresh}
@@ -1342,18 +1449,7 @@ export function ImportDialog({
                 {sharesLine(choices, team, fresh)}
               </p>
             ) : null}
-            {/* Said before the import, never only after (ph1-17). */}
-            {canManage && overLimitLines(choices, team, fresh).length ? (
-              <div
-                className={styles.importWarnings}
-                role="status"
-                data-import-limit=""
-              >
-                {overLimitLines(choices, team, fresh).map((line) => (
-                  <p key={line}>{line}</p>
-                ))}
-              </div>
-            ) : null}
+            {limitBox}
           </>
         )}
         {error ? (

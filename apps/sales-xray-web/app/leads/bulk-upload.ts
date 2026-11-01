@@ -21,9 +21,11 @@ export type UploadChoices = {
   step: string;
 };
 
+/** Cold Leads, and for owners and admins an even split among the salespeople
+ *  (competitor teardown 5, 1 Nov 2026); a seller's go on their own desk. */
 export const firstChoices = (canManage: boolean): UploadChoices => ({
   side: "cold",
-  assign: canManage ? "rules" : "me",
+  assign: canManage ? "people" : "me",
   off: [],
   counts: null,
   step: "",
