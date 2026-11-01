@@ -644,6 +644,48 @@ it("a sent report leaves no draft behind", async () => {
   expectNoDraft();
 });
 
+it("a draft outlives a refresh, each screen keeps its own, and sending clears it on the device", async () => {
+  captureScreen.mockResolvedValue(null);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ bug_id: "b-3" }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }),
+    ),
+  );
+  window.history.replaceState(null, "", "/dashboard");
+  await opened();
+  // QA robot ac73fb5a: 40 characters typed, then the page refreshed.
+  await act(async () => type(DEMO));
+  forgetDraftForTests(true);
+  await remounted();
+  await opened();
+  expect(document.querySelector("textarea")?.value).toBe(DEMO);
+  expect(document.querySelector("dialog")?.textContent).toContain(
+    "Draft restored",
+  );
+  await closedWithX();
+
+  // Another screen starts empty and keeps the first one's words for later.
+  window.history.replaceState(null, "", "/leads");
+  await opened();
+  expectNoDraft();
+  await closedWithX();
+  window.history.replaceState(null, "", "/dashboard");
+  await opened();
+  expect(document.querySelector("textarea")?.value).toBe(DEMO);
+
+  await submit();
+  await act(async () => button("Done").click());
+  await pause(600);
+  forgetDraftForTests(true);
+  await remounted();
+  await opened();
+  expectNoDraft();
+});
+
 it("in the phone app, uses the phone's own picture of the screen, taken before the sheet opens", async () => {
   phone.app = true;
   const shot = new Blob([new Uint8Array([9, 9, 9])], { type: "image/jpeg" });

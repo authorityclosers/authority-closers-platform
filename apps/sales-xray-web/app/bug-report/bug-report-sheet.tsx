@@ -8,8 +8,9 @@
  * gear on computers) → Report a problem; the command bar; Report on any error
  * corner card; and in the phone app, a shake. One sheet, one job, one primary
  * action at each step:
- * - Write: what went wrong (a draft survives closing and says so when it is
- *   back; Cancel asks before discarding it), "This stops my work",
+ * - Write: what went wrong (a draft per screen survives closing, a refresh
+ *   and a closed app, and says so when it is back; Cancel asks before
+ *   discarding it), "This stops my work",
  *   a picture of the screen taken on the device as the sheet opens (shown
  *   before it goes; none on screens with call details or messages) or one they
  *   choose, which they can mark up or blur, and an optional voice note. With
@@ -89,6 +90,10 @@ import {
   type OutboxItem,
 } from "./outbox";
 import { holdState, subscribeHold } from "../release-hold";
+import {
+  keepDraft as keepStored,
+  readDraft as readStored,
+} from "../leads/drafts";
 import { recentErrors } from "./recent-errors";
 import { ReportButton } from "./report-button";
 import { recentSteps } from "../telemetry";
@@ -132,16 +137,34 @@ type Step = "write" | "markup" | "sent" | "mine";
     31 Oct 2026: never "Sent" when the picture didn't go). */
 type Outcome = "sent" | "bare" | "queued";
 
-// What was typed stays for the next opening until it is sent, cleared or
-// discarded (X, Back or the scrim keep it; Cancel asks first).
-const draft = { words: "", blocksWork: false };
+// What was typed about a screen stays for the next opening there until it is
+// sent, cleared or discarded (X, Back or the scrim keep it; Cancel asks
+// first). Each screen keeps its own, on this device too, so a refresh or a
+// closed app never loses it (QA robot ac73fb5a, 2 Nov 2026: 40 characters gone
+// on a refresh, with no warning).
+type Draft = Readonly<{ words: string; blocksWork: boolean }>;
+const drafts = new Map<string, Draft>();
+let draftScreen = "";
 function keepDraft(words: string, blocksWork: boolean) {
-  draft.words = words;
-  draft.blocksWork = blocksWork;
+  drafts.set(draftScreen, { words, blocksWork });
+  if (draftScreen) keepStored(draftScreen, words);
+}
+/** The draft about the screen at this address, which later keeps go to. */
+function draftFor(path: string): Draft {
+  draftScreen = `report:${scrubRoute(path)}`;
+  return (
+    drafts.get(draftScreen) ?? {
+      words: readStored(draftScreen),
+      blocksWork: false,
+    }
+  );
 }
 
-export function forgetDraftForTests() {
-  keepDraft("", false);
+/** Forgets every draft; `reload` forgets only the page's copies, as a refresh does. */
+export function forgetDraftForTests(reload = false) {
+  if (!reload) keepDraft("", false);
+  drafts.clear();
+  draftScreen = "";
 }
 
 // Sending from the keyboard asks once, until "Don't ask again" (key-send.ts,
@@ -287,8 +310,8 @@ export function BugReportSheet({
 }) {
   const inApp = useInApp();
   const shakeOn = useShakeSetting();
-  const [words, setWords] = useState(draft.words);
-  const [blocksWork, setBlocksWork] = useState(draft.blocksWork);
+  const [words, setWords] = useState("");
+  const [blocksWork, setBlocksWork] = useState(false);
   const [picture, setPicture] = useState<Picture>({ state: "none" });
   const [voice, setVoice] = useState<VoiceNote | null>(null);
   const [include, setInclude] = useState(true);
@@ -342,7 +365,10 @@ export function BugReportSheet({
       setSendFailed(false);
       setStep("write");
       setPicture(hidden ? { state: "none" } : { state: "taking" });
-      const kept = words.trim() !== "" || voice !== null;
+      const draft = draftFor(path);
+      setWords(draft.words);
+      setBlocksWork(draft.blocksWork);
+      const kept = draft.words.trim() !== "" || voice !== null;
       setRestored(kept);
       setTapToEnd(kept);
       setDiscarding(false);
@@ -1001,6 +1027,7 @@ export function BugReportHost() {
         return;
       event.preventDefault();
       setOpen(false);
+      const draft = draftFor(window.location.pathname);
       setAdvanced({
         words: draft.words,
         blocksWork: draft.blocksWork,
