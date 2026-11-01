@@ -146,6 +146,9 @@ export function UpdatesBell({
   const groups = groupNotifications(notifications);
   const openRow = (entry: UpdateNotification) => {
     if (entry.kind === "updates") {
+      // The line tapped is read whether or not What's new lists all of it
+      // (phone personas ph1-27/ph1-53, 1 Nov 2026).
+      if (!entry.read) void markRead?.([entry.id]).catch(() => {});
       close();
       openNews(trigger.current);
       return;

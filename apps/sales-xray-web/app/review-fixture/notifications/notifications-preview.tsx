@@ -61,7 +61,7 @@ function entries(now: number): UpdateNotification[] {
     {
       id: "n4",
       kind: "updates",
-      title: "4 new updates",
+      title: "4 updates",
       href: null,
       urgent: false,
       created_at: at(50),
