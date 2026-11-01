@@ -144,6 +144,14 @@ import {
   rememberView,
   useWide,
 } from "./work-views";
+import {
+  keepPaused,
+  nextInRound,
+  readPaused,
+  roundDone,
+  type PausedRound,
+  type RoundNumbers,
+} from "./call-round";
 import { SideSelector } from "../ui/side-selector";
 import { stageName } from "./journey/stage-look";
 import { ViewTools } from "./view-switch";
@@ -526,6 +534,15 @@ export function LeadsRoute({
   // this round, in the list's order. A lead opened any other way is one-off.
   const [queue, setQueue] = useState<ReadonlySet<string> | null>(null);
   const order = useRef<readonly string[]>([]);
+  // The round's controls (competitor teardown 2): Skip sends a lead to the
+  // end, leads just tried are passed over on Continue, a closed round pauses,
+  // and its end says what it did.
+  const skipped = useRef<string[]>([]);
+  const reoffered = useRef<Set<string>>(new Set());
+  const triedRecently = useRef<readonly string[]>([]);
+  const passOver = useRef<ReadonlySet<string>>(new Set());
+  const roundFrom = useRef<RoundNumbers | null>(null);
+  const roundOn = useRef(false);
   // A settings page opened from the menu is a step of its own: Leads goes back.
   const pushedSettings = useRef(false);
   // The view picked here, until the address catches up (the router follows
@@ -617,8 +634,16 @@ export function LeadsRoute({
       setHolding(null);
       setIntent(handed.call ? "call" : null);
       // A call handed over from Home starts a round: Save & Next Lead goes on
-      // through this list (Dipak's handoff, items 16-17).
-      if (handed.call) setQueue(new Set([handed.leadId]));
+      // through this list (Dipak's handoff, items 16-17). Home's Start cold
+      // calling starts one at its card, which dials only on Call (ph2-33).
+      if (handed.call || handed.round) setQueue(new Set([handed.leadId]));
+      if (handed.round) {
+        roundOn.current = true;
+        skipped.current = [];
+        reoffered.current = new Set();
+        passOver.current = new Set();
+        roundFrom.current = null;
+      }
       setFocusAt(handed.at ?? null);
       setOpenLead(handed.leadId);
       refresh();
@@ -777,6 +802,47 @@ export function LeadsRoute({
     current && desk ? desk.queue : null,
     current && desk ? desk.me.person_id : null,
   );
+  // A new enquiry joins To Call at once, its row pulsing once, and in a
+  // running round it is the next card (competitor teardown 12 and 4): the
+  // pill tells; the list and the round act on it.
+  const [fresh, setFresh] = useState<ReadonlySet<string> | null>(null);
+  const ahead = useRef<string[]>([]);
+  const rounding = useRef(false);
+  const arrived = arrival.leads.map((row) => row.lead_id).join(" ");
+  useEffect(() => {
+    if (!arrived) return;
+    const ids = arrived.split(" ");
+    // Only a round running now takes them first; one started later keeps
+    // the list's order, so a lead already called is never offered again.
+    if (rounding.current)
+      ahead.current = [
+        ...ids.filter((id) => !ahead.current.includes(id)),
+        ...ahead.current,
+      ];
+    setFresh(new Set(ids));
+    setVersion((value) => value + 1);
+    const timer = window.setTimeout(() => setFresh(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [arrived]);
+  useEffect(() => {
+    rounding.current = queue !== null;
+    if (!queue) ahead.current = [];
+  }, [queue]);
+  // A round Home started takes today's numbers once the desk has them, so
+  // its end can say what it did.
+  useEffect(() => {
+    if (roundOn.current && !roundFrom.current && desk)
+      roundFrom.current = {
+        calls: desk.numbers.calls,
+        connected: desk.numbers.connected,
+        talk_seconds: desk.numbers.talk_seconds,
+      };
+  });
+  const [choosing, setChoosing] = useState<PausedRound | null>(null);
+  const [roundEnd, setRoundEnd] = useState<{
+    start: RoundNumbers | null;
+    leads: number;
+  } | null>(null);
   const can = current && desk ? desk.me.can_manage : false;
   // Only owners and admins pick whose leads; a seller's are always their own.
   const scope: Scope = can ? (scopeChoice ?? "team") : "mine";
@@ -1298,6 +1364,16 @@ export function LeadsRoute({
     setOpenLead(leadId);
   };
   const closeLead = () => {
+    // A round closed before its end pauses: the next start offers Continue.
+    if (roundOn.current && queue && desk)
+      keepPaused(desk.me.person_id, {
+        side,
+        served: [...queue],
+        skipped: skipped.current,
+        at: Date.now(),
+        start: roundFrom.current,
+      });
+    roundOn.current = false;
     setLinkDone(hash);
     leaveAddressLead();
     setOpenLead(null);
@@ -1571,13 +1647,61 @@ export function LeadsRoute({
   // Save & Next Lead (or Skip): the list's next lead not yet served this round;
   // none: done. Its card opens first, with Call and Skip; only Call dials
   // (phone personas, 1 Nov 2026, ph2-13: the dialler opened with a bare number).
-  const nextLead = (saved: string) => {
+  const nextLead = (saved: string, skip = false) => {
     const served = new Set(queue ?? []).add(saved);
-    const next = order.current.find((id) => !served.has(id));
+    // Skip sends a lead to the end of the round, once; an answer takes it off.
+    skipped.current = skipped.current.filter((id) => id !== saved);
+    if (skip && !reoffered.current.has(saved)) skipped.current.push(saved);
+    // A new enquiry that came in during the round is called first.
+    const { next, again: fromEnd } = nextInRound({
+      ahead: ahead.current,
+      order: order.current,
+      served,
+      skipped: skipped.current,
+      recent: passOver.current,
+    });
     if (!next) {
+      // The end: what the round did, then the next work; never a blank page.
+      if (roundOn.current)
+        setRoundEnd({ start: roundFrom.current, leads: served.size });
+      roundOn.current = false;
+      if (desk) keepPaused(desk.me.person_id, null);
       closeLead();
+      refresh();
       return;
     }
+    if (fromEnd) {
+      skipped.current = skipped.current.slice(1);
+      reoffered.current.add(next);
+    }
+    setQueue(served.add(next));
+    open(next);
+  };
+  const deskNumbers = (): RoundNumbers | null =>
+    desk
+      ? {
+          calls: desk.numbers.calls,
+          connected: desk.numbers.connected,
+          talk_seconds: desk.numbers.talk_seconds,
+        }
+      : null;
+  /** Start a round, from the top or where a paused one stopped. */
+  const startRound = (paused: PausedRound | null) => {
+    setChoosing(null);
+    const served = new Set(paused?.served ?? []);
+    skipped.current = [...(paused?.skipped ?? [])];
+    reoffered.current = new Set();
+    passOver.current = paused ? new Set(triedRecently.current) : new Set();
+    roundFrom.current = paused?.start ?? deskNumbers();
+    const { next } = nextInRound({
+      order: order.current,
+      served,
+      skipped: skipped.current,
+      recent: passOver.current,
+    });
+    if (desk) keepPaused(desk.me.person_id, null);
+    if (!next) return;
+    roundOn.current = true;
     setQueue(served.add(next));
     open(next);
   };
@@ -1597,6 +1721,24 @@ export function LeadsRoute({
         onChanged={refresh}
         queue={!!shownLead && !!queue?.has(shownLead)}
         onNext={nextLead}
+        round={
+          queue
+            ? {
+                at: queue.size,
+                of:
+                  viewCounts?.key === viewCountsKey &&
+                  typeof viewCounts.value[workView] === "number"
+                    ? Math.max(
+                        queue.size,
+                        (viewCounts.value[workView] ?? 0) +
+                          ahead.current.length,
+                      )
+                    : null,
+                skipped: skipped.current.length,
+                onPause: closeLead,
+              }
+            : null
+        }
       />
     ) : null;
 
@@ -1784,10 +1926,18 @@ export function LeadsRoute({
                       <CallNext
                         side={side}
                         disabled={!topLead}
+                        count={
+                          viewCounts?.key === viewCountsKey
+                            ? (viewCounts.value[workView] ?? null)
+                            : null
+                        }
                         onStart={() => {
                           if (!topLead) return;
-                          setQueue(new Set([topLead]));
-                          open(topLead);
+                          const paused = desk
+                            ? readPaused(desk.me.person_id, side)
+                            : null;
+                          if (paused) setChoosing(paused);
+                          else startRound(null);
                         }}
                       />
                     </>
@@ -1903,11 +2053,13 @@ export function LeadsRoute({
             <WorkSplit pane={paneShown ? leadSheet(true) : null}>
               <ListView
                 onTopLead={setTopLead}
-                onOrder={(leadIds) => {
+                onOrder={(leadIds, tried) => {
                   order.current = leadIds;
+                  triedRecently.current = tried;
                 }}
                 stageWord={stageWord}
                 quietLate={side === "cold" && !can}
+                fresh={fresh}
                 heading={headingShown}
                 empty={view === OPENING_STAGE ? emptyWords(workView) : null}
                 canManage={can}
@@ -2056,6 +2208,68 @@ export function LeadsRoute({
           />
         ) : null}
         {paneShown ? null : leadSheet(false)}
+        {/* A paused round: Continue where it stopped, or Start from top. */}
+        <ActionSheet
+          open={choosing !== null}
+          title="Your round"
+          onClose={() => setChoosing(null)}
+        >
+          <div className={styles.roundChoices}>
+            <Button variant="primary" onClick={() => startRound(choosing)}>
+              {(() => {
+                const of =
+                  viewCounts?.key === viewCountsKey
+                    ? viewCounts.value[workView]
+                    : null;
+                const at = choosing?.served.length ?? 0;
+                return of ? `Continue (${at} of ${of})` : "Continue";
+              })()}
+            </Button>
+            <Button onClick={() => startRound(null)}>Start from top</Button>
+          </div>
+        </ActionSheet>
+        {/* The round's end: what it did, then the next work. */}
+        <ActionSheet
+          open={roundEnd !== null}
+          title="Round done"
+          onClose={() => setRoundEnd(null)}
+        >
+          {(() => {
+            const done = roundDone(roundEnd?.start ?? null, deskNumbers());
+            return (
+              <dl className={styles.roundDone}>
+                <div>
+                  <dt>Leads</dt>
+                  <dd>{roundEnd?.leads ?? 0}</dd>
+                </div>
+                <div>
+                  <dt>Tried</dt>
+                  <dd>{done ? done.tried : "–"}</dd>
+                </div>
+                <div>
+                  <dt>Talked</dt>
+                  <dd>{done ? done.talked : "–"}</dd>
+                </div>
+                <div>
+                  <dt>Talk time</dt>
+                  <dd>{done ? `${done.minutes} min` : "–"}</dd>
+                </div>
+              </dl>
+            );
+          })()}
+          <div className={styles.roundChoices}>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setRoundEnd(null);
+                pickWork({ view: "follow_ups", when: "today", step: null });
+              }}
+            >
+              Follow-ups due today
+            </Button>
+            <Button onClick={() => setRoundEnd(null)}>Back to the list</Button>
+          </div>
+        </ActionSheet>
         <NewLeadCard
           lead={arrival.lead}
           count={arrival.count}

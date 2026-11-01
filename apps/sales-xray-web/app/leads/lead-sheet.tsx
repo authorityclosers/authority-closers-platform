@@ -2955,6 +2955,7 @@ export function LeadCard({
   primarySlot = null,
   hidePrimary = false,
   onSkip,
+  round = null,
 }: {
   detail: LeadDetail;
   me: Me | null;
@@ -2976,6 +2977,8 @@ export function LeadCard({
   hidePrimary?: boolean;
   /** In a calling round: go on to the next lead without calling this one. */
   onSkip?: () => void;
+  /** Where the round is ("12 of 900") and its Pause (competitor teardown 2). */
+  round?: RoundPlace | null;
 }) {
   const { lead } = detail;
   const setup = useContext(MessageSetup);
@@ -3295,11 +3298,29 @@ export function LeadCard({
   // A calling round (Call Next, Start Cold Calling) shows the card first: Call
   // dials, Skip goes on to the next lead and saves nothing (ph2-13, 1 Nov 2026).
   const primaryAction = onSkip ? (
-    <div className={styles.roundActions}>
-      {callAction}
-      <button type="button" className={styles.skipButton} onClick={onSkip}>
-        Skip
-      </button>
+    <div className={styles.roundBox}>
+      {round ? (
+        <p className={styles.roundWhere}>
+          <span>
+            {round.of ? `${round.at} of ${round.of}` : `Lead ${round.at}`}
+            {round.skipped ? ` · ${round.skipped} skipped` : ""}
+          </span>
+          <button
+            type="button"
+            className={styles.roundPause}
+            onClick={round.onPause}
+          >
+            Pause
+          </button>
+        </p>
+      ) : null}
+      <div className={styles.roundActions}>
+        {callAction}
+        {/* Skip sends the lead to the end of the round (competitor teardown 2). */}
+        <button type="button" className={styles.skipButton} onClick={onSkip}>
+          Skip
+        </button>
+      </div>
     </div>
   ) : (
     callAction
@@ -3833,6 +3854,14 @@ function CopyLeadLink({ leadId }: { leadId: string }) {
 /** What a lead opens for: a call, a message, or saying how a call went (L). */
 export type LeadIntent = "call" | "message" | "log" | "email";
 
+/** A calling round's place for its card: "12 of 900 · 3 skipped", and Pause. */
+export type RoundPlace = {
+  at: number;
+  of: number | null;
+  skipped: number;
+  onPause: () => void;
+};
+
 /**
  * Which pipeline the lead is in, and a move to another (owners and admins, when the
  * organisation runs several; owner, 22 Oct 2026). It keeps its owner and follow-ups
@@ -3926,6 +3955,7 @@ export function LeadSheet({
   queue = false,
   inline = false,
   focusAt = null,
+  round = null,
 }: {
   leadId: string | null;
   me: Me | null;
@@ -3936,8 +3966,10 @@ export function LeadSheet({
   /** Do this as soon as the lead is open (swipe, hold, an alert's Call). */
   intent?: LeadIntent | null;
   /** Call Next's queue: after Save & Next Lead, the list's next lead (given
-   *  this lead's id). */
-  onNext?: (leadId: string) => void;
+   *  this lead's id; skipped: Skip sent it to the round's end). */
+  onNext?: (leadId: string, skipped?: boolean) => void;
+  /** Where the round is, for the card (competitor teardown 2). */
+  round?: RoundPlace | null;
   /** Opened by Call Next (Dipak's handoff, 31 Oct 2026, items 16-17): Save &
    *  Next Lead goes on through the list; a one-off call is Save & Close. */
   queue?: boolean;
@@ -4089,8 +4121,11 @@ export function LeadSheet({
               primarySlot={primarySlot}
               hidePrimary={questionOpen || typing}
               onSkip={
-                queue && onNext && leadId ? () => onNext(leadId) : undefined
+                queue && onNext && leadId
+                  ? () => onNext(leadId, true)
+                  : undefined
               }
+              round={queue ? round : null}
               detail={detail}
               me={me}
               onChanged={update}

@@ -141,6 +141,7 @@ export function LeadLine({
   stageWord,
   quietLate = false,
   onPick,
+  fresh = false,
 }: {
   row: LeadRow;
   onOpen: (leadId: string) => void;
@@ -155,6 +156,8 @@ export function LeadLine({
   quietLate?: boolean;
   /** An owner's tick beside the row on a computer: start picking (bug report 130). */
   onPick?: (row: LeadRow) => void;
+  /** Just arrived: the row pulses once as it joins the list (competitor teardown 12). */
+  fresh?: boolean;
 }) {
   const reachable = !!row.phone_last4;
   const {
@@ -217,6 +220,7 @@ export function LeadLine({
       data-lead-row=""
       data-row-key={row.lead_id}
       data-overdue={(compact ? red : row.overdue) || undefined}
+      data-fresh={fresh || undefined}
       {...bind}
     >
       {reachable && actions ? (

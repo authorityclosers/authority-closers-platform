@@ -114,6 +114,8 @@ it("waits with what arrived between reads, and never with a lead the seller adde
   act(() => root.render(<Probe rows={next} />));
   expect(latest().lead?.lead_id).toBe("lead-2");
   expect(latest().count).toBe(1);
+  // Every lead waiting, for the list's pulse and a running round's next card.
+  expect(latest().leads.map((row) => row.lead_id)).toEqual(["lead-2"]);
   // The page opened it: gone.
   act(() => latest().know("lead-2"));
   expect(latest().lead).toBeNull();

@@ -8,8 +8,14 @@
 
 export const LEAD_ADDED_EVENT = "sx:lead-added";
 
-/** `at`: the line of its history to show, such as the call tapped on Calls. */
-export type HandedLead = { leadId: string; call: boolean; at?: string | null };
+/** `at`: the line of its history to show, such as the call tapped on Calls;
+ *  `round`: start a calling round at this lead (its card first). */
+export type HandedLead = {
+  leadId: string;
+  call: boolean;
+  at?: string | null;
+  round?: boolean;
+};
 
 let waiting: HandedLead | null = null;
 
@@ -20,6 +26,20 @@ export function handOverLead(
   at: string | null = null,
 ) {
   waiting = at ? { leadId, call, at } : { leadId, call };
+  if (typeof window !== "undefined")
+    window.dispatchEvent(
+      new CustomEvent<HandedLead>(LEAD_ADDED_EVENT, { detail: waiting }),
+    );
+}
+
+/**
+ * Start a calling round on Leads at this lead, as Leads' own Start Cold
+ * Calling does: its card first, with Call and Skip, and nothing dials until
+ * Call (phone personas ph2-33, 1 Nov 2026: Home's Start cold calling opened
+ * the dialer at once, and backing out left a phantom call).
+ */
+export function handOverRound(leadId: string) {
+  waiting = { leadId, call: false, round: true };
   if (typeof window !== "undefined")
     window.dispatchEvent(
       new CustomEvent<HandedLead>(LEAD_ADDED_EVENT, { detail: waiting }),
