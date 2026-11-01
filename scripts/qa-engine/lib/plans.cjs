@@ -223,5 +223,7 @@ function applies(plan, tab, row) {
 
 // the after-call journeys (they write, on the QA robot pool only)
 Object.assign(plans, require("./aftercall.cjs").plans);
+// read-and-assert journeys for Home and Settings (nothing is saved)
+Object.assign(plans, require("./readplans.cjs").plans);
 
 module.exports = { plans, applies, open };
