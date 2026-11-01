@@ -101,8 +101,10 @@ const tile = (label: string) =>
     button.textContent?.startsWith(label),
   )!;
 
-// Dipak's Home + Leads handoff (31 Oct 2026, items 16-17): a one-off call
-// saves and closes; from Call Next, Save & Next Lead goes on through the list.
+// Dipak's Home + Leads handoff (31 Oct 2026, items 16-17): from Call Next,
+// Save & Next Lead goes on through the list; a one-off call's Save & Close
+// closes the question and stays on the lead (J213, 1 Nov 2026: a note or a
+// follow-up often comes next).
 it.each([
   [false, "Save & Close"],
   [true, "Save & Next Lead"],
@@ -128,14 +130,41 @@ it.each([
   await act(async () => tile("No answer").click());
   await act(async () => tile(label).click());
   await flush();
+  expect(onClose).not.toHaveBeenCalled();
   if (queue) {
     expect(onNext).toHaveBeenCalledWith(ONE);
-    expect(onClose).not.toHaveBeenCalled();
   } else {
-    expect(onClose).toHaveBeenCalledTimes(1);
     expect(onNext).not.toHaveBeenCalled();
+    // Still on the lead, the question answered and gone.
+    expect(document.body.textContent).toContain("Ravi Kulkarni");
+    expect(document.body.textContent).not.toContain("How did the call");
+    expect(tile("Log a call")).toBeDefined();
   }
   expect(document.querySelector('[class*="nextUp"]')).toBeNull();
+});
+
+it("asks once when opened to log a call, then stays on the lead", async () => {
+  const onClose = vi.fn();
+  await act(async () =>
+    root.render(
+      <LeadSheet
+        leadId={ONE}
+        me={null}
+        intent="log"
+        onClose={onClose}
+        onChanged={() => undefined}
+      />,
+    ),
+  );
+  await flush();
+  expect(document.body.textContent).toContain("How did the call with Ravi go?");
+  await act(async () => tile("Didn't get through").click());
+  await act(async () => tile("No answer").click());
+  await act(async () => tile("Save & Close").click());
+  await flush();
+  expect(onClose).not.toHaveBeenCalled();
+  expect(document.body.textContent).toContain("Ravi Kulkarni");
+  expect(document.body.textContent).not.toContain("How did the call");
 });
 
 // One shared "Call next" (Liquid Glass split, 22 Oct 2026): the same card wherever it sits.

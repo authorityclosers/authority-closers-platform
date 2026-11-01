@@ -426,6 +426,7 @@ export function CallOutcome({
   upNext = null,
   ask = false,
   onSkip,
+  onUndone,
 }: {
   detail: LeadDetail;
   submitLabel: string;
@@ -444,6 +445,8 @@ export function CallOutcome({
   onSaved: (next: LeadDetail) => void;
   /** "I didn't call": close the question, saving nothing (ph2-16). */
   onSkip?: () => void;
+  /** The saved answer's Undo went through: the lead as it is again. */
+  onUndone?: (back: LeadDetail) => void;
 }) {
   const id = useId();
   const ref = useRef<HTMLElement>(null);
@@ -733,7 +736,8 @@ export function CallOutcome({
                 const answer = saved.undo_result;
                 if (!answer) return;
                 void undoResult(saved.lead, answer.event_id).then(
-                  (back) =>
+                  (back) => {
+                    onUndone?.(back);
                     notify({
                       id: `outcome-${saved.lead.lead_id}`,
                       tone: "info",
@@ -743,7 +747,8 @@ export function CallOutcome({
                         ? `${back.lead.name} · your note is kept in Notes`
                         : back.lead.name,
                       timeout: 6000,
-                    }),
+                    });
+                  },
                   (failure: unknown) =>
                     notify({
                       id: `outcome-${saved.lead.lead_id}`,
@@ -4060,7 +4065,16 @@ export function LeadSheet({
       })
     : null;
   const asking = after?.ask === true;
-  const questionOpen = asking || intent === "log" || logging === leadId;
+  // Opened to log a call: asked until it is saved or skipped, not again while
+  // the lead stays open (J213: a one-off call's Save & Close keeps the lead).
+  const [loggedFor, setLoggedFor] = useState<string | null>(null);
+  const [openFor, setOpenFor] = useState(leadId);
+  if (openFor !== leadId) {
+    setOpenFor(leadId);
+    setLoggedFor(null);
+  }
+  const logIntent = intent === "log" && loggedFor !== leadId;
+  const questionOpen = asking || logIntent || logging === leadId;
 
   // Home's "Pick up where you left off" (owner, 27 Oct 2026): the lead this
   // person opened last, kept on this device only.
@@ -4186,9 +4200,7 @@ export function LeadSheet({
               phoneCall={phoneCall}
               intent={intent}
               focusAt={focusAt}
-              afterCall={
-                asking || intent === "log" ? { step: "outcome" } : null
-              }
+              afterCall={asking || logIntent ? { step: "outcome" } : null}
               outcome={
                 questionOpen ? (
                   <CallOutcome
@@ -4197,24 +4209,37 @@ export function LeadSheet({
                     submitLabel={queue ? "Save & Next Lead" : "Save & Close"}
                     heard={after?.heard ?? null}
                     attention={asking}
-                    ask={intent === "log" || logging === leadId}
+                    ask={logIntent || logging === leadId}
                     beforeSave={() => logWaitingCall(detail)}
                     onSkip={() => {
                       // Nothing saved; in a round, on to the next lead (ph2-16).
                       setBackFrom(null);
                       setLogging(null);
+                      setLoggedFor(leadId);
                       if (asked) setAnswered(asked.startedMs);
                       if (queue && onNext && leadId) onNext(leadId);
                     }}
                     onSaved={(next) => {
                       setBackFrom(null);
                       setLogging(null);
+                      setLoggedFor(leadId);
                       if (asked) setAnswered(asked.startedMs);
                       update(next);
-                      // From Call Next, on to the list's next lead; a one-off
-                      // call closes, saved (Dipak's handoff, items 16-17).
+                      // From Call Next, on to the list's next lead. A one-off
+                      // call's Save & Close closes the question and stays on
+                      // the lead, saved: a note or a follow-up often comes next
+                      // (J213; Dipak's doc R10-31: back to the screen it came
+                      // from).
                       if (queue && onNext && leadId) onNext(leadId);
-                      else onClose();
+                    }}
+                    onUndone={(back) => {
+                      // The lead still open shows where Undo put it.
+                      setLoaded((current) =>
+                        current?.lead.lead_id === back.lead.lead_id
+                          ? back
+                          : current,
+                      );
+                      onChanged();
                     }}
                   />
                 ) : (
