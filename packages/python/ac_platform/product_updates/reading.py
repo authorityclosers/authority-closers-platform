@@ -9,13 +9,14 @@ from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import case, func, or_, select, update
+from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as postgres_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.lead_desk import bell
 from ac_platform.lead_desk.capture_reminder import BODY as REMINDER_BODY
 from ac_platform.lead_desk.capture_reminder import KEY as CAPTURE_KEY
 from ac_platform.lead_desk.capture_reminder import as_bell, reminder_day
@@ -207,10 +208,15 @@ class ProductUpdatesReading:
         unread = sum(not entry["read"] for entry in entries)
         # A workspace's capture reminder shows only there: one per day, with the count
         # its own calls say (phone personas ph1-27, 1 Nov 2026: 2 and 4 for one day).
-        here = or_(
-            Notification.dedupe_key.is_(None),
-            ~Notification.dedupe_key.startswith(CAPTURE_KEY),
-            Notification.tenant_id == self.actor.tenant_id,
+        # So does a "<name> is your lead now" line: its lead opens only there (lead_desk.bell;
+        # QA robot 5a5fb451, 2 Nov 2026).
+        here = and_(
+            or_(
+                Notification.dedupe_key.is_(None),
+                ~Notification.dedupe_key.startswith(CAPTURE_KEY),
+                Notification.tenant_id == self.actor.tenant_id,
+            ),
+            or_(Notification.kind != bell.KIND, Notification.tenant_id == self.actor.tenant_id),
         )
         unread += (
             await self.database.scalar(
@@ -233,6 +239,29 @@ class ProductUpdatesReading:
             )
         ).all()
         counts = await self._capture_counts(events)
+        # A lead line whose lead is gone or someone else's now is history: read, opening
+        # nothing, never counted, so no banner rings for it (lead_desk.bell.stale).
+        stale: set[UUID] = set()
+        if self.actor.tenant_id is not None:
+            found = await self.database.execute(
+                select(Notification.id, Notification.href).where(
+                    Notification.person_id == self.actor.person_id,
+                    Notification.tenant_id == self.actor.tenant_id,
+                    Notification.kind == bell.KIND,
+                    Notification.read_at.is_(None),
+                )
+            )
+            unread_leads = found.tuples().all()
+            stale = await bell.stale(
+                self.database,
+                self.actor.tenant_id,
+                self.actor.person_id,
+                [
+                    *unread_leads,
+                    *((event.id, event.href) for event in events if event.kind == bell.KIND),
+                ],
+            )
+            unread -= sum(1 for line_id, _ in unread_leads if line_id in stale)
         for event in events:
             # The capture reminder stays in the bell and names its day, older rows too,
             # with that day's count now: the calls it opens say the same (ph1-53).
@@ -250,10 +279,10 @@ class ProductUpdatesReading:
                     "kind": event.kind,
                     "title": title,
                     "body": REMINDER_BODY if day else event.body,
-                    "href": href,
-                    "urgent": urgent,
+                    "href": None if event.id in stale else href,
+                    "urgent": urgent and event.id not in stale,
                     "created_at": utc(event.created_at),
-                    "read": event.read_at is not None,
+                    "read": event.read_at is not None or event.id in stale,
                 }
             )
         entries.sort(key=lambda entry: (entry["created_at"], entry["id"]), reverse=True)
