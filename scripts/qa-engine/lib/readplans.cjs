@@ -62,7 +62,12 @@ const J175 = {
   async run({ tab }) {
     const page = tab.page;
     await until(() => page.getByText("Today's performance").first().count(), 15000);
-    const home = await page.evaluate(readHome, { labels: TODAY_LABELS, cardSource: CARD.source });
+    // the counters can still be coming in when the page first answers (a dark row once read one of four): wait for them before judging
+    let home = await page.evaluate(readHome, { labels: TODAY_LABELS, cardSource: CARD.source });
+    for (let t = 0; t < 20 && new Set(home.found).size < 3; t++) {
+      await sleep(1000);
+      home = await page.evaluate(readHome, { labels: TODAY_LABELS, cardSource: CARD.source });
+    }
     const labels = [...new Set(home.found)];
     if (labels.length < 3) return fail(`Home shows only ${labels.length} of the four counters (${labels.join(", ") || "none"}): ${TODAY_LABELS.join(", ")}`, "/dashboard", "Home counters");
     if (home.covered.length) return fail(`the counter${home.covered.length > 1 ? "s" : ""} ${[...new Set(home.covered)].join(", ")} sit${home.covered.length > 1 ? "" : "s"} under something else on Home`, "/dashboard", "Home counters");
@@ -318,7 +323,9 @@ const SECTION_ROWS = ({ from }) => {
   const seeLinks = [...document.querySelectorAll("a[href]")]
     .filter((e) => {
       const r = e.getBoundingClientRect();
-      return visible(e) && /^see (all|details)/i.test(nameOf(e)) && Math.abs(r.top + r.height / 2 - mid) <= 30 && r.left >= ha.left;
+      // on the heading's line, or just under it when a narrow screen wraps "+ Add" and "See all" onto a second line (360 px)
+      const centre = r.top + r.height / 2;
+      return visible(e) && /^see (all|details)/i.test(nameOf(e)) && centre >= ha.top - 20 && centre <= ha.bottom + 50 && r.left >= ha.left;
     })
     .sort((x, y) => x.getBoundingClientRect().left - y.getBoundingClientRect().left);
   const seeAll = seeLinks.filter((e) => /^see all/i.test(nameOf(e))).map((e) => e.getAttribute("href"));
@@ -384,7 +391,7 @@ const J141 = {
     const leadId = (/lead=([0-9a-f-]+)/.exec(nameLink.href) || [])[1];
     const callA = page.getByRole("link", { name: callLink.text }).filter({ visible: true }).first();
     await callA.click({ timeout: 8000 }).catch(() => null);
-    const opened = await until(async () => (new URL(page.url()).searchParams.get("lead") || "") && (await page.getByRole("heading", { name: nameLink.text, exact: true }).filter({ visible: true }).count()), 15000);
+    const opened = await until(async () => (new URL(page.url()).searchParams.get("lead") || "") && (await page.getByRole("heading", { name: nameLink.text, exact: true }).filter({ visible: true }).count()), 30000);
     const gotId = new URL(page.url()).searchParams.get("lead") || "";
     if (!opened || gotId !== leadId) return fail(`"${callLink.text}" on Home was meant to open ${nameLink.text}, but ${gotId ? "another lead opened" : "no lead opened"} (${page.url().replace(/lead=[0-9a-f-]+/, "lead=<id>").replace(/^https?:\/\/[^/]+/, "")})`, "/dashboard", "Next to Call");
     const tel = await page.evaluate(() => [...document.querySelectorAll("a[href^='tel:']")].filter((e) => e.getBoundingClientRect().width > 0).map((e) => ({ href: e.getAttribute("href"), text: (e.textContent || "").replace(/\D/g, "") })));
@@ -685,6 +692,120 @@ const J052 = {
   },
 };
 
+// ---- Reports: the hub with its All, Calls and Leads tabs (J244, J247, J251, J252, J254); nothing is saved --------------------------------------
+const reportsTab = (page, name) => page.getByRole("tab", { name, exact: true }).or(page.getByRole("radio", { name, exact: true })).filter({ visible: true }).first();
+const tabOn = async (locator) => (await locator.evaluate((e) => e.getAttribute("aria-selected") === "true" || e.getAttribute("aria-checked") === "true" || e.checked === true).catch(() => false));
+
+const J244 = {
+  route: "/reports",
+  async run({ tab }) {
+    const page = tab.page;
+    await until(() => page.getByRole("heading", { name: "What stands out" }).first().count(), 20000);
+    const read = await page.evaluate(() => {
+      const visible = (e) => e.checkVisibility && e.checkVisibility() && e.getBoundingClientRect().width > 0;
+      const main = document.querySelector("main") || document.body;
+      const heads = [...main.querySelectorAll("h1,h2,h3")].filter(visible).map((e) => e.textContent.trim());
+      return { heads, links: [...main.querySelectorAll("a[href]")].filter(visible).map((e) => ({ text: (e.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60), href: e.getAttribute("href") })) };
+    });
+    const wrong = [];
+    for (const h of ["Reports", "What stands out", "Calls", "Leads"]) if (!read.heads.includes(h)) wrong.push(`Reports has no "${h}" heading (${read.heads.join(" / ").slice(0, 60)})`);
+    if (!read.links.length) wrong.push("Reports shows no summary line or tile to open");
+    const empty = read.links.filter((l) => !l.text || !l.href);
+    if (empty.length) wrong.push(`${empty.length} tile${empty.length > 1 ? "s" : ""} on Reports have no words or no destination`);
+    return wrong.length ? fail(wrong.join("; "), "/reports", "summary") : pass(`Reports shows "What stands out" and the Calls and Leads groups with ${read.links.length} lines that open something`, "/reports", "summary");
+  },
+};
+
+const J247 = {
+  route: "/reports",
+  async run({ tab }) {
+    const page = tab.page;
+    await until(() => page.getByRole("heading", { name: "What stands out" }).first().count(), 20000);
+    const period = await page.evaluate(() => {
+      const visible = (e) => e.checkVisibility && e.checkVisibility() && e.getBoundingClientRect().width > 0;
+      const rx = /^(today|this week|this month|last 7 days|last 30 days|period|date range|week|month)\b/i;
+      return [...document.querySelectorAll("button,[role=tab],[role=radio],[role=combobox],select,input")].filter(visible).map((e) => (e.getAttribute("aria-label") || e.textContent || "").replace(/\s+/g, " ").trim()).filter((t) => rx.test(t));
+    });
+    if (!period.length) return blocked("Reports has no period control in this version (its controls are the All, Calls and Leads tabs): nothing to change; the journey needs the period selector", "/reports", "period");
+    return blocked(`Reports shows a period control (${period.slice(0, 3).join(", ")}); changing it and comparing the numbers is not scripted yet`, "/reports", "period");
+  },
+};
+
+const J251 = {
+  route: "/reports",
+  async run({ tab }) {
+    const page = tab.page;
+    await until(() => reportsTab(page, "Calls").count(), 20000);
+    const gap = await page.evaluate(() => {
+      const visible = (e) => e.checkVisibility && e.checkVisibility() && e.getBoundingClientRect().width > 0;
+      const main = document.querySelector("main") || document.body;
+      const h = [...main.querySelectorAll("h1,h2")].find((e) => (e.textContent || "").trim() === "Reports" && visible(e));
+      const pill = [...main.querySelectorAll("[role=tab],[role=radio],button")].find((e) => /^all$/i.test((e.textContent || "").trim()) && visible(e));
+      if (!h || !pill) return null;
+      const a = h.getBoundingClientRect();
+      const b = pill.getBoundingClientRect();
+      return { gap: Math.round(b.top - a.bottom), overlap: b.top < a.bottom };
+    });
+    if (!gap) return fail("Reports has no heading or no tab row to measure", "/reports", "heading and tabs");
+    if (gap.overlap) return fail(`the tab row sits ${-gap.gap}px over the Reports heading`, "/reports", "heading and tabs");
+    if (gap.gap < 8) return fail(`only ${gap.gap}px between the Reports heading and the tab row, less than 8px`, "/reports", "heading and tabs");
+    return pass(`${gap.gap}px between the Reports heading and the tab row`, "/reports", "heading and tabs");
+  },
+};
+
+const J252 = {
+  route: "/reports",
+  async run({ tab }) {
+    const page = tab.page;
+    await until(() => page.getByRole("heading", { name: "What stands out" }).first().count(), 20000);
+    const covered = await page.evaluate(() => {
+      const visible = (e) => e.checkVisibility && e.checkVisibility() && e.getBoundingClientRect().width > 0;
+      const main = document.querySelector("main") || document.body;
+      const bad = [];
+      let n = 0;
+      for (const a of [...main.querySelectorAll("a[href]")].filter(visible)) {
+        n += 1;
+        a.scrollIntoView({ block: "center", inline: "center" });
+        const r = a.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        if (!hit || !(hit === a || a.contains(hit) || hit.contains(a))) bad.push(`${(a.textContent || "").replace(/\s+/g, " ").trim().slice(0, 30)} (under ${hit ? hit.tagName + " " + (hit.textContent || "").replace(/\s+/g, " ").trim().slice(0, 30) : "nothing"})`);
+      }
+      return { n, bad };
+    });
+    if (!covered.n) return fail("Reports shows no tile to check", "/reports", "tiles");
+    if (covered.bad.length) return fail(`${covered.bad.length} of ${covered.n} Reports tiles are under something else: ${covered.bad.slice(0, 3).join("; ")}`, "/reports", "tiles");
+    return pass(`none of the ${covered.n} Reports tiles has a card or notice over it`, "/reports", "tiles");
+  },
+};
+
+const J254 = {
+  route: "/reports",
+  async run({ tab }) {
+    const page = tab.page;
+    const calls = reportsTab(page, "Calls");
+    await until(() => calls.count(), 20000);
+    if (!(await calls.count())) return fail("Reports has no Calls tab", "/reports", "tab bar");
+    await calls.click({ timeout: 6000 }).catch(() => null);
+    await sleep(1200);
+    if (!(await tabOn(calls))) return fail("pressing Calls does not select it", "/reports", "tab bar");
+    const before = new URL(page.url()).search;
+    const tile = page.locator("main a[href]").filter({ visible: true }).first();
+    const href = (await tile.getAttribute("href").catch(() => "")) || "";
+    if (!href) return fail("the Calls tab shows no tile to open", "/reports", "tab bar");
+    await tile.click({ timeout: 6000 }).catch(() => null);
+    await until(async () => new URL(page.url()).pathname !== "/reports", 12000);
+    await sleep(800);
+    await page.goBack({ timeout: 10000 }).catch(() => null);
+    await until(() => reportsTab(page, "Calls").count(), 15000);
+    await sleep(1000);
+    const back = reportsTab(page, "Calls");
+    const wrong = [];
+    if (new URL(page.url()).pathname !== "/reports") wrong.push(`Back from ${href.slice(0, 30)} lands on ${new URL(page.url()).pathname}, not Reports`);
+    else if (!(await tabOn(back))) wrong.push(`Back to Reports does not keep the Calls tab (the address was "${before || "no query"}", now "${new URL(page.url()).search || "no query"}")`);
+    return wrong.length ? fail(wrong.join("; "), "/reports", "tab bar") : pass(`the Calls tab is still selected after opening ${href.slice(0, 30)} and pressing Back`, "/reports", "tab bar");
+  },
+};
+
 // Plan rows do not run under the walks' write guard, so every plan here refuses any write itself for as long as it runs (the route is taken off again afterwards:
 // the after-call plans share the tab and need their own writes to pass).
 const guarded = (plan) => ({
@@ -700,4 +821,4 @@ const guarded = (plan) => ({
   },
 });
 
-module.exports = { plans: { J050: guarded(J050), J052: guarded(J052), J053: guarded(J053), J055: guarded(J055), J142: guarded(J142), J177: guarded(J177), J181: guarded(J181), J139: guarded(J162), J141: guarded(J141), J158: guarded(J158), J159: guarded(J141), J162: guarded(J162), J175: guarded(J175), J310: guarded(J310), J323: writeGuarded(J323), J324: guarded(J324), J330: writeGuarded(J330) } };
+module.exports = { plans: { J244: guarded(J244), J247: guarded(J247), J251: guarded(J251), J252: guarded(J252), J254: guarded(J254), J050: guarded(J050), J052: guarded(J052), J053: guarded(J053), J055: guarded(J055), J142: guarded(J142), J177: guarded(J177), J181: guarded(J181), J139: guarded(J162), J141: guarded(J141), J158: guarded(J158), J159: guarded(J141), J162: guarded(J162), J175: guarded(J175), J310: guarded(J310), J323: writeGuarded(J323), J324: guarded(J324), J330: writeGuarded(J330) } };
