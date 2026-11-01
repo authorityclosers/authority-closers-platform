@@ -2,7 +2,7 @@
 import { act, type AnchorHTMLAttributes, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { AppSession } from "./app-session";
+import { AppSession, isShellRoute } from "./app-session";
 import PlansPage from "./plans/page";
 import ProspectsPage from "./prospects/page";
 import ProspectDetailPage from "./prospects/[prospectId]/page";
@@ -383,4 +383,11 @@ it("keeps login and fixture routes outside both session boundaries", async () =>
     expect(host.textContent).toBe("Public route");
   }
   expect(fetchMock).not.toHaveBeenCalled();
+});
+
+// Owner alerts' list and the day's summary (competitor teardown 19 and 20, 1 Nov
+// 2026) are app pages: otherwise they never get their workspace.
+it("counts the alert list and the day's summary as app pages", () => {
+  expect(isShellRoute("/leads/alerts")).toBe(true);
+  expect(isShellRoute("/leads/summary/")).toBe(true);
 });

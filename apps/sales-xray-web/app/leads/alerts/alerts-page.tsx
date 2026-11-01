@@ -28,10 +28,11 @@ import { useWorkspaceAccess } from "../../workspace-access";
 import { handOverLead } from "../lead-handoff";
 import styles from "./alerts.module.css";
 
+// One word each, so four fit one line at 360 px; the heading below says it in full.
 const TABS: Record<AlertKind, string> = {
-  first_call: "Not called",
-  missed_call: "Missed calls",
-  no_follow_up: "No follow-up",
+  first_call: "Waiting",
+  missed_call: "Missed",
+  no_follow_up: "Quiet",
   seller_idle: "Idle",
 };
 
