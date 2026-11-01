@@ -71,6 +71,7 @@ import {
   parseInsights,
   percent,
   queryOf,
+  stillNeeds,
   type CallPage,
   type CallRow,
   type Filters,
@@ -80,7 +81,7 @@ import {
   type View,
 } from "./insights-data";
 import styles from "./insights.module.css";
-import { OutcomeStory } from "./insights-outcomes";
+import { Evidence, OutcomeStory } from "./insights-outcomes";
 import { InsightsSkeleton } from "./insights-skeleton";
 
 type Read =
@@ -407,6 +408,7 @@ export function InsightsView({
         <Sections
           section={section}
           data={data}
+          onePerson={Boolean(filters.person)}
           go={go}
           linkFor={linkFor}
           calls={calls}
@@ -553,6 +555,7 @@ function shareDelta(now: number | null, before: number | null): ReactNode {
 function Sections({
   section,
   data,
+  onePerson,
   go,
   linkFor,
   calls,
@@ -563,6 +566,8 @@ function Sections({
   section: View;
   onCalls: (outcome?: Filters["outcome"]) => void;
   data: Insights;
+  /** The person filter is on (the sellers' floor is off). */
+  onePerson: boolean;
   go: (next: Partial<Filters>) => void;
   linkFor: ((key: string) => string) | null;
   calls: CallPage | null;
@@ -570,6 +575,10 @@ function Sections({
   moreLoading: boolean;
 }) {
   const { totals, previous } = data;
+  // Too few calls or sellers: the panels say what they still need, never a
+  // claim (competitor teardown 14). Each that does claim says what it rests on.
+  const need = stillNeeds(data, onePerson);
+  const evidence = <Evidence data={data} onCalls={() => onCalls()} />;
   const [grouping, setGrouping] = useState<"people" | "teams">("people");
   const attention = useMemo(
     () =>
@@ -650,7 +659,7 @@ function Sections({
 
       {section === "overview" ? (
         <>
-          <OutcomeStory data={data} onCalls={onCalls} />
+          <OutcomeStory data={data} onCalls={onCalls} onePerson={onePerson} />
           <Panel
             title="Calls over time"
             sub={`By ${data.window.unit}`}
@@ -668,7 +677,14 @@ function Sections({
           <div className={styles.grid}>
             <Panel title="Skills across the calls" sub="Share observed">
               <div className={styles.inset}>
-                <SkillSplit skills={data.skills} />
+                {need ? (
+                  <p className={styles.muted}>{need}</p>
+                ) : (
+                  <>
+                    <SkillSplit skills={data.skills} />
+                    {evidence}
+                  </>
+                )}
               </div>
             </Panel>
           </div>
@@ -676,16 +692,21 @@ function Sections({
           <div className={styles.grid}>
             <Panel title="Objections" sub="What prospects raised">
               <div className={styles.inset}>
-                {data.objections.length ? (
-                  <BarList
-                    label="Objections"
-                    rows={data.objections.map((row) => ({
-                      key: row.kind,
-                      label: row.label,
-                      value: row.calls,
-                      note: `${percent(row.calls ? row.won / row.calls : null)} won`,
-                    }))}
-                  />
+                {need ? (
+                  <p className={styles.muted}>{need}</p>
+                ) : data.objections.length ? (
+                  <>
+                    <BarList
+                      label="Objections"
+                      rows={data.objections.map((row) => ({
+                        key: row.kind,
+                        label: row.label,
+                        value: row.calls,
+                        note: `${percent(row.calls ? row.won / row.calls : null)} won`,
+                      }))}
+                    />
+                    {evidence}
+                  </>
                 ) : (
                   <p className={styles.muted}>
                     No objections recorded in these calls.
@@ -704,17 +725,28 @@ function Sections({
               }
             >
               <div className={styles.inset}>
-                {data.mistakes.length ? (
-                  <BarList
-                    label="Common mistakes"
-                    rows={data.mistakes.map((row) => ({
-                      key: row.kind,
-                      label: row.label,
-                      value: row.calls,
-                    }))}
-                  />
+                {need ? (
+                  <p className={styles.muted}>{need}</p>
+                ) : data.mistakes.length ? (
+                  <>
+                    <BarList
+                      label="Common mistakes"
+                      rows={data.mistakes.map((row) => ({
+                        key: row.kind,
+                        label: row.label,
+                        value: row.calls,
+                      }))}
+                    />
+                    {evidence}
+                  </>
                 ) : attention.length ? (
-                  <BarList label="Skills needing attention" rows={attention} />
+                  <>
+                    <BarList
+                      label="Skills needing attention"
+                      rows={attention}
+                    />
+                    {evidence}
+                  </>
                 ) : (
                   <p className={styles.muted}>
                     No skill needed attention in these calls.

@@ -1,4 +1,8 @@
-import type { ActivityItem } from "../leads/leads-client";
+import type {
+  ActivityItem,
+  ActivityPage,
+  LeadEvent,
+} from "../leads/leads-client";
 import { displayName } from "../display-name";
 import { type OrgMember } from "./organisation-api";
 
@@ -9,6 +13,17 @@ export const METRICS = [
   { key: "moves", label: "Stage moves" },
 ] as const;
 export type Metric = (typeof METRICS)[number]["key"];
+
+/** The periods Analytics reads (competitor teardown 15, 1 Nov 2026). */
+export const PERIODS = [
+  { key: "1", label: "Today", days: 1 },
+  { key: "7", label: "7 days", days: 7 },
+  { key: "30", label: "30 days", days: 30 },
+] as const;
+export type PeriodKey = (typeof PERIODS)[number]["key"];
+/** The period from the address (?days=); 30 days when it says none. */
+export const periodFrom = (value: string | null | undefined): PeriodKey =>
+  PERIODS.find((period) => period.key === value)?.key ?? "30";
 export type Counts = Record<Metric, number>;
 export type AnalyticsHistory = {
   items: ActivityItem[];
@@ -61,13 +76,16 @@ type SummaryResponse = {
 export async function readAnalytics({
   team,
   personId,
+  days = 30,
   signal,
 }: {
   team: boolean;
   personId?: string;
+  /** Today (1), 7 or 30 days, ending today. */
+  days?: number;
   signal?: AbortSignal;
 }): Promise<AnalyticsSummary> {
-  const query = new URLSearchParams({ days: "30" });
+  const query = new URLSearchParams({ days: String(days) });
   if (team) query.set("team", "true");
   else if (personId) query.set("person", personId);
   const response = await fetch(`/v1/lead-desk/activity/summary?${query}`, {
@@ -81,7 +99,7 @@ export async function readAnalytics({
   const summary = (await response.json()) as SummaryResponse;
   if (
     summary.schema !== "lead-desk/1" ||
-    summary.days !== 30 ||
+    summary.days !== days ||
     !Array.isArray(summary.people)
   )
     throw new Error("Activity is unavailable");
@@ -104,12 +122,89 @@ export async function readAnalytics({
         name: displayName(person.name),
         work: person.current.work,
         daily: Array.from(
-          { length: 30 },
+          { length: days },
           (_, index) => daily.get(start + index) ?? { ...zero(), work: 0 },
         ),
       };
     }),
   };
+}
+
+/** Whether a feed item is one the summary counts for this number. */
+export function countsToward(metric: Metric, event: LeadEvent): boolean {
+  if (metric === "calls") return event.kind === "call";
+  if (metric === "conversations")
+    return (
+      event.kind === "call" &&
+      (event.connected === true || (event.duration_seconds ?? 0) > 0)
+    );
+  return event.kind === (metric === "notes" ? "note" : "stage");
+}
+
+/**
+ * One page of the feed behind a number (competitor teardown 15: every number
+ * opens its list), newest first: today's, the week's, or everything paged
+ * back past the period's first day.
+ */
+export async function readActivityPage({
+  days,
+  team,
+  personId,
+  before,
+  signal,
+}: {
+  days: number;
+  team: boolean;
+  personId?: string;
+  before: string | null;
+  signal?: AbortSignal;
+}): Promise<ActivityPage> {
+  const query = new URLSearchParams({
+    day: days === 1 ? "today" : days === 7 ? "week" : "recent",
+  });
+  if (team) query.set("team", "true");
+  else if (personId) query.set("person", personId);
+  if (before) query.set("before", before);
+  const response = await fetch(`/v1/lead-desk/activity?${query}`, {
+    credentials: "same-origin",
+    cache: "no-store",
+    redirect: "error",
+    signal,
+    headers: { accept: "application/json" },
+  });
+  if (!response.ok) throw new Error("Activity could not load");
+  return (await response.json()) as ActivityPage;
+}
+
+/** A day number as 2026-11-01. */
+export const dayIso = (day: number) =>
+  new Date(day * DAY).toISOString().slice(0, 10);
+
+/**
+ * The period's numbers, one row per person, for a spreadsheet (teardown 15,
+ * Export for owners). A name that starts like a formula stays text.
+ */
+export function activityCsv(data: AnalyticsSummary): string {
+  const cell = (value: string | number) => {
+    let text = String(value);
+    if (/^[=+\-@]/.test(text)) text = `'${text}`;
+    return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  const lines = [
+    [
+      "Person",
+      ...METRICS.map((metric) => metric.label),
+      "All updates",
+      ...METRICS.map((metric) => `${metric.label}, period before`),
+    ],
+    ...data.people.map((person) => [
+      person.name,
+      ...METRICS.map((metric) => person.current[metric.key]),
+      person.work,
+      ...METRICS.map((metric) => person.previous[metric.key]),
+    ]),
+  ];
+  return `${lines.map((line) => line.map(cell).join(",")).join("\n")}\n`;
 }
 
 export function activitySummary(history: AnalyticsHistory) {

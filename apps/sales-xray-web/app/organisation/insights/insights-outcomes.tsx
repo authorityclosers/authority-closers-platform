@@ -1,26 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { ChevronRight } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { readRevenue } from "../../dashboard/revenue-client";
 import { Button } from "../../ui/kit";
 import {
+  basedOn,
   count,
   dateLabel,
   OUTCOMES,
   percent,
   rupees,
+  stillNeeds,
   type Insights,
   type OutcomeKey,
 } from "./insights-data";
 import styles from "./outcomes.module.css";
 
 /**
- * Below this many analysed calls Insights makes no claims: one call is not a
- * trend (Dipak's walk, ph1-22, 1 Nov 2026: "Wins held steady" and 100% from
- * one call).
+ * Where an insight comes from, as its last line: "Based on 12 calls · 3
+ * sellers", opening those calls (competitor teardown 14, 1 Nov 2026).
  */
-export const MIN_CALLS = 10;
+export function Evidence({
+  data,
+  onCalls,
+}: {
+  data: Insights;
+  onCalls: () => void;
+}) {
+  const words = basedOn(data);
+  if (!words) return null;
+  return (
+    <button type="button" className={styles.evidence} onClick={onCalls}>
+      {words}
+      <ChevronRight size={14} aria-hidden="true" />
+    </button>
+  );
+}
 
 /** This month's Won leads, from the Lead Desk: a win is a deal, not a call. */
 export type MonthWins = { deals: number; amount: number };
@@ -62,13 +79,16 @@ function EveryEnding({
   calls,
   missing,
   few = false,
+  evidence,
   onCalls,
 }: {
   groups: { key: string; label: string; rows: EndingRow[] }[];
   calls: number | null;
   missing: boolean;
-  /** Too few calls for shares or a most common ending (MIN_CALLS). */
+  /** Too few calls or sellers for shares or a most common ending. */
   few?: boolean;
+  /** Its "Based on" line. */
+  evidence: ReactNode;
   onCalls: (outcome?: OutcomeKey) => void;
 }) {
   const rows = groups.flatMap((group) => group.rows);
@@ -87,10 +107,6 @@ function EveryEnding({
           ? `${top.label} was the most common ending`
           : "How every call ended"}
       </h2>
-      <p className={styles.caption}>
-        {calls === null ? "—" : count(calls)} analysed calls · tap an ending to
-        see its calls
-      </p>
       {known > 0 ? (
         <div
           className={styles.mix}
@@ -147,6 +163,7 @@ function EveryEnding({
       {missing ? (
         <p className={styles.caption}>— Outcome count unavailable</p>
       ) : null}
+      {calls === null ? null : evidence}
     </section>
   );
 }
@@ -156,11 +173,14 @@ export function OutcomeStory({
   data,
   onCalls,
   wins: given,
+  onePerson = false,
 }: {
   data: Insights;
   onCalls: (outcome?: OutcomeKey) => void;
   /** This month's Won leads; read from the Lead Desk when not given. */
   wins?: MonthWins | null;
+  /** The person filter is on: one seller's calls, on purpose. */
+  onePerson?: boolean;
 }) {
   const { totals, previous, coverage } = data;
   // Off under test, as the shell's own reads are (pages count their reads).
@@ -168,7 +188,10 @@ export function OutcomeStory({
     given === undefined && !data.synthetic && process.env.NODE_ENV !== "test",
   );
   const wins = given === undefined ? read : given;
-  const few = coverage.calls && totals.calls < MIN_CALLS;
+  // Below five calls or two sellers nothing is claimed (teardown 14).
+  const need = stillNeeds(data, onePerson);
+  const few = need !== null;
+  const evidence = <Evidence data={data} onCalls={() => onCalls()} />;
   const share =
     !few && coverage.nextStep && coverage.calls && totals.calls > 0
       ? totals.nextStep / totals.calls
@@ -177,8 +200,8 @@ export function OutcomeStory({
     previous && coverage.previousWon && coverage.won
       ? totals.won - previous.won
       : null;
-  const headline = few
-    ? `Not enough calls yet (${count(totals.calls)} of ${MIN_CALLS})`
+  const headline = need
+    ? need
     : diff === null
       ? "How your calls ended"
       : diff === 0
@@ -257,12 +280,13 @@ export function OutcomeStory({
             : "Period dates unavailable"}{" "}
           · One outcome per call
         </p>
+        {evidence}
       </section>
       <div className={styles.grid}>
         <section className={styles.card} aria-label="Next steps and outcomes">
           <h2>
-            {few
-              ? "Not enough calls yet"
+            {need
+              ? need
               : share === null
                 ? "Next-step share unavailable"
                 : `${percent(share)} of calls agreed a next step`}
@@ -316,10 +340,8 @@ export function OutcomeStory({
               </p>
             </div>
           </div>
-          <p className={styles.caption}>
-            Won, meeting booked or follow-up set · Of{" "}
-            {coverage.calls ? count(totals.calls) : "—"} analysed calls
-          </p>
+          <p className={styles.caption}>Won, meeting booked or follow-up set</p>
+          {evidence}
         </section>
         <section className={styles.card} aria-label="Counted call funnel">
           <h2>Where calls move forward</h2>
@@ -372,9 +394,7 @@ export function OutcomeStory({
             </svg>
           ) : (
             <p className={styles.unavailable}>
-              {few
-                ? `Not enough calls yet (${count(totals.calls)} of ${MIN_CALLS})`
-                : "— Funnel counts unavailable"}
+              {need ?? "— Funnel counts unavailable"}
             </p>
           )}
           <p className={styles.caption}>
@@ -383,15 +403,13 @@ export function OutcomeStory({
           <Button variant="primary" onClick={() => onCalls()}>
             View matching calls
           </Button>
+          {evidence}
           <p className={styles.coverage}>
-            {coverage.calls
-              ? `${count(totals.calls)} calls analysed`
-              : "Analysed count unavailable"}
             {data.pending > 0
-              ? ` · ${count(data.pending)} pending`
+              ? `${count(data.pending)} calls pending`
               : coverage.pending
-                ? " · No calls pending"
-                : " · Pending count unavailable"}
+                ? "No calls pending"
+                : "Pending count unavailable"}
           </p>
         </section>
       </div>
@@ -411,6 +429,7 @@ export function OutcomeStory({
         calls={coverage.calls ? totals.calls : null}
         missing={missing}
         few={few}
+        evidence={evidence}
         onCalls={onCalls}
       />
     </>
