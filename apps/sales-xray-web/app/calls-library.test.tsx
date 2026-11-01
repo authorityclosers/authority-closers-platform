@@ -18,10 +18,14 @@ vi.mock("next/navigation", () => ({
 // The shell's profile widgets load their own account summary. Keep these
 // library requests isolated from that unrelated fetch sequence.
 vi.mock("./profile-menu", () => ({ ProfileMenu: () => null }));
-// The no-recording line has its own tests (capture-setup/recording-check.test.tsx).
-vi.mock("./capture-setup/recording-check", () => ({
-  RecordingLine: () => null,
-}));
+// The no-recording line has its own tests (capture-setup/recording-check.test.tsx);
+// here only where it sits, so it reads nothing and says nothing.
+vi.mock("./capture-setup/recording-check", async () => {
+  const { createElement } = await import("react");
+  return {
+    RecordingLine: () => createElement("p", { "data-recording-line": "" }),
+  };
+});
 
 import { AccountNavigation } from "./account-navigation";
 import { CallsLibrary, callsViewSearch, readCallsView } from "./calls-library";
@@ -195,6 +199,17 @@ const submitEditor = () =>
       .querySelector<HTMLFormElement>("[data-call-label-editor]")!
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
   );
+
+it("puts the no-recording line first on the page, above the phone's calls and the heading", async () => {
+  // Teardown #13 on dev (1 Nov 2026): it sat under "Your calls", a screen down.
+  routeFetch({ [LIST]: () => ok(page([row(firstId, true)])) });
+  await act(async () => renderLibrary());
+  await flush();
+  const line = host.querySelector("[data-recording-line]");
+  expect(line).not.toBeNull();
+  expect(line?.parentElement?.hasAttribute("data-variant")).toBe(true);
+  expect(line?.parentElement?.firstElementChild).toBe(line);
+});
 
 it("sums the recorded lengths and counts report outcomes", async () => {
   routeFetch({

@@ -1621,6 +1621,10 @@ function CallsLibraryContent({
       data-reps={showReps ? "true" : undefined}
       data-selecting={selecting || picked.size > 0 ? "true" : undefined}
     >
+      {/* Calls with no recording: one line at the very top, above the phone's
+          calls, never a card over a call (teardown #13; on dev it sat under
+          "Your calls", a screen down). */}
+      {preview ? null : <RecordingLine />}
       {/* The phone's calls come first, then saved calls (owner, 27 Oct 2026:
           call logs and recordings were "hidden somewhere"). */}
       {insights &&
@@ -1692,8 +1696,6 @@ function CallsLibraryContent({
           ) : null}
         </div>
       </header>
-      {/* Calls with no recording: one line, never a card over a call (teardown #13). */}
-      {preview ? null : <RecordingLine />}
 
       {access?.authenticated === false ? (
         <section
