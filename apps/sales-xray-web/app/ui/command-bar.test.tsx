@@ -159,3 +159,28 @@ it("asks for leads after a short pause, from two letters, and adds them", async 
   await act(async () => vi.advanceTimersByTime(COMMAND_SEARCH_DELAY_MS));
   expect(document.body.textContent).toContain("Nothing matches “zz”");
 });
+
+// ph2-27 (phone QA, 1 Nov 2026): a lead's Call is a small button beside its row.
+it("puts a row's quick action in a small button beside it", async () => {
+  vi.useFakeTimers();
+  const call = vi.fn();
+  const asha = command("Asha Fictional", "Leads", {
+    aside: {
+      label: "Call Asha Fictional, ends in 3210",
+      icon: null,
+      run: call,
+    },
+  });
+  const bar = await render([], async () => [asha]);
+  await bar.type("as");
+  await act(async () => vi.advanceTimersByTime(COMMAND_SEARCH_DELAY_MS));
+  expect(bar.options()).toEqual(["Asha Fictional"]);
+  const button = document.querySelector<HTMLButtonElement>(
+    'button[aria-label="Call Asha Fictional, ends in 3210"]',
+  )!;
+  expect(button.closest('[role="option"]')).toBeNull();
+  await act(async () => button.click());
+  expect(call).toHaveBeenCalledTimes(1);
+  expect(asha.run).not.toHaveBeenCalled();
+  expect(bar.onClose).toHaveBeenCalledTimes(1);
+});

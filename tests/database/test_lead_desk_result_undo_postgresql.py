@@ -57,7 +57,7 @@ def test_a_seller_undoes_their_latest_answer_and_the_lead_comes_back(
         async with world(postgres_harness, tmp_path) as here:
             lead_id = await here.add("Fictional Undo Asha", "98760 61000")
             before = (await here.detail(lead_id))["lead"]
-            saved = await answer(here, lead_id, "interested")
+            saved = await answer(here, lead_id, "interested", remark="Wants the EMI sheet")
             assert saved["lead"]["step"] == "interested"
             offer = saved["undo_result"]
             assert offer is not None and offer["event_id"] == await last_answer(here, lead_id)
@@ -74,6 +74,9 @@ def test_a_seller_undoes_their_latest_answer_and_the_lead_comes_back(
             assert back["undo_result"] is None
             kinds = [event["kind"] for event in back["events"]]
             assert "result" in kinds and "edited" in kinds
+            # The answer's note stays, a note of its own (ph2-26, 1 Nov 2026).
+            notes = [event["note"] for event in back["events"] if event["kind"] == "note"]
+            assert notes == ["Wants the EMI sheet"]
             # Once only.
             again = await undo(here, back["lead"], offer["event_id"])
             assert again.status_code == 409, again.text

@@ -713,7 +713,10 @@ export function CallOutcome({
                       id: `outcome-${saved.lead.lead_id}`,
                       tone: "info",
                       title: `Undone: back to ${back.lead.stage_label}`,
-                      message: back.lead.name,
+                      // The answer's note stays, in Notes (ph2-26, 1 Nov 2026).
+                      message: note.trim()
+                        ? `${back.lead.name} · your note is kept in Notes`
+                        : back.lead.name,
                       timeout: 6000,
                     }),
                   (failure: unknown) =>
@@ -3124,6 +3127,17 @@ export function LeadCard({
   const [picking, setPicking] = useState(false);
   // Lead OS: the stage chip opens the stage sheet (only the moves allowed).
   const [staging, setStaging] = useState(false);
+  // The Call bar steps aside while a form or sheet is open over the lead (phone QA,
+  // 1 Nov 2026, ph2-32: Cancel in Edit sat under it, and a tap dialled).
+  const formOpen =
+    editing ||
+    reminding ||
+    tasking ||
+    asking ||
+    picking ||
+    staging ||
+    testing ||
+    messaging !== null;
   // The subtitle shows two lines until it is tapped.
   const [subOpen, setSubOpen] = useState(false);
   // Notes · Calls · Story; a line opened from My work opens on the Story.
@@ -3374,7 +3388,7 @@ export function LeadCard({
       {/* Call, then one grid of equal boxes (owner, 25 Oct 2026): three to a
           row, the same size, a box that can't work greyed in its place. */}
       <div className={styles.leadActions}>
-        {hidePrimary
+        {hidePrimary || formOpen
           ? null
           : primarySlot
             ? createPortal(primaryAction, primarySlot)

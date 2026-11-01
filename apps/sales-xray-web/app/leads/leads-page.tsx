@@ -20,6 +20,7 @@
  * /leads#lead=<id> (ids only, after "#"); pull down to refresh.
  */
 
+import { leadSearchCommands } from "./search-commands";
 import dynamic from "next/dynamic";
 import {
   ArrowLeft,
@@ -27,10 +28,8 @@ import {
   Settings as SettingsIcon,
   ListTodo,
   NotebookPen,
-  Phone,
   PhoneCall,
   Plus,
-  UserRound,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -1040,6 +1039,25 @@ export function LeadsRoute({
   // calling, Add lead, and each lead found to open or to call. A call asks
   // first, as a swipe does; nothing dials from the bar.
   const canStart = current && !!desk && desk.counts.open > 0;
+  const pickWork = (next: ListMore) => {
+    const nextMore = { ...more, ...next };
+    setMore(nextMore);
+    setPicked({ view: OPENING_STAGE, at: addressKey, pipeline });
+    window.history.replaceState(
+      null,
+      "",
+      viewHref(OPENING_STAGE, pipeline, { ...filters, more: nextMore }),
+    );
+  };
+  // Search's Show all: the words over All Leads (phone QA, 1 Nov 2026, ph2-27).
+  const searchAll = useRef<(words: string) => void>(() => undefined);
+  useEffect(() => {
+    searchAll.current = (words) => {
+      setSearch(words);
+      setQuery(words);
+      pickWork({ view: "all", when: null, step: null });
+    };
+  });
   const commands = useMemo<CommandSource | null>(() => {
     if (!authenticated) return null;
     const openLead = (
@@ -1102,28 +1120,12 @@ export function LeadsRoute({
           icon: <ListTodo size={16} aria-hidden="true" />,
           run: () => openLead(task.lead_id),
         }));
-        const leads = found.leads.slice(0, 6).flatMap((row) => [
-          {
-            id: `leads:open:${row.lead_id}`,
-            group: "Leads",
-            label: row.name,
-            hint: [row.stage_label, row.city].filter(Boolean).join(" · "),
-            icon: <UserRound size={16} aria-hidden="true" />,
-            run: () => openLead(row.lead_id),
-          },
-          ...(row.phone_last4
-            ? [
-                {
-                  id: `leads:call:${row.lead_id}`,
-                  group: "Leads",
-                  label: `Call ${row.name}`,
-                  hint: `Ends in ${row.phone_last4}`,
-                  icon: <Phone size={16} aria-hidden="true" />,
-                  run: () => setDialling(row),
-                },
-              ]
-            : []),
-        ]);
+        // One row per lead, Call beside it, then Show all (ph2-27, 1 Nov 2026).
+        const leads = leadSearchCommands(found.leads, text, {
+          open: (leadId) => openLead(leadId),
+          call: (row) => setDialling(row),
+          showAll: (words) => searchAll.current(words),
+        });
         return [...leads, ...written, ...promised];
       },
     };
@@ -1325,16 +1327,6 @@ export function LeadsRoute({
   };
   // Inbound | Cold, the work views, the Follow-ups split and the stage pick
   // change the list in place (items 44-73), so Back leaves Leads.
-  const pickWork = (next: ListMore) => {
-    const nextMore = { ...more, ...next };
-    setMore(nextMore);
-    setPicked({ view: OPENING_STAGE, at: addressKey, pipeline });
-    window.history.replaceState(
-      null,
-      "",
-      viewHref(OPENING_STAGE, pipeline, { ...filters, more: nextMore }),
-    );
-  };
   const leaveSettings = () => {
     setPicked({ view: OPENING_STAGE, at: addressKey });
     if (pushedSettings.current) {

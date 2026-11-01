@@ -4176,6 +4176,11 @@ class LeadDesk:
             actor=self.viewer.person_id,
             command_id=command.command_id,
         )
+        # The answer's note stays, a note of its own (phone QA, 1 Nov 2026, ph2-26: Undo
+        # took it out of sight with the next call it was written for).
+        remark = data.get("remark")
+        if isinstance(remark, str) and remark.strip():
+            self._event(lead, "note", {"note": remark}, actor=self.viewer.person_id)
         await self.db.flush()
         return await self.detail(lead.id)
 
