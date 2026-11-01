@@ -18,6 +18,10 @@ vi.mock("next/navigation", () => ({
 // The shell's profile widgets load their own account summary. Keep these
 // library requests isolated from that unrelated fetch sequence.
 vi.mock("./profile-menu", () => ({ ProfileMenu: () => null }));
+// The no-recording line has its own tests (capture-setup/recording-check.test.tsx).
+vi.mock("./capture-setup/recording-check", () => ({
+  RecordingLine: () => null,
+}));
 
 import { AccountNavigation } from "./account-navigation";
 import { CallsLibrary, callsViewSearch, readCallsView } from "./calls-library";

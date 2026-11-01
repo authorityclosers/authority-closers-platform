@@ -72,12 +72,23 @@ export type CaptureTeam = Readonly<{
   missingToday: number;
 }>;
 
+/** One connected call with no recording: its lead, when and how long (never a number). */
+export type MissingCall = Readonly<{
+  event_id: string;
+  lead_id: string;
+  lead_name: string | null;
+  at: string;
+  seconds: number;
+}>;
+
 /** The seller's own connected lead calls today with no recording after two minutes. */
 export type MissingRecordings = Readonly<{
   calls: number;
   /** Calls the seller tried today, as Home counts them (its Tried). */
   tried: number;
   latest_at: string | null;
+  /** The calls themselves, newest first (competitor teardown #13). */
+  items: MissingCall[];
 }>;
 
 export type CaptureFinishedPhone = Readonly<{
@@ -156,10 +167,27 @@ export function parseCaptureTeam(body: unknown): CaptureTeam {
 export function parseMissing(body: unknown): MissingRecordings {
   if (!record(body) || body.schema !== "sales-xray-missing-recordings/1")
     throw new Error("Calls without recordings could not be read.");
+  const items = Array.isArray(body.items) ? body.items.filter(record) : [];
   return {
     calls: count(body.calls),
     tried: count(body.tried),
     latest_at: typeof body.latest_at === "string" ? body.latest_at : null,
+    items: items.flatMap((item) =>
+      typeof item.event_id === "string" &&
+      typeof item.lead_id === "string" &&
+      typeof item.at === "string"
+        ? [
+            {
+              event_id: item.event_id,
+              lead_id: item.lead_id,
+              lead_name:
+                typeof item.lead_name === "string" ? item.lead_name : null,
+              at: item.at,
+              seconds: count(item.seconds),
+            },
+          ]
+        : [],
+    ),
   };
 }
 
@@ -253,12 +281,17 @@ export async function readCaptureTeam(
   );
 }
 
-/** The seller's own calls today with no recording (the recording check banner). */
+/**
+ * The seller's own calls with no recording (the line on Calls and Reports):
+ * today, or one India day, "2026-10-30" (the bell's reminder, ph1-27).
+ */
 export async function readMissingRecordings(
   signal?: AbortSignal,
+  day?: string,
 ): Promise<MissingRecordings> {
+  const path = day ? `/missing/${encodeURIComponent(day)}` : "/missing";
   return answer(
-    await fetch(`${CAPTURE_SETUP_PATH}/missing`, {
+    await fetch(`${CAPTURE_SETUP_PATH}${path}`, {
       credentials: "same-origin",
       cache: "no-store",
       headers: { accept: "application/json" },

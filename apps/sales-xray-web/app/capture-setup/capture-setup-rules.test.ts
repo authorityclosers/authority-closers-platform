@@ -3,12 +3,14 @@ import { describe, expect, it } from "vitest";
 import { parseSetup } from "../leads/native-phone";
 import type { CaptureSetup } from "./capture-setup-client";
 import {
+  failingStep,
   finishedPhone,
   isGatedRoute,
   phoneFacts,
   savedWhen,
   setupRequired,
   stepsFor,
+  stepsWith,
 } from "./capture-setup-rules";
 
 // Owner, 30 Oct 2026: "simple clicks and disclosure one by one ... kind of
@@ -304,6 +306,48 @@ describe("stepsFor", () => {
     const off = phoneFacts(status({}), { ...on, on: false })!;
     expect(stepsFor(personal, off)).toEqual(["consent", "done"]);
     expect(stepsFor(personal, null)).toEqual(["consent"]);
+  });
+});
+
+describe("failingStep", () => {
+  it("opens the step that fails on this phone, the recording check first", () => {
+    // Competitor teardown #13, 1 Nov 2026: Fix on the no-recording line.
+    expect(failingStep(null)).toBe("phone");
+    expect(failingStep({ ...ready, captureSupported: false })).toBe("phone");
+    expect(failingStep({ ...ready, folderPicked: false, battery: false })).toBe(
+      "recordings",
+    );
+    expect(failingStep({ ...ready, recorderOff: true })).toBe("recordings");
+    expect(failingStep({ ...ready, battery: false })).toBe("background");
+    expect(failingStep({ ...ready, autostart: false })).toBe("background");
+    expect(failingStep({ ...ready, uploadsOn: false })).toBe("uploads");
+    // Everything on, yet calls have no recording: the check and its test call.
+    expect(failingStep(ready)).toBe("recordings");
+  });
+
+  it("adds the phone step a fix asked for in its place, even on a phone that looks set", () => {
+    expect(stepsWith(["consent", "done"], "recordings")).toEqual([
+      "consent",
+      "recordings",
+      "done",
+    ]);
+    expect(stepsWith(["consent", "uploads", "done"], "background")).toEqual([
+      "consent",
+      "background",
+      "uploads",
+      "done",
+    ]);
+    expect(stepsWith(["consent", "recordings", "done"], "recordings")).toEqual([
+      "consent",
+      "recordings",
+      "done",
+    ]);
+    // The web has no phone steps; nothing asked, nothing added.
+    expect(stepsWith(["consent", "phone"], "recordings")).toEqual([
+      "consent",
+      "phone",
+    ]);
+    expect(stepsWith(["consent", "done"])).toEqual(["consent", "done"]);
   });
 });
 

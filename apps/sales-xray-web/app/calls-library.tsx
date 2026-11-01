@@ -89,6 +89,7 @@ import { csvRows } from "./csv-export";
 import { Panel } from "./ui/kit";
 import { RecentCallsList, RecentCallsSkeleton } from "./dashboard/recent-calls";
 import { PhoneCalls } from "./calls/phone-calls";
+import { RecordingLine } from "./capture-setup/recording-check";
 
 const libraryError =
   "Saved calls could not be loaded. Try again; your completed work remains private.";
@@ -1685,6 +1686,8 @@ function CallsLibraryContent({
           ) : null}
         </div>
       </header>
+      {/* Calls with no recording: one line, never a card over a call (teardown #13). */}
+      {preview ? null : <RecordingLine />}
 
       {access?.authenticated === false ? (
         <section

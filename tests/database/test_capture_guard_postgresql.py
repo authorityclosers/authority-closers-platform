@@ -16,7 +16,8 @@ from ac_platform.conversation_intelligence.models import (
     ConversationReportDraft,
     ConversationRun,
 )
-from ac_platform.lead_desk.models import LeadEvent
+from ac_platform.lead_desk.models import LeadDeskSettings, LeadEvent
+from ac_platform.lead_desk.store import PHONES_KEY, TIMED_CALL
 from tests.database.conversation_harness import conversation_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_submission_http_postgresql import _upload_for_read_test
@@ -217,5 +218,83 @@ def test_capture_guard_scope_missing_attachment_and_privacy(postgres_harness: An
             }
             here.client.cookies.clear()
             assert (await here.client.get(f"{BASE}/capture-guard")).status_code in {401, 403}
+
+    run(exercise())
+
+
+def test_capture_guard_leaves_out_a_dial_never_placed(postgres_harness: Any, tmp_path: Path):
+    """Phone personas ph2-31 (v1.22, 1 Nov 2026): a dial backed out of, which the phone's call
+    log never showed, read "No recording after 30 minutes" with Fix recording. It was never
+    placed (store.dial_placed), so it never waits for a recording."""
+
+    async def exercise():
+        async with world(postgres_harness, tmp_path) as here:
+            lead = UUID(await here.add("Alex Example", "+12025550123"))
+            other = UUID(await here.add("Sam Example", "+12025550124"))
+            now = datetime.now(UTC)
+            unplaced, timed, talked, later = [uuid4() for _ in range(4)]
+            dial = {"duration_seconds": 12, "simulated": False, "estimated": True}
+            async with here.setup.sessions() as db, db.begin():
+                for eid, on, data, kind, at in [
+                    (unplaced, lead, dial, "call", now - timedelta(hours=3)),
+                    (timed, lead, dial, "call", now - timedelta(hours=2)),
+                    # The phone's call log matched this dial later, with its own seconds.
+                    (
+                        uuid4(),
+                        lead,
+                        {TIMED_CALL: str(timed), "duration_seconds": 30},
+                        "edited",
+                        now - timedelta(hours=1),
+                    ),
+                    (talked, other, dial, "call", now - timedelta(hours=2)),
+                    # Its seller said "We talked" right after.
+                    (
+                        uuid4(),
+                        other,
+                        {"connected": True},
+                        "result",
+                        now - timedelta(hours=2) + timedelta(minutes=1),
+                    ),
+                    # Dialled after the phone's last look: it counts, as before.
+                    (later, other, dial, "call", now - timedelta(minutes=40)),
+                ]:
+                    db.add(
+                        LeadEvent(
+                            id=eid,
+                            tenant_id=here.tenant_id,
+                            lead_id=on,
+                            kind=kind,
+                            actor_person_id=here.seller.person_id,
+                            command_id=uuid4(),
+                            data=data,
+                            created_at=at,
+                        )
+                    )
+                phones = {
+                    str(here.seller.person_id): {
+                        "device_id": str(uuid4()),
+                        "synced_at": (now - timedelta(minutes=41)).isoformat(),
+                    }
+                }
+                settings = await db.get(LeadDeskSettings, here.tenant_id)
+                if settings is None:
+                    db.add(
+                        LeadDeskSettings(
+                            tenant_id=here.tenant_id,
+                            revision=1,
+                            config={PHONES_KEY: phones},
+                            updated_by_person_id=None,
+                            updated_at=now,
+                        )
+                    )
+                else:
+                    settings.config = {**settings.config, PHONES_KEY: phones}
+            here.as_seller()
+            guard = (await here.client.get(f"{BASE}/capture-guard")).json()
+            states = {row["event_id"]: row["state"] for row in guard["calls"]}
+            assert states == {str(timed): "missing", str(talked): "missing", str(later): "missing"}
+            assert sum(rate["calls"] for rate in guard["rates"]) == 3
+            alone = await here.client.get(f"{BASE}/capture-guard?event_id={unplaced}")
+            assert alone.json()["calls"] == []
 
     run(exercise())

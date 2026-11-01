@@ -19,6 +19,11 @@ vi.mock("./calls-insights", () => ({
   }),
 }));
 
+// The no-recording line has its own tests (capture-setup/recording-check.test.tsx).
+vi.mock("./capture-setup/recording-check", () => ({
+  RecordingLine: () => null,
+}));
+
 import { CallsLibrary } from "./calls-library";
 import { WorkspaceAccessProvider } from "./workspace-access";
 
