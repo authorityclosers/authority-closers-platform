@@ -400,6 +400,8 @@ const J214 = {
       await cont.click({ timeout: 8000 }).catch(() => null);
       const resumed = await until(here, 10000);
       if (!resumed || !names.has(resumed)) wrong.push(`Continue opened "${(resumed || "nothing").slice(0, 40)}", expected a lead in the round`);
+      // orchestrator, 1 Nov 2026: a seller who pauses on a lead expects to resume on it, unless an outcome was recorded for it (none was here)
+      else if (afterSkip && resumed !== afterSkip) wrong.push(`the round was paused on ${afterSkip} (no outcome recorded) but Continue opened ${resumed}: the lead paused on is passed over and only comes back if it is skipped`);
       await press(page, /^Pause$/, 1500);
       await until(() => start.count(), 10000);
       await start.click({ timeout: 8000 }).catch(() => null);

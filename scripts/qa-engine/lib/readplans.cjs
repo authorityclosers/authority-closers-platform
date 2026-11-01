@@ -1,6 +1,9 @@
 // Read-and-assert journeys for Home and Settings (orchestrator order, 1 Nov 2026): J175 and J310 (the "no recording" card and the counters), J324 (theme), J323 and J330
-// (profile name, notification preferences). They never save anything: every write stays held and refused by the engine's guard. A journey whose point is the save itself
-// (J323, J330) checks that the controls are there and answers "blocked" for the save, because the robot only writes QA robot records.
+// (profile name, notification preferences), then the Home and Leads journeys. All of them refuse every write while they run, except J323 and J330: those two really save one setting as
+// priya in the AC Sales Sandbox (orchestrator's yes, 1 Nov 2026), put it back in the same run and read the restore back after a reload.
+const fs = require("fs");
+const path = require("path");
+const cfg = require("./config.cjs");
 const { sleep } = require("./session.cjs");
 
 const pass = (reason, route, selector = "") => ({ outcome: "pass", reason, route, selector });
@@ -129,11 +132,54 @@ const J324 = {
   },
 };
 
+// J330 and J323 really save, as priya in the AC Sales Sandbox (orchestrator, 1 Nov 2026: "let the row change one setting and put it back in the same run, then assert the restore before the
+// row passes; if the restore fails, stop the row and tell me"). One setting each: the Quiet outside working hours switch, and the Full name. The restore is read back after a reload; when it
+// does not hold, the row fails with "RESTORE FAILED", state/restore-failed.txt is written and every later row of these two journeys is held until someone clears that file.
+const RESTORE_FLAG = path.join(cfg.STATE, "restore-failed.txt");
+const UUID = /[0-9a-f]{8}-[0-9a-f-]{27}/g;
+
+const writeGuarded = (plan) => ({
+  ...plan,
+  as: "priya",
+  async run(ctx) {
+    if (fs.existsSync(RESTORE_FLAG)) return blocked(`held: an earlier row could not put its change back (state/restore-failed.txt); nothing is changed until that file is cleared`, plan.route, "restore");
+    const st = { writes: [] };
+    const handler = async (route) => {
+      const req = route.request();
+      if (["GET", "HEAD", "OPTIONS"].includes(req.method())) return route.fallback();
+      const u = new URL(req.url());
+      if (u.pathname.startsWith("/v1/")) {
+        st.writes.push(`${req.method()} ${u.pathname.replace(UUID, ":id")}`);
+        return route.fallback();
+      }
+      if (u.pathname.startsWith("/_next/") || u.pathname.startsWith("/__")) return route.fallback();
+      return route.abort("blockedbyclient");
+    };
+    await ctx.tab.context.route("**/*", handler);
+    try {
+      return await plan.run({ ...ctx, st });
+    } finally {
+      await ctx.tab.context.unroute("**/*", handler).catch(() => null);
+    }
+  },
+});
+
+const sandboxLabel = (page) => page.evaluate(() => (document.querySelector('[aria-label*="orkspace:"]') || {}).ariaLabel || "");
+const restoreFailed = (what, route, selector) => {
+  try {
+    fs.appendFileSync(RESTORE_FLAG, `${new Date().toISOString()} ${what}\n`);
+  } catch {
+    // the failure is still reported by the row
+  }
+  return fail(`RESTORE FAILED: ${what}. Every later J323 and J330 row is held until state/restore-failed.txt is cleared; tell the orchestrator`, route, selector, "MAJOR");
+};
+
 const J330 = {
   route: "/settings/notifications",
-  async run({ tab }) {
+  async run({ tab, st }) {
     const page = tab.page;
     await until(() => page.getByRole("switch").first().count(), 15000);
+    if (!/sandbox/i.test(await sandboxLabel(page))) return blocked("NOT A SANDBOX WORKSPACE: nothing was changed", "/settings/notifications", "workspace");
     // Vibration is a phone setting: a computer does not show it
     const want = [["New enquiry", /^New enquiry/i], ["Follow-up due", /^Follow-up due/i], ["Missed follow-up", /^Missed follow-up/i], ["Quiet outside working hours", /^Quiet outside working hours/i]];
     if (tab.dev.phone) want.push(["Vibration", /^Vibration/i]);
@@ -141,39 +187,92 @@ const J330 = {
     for (const [label, name] of want) if (!(await page.getByRole("switch", { name }).filter({ visible: true }).count())) missing.push(label);
     if (!(await page.getByRole("button", { name: /^Send me a test notification/ }).filter({ visible: true }).count())) missing.push("Send me a test notification");
     if (missing.length) return fail(`the notification settings are missing: ${missing.join(", ")}`, "/settings/notifications", "notification switches");
-    return blocked("the switches and the test button are there; saving and applying a change is not exercised, because it changes this seller's own settings and the robot only writes QA robot records (needs the owner's say-so to toggle and put back)", "/settings/notifications", "notification switches");
+    const sw = () => page.getByRole("switch", { name: /^Quiet outside working hours/i }).filter({ visible: true }).first();
+    const state = async () => (await sw().getAttribute("aria-checked").catch(() => null)) || (await sw().evaluate((e) => String(e.checked)).catch(() => null));
+    const reload = async () => {
+      await page.reload({ waitUntil: "load" }).catch(() => null);
+      await until(() => sw().count(), 15000);
+      await sleep(1500);
+    };
+    const before = await state();
+    if (before !== "true" && before !== "false") return fail("the Quiet outside working hours switch does not say whether it is on", "/settings/notifications", "Quiet outside working hours");
+    const changed = before === "true" ? "false" : "true";
+    const wrong = [];
+    st.writes.length = 0;
+    await sw().click({ timeout: 6000 }).catch(() => null);
+    await sleep(2500);
+    if ((await state()) !== changed) wrong.push("the switch does not change when it is pressed");
+    if (!st.writes.some((w) => /^(PUT|POST|PATCH)/.test(w))) wrong.push("pressing the switch sent no save");
+    await reload();
+    const kept = await state();
+    if (kept !== changed) wrong.push(`after a reload the switch is "${kept}" again: the change was not saved`);
+    // put it back, and read it back after a reload
+    if (kept !== before) {
+      await sw().click({ timeout: 6000 }).catch(() => null);
+      await sleep(2500);
+      await reload();
+    }
+    const final = await state();
+    if (final !== before) return restoreFailed(`Quiet outside working hours was ${before}, changed to ${changed}, and reads ${final} after the put-back and a reload`, "/settings/notifications", "Quiet outside working hours");
+    return wrong.length ? fail(wrong.join("; "), "/settings/notifications", "Quiet outside working hours") : pass(`Quiet outside working hours changed from ${before} to ${changed}, was saved (survived a reload) and was put back (reads ${before} after a reload)`, "/settings/notifications", "Quiet outside working hours");
   },
 };
 
 const J323 = {
   route: "/settings/profile",
-  async run({ tab }) {
+  async run({ tab, st }) {
     const page = tab.page;
-    // the name lives behind "Edit details" (Full name, Phone number, Save details, Cancel); the top form is user id, job title and team
     const edit = page.getByRole("button", { name: /^Edit details/ }).filter({ visible: true }).first();
     await until(() => edit.count(), 15000);
-    if (!(await edit.count())) return fail("the Profile page has no Edit details button", "/settings/profile", "Edit details");
-    await edit.click({ timeout: 6000 }).catch(() => null);
-    const field = page.getByLabel(/^Full name/).filter({ visible: true }).first();
-    await until(() => field.count(), 8000);
-    if (!(await field.count())) return fail('"Edit details" shows no Full name field', "/settings/profile", "Full name");
-    const save = page.getByRole("button", { name: /^Save details/ }).filter({ visible: true }).first();
-    const cancel = page.getByRole("button", { name: /^Cancel/ }).filter({ visible: true }).first();
-    if (!(await save.count())) return fail("Edit details has no Save details button", "/settings/profile", "Save details");
-    const before = await field.inputValue();
-    await field.fill(`${before} QA`).catch(() => null);
-    await sleep(600);
-    const enabled = await save.isEnabled().catch(() => false);
+    if (!/sandbox/i.test(await sandboxLabel(page))) return blocked("NOT A SANDBOX WORKSPACE: nothing was changed", "/settings/profile", "workspace");
+    const field = () => page.getByLabel(/^Full name/).filter({ visible: true }).first();
+    const open = async () => {
+      if (!(await field().count())) {
+        await edit.click({ timeout: 6000 }).catch(() => null);
+        await until(() => field().count(), 8000);
+      }
+      return (await field().count()) > 0;
+    };
+    const reload = async () => {
+      await page.reload({ waitUntil: "load" }).catch(() => null);
+      await until(() => edit.count(), 15000);
+      await sleep(1200);
+    };
+    const save = async (name) => {
+      if (!(await open())) return false;
+      await field().fill(name).catch(() => null);
+      await sleep(400);
+      await page.getByRole("button", { name: /^Save details/ }).filter({ visible: true }).first().click({ timeout: 6000 }).catch(() => null);
+      await sleep(3000);
+      return true;
+    };
+    if (!(await open())) return fail('"Edit details" shows no Full name field', "/settings/profile", "Full name");
+    const before = await field().inputValue();
+    const next = before.endsWith(" QA") ? before.slice(0, -3) : `${before} QA`;
     const wrong = [];
-    if (!enabled) wrong.push("typing in Full name does not enable Save details");
-    if (await cancel.count()) {
-      await cancel.click({ timeout: 6000 }).catch(() => null);
-      await sleep(900);
-      const shown = await page.evaluate(() => (document.querySelector("main") || document.body).innerText.replace(/\s+/g, " "));
-      if (/ QA\b/.test(shown) && !before.includes(" QA")) wrong.push("Cancel leaves the typed name on the page");
-    } else wrong.push("Edit details has no Cancel button");
-    if (wrong.length) return fail(wrong.join("; "), "/settings/profile", "Edit details");
-    return blocked("Edit details opens Full name and Save details responds to typing, and Cancel puts the name back; saving a new name and seeing it everywhere is not exercised, because it changes this seller's own profile and the robot only writes QA robot records (needs the owner's say-so to rename and put back)", "/settings/profile", "Edit details");
+    st.writes.length = 0;
+    await save(next);
+    if (!st.writes.some((w) => /^(PUT|POST|PATCH)/.test(w))) wrong.push("Save details sent no save");
+    const shownAfter = await page.evaluate(() => (document.querySelector("main") || document.body).innerText.replace(/\s+/g, " "));
+    if (!shownAfter.includes(next)) wrong.push(`after Save details the Profile page does not show the new name "${next}"`);
+    await reload();
+    await open();
+    const kept = await field().inputValue().catch(() => "");
+    if (kept !== next) wrong.push(`after a reload the name reads "${kept}", not the saved "${next}"`);
+    // everywhere: the account menu on a computer names the person
+    if (!tab.dev.phone) {
+      const label = await page.getByRole("button", { name: /^Open .* menu$/ }).filter({ visible: true }).first().getAttribute("aria-label").catch(() => "");
+      if (label && !label.includes(next)) wrong.push(`the account menu still reads "${label}" after the name changed to "${next}"`);
+    }
+    // put it back, and read it back after a reload
+    if (kept !== before) {
+      await save(before);
+      await reload();
+      await open();
+    }
+    const final = await field().inputValue().catch(() => "");
+    if (final !== before) return restoreFailed(`the Full name was "${before}", changed to "${next}", and reads "${final}" after the put-back and a reload`, "/settings/profile", "Full name");
+    return wrong.length ? fail(wrong.join("; "), "/settings/profile", "Full name") : pass(`the Full name changed from "${before}" to "${next}", showed on the Profile page and after a reload, and was put back (reads "${before}" after a reload)`, "/settings/profile", "Full name");
   },
 };
 
@@ -431,6 +530,161 @@ const J181 = {
   },
 };
 
+// ---- Leads: the filter sheet, one control at a time (J050, J052, J053, J055); nothing is saved ---------------------------------
+// The sheet slides up and a tap in that slide is not taken (for a person either), so every open waits 1.3 s; each filter is a picker: open it, then choose the row.
+const filterKit = (page) => {
+  const sheet = () => page.getByRole("dialog").filter({ visible: true }).count();
+  const button = () => page.getByRole("button", { name: /^Filter leads/ }).filter({ visible: true }).first();
+  const field = async (name) => ((await page.getByRole("dialog").getByRole("button", { name: new RegExp(`^${name}`) }).first().textContent().catch(() => "")) || "").replace(/\s+/g, " ").trim();
+  return {
+    sheet,
+    async open() {
+      await button().click({ timeout: 6000 }).catch(() => null);
+      if (!(await until(sheet, 8000))) return false;
+      await sleep(1300);
+      return true;
+    },
+    field,
+    async pick(name, option) {
+      const opener = page.getByRole("dialog").getByRole("button", { name: new RegExp(`^${name}`) }).first();
+      if (!(await opener.count())) return `the filter sheet has no ${name} choice`;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        await opener.click({ timeout: 5000 }).catch(() => null);
+        await sleep(500);
+        const row = page.getByRole("option", { name: option, exact: true }).filter({ visible: true }).first();
+        if (!(await row.count())) return `${name} has no "${option}" choice`;
+        await row.click({ timeout: 5000 }).catch(() => null);
+        await sleep(500);
+        if ((await field(name)).includes(option)) return "";
+      }
+      return `choosing "${option}" in ${name} does not take (it reads "${(await field(name)).slice(0, 40)}")`;
+    },
+    async show() {
+      await page.getByRole("button", { name: /^Show Results/ }).filter({ visible: true }).first().click({ timeout: 5000 }).catch(() => null);
+      await sleep(2200);
+    },
+    async clear() {
+      await page.getByRole("button", { name: /^Clear Filters/ }).filter({ visible: true }).first().click({ timeout: 5000 }).catch(() => null);
+      await sleep(1200);
+      if (await sheet()) await this.show();
+      await sleep(1000);
+    },
+    async badge() {
+      return (await button().textContent().catch(() => "")).replace(/\s+/g, " ").trim();
+    },
+  };
+};
+
+const J053 = {
+  route: "/leads",
+  async run({ tab }) {
+    const page = tab.page;
+    await until(() => page.getByRole("tab", { name: /^To Call/ }).first().count(), 25000);
+    const kit = filterKit(page);
+    const before = await leadsSnap(page);
+    if (!(await kit.open())) return fail("Filter leads does not open the filter sheet", "/leads", "Filter leads");
+    const problem = await kit.pick("Lead source", "Added by hand");
+    if (problem) return fail(problem, "/leads", "Show Results");
+    await kit.show();
+    const wrong = [];
+    if (await kit.sheet()) wrong.push("Show Results leaves the filter sheet open");
+    const after = await leadsSnap(page);
+    if (after.search === before.search) wrong.push(`Show Results leaves the address as it was (${after.search || "none"}): the choice is not in the link`);
+    const badge = await kit.badge();
+    // the button reads "Filter" with the number of filters after it ("Filter1")
+    if (!/1\s*$/.test(badge)) wrong.push(`one filter is applied but the Filter button reads "${badge.slice(0, 30)}"`);
+    const count = tabCount(after, /^All Leads/);
+    if (count != null && after.tabs.length && !after.rows.length && !after.empty) wrong.push("the list is empty and says nothing about the filter");
+    await kit.open();
+    await kit.clear();
+    return wrong.length ? fail(wrong.join("; "), "/leads", "Show Results") : pass(`Show Results closes the sheet, puts the choice in the address (${after.search}) and the Filter button reads "${badge.slice(0, 20)}"`, "/leads", "Show Results");
+  },
+};
+
+const J055 = {
+  route: "/leads",
+  async run({ tab }) {
+    const page = tab.page;
+    await until(() => page.getByRole("tab", { name: /^To Call/ }).first().count(), 25000);
+    const kit = filterKit(page);
+    const before = await leadsSnap(page);
+    const badgeBefore = await kit.badge();
+    if (!(await kit.open())) return fail("Filter leads does not open the filter sheet", "/leads", "Filter leads");
+    const problem = await kit.pick("Lead source", "Added by hand");
+    if (problem) return fail(problem, "/leads", "Close Filter sheet");
+    await page.getByRole("dialog").getByRole("button", { name: /^Close/ }).first().click({ timeout: 5000 }).catch(() => null);
+    await sleep(1500);
+    const wrong = [];
+    if (await kit.sheet()) wrong.push("Close leaves the filter sheet open");
+    const after = await leadsSnap(page);
+    if (after.search !== before.search) wrong.push(`closing the sheet applied the draft: the address is now ${after.search || "none"}`);
+    if (JSON.stringify(after.tabs) !== JSON.stringify(before.tabs)) wrong.push(`closing the sheet changed the counts (${before.tabs.map((t) => t.name).join(" / ")} to ${after.tabs.map((t) => t.name).join(" / ")})`);
+    if ((await kit.badge()) !== badgeBefore) wrong.push(`the Filter button changed from "${badgeBefore.slice(0, 20)}" to "${(await kit.badge()).slice(0, 20)}" without applying anything`);
+    if (await kit.open()) {
+      const reopened = await kit.field("Lead source");
+      if (!/Every source/.test(reopened)) wrong.push(`reopening the sheet still shows the draft ("${reopened.slice(0, 40)}"), it should be back to Every source`);
+      await page.getByRole("dialog").getByRole("button", { name: /^Close/ }).first().click({ timeout: 5000 }).catch(() => null);
+      await sleep(900);
+    }
+    return wrong.length ? fail(wrong.join("; "), "/leads", "Close Filter sheet") : pass("Close drops the draft choices: nothing is applied, the counts and the Filter button stay, and the sheet reopens clean", "/leads", "Close Filter sheet");
+  },
+};
+
+const J050 = {
+  route: "/leads",
+  async run({ tab }) {
+    const page = tab.page;
+    await until(() => page.getByRole("tab", { name: /^To Call/ }).first().count(), 25000);
+    const kit = filterKit(page);
+    const before = await leadsSnap(page);
+    if (!(await kit.open())) return fail("Filter leads does not open the filter sheet", "/leads", "Filter leads");
+    await page.getByRole("dialog").getByRole("button", { name: /^Lead source/ }).first().click({ timeout: 5000 }).catch(() => null);
+    await sleep(600);
+    const options = await page.getByRole("option").filter({ visible: true }).evaluateAll((els) => els.map((e) => (e.textContent || "").replace(/\s+/g, " ").trim()));
+    const wrong = [];
+    const want = [/^Every source/, /meta/i, /google/i, /website/i, /upload|import|sheet/i];
+    for (const rx of want) if (!options.some((o) => rx.test(o))) wrong.push(`the Lead source choices (${options.slice(0, 8).join(", ")}) have nothing like ${rx.source}`);
+    await page.keyboard.press("Escape").catch(() => null);
+    await sleep(500);
+    const problem = await kit.pick("Lead source", "Added by hand");
+    if (problem) return fail(problem, "/leads", "Lead Source filter");
+    await kit.show();
+    const after = await leadsSnap(page);
+    const all0 = tabCount(before, /^All Leads/);
+    const all1 = tabCount(after, /^All Leads/);
+    if (!/source=/.test(after.search)) wrong.push(`choosing a source does not reach the address (${after.search || "none"})`);
+    if (all0 != null && all1 != null && all1 > all0) wrong.push(`All Leads went from ${all0} to ${all1} after narrowing by source`);
+    if (all0 != null && all1 != null && all1 === all0 && after.search) wrong.push(`All Leads still counts ${all1} after choosing Added by hand: the source did not narrow anything`);
+    await kit.open();
+    await kit.clear();
+    return wrong.length ? fail(wrong.join("; "), "/leads", "Lead Source filter") : pass(`Lead source offers ${options.length - 1} sources and Added by hand narrows All Leads from ${all0} to ${all1}`, "/leads", "Lead Source filter");
+  },
+};
+
+const J052 = {
+  route: "/leads",
+  async run({ tab }) {
+    const page = tab.page;
+    await until(() => page.getByRole("tab", { name: /^To Call/ }).first().count(), 25000);
+    const kit = filterKit(page);
+    const wrong = [];
+    const seen = [];
+    for (const [option, key] of [["Today", "today"], ["Overdue", "overdue"], ["Upcoming", "upcoming"]]) {
+      if (!(await kit.open())) return fail("Filter leads does not open the filter sheet", "/leads", "Follow-up filter");
+      const problem = await kit.pick("Follow-up", option);
+      if (problem) return fail(problem, "/leads", "Follow-up filter");
+      await kit.show();
+      const now = await leadsSnap(page);
+      seen.push(`${option}: ${now.search || "none"}`);
+      if (!new RegExp(`when=${key}`).test(now.search)) wrong.push(`${option} does not reach the address (${now.search || "none"})`);
+      if (!now.rows.length && !now.empty) wrong.push(`${option} leaves an empty list that says nothing`);
+      await kit.open();
+      await kit.clear();
+    }
+    return wrong.length ? fail(wrong.join("; "), "/leads", "Follow-up filter") : pass(`Today, Overdue and Upcoming each reach the address and clear again (${seen.join("; ")})`, "/leads", "Follow-up filter");
+  },
+};
+
 // Plan rows do not run under the walks' write guard, so every plan here refuses any write itself for as long as it runs (the route is taken off again afterwards:
 // the after-call plans share the tab and need their own writes to pass).
 const guarded = (plan) => ({
@@ -446,4 +700,4 @@ const guarded = (plan) => ({
   },
 });
 
-module.exports = { plans: { J142: guarded(J142), J177: guarded(J177), J181: guarded(J181), J139: guarded(J162), J141: guarded(J141), J158: guarded(J158), J159: guarded(J141), J162: guarded(J162), J175: guarded(J175), J310: guarded(J310), J323: guarded(J323), J324: guarded(J324), J330: guarded(J330) } };
+module.exports = { plans: { J050: guarded(J050), J052: guarded(J052), J053: guarded(J053), J055: guarded(J055), J142: guarded(J142), J177: guarded(J177), J181: guarded(J181), J139: guarded(J162), J141: guarded(J141), J158: guarded(J158), J159: guarded(J141), J162: guarded(J162), J175: guarded(J175), J310: guarded(J310), J323: writeGuarded(J323), J324: guarded(J324), J330: writeGuarded(J330) } };
