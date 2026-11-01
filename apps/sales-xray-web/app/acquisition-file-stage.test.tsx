@@ -81,6 +81,18 @@ it("offers accessible local browse and only supplied file limits", async () => {
   expect(input.multiple).toBe(true);
 });
 
+it("has a phone's words for a phone, and never says click (ph2-30)", async () => {
+  await renderStage();
+  // CSS shows one of the two lines: a phone reads what a tap does.
+  expect(host.querySelector("strong")?.textContent).toBe(
+    "Drop your call recording hereAdd your call recording",
+  );
+  expect(host.textContent).not.toMatch(/click/i);
+  await renderStage({ files: [first] });
+  expect(host.textContent).toContain("Choose another file");
+  expect(host.textContent).not.toMatch(/click/i);
+});
+
 it.each([
   "amr",
   "awb",

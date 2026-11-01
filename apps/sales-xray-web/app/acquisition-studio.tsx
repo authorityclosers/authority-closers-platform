@@ -3171,14 +3171,14 @@ export function AcquisitionStudio({
                         />
                       </svg>
                     </span>
-                    <p className={styles.dropTitle}>
-                      Drag and drop your audio file here
-                    </p>
+                    {/* Words for a phone too: no dragging, no clicking
+                        (phone personas ph2-30, 1 Nov 2026). */}
+                    <p className={styles.dropTitle}>Add your audio file</p>
                     <label
                       className={`${styles.dropSelect} ${!policy ? styles.disabled : ""}`}
                       htmlFor="acquisition-file"
                     >
-                      or click to browse
+                      Choose a file
                     </label>
                     <span className="visually-hidden">Choose audio file</span>
                     <div className={styles.formatFacts}>
