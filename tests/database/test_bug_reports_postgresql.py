@@ -12,6 +12,7 @@ from __future__ import annotations
 import base64
 import importlib.util
 import io
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -342,6 +343,44 @@ def test_platform_staff_can_report_without_consuming_a_bucket(
                 assert blank.status_code == 422
                 unsafe = await http.post("/v1/bug-reports", json=_report())
                 assert unsafe.status_code == 403
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_half_an_emoji_never_fails_a_report(postgres_harness: Any, tmp_path: Path) -> None:
+    """Text cut mid-emoji carries a lone surrogate, which PostgreSQL refuses: such a report
+    answered 500 (orchestrator, 1 Nov 2026). It goes; a whole emoji stays."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            bug_http.install_bug_reports_http(
+                setup.app, RouteContext(setup.settings, setup.require_actor, setup.sessions)
+            )
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as http:
+                http.cookies.set(setup.settings.session_cookie_name, setup.token)
+                body = _report(
+                    words="Stuck on Leads \U0001f600 \ud83d",
+                    context={"device": {"os": "Android \udc00 14"}},
+                    client_errors=[{"kind": "console", "message": "bad \ud83d"}],
+                )
+                # As a browser sends it: JSON.stringify writes a lone surrogate as an escape.
+                sent = await http.post(
+                    "/v1/bug-reports", content=json.dumps(body).encode(), headers=WRITE
+                )
+                assert sent.status_code == 201, sent.text
+                bug_id = sent.json()["bug_id"]
+                mine = (await http.get("/v1/bug-reports/mine")).json()["items"]
+                assert [item["words"] for item in mine] == ["Stuck on Leads \U0001f600"]
+            async with setup.sessions() as db:
+                kept = await db.get(BugReport, bug_id)
+                assert kept is not None
+                assert kept.context["device"]["os"] == "Android 14"
+                assert kept.client_errors == [{"kind": "console", "message": "bad"}]
         finally:
             await setup.engine.dispose()
 

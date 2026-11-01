@@ -2,6 +2,7 @@
 
 import { BugReportError } from "../bug-report/bug-report-client";
 import type { ReportContext } from "../bug-report/device";
+import { wholeCharacters } from "../bug-report/scrub";
 
 export type Moment =
   | "report_read"
@@ -37,7 +38,8 @@ export function feedbackRequest(answer: Answer): Record<string, unknown> {
     moment: answer.moment,
     kind: answer.kind,
     rating: answer.rating ?? null,
-    comment: answer.comment?.trim() || null,
+    // Never half an emoji: the server once refused one with a 500.
+    comment: wholeCharacters(answer.comment ?? "").trim() || null,
     subject: answer.subject ?? null,
     route: answer.route,
     context: answer.context,
