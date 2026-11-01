@@ -187,6 +187,7 @@ import { DeleteLeadsSheet, type Doomed } from "./delete-leads";
 import { Sheet } from "./sheet-frame";
 import { Sheet as Picker } from "../ui/sheet";
 import deleteStyles from "./delete-leads.module.css";
+import { keepDraft, readDraft } from "./drafts";
 import styles from "./leads.module.css";
 
 // Sources whose leads arrive with a form's own answers worth showing.
@@ -347,24 +348,6 @@ function breakable(label: string): ReactNode {
       {part}
     </Fragment>
   ));
-}
-
-/** A draft kept on the phone per lead (ph2-19); storage may be missing. */
-const DRAFTS = "sx-draft:";
-function readDraft(key: string): string {
-  try {
-    return localStorage.getItem(DRAFTS + key) ?? "";
-  } catch {
-    return "";
-  }
-}
-function keepDraft(key: string, text: string) {
-  try {
-    if (text.trim()) localStorage.setItem(DRAFTS + key, text);
-    else localStorage.removeItem(DRAFTS + key);
-  } catch {
-    // Private mode or full storage: the draft lives in the page only.
-  }
 }
 
 /** On a touch screen, true while a field is being typed into: the call bar

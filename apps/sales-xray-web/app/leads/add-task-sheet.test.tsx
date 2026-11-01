@@ -62,6 +62,7 @@ afterEach(async () => {
   host.remove();
   resetBackCloseForTests();
   vi.clearAllMocks();
+  localStorage.clear();
 });
 
 async function open(me: string | null = null) {
@@ -268,4 +269,24 @@ it("offers non-calling kinds, tomorrow at 4 PM and the time day first", async ()
     kind: "whatsapp",
     starts_at: new Date(2026, 10, 3, 16, 0).toISOString(),
   });
+});
+
+// The test robot, 1 Nov 2026 (2e72e8fa, 11ef4f38, 0f5c0fb1): Back, Forward or a
+// refresh lost a half-typed task. Its title is kept as a draft until saved.
+it("keeps a half-typed task title until it is saved", async () => {
+  calls.own.mockResolvedValue({});
+  await open();
+  const title = () =>
+    host.querySelector<HTMLInputElement>(
+      'input[placeholder="Send the brochure"]',
+    )!;
+  await act(async () => type(title(), "Send the fee sheet"));
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  const onAdded = await open();
+  expect(title().value).toBe("Send the fee sheet");
+  await act(async () => button("Add task")!.click());
+  for (let i = 0; i < 6; i++) await act(async () => Promise.resolve());
+  expect(onAdded).toHaveBeenCalled();
+  expect(localStorage.length).toBe(0);
 });

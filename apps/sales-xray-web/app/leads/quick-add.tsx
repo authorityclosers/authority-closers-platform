@@ -22,6 +22,7 @@ import {
 import { displayName } from "../display-name";
 import { notify } from "../notice-center";
 import { useFlow } from "../telemetry-flows";
+import { useDraft } from "./drafts";
 import { LeadsError, addLead, matchLead, type LeadMatch } from "./leads-client";
 import styles from "./leads-table.module.css";
 
@@ -49,8 +50,10 @@ function useQuickAdd(
   onAdded: () => void,
   onPasteRows?: PasteRows,
 ): [QuickAdd, RefObject<HTMLInputElement | null>] {
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  // Kept as drafts: Back, refresh or a closed app never lose them (robot,
+  // 1 Nov 2026: 5fc635af, 2ccf3f9f).
+  const [name, setName] = useDraft("quick-add:name");
+  const [phone, setPhone] = useDraft("quick-add:phone");
   const [busy, setBusy] = useState(false);
   const [match, setMatch] = useState<{
     phone: string;
