@@ -699,6 +699,8 @@ class LeadDesk:
                 await self.db.scalars(select(LeadRep).where(LeadRep.tenant_id == self.tenant_id))
             ).all()
         }
+        # The open-lead limit and the fair share count Inbound leads only (ph1-17, 1 Nov
+        # 2026): a Cold list handed to a seller never fills their limit.
         loads: dict[UUID | None, int] = dict(
             (
                 await self.db.execute(
@@ -707,6 +709,7 @@ class LeadDesk:
                         Lead.tenant_id == self.tenant_id,
                         Lead.owner_person_id.is_not(None),
                         Lead.stage.in_(OPEN_STAGES),
+                        func.coalesce(Lead.pipeline, "live") != "cold",
                     )
                     .group_by(Lead.owner_person_id)
                 )
@@ -3503,7 +3506,7 @@ class LeadDesk:
             beyond = over_cap(state.open_leads, state.max_open)
             if state.person_id in wanted and beyond:
                 lines.append(
-                    f"{state.name} now has {state.open_leads} open leads, {beyond} over "
+                    f"{state.name} now has {state.open_leads} open Inbound leads, {beyond} over "
                     f"their limit of {state.max_open}."
                 )
         return lines
@@ -3719,6 +3722,7 @@ class LeadDesk:
                     interest=lead.interest,
                     previous_owner=previous_owner,
                     exclude=exclude,
+                    cold=lead_side(lead.pipeline) == "cold",
                 ),
                 [rep.state for rep in team],
                 strict_language=bool(config.get("strict_language")),

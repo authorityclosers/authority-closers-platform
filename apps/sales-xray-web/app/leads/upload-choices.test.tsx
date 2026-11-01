@@ -158,7 +158,7 @@ it("says before the import who it takes past their limit", () => {
     open_leads: 2,
   } as RepView;
   const choices = {
-    side: "cold",
+    side: "inbound",
     assign: "people",
     off: [],
     counts: null,
@@ -169,4 +169,20 @@ it("says before the import who it takes past their limit", () => {
   expect(overLimitLines(choices, [{ ...priya, max_open: null }], 900)).toEqual(
     [],
   );
+});
+
+it("never warns for a Cold list: the limit counts Inbound only (ph1-17)", () => {
+  const priya = {
+    person_id: "p",
+    name: "priya fictional",
+    max_open: 50,
+    open_leads: 2,
+  } as RepView;
+  const cold = {
+    side: "cold",
+    assign: "people",
+    off: [],
+    counts: null,
+  } as unknown as UploadChoices;
+  expect(overLimitLines(cold, [priya], 900)).toEqual([]);
 });

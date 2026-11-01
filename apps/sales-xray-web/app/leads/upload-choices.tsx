@@ -244,7 +244,8 @@ export function overLimitLines(
   team: RepView[] | null,
   fresh: number,
 ): string[] {
-  if (value.assign !== "people" || !team) return [];
+  // The limit counts Inbound only (ph1-17: a Cold list is handed over on purpose).
+  if (value.assign !== "people" || !team || value.side === "cold") return [];
   const counts = countsFor(value, team, fresh);
   return team.flatMap((rep) => {
     const given = counts[rep.person_id] ?? 0;

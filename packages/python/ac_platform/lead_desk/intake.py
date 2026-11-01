@@ -499,7 +499,10 @@ class Intake:
         }
         return _result(outcomes, leads).model_copy(
             update={
-                "warnings": tuple(await self.desk.over_limit(given)) if given else (),
+                # The limit counts Inbound only: a Cold list never says over it (ph1-17).
+                "warnings": tuple(await self.desk.over_limit(given))
+                if given and command.side != "cold"
+                else (),
                 "staged": staged,
                 "owned": owned,
                 "unmatched_stages": tuple(missing_stages)[:UNMATCHED_SHOWN],
