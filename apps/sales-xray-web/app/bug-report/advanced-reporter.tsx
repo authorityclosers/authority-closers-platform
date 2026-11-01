@@ -66,8 +66,9 @@ import {
   MAX_PICTURE_BYTES,
   PICTURE_TYPES,
   bugReportRequest,
-  postBugReport,
+  postBugReportNow,
   retryLater,
+  savedWords,
 } from "./bug-report-client";
 import { captureScreen } from "./capture";
 import { commandId } from "./command-id";
@@ -285,6 +286,8 @@ export function AdvancedReporter({
   const wordsArea = useRef<HTMLTextAreaElement>(null);
   const [sending, setSending] = useState(false);
   const [outcome, setOutcome] = useState<"sent" | "queued" | null>(null);
+  // Why a saved report waits: an update, no answer, or no connection (ph1-44).
+  const [savedWhy, setSavedWhy] = useState("");
   const [route, setRoute] = useState("/");
   const [shownSeed, setShownSeed] = useState<AdvancedSeed | null>(null);
   const [comments, setComments] = useState<readonly Comment[]>([]);
@@ -651,7 +654,7 @@ export function AdvancedReporter({
             },
           }
         : base;
-      const sent = await postBugReport(request);
+      const sent = await postBugReportNow(request);
       rememberSent(sent.bugId);
       let missed = 0;
       for (const item of follow) {
@@ -684,6 +687,7 @@ export function AdvancedReporter({
       if (request && retryLater(error) && (await keepNow("bug", id, request))) {
         tick();
         onSent();
+        setSavedWhy(savedWords(error));
         setOutcome("queued");
       } else {
         notify({
@@ -897,7 +901,7 @@ export function AdvancedReporter({
             <p>
               {outcome === "sent"
                 ? "The team sees it now, with your marks on the picture."
-                : "It goes by itself as soon as you're back online."}
+                : savedWhy}
             </p>
           </div>
         ) : (

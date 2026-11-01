@@ -17,8 +17,9 @@
  *   never call content). Primary: "Send report". Ctrl+Enter (and Enter on a
  *   computer) sends too, asking "Send this report?" until "Don't ask again".
  * - Mark up: draw or blur on the picture, a step inside the sheet.
- * - Sent: "We'll tell you when it's fixed", or, with no connection, "Saved on
- *   this phone, it goes when you're back online".
+ * - Sent: "We'll tell you when it's fixed", or "Saved on this phone" with why
+ *   it waits (Sales X-Ray updating, no answer, or no connection); it goes by
+ *   itself as soon as it can (outbox.keepSending).
  * - Your reports: what they sent and where each stands.
  * A failure that cannot wait is a corner card with Try again; the sheet
  * keeps everything.
@@ -37,7 +38,14 @@ import {
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { postFeedbackRequest } from "../feedback/feedback-client";
 import { useInApp } from "../in-app-client";
@@ -53,8 +61,9 @@ import {
   PICTURE_TYPES,
   bugReportRequest,
   myReports,
-  postBugReport,
+  postBugReportNow,
   retryLater,
+  savedWords,
   type MyReport,
   type ReportPicture,
 } from "./bug-report-client";
@@ -72,7 +81,14 @@ import {
   takeWaitingReport,
   type ReportAbout,
 } from "./open";
-import { flush, keepNow, type OutboxItem } from "./outbox";
+import {
+  flush,
+  keepNow,
+  keepSending,
+  list as waitingItems,
+  type OutboxItem,
+} from "./outbox";
+import { holdState, subscribeHold } from "../release-hold";
 import { recentErrors } from "./recent-errors";
 import { ReportButton } from "./report-button";
 import { recentSteps } from "../telemetry";
@@ -149,33 +165,78 @@ function when(iso: string): string {
   return at.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
+/** A saved report's own words, for its row while it waits. */
+function waitingWords(item: OutboxItem): string {
+  const words = (item.body as { words?: unknown } | null)?.words;
+  return typeof words === "string" && words.trim() ? words : "Your report";
+}
+
+const holdingNow = () => holdState().holding;
+const notHolding = () => false;
+
 function MyReportsList() {
   const [items, setItems] = useState<MyReport[] | null>(null);
   const [failed, setFailed] = useState(false);
+  // Saved on this device, not sent yet: listed first (phone personas ph1-44,
+  // 1 Nov 2026: they weren't listed at all).
+  const [waiting, setWaiting] = useState<OutboxItem[]>([]);
+  const holding = useSyncExternalStore(subscribeHold, holdingNow, notHolding);
   useEffect(() => {
     const controller = new AbortController();
     myReports(controller.signal)
       .then(setItems)
       .catch(() => setFailed(true));
+    void waitingItems().then((saved) =>
+      setWaiting(saved.filter((item) => item.kind === "bug")),
+    );
     return () => controller.abort();
   }, []);
+  const saved = waiting.length ? (
+    <ul className={styles.mine} aria-label="Waiting to send">
+      {waiting.map((item) => (
+        <li key={item.id} className={styles.mineRow}>
+          <span className={styles.mineWords}>{waitingWords(item)}</span>
+          <span className={styles.mineMeta}>
+            <span className={styles.status} data-status="waiting">
+              Waiting to send
+            </span>
+            <small>{when(new Date(item.at).toISOString())}</small>
+          </span>
+        </li>
+      ))}
+    </ul>
+  ) : null;
   if (failed) {
     return (
-      <p className={styles.fine} role="status">
-        Your reports can&apos;t load right now. Try again in a moment.
-      </p>
+      <>
+        {saved}
+        <p className={styles.fine} role="status">
+          Your reports can&apos;t load right now. Try again in a moment.
+        </p>
+      </>
     );
   }
   if (items === null) {
     return (
-      <div className={styles.mine} aria-busy="true">
-        {[0, 1, 2].map((key) => (
-          <span key={key} className={styles.mineSkeleton} />
-        ))}
-      </div>
+      <>
+        {saved}
+        {holding ? (
+          // A release, not a hang: what it waits for, in words.
+          <p className={styles.fine} role="status">
+            Sales X-Ray is updating. Your reports show as soon as it&apos;s
+            back.
+          </p>
+        ) : (
+          <div className={styles.mine} aria-busy="true">
+            {[0, 1, 2].map((key) => (
+              <span key={key} className={styles.mineSkeleton} />
+            ))}
+          </div>
+        )}
+      </>
     );
   }
-  if (!items.length) {
+  if (!items.length && !waiting.length) {
     return (
       <p className={styles.fine}>
         Nothing sent yet. When something goes wrong, report it here and
@@ -184,19 +245,22 @@ function MyReportsList() {
     );
   }
   return (
-    <ul className={styles.mine}>
-      {items.map((item) => (
-        <li key={item.bugId} className={styles.mineRow}>
-          <span className={styles.mineWords}>{item.words}</span>
-          <span className={styles.mineMeta}>
-            <span className={styles.status} data-status={item.status}>
-              {STATUS_WORDS[item.status] ?? "Sent"}
+    <>
+      {saved}
+      <ul className={styles.mine}>
+        {items.map((item) => (
+          <li key={item.bugId} className={styles.mineRow}>
+            <span className={styles.mineWords}>{item.words}</span>
+            <span className={styles.mineMeta}>
+              <span className={styles.status} data-status={item.status}>
+                {STATUS_WORDS[item.status] ?? "Sent"}
+              </span>
+              <small>{when(item.statusAt)}</small>
             </span>
-            <small>{when(item.statusAt)}</small>
-          </span>
-        </li>
-      ))}
-    </ul>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 
@@ -235,6 +299,8 @@ export function BugReportSheet({
   const [route, setRoute] = useState("/");
   const [step, setStep] = useState<Step>("write");
   const [outcome, setOutcome] = useState<Outcome>("sent");
+  // Why a saved report waits: an update, no answer, or no connection (ph1-44).
+  const [savedWhy, setSavedWhy] = useState("");
   const [shownOpen, setShownOpen] = useState(false);
   // Bug 106 (29 Oct 2026): an old draft came back unseen and a tap put the
   // cursor mid-text, so new words merged into it. A restored draft now says
@@ -444,7 +510,7 @@ export function BugReportSheet({
         picture: shot,
         voice: voice ? { blob: voice.blob, seconds: voice.seconds } : null,
       });
-      const sent = await postBugReport(request);
+      const sent = await postBugReportNow(request);
       rememberSent(sent.bugId);
       tick();
       cleared();
@@ -466,6 +532,7 @@ export function BugReportSheet({
       if (request && retryLater(error) && (await keepNow("bug", id, request))) {
         tick();
         cleared();
+        setSavedWhy(savedWords(error));
         setOutcome("queued");
         setStep("sent");
       } else {
@@ -617,7 +684,7 @@ export function BugReportSheet({
               ? "The team sees it now. When it's fixed, a note appears here in the app."
               : outcome === "bare"
                 ? "A picture of the screen couldn't be taken this time, so your words went on their own. When it's fixed, a note appears here in the app."
-                : "It goes by itself as soon as you're back online. You can keep working."}
+                : `${savedWhy} You can keep working.`}
           </p>
         </div>
       ) : step === "mine" ? (
@@ -892,7 +959,7 @@ async function sendWaiting(
 ): Promise<"sent" | "retry" | "drop"> {
   try {
     if (item.kind === "bug") {
-      const sent = await postBugReport(item.body as Record<string, unknown>);
+      const sent = await postBugReportNow(item.body as Record<string, unknown>);
       rememberSent(sent.bugId);
     } else {
       await postFeedbackRequest(item.body as Record<string, unknown>);
@@ -1009,22 +1076,21 @@ export function BugReportHost() {
   useShakeToReport(inApp && !open && !advanced, onShake);
 
   useEffect(() => {
-    const send = () => {
-      void flush(sendWaiting).then((sent) => {
-        if (sent) {
-          notify({
-            id: "bug-report-outbox",
-            tone: "success",
-            title:
-              sent === 1
-                ? "Your saved report has gone to the team."
-                : `${sent} saved reports have gone to the team.`,
-          });
-        }
-      });
-    };
-    send();
-    window.addEventListener("online", send);
+    // Whatever waits goes as soon as it can (outbox.keepSending, ph1-45).
+    const stopSending = keepSending(async () => {
+      const sent = await flush(sendWaiting);
+      if (sent) {
+        notify({
+          id: "bug-report-outbox",
+          tone: "success",
+          title:
+            sent === 1
+              ? "Your saved report has gone to the team."
+              : `${sent} saved reports have gone to the team.`,
+        });
+      }
+      return (await waitingItems()).length;
+    });
     // A little after the frame is up: say if a report has been fixed.
     const look = window.setTimeout(() => {
       void lookForFixes()
@@ -1043,7 +1109,7 @@ export function BugReportHost() {
         .catch(() => {});
     }, 8000);
     return () => {
-      window.removeEventListener("online", send);
+      stopSending();
       window.clearTimeout(look);
     };
   }, []);
