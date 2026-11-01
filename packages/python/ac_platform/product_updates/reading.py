@@ -54,6 +54,15 @@ class VisibleUpdate:
         }
 
 
+def release_title(items: Sequence[VisibleUpdate]) -> str:
+    """A release's line in the bell: new only while some of it is unseen (phone personas
+    ph1-27/ph1-53, 1 Nov 2026: "6 new updates" stayed after reading What's new)."""
+    unseen = sum(not item.seen for item in items)
+    count = unseen or len(items)
+    words = f"{count} {'new ' if unseen else ''}update"
+    return words if count == 1 else f"{words}s"
+
+
 class ProductUpdatesReading:
     def __init__(
         self,
@@ -187,7 +196,7 @@ class ProductUpdatesReading:
                 "id": f"updates:{release_id}",
                 "kind": "updates",
                 "count": len(items),
-                "title": "1 new update" if len(items) == 1 else f"{len(items)} new updates",
+                "title": release_title(items),
                 "href": None,
                 "urgent": False,
                 "created_at": max(item.first_published_at or item.order_at for item in items),
