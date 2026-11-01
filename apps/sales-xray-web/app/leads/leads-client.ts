@@ -1696,8 +1696,9 @@ export type CallTime = "hour" | "evening" | "morning" | "week" | "someday";
 
 /**
  * When to call again, as a human time: this evening, tomorrow at 10, next
- * week at 10, or Someday (Privyr's, UX study item 9): three weeks out at 11,
- * moved off a Sunday, so a "not now" lead still has a next date.
+ * week at 10, or "In 2 weeks" (the old Someday, Privyr's, UX study item 9):
+ * two weeks out at 11, moved off a Sunday, so a "not now" lead still has a
+ * date it says (competitor teardown 11: no follow-up without a date).
  */
 export function nextCallTime(choice: CallTime, now: Date = new Date()): Date {
   const at = new Date(now);
@@ -1707,7 +1708,7 @@ export function nextCallTime(choice: CallTime, now: Date = new Date()): Date {
     return at;
   }
   if (choice === "someday") {
-    at.setDate(at.getDate() + 21);
+    at.setDate(at.getDate() + 14);
     if (at.getDay() === 0) at.setDate(at.getDate() + 1);
     at.setHours(11, 0, 0, 0);
     return at;

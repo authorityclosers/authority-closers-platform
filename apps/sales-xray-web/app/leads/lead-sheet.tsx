@@ -277,7 +277,7 @@ const TIMES: { key: Pick; label: string }[] = [
   { key: "evening", label: "This evening" },
   { key: "morning", label: "Tomorrow morning" },
   { key: "week", label: "Next week" },
-  { key: "someday", label: "Someday" },
+  { key: "someday", label: "In 2 weeks" },
   { key: "custom", label: "Pick a time" },
 ];
 
@@ -391,6 +391,44 @@ function useTyping(): boolean {
   return typing;
 }
 
+/**
+ * The after-call sheet's two lines of context (competitor teardown 17, 1 Nov
+ * 2026; NeoDove's dispose popup, HubSpot's call header): the last answer and
+ * what was said, and the tries so far. Nothing to tap: no extra step.
+ */
+export function lastWord(
+  detail: { events: LeadDetail["events"]; lead: LeadDetail["lead"] },
+  now: Date = new Date(),
+): { last: string | null; tries: string | null } {
+  const answer = detail.events.find((event) => event.kind === "result");
+  const said = answer?.note?.replace(/\s+/g, " ").trim();
+  const last = answer
+    ? [
+        `Last: ${
+          answer.connected
+            ? (answer.stage_label ?? "Talked")
+            : (answer.reason_label ?? "No answer")
+        }`,
+        said ? `“${said.length > 40 ? `${said.slice(0, 39)}…` : said}”` : null,
+        dayLabel(answer.at, now),
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
+  const count = detail.lead.attempts ?? 0;
+  const tries = count
+    ? [
+        `Tries: ${count}`,
+        answer && !answer.connected
+          ? `last ${(answer.reason_label ?? "no answer").toLowerCase()} ${clockTime(answer.at)}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
+  return { last, tries };
+}
+
 export function CallOutcome({
   detail,
   submitLabel,
@@ -423,6 +461,7 @@ export function CallOutcome({
 }) {
   const id = useId();
   const ref = useRef<HTMLElement>(null);
+  const context = lastWord(detail);
   const [talk, setTalk] = useState<Talk>(
     heard?.connected === true
       ? "talked"
@@ -782,6 +821,12 @@ export function CallOutcome({
           ? `Back from the call with ${first}. How did it go?`
           : `How did the call with ${first} go?`}
       </h3>
+      {context.last || context.tries ? (
+        <p className={styles.lastWord}>
+          {context.last ? <span>{context.last}</span> : null}
+          {context.tries ? <span>{context.tries}</span> : null}
+        </p>
+      ) : null}
       {heard && heardLine(heard) ? (
         <p className={styles.heard}>
           <HistoryIcon size={14} aria-hidden="true" />

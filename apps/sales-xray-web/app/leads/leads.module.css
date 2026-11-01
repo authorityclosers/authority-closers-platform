@@ -3343,6 +3343,20 @@ a.repName {
 
 /* ---------- Calling from the phone app ---------- */
 
+/* The last answer and the tries, over "Did you talk to them?" (teardown 17). */
+.lastWord {
+  display: grid;
+  gap: 2px;
+  margin: -4px 0 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.lastWord span:first-child {
+  color: var(--sx-ink-2);
+}
+
 .heard {
   display: flex;
   gap: 6px;
