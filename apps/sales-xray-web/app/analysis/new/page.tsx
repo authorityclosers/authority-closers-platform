@@ -17,6 +17,7 @@ export default async function NewAnalysisPage({
     <AcquisitionStudio
       requestedCallId={requestedCallId}
       deferRouteSelection={staticPreview}
+      noticeDock
     />
   );
 }
