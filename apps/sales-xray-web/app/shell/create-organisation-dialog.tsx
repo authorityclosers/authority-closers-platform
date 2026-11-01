@@ -25,18 +25,21 @@ export function CreateOrganisationDialog({
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Set the moment a press sends, before React draws the busy button: a second
+  // press in the same moment finds it and sends nothing (QA robot, 31 Oct 2026).
+  const sending = useRef(false);
   // One key per name: sending the same name again can't create two.
   const request = useRef<{ name: string; key: string } | null>(null);
 
   const close = () => {
-    if (busy) return;
+    if (busy || sending.current) return;
     setError("");
     onClose();
   };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (busy) return;
+    if (busy || sending.current) return;
     const clean = name.trim().replace(/\s+/g, " ");
     if (clean.length < 2 || clean.length > 80) {
       setError("Use 2 to 80 characters.");
@@ -44,6 +47,7 @@ export function CreateOrganisationDialog({
     }
     if (request.current?.name !== clean)
       request.current = { name: clean, key: crypto.randomUUID() };
+    sending.current = true;
     setBusy(true);
     setError("");
     try {
@@ -51,6 +55,7 @@ export function CreateOrganisationDialog({
       // Busy stays on: the page moves into the new workspace.
       onCreated(created.tenantId);
     } catch (failure) {
+      sending.current = false;
       setBusy(false);
       setError(
         failure instanceof OrgApiError

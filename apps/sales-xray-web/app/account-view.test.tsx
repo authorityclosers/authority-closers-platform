@@ -319,6 +319,26 @@ it.each([0, 2_700])(
   },
 );
 
+it("adds available and used minutes up to the total", async () => {
+  respond({
+    "GET /v1/me/sales-xray-profile": () => json(PROFILE),
+    "GET /v1/conversation/acquisition/session": () =>
+      json({
+        allowance: {
+          allowance_seconds: 7_200,
+          committed_seconds: 150,
+          available_seconds: 7_050,
+          unlimited: false,
+        },
+      }),
+  });
+  await renderAccount();
+  const allowance = host.querySelector("[data-allowance]")!;
+  // 117 min 30 s left and 2 min 30 s used: 117 + 3 = 120, never 117 + 2.
+  expect(allowance.textContent).toContain("117 of 120 min");
+  expect(allowance.textContent).toContain("3 min used or reserved");
+});
+
 it("shows exhausted balance with 0 available minutes and empty meter", async () => {
   respond({
     "GET /v1/me/sales-xray-profile": () => json(PROFILE),

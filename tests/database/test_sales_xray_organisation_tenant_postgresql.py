@@ -219,9 +219,11 @@ def test_sales_xray_serves_personal_and_all_registered_organisations(
                     content=data,
                     headers=await _headers(client, data),
                 )
-                # The same refusal an exhausted Personal account gets.
+                # Never given minutes is not "used": the seller is told what's true.
                 assert refused.status_code == 409, refused.text
-                assert refused.json()["detail"] == "Your current free call allowance has been used."
+                assert refused.json()["detail"] == (
+                    "Call analysis isn't on for this organisation yet. Ask your owner."
+                )
 
                 # An Admin grant applies in the organisation: the eligibility gate
                 # and target lookup accept the member role, and the ledger lot the

@@ -15,7 +15,10 @@ import {
   PLANS_ON_WEB,
   PurchaseGate,
   resetPurchaseStoreForTests,
+  usePlansOnWebLine,
+  YOUR_PLANS_ON_WEB,
 } from "./purchase-policy";
+import { WorkspaceAccessProvider } from "./workspace-access";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -81,3 +84,40 @@ it("keeps purchases hidden in the app while the store is unknown", async () => {
   expect(host.querySelector('a[href="/plans"]')).toBeNull();
   expect(host.textContent).toBe(PLANS_ON_WEB);
 });
+
+function PlansLine() {
+  return <p>{usePlansOnWebLine()}</p>;
+}
+
+it.each([
+  ["owner", YOUR_PLANS_ON_WEB],
+  ["member", PLANS_ON_WEB],
+] as const)(
+  "tells an organisation %s the line that fits who pays",
+  async (role, line) => {
+    await act(async () =>
+      root.render(
+        <WorkspaceAccessProvider
+          value={{
+            status: "ready",
+            authenticated: true,
+            retry: () => {},
+            context: { personId: "p", sessionId: "s", tenantId: "org" },
+            workspaces: [
+              {
+                tenant_id: "org",
+                kind: "organisation",
+                name: "Brightline",
+                role,
+                sales_xray_enabled: true,
+              },
+            ],
+          }}
+        >
+          <PlansLine />
+        </WorkspaceAccessProvider>,
+      ),
+    );
+    expect(host.textContent).toBe(line);
+  },
+);
