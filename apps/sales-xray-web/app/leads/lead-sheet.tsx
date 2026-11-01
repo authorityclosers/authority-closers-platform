@@ -185,6 +185,7 @@ import {
 import { askFeedback } from "../feedback/ask";
 import { DeleteLeadsSheet, type Doomed } from "./delete-leads";
 import { Sheet } from "./sheet-frame";
+import { useBackClose } from "../ui/back-close";
 import { Sheet as Picker } from "../ui/sheet";
 import deleteStyles from "./delete-leads.module.css";
 import { keepDraft, readDraft } from "./drafts";
@@ -4267,6 +4268,9 @@ function PaneOrSheet({
   onClose: () => void;
   children: ReactNode;
 }) {
+  // Beside the list too, Back closes the lead before it leaves Leads, and the
+  // lead's address entry is its own (the open lead in the address).
+  useBackClose(inline && open, onClose);
   if (!inline)
     return (
       <Sheet
