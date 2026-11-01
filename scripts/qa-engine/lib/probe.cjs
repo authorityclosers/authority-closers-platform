@@ -186,7 +186,26 @@ function inPage(phone) {
       const r = el.getBoundingClientRect();
       if (r.bottom < 0 || r.top > vh * 2) continue;
       if (getComputedStyle(el).display === "inline" && el.tagName === "A") continue; // a link inside a sentence
-      if (r.width < 24 || r.height < 24) out.small.push(`${css(el)} ${Math.round(r.width)}x${Math.round(r.height)}`);
+      if (r.width < 24 || r.height < 24) {
+        // judge the tap area, not the box: a ::after band can make a 23 px line a 47 px target (the lead's "Follow-up · Tomorrow" line, 2 Nov 2026), so probe 6 px beyond each short side
+        const hit = (px, py) => {
+          if (px < 0 || py < 0 || px >= vw || py >= vh) return false;
+          const t = document.elementFromPoint(px, py);
+          return !!t && (t === el || el.contains(t));
+        };
+        // below the fold: bring it into view for the test, then put the page back
+        const sx0 = window.scrollX;
+        const sy0 = window.scrollY;
+        if (r.top < 0 || r.bottom > vh) el.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
+        const q = el.getBoundingClientRect();
+        const mx = q.left + q.width / 2;
+        const my = q.top + q.height / 2;
+        const tallEnough = q.height >= 24 || (hit(mx, q.top - 6) && hit(mx, q.bottom + 6));
+        const wideEnough = q.width >= 24 || (hit(q.left - 6, my) && hit(q.right + 6, my));
+        window.scrollTo(sx0, sy0);
+        if (tallEnough && wideEnough) continue;
+        out.small.push(`${css(el)} ${Math.round(r.width)}x${Math.round(r.height)}`);
+      }
     }
   }
   return out;
