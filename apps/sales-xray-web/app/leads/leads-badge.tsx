@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * The Leads tab's badge (UX study item 3): red with the count of calls more
- * than an hour late, or teal with the count due now when none is late. One
+ * The Leads tab's badge (UX study item 3): the Inbound To Call list's rows
+ * (orchestrator, 1 Nov 2026, #9 option A: one count, the list's), red when any
+ * of them is more than an hour late, teal when none is. One
  * shared reader serves the rail and the phone tab bar: it reads on open, when
  * the app or tab comes back to the front, and every two minutes while shown.
  * The Leads page also hands over its fresh counts, so the badge never lags it.
@@ -110,20 +111,22 @@ function useLeadsCounts(live: boolean, withChats: boolean) {
   const badge = live ? latest : null;
   const unread = useUnreadChats(live && withChats);
   const late = badge?.overdue ?? 0;
-  const due = badge?.to_call ?? 0;
-  return { late, due, unread, count: late || due + unread };
+  // Late rows are To Call rows; an older server may count them apart.
+  const due = Math.max(badge?.to_call ?? 0, late);
+  return { late, due, unread, count: due + unread };
 }
 
 /**
- * What the badge says, for its link's name after the label ("Leads, 3 late"):
+ * What the badge says, for its link's name after the label ("Leads, 8 to
+ * call, 3 late"):
  * a screen reader hears the place first, then what waits there (the test
  * robot, 31 Oct 2026: it said "3, 3 late Leads"). The badge itself is hidden.
  */
 export function useLeadsBadgeWords(live: boolean, withChats = false): string {
   const { late, due, unread } = useLeadsCounts(live, withChats);
-  if (late) return `, ${late} late`;
   return [
     due ? `, ${due} to call` : "",
+    late ? `, ${late} late` : "",
     unread ? `, ${unread} unread chats` : "",
   ].join("");
 }
@@ -143,7 +146,7 @@ export function LeadsTabIcon({
   /** Phones: Chats lives inside Leads, so unread chats count here too. */
   withChats?: boolean;
 }) {
-  // Late calls first (red); otherwise what waits: calls due and unread chats.
+  // To Call's rows and unread chats; red when any row is late.
   const { late, count } = useLeadsCounts(live, withChats);
   return (
     <span className={styles.tabIcon}>
