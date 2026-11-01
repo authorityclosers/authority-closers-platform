@@ -1,4 +1,7 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -129,6 +132,20 @@ it("is one line whose count opens the calls and whose Fix opens the failing step
   await act(async () => button("Fix")!.click());
   for (let i = 0; i < 4; i++) await act(async () => await Promise.resolve());
   expect(opened.steps).toEqual(["phone"]);
+});
+
+// QA robot reports 845, 846 and 857 (1 Nov 2026): rows and Call buttons sat
+// under the old corner card. The line is part of the page, at its top, as
+// NoticeDock's notices are: nothing in it is pinned or lifted over the rows.
+it("sits in the page's flow, never pinned over the rows", () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const css = readFileSync(join(here, "capture-setup.module.css"), "utf8");
+  const rules = css.match(/[^{}]*\.missingLine[^{}]*\{[^}]*\}/g) ?? [];
+  expect(rules.length).toBeGreaterThan(5);
+  for (const rule of rules)
+    expect(rule).not.toMatch(
+      /position:\s*(fixed|sticky|absolute)|z-index|inset|translate/,
+    );
 });
 
 it("shows nothing when Home tried nothing today, or every call has its recording", async () => {

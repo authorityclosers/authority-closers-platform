@@ -265,9 +265,14 @@ def test_app_recordings_are_off_until_pulse_is_set_up(
                     f"/v1/api/calls/uploads/{uuid4()}", headers={"Authorization": bearer}
                 )
                 assert (state.status_code, state.json()) == (404, off)
+                # The waiting list pages read by themselves: empty and off, never a 404
+                # (QA robot, 1 Nov 2026: a console error on every New analysis visit).
                 inbox = await person.get("/v1/sales-xray/app-uploads")
-                assert inbox.status_code == 404
-                assert inbox.json()["detail"] == "Pulse isn't set up here."
+                assert (inbox.status_code, inbox.json()) == (200, {"uploads": [], "on": False})
+                # A recording's own routes still answer as Pulse does when it is off.
+                held = await person.get(f"/v1/sales-xray/app-uploads/{uuid4()}/file")
+                assert held.status_code == 404
+                assert held.json()["detail"] == "Pulse isn't set up here."
                 # Everything else the connection may do still answers.
                 assert (
                     await server.get("/v1/api/leads", headers={"Authorization": bearer})
