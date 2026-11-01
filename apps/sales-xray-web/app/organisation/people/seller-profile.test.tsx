@@ -272,6 +272,8 @@ it("counts and filters late leads beyond the first server page and retains the p
                   lead_id: offset ? "later" : "first",
                   name: offset ? "Morgan Example" : "Rowan Fictional",
                   overdue: !!offset,
+                  // Late as on Home: a follow-up time passed (ph1-56).
+                  next_action_at: offset ? "2026-10-01T04:00:00Z" : null,
                 },
               ],
           total: open ? 2 : 0,

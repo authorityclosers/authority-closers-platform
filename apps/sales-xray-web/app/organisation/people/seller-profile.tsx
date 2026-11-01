@@ -371,16 +371,27 @@ function SellerLeads({
   );
   const thisWeek = (lead: LeadRow) =>
     !!lead.stage_at && Date.parse(lead.stage_at) >= weekStart.getTime();
+  // The header's own counts (phone QA ph1-56, 1 Nov 2026: "2 open leads" over
+  // 909 Open, 2 Late and 904 Untouched): open, late and untouched are Inbound's,
+  // late is a follow-up time passed, as on Home; a Cold list has its own tile.
+  const inbound = (lead: LeadRow) => lead.side !== "cold";
   const matches = (lead: LeadRow, key: string) =>
     key === "open"
-      ? open(lead)
+      ? open(lead) && inbound(lead)
       : key === "late"
-        ? open(lead) && !!lead.overdue
+        ? open(lead) &&
+          inbound(lead) &&
+          !!lead.next_action_at &&
+          Date.parse(lead.next_action_at) < clock
         : key === "untouched"
-          ? lead.stage === "new" && lead.last_contact_at == null
-          : key === "won" || key === "lost"
-            ? (lead.group ?? lead.stage) === key && thisWeek(lead)
-            : open(lead) && (lead.step ?? lead.stage) === key;
+          ? inbound(lead) &&
+            lead.stage === "new" &&
+            lead.last_contact_at == null
+          : key === "cold"
+            ? open(lead) && !inbound(lead)
+            : key === "won" || key === "lost"
+              ? (lead.group ?? lead.stage) === key && thisWeek(lead)
+              : open(lead) && (lead.step ?? lead.stage) === key;
   const stages = [
     ...new Map(
       page.leads
@@ -388,10 +399,12 @@ function SellerLeads({
         .map((lead) => [lead.step ?? lead.stage, lead.stage_label]),
     ).entries(),
   ];
+  const hasCold = page.leads.some((lead) => !inbound(lead));
   const insights = [
-    ["open", "Open leads"],
+    ["open", "Open Inbound leads"],
     ["late", "Late follow-ups"],
-    ["untouched", "Untouched new leads"],
+    ["untouched", "Untouched new enquiries"],
+    ...(hasCold ? [["cold", "Cold leads"]] : []),
     ["won", "Won this week"],
     ["lost", "Lost this week"],
     ...stages,
