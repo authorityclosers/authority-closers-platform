@@ -1772,7 +1772,10 @@ function CallsLibraryContent({
           {stats ? (
             <dl className={styles.strip} aria-label="Calls at a glance">
               <div className={styles.kpi} id="metric-calls">
-                <dt>Calls</dt>
+                {/* The saved recordings, as the header says them: the phone's
+                    calls above count by Home's rule (ph1-50, 1 Nov 2026: "Calls 2"
+                    beside five "You called"). */}
+                <dt>Saved calls</dt>
                 <dd>
                   <b>{stats.calls}</b>
                   {activeDays >= 3 ? (

@@ -2020,30 +2020,37 @@ class LeadDesk:
         counts = {str(kind): int(total) for kind, total, _, _ in grouped}
         today_counts = {str(kind): int(today) for kind, _, today, _ in grouped}
         week_counts = {str(kind): int(week) for kind, _, _, week in grouped}
-        connected = and_(
-            LeadEvent.kind == "call",
-            or_(
-                LeadEvent.data["connected"].as_boolean().is_(True),
-                LeadEvent.data["duration_seconds"].as_integer() > 0,
-            ),
+        # Calls as Home counts them (_call_rows): a dial its phone's call log never showed
+        # was not placed, and connected is call_answered, never a dial's time away (phone
+        # QA ph1-50, 1 Nov 2026: five "You called" rows that were back-outs from the dialler).
+        placed = await self._call_rows(after, upto, person=person, team=team)
+        placed_ids = {row.event_id for row in placed}
+        unplaced: dict[UUID, datetime] = {
+            event_id: at
+            for event_id, at, data in (
+                await self.db.execute(
+                    select(LeadEvent.id, LeadEvent.created_at, LeadEvent.data)
+                    .join(Lead, joined)
+                    .where(*window, LeadEvent.kind == "call")
+                )
+            ).all()
+            if isinstance(data, dict)
+            and is_dial(data)
+            and event_id not in placed_ids
+            and str(event_id) not in hidden
+        }
+        week_start = start - timedelta(days=6)
+        for at in unplaced.values():
+            counts["call"] = counts.get("call", 0) - 1
+            if at >= start:
+                today_counts["call"] = today_counts.get("call", 0) - 1
+            if at >= week_start:
+                week_counts["call"] = week_counts.get("call", 0) - 1
+        today_counts["connected"] = sum(
+            1 for row in placed if row.at >= start and call_answered(row.data)
         )
-        today_counts["connected"] = int(
-            await self.db.scalar(
-                select(func.count())
-                .select_from(LeadEvent)
-                .join(Lead, joined)
-                .where(*window, connected, LeadEvent.created_at >= start)
-            )
-            or 0
-        )
-        week_counts["connected"] = int(
-            await self.db.scalar(
-                select(func.count())
-                .select_from(LeadEvent)
-                .join(Lead, joined)
-                .where(*window, connected, LeadEvent.created_at >= start - timedelta(days=6))
-            )
-            or 0
+        week_counts["connected"] = sum(
+            1 for row in placed if row.at >= week_start and call_answered(row.data)
         )
         latest = (
             await self.db.execute(
@@ -2119,9 +2126,12 @@ class LeadDesk:
         labels: dict[str, journeys.Journey] = {}
         items: list[ActivityItem] = []
         for event, lead in rows:
-            if (str(event.id) in hidden and event.actor_person_id != self.viewer.person_id) or str(
-                event.id
-            ) in removed:
+            if (
+                (str(event.id) in hidden and event.actor_person_id != self.viewer.person_id)
+                or str(event.id) in removed
+                # A dial never placed: a back-out from the dialler, never a call (ph1-50).
+                or event.id in unplaced
+            ):
                 continue
             key = journeys.pipeline_of(lead)
             if key not in labels:

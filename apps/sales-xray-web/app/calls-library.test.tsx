@@ -1618,7 +1618,7 @@ it("shows four figures from the loaded calls and one labelled list", async () =>
 
   const strip = host.querySelector('dl[aria-label="Calls at a glance"]')!;
   expect([...strip.querySelectorAll("dt")].map((dt) => dt.textContent)).toEqual(
-    ["Calls", "Reports ready", "Call time", "Next step agreed"],
+    ["Saved calls", "Reports ready", "Call time", "Next step agreed"],
   );
   expect(strip.querySelector("#metric-calls dd b")?.textContent).toBe("2");
   expect(host.querySelector("#metric-commitments")).toBeNull();

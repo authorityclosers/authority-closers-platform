@@ -517,3 +517,51 @@ def test_the_next_lead_who_rang_says_so(postgres_harness: Any, tmp_path: Path) -
             assert first["missed_calls"] == 2 and first["missed_at"] is not None, first
 
     run(exercise())
+
+
+def test_a_dial_never_placed_is_never_listed(postgres_harness: Any, tmp_path: Path) -> None:
+    """Phone QA ph1-50 (1 Nov 2026): My work and Calls' Your calls listed five "You called" rows
+    that were back-outs from the dialler, which Home never counted. A dial the phone's call log
+    never showed is neither listed nor counted, and a dial's time away never makes a call
+    connected; the call the phone logged is, as on Home."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            lead = await here.add("Fictional Backed Out", "98760 67061")
+            now = datetime.now(UTC)
+            if (now - timedelta(minutes=30)).astimezone(IST).date() != now.astimezone(IST).date():
+                pytest.skip("the dial would be yesterday's, just after midnight")
+            async with here.setup.sessions() as db, db.begin():
+                for minutes, data in (
+                    # The Call button: 40 s away from the app, and the dialler backed out of.
+                    (30, {"simulated": False, "estimated": True, "duration_seconds": 40}),
+                    # A call the phone logged: one minute.
+                    (20, {"via": "phone", "direction": "outgoing", "duration_seconds": 60}),
+                ):
+                    db.add(
+                        LeadEvent(
+                            id=uuid4(),
+                            tenant_id=here.tenant_id,
+                            lead_id=UUID(lead),
+                            kind="call",
+                            actor_person_id=here.seller.person_id,
+                            data=data,
+                            created_at=now - timedelta(minutes=minutes),
+                        )
+                    )
+            here.as_seller()
+            # The phone's call history arrived after the dial, without it.
+            seen = await here.client.post(
+                f"{BASE}/phone-log", json={"device_id": str(uuid4()), "calls": []}, headers=WRITE
+            )
+            assert seen.status_code == 200, seen.text
+            answer = await here.client.get(f"{BASE}/activity", params={"day": "today"})
+            assert answer.status_code == 200, answer.text
+            work = answer.json()
+            listed = [item for item in work["items"] if item["event"]["kind"] == "call"]
+            assert len(listed) == 1, listed
+            assert (work["today_counts"]["call"], work["today_counts"]["connected"]) == (1, 1)
+            desk = (await here.client.get(BASE)).json()
+            assert (desk["numbers"]["calls"], desk["numbers"]["connected"]) == (1, 1)
+
+    run(exercise())
