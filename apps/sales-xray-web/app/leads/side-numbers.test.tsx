@@ -7,6 +7,17 @@ const reads = vi.hoisted(() => ({
   failures: [] as Array<(reason: unknown) => void>,
   calls: 0,
 }));
+// The bell's lines go up with the answer, before the page draws.
+const raised = vi.hoisted(
+  () => [] as Array<{ lines: unknown; drawn: boolean }>,
+);
+vi.mock("../shell/update-notices", () => ({
+  raiseNotificationLines: (lines: unknown) =>
+    raised.push({
+      lines,
+      drawn: (document.body.textContent ?? "").includes('"settled":true'),
+    }),
+}));
 vi.mock("./leads-client", () => ({
   readSides: () => {
     reads.calls += 1;
@@ -42,6 +53,7 @@ beforeEach(() => {
   reads.answers.length = 0;
   reads.failures.length = 0;
   reads.calls = 0;
+  raised.length = 0;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -106,4 +118,26 @@ it("asks nothing and waits for nothing before there is a role", () => {
   show("signed-out", false);
   expect(reads.calls).toBe(0);
   expect(seen()).toEqual({ numbers: null, settled: true });
+});
+
+// QA robot 10572d93 (2 Nov 2026): a "<name> is your lead now" line arrived 3 s
+// after Leads drew and pushed it down 52 px. The answer's lines go up first.
+it("raises the bell's lines with the answer, before the page draws", async () => {
+  show();
+  const line = {
+    id: "1",
+    kind: "lead_assigned",
+    title: "Asha Fictional is your lead now",
+    href: "/leads?lead=1",
+    urgent: true,
+    read: false,
+    created_at: "2026-11-02T04:00:00Z",
+  };
+  await act(async () => reads.answers[0]({ ...BOTH, bell_lines: [line] }));
+  expect(raised).toEqual([{ lines: [line], drawn: false }]);
+  expect(seen()?.settled).toBe(true);
+  // An answer without lines (an older server) raises nothing.
+  show("priya:maple:mine");
+  await act(async () => reads.answers[1](BOTH));
+  expect(raised.at(-1)).toEqual({ lines: [], drawn: false });
 });

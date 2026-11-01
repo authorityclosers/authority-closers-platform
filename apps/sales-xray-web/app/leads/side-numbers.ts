@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from "react";
 
+import { raiseNotificationLines } from "../shell/update-notices";
 import { readSides, type SideNumbers } from "./leads-client";
 
 /** From the read's start: a slow network answers in about 2 s (QA robot 844,
@@ -52,6 +53,11 @@ export function useSideNumbers({
     readSides(scope, controller.signal)
       .then((value) => {
         kept.set(keyed, value);
+        // A "<name> is your lead now" line lands with the page, in the same
+        // commit as the draw this answer lets through; the bell's own first
+        // read (at 3 s) then finds it shown (QA robot 10572d93, 2 Nov 2026:
+        // the docked line arrived late and pushed Leads down 52 px).
+        raiseNotificationLines(value.bell_lines ?? []);
         setGot({ key: keyed, value });
       })
       .catch(() => {

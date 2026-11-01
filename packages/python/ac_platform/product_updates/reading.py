@@ -64,6 +64,68 @@ def release_title(items: Sequence[VisibleUpdate]) -> str:
     return words if count == 1 else f"{words}s"
 
 
+def shown_here(tenant_id: UUID | None) -> Any:
+    """The person's notifications the bell shows in this workspace. A workspace's capture
+    reminder shows only there: one per day, with the count its own calls say (phone
+    personas ph1-27, 1 Nov 2026: 2 and 4 for one day). So does a "<name> is your lead now"
+    line: its lead opens only there (lead_desk.bell; QA robot 5a5fb451, 2 Nov 2026)."""
+    return and_(
+        or_(
+            Notification.dedupe_key.is_(None),
+            ~Notification.dedupe_key.startswith(CAPTURE_KEY),
+            Notification.tenant_id == tenant_id,
+        ),
+        or_(Notification.kind != bell.KIND, Notification.tenant_id == tenant_id),
+    )
+
+
+async def listed(
+    database: AsyncSession, person_id: UUID, tenant_id: UUID | None
+) -> Sequence[Notification]:
+    """The newest 50 the bell reads, newest first."""
+    return (
+        await database.scalars(
+            select(Notification)
+            .where(Notification.person_id == person_id, shown_here(tenant_id))
+            .order_by(Notification.created_at.desc(), Notification.id.desc())
+            .limit(50)
+        )
+    ).all()
+
+
+async def lead_lines(
+    database: AsyncSession, person_id: UUID, tenant_id: UUID
+) -> list[dict[str, Any]]:
+    """The person's unread "<name> is your lead now" lines here, newest first, as the bell
+    lists them (the same 50, the same stale rule, the same shape). Leads raises them as it
+    draws (shell/update-notices raiseNotificationLines), so a docked line never pushes the
+    page after it drew (QA robot 10572d93 and 376d2850, 2 Nov 2026)."""
+    events = [
+        event
+        for event in await listed(database, person_id, tenant_id)
+        if event.kind == bell.KIND and event.read_at is None
+    ]
+    if not events:
+        return []
+    stale = await bell.stale(
+        database, tenant_id, person_id, [(event.id, event.href) for event in events]
+    )
+    return [
+        {
+            "id": str(event.id),
+            "kind": event.kind,
+            "title": event.title,
+            "body": event.body,
+            "href": event.href,
+            "urgent": event.urgent,
+            "created_at": utc(event.created_at),
+            "read": False,
+        }
+        for event in events
+        if event.id not in stale
+    ]
+
+
 class ProductUpdatesReading:
     def __init__(
         self,
@@ -206,18 +268,7 @@ class ProductUpdatesReading:
             for release_id, items in releases.items()
         ]
         unread = sum(not entry["read"] for entry in entries)
-        # A workspace's capture reminder shows only there: one per day, with the count
-        # its own calls say (phone personas ph1-27, 1 Nov 2026: 2 and 4 for one day).
-        # So does a "<name> is your lead now" line: its lead opens only there (lead_desk.bell;
-        # QA robot 5a5fb451, 2 Nov 2026).
-        here = and_(
-            or_(
-                Notification.dedupe_key.is_(None),
-                ~Notification.dedupe_key.startswith(CAPTURE_KEY),
-                Notification.tenant_id == self.actor.tenant_id,
-            ),
-            or_(Notification.kind != bell.KIND, Notification.tenant_id == self.actor.tenant_id),
-        )
+        here = shown_here(self.actor.tenant_id)
         unread += (
             await self.database.scalar(
                 select(func.count())
@@ -230,14 +281,7 @@ class ProductUpdatesReading:
             )
             or 0
         )
-        events = (
-            await self.database.scalars(
-                select(Notification)
-                .where(Notification.person_id == self.actor.person_id, here)
-                .order_by(Notification.created_at.desc(), Notification.id.desc())
-                .limit(50)
-            )
-        ).all()
+        events = await listed(self.database, self.actor.person_id, self.actor.tenant_id)
         counts = await self._capture_counts(events)
         # A lead line whose lead is gone or someone else's now is history: read, opening
         # nothing, never counted, so no banner rings for it (lead_desk.bell.stale).
