@@ -115,11 +115,40 @@ if ((snapshot_age_seconds < 0 || snapshot_age_seconds > AC_FOUNDATION_RPO_TARGET
   exit 1
 fi
 
-restore_dir="$(mktemp -d -t ac-restic-restore.XXXXXX)"
+restore_dir=''
+# Space admission (1 Nov 2026). On 1 Nov the drill restored about 8.5 GB into /tmp on a
+# root disk that was 95% full; the disk filled and production lost its database
+# connections. The restore now goes only to the bounded recovery scratch area, and only
+# when it has room for 1.5 times the snapshot plus a 10 GiB floor; otherwise the drill
+# refuses before restoring anything and tells the owner.
+restore_root='/srv/authority-closers/recovery-tmp'
+restore_floor_bytes=10737418240
+restore_size_json="$(restic stats --mode restore-size --json "$snapshot_id")"
+restore_size_bytes="$(jq -er '.total_size | select(type == "number" and . >= 0 and . == floor)' \
+  <<<"$restore_size_json")" || {
+  printf 'FAIL  Restic did not report the snapshot restore size.\n' >&2
+  exit 1
+}
+restore_required_bytes="$((restore_size_bytes * 3 / 2 + restore_floor_bytes))"
+restore_free_bytes="$(df --output=avail --block-size=1 -- "$restore_root" | awk 'NR == 2 {print $1}')"
+[[ "$restore_free_bytes" =~ ^[0-9]+$ ]] || {
+  printf 'FAIL  Free space under %s could not be read.\n' "$restore_root" >&2
+  exit 1
+}
+if ((restore_free_bytes < restore_required_bytes)); then
+  restore_refusal="Restic restore drill refused: $(numfmt --to=iec "$restore_free_bytes") free under $restore_root, it needs $(numfmt --to=iec "$restore_required_bytes") (1.5 x the $(numfmt --to=iec "$restore_size_bytes") snapshot + 10 GiB). Nothing was restored; free disk space on ac before the next drill."
+  printf 'FAIL  %s\n' "$restore_refusal" >&2
+  /usr/local/sbin/ac-notify-owner "$restore_refusal" >/dev/null 2>&1 \
+    || printf 'WARN  The owner could not be told about the refused restore drill.\n' >&2
+  exit 1
+fi
+# Space admission complete.
+
+restore_dir="$(mktemp -d "$restore_root/restore-check.XXXXXX")"
 cleanup() {
   local status=$?
   case "$restore_dir" in
-    /tmp/ac-restic-restore.*) rm -rf -- "$restore_dir" ;;
+    "$restore_root"/restore-check.*) rm -rf -- "$restore_dir" ;;
     *) printf 'Refusing to remove unexpected restore path: %s\n' "$restore_dir" >&2; status=1 ;;
   esac
   exit "$status"
