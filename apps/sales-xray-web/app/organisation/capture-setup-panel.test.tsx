@@ -82,6 +82,11 @@ it("counts who still needs it and names why, never a phone number", async () => 
   expect(items[1]).toContain("Said not now on 29 Oct");
   expect(items[2]).toContain("Redmi 13 · since 29 Oct");
   expect(host.textContent).not.toMatch(/\+\d{6,}/);
+  // Done reads Ready: "Set up" is only ever an action (ph1-38).
+  const badges = [...host.querySelectorAll("li > [data-state]")].map(
+    (badge) => badge.textContent,
+  );
+  expect(badges).toEqual(["Not set up", "Said not now", "Ready"]);
 });
 
 it("says when everyone is set up, and shows nothing it can't read", async () => {
