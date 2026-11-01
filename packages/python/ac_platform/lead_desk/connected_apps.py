@@ -56,7 +56,15 @@ from ac_platform.lead_desk.models import (
 )
 from ac_platform.lead_desk.social import graph
 from ac_platform.lead_desk.social import inbox as social_inbox
-from ac_platform.lead_desk.store import PHONES_KEY, DeskError, LeadDesk, person_name, phone_health
+from ac_platform.lead_desk.store import (
+    PHONE_DEVICES_KEY,
+    PHONES_KEY,
+    DeskError,
+    LeadDesk,
+    person_name,
+    phone_devices,
+    phone_health,
+)
 from ac_platform.lead_desk.whatsapp import cloud
 from ac_platform.lead_desk.whatsapp import inbox as wa_inbox
 
@@ -92,8 +100,9 @@ NAMES: Final[dict[App, str]] = {
     "messenger": "Messenger",
     "instagram": "Instagram messages",
     "google_ads": "Google Ads lead forms",
-    "lead_stages": "Lead stages",
-    "phone_calls": "Phone call logging (Sales Xray app)",
+    # What it does, not an app's name (phone personas ph1-55, 1 Nov 2026).
+    "lead_stages": "Sales results sent to your ads",
+    "phone_calls": "Phone call logging (Sales X-Ray app)",
     "webhook_sources": "Webhooks and sheets",
     "ai_replies": "AI replies",
 }
@@ -136,7 +145,7 @@ GIVES: Final[dict[str, str]] = {
 # A Sales Xray page where an app is set up, for a card with nothing to connect here.
 PAGES: Final[dict[App, str]] = {"lead_stages": "/leads?tab=stages"}
 LEAD_WAIT: Final[timedelta] = timedelta(seconds=60)
-TEST_TEXT: Final[str] = "Test message from Sales Xray. No reply needed."
+TEST_TEXT: Final[str] = "Test message from Sales X-Ray. No reply needed."
 CLEAR_LABEL: Final[str] = "Clear the form's earlier test lead"
 ASK_LABEL: Final[str] = "Ask Meta for a test lead"
 WAIT_LABEL: Final[str] = "Wait for it in Leads"
@@ -374,13 +383,13 @@ def meta_review() -> Review:
         return Review(
             state=state,
             since=since,
-            works_now="Meta approved Sales Xray. Any business can connect its own Pages here.",
+            works_now="Meta approved Sales X-Ray. Any business can connect its own Pages here.",
         )
     return Review(
         state=state,
         since=since,
         works_now=(
-            "Until Meta approves Sales Xray, only people added to our Meta app as testers"
+            "Until Meta approves Sales X-Ray, only people added to our Meta app as testers"
             " can connect a Page, and only test leads come through. Leads from your ads"
             " can come in now through a Website form in Leads."
         ),
@@ -397,7 +406,7 @@ def meta_blockers() -> list[Blocker]:
         Blocker(
             short="Meta approval pending: test leads only for now",
             reason=(
-                f"Meta is still reviewing Sales Xray (sent {since:%d %b}). Until it approves,"
+                f"Meta is still reviewing Sales X-Ray (sent {since:%d %b}). Until it approves,"
                 " only test leads come through, not leads from your ads."
             ),
             fix=(
@@ -419,7 +428,7 @@ def messaging_blockers(channel: App, *, pages: int, accounts: int) -> list[Block
             Blocker(
                 short="Meta approval pending: our testers only for now",
                 reason=(
-                    "Meta hasn't approved Sales Xray for messages yet. Until it does, only"
+                    "Meta hasn't approved Sales X-Ray for messages yet. Until it does, only"
                     " people on our Meta app can connect, and only their messages come in."
                 ),
                 fix=(
@@ -588,7 +597,7 @@ SKIP_WORDS: Final[dict[str, str]] = {
     "from_page": "It was written as the Page itself, so there's no one to message. To test,"
     " comment from a personal profile.",
     "not_new": "It was an edit, not a new comment.",
-    "bad_id": "Meta sent it in a form Sales Xray doesn't read.",
+    "bad_id": "Meta sent it in a form Sales X-Ray doesn't read.",
     "no_rule": "None of your comment rules' keywords was in it.",
     "too_old": "It was more than 7 days old; Meta allows a private reply only within 7 days.",
     "rule_gone": "Its comment rule was changed or removed before the reply went.",
@@ -718,7 +727,9 @@ async def _google(db: AsyncSession, tenant_id: UUID) -> AppHealth:
         app="google_ads",
         name=NAMES["google_ads"],
         state=_state(configured, bool(active), False),
-        words=NOT_SET_UP
+        # Why, and what to do (phone personas ph1-55, 1 Nov 2026: "Not available here" alone).
+        words="Google Ads lead forms aren't switched on in Sales X-Ray yet. Ask us, and"
+        " we'll turn them on for you."
         if not configured
         else "Bring in the leads from your Google Ads lead forms as they arrive."
         if not active
@@ -739,8 +750,18 @@ async def _phones(db: AsyncSession, tenant_id: UUID) -> AppHealth:
     settings = await db.get(LeadDeskSettings, tenant_id)
     stored = (settings.config if settings else None) or {}
     raw = stored.get(PHONES_KEY)
-    phones: dict[str, Any] = raw if isinstance(raw, dict) else {}
-    ids = [UUID(key) for key in phones if _uuid(key)]
+    newest: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    every = stored.get(PHONE_DEVICES_KEY)
+    # Every seller with a phone, each phone a line of its own (ph1-55: a second phone of
+    # the same seller wasn't one, while installs were kept one per seller).
+    sellers = list(dict.fromkeys([*newest, *(every if isinstance(every, dict) else ())]))
+    now = datetime.now(UTC)
+    phones = [
+        (person_id, entry)
+        for person_id in sellers
+        for entry in phone_devices(stored, person_id, now)
+    ]
+    ids = [UUID(key) for key in sellers if _uuid(key)]
     people = (
         {
             str(person.id): person_name(person)
@@ -753,16 +774,18 @@ async def _phones(db: AsyncSession, tenant_id: UUID) -> AppHealth:
     finished = await capture_setup.team(db, tenant_id, ids) if ids else {}
     connections = []
     off: list[str] = []
-    for person_id, entry in phones.items():
+    lines: dict[str, int] = {}
+    for person_id, entry in phones:
         report = phone_health(entry)
         if report is None:
             continue
         who = people.get(person_id, "A teammate")
-        phone = capture_setup.phone_label(
-            entry.get("device_id"),
-            report.family,
-            finished.get(UUID(person_id)) if _uuid(person_id) else None,
+        phone = capture_setup.device_name(
+            entry, finished.get(UUID(person_id)) if _uuid(person_id) else None
         )
+        # The seller's first phone keeps their own id; another is told apart by its install.
+        lines[person_id] = lines.get(person_id, 0) + 1
+        line_id = person_id if lines[person_id] == 1 else f"{person_id}:{entry.get('device_id')}"
         # One rule with Team (ph1-23): a build that can't log calls (Play) never says so.
         is_off = capture_setup.call_log_off(entry)
         if is_off:
@@ -770,13 +793,13 @@ async def _phones(db: AsyncSession, tenant_id: UUID) -> AppHealth:
         synced = f"synced {report.synced_at:%d %b %H:%M} UTC" if report.synced_at else "not synced"
         connections.append(
             Connection(
-                id=person_id,
+                id=line_id,
                 label=f"{who} · {phone}",
                 detail=f"Call log {'on' if report.call_log_on else 'off'} · {synced}"
                 if "callLog" in report.checks
-                else "Logs the calls placed from Sales Xray",
+                else "Logs the calls placed from Sales X-Ray",
                 state="problem" if is_off else "ready",
-                words=f"On {who}'s {phone}: Sales Xray, Settings, Selling, turn on Log work calls."
+                words=f"On {who}'s {phone}: Sales X-Ray, Settings, Selling, turn on Log work calls."
                 if is_off
                 else None,
                 fix=Link(method="GET", path="/settings/selling") if is_off else None,
@@ -793,10 +816,11 @@ async def _phones(db: AsyncSession, tenant_id: UUID) -> AppHealth:
         app="phone_calls",
         name=NAMES["phone_calls"],
         state=_state(True, bool(connections), bool(off)),
-        words="Log your team's calls from their phones with the Sales Xray app."
+        words="Log your team's calls from their phones with the Sales X-Ray app."
         if not connections
         else f"Call logging is off on {', '.join(off)}."
         if off
+        # Counted by phone: each install reports here, a seller's second phone too (ph1-55).
         else f"{_count(len(connections), 'phone', 'phones')} logging calls.",
         configured=True,
         connections=connections,
@@ -920,7 +944,7 @@ def _platform_words(
     name: str, mine: journey_mapping.ProviderSettings, *, retrying: bool, new: int, sending: int
 ) -> str:
     if retrying:
-        return f"A stage didn't reach {name} yet. Sales Xray tries again."
+        return f"A stage didn't reach {name} yet. Sales X-Ray tries again."
     if new:
         them = "it" if new == 1 else "them"
         stages = _count(new, "new stage", "new stages")
@@ -1076,7 +1100,7 @@ async def lead_status(desk: LeadDesk, test_id: str) -> TestResult:
             status="failed",
             words=(
                 "Meta made the test lead, but it hasn't reached Leads in a minute: Meta isn't"
-                " sending this Page's leads to Sales Xray. The 10-minute check will still"
+                " sending this Page's leads to Sales X-Ray. The 10-minute check will still"
                 " bring it in."
             ),
             steps=[made, Step(label=WAIT_LABEL, state="failed", words="Not here after a minute.")],
@@ -1247,7 +1271,7 @@ async def test_social(
         return TestResult(
             app=channel,
             status="failed",
-            words="Meta isn't sending this Page's messages to Sales Xray. Connect it again.",
+            words="Meta isn't sending this Page's messages to Sales X-Ray. Connect it again.",
             steps=steps,
         )
     # Instagram's own events come under the app's Instagram subscription, not the Page's.
@@ -1257,7 +1281,7 @@ async def test_social(
         Step(
             label="Meta sends this Page's events",
             state="failed",
-            words=f"Meta isn't sending this Page's {_and(missing)} to Sales Xray."
+            words=f"Meta isn't sending this Page's {_and(missing)} to Sales X-Ray."
             " Connect the Page again.",
         )
         if missing

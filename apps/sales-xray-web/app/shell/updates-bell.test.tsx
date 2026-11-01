@@ -148,6 +148,35 @@ it("shows acknowledgement failures without closing the list", async () => {
   expect(trigger().getAttribute("aria-expanded")).toBe("true");
 });
 
+it("reads a release line as it opens What's new, and never a read one again", async () => {
+  const markRead = vi.fn().mockResolvedValue(undefined);
+  const openNews = vi.fn();
+  const render = (notifications: UpdateNotification[]) =>
+    act(async () =>
+      root.render(
+        <UpdatesBell
+          notifications={notifications}
+          unreadCount={1}
+          status="ready"
+          openNews={openNews}
+          openEvent={async () => {}}
+          markRead={markRead}
+        />,
+      ),
+    );
+  await render([release]);
+  await act(async () => trigger().click());
+  await act(async () => rows()[0].click());
+  expect(markRead).toHaveBeenCalledWith(["fictional-release"]);
+  expect(openNews).toHaveBeenCalledTimes(1);
+  await render([{ ...release, title: "6 updates", read: true }]);
+  await act(async () => trigger().click());
+  expect(rows()[0].textContent).not.toContain("Unread");
+  await act(async () => rows()[0].click());
+  expect(markRead).toHaveBeenCalledTimes(1);
+  expect(openNews).toHaveBeenCalledTimes(2);
+});
+
 it("marks every unread line read in one tap", async () => {
   const markRead = vi.fn().mockResolvedValue(undefined);
   await act(async () =>

@@ -134,6 +134,25 @@ function install() {
                   fix: "recorder",
                   phone: "Nord CE 2 5G",
                 },
+                // Each phone with its own line (ph1-55).
+                devices: [
+                  {
+                    device: "install-fictional-2",
+                    name: "Nord CE 2 5G",
+                    recording: { state: "off", last_at: null, fix: "recorder" },
+                    call_log_off: false,
+                  },
+                  {
+                    device: "install-fictional-1",
+                    name: "Redmi 13",
+                    recording: {
+                      state: "ok",
+                      last_at: new Date(NOW - 12 * 60_000).toISOString(),
+                      fix: null,
+                    },
+                    call_log_off: false,
+                  },
+                ],
               }
             : {}),
         })),

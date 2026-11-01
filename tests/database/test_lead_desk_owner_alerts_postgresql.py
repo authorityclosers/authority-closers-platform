@@ -347,3 +347,56 @@ def test_lead_alerts_follow_each_persons_choices(postgres_harness: Any, tmp_path
             assert ("due", later) in await lead_pushes(here, soon + timedelta(seconds=5))
 
     run(exercise())
+
+
+def test_an_enquiry_never_called_stays_listed_until_it_is(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Phone personas ph1-57 (1 Nov 2026): an Inbound enquiry nobody had called for three days
+    fell out of the first-response clock's two-day look-back, and "Enquiries not called in 15
+    min" said Nothing here. However old, it is listed until someone calls; a Cold lead never."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            # An organisation workspace, as the first test's (Leads work only there).
+            settings = here.setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
+            install_owner_alerts_http(
+                here.setup.app,
+                RouteContext(settings, here.setup.require_actor, here.setup.sessions),
+            )
+            waiting = await here.add("Fictional Waiting", "98760 83011")
+            cold = await here.add("Fictional Cold", "98760 83012")
+            here.as_admin()
+            now = datetime.now(UTC)
+            old = now - timedelta(days=3)
+            async with here.setup.sessions() as db, db.begin():
+                for lead in (waiting, cold):
+                    await db.execute(
+                        update(Lead).where(Lead.id == UUID(lead)).values(created_at=old)
+                    )
+                    await db.execute(
+                        update(LeadEvent)
+                        .where(LeadEvent.lead_id == UUID(lead))
+                        .values(created_at=old)
+                    )
+                await db.execute(update(Lead).where(Lead.id == UUID(cold)).values(pipeline="cold"))
+
+            async def listed() -> list[str]:
+                answer = await here.client.get(
+                    f"{BASE}/owner-alerts/list", params={"kind": "first_call"}
+                )
+                assert answer.status_code == 200, answer.text
+                return [item["lead_id"] for item in answer.json()["items"]]
+
+            assert await listed() == [waiting]
+            # Someone calls: off the list.
+            await call(here, waiting, now - timedelta(minutes=1), direction="outgoing")
+            async with here.setup.sessions() as db, db.begin():
+                await db.execute(
+                    update(Lead)
+                    .where(Lead.id == UUID(waiting))
+                    .values(first_contact_at=now - timedelta(minutes=1))
+                )
+            assert await listed() == []
+
+    run(exercise())

@@ -147,8 +147,33 @@ def phone_label(device: str | None, family: str | None, found: Setup | None) -> 
     return f"{maker} phone" if maker else "phone"
 
 
+def device_name(entry: Any, found: Setup | None) -> str:
+    """One of a seller's phones by name (ph1-55, ph1-46): the model it reports, else the
+    model its setup finished with, else its maker."""
+    entry = entry if isinstance(entry, dict) else {}
+    family = entry.get("family") if isinstance(entry.get("family"), str) else ""
+    model = entry.get("model")
+    if isinstance(model, str) and (name := phone_name(model, family)):
+        return name
+    device = entry.get("device_id")
+    return phone_label(device if isinstance(device, str) else None, family, found)
+
+
+def device_recording(entry: Any, legacy: Any) -> dict[str, Any] | None:
+    """An install's newest recording, as recording_state reads it: its own (kept with the
+    install), else the seller's one newest report when it came from this install."""
+    if not isinstance(entry, dict):
+        return None
+    if isinstance(entry.get("recording_reported_at"), str):
+        return {"newest_at": entry.get("newest_recording_at")}
+    if isinstance(legacy, dict) and legacy.get("device") == entry.get("device_id"):
+        return legacy
+    return None
+
+
 # Each seller's phone's newest call recording, as it reports it, kept beside the phone
-# reports in the Lead Desk settings row (competitor teardown #7, 1 Nov 2026).
+# reports in the Lead Desk settings row (competitor teardown #7, 1 Nov 2026). Each
+# install's own is kept with it too (lead_desk.store.PHONE_DEVICES_KEY, ph1-55).
 RECORDING_KEY: Final = "recording_health"
 # A recording this recent says the phone records.
 RECORDING_FRESH: Final = timedelta(days=2)

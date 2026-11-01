@@ -130,6 +130,36 @@ it("shows what the bell received as a top banner, never as a corner card", async
   expect(raised()).toHaveLength(2);
 });
 
+it("clears a banner whose line has left the bell, but never on a list that failed", async () => {
+  const key = `account-${account}`;
+  const render = (data: Parameters<typeof UpdateNotices>[0]["updates"]) => (
+    <UpdateNotices
+      updates={data}
+      contextKey={key}
+      openNews={() => {}}
+      openEvent={() => {}}
+    />
+  );
+  await act(async () =>
+    root.render(render({ ...updates, notifications: [event] })),
+  );
+  const id = `event:${key}:fictional-event`;
+  expect(raised().map((alert) => alert.id)).toContain(id);
+  // The lead went to someone else: the next poll fails first, then loads without it.
+  await act(async () =>
+    root.render(
+      render({
+        ...updates,
+        notifications: [],
+        notifications_status: "error",
+      }),
+    ),
+  );
+  expect(mocks.clear).not.toHaveBeenCalledWith(id);
+  await act(async () => root.render(render({ ...updates, notifications: [] })));
+  expect(mocks.clear).toHaveBeenCalledWith(id);
+});
+
 it("clears banners once read and for another account, and never follows an unsafe link", async () => {
   const openEvent = vi.fn();
   const key = `account-${account}`;

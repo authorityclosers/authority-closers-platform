@@ -237,6 +237,57 @@ it("makes the fix a button: on another seller's row, what they do on their phone
   );
 });
 
+it("gives each of a seller's phones its own recording line and fix (ph1-55)", async () => {
+  // Phone personas ph1-55 (v1.25): one report per seller hid their second phone.
+  await mount(
+    [
+      row("Karan Fictional", "recording_off", {
+        phone: "Redmi 13 5G",
+        phones: ["Redmi 13 5G"],
+        recording: {
+          state: "off",
+          last_at: null,
+          fix: "recorder",
+          phone: "Samsung SM-A155F",
+        },
+        devices: [
+          {
+            device: "install-b",
+            name: "Samsung SM-A155F",
+            recording: { state: "off", last_at: null, fix: "recorder" },
+            call_log_off: false,
+          },
+          {
+            device: "install-a",
+            name: "Redmi 13 5G",
+            recording: { state: "ok", last_at: null, fix: null },
+            call_log_off: false,
+          },
+        ],
+      }),
+    ],
+    200,
+    0,
+    "id-Karan Fictional",
+  );
+  const lines = [...host.querySelectorAll("small[data-state]")].map(
+    (line) => line.textContent,
+  );
+  expect(lines).toEqual([
+    "Samsung SM-A155F: Call recording off · Turn on call recording",
+    "Redmi 13 5G: Recording OK",
+  ]);
+  // Not this phone (the browser): its fix is said for that phone, in a sheet.
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>('small[data-state="off"] button')
+      ?.click(),
+  );
+  expect(document.body.textContent).toContain(
+    "On Samsung SM-A155F, open Sales X-Ray.",
+  );
+});
+
 it("makes the fix a button: on your own row, the recording check on this phone", async () => {
   await mount([off], 200, 0, "id-Karan Fictional");
   const asked: unknown[] = [];

@@ -30,6 +30,7 @@ from ac_platform.identity import person_photos
 from ac_platform.identity.models import Person
 from ac_platform.lead_desk import (
     allocation,
+    bell,
     choices,
     deletion,
     duplicate_queue,
@@ -248,6 +249,13 @@ PHONE_DIRECTIONS = frozenset({"outgoing", "incoming", "missed", "rejected", "blo
 # workspace's Lead Desk settings, one entry per person. It is the app's own report,
 # not a manager's setting, so writing it never changes the settings revision.
 PHONES_KEY = "phones"
+# Every phone a seller uses, by install, beside PHONES_KEY (their newest phone, as
+# before): {person: {install: report}} (phone personas ph1-55 and ph1-46, 1 Nov 2026:
+# one entry per seller hid their second phone from Team and Connections).
+PHONE_DEVICES_KEY = "phone_devices"
+# A seller's installs kept, newest first; one not heard from in this long is left out.
+PHONE_DEVICES_KEPT = 5
+PHONE_DEVICE_STALE = timedelta(days=30)
 # The calls report covers at most this many days at once.
 REPORT_DAYS = 92
 # A missed call waits on the desk this long for a call back.
@@ -376,6 +384,69 @@ def counted_phone_call(data: Any) -> bool:
     return data.get("direction") == "outgoing" or (
         data.get("direction") == "incoming" and data.get("connected") is True
     )
+
+
+def _heard_at(entry: Mapping[str, Any]) -> datetime | None:
+    """When an install last reported anything: its checklist, its call history or its
+    newest recording."""
+    moments: list[datetime] = []
+    for name in ("reported_at", "synced_at", "recording_reported_at"):
+        value = entry.get(name)
+        if isinstance(value, str):
+            with contextlib.suppress(ValueError):
+                at = datetime.fromisoformat(value)
+                moments.append(at if at.tzinfo else at.replace(tzinfo=UTC))
+    return max(moments) if moments else None
+
+
+def keep_device(mine: Any, report: Mapping[str, Any], now: datetime) -> dict[str, Any]:
+    """A seller's installs with this report merged into its own (``device_id``): a checklist
+    keeps the install's call-history look, and a look keeps its checklist. Installs not
+    heard from in PHONE_DEVICE_STALE drop out; at most PHONE_DEVICES_KEPT stay, newest
+    first. Read only by Team and Connections; nothing about a call or a number."""
+    kept = {
+        install: dict(entry)
+        for install, entry in (mine.items() if isinstance(mine, dict) else ())
+        if isinstance(install, str) and isinstance(entry, dict)
+    }
+    device = report.get("device_id")
+    if isinstance(device, str) and device:
+        kept[device] = {**kept.get(device, {}), **report, "device_id": device}
+    fresh = [
+        (heard, install)
+        for install, entry in kept.items()
+        if (heard := _heard_at(entry)) is not None and now - heard <= PHONE_DEVICE_STALE
+    ]
+    fresh.sort(reverse=True)
+    return {install: kept[install] for _, install in fresh[:PHONE_DEVICES_KEPT]}
+
+
+def phone_devices(config: Mapping[str, Any], person: str, now: datetime) -> list[dict[str, Any]]:
+    """A seller's phones, newest first: each install's own report. Their newest report
+    (PHONES_KEY, all there was before installs were kept apart) lies under its install's
+    own and always shows; another install not heard from in PHONE_DEVICE_STALE doesn't."""
+    stored = config.get(PHONE_DEVICES_KEY)
+    mine = stored.get(person) if isinstance(stored, dict) else None
+    kept: dict[str, dict[str, Any]] = {
+        install: dict(entry)
+        for install, entry in (mine.items() if isinstance(mine, dict) else ())
+        if isinstance(install, str) and isinstance(entry, dict)
+    }
+    legacy = config.get(PHONES_KEY)
+    newest = legacy.get(person) if isinstance(legacy, dict) else None
+    current: str | None = None
+    if isinstance(newest, dict):
+        install = newest.get("device_id")
+        current = install if isinstance(install, str) else ""
+        kept[current] = {**newest, **kept.get(current, {})}
+    epoch = datetime.min.replace(tzinfo=UTC)
+    entries = [
+        entry
+        for install, entry in kept.items()
+        if install == current
+        or ((heard := _heard_at(entry)) is not None and now - heard <= PHONE_DEVICE_STALE)
+    ]
+    return sorted(entries, key=lambda entry: _heard_at(entry) or epoch, reverse=True)
 
 
 def phone_health(entry: Any) -> PhoneHealth | None:
@@ -4012,6 +4083,9 @@ class LeadDesk:
         # the lead, which must be whole by then.
         if previous != person_id:
             await task_book.follow_owner(self, lead, person_id)
+            # The one who had it is told no more: their "is your lead now" goes quiet.
+            if previous is not None:
+                await bell.retire(self.db, lead.tenant_id, [lead.id], self.now, person_id=previous)
         # The bell's "<name> is your lead now" (owner, 27 Oct 2026; migration 0142): for a
         # seller someone else gave it to (the lead rules, a manager), never for their own pick
         # (an add for oneself passes no actor, so the person asking counts too).
@@ -4043,11 +4117,11 @@ class LeadDesk:
                 id=uuid4(),
                 person_id=person_id,
                 tenant_id=lead.tenant_id,
-                kind="lead_assigned",
+                kind=bell.KIND,
                 dedupe_key=f"lead-assigned:{event.id}",
                 title=f"{name} is your lead now"[:200],
                 body=" ".join(part for part in why if part)[:1000],
-                href=f"/leads?lead={lead.id}",
+                href=bell.link(lead.id),
                 urgent=True,
                 created_at=self.now,
             )
@@ -4964,6 +5038,7 @@ class LeadDesk:
                 "removed": removal.removed,
                 "emptied": removal.emptied,
                 "kept": removal.kept,
+                "retired": removal.retired,
             },
             reason="Deleted in Leads after a confirm",
             now=self.now,
@@ -5497,11 +5572,21 @@ class LeadDesk:
         return row, dict(phones) if isinstance(phones, dict) else {}
 
     async def _save_phone(
-        self, row: LeadDeskSettings, phones: dict[str, Any], entry: dict[str, Any]
+        self,
+        row: LeadDeskSettings,
+        phones: dict[str, Any],
+        entry: dict[str, Any],
+        device: dict[str, Any] | None = None,
     ) -> None:
-        phones[str(self.viewer.person_id)] = entry
+        person = str(self.viewer.person_id)
+        phones[person] = entry
+        # The same report kept for its own install too (``device``: just what this one
+        # said), beside the seller's other phones (ph1-55, ph1-46).
+        stored = row.config.get(PHONE_DEVICES_KEY)
+        every = dict(stored) if isinstance(stored, dict) else {}
+        every[person] = keep_device(every.get(person), device or entry, self.now)
         # A new dict, so the change is saved; the revision stays (not a manager's edit).
-        row.config = {**row.config, PHONES_KEY: phones}
+        row.config = {**row.config, PHONES_KEY: phones, PHONE_DEVICES_KEY: every}
         await self.db.flush()
 
     async def _phone_seen(self, device_id: UUID) -> None:
@@ -5509,7 +5594,12 @@ class LeadDesk:
         row, phones = await self._phones()
         entry = dict(phones.get(str(self.viewer.person_id)) or {})
         entry.update(device_id=str(device_id), synced_at=self.now.isoformat())
-        await self._save_phone(row, phones, entry)
+        await self._save_phone(
+            row,
+            phones,
+            entry,
+            {"device_id": str(device_id), "synced_at": self.now.isoformat()},
+        )
 
     async def report_phone(self, command: PhoneReport) -> PhoneHealth:
         """The seller's phone app reports its setup checklist; managers see it on Team."""
@@ -5522,6 +5612,9 @@ class LeadDesk:
             "checks": command.checks,
             "reported_at": self.now.isoformat(),
         }
+        # The phone's own model (newer pages send it), so Team names each phone.
+        if command.model:
+            entry["model"] = command.model
         # The last call-history look stays when it came from this same phone.
         if isinstance(previous, dict) and previous.get("device_id") == str(command.device_id):
             entry["synced_at"] = previous.get("synced_at")

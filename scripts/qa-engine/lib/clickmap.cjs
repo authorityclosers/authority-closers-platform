@@ -49,6 +49,47 @@ async function leadFor(tab, owner) {
     .catch(() => null);
 }
 
+// Close and the browser's Back both close the open lead (orchestrator, 1 Nov 2026): the list stays, ?lead=<id> goes; Forward reopens it.
+async function leadClose(tab, entry, factor) {
+  const page = tab.page;
+  const route = entry.start.split("?")[0];
+  const label = 'button "Close" and the browser Back';
+  const opened = await go(tab, entry.start, { wait: 25000 * factor });
+  if (!opened.ok) return { outcome: "skipped", reason: `the start page did not open (${String(opened.error).slice(0, 80)}): not judged` };
+  const rows = page.getByRole("button", { name: /^Open (?!lead$)(?!.* menu$)/ }).filter({ visible: true });
+  for (let wait = 0; wait < 15 * factor && !(await rows.count()); wait++) await sleep(1000);
+  if (!(await rows.count())) return { outcome: "blocked", reason: "no lead in this list to open", route, selector: label };
+  const hasLead = () => new URL(page.url()).searchParams.has("lead");
+  const wrong = [];
+  const openFirst = async () => {
+    await rows.first().click({ timeout: 8000 * factor }).catch(() => null);
+    await settle(tab, 10000 * factor);
+    await sleep(900);
+  };
+  await openFirst();
+  if (!hasLead()) return { outcome: "fail", reason: "opening a lead did not put it in the address (?lead=<id>)", route, selector: label };
+  const close = page.getByRole("button", { name: /^Close/ }).filter({ visible: true });
+  for (let wait = 0; wait < 10 * factor && !(await close.count()); wait++) await sleep(1000);
+  if (!(await close.count())) return { outcome: "missing", reason: "the open lead has no Close button", route, selector: label };
+  await close.first().click({ timeout: 8000 * factor }).catch(() => null);
+  await settle(tab, 8000 * factor);
+  await sleep(900);
+  if (hasLead()) wrong.push("Close left the lead id in the address");
+  if (!(await rows.count())) wrong.push("the list is gone after Close");
+  await openFirst();
+  if (!hasLead()) wrong.push("the lead did not open a second time");
+  await page.goBack({ timeout: 10000 }).catch(() => null);
+  await settle(tab, 8000 * factor);
+  await sleep(900);
+  if (hasLead()) wrong.push("the browser's Back did not drop the lead id");
+  if (new URL(page.url()).pathname !== route) wrong.push(`Back went to ${new URL(page.url()).pathname}, not ${route}`);
+  await page.goForward({ timeout: 10000 }).catch(() => null);
+  await settle(tab, 8000 * factor);
+  await sleep(900);
+  if (!hasLead()) wrong.push("Forward did not reopen the lead");
+  return wrong.length ? { outcome: "fail", reason: wrong.join("; "), route, selector: label } : { outcome: "pass", reason: "Close and Back drop the id, Forward reopens the lead", route, selector: label };
+}
+
 /**
  * Check one destination as this person at this size. Returns
  *   { outcome: "pass" | "fail" | "missing" | "skipped", reason, route, selector, detail }
@@ -59,6 +100,7 @@ async function check(tab, listed, { lead, owner, slow, onOpened }) {
   const page = tab.page;
   const factor = slow ? 2 : 1;
   if (entry.kind === "todo") return { outcome: "skipped", reason: "no script for this destination yet" };
+  if (entry.kind === "lead-close") return leadClose(tab, entry, factor);
   if (entry.status === "expected-missing" && entry.at && (entry.at[tab.dev.phone ? "phone" : "desktop"] || {}).status === "expected-missing") {
     // the handoff lists it but this layout has none yet: look, and say so
   }
@@ -69,9 +111,14 @@ async function check(tab, listed, { lead, owner, slow, onOpened }) {
   if (!opened.ok) return { outcome: "fail", reason: `the page did not open: ${opened.error}`, route: start.split("?")[0], selector: "page load" };
   if (entry.side) {
     const side = page.getByRole("radio", { name: entry.side }).filter({ visible: true });
+    // the selector renders with the data: give it 15 s before deciding this seller has none
+    for (let wait = 0; wait < 15 * factor && !(await side.count()); wait++) await sleep(1000);
     if (await side.count()) {
       await side.first().click().catch(() => null);
       await settle(tab, 8000 * factor);
+    } else {
+      // a seller with one lead type has no Inbound|Cold selector: the check cannot be judged for them
+      return { outcome: "blocked", reason: `not applicable: this seller has no "${entry.side}" selector (one lead type)`, route: start.split("?")[0], selector: `radio "${entry.side}"` };
     }
   }
   if (entry.type) {

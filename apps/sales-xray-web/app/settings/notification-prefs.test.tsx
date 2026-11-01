@@ -143,3 +143,61 @@ it("sends one test for two quick taps (the robot's 14836c51)", async () => {
     sent.filter((call) => call.path === "/v1/lead-desk/notifications/test"),
   ).toHaveLength(2);
 });
+
+// The test robot (1 Nov 2026, report 853): Phone & alerts drew nothing here
+// while this read was out, then the panel pushed the page down 471 px at 1440.
+const hold = (path: string) => {
+  const served = globalThis.fetch;
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: string, init?: RequestInit) => {
+      if (input === path && !init?.method) await held;
+      return served(input, init);
+    }),
+  );
+  return async () => {
+    await act(async () => release());
+    for (let step = 0; step < 4; step += 1)
+      await act(async () => Promise.resolve());
+  };
+};
+
+it("keeps its place while it reads, then shows the switches", async () => {
+  serve(false);
+  const answer = hold("/v1/lead-desk/notifications");
+  await act(async () => root.render(<NotificationPrefs />));
+  expect(host.textContent).toContain("Notifications");
+  expect(host.querySelector('[aria-busy="true"]')).not.toBeNull();
+  expect(host.querySelectorAll("li")).toHaveLength(4);
+  expect(toggle("New enquiry")).toBeNull();
+  await answer();
+  expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+  expect(host.querySelectorAll("li")).toHaveLength(4);
+  expect(toggle("New enquiry")).not.toBeNull();
+});
+
+it("brings an owner's Daily summary with the rest, never a row later", async () => {
+  serve(true);
+  const answer = hold("/v1/lead-desk/owner-alerts");
+  await act(async () => root.render(<NotificationPrefs />));
+  expect(toggle("Team alerts")).toBeNull();
+  expect(host.querySelectorAll("li")).toHaveLength(4);
+  await answer();
+  expect(toggle("Team alerts")).not.toBeNull();
+  expect(toggle("Daily summary")).not.toBeNull();
+});
+
+it("stays away where there are no Leads", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("{}", { status: 404 })),
+  );
+  await act(async () => root.render(<NotificationPrefs />));
+  for (let step = 0; step < 4; step += 1)
+    await act(async () => Promise.resolve());
+  expect(host.innerHTML).toBe("");
+});

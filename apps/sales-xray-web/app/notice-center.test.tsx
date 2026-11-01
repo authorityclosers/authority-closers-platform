@@ -417,6 +417,63 @@ it("on a phone page with a dock, new leads and work are one line in it; problems
     vi.unstubAllGlobals();
   }
 });
+it("keeps a line in the dock until it is used or closed, so the page never jumps", async () => {
+  // QA robot a4e9034c, 1 Nov 2026: "Fictional is your lead now" went by itself
+  // after 8 s and lifted Leads by its height, a layout shift of 0.1 per load.
+  vi.useFakeTimers();
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+  const page = document.createElement("div");
+  document.body.append(page);
+  const pageRoot = createRoot(page);
+  try {
+    await act(async () => pageRoot.render(<NoticeDock />));
+    await act(async () =>
+      raiseAlert({
+        id: "fictional-work",
+        level: "normal",
+        title: "Varun Fictional is your lead now",
+        action: { label: "Open lead", href: "/leads" },
+        timeout: 8_000,
+      }),
+    );
+    const docked = page.querySelector("[data-notice-dock]")!;
+    expect(docked.textContent).toContain("Varun Fictional is your lead now");
+    await act(async () => vi.advanceTimersByTime(60_000));
+    expect(docked.textContent).toContain("Varun Fictional is your lead now");
+    // Its X still takes it away.
+    await act(async () =>
+      docked
+        .querySelector<HTMLButtonElement>('[aria-label="Dismiss"]')!
+        .click(),
+    );
+    expect(docked.textContent).not.toContain("Varun Fictional");
+    // In the corner (a computer, or another page) it still goes by itself.
+    await act(async () => pageRoot.unmount());
+    await act(async () =>
+      raiseAlert({
+        id: "fictional-work",
+        level: "normal",
+        title: "Varun Fictional is your lead now",
+        timeout: 8_000,
+      }),
+    );
+    expect(host.textContent).toContain("Varun Fictional is your lead now");
+    await act(async () => vi.advanceTimersByTime(10_000));
+    expect(host.textContent).not.toContain("Varun Fictional");
+  } finally {
+    await act(async () => clearAlert("fictional-work"));
+    page.remove();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  }
+});
 it("keeps a short-lived card's Undo in its folded pill", async () => {
   // Phone personas ph2-36 (1 Nov 2026): the after-call card folded, its Undo
   // vanished, and a second tap opened the lead underneath.

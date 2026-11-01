@@ -16,7 +16,9 @@ The app must also state that the people on the call know it is recorded
 
 All of it is off, with the rest of Pulse, until Pulse is set up here (AC_PULSE_ISSUER,
 AC_PULSE_CLIENT_ID and AC_PULSE_CLIENT_SECRET; orchestrator, 27 Oct 2026): every route below
-and POST /v1/api/calls answer 404 "Pulse isn't set up here.", and no inbox shows.
+and POST /v1/api/calls answer 404 "Pulse isn't set up here.", and no inbox shows. The
+waiting list, which pages read on their own, answers an empty list with "on": false instead
+(QA robot, 1 Nov 2026: a 404 and a console error on every New analysis visit).
 
 Session routes (the person's own uploads in the selected workspace):
 
@@ -361,6 +363,15 @@ def install_app_uploads_http(application: FastAPI, ctx: RouteContext) -> None:
     @router.get("")
     async def waiting(request: Request, response: Response) -> dict[str, Any]:
         response.headers.update(PRIVATE)
+        # Off here (no Pulse, or not Sales X-Ray's own address): an empty list that says
+        # so, never a refusal for every page that looks (QA robot, 1 Nov 2026: New
+        # analysis logged a 404 and a console error on every visit). Nothing is read.
+        if (
+            settings.sales_xray_app_url is None
+            or request.url.hostname != settings.sales_xray_app_url.host
+            or not settings.pulse_configured
+        ):
+            return {"uploads": [], "on": False}
         async with mine(request) as auth:
             actor = auth.resolved.actor
             now = datetime.now(UTC)
@@ -393,7 +404,8 @@ def install_app_uploads_http(application: FastAPI, ctx: RouteContext) -> None:
                         "expires_at": row.expires_at.isoformat(),
                     }
                     for row in rows
-                ]
+                ],
+                "on": True,
             }
 
     @router.get("/{upload_id}/file")

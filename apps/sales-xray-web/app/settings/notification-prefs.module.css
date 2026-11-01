@@ -103,6 +103,12 @@
   transform: translateX(20px);
 }
 
+/* The switch's place while the panel reads. */
+.bone {
+  display: flex;
+  flex: none;
+}
+
 .toggle:disabled {
   opacity: 0.6;
   cursor: default;

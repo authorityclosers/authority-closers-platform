@@ -81,7 +81,7 @@ const STATUS: Record<AppState, { label: string; tone: Tone }> = {
   ready: { label: "Connected", tone: "good" },
   problem: { label: "Needs attention", tone: "warn" },
   not_connected: { label: "Not connected", tone: "neutral" },
-  not_set_up: { label: "Not available here", tone: "neutral" },
+  not_set_up: { label: "Not switched on", tone: "neutral" },
   off: { label: "Off", tone: "neutral" },
 };
 
@@ -221,7 +221,8 @@ const GIVES: Record<AppKey, string> = {
 export function cardWords(app: AppHealth): string {
   if (app.state === "problem" && app.lastError) return app.lastError.words;
   if (app.state === "ready" || app.state === "problem") return app.words;
-  // The status already says "Not available here"; the line says what it does.
+  // The status says "Not switched on"; the line says why and what to do when
+  // the app says so, or else what it does.
   if (app.state === "not_set_up")
     return !app.words || /^not available here/i.test(app.words)
       ? GIVES[app.app]
@@ -353,40 +354,56 @@ function AppCard({
   onDismiss: () => void;
 }) {
   const titleId = useId();
-  const status = STATUS[app.state];
+  // Set up on a page of its own (lead stages): not set up, never "not
+  // connected", as an app would be (phone personas ph1-55, 1 Nov 2026).
+  const status =
+    app.page && app.state === "not_connected"
+      ? { label: "Not set up", tone: "neutral" as const }
+      : STATUS[app.state];
   const offer = app.tests[0];
   const connected = app.state === "ready" || app.state === "problem";
   // One card for every app (owner bug #45, 27 Oct 2026): its tile, name,
   // status and one line of detail; the whole card opens it; at most one filled
-  // action, and none where it can't connect here ("Not available here").
-  const main: ReactNode = app.page ? (
-    // Set up on its own page (lead stages live in Leads): a problem there is
-    // the one filled action; connected, the card itself goes there.
-    app.state === "problem" || !connected ? (
-      <Link
-        href={app.page}
+  // action. Where it isn't switched on here, Ask us is the next step (ph1-55).
+  const main: ReactNode =
+    app.state === "not_set_up" ? (
+      <a
         className={styles.linkButton}
-        data-variant={app.state === "problem" ? "primary" : "tinted"}
+        data-variant="tinted"
+        href={`mailto:support@authorityclosers.com?subject=${encodeURIComponent(
+          `Please switch on ${app.name}`,
+        )}`}
       >
-        {app.state === "problem" ? "Review" : "Set up"}
-      </Link>
-    ) : null
-  ) : app.state === "problem" && app.connect ? (
-    // Its own words ask to connect again: that is the one filled button.
-    <Button variant="primary" onClick={() => connectApp(app)}>
-      <PlugZap size={15} aria-hidden="true" />
-      Reconnect
-    </Button>
-  ) : !connected && app.connect && app.state !== "off" ? (
-    <Button
-      variant="secondary"
-      className={styles.tinted}
-      onClick={() => (GUIDED.has(app.app) ? onManage() : connectApp(app))}
-    >
-      <PlugZap size={15} aria-hidden="true" />
-      {GUIDED.has(app.app) ? "Set up" : "Connect"}
-    </Button>
-  ) : null;
+        Ask us
+      </a>
+    ) : app.page ? (
+      // Set up on its own page (lead stages live in Leads): a problem there is
+      // the one filled action; connected, the card itself goes there.
+      app.state === "problem" || !connected ? (
+        <Link
+          href={app.page}
+          className={styles.linkButton}
+          data-variant={app.state === "problem" ? "primary" : "tinted"}
+        >
+          {app.state === "problem" ? "Review" : "Set up"}
+        </Link>
+      ) : null
+    ) : app.state === "problem" && app.connect ? (
+      // Its own words ask to connect again: that is the one filled button.
+      <Button variant="primary" onClick={() => connectApp(app)}>
+        <PlugZap size={15} aria-hidden="true" />
+        Reconnect
+      </Button>
+    ) : !connected && app.connect && app.state !== "off" ? (
+      <Button
+        variant="secondary"
+        className={styles.tinted}
+        onClick={() => (GUIDED.has(app.app) ? onManage() : connectApp(app))}
+      >
+        <PlugZap size={15} aria-hidden="true" />
+        {GUIDED.has(app.app) ? "Set up" : "Connect"}
+      </Button>
+    ) : null;
   const testable = offer && app.state !== "not_set_up";
   const passed = result?.status === "passed";
   return (

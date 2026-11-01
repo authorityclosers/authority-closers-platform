@@ -22,6 +22,12 @@
 import { useEffect, useRef, useState } from "react";
 
 export const OVERLAY_DEPTH_KEY = "sxOverlayDepth";
+/**
+ * Forward onto an overlay's entry with no overlay open: before stepping over
+ * it, the page may claim it (preventDefault) and open that overlay again, as
+ * Leads does for the lead in its address (?lead=<id>).
+ */
+export const OVERLAY_FORWARD_EVENT = "sx:overlay-forward";
 /** A close this soon after a link tap is that link leaving the page. */
 const LEAVE_MS = 400;
 /** A pop we asked for and never heard back about stops blocking after this. */
@@ -96,8 +102,13 @@ function onPop() {
     for (const entry of closing) entry.close();
     return;
   }
-  // An entry a link left behind (no overlay is open there): step over it.
-  if (here > stack.length) window.history.back();
+  // An entry a link left behind (no overlay is open there): step over it,
+  // unless the page opens what was there again (Forward to an open lead).
+  if (here > stack.length) {
+    const claim = new Event(OVERLAY_FORWARD_EVENT, { cancelable: true });
+    window.dispatchEvent(claim);
+    if (!claim.defaultPrevented) window.history.back();
+  }
 }
 
 function onClick(event: MouseEvent) {

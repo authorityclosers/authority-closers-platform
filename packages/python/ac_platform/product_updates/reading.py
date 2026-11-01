@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as postgres_insert
@@ -15,13 +16,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.lead_desk.capture_reminder import BODY as REMINDER_BODY
 from ac_platform.lead_desk.capture_reminder import KEY as CAPTURE_KEY
-from ac_platform.lead_desk.capture_reminder import as_bell
+from ac_platform.lead_desk.capture_reminder import as_bell, reminder_day
 from ac_platform.product_updates.models import Notification, ProductUpdate, UpdateSeen
 from ac_platform.tenancy.models import Membership, Organisation
 from ac_platform.tenancy.roles import roles_with
 
 FEATURE_REGISTRY: dict[str, Callable[[AsyncSession, ActorContext], Awaitable[bool]]] = {}
+# A capture reminder's day is an India day, as the seller's calls are counted.
+INDIA = ZoneInfo("Asia/Kolkata")
 
 
 def utc(value: datetime) -> datetime:
@@ -48,6 +52,15 @@ class VisibleUpdate:
             "seen": self.seen,
             "published_at": self.note.published_at,
         }
+
+
+def release_title(items: Sequence[VisibleUpdate]) -> str:
+    """A release's line in the bell: new only while some of it is unseen (phone personas
+    ph1-27/ph1-53, 1 Nov 2026: "6 new updates" stayed after reading What's new)."""
+    unseen = sum(not item.seen for item in items)
+    count = unseen or len(items)
+    words = f"{count} {'new ' if unseen else ''}update"
+    return words if count == 1 else f"{words}s"
 
 
 class ProductUpdatesReading:
@@ -183,7 +196,7 @@ class ProductUpdatesReading:
                 "id": f"updates:{release_id}",
                 "kind": "updates",
                 "count": len(items),
-                "title": "1 new update" if len(items) == 1 else f"{len(items)} new updates",
+                "title": release_title(items),
                 "href": None,
                 "urgent": False,
                 "created_at": max(item.first_published_at or item.order_at for item in items),
@@ -219,15 +232,24 @@ class ProductUpdatesReading:
                 .limit(50)
             )
         ).all()
+        counts = await self._capture_counts(events)
         for event in events:
-            # The capture reminder stays in the bell and names its day, older rows too.
-            title, urgent, href = as_bell(event.dedupe_key, event.title, event.urgent, event.href)
+            # The capture reminder stays in the bell and names its day, older rows too,
+            # with that day's count now: the calls it opens say the same (ph1-53).
+            day = reminder_day(event.dedupe_key)
+            title, urgent, href = as_bell(
+                event.dedupe_key,
+                event.title,
+                event.urgent,
+                event.href,
+                counts.get(day) if day else None,
+            )
             entries.append(
                 {
                     "id": str(event.id),
                     "kind": event.kind,
                     "title": title,
-                    "body": event.body,
+                    "body": REMINDER_BODY if day else event.body,
                     "href": href,
                     "urgent": urgent,
                     "created_at": utc(event.created_at),
@@ -236,6 +258,37 @@ class ProductUpdatesReading:
             )
         entries.sort(key=lambda entry: (entry["created_at"], entry["id"]), reverse=True)
         return {"notifications": entries[:50], "unread_count": unread}
+
+    async def _capture_counts(self, events: Sequence[Notification]) -> dict[date, int]:
+        """Each capture reminder's day in this workspace, counted now as the Calls line counts
+        it (call_ai.missing_recordings.calls_today): the seller's own connected calls with no
+        recording. Days older than the line reads (31) keep their stored words."""
+        from ac_platform.call_ai.missing_recordings import calls_today  # the store is heavy
+
+        tenant = self.actor.tenant_id
+        if tenant is None:
+            return {}
+        now = datetime.now(UTC)
+        today = now.astimezone(INDIA).date()
+        days = {
+            day
+            for event in events
+            if event.tenant_id == tenant
+            and (day := reminder_day(event.dedupe_key)) is not None
+            and timedelta(0) <= today - day <= timedelta(days=31)
+        }
+        counts: dict[date, int] = {}
+        for day in sorted(days):
+            found = await calls_today(
+                self.database,
+                tenant_id=tenant,
+                person_id=self.actor.person_id,
+                role="member",
+                now=now,
+                day=day,
+            )
+            counts[day] = found.missing.total
+        return counts
 
     async def mark_read(self, ids: Sequence[str]) -> dict[str, int]:
         releases = {value.removeprefix("updates:") for value in ids if value.startswith("updates:")}

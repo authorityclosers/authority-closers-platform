@@ -15,6 +15,8 @@ by itself. Everything happens in the request's one transaction:
   is left to its sweep, so a delete never waits on a send.
 - **Untouched:** calls recorded with the lead and the call facts drawn from them. They
   are the seller's calls, with their own delete.
+- **Retired:** the bell's "is your lead now" lines for the lead are marked read, so none
+  pops again or opens a lead that is gone; they stay in the bell's history (bell.py).
 - **Audit:** one audit event names who deleted which lead ids, with counts; never a
   name, a number or a word. Audit history is never deleted.
 """
@@ -32,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.audit.models import AuditEvent
 from ac_platform.call_data.models import CallObject
+from ac_platform.lead_desk import bell
 from ac_platform.lead_desk.chats.models import LeadChatRead
 from ac_platform.lead_desk.models import (
     Lead,
@@ -60,6 +63,7 @@ class Removal:
     removed: dict[str, int]
     emptied: dict[str, int]
     kept: dict[str, int]
+    retired: dict[str, int]
 
 
 def _count(result: Any) -> int:
@@ -263,4 +267,6 @@ async def remove(
             )
         ),
     }
-    return Removal(removed=removed, emptied=emptied, kept=kept)
+    # The bell's "is your lead now" lines for these leads go quiet, read but kept (bell.py).
+    retired = {"bell_lines": await bell.retire(db, tenant_id, ids, now)}
+    return Removal(removed=removed, emptied=emptied, kept=kept, retired=retired)
