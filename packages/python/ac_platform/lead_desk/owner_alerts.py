@@ -45,6 +45,7 @@ from ac_platform.lead_desk import notify_prefs, sla
 from ac_platform.lead_desk.contracts import AlertText, Command, Model
 from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadDevice, LeadEvent
 from ac_platform.lead_desk.sides import on_side
+from ac_platform.lead_desk.vocabulary import OPEN_STAGES
 from ac_platform.tenancy.models import Membership
 
 if TYPE_CHECKING:
@@ -201,6 +202,28 @@ async def over_limit(
             Over(kind, lead_id, clock.started_at, clock.started_at + target)
             for lead_id, clock in latest.items()
         ]
+        # Never called, however long ago it came in: it stays until a person calls (phone
+        # personas ph1-57, 1 Nov 2026: an enquiry nobody had called for three days fell out
+        # of the first-response clock's two-day look-back, and its list said Nothing here).
+        uncalled = (
+            await db.execute(
+                select(Lead.id, Lead.created_at)
+                .where(
+                    Lead.tenant_id == tenant_id,
+                    Lead.stage.in_(OPEN_STAGES),
+                    Lead.first_contact_at.is_(None),
+                    Lead.created_at < now - sla.LOOK_BACK,
+                    on_side("inbound"),
+                    sla.counted(tenant_id),
+                )
+                .order_by(Lead.created_at)
+                .limit(ROWS)
+            )
+        ).all()
+        for lead_id, arrived in uncalled:
+            crossed = sla.clock_start(arrived, hours) + target
+            if lead_id not in latest and crossed <= now:
+                out.append(Over(kind, lead_id, arrived, crossed))
     elif kind == "missed_call":
         rows = (
             await db.execute(

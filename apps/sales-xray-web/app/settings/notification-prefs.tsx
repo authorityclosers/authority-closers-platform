@@ -17,10 +17,12 @@ import {
   summaryWhen,
   type OwnerAlerts,
 } from "../dashboard/owner-alerts-client";
+import { inPhoneApp } from "../leads/native-phone";
 import { notify } from "../notice-center";
 import { Panel } from "../ui/kit";
 import {
   NotifyError,
+  noPhoneWords,
   readNotify,
   saveNotify,
   testNotify,
@@ -184,7 +186,7 @@ export function NotificationPrefs() {
                 id: "notification-test",
                 tone: "info",
                 title: "No phone yet",
-                message: "Sign in to the Sales X-Ray app on your phone first.",
+                message: noPhoneWords(inPhoneApp()),
               }
             : {
                 id: "notification-test",
@@ -291,10 +293,7 @@ export function NotificationPrefs() {
           {testing ? "Sending…" : "Send me a test notification"}
         </button>
         {prefs.phones === 0 ? (
-          <small>
-            Notifications reach the Sales X-Ray app. Sign in to it on your
-            phone.
-          </small>
+          <small>{noPhoneWords(inPhoneApp())}</small>
         ) : null}
       </div>
     </Panel>

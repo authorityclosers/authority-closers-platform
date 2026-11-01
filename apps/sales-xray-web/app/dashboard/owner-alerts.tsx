@@ -14,7 +14,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { notify } from "../notice-center";
+import { inPhoneApp } from "../leads/native-phone";
 import { waCall, type Sla } from "../leads/whatsapp-client";
+import { noPhoneWords } from "../settings/notifications-client";
 import {
   OwnerAlertsError,
   readOwnerAlerts,
@@ -169,10 +171,7 @@ export function OwnerAlertsDetail({
         );
       })}
       {view.phones === 0 ? (
-        <p className={styles.hint}>
-          Alerts reach the Sales X-Ray app. Sign in to it on your phone to get
-          them.
-        </p>
+        <p className={styles.hint}>{noPhoneWords(inPhoneApp())}</p>
       ) : null}
     </div>
   );
@@ -225,7 +224,7 @@ export function DailySummaryDetail({
                 id: "summary-test",
                 tone: "info",
                 title: "No phone yet",
-                message: "Sign in to the Sales X-Ray app on your phone first.",
+                message: noPhoneWords(inPhoneApp()),
               }
             : {
                 id: "summary-test",
