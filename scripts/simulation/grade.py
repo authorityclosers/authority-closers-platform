@@ -285,7 +285,7 @@ def grade_facts(key: dict[str, Any], objects: list[dict[str, Any]]) -> dict[str,
         else:
             for group in groups(spec):
                 expected += 1
-                ok = [o for o in found if any(norm(alt) in norm(fact_text(o)) for alt in group)]
+                ok = [o for o in found if _matches([group], fact_text(o), type_key)]
                 hit += bool(ok)
                 right_objects.update(id(o) for o in ok)
                 detail.append(
@@ -467,6 +467,100 @@ def follow_up_in_text(spec: dict[str, Any] | None, text: str) -> bool | None:
         pattern = rf"\b({twelve}( 00)? ?{half}|{hour} 00|at {twelve}|at {word})\b"
         ok &= re.search(pattern, said) is not None
     return bool(ok)
+
+
+# ----- the call data engine's lead work -----------------------------------------------
+#
+# Where the engine runs, it offers a stage only when the call moved the lead forward
+# (lead_desk/journey/signals.py: a meeting, a deal, "spoke to them"); lost, junk, not
+# connected and new are never offered. It fills only empty lead fields, and asks before it
+# sets a follow-up.
+
+NEVER_SUGGESTED = {"new", "lost", "junk", "not_connected"}
+# The lead columns the engine can fill (call_data/taxonomy.py lead_field), from the key.
+FILL_FIELDS = {
+    "name": ("person.name", "Name"),
+    "company": ("company.name", "Company"),
+    "city": ("company.location", "City"),
+    "interest": ("offer.product", "Interested in"),
+}
+NAME_TYPES = {"person.name", "company.name"}
+
+
+def close_spelling(alt: str, text: str) -> bool:
+    """Every word of a name within a small edit of a word of the text (Shaikh/Sheikh,
+    Mehta/Meta as heard): names have several spellings, and the ear writes one."""
+    words = norm(text).split()
+    wanted = norm(alt).split()
+    return bool(wanted) and all(
+        any(SequenceMatcher(None, w, t).ratio() >= 0.75 for t in words) for w in wanted
+    )
+
+
+def _field(lead: dict[str, Any], fields: Any, name: str, label: str) -> Any:
+    if lead.get(name):
+        return lead[name]
+    for item in fields or []:
+        if isinstance(item, dict) and str(item.get("label", "")).casefold() == label.casefold():
+            return item.get("value")
+    return None
+
+
+def _matches(spec: Any, value: Any, type_key: str = "") -> bool:
+    text = str(value or "")
+    if isinstance(spec, dict):
+        matcher = amount_matches if "amount" in spec else number_matches
+        return matcher(spec, text, value)
+    if isinstance(spec, str):
+        return norm(spec) in norm(text)
+    return any(
+        norm(alt) in norm(text) or (type_key in NAME_TYPES and close_spelling(alt, text))
+        for group in groups(spec)
+        for alt in group
+    )
+
+
+def grade_fills(key: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
+    """Each lead field the key has a value for: filled right or wrong by the engine, kept
+    (it already had a value), or missed (empty, and the engine left it)."""
+    before = run.get("lead_before") or {}
+    detail = run.get("lead") or {}
+    row = detail.get("lead") or {}
+    filled = {
+        str(item.get("field")): item.get("value")
+        for item in (run.get("call_data") or {}).get("filled") or []
+        if isinstance(item, dict)
+    }
+    rows = []
+    for name, (type_key, label) in FILL_FIELDS.items():
+        if type_key not in key:
+            continue
+        had = _field(before, before.get("fields"), name, label)
+        now = _field(row, detail.get("fields"), name, label)
+        if name in filled:
+            status = "right" if _matches(key[type_key], filled[name], type_key) else "wrong"
+        else:
+            status = "kept" if had else "missed"
+        rows.append({"field": name, "before": had, "after": now, "status": status})
+    count = {s: sum(r["status"] == s for r in rows) for s in ("right", "wrong", "kept", "missed")}
+    return {
+        **count,
+        "fields": rows,
+        "other_filled": sorted(set(filled) - set(FILL_FIELDS)),
+    }
+
+
+def follow_up_from_facts(call_data: Any) -> datetime | None:
+    """The agreed next talk the engine read (date and time, India time) as UTC."""
+    for obj in objects_from(call_data):
+        value = obj.get("value")
+        if obj["type_key"] != "commitment.follow_up" or not isinstance(value, dict):
+            continue
+        if value.get("date"):
+            hour, minute = (int(x) for x in str(value.get("time") or "10:00").split(":")[:2])
+            day = datetime.fromisoformat(str(value["date"])).replace(tzinfo=UTC)
+            return day + timedelta(hours=hour, minutes=minute) - IST
+    return None
 
 
 def engine_ran(call_data: Any) -> bool:
@@ -664,8 +758,9 @@ def due_check(spec: dict[str, Any] | None, call_at: datetime, due: datetime | No
         return False
     local, call_local = due + IST, call_at + IST
     ok = True
-    if "weekday" in spec:
-        ok &= WEEKDAYS[local.weekday()] == spec["weekday"] and local.date() > call_local.date()
+    if "weekday" in spec:  # the first such day after the call ("Saturday" said on a Friday)
+        ahead = (local.date() - call_local.date()).days
+        ok &= WEEKDAYS[local.weekday()] == spec["weekday"] and 0 < ahead <= 7
     if "day_offset" in spec:
         ok &= (local.date() - call_local.date()).days == spec["day_offset"]
     if "month_day" in spec:
@@ -782,6 +877,7 @@ def grade(truth: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
     stage = (lead.get("lead") or {}).get("stage")
     before = (run.get("lead_before") or {}).get("stage")
     suggestion = lead.get("stage_suggestion")
+    stage_ok = truth["expect"].get("stage_ok")
     # Without the call data engine nothing moves a stage by itself: not graded (guarded).
     guarded = not ran and stage == before and not suggestion
     out["stage"] = {
@@ -789,9 +885,7 @@ def grade(truth: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
         "after": stage,
         "suggested": suggestion,
         "want": truth["expect"].get("stage"),
-        "ok": None
-        if not lead or truth["expect"].get("stage_ok") is None or guarded
-        else stage in truth["expect"]["stage_ok"],
+        "ok": None if not lead or stage_ok is None or guarded else stage in stage_ok,
         "guarded": guarded,
     }
     call_at = parse_time(run.get("call_started_at")) or accepted or datetime.now(UTC)
@@ -801,6 +895,29 @@ def grade(truth: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
         if lead and not guarded
         else None,
     }
+    if ran and lead:
+        # The engine offers a stage with one tap and never moves it itself (Lead OS).
+        step = suggestion.get("step") if isinstance(suggestion, dict) else None
+        moved = stage != before
+        if stage_ok is None:
+            right = None
+        elif step:
+            right = step in stage_ok
+        else:  # nothing offered: right where the app never offers that stage, or it is there
+            right = truth["expect"].get("stage") in NEVER_SUGGESTED or before in stage_ok
+        out["stage"].update(
+            suggested=step,
+            why=suggestion.get("why") if isinstance(suggestion, dict) else None,
+            moved_without_tap=moved,
+            ok=None if right is None else right and not moved,
+        )
+        due = follow_up_from_facts(run.get("call_data"))
+        out["follow_up"] = {
+            "want": truth["expect"].get("follow_up"),
+            "got": due.isoformat() if due else None,
+            "ok": due_check(truth["expect"].get("follow_up"), call_at, due),
+        }
+        out["fills"] = grade_fills(truth["key"], run)
     log = run.get("phone_log") or {}
     if run.get("path") == "phone":
         out["landing"] = {
@@ -871,11 +988,37 @@ def markdown(rows: list[dict[str, Any]]) -> str:
     return head + "\n".join(lines) + "\n"
 
 
+def engine_markdown(rows: list[dict[str, Any]]) -> str:
+    """Round two: what the call data engine did with each call's lead."""
+    head = (
+        "| Scenario | Result | Stage offered (want) | Moved without a tap | Lead fills "
+        "(right/wrong/kept/missed) | Facts R/P (objects) | Follow-up read |\n"
+        "|---|---|---|---|---|---|---|\n"
+    )
+    lines = []
+    for r in rows:
+        st = r.get("stage") or {}
+        fills = r.get("fills") or {}
+        facts = r.get("facts") or {}
+        fu = (r.get("follow_up") or {}).get("ok")
+        offered = st.get("suggested") or "none"
+        lines.append(
+            f"| {r['id']} {r['title']} | **{r['result']}** | {offered} ({st.get('want') or '–'})"
+            f" | {'yes' if st.get('moved_without_tap') else 'no'} | "
+            f"{fills.get('right', 0)}/{fills.get('wrong', 0)}/{fills.get('kept', 0)}/"
+            f"{fills.get('missed', 0)} | {_pct(facts.get('recall'))} / "
+            f"{_pct(facts.get('precision'))} ({facts.get('extracted', 0)}) | "
+            f"{'–' if fu is None else ('ok' if fu else 'wrong')} |"
+        )
+    return head + "\n".join(lines) + "\n"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("out")
     parser.add_argument("results")
     parser.add_argument("--md")
+    parser.add_argument("--engine-md", help="the call data engine table (round two)")
     args = parser.parse_args()
     rows = []
     for truth_file in sorted(Path(args.out).glob("S*/truth.json")):
@@ -889,6 +1032,9 @@ def main() -> None:
     )
     if args.md:
         Path(args.md).write_text(markdown(rows), "utf-8")
+    if args.engine_md:
+        ran = [r for r in rows if r.get("engine") == "ran"]
+        Path(args.engine_md).write_text(engine_markdown(ran), "utf-8")
     for r in rows:
         print(
             r["id"],

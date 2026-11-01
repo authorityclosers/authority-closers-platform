@@ -183,13 +183,17 @@ COLD = {"S02", "S19", "S28"}
 
 
 def pick_lead(
-    http_: Http, truth: dict[str, Any], results: Path, skip: set[str]
+    http_: Http,
+    truth: dict[str, Any],
+    results: Path,
+    skip: set[str],
+    before: datetime | None = None,
 ) -> list[dict[str, Any]]:
     """The seller's own existing leads this call could be with, best first.
 
     The server takes a phone's recording only for a lead created before the call (and the
     phone dates calls inside work hours), so the lab calls the sandbox's existing leads,
-    never-used ones first, in the stage the story starts from."""
+    never-used ones first, in the stage the story starts from, created before ``before``."""
     stage = FROM_STAGE.get(truth["id"], "new")
     used = _registry(results)
     taken = {v["lead_id"] for k, v in used.items() if k != truth["id"]}
@@ -212,12 +216,25 @@ def pick_lead(
             rows.extend(batch)
             if len(batch) < 50:
                 break
-        if any(str(r["lead_id"]) not in taken for r in rows):
+        if any(
+            str(r["lead_id"]) not in taken | skip
+            and not (before is not None and _created_after(r, before))
+            for r in rows
+        ):
             break
     ordered = sorted(rows, key=lambda r: str(r["lead_id"]))
+    if before is not None:
+        ordered = [r for r in ordered if not _created_after(r, before)]
     if mine:
         ordered = [r for r in ordered if str(r["lead_id"]) == mine["lead_id"]] + ordered
     return [r for r in ordered if str(r["lead_id"]) not in taken | skip][:6]
+
+
+def _created_after(row: dict[str, Any], moment: datetime) -> bool:
+    created = row.get("created_at")
+    if not isinstance(created, str):
+        return False
+    return datetime.fromisoformat(created.replace("Z", "+00:00")) >= moment
 
 
 def _registry(results: Path) -> dict[str, Any]:
@@ -251,16 +268,30 @@ def schedule_offset(truth_file: Path, gap_min: float = 3) -> float | None:
     return None
 
 
+def round_offset(out: Path, ids: list[str], scenario_id: str, gap_min: float = 3) -> float:
+    """The same, among one round's calls only (``--round-ids``), in the order given."""
+    offset = 0.0
+    for other in ids:
+        if other == scenario_id:
+            return offset
+        data = json.loads((out / other / "truth.json").read_text(encoding="utf-8"))
+        offset += data["duration_seconds"] / 60 + gap_min
+    raise SystemExit(f"refused: {scenario_id} is not in --round-ids")
+
+
 def call_start(
     truth: dict[str, Any],
     hours: dict[str, Any] | None,
     now: datetime,
     offset_min: float | None = None,
+    day_back: int = 0,
+    from_hm: str | None = None,
 ) -> datetime:
     """When the call happened: just now inside work hours; outside them, inside the last
     working day's hours (a phone that uploads late), one slot per scenario (``offset_min``
     after the first, or every 14 minutes), so the server sees what a real phone would send.
-    The server clock is never touched."""
+    A second round goes ``day_back`` working days further back, from ``from_hm`` (India
+    time), so one seller's calls never overlap. The server clock is never touched."""
     seconds = max(1, int(round(truth["duration_seconds"])))
     if not hours or hours.get("inside"):
         return now - timedelta(seconds=seconds + 45)
@@ -274,9 +305,16 @@ def call_start(
         day -= timedelta(days=1)
     while day.weekday() not in days:
         day -= timedelta(days=1)
+    for _ in range(day_back):
+        day -= timedelta(days=1)
+        while day.weekday() not in days:
+            day -= timedelta(days=1)
     first = datetime(day.year, day.month, day.day, open_h, open_m, tzinfo=UTC) + timedelta(
         minutes=20
     )
+    if from_hm:
+        hour, minute = (int(x) for x in from_hm.split(":"))
+        first = datetime(day.year, day.month, day.day, hour, minute, tzinfo=UTC)
     last = datetime(day.year, day.month, day.day, close_h, close_m, tzinfo=UTC) - timedelta(
         seconds=seconds + 300
     )
@@ -293,11 +331,16 @@ def phone_path(
     run: dict[str, Any],
     results: Path,
     offset_min: float | None = None,
+    day_back: int = 0,
+    from_hm: str | None = None,
+    avoid: set[str] | None = None,
 ) -> str:
     seconds = max(1, int(round(truth["duration_seconds"])))
     # 1. The phone book, as both CallLogSync and CaptureApi.book() read it.
     _, book = http_.call("GET", "/v1/lead-desk/phone-book")
-    started = call_start(truth, book.get("work_hours"), datetime.now(UTC), offset_min)
+    started = call_start(
+        truth, book.get("work_hours"), datetime.now(UTC), offset_min, day_back, from_hm
+    )
     stamp = int(started.timestamp() * 1000)
     run["call_started_at"] = started.isoformat()
     identity = (
@@ -332,7 +375,7 @@ def phone_path(
     # seller's own that existed before the call.
     call: dict[str, Any] | None = None
     tried: list[str] = []
-    for row in pick_lead(http_, truth, results, set()):
+    for row in pick_lead(http_, truth, results, avoid or set(), before=started):
         _, detail = http_.call("GET", f"/v1/lead-desk/leads/{row['lead_id']}")
         number = detail.get("phone") or row.get("phone")
         tried.append(str(row["lead_id"]))
@@ -357,10 +400,12 @@ def phone_path(
         lead_before = detail["lead"]
         run["lead_before"] = {
             "lead_id": str(row["lead_id"]),
-            "name": lead_before.get("name"),
-            "stage": lead_before.get("stage"),
-            "company": lead_before.get("company"),
-            "city": lead_before.get("city"),
+            **{
+                key: lead_before.get(key)
+                for key in ("name", "stage", "company", "city", "interest", "next_action_at")
+            },
+            "fields": detail.get("fields"),
+            "tasks": len(detail.get("tasks") or []),
             "events": len(detail.get("events") or []),
             "meeting": detail.get("meeting"),
         }
@@ -502,6 +547,27 @@ def follow(http_: Http, sid: str, run: dict[str, Any], deadline: float) -> dict[
     return progress
 
 
+ENGINE_BUSY = {None, "none", "not_started", "queued", "running"}
+
+
+def wait_engine(http_: Http, lead_id: str, run: dict[str, Any], minutes: float) -> None:
+    """Where the call data engine runs: wait until its fast read of this call has finished
+    (a run newer than the upload), so the lead's fills and suggestion are collected."""
+    since = run.get("upload_started") or ""
+    deadline = time.monotonic() + minutes * 60
+    fast: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        _, data = http_.call("GET", f"/v1/sales-xray/call-data/leads/{lead_id}")
+        fast = ((data or {}).get("pipelines") or {}).get("fast") or {}
+        if fast.get("state") not in ENGINE_BUSY and str(fast.get("at") or "") >= since[:19]:
+            run["engine_done_at"] = datetime.now(UTC).isoformat()
+            break
+        time.sleep(15)
+    else:
+        run["engine_timed_out"] = True
+    run["engine_fast"] = fast
+
+
 def collect(http_: Http, sid: str, lead_id: str | None, run: dict[str, Any]) -> None:
     def safe(method: str, path: str) -> Any:
         try:
@@ -535,6 +601,11 @@ def main() -> None:
     parser.add_argument("--collect-only", help="a submission id already uploaded")
     parser.add_argument("--seller", help="run as this sandbox seller instead of the script's")
     parser.add_argument("--tenant", help="that seller's sandbox organisation")
+    parser.add_argument("--round-ids", help="a later round's calls, comma separated, in order")
+    parser.add_argument("--day-back", type=int, default=0, help="working days before the last")
+    parser.add_argument("--from", dest="from_hm", help="the round's first call, HH:MM India")
+    parser.add_argument("--avoid", action="append", default=[], help="leads.json to skip")
+    parser.add_argument("--wait-engine-min", type=float, default=0)
     args = parser.parse_args()
     truth_file = Path(args.truth)
     truth = json.loads(truth_file.read_text(encoding="utf-8"))
@@ -567,12 +638,27 @@ def main() -> None:
         if args.collect_only:
             sid = args.collect_only
         elif path == "phone":
-            sid = phone_path(http_, truth, file, run, out, schedule_offset(truth_file))
+            ids = args.round_ids.split(",") if args.round_ids else None
+            offset = (
+                round_offset(truth_file.parent.parent, ids, truth["id"])
+                if ids
+                else schedule_offset(truth_file)
+            )
+            avoid = {
+                str(lead["lead_id"])
+                for registry in args.avoid
+                for lead in json.loads(Path(registry).read_text()).values()
+            }
+            sid = phone_path(
+                http_, truth, file, run, out, offset, args.day_back, args.from_hm, avoid
+            )
         else:
             sid = web_path(http_, truth, file, run)
         run["submission_id"] = sid
         lead_id = (run.get("recording_call") or {}).get("lead_id")
         follow(http_, sid, run, deadline)
+        if lead_id and args.wait_engine_min:
+            wait_engine(http_, str(lead_id), run, args.wait_engine_min)
         collect(http_, sid, str(lead_id) if lead_id else None, run)
     except Refused as error:
         run["error"] = str(error)

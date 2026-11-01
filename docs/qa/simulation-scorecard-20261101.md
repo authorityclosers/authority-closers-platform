@@ -24,11 +24,12 @@ fictional seller **ac.priya** (AC Sales Sandbox) through the audited admin route
 | Facts, recall | **87%** of the answer keys' items (165 of 189) are in the reports' own words; worst call 67%. Misses: the city (11) and the company name (6) |
 | Facts, precision | Rupee figures: **46 of 51** match the call. Of the 5 others, 4 are worked out from it (10 × ₹45,000; a ₹35,000 discount; an EMI of about ₹8,500; a ₹10,000 concession) and **1 is wrong** (S15, misheard) |
 | Next step | The follow-up day and time are right in **16 of 16** reports that name one |
-| Stage | **Not testable on dev**: the AI spend guard skips sandbox organisations, so the call data engine never ran: no stage moves, no lead fills, no structured facts |
+| Stage | Round one: guarded (dev’s AI spend guard skips sandbox organisations). **Round two, engine on (10 calls):** no stage moved without a tap; the stage offered was right in 7 of 10; a closed deal and a booked meeting got no offer, because the outcome is never read (`8d68f322`) |
 | Latency | Upload accepted → report: median **62 s**, p90 93 s, worst 237 s (the 45.6-minute call). Short-call holds 21–23 s |
 | Where calls land | All **25 of 25** phone uploads sit once on their lead with the recording; the call-log sync of the same call is recognised (`already=1`). The Calls tab counts 29 (21 completed; the 8 held short calls are in no bucket) |
 | Long calls | **Fail**: 117.9 min refused "longer than 60 minutes … Split it and try again" (owner order: 120 min everywhere); 126.3 min refused before spend but with "The audio length could not be verified" |
-| AI spend | **₹71.12** for 81.6 analysed minutes (29 calls) = **₹0.87/min**; nothing for the 2 refused calls |
+| AI spend | Round one **₹71.12** for 81.6 analysed minutes (29 calls) = **₹0.87/min**; nothing for the 2 refused calls. Round two ₹56.47 (analyses ₹44.78 with the engine’s ₹7.41, one-pass trial ₹11.69). **Day: ₹127.59** of the approved ₹280 |
+| Call data engine (round two) | Structured facts recall 88%, precision 94%; lead fills 5 right, 1 wrong; follow-up dates right in 4 of 6 (“tomorrow” counted from the analysis day, `deb67f5f`) |
 | Part 2: triggers | Unchanged from the first pass below (all testable triggers pass) |
 
 ## Part 1: the 31 synthetic calls
@@ -133,6 +134,50 @@ Priya's allowance after the run: 4,606 s used of 18,000.
 - **Home (my day)**: the do-now list is unchanged by the calls (no stage or follow-up was written,
   see *guarded*).
 
+## Round two: the call data engine on (10 calls)
+
+The owner approved it (1 Nov, orchestrator chat: "DO this yourself turn on"). Dev only, through the
+audited Admin routes, each step logged in `/var/log/ac-owner-data-changes.log`:
+
+- 07:16:50Z: AI spend revision 4 → 5: `background_enabled` true, `skip_sandbox` false, caps unchanged.
+  The engine's fast pipeline was already enabled.
+- The ₹50 daily cap had already been passed by round one's analyses (₹73 in 24 h), so the engine
+  stopped at once (`ai_spend_daily_cap`). 07:28:21Z: daily cap ₹50 → ₹150 (owner via orchestrator,
+  option (a), within the approved ₹280 call-test budget).
+- 07:45:09Z: restored, revision 6 → 7: background off, sandbox skipped, daily cap ₹50 (as revision 4).
+
+The 10 calls were new uploads through the fake phone as Priya, dated back to back on Friday 30 Oct
+from 13:00 India time, on leads round one did not use. The fake phone waited for the engine's read
+before collecting. The engine read every call 3–14 s after its transcript.
+
+| Scenario | Result | Stage offered (want) | Moved without a tap | Lead fills (right/wrong/kept/missed) | Facts R/P (objects) | Follow-up read |
+|---|---|---|---|---|---|---|
+| S01 Inbound enquiry from a Meta form, demo booked | **pass** | meeting_scheduled (meeting_scheduled) | no | 1/0/2/0 | 85% / 91% (22) | ok |
+| S02 Cold call, rejected: in-house trainer already | **pass** | none (lost) | no | 1/0/2/0 | 100% / 86% (15) | – |
+| S03 Inbound, heavy objections, follow-up agreed | **pass** | open_leads (interested) | no | 1/0/1/0 | 87% / 100% (24) | ok |
+| S04 Price negotiation on the team package, closed at 1.55 lakh | **fail** | none (won) | no | 0/1/1/0 | 78% / 80% (18) | – |
+| S05 Busy prospect asks for a call back tomorrow at 6 pm | **pass** | open_leads (open_leads) | no | 0/0/2/0 | 100% / 100% (12) | wrong |
+| S06 Wrong number | **pass** | none (junk) | no | 0/0/0/0 | 100% / 100% (1) | – |
+| S07 Switched-off IVR, then voicemail beep | **pass** | none (not_connected) | no | 0/0/0/0 | 100% / 100% (3) | – |
+| S09 45-minute discovery call, proposal meeting booked | **fail** | none (meeting_scheduled) | no | 1/0/2/0 | 90% / 100% (21) | ok |
+| S17 Speakerphone with echo, call-back on Saturday | **pass** | open_leads (open_leads) | no | 1/0/2/0 | 71% / 83% (13) | wrong |
+| S30 Lost: already signed with another training firm | **fail** | open_leads (lost) | no | 0/0/1/0 | 100% / 100% (11) | – |
+
+| Measure | Result |
+|---|---|
+| Stage moved without a tap | **0 of 10**: no stage moved by itself |
+| Stage offered | **7 of 10 right**. Meeting Scheduled for the demo (S01); Open Leads for the call-backs (S05, S17) and for the follow-up call (S03); nothing for the wrong number, the IVR and the cold rejection (lost, junk and not connected are never offered, by design). **Misses:** the closed deal (S04) and the booked proposal meeting (S09) got nothing, and the lost deal with a March check-in (S30) got Open Leads |
+| Structured facts | Recall **88%** (64 of 73 key items), precision 94% on average, 140 objects. Misses: the decision maker named in passing (Sunil, Nitin), a quoted price (₹45,000), an investment figure, one objection |
+| Lead fills | **5 right, 1 wrong**, 13 kept (the field already had a value: the engine only fills empty ones), 0 missed. Wrong: Company "Paddle Home Appliances" for Patil (S04, filled without asking) |
+| Follow-up read | Right in 4 of 6 (S01 Tuesday 16:00, S03 Friday 11:00, S09 Wednesday 15:00 with the day). **Wrong in 2:** "tomorrow at six" said on Friday became Monday (S05), "Saturday morning" said on Friday became the next week's Saturday (S17) |
+| Spend | ₹44.78 for 58.2 min (₹0.77/min), including the engine's 10 reads (₹7.41). With background on, the one-pass trial also read 5 of these calls (₹11.69). Round two ₹56.47; the day ₹127.59 |
+
+**Why S04 and S09 got no suggestion** (`8d68f322`): the engine stores the call's outcome as
+`{"enum": "deal_closed"}` (`call_data/values.py`), but `lead_desk/journey/signals.py`
+`milestone_of` reads `value.get("value")`, so the outcome never counts. Its unit test feeds
+`{"value": …}` and passes. A suggestion then appears only when the next step's words name a term
+("demo" did; "proposal presentation" and "invoice and first installment" did not).
+
 ## Part 2: triggers (seller Rohan, AC Sales Sandbox)
 
 | Trigger | What was sent | What came back | Result |
@@ -174,6 +219,10 @@ removed mid-day.
 | `6370dc55` | call analysis / report (Calls, short-call rule) | medium | Short calls: transcript never opens, no Get full report, panel says it is saved |
 | `12b4a31f` | call analysis / report (speaker identity) | medium | S20: Hindi call, the prospect labelled the salesperson |
 | `ee41b4af` | call analysis / report (transcription of money) | low | S15: "forty-five thousand" heard as "four to five thousand" |
+| `8d68f322` | Leads (Lead OS journey signals) with the call data engine | high | Round two: stage suggestions ignore the call outcome (`{"enum"}` stored, `value` read): a closed deal and a booked meeting get no offer |
+| `deb67f5f` | call data engine (follow-up dates) | medium | Round two: "tomorrow" and weekday names count from the analysis day, not the call's (late uploads move the follow-up) |
+| `f04037f2` | Leads (Lead OS journey signals) | low | Round two: a clear no is never offered as Lost; a lost deal with a March check-in is offered Open Leads |
+| `26cabf15` | call data engine (lead fills) | low | Round two: Company auto-filled from a misheard name ("Paddle" for Patil) without asking |
 | `5605dd37` | capture-setup (call analysis / billing for the words) | high, blocks work | 0 call minutes in both sandboxes; the upload says the allowance "has been used" (still true for every seller but Priya) |
 | ~~`d208a435`~~ | Leads | — | Filed in error (a 201 that returns the existing lead was read as a new one); withdrawn by `3f995945` |
 | ~~`67e0ed7e`~~ | Leads | — | Filed in error (three late counts that differ by definition); withdrawn by `0ff39cb4` |
@@ -185,4 +234,6 @@ AC Sales Sandbox:
   1 "SIM Due" lead with 2 call-back tasks (all `+91 00000 5xxxx`), the lead "Anil Deshmukh"
   (`+91 00000 30001`), 59 phone-logged calls on Rohan's older leads (Saturday).
 - Part 1: 27 Saturday calls on Priya's existing leads (25 with recordings and reports or holds, S10
-  and S10X without a recording), 4 web uploads, and Priya's 300-minute grant (13,394 s left).
+  and S10X without a recording), 4 web uploads, and Priya's 300-minute grant.
+- Round two: 10 Friday calls on 10 more of Priya's leads, with the engine's facts, questions and
+  6 company fills (each can be undone); 10,045 s of Priya's 18,000 left.

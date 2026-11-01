@@ -208,7 +208,8 @@ def test_a_whole_scenario_grades_pass_and_blocked() -> None:
                 {"type_key": "money.budget", "display": "₹2 lakh"},
             ],
         },
-        "lead": {"lead": {"stage": "interested"}},
+        "lead_before": {"stage": "new"},
+        "lead": {"lead": {"stage": "new"}, "stage_suggestion": {"step": "interested"}},
         "phone_log": {"logged": 0, "already": 1},
         "attached": True,
     }
@@ -272,6 +273,73 @@ def test_the_report_is_read_in_its_own_words_never_its_quotes() -> None:
     assert grade.follow_up_in_text({"weekday": "friday", "hour": 17}, "a call Friday at five")
     assert grade.engine_ran({"pipelines": {"fast": {"state": "none"}}}) is False
     assert grade.engine_ran({"pipelines": {"fast": {"state": "done"}}}) is True
+
+
+def test_the_engine_offers_a_stage_fills_empty_fields_and_never_moves_the_lead() -> None:
+    truth = {
+        "id": "S01",
+        "title": "Demo booked",
+        "language": "english",
+        "path": "phone",
+        "duration_seconds": 175.0,
+        "turns": [["S", "hello anil"]],
+        "key": {
+            "company.name": ["deshmukh auto"],
+            "company.location": ["nashik"],
+            "money.budget": {"amount": 250000},
+        },
+        "expect": {
+            "report": True,
+            "stage": "meeting_scheduled",
+            "stage_ok": ["meeting_scheduled"],
+            "follow_up": {"weekday": "tuesday", "hour": 16},
+        },
+    }
+    follow_up = {
+        "type": "commitment.follow_up",
+        "value": {"text": "Tuesday 4 PM", "date": "2026-11-03", "time": "16:00"},
+        "display": "Tuesday 4 PM",
+    }
+    run = {
+        "path": "phone",
+        "submission_id": "x",
+        "call_started_at": "2026-10-30T07:30:00+00:00",
+        "progress": {"has_report": True},
+        "call_data": {
+            "pipelines": {"fast": {"state": "done"}},
+            "facts": [follow_up, {"type": "company.name", "display": "Deshmukh Auto Spares"}],
+            "filled": [{"field": "company", "value": "Deshmukh Auto Spares"}],
+        },
+        "lead_before": {"stage": "new", "city": "Delhi", "company": None, "fields": []},
+        "lead": {
+            "lead": {"stage": "new", "company": "Deshmukh Auto Spares", "city": "Delhi"},
+            "stage_suggestion": {"step": "meeting_scheduled", "why": "Demo on Tuesday 4 PM"},
+            "fields": [],
+        },
+    }
+    graded = grade.grade(truth, run)
+    assert graded["stage"]["suggested"] == "meeting_scheduled"
+    assert graded["stage"]["moved_without_tap"] is False and graded["stage"]["ok"] is True
+    # Company filled right, the city kept; the budget is no lead column, so not graded.
+    assert (graded["fills"]["right"], graded["fills"]["kept"], graded["fills"]["missed"]) == (
+        1,
+        1,
+        0,
+    )
+    friday = datetime(2026, 10, 30, 7, 30, tzinfo=UTC)
+    saturday_11 = datetime(2026, 10, 31, 5, 30, tzinfo=UTC)
+    spec = {"weekday": "saturday", "hour": 11}
+    assert grade.due_check(spec, friday, saturday_11)
+    assert not grade.due_check(spec, friday, saturday_11 + grade.timedelta(days=7))
+    assert grade.close_spelling("mehta insurance", "Meta Insurance Point")
+    assert grade.close_spelling("shaikh pharma", "Sheikh Pharma Distributors")
+    assert not grade.close_spelling("anil", "Sunil")
+    assert graded["follow_up"]["ok"] is True
+    run["lead"]["lead"]["stage"] = "meeting_scheduled"  # moved by itself: a miss
+    assert grade.grade(truth, run)["stage"]["ok"] is False
+    assert "meeting_scheduled (meeting_scheduled) | yes" in grade.engine_markdown(
+        [grade.grade(truth, run)]
+    )
 
 
 def test_a_call_over_two_hours_passes_on_a_clear_refusal_before_spend() -> None:
@@ -341,6 +409,21 @@ def test_calls_outside_work_hours_move_into_the_last_working_day() -> None:
     assert long_call + inject.timedelta(seconds=7200) <= datetime(2026, 10, 31, 13, 30, tzinfo=UTC)
     over_limit = inject.call_start({"id": "S10X", "duration_seconds": 60}, hours, sunday_morning)
     assert over_limit == start + inject.timedelta(minutes=14 * 9)
+
+
+def test_a_second_round_goes_a_working_day_back_from_its_own_hour(tmp_path: Path) -> None:
+    hours = {"days": [0, 1, 2, 3, 4, 5], "start": "10:30", "end": "19:00", "inside": False}
+    sunday_noon = datetime(2026, 11, 1, 7, 12, tzinfo=UTC)
+    start = inject.call_start(
+        {"id": "S01", "duration_seconds": 175}, hours, sunday_noon, 0, 1, "13:00"
+    )
+    assert start == datetime(2026, 10, 30, 7, 30, tzinfo=UTC)  # Friday 13:00 India time
+    for scenario_id, seconds in (("S02", 120), ("S06", 60)):
+        (tmp_path / scenario_id).mkdir()
+        (tmp_path / scenario_id / "truth.json").write_text(f'{{"duration_seconds": {seconds}}}')
+    assert inject.round_offset(tmp_path, ["S06", "S02"], "S02") == 1 + 3
+    assert inject._created_after({"created_at": "2026-10-30T08:00:00Z"}, start)
+    assert not inject._created_after({"created_at": "2026-10-30T05:50:00Z"}, start)
 
 
 def test_one_sellers_calls_run_back_to_back(tmp_path: Path) -> None:

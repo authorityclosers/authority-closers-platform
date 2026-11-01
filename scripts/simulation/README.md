@@ -58,8 +58,14 @@ simlab .venv/bin/python scripts/simulation/synth.py scenarios/S01.json out --voi
 simlab-probe 3100ddbc-4549-4a5e-85b8-421af6edd588 ac.priya ac.rohan
 # 3. Inject, follow and collect (--seller: run as the one seller who has call minutes)
 simlab-inject out/S01/truth.json results --seller ac.priya --tenant 3100ddbc-4549-4a5e-85b8-421af6edd588
-# 4. Grade
+# 3b. A later round of new uploads (here with the call data engine on): a working day further
+# back from 13:00, back to back among its own calls, on leads round one did not use, waiting
+# for the engine's read of each call
+simlab-inject out/S01/truth.json results-r2 --seller ac.priya --tenant 3100ddbc-4549-4a5e-85b8-421af6edd588 \
+  --round-ids S01,S02,S03 --day-back 1 --from 13:00 --avoid results/leads.json --wait-engine-min 8
+# 4. Grade (--engine-md: the call data engine table)
 simlab .venv/bin/python scripts/simulation/grade.py out results --md results/scorecard.md
+simlab .venv/bin/python scripts/simulation/grade.py out results-r2 --engine-md results-r2/engine.md
 # 4b. Cost per call and per minute, and what the screens show
 simlab-cost
 simlab-screens 3100ddbc-4549-4a5e-85b8-421af6edd588 ac.priya results --day 2026-10-31
@@ -104,7 +110,14 @@ the last working day (a phone that uploads late), back to back in scenario order
 - **Facts:** recall over the key's items, precision over extracted objects of graded types
   (plus anything forbidden). Money understands lakh, thousand, k, words and ranges.
 - **Stage and follow-up:** the lead's stage after the call against the allowed stages; the
-  next meeting or task against the agreed day and hour (India time).
+  next meeting or task against the agreed day and hour (India time; a weekday is the first one
+  after the call). Where dev's AI spend guard keeps the call data engine off, the report's own
+  words are graded instead (quotes left out) and the stage is marked *guarded*.
+- **Call data engine (when it runs):** the stage it offers against the key (it offers only
+  forward moves: lost, junk and not connected are never offered) and that no stage moved
+  without a tap; each lead column it can fill (name, company, city, interest) right, wrong,
+  kept (already had a value) or missed; the follow-up it read; its structured facts. Names
+  count with a close spelling (Shaikh/Sheikh), recorded as heard.
 - **Over 2 hours (S10X):** a clear refusal (4xx) before any spend passes, and so does a
   report; the grade records how far the transcript reached.
 - **Pass:** report as expected; where a report is expected, facts recall ≥ 60% and roles
