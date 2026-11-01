@@ -1266,12 +1266,14 @@
   justify-items: start;
 }
 
+/* Its line grows with the text (16 px at 12 px): a fixed 16 px cut the name's
+   top and bottom at 200 % text (the test robot, 1 Nov 2026). */
 .titleContext {
   max-width: 320px;
   overflow: hidden;
   font-size: 12px;
   font-weight: 500;
-  line-height: 16px;
+  line-height: calc(16 / 12);
   letter-spacing: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1765,13 +1767,13 @@
   white-space: nowrap;
 }
 
+/* The page's name wraps instead of being cut, so it reads at any text size
+   (the test robot, 1 Nov 2026: at 200 % text "Leads" lost its bottom). */
 .mobileWorkspace b {
-  overflow: hidden;
+  overflow-wrap: break-word;
   color: var(--lx-ink);
   font-size: 15px;
   font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* Phone header, signed in: your own avatar opens the account sheet (owner,
