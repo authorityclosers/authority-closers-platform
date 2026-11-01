@@ -56,13 +56,11 @@ it("says what the round did from the desk's numbers", () => {
 
 it("keeps a paused round for its side for half a day", () => {
   const at = Date.parse("2026-11-01T10:00:00Z");
-  keepPaused("me", {
-    side: "cold",
-    served: ["a", "b"],
-    skipped: ["b"],
+  keepPaused(
+    "me",
+    { side: "cold", served: ["a", "b"], skipped: ["b"], start: null },
     at,
-    start: null,
-  });
+  );
   expect(readPaused("me", "cold", at + 60_000)?.served).toEqual(["a", "b"]);
   expect(readPaused("me", "inbound", at)).toBeNull();
   expect(readPaused("me", "cold", at + PAUSE_KEEP_MS + 1)).toBeNull();

@@ -24,6 +24,27 @@ export type PausedRound = {
   start: RoundNumbers | null;
 };
 
+/** A running round's bookkeeping: whether one runs, the leads skipped to its
+ *  end and those already offered again, the leads Continue passes over, the
+ *  desk's numbers at its start, and new enquiries to call first. */
+export type RoundBook = {
+  on: boolean;
+  skipped: string[];
+  again: string[];
+  passOver: string[];
+  from: RoundNumbers | null;
+  ahead: string[];
+};
+
+export const NO_ROUND: RoundBook = {
+  on: false,
+  skipped: [],
+  again: [],
+  passOver: [],
+  from: null,
+  ahead: [],
+};
+
 /** How long a lead counts as just tried: Continue passes over it. */
 export const RECENT_MS = 60 * 60_000;
 /** A paused round older than this starts again from the top. */
@@ -72,11 +93,19 @@ export function roundDone(
 
 const pausedKey = (person: string) => `sx:call-round:${person}`;
 
-/** Keep a paused round for this tab (private browsing keeps nothing). */
-export function keepPaused(person: string, round: PausedRound | null): void {
+/** Keep a paused round for this tab, stamped now (private browsing keeps
+ *  nothing). */
+export function keepPaused(
+  person: string,
+  round: Omit<PausedRound, "at"> | null,
+  at: number = Date.now(),
+): void {
   try {
     if (round)
-      window.sessionStorage.setItem(pausedKey(person), JSON.stringify(round));
+      window.sessionStorage.setItem(
+        pausedKey(person),
+        JSON.stringify({ ...round, at }),
+      );
     else window.sessionStorage.removeItem(pausedKey(person));
   } catch {
     // Nothing kept: the next start begins at the top.

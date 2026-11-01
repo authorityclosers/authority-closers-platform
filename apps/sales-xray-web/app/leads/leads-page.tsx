@@ -149,7 +149,9 @@ import {
   nextInRound,
   readPaused,
   roundDone,
+  NO_ROUND,
   type PausedRound,
+  type RoundBook,
   type RoundNumbers,
 } from "./call-round";
 import { SideSelector } from "../ui/side-selector";
@@ -537,12 +539,10 @@ export function LeadsRoute({
   // The round's controls (competitor teardown 2): Skip sends a lead to the
   // end, leads just tried are passed over on Continue, a closed round pauses,
   // and its end says what it did.
-  const skipped = useRef<string[]>([]);
-  const reoffered = useRef<Set<string>>(new Set());
-  const triedRecently = useRef<readonly string[]>([]);
-  const passOver = useRef<ReadonlySet<string>>(new Set());
-  const roundFrom = useRef<RoundNumbers | null>(null);
-  const roundOn = useRef(false);
+  // Kept as state, never refs: the round's handlers pass these on, and a ref
+  // passed on during render is a lint error (react-hooks/refs).
+  const [book, setBook] = useState<RoundBook>(NO_ROUND);
+  const [tried, setTried] = useState<readonly string[]>([]);
   // A settings page opened from the menu is a step of its own: Leads goes back.
   const pushedSettings = useRef(false);
   // The view picked here, until the address catches up (the router follows
@@ -638,11 +638,7 @@ export function LeadsRoute({
       // calling starts one at its card, which dials only on Call (ph2-33).
       if (handed.call || handed.round) setQueue(new Set([handed.leadId]));
       if (handed.round) {
-        roundOn.current = true;
-        skipped.current = [];
-        reoffered.current = new Set();
-        passOver.current = new Set();
-        roundFrom.current = null;
+        setBook({ ...NO_ROUND, on: true });
       }
       setFocusAt(handed.at ?? null);
       setOpenLead(handed.leadId);
@@ -806,38 +802,41 @@ export function LeadsRoute({
   // running round it is the next card (competitor teardown 12 and 4): the
   // pill tells; the list and the round act on it.
   const [fresh, setFresh] = useState<ReadonlySet<string> | null>(null);
-  const ahead = useRef<string[]>([]);
-  const rounding = useRef(false);
+  const [pulsed, setPulsed] = useState("");
   const arrived = arrival.leads.map((row) => row.lead_id).join(" ");
-  useEffect(() => {
-    if (!arrived) return;
+  // Each arrival once: the list reads again and its rows pulse (state
+  // adjusted while rendering, never set inside an effect).
+  if (arrived && arrived !== pulsed) {
     const ids = arrived.split(" ");
-    // Only a round running now takes them first; one started later keeps
-    // the list's order, so a lead already called is never offered again.
-    if (rounding.current)
-      ahead.current = [
-        ...ids.filter((id) => !ahead.current.includes(id)),
-        ...ahead.current,
-      ];
+    setPulsed(arrived);
     setFresh(new Set(ids));
     setVersion((value) => value + 1);
+    // Only a round running now takes them first; one started later keeps
+    // the list's order, so a lead already called is never offered again.
+    if (queue)
+      setBook((now) => ({
+        ...now,
+        ahead: [...ids.filter((id) => !now.ahead.includes(id)), ...now.ahead],
+      }));
+  }
+  // The round over: nothing waits ahead of the list.
+  if (!queue && book.ahead.length) setBook((now) => ({ ...now, ahead: [] }));
+  useEffect(() => {
+    if (!arrived) return;
     const timer = window.setTimeout(() => setFresh(null), 4000);
     return () => window.clearTimeout(timer);
   }, [arrived]);
-  useEffect(() => {
-    rounding.current = queue !== null;
-    if (!queue) ahead.current = [];
-  }, [queue]);
   // A round Home started takes today's numbers once the desk has them, so
   // its end can say what it did.
-  useEffect(() => {
-    if (roundOn.current && !roundFrom.current && desk)
-      roundFrom.current = {
+  if (book.on && !book.from && desk)
+    setBook((now) => ({
+      ...now,
+      from: {
         calls: desk.numbers.calls,
         connected: desk.numbers.connected,
         talk_seconds: desk.numbers.talk_seconds,
-      };
-  });
+      },
+    }));
   const [choosing, setChoosing] = useState<PausedRound | null>(null);
   const [roundEnd, setRoundEnd] = useState<{
     start: RoundNumbers | null;
@@ -1363,17 +1362,16 @@ export function LeadsRoute({
     setFocusAt(at);
     setOpenLead(leadId);
   };
-  const closeLead = () => {
+  const closeLead = (pause: unknown = true) => {
     // A round closed before its end pauses: the next start offers Continue.
-    if (roundOn.current && queue && desk)
+    if (pause && book.on && queue && desk)
       keepPaused(desk.me.person_id, {
         side,
         served: [...queue],
-        skipped: skipped.current,
-        at: Date.now(),
-        start: roundFrom.current,
+        skipped: book.skipped,
+        start: book.from,
       });
-    roundOn.current = false;
+    setBook(NO_ROUND);
     setLinkDone(hash);
     leaveAddressLead();
     setOpenLead(null);
@@ -1650,30 +1648,36 @@ export function LeadsRoute({
   const nextLead = (saved: string, skip = false) => {
     const served = new Set(queue ?? []).add(saved);
     // Skip sends a lead to the end of the round, once; an answer takes it off.
-    skipped.current = skipped.current.filter((id) => id !== saved);
-    if (skip && !reoffered.current.has(saved)) skipped.current.push(saved);
-    // A new enquiry that came in during the round is called first.
+    let skipped = book.skipped.filter((id) => id !== saved);
+    if (skip && !book.again.includes(saved)) skipped = [...skipped, saved];
+    // A new enquiry that came in during the round first, then the list's
+    // order (past leads tried in the last hour on Continue), then the skipped.
+    const listed = order.current.find(
+      (id) =>
+        !served.has(id) &&
+        !book.passOver.includes(id) &&
+        !book.ahead.includes(id),
+    );
     const { next, again: fromEnd } = nextInRound({
-      ahead: ahead.current,
-      order: order.current,
+      ahead: book.ahead,
+      order: listed ? [listed] : [],
       served,
-      skipped: skipped.current,
-      recent: passOver.current,
+      skipped,
+      recent: new Set(book.passOver),
     });
     if (!next) {
       // The end: what the round did, then the next work; never a blank page.
-      if (roundOn.current)
-        setRoundEnd({ start: roundFrom.current, leads: served.size });
-      roundOn.current = false;
+      if (book.on) setRoundEnd({ start: book.from, leads: served.size });
       if (desk) keepPaused(desk.me.person_id, null);
-      closeLead();
+      closeLead(false);
       refresh();
       return;
     }
-    if (fromEnd) {
-      skipped.current = skipped.current.slice(1);
-      reoffered.current.add(next);
-    }
+    setBook({
+      ...book,
+      skipped: fromEnd ? skipped.slice(1) : skipped,
+      again: fromEnd ? [...book.again, next] : book.again,
+    });
     setQueue(served.add(next));
     open(next);
   };
@@ -1689,19 +1693,27 @@ export function LeadsRoute({
   const startRound = (paused: PausedRound | null) => {
     setChoosing(null);
     const served = new Set(paused?.served ?? []);
-    skipped.current = [...(paused?.skipped ?? [])];
-    reoffered.current = new Set();
-    passOver.current = paused ? new Set(triedRecently.current) : new Set();
-    roundFrom.current = paused?.start ?? deskNumbers();
-    const { next } = nextInRound({
-      order: order.current,
+    const skipped = [...(paused?.skipped ?? [])];
+    const passOver = paused ? [...tried] : [];
+    const listed = order.current.find(
+      (id) => !served.has(id) && !passOver.includes(id),
+    );
+    const { next, again: fromEnd } = nextInRound({
+      order: listed ? [listed] : [],
       served,
-      skipped: skipped.current,
-      recent: passOver.current,
+      skipped,
+      recent: new Set(passOver),
     });
     if (desk) keepPaused(desk.me.person_id, null);
     if (!next) return;
-    roundOn.current = true;
+    setBook({
+      ...NO_ROUND,
+      on: true,
+      skipped: fromEnd ? skipped.slice(1) : skipped,
+      again: fromEnd ? [next] : [],
+      passOver,
+      from: paused?.start ?? deskNumbers(),
+    });
     setQueue(served.add(next));
     open(next);
   };
@@ -1728,13 +1740,9 @@ export function LeadsRoute({
                 of:
                   viewCounts?.key === viewCountsKey &&
                   typeof viewCounts.value[workView] === "number"
-                    ? Math.max(
-                        queue.size,
-                        (viewCounts.value[workView] ?? 0) +
-                          ahead.current.length,
-                      )
+                    ? Math.max(queue.size, viewCounts.value[workView] ?? 0)
                     : null,
-                skipped: skipped.current.length,
+                skipped: book.skipped.length,
                 onPause: closeLead,
               }
             : null
@@ -2053,9 +2061,11 @@ export function LeadsRoute({
             <WorkSplit pane={paneShown ? leadSheet(true) : null}>
               <ListView
                 onTopLead={setTopLead}
-                onOrder={(leadIds, tried) => {
+                onOrder={(leadIds, recent) => {
                   order.current = leadIds;
-                  triedRecently.current = tried;
+                  setTried((now) =>
+                    now.join(" ") === recent.join(" ") ? now : recent,
+                  );
                 }}
                 stageWord={stageWord}
                 quietLate={side === "cold" && !can}
