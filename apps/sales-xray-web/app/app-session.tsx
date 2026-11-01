@@ -38,6 +38,10 @@ const SHELL_ROUTES = new Set([
   "/leads",
   // Notes, all written on the seller's leads (owner, 25 Oct 2026).
   "/leads/notes",
+  // An owner alert's list and the day's summary (competitor teardown 19 and
+  // 20, 1 Nov 2026); without them they stayed a skeleton, as Performance did.
+  "/leads/alerts",
+  "/leads/summary",
   // Chats: WhatsApp, Messenger and Instagram in one inbox (owner, 20 Oct 2026).
   "/chats",
   // Settings and each of its sections (owner, 20 Oct 2026).

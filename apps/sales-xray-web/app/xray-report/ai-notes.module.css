@@ -1,0 +1,209 @@
+/* AI notes in the Report's summary card (competitor teardown 24). */
+
+.notes {
+  flex: 1;
+  gap: 12px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.block {
+  display: grid;
+  gap: 4px;
+}
+
+.label {
+  color: var(--xr-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+/* Three lines, the rest a tap away. */
+.recap:not([data-open]) {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.more,
+.wrong,
+.copy {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--xr-green);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.copy {
+  flex: none;
+  padding: 0 12px;
+  border: 1px solid var(--xr-line);
+  border-radius: 999px;
+  color: var(--xr-text);
+}
+
+.rate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.thumb {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--xr-line);
+  border-radius: 999px;
+  background: none;
+  color: var(--xr-text-2);
+  cursor: pointer;
+}
+
+.thumb[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--xr-green-mark);
+  color: var(--xr-on-mark);
+}
+
+.thumb:disabled:not([aria-pressed="true"]) {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.tell {
+  display: flex;
+  flex: 1 1 220px;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tell input {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--xr-line-2);
+  border-radius: 10px;
+  background: var(--xr-card);
+  color: var(--xr-text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.send {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--xr-green-mark);
+  color: var(--xr-on-mark);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.thanks {
+  margin: 0;
+  color: var(--xr-muted);
+  font-size: 13px;
+}
+
+.applies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.apply {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--xr-green);
+  border-radius: 999px;
+  background: none;
+  color: var(--xr-green);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.apply[data-state="done"] {
+  border-color: transparent;
+  background: var(--xr-green-soft);
+  color: var(--xr-text);
+  cursor: default;
+}
+
+.talk {
+  margin: 0;
+  color: var(--xr-text-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.more:focus-visible,
+.wrong:focus-visible,
+.copy:focus-visible,
+.thumb:focus-visible,
+.send:focus-visible,
+.apply:focus-visible,
+.tell input:focus-visible {
+  outline: 2px solid var(--xr-green);
+  outline-offset: 2px;
+}
+
+/* A finger-sized target on touch screens, the look kept slim. */
+@media (pointer: coarse) {
+  .more,
+  .wrong,
+  .copy,
+  .thumb,
+  .apply {
+    position: relative;
+  }
+  .more::after,
+  .wrong::after,
+  .copy::after,
+  .thumb::after,
+  .apply::after {
+    position: absolute;
+    inset: -6px;
+    content: "";
+  }
+}

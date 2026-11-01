@@ -26,6 +26,8 @@ Infisical, never in git.
 Nudges (team engine) go in the same pass, under the same lock, as their own urgent push
 with no lead in it (``nudge_push``).
 So do the day's 10:00 digest and the two-hourly sweep, counts only (``digest_push``).
+So do revenue milestones, half and all of the month's target (``revenue_push``).
+So do owners' and admins' alerts and their 7 PM summary, counts only (``owner_alerts``).
 
 A second run of the same loop sends gold review alerts to the same phones (``review_push``).
 
@@ -45,22 +47,34 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequenc
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
 
 import httpx
 from fastapi import FastAPI
-from sqlalchemy import and_, delete, exists, or_, select, text
+from sqlalchemy import and_, delete, exists, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ac_platform.lead_desk import digest_push, hours, nudge_push, reassign, sheet_sync, task_push
+from ac_platform.lead_desk import (
+    digest_push,
+    hours,
+    notify_prefs,
+    nudge_push,
+    reassign,
+    revenue_push,
+    sheet_sync,
+    task_push,
+)
 from ac_platform.lead_desk.connectors import google_ads_api, google_files
 from ac_platform.lead_desk.contracts import PushConfig
 from ac_platform.lead_desk.meetings import REMIND_BEFORE
-from ac_platform.lead_desk.models import Lead, LeadDevice, LeadMeeting
+from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadDevice, LeadMeeting
 from ac_platform.lead_desk.store import LeadDesk, Viewer
 from ac_platform.lead_desk.vocabulary import OPEN_STAGES
 from ac_platform.tenancy.models import Membership
+
+if TYPE_CHECKING:
+    from ac_platform.lead_desk import owner_alerts
 
 log = logging.getLogger(__name__)
 
@@ -259,6 +273,9 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
                 or_(_has_device(), _owner_has_device()),
                 Lead.assigned_at > since,
                 Lead.assigned_at <= now,
+                # Cold leads come in lists: a new one is never an alert (phone personas,
+                # 1 Nov 2026, ph1-16: 900 imported fired "New lead" on two phones).
+                func.coalesce(Lead.pipeline, "live") != "cold",
                 or_(
                     Lead.alerted_assigned_at.is_(None),
                     Lead.alerted_assigned_at < Lead.assigned_at,
@@ -275,7 +292,8 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
             .where(
                 owned,
                 Lead.next_action_at > since,
-                Lead.next_action_at <= now,
+                # Up to an hour ahead: for someone who hears follow-ups early.
+                Lead.next_action_at <= now + notify_prefs.MAX_DUE_LEAD,
                 or_(Lead.alerted_due_at.is_(None), Lead.alerted_due_at != Lead.next_action_at),
             )
             .order_by(Lead.next_action_at)
@@ -283,6 +301,31 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
             .with_for_update(skip_locked=True)
         )
     ).all()
+    # Each person's own choices (Notifications, competitor teardown 26, 1 Nov 2026): a
+    # follow-up reaches its owner at the time, or 15 minutes or an hour before; one not due
+    # for its owner yet stays unmarked until it is. By default everyone hears it at the time.
+    configs: dict[UUID, Any] = {
+        tenant_id: config or {}
+        for tenant_id, config in (
+            await database.execute(
+                select(LeadDeskSettings.tenant_id, LeadDeskSettings.config).where(
+                    LeadDeskSettings.tenant_id.in_({lead.tenant_id for lead in (*assigned, *due)})
+                )
+            )
+        ).tuples()
+    }
+    due = [
+        lead
+        for lead in due
+        if lead.owner_person_id is not None
+        and lead.next_action_at is not None
+        and lead.next_action_at
+        - notify_prefs.due_lead(configs.get(lead.tenant_id, {}), lead.owner_person_id)
+        <= now
+    ]
+    follow_ups = {lead.id for lead in due}
+    for lead in due:
+        lead.alerted_due_at = lead.next_action_at
     meetings = (
         await database.execute(
             select(LeadMeeting, Lead)
@@ -334,6 +377,17 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
             arrived = lead.received_at or lead.created_at
             if kind == "new" and lead.created_by_person_id is None and arrived > since:
                 hear.extend(owner for owner in owners.get(lead.tenant_id, ()) if owner not in hear)
+            # Each person hears this kind or not, by their own choice (teardown 26).
+            choice: notify_prefs.Kind | None = (
+                "new_enquiry"
+                if kind == "new"
+                else "follow_up_due"
+                if lead.id in follow_ups
+                else None
+            )
+            if choice is not None:
+                config = configs.get(lead.tenant_id, {})
+                hear = [p for p in hear if notify_prefs.allows(config, p, choice, now)]
             for person_id in hear:
                 key = (lead.tenant_id, person_id)
                 alert = alerts.setdefault(key, Alert(tenant_id=key[0], person_id=key[1]))
@@ -364,7 +418,13 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
 
 
 async def send(
-    alerts: Sequence[Alert | nudge_push.NudgeAlert | digest_push.DigestAlert],
+    alerts: Sequence[
+        Alert
+        | nudge_push.NudgeAlert
+        | digest_push.DigestAlert
+        | revenue_push.RevenueAlert
+        | owner_alerts.OwnerAlert
+    ],
     fcm: Fcm,
     client: httpx.AsyncClient,
 ) -> tuple[int, list[str]]:
@@ -395,10 +455,20 @@ async def tick(
             text("SELECT pg_try_advisory_xact_lock(:a, :b)"), {"a": _LOCK[0], "b": _LOCK[1]}
         ):
             return 0
-        alerts: list[Alert | nudge_push.NudgeAlert | digest_push.DigestAlert] = [
+        from ac_platform.lead_desk import owner_alerts
+
+        alerts: list[
+            Alert
+            | nudge_push.NudgeAlert
+            | digest_push.DigestAlert
+            | revenue_push.RevenueAlert
+            | owner_alerts.OwnerAlert
+        ] = [
             *await collect(database, now),
             *await nudge_push.collect(database, now),
             *await digest_push.collect(database, now),
+            *await revenue_push.collect(database, now),
+            *await owner_alerts.collect(database, now),
         ]
     if not alerts:
         return 0

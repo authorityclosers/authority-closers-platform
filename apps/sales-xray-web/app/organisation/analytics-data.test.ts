@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import type { ActivityItem } from "../leads/leads-client";
 import {
+  activityCsv,
   activitySummary,
   dayNumber,
   readAnalytics,
@@ -177,4 +178,35 @@ it("keeps a person active through messages and meetings without adding fake call
   expect(result.currentWork).toBe(2);
   expect(result.people[0].work).toBe(2);
   expect(result.people[0].daily[29]?.work).toBe(2);
+});
+
+// Competitor teardown 15: the export is a plain spreadsheet, safe to open.
+it("writes one row per person, quoting commas and keeping formulas as text", () => {
+  const csv = activityCsv({
+    ...activitySummary({
+      items: [],
+      members: [],
+      directoryMissing: false,
+      cursor: null,
+      timezone: "Asia/Kolkata",
+      now,
+    }),
+    people: [
+      {
+        id: "p1",
+        name: "=cmd, Fictional",
+        current: { calls: 3, conversations: 2, notes: 1, moves: 0 },
+        previous: { calls: 1, conversations: 1, notes: 0, moves: 0 },
+        work: 4,
+        daily: [],
+      },
+    ],
+  });
+  const [head, row] = csv.trim().split("\n");
+  expect(
+    head.startsWith(
+      "Person,Calls,Conversations,Notes,Stage moves,All updates,",
+    ),
+  ).toBe(true);
+  expect(row).toBe(`"'=cmd, Fictional",3,2,1,0,4,1,1,0,0`);
 });

@@ -685,3 +685,115 @@
     min-height: 44px;
   }
 }
+
+/* Rows you act on in place (competitor teardown #1, 1 Nov 2026): swipe right
+   does it, left moves it; the face slides over what each side does. */
+.swipeRow {
+  position: relative;
+  overflow: hidden;
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+.swipeFace {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 60px;
+}
+
+.swipeRow[data-swipe="right"] .swipeFace,
+.swipeRow[data-swipe="left"] .swipeFace {
+  background: var(--sx-surface);
+}
+
+.swipeBack {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.swipeBack > span {
+  display: none;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  color: var(--lx-on-teal);
+}
+
+.swipeBack > [data-side="right"] {
+  justify-content: flex-start;
+  background: var(--lx-success);
+}
+
+.swipeBack > [data-side="left"] {
+  justify-content: flex-end;
+  background: var(--sx-accent);
+}
+
+.swipeRow[data-swipe="right"] .swipeBack > [data-side="right"],
+.swipeRow[data-swipe="left"] .swipeBack > [data-side="left"] {
+  display: flex;
+}
+
+/* Late first, in red. */
+.taskMeta [data-late-time] {
+  color: var(--sx-bad);
+  font-weight: 700;
+}
+
+/* An empty block: one line, and the next thing to do. */
+.allClear {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  min-height: 44px;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.nextAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  color: var(--sx-accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* When instead: the after-call's four times. */
+.laterTimes {
+  display: grid;
+  gap: 8px;
+  padding: 4px 16px 16px;
+}
+
+.laterTime {
+  min-height: 48px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--sx-fill);
+  color: var(--sx-ink);
+  font: inherit;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.laterTime:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}

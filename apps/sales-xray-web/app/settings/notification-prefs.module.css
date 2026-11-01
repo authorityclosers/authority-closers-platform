@@ -1,0 +1,160 @@
+/* Notifications, one place (competitor teardown 26). */
+
+.list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 60px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--sx-hairline);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.text strong {
+  font-size: 15px;
+}
+
+.text small {
+  color: var(--sx-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.chip {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-hairline);
+  border-radius: 999px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chip[aria-checked="true"] {
+  border-color: transparent;
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+
+.chip:focus-visible,
+.toggle:focus-visible,
+.test:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
+.toggle {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sx-fill);
+  cursor: pointer;
+  transition: background var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.toggle > span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--sx-elevated);
+  box-shadow: 0 1px 3px color-mix(in oklab, var(--lx-film) 20%, transparent);
+  transition: transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.toggle[aria-checked="true"] {
+  background: var(--sx-accent);
+}
+
+.toggle[aria-checked="true"] > span {
+  transform: translateX(20px);
+}
+
+.toggle:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.foot {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.foot small {
+  color: var(--sx-muted);
+  font-size: 13px;
+}
+
+.test {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--sx-hairline);
+  border-radius: 999px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.test:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* A finger-sized target on touch screens. */
+@media (pointer: coarse) {
+  .chip,
+  .toggle {
+    position: relative;
+  }
+  .chip::after,
+  .toggle::after {
+    position: absolute;
+    inset: -8px -2px;
+    content: "";
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toggle,
+  .toggle > span {
+    transition: none;
+  }
+}

@@ -57,3 +57,10 @@ def test_an_owner_is_a_full_name_or_a_first_name_only_one_teammate_has() -> None
     # The same full name twice names neither either.
     twins = people_index([(asha, "Meera Joshi"), (ravi, "Meera Joshi")])
     assert twins["meera_joshi"] is None
+
+
+def test_a_source_column_is_found_by_its_header() -> None:
+    """ph1-18 (phone personas, 1 Nov 2026): a file's Source column was never matched."""
+    headers = ["Name", "Phone", "Email", "City", "Source"]
+    assert suggest_columns(headers, {"name": "Name", "phone": "Phone"}) == {"source": "Source"}
+    assert suggest_columns(["Name", "Lead list"], {"name": "Name"}) == {"source": "Lead list"}

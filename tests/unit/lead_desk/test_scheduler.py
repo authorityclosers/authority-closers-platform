@@ -111,6 +111,9 @@ def test_snooze_choices() -> None:
     assert snoozed(task, "evening", at(18, 30), WORK) == at(10, 0, days=1)
     # Saturday's tomorrow is a Sunday off: Monday.
     assert snoozed(task, "tomorrow", at(12, 0, days=1), WORK) == at(10, 0, days=3)
+    # Next week: the same day a week on, at the start of work (Home's swipe-left).
+    assert snoozed(task, "week", at(12, 5)) == at(10, 0, days=7)
+    assert snoozed(task, "week", at(12, 5), WORK) == at(10, 0, days=7)
 
 
 def test_stale_reminders_are_not_sent() -> None:

@@ -5,9 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const route = vi.hoisted(() => ({ path: "/leads" }));
 vi.mock("next/navigation", () => ({ usePathname: () => route.path }));
+vi.mock("../leads/native-phone", async (original) => ({
+  ...(await original<typeof import("../leads/native-phone")>()),
+  openDialer: vi.fn(),
+}));
 
 import { REPORT_PROBLEM_EVENT } from "../bug-report/open";
 import { SELECT_WORKSPACE_EVENT } from "../call-ownership";
+import { openDialer } from "../leads/native-phone";
 import { resetBackCloseForTests } from "../ui/back-close";
 import { WorkspaceAccessContext } from "../workspace-access";
 import type { CaptureSetup } from "./capture-setup-client";
@@ -352,12 +357,91 @@ describe("CaptureSetupFlow", () => {
     await flow(setup({ consent: "on" }));
     await act(async () => button("Continue").click());
     await settle();
-    expect(title()).toBe("Pick your call recordings folder");
+    // One checked list: only the folder is left (competitor teardown #6).
+    expect(title()).toBe("Your Redmi can record · 1 step");
+    expect(host.textContent).toContain("Recordings folder chosen not done");
     await act(async () => button("Choose the folder").click());
     await settle();
     expect(sent.map((message) => message.method)).toContain(
       "pickRecordingsFolder",
     );
+  });
+
+  it("lists recording as checked steps and finishes with a 10-second test call", async () => {
+    // Competitor teardown #6, 1 Nov 2026: each step checks itself, and a test
+    // call the seller places proves recording works before "You're set".
+    const phone: Record<string, unknown> = {
+      recorderProfile: {
+        kind: "folder",
+        maker: "xiaomi",
+        dialerLabel: "Phone",
+        recording: "on",
+        folders: [],
+      },
+    };
+    fakePhone(phone);
+    fakeServer(setup({ consent: "on" }), "on");
+    await flow(setup({ consent: "on" }));
+    await act(async () => button("Continue").click());
+    await settle();
+    expect(title()).toBe("Your Redmi can record · 1 step");
+    expect(host.textContent).toContain("Call recording on in Phone done");
+    expect(host.textContent).toContain("Recordings folder chosen done");
+    expect(host.textContent).toContain("10-second test call not done");
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await act(async () => button("Open the dialer").click());
+    expect(openDialer).toHaveBeenCalledOnce();
+    expect(host.textContent).toContain("Looking for the test recording");
+    // The call ends; the Phone app saves a 10-second recording in the folder.
+    phone.recorderProfile = {
+      ...(phone.recorderProfile as Record<string, unknown>),
+      newestMs: Date.now() + 1_000,
+      newestDurationMs: 10_000,
+    };
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent("sx-phone", { detail: { event: "resume" } }),
+      );
+    });
+    await settle();
+    expect(host.textContent).toContain("Test recording found ✓ 0:10");
+    expect(title()).toBe("Recording works");
+    await act(async () => button("Continue").click());
+    await settle();
+    expect(title()).toBe("You're set");
+  });
+
+  it("says the exact fix when the test recording doesn't arrive", async () => {
+    fakePhone({
+      recorderProfile: {
+        kind: "folder",
+        maker: "xiaomi",
+        dialerLabel: "Phone",
+        recording: "on",
+        folders: [],
+      },
+    });
+    fakeServer(setup({ consent: "on" }), "on");
+    await flow(setup({ consent: "on" }));
+    await act(async () => button("Continue").click());
+    await settle();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await act(async () => button("Open the dialer").click());
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent("sx-phone", { detail: { event: "resume" } }),
+      );
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(46_000);
+    });
+    await settle();
+    expect(host.textContent).toContain(
+      "No recording arrived in the folder you chose. Check Phone records all calls, or choose the folder again, then test again.",
+    );
+    expect(button("Test again")).toBeTruthy();
+    expect(button("Choose the folder again")).toBeTruthy();
+    expect(button("Skip the test call")).toBeTruthy();
   });
 
   it("tells a Xiaomi phone to choose No restrictions on the battery step", async () => {

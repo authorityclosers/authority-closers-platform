@@ -58,6 +58,8 @@ export type LeadRow = {
   step?: string | null;
   /** The organisation's pipeline the lead is in ("main" until there are more). */
   pipeline?: string;
+  /** Inbound or Cold (ph1-16). */
+  side?: "inbound" | "cold";
   /** They called, nobody picked up, and nobody has called back yet. */
   missed_at?: string | null;
   missed_calls?: number;
@@ -86,6 +88,8 @@ export type Stage =
   | "junk";
 
 export type Desk = {
+  /** The organisation's own lists, from files' Source columns (ph1-18). */
+  file_sources?: string[];
   me: {
     person_id: string;
     name: string;
@@ -847,7 +851,7 @@ export type TaskKind =
   | "meeting"
   | "other";
 export type TaskBucket = "overdue" | "today" | "upcoming";
-export type TaskSnoozeChoice = "15m" | "1h" | "evening" | "tomorrow";
+export type TaskSnoozeChoice = "15m" | "1h" | "evening" | "tomorrow" | "week";
 
 export type TaskView = {
   task_id: string;
@@ -1807,9 +1811,10 @@ export const SAMPLE_CSV = [
   "Ravi Kumar,+91 91234 56780,,Mumbai,Home loan",
 ].join("\n");
 
-/** A phone number as people read it: "+91 98765 43210" for Indian mobiles. */
+/** A phone number as people read it: "+91 98765 43210" for any Indian number
+ *  of ten digits (ph2-22: "+91 00000 19999", never a run of digits). */
 export function displayPhone(phone: string): string {
-  const india = /^\+91([6-9]\d{4})(\d{5})$/.exec(phone);
+  const india = /^\+91(\d{5})(\d{5})$/.exec(phone);
   return india ? `+91 ${india[1]} ${india[2]}` : phone;
 }
 

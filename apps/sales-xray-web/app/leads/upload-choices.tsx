@@ -236,3 +236,23 @@ export function sharesLine(
   const left = Math.max(0, fresh - given);
   return `${[...named, ...(left ? [`${left} unassigned`] : [])].join(" · ")}.`;
 }
+
+/** Who the import would take past their open-lead limit, before anything is
+ *  written (ph1-17, 1 Nov 2026: the warning came only after the import). */
+export function overLimitLines(
+  value: UploadChoices,
+  team: RepView[] | null,
+  fresh: number,
+): string[] {
+  // The limit counts Inbound only (ph1-17: a Cold list is handed over on purpose).
+  if (value.assign !== "people" || !team || value.side === "cold") return [];
+  const counts = countsFor(value, team, fresh);
+  return team.flatMap((rep) => {
+    const given = counts[rep.person_id] ?? 0;
+    const after = rep.open_leads + given;
+    if (!given || rep.max_open === null || after <= rep.max_open) return [];
+    return [
+      `${displayName(rep.name)} would have ${after} open leads, ${after - rep.max_open} over the limit of ${rep.max_open}.`,
+    ];
+  });
+}

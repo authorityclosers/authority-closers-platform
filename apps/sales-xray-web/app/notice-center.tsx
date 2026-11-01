@@ -8,6 +8,7 @@ import {
   Copy,
   ExternalLink,
   Info,
+  PhoneIncoming,
   RotateCw,
   X,
 } from "lucide-react";
@@ -38,8 +39,9 @@ import {
 } from "./ui/alerts";
 import styles from "./notice-center.module.css";
 
-/** "work" and "due" are work alerts (ui/alerts.tsx); "due" is within the hour. */
-export type NoticeTone = "error" | "info" | "success" | "work" | "due";
+/** "work" and "due" are work alerts (ui/alerts.tsx); "due" is within the hour;
+    "lead" is a new enquiry (competitor teardown 12). */
+export type NoticeTone = "error" | "info" | "success" | "work" | "due" | "lead";
 export type Notice = Readonly<{
   id: string;
   tone: NoticeTone;
@@ -65,6 +67,9 @@ export type Notice = Readonly<{
   folded?: boolean;
   /** The same as folded (the recording card's first name for it). */
   slim?: boolean;
+  /** Its action stays in the one-line pill: "New enquiry · Asha · Meta",
+      Call now (competitor teardown 12, 1 Nov 2026). */
+  pillAction?: boolean;
   /** Error cards offer "Report" (the bug reporter); not on the reporter's own. */
   noReport?: boolean;
 }>;
@@ -150,6 +155,7 @@ const ICON = {
   success: CheckCircle2,
   work: BellRing,
   due: BellRing,
+  lead: PhoneIncoming,
 };
 
 /** A work alert (ui/alerts.tsx) as a corner card: one notification system,
@@ -324,6 +330,14 @@ function NoticeCard({
           <Icon className={styles.icon} size={16} aria-hidden="true" />
           <span className={styles.pillText}>{notice.title}</span>
         </button>
+        {notice.action && notice.pillAction ? (
+          <CardAction
+            action={notice.action}
+            onRun={() => {
+              if (!notice.onDismiss) remove();
+            }}
+          />
+        ) : null}
         <button
           type="button"
           className={styles.close}

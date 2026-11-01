@@ -267,21 +267,24 @@ def test_a_sellers_day_on_the_desk(postgres_harness: Any, tmp_path: Path) -> Non
                 assert report.status_code == 200, report.text
                 week = report.json()
                 assert week["days"] == 7
-                assert week["current"]["calls"] == 2 and week["current"]["connected"] == 1
-                assert week["current"]["leads_called"] == 1
+                # Outcomes logged without a call are not calls here either, as on Home above
+                # (hardcore phone QA ph1-30, 1 Nov 2026; calls themselves are counted in
+                # test_lead_desk_home_numbers_postgresql).
+                assert week["current"]["calls"] == 0 and week["current"]["connected"] == 0
+                assert week["current"]["leads_called"] == 0
                 assert (week["current"]["interested"], week["current"]["won"]) == (1, 0)
                 assert week["current"]["new_leads"] == 1
                 assert week["previous"]["calls"] == 0 and week["previous"]["new_leads"] == 0
                 top = week["sellers"][0]
                 assert top["person_id"] == str(seller.person_id)
-                assert (top["calls"], top["interested"]) == (2, 1)
+                assert (top["calls"], top["interested"]) == (0, 1)
                 assert week["pipeline"] == {"interested": 1}
                 # Each India-time day, oldest first: today holds this test's work.
                 daily = week["daily"]
                 assert [day["day"] for day in daily][-1] == week["end"]
                 assert len(daily) == 7 and daily[0]["day"] == week["start"]
                 today = daily[-1]
-                assert (today["calls"], today["connected"], today["new_leads"]) == (2, 1, 1)
+                assert (today["calls"], today["connected"], today["new_leads"]) == (0, 0, 1)
                 assert (today["interested"], today["won"]) == (1, 0)
                 assert sum(day["calls"] + day["new_leads"] for day in daily[:-1]) == 0
                 odd = await client.get(f"{BASE}/reports/performance", params={"days": 3})
@@ -390,10 +393,10 @@ def test_website_form_and_file_capture(postgres_harness: Any, tmp_path: Path) ->
                     if rep["person_id"] == str(setup.state.person_id)
                 )
                 sheet = (
-                    "Name,Phone,Status,Assigned to\n"
-                    f"Meera,9800000010,interested,{me['name'].upper()}\n"
-                    "Karan,9800000011,Hot lead,Nobody Known\n"
-                    "Asha,98000 00003,Won,\n"
+                    "Name,Phone,Status,Assigned to,Source\n"
+                    f"Meera,9800000010,interested,{me['name'].upper()},Expo list\n"
+                    "Karan,9800000011,Hot lead,Nobody Known,\n"
+                    "Asha,98000 00003,Won,,\n"
                 ).encode()
                 looked = await client.post(
                     f"{BASE}/imports/preview",
@@ -429,6 +432,18 @@ def test_website_form_and_file_capture(postgres_harness: Any, tmp_path: Path) ->
                 assert rows["Meera"]["owner_person_id"] == str(setup.state.person_id)
                 assert rows["Karan"]["stage"] == "new"
                 assert rows["Asha"]["stage"] == "new"
+                # The file's Source column is the lead's source; the filter can pick it
+                # (ph1-18, 1 Nov 2026: "Expo list" read "File upload").
+                assert seen["mapping"]["source"] == "Source"
+                assert rows["Meera"]["source_label"] == "Expo list"
+                assert rows["Karan"]["source_label"] == "File: b.csv"
+                listed = (
+                    await client.get(
+                        f"{BASE}/leads", params={"scope": "team", "source": "Expo list"}
+                    )
+                ).json()
+                assert [row["name"] for row in listed["leads"]] == ["Meera"]
+                assert "Expo list" in (await client.get(BASE)).json()["file_sources"]
         finally:
             await setup.engine.dispose()
 

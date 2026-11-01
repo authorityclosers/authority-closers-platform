@@ -24,6 +24,7 @@ import {
   unscoredPointers,
   type XrayView,
 } from "./model";
+import type { TalkLine } from "./ai-notes";
 import { OverviewScore } from "./overview";
 import { readStructure } from "./structure";
 import { Brain4Analysis, Brain4Pending } from "./brain4-view";
@@ -142,6 +143,33 @@ export function useXrayView(
   }, [illustration, model, transcript, seller, prospect, data.report]);
 }
 
+/** The call's talk for the AI notes: the seller's share and each side's longest turn. */
+function useTalkLine(
+  data: DocumentReportData,
+  callId: string | null,
+): TalkLine | null {
+  const { people } = useStory(data, callId);
+  const transcript = data.transcript;
+  const seller = people.roles?.seller ?? null;
+  const prospect = people.roles?.prospect ?? null;
+  return useMemo(() => {
+    if (!transcript || !seller || !prospect) return null;
+    const metrics = computeCallMetrics(
+      transcript.segments,
+      transcript.duration_ms || null,
+    );
+    const you = metrics.speakers[seller];
+    const them = metrics.speakers[prospect];
+    if (!you || !them) return null;
+    const total = you.talk_ms + them.talk_ms;
+    return {
+      you: total > 0 ? Math.round((you.talk_ms / total) * 100) : null,
+      yourLongestMs: you.longest_monologue_ms || null,
+      theirLongestMs: them.longest_monologue_ms || null,
+    };
+  }, [transcript, seller, prospect]);
+}
+
 /** One part's render error stays inside that part. */
 class PartBoundary extends Component<
   { children: ReactNode },
@@ -172,7 +200,15 @@ type PartProps = {
 
 function OverviewPart(props: PartProps) {
   const view = useXrayView(props.data, props.callId, props.illustration);
-  return <OverviewScore view={view} onSelect={props.onSelect} />;
+  const talk = useTalkLine(props.data, props.callId);
+  return (
+    <OverviewScore
+      view={view}
+      onSelect={props.onSelect}
+      talk={talk}
+      callKey={props.callId}
+    />
+  );
 }
 
 /**

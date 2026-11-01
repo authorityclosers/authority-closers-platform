@@ -68,27 +68,60 @@ function Answers({ children }: { children: ReactNode }) {
         const data = activitySummary(history);
         const iso = (day: number) =>
           new Date(day * 86400000).toISOString().slice(0, 10);
+        // Today, 7 or 30 days: the last days of the fixture's month.
+        const days = Math.min(
+          30,
+          Math.max(1, Number(url.searchParams.get("days")) || 30),
+        );
+        const cut = 30 - days;
+        const none = {
+          calls: 0,
+          conversations: 0,
+          notes: 0,
+          moves: 0,
+          work: 0,
+        };
+        const add = (sum: typeof none, day: typeof none) => ({
+          calls: sum.calls + day.calls,
+          conversations: sum.conversations + day.conversations,
+          notes: sum.notes + day.notes,
+          moves: sum.moves + day.moves,
+          work: sum.work + day.work,
+        });
+        const people = data.people.map((person) => {
+          const daily = person.daily.slice(cut).map((day) => day ?? none);
+          return {
+            ...person,
+            current: daily.reduce(add, none),
+            previous: { ...person.previous, work: 0 },
+            daily: daily.map((day, i) => ({
+              ...day,
+              day: iso(data.start + cut + i),
+            })),
+          };
+        });
         return json({
           schema: "lead-desk/1",
-          days: 30,
+          days,
           now: FIXTURE_NOW,
           timezone: data.timezone,
-          start: iso(data.start),
-          prior: iso(data.prior),
+          start: iso(data.start + cut),
+          prior: iso(data.start + cut - days),
           today: iso(data.today),
-          current: { ...data.current, work: data.currentWork },
+          current: people.map((person) => person.current).reduce(add, none),
           previous: { ...data.previous, work: 0 },
-          people: data.people.map((person) => ({
-            ...person,
-            current: { ...person.current, work: person.work },
-            previous: { ...person.previous, work: 0 },
-            daily: person.daily.map((day, i) => ({
-              ...day,
-              day: iso(data.start + i),
-            })),
-          })),
+          people,
         });
       }
+      // The list behind a number: the fixture's events, newest first.
+      if (url.pathname === "/v1/lead-desk/activity")
+        return json({
+          items: [...analyticsFixture.items].sort(
+            (a, b) => Date.parse(b.event.at) - Date.parse(a.event.at),
+          ),
+          next_before: null,
+          counts: {},
+        });
 
       return original(input, init);
     };

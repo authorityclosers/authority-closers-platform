@@ -313,3 +313,37 @@ it("puts a new card at the top, so the cards already there stay put", async () =
     await act(async () => ids.forEach((id) => dismissNotice(id)));
   }
 });
+
+// Competitor teardown 12 (1 Nov 2026): a new enquiry is a one-line pill with
+// its Call now in it, never a sheet over the list; the X is "Later".
+it("keeps a new enquiry's Call now in its one-line pill", async () => {
+  const call = vi.fn();
+  const later = vi.fn(async () => {});
+  await act(async () =>
+    notify({
+      id: "fictional",
+      tone: "lead",
+      title: "New enquiry · Asha Fictional · Meta",
+      action: { label: "Call now", run: call, icon: "none" },
+      dismissLabel: "Later",
+      onDismiss: later,
+      pillAction: true,
+      folded: true,
+      timeout: 0,
+    }),
+  );
+  const pill = host.querySelector<HTMLButtonElement>(
+    '[aria-expanded="false"]',
+  )!;
+  expect(pill.textContent).toBe("New enquiry · Asha Fictional · Meta");
+  const now = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Call now",
+  )!;
+  await act(async () => now.click());
+  expect(call).toHaveBeenCalledTimes(1);
+  // It stays until the page or the person closes it.
+  expect(host.textContent).toContain("New enquiry · Asha Fictional");
+  await act(async () => close().click());
+  expect(later).toHaveBeenCalledTimes(1);
+  expect(host.textContent).not.toContain("New enquiry");
+});

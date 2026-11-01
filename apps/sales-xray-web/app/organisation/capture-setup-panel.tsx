@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 
 import {
   readCaptureTeam,
+  type CaptureRecording,
   type CaptureTeam,
   type CaptureTeamRow,
   type CaptureTeamState,
@@ -42,6 +43,60 @@ function day(at: string | null): string | null {
 }
 
 const calls = (count: number) => (count === 1 ? "1 call" : `${count} calls`);
+
+const RECORDING_FIX: Record<NonNullable<CaptureRecording["fix"]>, string> = {
+  folder: "Allow folder",
+  recorder: "Turn on call recording",
+  test: "Place a test call",
+};
+
+/** How long ago, in Team's few words: "12 min ago", "3 h ago", "yesterday". */
+function since(at: number, now: number): string {
+  const minutes = Math.max(0, Math.floor((now - at) / 60_000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 24 * 60) return `${Math.floor(minutes / 60)} h ago`;
+  return minutes < 48 * 60
+    ? "yesterday"
+    : `on ${day(new Date(at).toISOString())}`;
+}
+
+/** The day, as a seller would say it: "Tue", or "28 Oct" further back. */
+function dayName(at: number, now: number): string {
+  return now - at < 6 * 86_400_000
+    ? new Date(at).toLocaleDateString("en-IN", {
+        weekday: "short",
+        timeZone: "Asia/Kolkata",
+      })
+    : (day(new Date(at).toISOString()) ?? "");
+}
+
+/**
+ * Recording on a seller's phone, in one line with its fix (competitor teardown
+ * #7, 1 Nov 2026): "Recording OK · last file 12 min ago", "No recordings since
+ * Tue · Turn on call recording", "No recordings folder · Allow folder".
+ */
+export function recordingLine(
+  recording: CaptureRecording | null | undefined,
+  now: number,
+): string | null {
+  if (!recording) return null;
+  const last = recording.last_at ? Date.parse(recording.last_at) : NaN;
+  const fix = recording.fix ? RECORDING_FIX[recording.fix] : null;
+  if (recording.state === "ok")
+    return Number.isFinite(last)
+      ? `Recording OK · last file ${since(last, now)}`
+      : "Recording OK";
+  const what =
+    recording.state === "off"
+      ? recording.fix === "folder"
+        ? "No recordings folder"
+        : "Call recording off"
+      : Number.isFinite(last)
+        ? `No recordings since ${dayName(last, now)}`
+        : "No call recording found yet";
+  return [what, fix].filter(Boolean).join(" · ");
+}
 
 /** The one line under a seller's name, with today's calls that have no recording
     and a phone with work-call logging off (the rule Connections uses, ph1-23). */
@@ -82,6 +137,7 @@ function stateLine(row: CaptureTeamRow): string {
 export function CaptureSetupPanel() {
   const [team, setTeam] = useState<CaptureTeam | null>(null);
   const [failed, setFailed] = useState(false);
+  const [now] = useState(() => Date.now());
 
   useEffect(() => {
     const controller = new AbortController();
@@ -133,6 +189,14 @@ export function CaptureSetupPanel() {
                     <PersonDisplayName name={row.name} />
                   </strong>
                   <small>{named(captureLine(row))}</small>
+                  {row.recording ? (
+                    <small
+                      className={own.recording}
+                      data-state={row.recording.state}
+                    >
+                      {recordingLine(row.recording, now)}
+                    </small>
+                  ) : null}
                 </span>
                 <span className={own.badge} data-state={row.state}>
                   {BADGE[row.state]}

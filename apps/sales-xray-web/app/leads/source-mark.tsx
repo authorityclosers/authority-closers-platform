@@ -35,7 +35,11 @@ export function sourceText(row: Source): string {
     const kind = row.source_label.split("·").pop()?.trim() ?? "";
     return kind ? kind[0].toUpperCase() + kind.slice(1) : "Lead";
   }
-  if (row.source === "csv") return "File upload";
+  // A file's own list name from its Source column (ph1-18): "Expo list".
+  if (row.source === "csv")
+    return /^File: | export: /.test(row.source_label)
+      ? "File upload"
+      : row.source_label;
   return row.source_label.replace(/^Sheet: /, "Sheet · ");
 }
 

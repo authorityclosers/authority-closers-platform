@@ -7,6 +7,8 @@ vi.mock("../notice-center", () => ({ notify: () => undefined }));
 
 import type { Revenue, RevenueTargets } from "./revenue-client";
 import {
+  forgetTargetDraft,
+  mismatch,
   RevenueTargetCard,
   RevenueTargetDetail,
   takesChain,
@@ -62,6 +64,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  forgetTargetDraft();
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -134,9 +137,11 @@ it("saves the organisation's month and only the sellers that changed", async () 
   const inputs = Array.from(
     container.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]'),
   );
-  // The organisation, then each seller by name, then the typical deal.
-  expect(inputs).toHaveLength(6);
-  expect(container.textContent).toContain("Even share ₹3 L");
+  // This month and next side by side (competitor teardown #8): the
+  // organisation's row, each seller's, then the typical deal.
+  expect(inputs).toHaveLength(11);
+  // The even share is the seller's placeholder.
+  expect(inputs[2].placeholder).toBe("₹3 L");
   const type = (input: HTMLInputElement, value: string) =>
     act(() => {
       Object.getOwnPropertyDescriptor(
@@ -146,7 +151,7 @@ it("saves the organisation's month and only the sellers that changed", async () 
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
   type(inputs[0], "15 L");
-  type(inputs[1], "4 L");
+  type(inputs[2], "4 L");
   const save = Array.from(container.querySelectorAll("button")).find((node) =>
     node.textContent?.startsWith("Save"),
   )!;
@@ -160,7 +165,83 @@ it("saves the organisation's month and only the sellers that changed", async () 
   });
   // Said by the button, where the owner looks (the corner notice sits under the sheet).
   await settle();
-  expect(container.querySelector("[role=status]")?.textContent).toMatch(
-    /target saved$/,
+  expect(
+    Array.from(
+      container.querySelectorAll("[role=status]"),
+      (node) => node.textContent,
+    ).join(" | "),
+  ).toMatch(/ saved$/);
+});
+
+const cell = (label: string) =>
+  container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+const button = (words: string) =>
+  Array.from(container.querySelectorAll("button")).find(
+    (node) => node.textContent === words,
+  )!;
+const typeInto = (input: HTMLInputElement, value: string) =>
+  act(() => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+// Competitor teardown #8 (1 Nov 2026): sellers x month, Split equally, Apply
+// to all, and a warning when the sellers don't add up.
+it("splits the month equally, applies it to next month, and warns when it doesn't add up", async () => {
+  serve();
+  await act(async () => root.render(<RevenueTargetDetail />));
+  await settle();
+  const [first, second] = Array.from(
+    container.querySelectorAll("[aria-label^='Organisation, ']"),
+    (node) => node.getAttribute("aria-label")!.replace("Organisation, ", ""),
   );
+  // Ravi's own ₹5 L and three even shares of ₹3 L make ₹14 L against ₹12 L.
+  expect(container.textContent).toContain(
+    `${first}: Sellers add up to ₹14 L, ₹2 L over ₹12 L`,
+  );
+  typeInto(cell(`Organisation, ${first}`), "20 L");
+  await act(async () => button("Split equally").click());
+  expect(cell(`Asha Fictional, ${first}`).value).toBe("5,00,000");
+  expect(cell(`Ravi Fictional, ${first}`).value).toBe("5,00,000");
+  expect(container.textContent).not.toContain(`${first}: Sellers add up`);
+  await act(async () => button("Apply to all").click());
+  expect(cell(`Organisation, ${second}`).value).toBe("20 L");
+  expect(cell(`Kabir Fictional, ${second}`).value).toBe("5,00,000");
+});
+
+// Hardcore phone QA ph1-29 (1 Nov 2026): amounts read as people write them,
+// and Back keeps what was typed instead of discarding it.
+it("shows amounts with Indian grouping, and keeps a draft through Back", async () => {
+  serve();
+  await act(async () => root.render(<RevenueTargetDetail />));
+  await settle();
+  const [first] = Array.from(
+    container.querySelectorAll("[aria-label^='Organisation, ']"),
+    (node) => node.getAttribute("aria-label")!.replace("Organisation, ", ""),
+  );
+  expect(cell(`Organisation, ${first}`).value).toBe("12,00,000");
+  expect(cell(`Ravi Fictional, ${first}`).value).toBe("5,00,000");
+  typeInto(cell(`Organisation, ${first}`), "18 L");
+  expect(container.textContent).toContain("Not saved yet");
+  // Back: the detail closes; opening it again brings the draft back.
+  act(() => root.unmount());
+  root = createRoot(container);
+  await act(async () => root.render(<RevenueTargetDetail />));
+  await settle();
+  expect(cell(`Organisation, ${first}`).value).toBe("18 L");
+  expect(container.textContent).toContain("Not saved yet");
+});
+
+it("says how far the sellers are from the organisation's month", () => {
+  expect(
+    mismatch({ org: "1500000", own: { a: "", b: "500000" } }, ["a", "b"]),
+  ).toBe("Sellers add up to ₹12.5 L, ₹2.5 L short of ₹15 L");
+  // No seller of their own: the even split is the organisation's.
+  expect(mismatch({ org: "1500000", own: { a: "", b: "" } }, ["a", "b"])).toBe(
+    null,
+  );
+  expect(mismatch({ org: "", own: { a: "500000" } }, ["a"])).toBe(null);
 });

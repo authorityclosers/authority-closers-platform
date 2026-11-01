@@ -601,6 +601,17 @@ def overdue_filter(now: datetime) -> Any:
     )
 
 
+# A lead whose next step is a task other than a call says the task's kind, never "Call
+# booked" (hardcore phone QA ph2-24, 1 Nov 2026: a WhatsApp task read "Call booked").
+TASK_BOOKED: dict[str, str] = {
+    "whatsapp": "WhatsApp booked",
+    "email": "Email booked",
+    "send_file": "File to send",
+    "meeting": "Meeting booked",
+    "other": "Task booked",
+}
+
+
 def ago_text(at: datetime, now: datetime) -> str:
     minutes = max(0, round((now - at).total_seconds() / 60))
     if minutes < 1:
@@ -699,6 +710,8 @@ class LeadDesk:
                 await self.db.scalars(select(LeadRep).where(LeadRep.tenant_id == self.tenant_id))
             ).all()
         }
+        # The open-lead limit and the fair share count Inbound leads only (ph1-17, 1 Nov
+        # 2026): a Cold list handed to a seller never fills their limit.
         loads: dict[UUID | None, int] = dict(
             (
                 await self.db.execute(
@@ -707,6 +720,7 @@ class LeadDesk:
                         Lead.tenant_id == self.tenant_id,
                         Lead.owner_person_id.is_not(None),
                         Lead.stage.in_(OPEN_STAGES),
+                        func.coalesce(Lead.pipeline, "live") != "cold",
                     )
                     .group_by(Lead.owner_person_id)
                 )
@@ -885,13 +899,17 @@ class LeadDesk:
 
     # ----- rows ------------------------------------------------------------------
 
-    def _why(self, lead: Lead, day_end: datetime) -> tuple[WhyKind, str]:
+    def _why(
+        self, lead: Lead, day_end: datetime, task_kind: str | None = None
+    ) -> tuple[WhyKind, str]:
         source = lead.source_label or SOURCE_LABELS.get(lead.source, lead.source)
         if lead.stage in CLOSED_STAGES:
             return "closed", self._stage_label(lead)
         if lead.owner_person_id is None:
             return "waiting", "Waiting for an owner"
         due = lead.next_action_at
+        # Its next step's own kind when that is a task other than a call (ph2-24).
+        booked = TASK_BOOKED.get(task_kind or "", "Call booked")
         if lead.stage == "new" and due is None:
             return "new", "New lead"
         if due is not None and due <= self.now:
@@ -902,14 +920,14 @@ class LeadDesk:
                 tries = f"{lead.attempts} tr{'y' if lead.attempts == 1 else 'ies'}"
                 return "retry", f"Try again · {label.lower()} · {tries}"
             if lead.stage == "new":
-                return "due", f"Asked again · {source}" if lead.repeats else "Call booked"
+                return "due", f"Asked again · {source}" if lead.repeats else booked
             return "due", f"{self._stage_label(lead)} due"
         if due is not None and due <= day_end:
             if lead.stage == "new":
-                return "later", "Call booked"
+                return "later", booked
             return "later", "Try again" if lead.stage == "not_connected" else "Follow-up"
         if due is not None and lead.stage == "new":
-            return "open", "Call booked"
+            return "open", booked
         return "open", self._stage_label(lead)
 
     def _row(
@@ -919,8 +937,9 @@ class LeadDesk:
         day_end: datetime,
         *,
         full_phone: bool = False,
+        task_kind: str | None = None,
     ) -> LeadRow:
-        kind, why = self._why(lead, day_end)
+        kind, why = self._why(lead, day_end, task_kind)
         result_label = (
             STAGE_LABELS.get(lead.last_result) or REASON_LABELS.get(lead.last_result)
             if lead.last_result
@@ -940,6 +959,7 @@ class LeadDesk:
             stage_label=self._stage_label(lead),
             step=self._step(lead),
             pipeline=journeys.pipeline_of(lead),
+            side=lead_side(lead.pipeline),
             source=lead.source,
             source_label=lead.source_label or SOURCE_LABELS.get(lead.source, lead.source),
             owner_person_id=lead.owner_person_id,
@@ -991,7 +1011,36 @@ class LeadDesk:
         names = await self._names(lead.owner_person_id for lead in leads)
         day_end = self._day_start() + timedelta(days=1)
         full = bool((await self.settings())[1].get("show_full_phones"))
-        return tuple(self._row(lead, names, day_end, full_phone=full) for lead in leads)
+        kinds = await self._next_task_kinds(leads)
+        return tuple(
+            self._row(lead, names, day_end, full_phone=full, task_kind=kinds.get(lead.id))
+            for lead in leads
+        )
+
+    async def _next_task_kinds(self, leads: Sequence[Lead]) -> dict[UUID, str]:
+        """Each lead's next step when it is an open task (its next action is its earliest
+        open task, tasks.project): that task's kind, for the row's words (ph2-24)."""
+        from ac_platform.lead_desk.models import LeadTask
+
+        planned = {lead.id: lead.next_action_at for lead in leads if lead.next_action_at}
+        if not planned:
+            return {}
+        rows = (
+            await self.db.execute(
+                select(LeadTask.lead_id, LeadTask.kind, LeadTask.starts_at)
+                .where(
+                    LeadTask.tenant_id == self.tenant_id,
+                    LeadTask.lead_id.in_(list(planned)),
+                    LeadTask.status == "open",
+                )
+                .order_by(LeadTask.starts_at, LeadTask.id)
+            )
+        ).all()
+        found: dict[UUID, str] = {}
+        for lead_id, kind, starts_at in rows:
+            if lead_id not in found and starts_at == planned[lead_id]:
+                found[lead_id] = str(kind)
+        return found
 
     # ----- the desk --------------------------------------------------------------
 
@@ -1140,7 +1189,24 @@ class LeadDesk:
                 new_key=new_key,
                 open_key=open_key,
             )
+        file_sources = tuple(
+            (
+                await self.db.scalars(
+                    select(Lead.source_label)
+                    .where(
+                        Lead.tenant_id == self.tenant_id,
+                        Lead.source == "csv",
+                        Lead.source_label.not_like("File: %"),
+                        Lead.source_label.not_like("% export: %"),
+                    )
+                    .distinct()
+                    .order_by(Lead.source_label)
+                    .limit(12)
+                )
+            ).all()
+        )
         return Desk(
+            file_sources=file_sources,
             me=who,
             numbers=numbers[("today", None)],
             numbers_yesterday=numbers[("yesterday", None)],
@@ -1785,7 +1851,10 @@ class LeadDesk:
         day = self._day_start()
         where: list[Any] = []
         if source is not None:
-            where.append(Lead.source == source)
+            # A kind ("csv"), or a list's own name from a file's Source column (ph1-18).
+            where.append(
+                Lead.source == source if source in SOURCE_LABELS else Lead.source_label == source
+            )
         if due == "late":
             where.append(and_(Lead.stage.in_(OPEN_STAGES), Lead.next_action_at < self.now))
         elif due == "today":
@@ -3210,7 +3279,10 @@ class LeadDesk:
                 raise DeskError(403, "Only owners and admins see another seller's leads.")
             where.append(Lead.owner_person_id == owner)
         if source is not None:
-            where.append(Lead.source == source)
+            # A kind ("csv"), or a list's own name from a file's Source column (ph1-18).
+            where.append(
+                Lead.source == source if source in SOURCE_LABELS else Lead.source_label == source
+            )
         if search:
             needle = search_needle(search)
             digits = "".join(ch for ch in search if ch.isdigit())
@@ -3479,7 +3551,7 @@ class LeadDesk:
             beyond = over_cap(state.open_leads, state.max_open)
             if state.person_id in wanted and beyond:
                 lines.append(
-                    f"{state.name} now has {state.open_leads} open leads, {beyond} over "
+                    f"{state.name} now has {state.open_leads} open Inbound leads, {beyond} over "
                     f"their limit of {state.max_open}."
                 )
         return lines
@@ -3623,10 +3695,12 @@ class LeadDesk:
         # The bell's "<name> is your lead now" (owner, 27 Oct 2026; migration 0142): for a
         # seller someone else gave it to (the lead rules, a manager), never for their own pick
         # (an add for oneself passes no actor, so the person asking counts too).
+        # A Cold lead comes in a list: never a bell line (ph1-16, 1 Nov 2026).
         if (
             person_id is not None
             and person_id != previous
             and person_id not in {actor, self.viewer.person_id}
+            and lead_side(lead.pipeline) != "cold"
         ):
             self._tell_new_owner(lead, person_id, event)
         return event
@@ -3693,6 +3767,7 @@ class LeadDesk:
                     interest=lead.interest,
                     previous_owner=previous_owner,
                     exclude=exclude,
+                    cold=lead_side(lead.pipeline) == "cold",
                 ),
                 [rep.state for rep in team],
                 strict_language=bool(config.get("strict_language")),
@@ -5137,7 +5212,7 @@ class LeadDesk:
         if not self.viewer.can_manage:
             raise DeskError(403, "Only owners and admins manage the team's lead rules.")
 
-    async def effort(self, days: int) -> Effort:
+    async def effort(self, days: int, *, month: bool = False) -> Effort:
         """The Performance engine (Leads redesign section 6; owner and Dipak, 30 Oct 2026):
         for each seller, the work done, what was missed and the breaks taken, with Inbound
         and Cold leads measured apart (Dipak's table).
@@ -5156,7 +5231,10 @@ class LeadDesk:
         from ac_platform.call_ai.missing_recordings import missing_today
         from ac_platform.lead_desk.models import LeadTask
 
-        if days not in (1, 7, 30):
+        if month:
+            # This month so far, India time (teardown #18: Today, 7 days, Month).
+            days = self.now.astimezone(IST).date().day
+        elif days not in (1, 7, 30):
             raise DeskError(422, "Pick today, 7 days or 30 days.")
         team = self.viewer.can_see_team
         me = self.viewer.person_id
@@ -5294,10 +5372,12 @@ class LeadDesk:
             before = data.get("from_stage") or data.get("previous_stage")
             if stage in ("interested", "won") and stage != before:
                 into[stage].add(lead_id)
-        for owner, lead_id, pipeline, stage, calls, late in open_now:
+        for owner, lead_id, pipeline, stage, _stored_calls, late in open_now:
             into = bucket(owner, lead_side(pipeline))
             into["open"].add(lead_id)
-            if stage == "new" and not calls:
+            # Still in the first stage, as Leads counts New leads and Unworked (hardcore phone
+            # QA ph1-31: 898 not called beside 899 Unworked, a phantom dial between them).
+            if stage == "new":
                 into["backlog"] += 1
             # Home's "Follow-ups late" opens the Late list on Inbound: it counts those only
             # (phone personas, 1 Nov 2026: "2 late" over a list of 0).
@@ -5372,8 +5452,28 @@ class LeadDesk:
             people.update(await self._names(acting - set(people)))
         else:
             people = {me: self.viewer.name}
+        from ac_platform.lead_desk import revenue as revenue_rules
+
+        # Each seller's wins in rupees in the period, as revenue credits them (teardown #18).
+        won_amount: dict[UUID, int] = {}
+        for deal in (await revenue_rules._deals(self, begin, until)).values():
+            if deal.credited_person_id is not None:
+                person_id = deal.credited_person_id
+                won_amount[person_id] = won_amount.get(person_id, 0) + deal.amount
+        # Their follow-ups done, as Home counts them (calls out to a lead past New then).
+        their_calls: dict[UUID, list[CallRow]] = {}
+        for row in rows:
+            if row.actor is not None:
+                their_calls.setdefault(row.actor, []).append(row)
         sellers = []
         for person, name in people.items():
+            follow_ups = (
+                (await self._windows(their_calls[person], {"": (begin, until)}))[
+                    ("", None)
+                ].follow_ups_done
+                if person in their_calls
+                else 0
+            )
             seen = spans.get(person, {})
             gaps = [
                 gap
@@ -5401,6 +5501,8 @@ class LeadDesk:
                     last_call_at=max((span.end for span in today), default=None),
                     tasks_late=int(tasks_late.get(person, 0)),
                     missing_recordings=missing.by_person.get(person, 0),
+                    follow_ups_done=follow_ups,
+                    won_amount=int(won_amount.get(person, 0)),
                 )
             )
         sellers.sort(
@@ -5714,12 +5816,17 @@ class LeadDesk:
                     LeadEvent.created_at,
                 ).where(
                     LeadEvent.tenant_id == self.tenant_id,
-                    LeadEvent.kind.in_(("call", "result", "stage")),
+                    LeadEvent.kind.in_(("result", "stage")),
                     LeadEvent.created_at >= before,
                 )
             )
         ).all()
-        hidden = await self._private_calls(before)
+        # Calls are counted as Home and Growth count them (_call_rows: calls out, connected
+        # by call_answered, a dial never placed left out; hardcore phone QA ph1-30, 1 Nov
+        # 2026: Reports said 3 calls where Home said 2). An after-call answer is not a call.
+        calls = [
+            row for row in await self._call_rows(before, self.now, team=True) if call_out(row.data)
+        ]
 
         def blank() -> dict[str, Any]:
             return {"calls": 0, "connected": 0, "called": set(), "interested": set(), "won": set()}
@@ -5727,25 +5834,26 @@ class LeadDesk:
         current, previous = blank(), blank()
         per: dict[UUID, dict[str, Any]] = {}
         by_day: dict[date, dict[str, Any]] = {}
-        for event_id, actor, lead_id, kind, data, at in rows:
-            if not isinstance(data, dict) or str(event_id) in hidden:
-                continue
-            tallies = [current if at >= begin else previous]
+
+        def tallies_at(actor: UUID | None, at: datetime) -> list[dict[str, Any]]:
+            found = [current if at >= begin else previous]
             if actor is not None and at >= begin:
-                tallies.append(per.setdefault(actor, blank()))
+                found.append(per.setdefault(actor, blank()))
             if at >= begin:
-                tallies.append(by_day.setdefault(at.astimezone(IST).date(), blank()))
-            if kind == "result" or (kind == "call" and counted_phone_call(data)):
-                for tally in tallies:
-                    tally["calls"] += 1
-                    tally["called"].add(lead_id)
-                    tally["connected"] += 1 if data.get("connected") else 0
+                found.append(by_day.setdefault(at.astimezone(IST).date(), blank()))
+            return found
+
+        for row in calls:
+            for tally in tallies_at(row.actor, row.at):
+                tally["calls"] += 1
+                tally["called"].add(row.lead_id)
+                tally["connected"] += 1 if call_answered(row.data) else 0
+        for _, actor, lead_id, _kind, data, at in rows:
+            if not isinstance(data, dict):
+                continue
+            tallies = tallies_at(actor, at)
             stage = data.get("stage")
-            if (
-                kind != "call"
-                and stage in ("interested", "won")
-                and stage != data.get("from_stage")
-            ):
+            if stage in ("interested", "won") and stage != data.get("from_stage"):
                 for tally in tallies:
                     tally[stage].add(lead_id)
 

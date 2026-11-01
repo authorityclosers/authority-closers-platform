@@ -40,7 +40,10 @@ from ac_platform.lead_desk import (
     duplicate_queue,
     finder,
     merging,
+    notify_prefs,
+    owner_alerts,
     push,
+    revenue_push,
     simulation,
     spool,
 )
@@ -279,7 +282,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         pipeline: str | None = None,
         sort: LeadSort | None = None,
         order: Literal["asc", "desc"] | None = None,
-        source: str | None = Query(default=None, max_length=16),
+        source: str | None = Query(default=None, max_length=120),
         due: LeadDue | None = None,
         contact: LeadSince | None = None,
         created: LeadMade | None = None,
@@ -796,7 +799,15 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 return await team_engine.nudge_words(lead_desk)
             if kind in ("digest", "sweep"):
                 return await digest_push.words(lead_desk, kind)
-            return await lead_desk.alert_summary()
+            # A revenue milestone just sent to this person (competitor teardown #27).
+            milestone = await revenue_push.words(lead_desk)
+            if milestone is not None:
+                return milestone
+            # A test this person just sent, or an owner alert with no lead just sent
+            # (idle sellers, the day's summary).
+            test = await notify_prefs.test_words(lead_desk)
+            owner = test or await owner_alerts.words(lead_desk)
+            return owner or await lead_desk.alert_summary()
 
     @router.get("/soon", response_model=Soon, response_model_by_alias=True)
     async def due_within_the_hour(request: Request, response: Response) -> Soon:
@@ -810,7 +821,9 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
     async def alert_text(lead_id: UUID, request: Request, response: Response) -> AlertText:
         no_query(request)
         async with desk_for(request, response) as lead_desk:
-            return await lead_desk.alert_text(lead_id)
+            # An owner alert about this lead just sent to this owner or admin.
+            owner = await owner_alerts.words(lead_desk, lead_id=lead_id)
+            return owner or await lead_desk.alert_text(lead_id)
 
     @router.get("/push", response_model=PushConfig, response_model_by_alias=True)
     async def push_config(request: Request, response: Response) -> PushConfig:
@@ -1040,12 +1053,14 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
             return await lead_desk.performance(days)
 
     @router.get("/performance/sellers", response_model=Effort, response_model_by_alias=True)
-    async def effort(request: Request, response: Response, days: int = 1) -> Effort:
+    async def effort(
+        request: Request, response: Response, days: int = 1, month: bool = False
+    ) -> Effort:
         """The Performance page: each seller's effort with Inbound and Cold apart (owners and
-        admins see every seller; a seller their own)."""
-        no_query(request, frozenset({"days"}))
+        admins see every seller; a seller their own); month=1 is this month so far."""
+        no_query(request, frozenset({"days", "month"}))
         async with desk_for(request, response) as lead_desk:
-            return await lead_desk.effort(days)
+            return await lead_desk.effort(days, month=month)
 
     @router.get("/me", response_model=Me, response_model_by_alias=True)
     async def me(request: Request, response: Response) -> Me:

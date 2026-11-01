@@ -260,6 +260,35 @@ describe("stepsFor", () => {
     });
   });
 
+  it("ends the recording list with a test call until a recording is found (teardown #6)", () => {
+    const untested = phoneFacts(
+      status(
+        {},
+        {
+          recorderProfile: {
+            kind: "folder",
+            maker: "xiaomi",
+            dialerLabel: "Phone",
+            recording: "on",
+            folders: [],
+          },
+        },
+      ),
+      on,
+    )!;
+    expect(untested.newestMs).toBeNull();
+    expect(stepsFor(setup(), untested)).toEqual([
+      "consent",
+      "recordings",
+      "done",
+    ]);
+    // A recording found, or the phone's own test call: nothing to test.
+    expect(stepsFor(setup(), { ...untested, testCall: true })).toEqual([
+      "consent",
+      "done",
+    ]);
+  });
+
   it("ends the web's steps with finishing on the phone", () => {
     expect(
       stepsFor(setup({ profile_complete: false, consent: "ask" }), null),

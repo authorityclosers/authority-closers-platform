@@ -536,13 +536,19 @@ async def distribute_leads(desk: LeadDesk, command: DistributeLeads) -> Distribu
         found.sort(key=lambda lead: place[lead.id])
         gone = len(place) - len(found)
 
+    all_cold = bool(found) and all(lead.pipeline == "cold" for lead in found)
     plan = spread.distribute(
         [
             spread.LeadSpot(lead.id, lead.stage, lead.owner_person_id, _source_of(lead), lead.city)
             for lead in found
         ],
         [
-            spread.Seller(person, reps[person].open_leads, reps[person].max_open)
+            # A Cold list never meets the open-lead limit, Inbound only (ph1-17).
+            spread.Seller(
+                person,
+                reps[person].open_leads,
+                None if all_cold else reps[person].max_open,
+            )
             for person in people
         ],
         command.rule,

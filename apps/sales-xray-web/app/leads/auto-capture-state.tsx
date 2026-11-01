@@ -116,6 +116,8 @@ export type Track = {
   ended?: boolean;
   /** sheet: the recording check opens over the call (Back returns to it); else a link. */
   fix?: { label: string; href: string; sheet?: boolean };
+  /** Where the recording is (competitor teardown #7): said first on the row. */
+  recording?: "arrived" | "waiting" | "not found";
 };
 const setupFix = {
   label: "Fix recording",
@@ -132,26 +134,40 @@ export function trackFor(
   server: CaptureCall | null,
   unavailable = false,
 ): Track | null {
+  const arrived = "arrived" as const;
   if (server?.state === "report_ready")
-    return { done: 6, label: "Report ready", stuck: false };
+    return {
+      done: 6,
+      label: "Report ready",
+      stuck: false,
+      recording: arrived,
+    };
   if (server?.state === "short_call")
-    return { done: 5, label: labels.short_call, stuck: false, ended: true };
+    return {
+      done: 5,
+      label: labels.short_call,
+      stuck: false,
+      ended: true,
+      recording: arrived,
+    };
   if (server?.attention)
     return {
       done: 4,
       label: "Analysis stopped · the AC team sees it in Health",
       stuck: true,
+      recording: arrived,
     };
   if (server?.state === "analysing")
-    return { done: 4, label: "Analysing", stuck: false };
+    return { done: 4, label: "Analysing", stuck: false, recording: arrived };
   if (server?.state === "uploaded")
-    return { done: 4, label: "Uploaded", stuck: false };
+    return { done: 4, label: "Uploaded", stuck: false, recording: arrived };
   if (native?.state === "held") {
     const held = native.hold ? holds[native.hold] : undefined;
     return {
       done: 2,
       label: held?.label ?? labels.held,
       stuck: true,
+      recording: arrived,
       fix: held
         ? {
             label: native.hold === "profile" ? "Open Profile" : "Fix uploads",
@@ -167,6 +183,7 @@ export function trackFor(
       done: 2,
       label: "Upload cancelled · the recording stays on the phone",
       stuck: true,
+      recording: arrived,
       fix: setupFix,
     };
   // No recording 30 minutes on: a call that ended without one, said calmly with its way to
@@ -178,17 +195,28 @@ export function trackFor(
       stuck: false,
       ended: true,
       fix: setupFix,
+      recording: "not found",
     };
   if (native?.state === "report_ready")
-    return { done: 6, label: "Report ready", stuck: false };
+    return { done: 6, label: "Report ready", stuck: false, recording: arrived };
   if (native?.state === "analysing")
-    return { done: 4, label: "Uploaded", stuck: false };
+    return { done: 4, label: "Uploaded", stuck: false, recording: arrived };
   if (native?.state === "uploading")
-    return { done: 3, label: "Uploading", stuck: false };
+    return { done: 3, label: "Uploading", stuck: false, recording: arrived };
   if (native?.state === "waiting")
-    return { done: 2, label: "Waiting to upload", stuck: false };
+    return {
+      done: 2,
+      label: "Waiting to upload",
+      stuck: false,
+      recording: arrived,
+    };
   if (server?.state === "waiting")
-    return { done: 0, label: labels.waiting, stuck: false };
+    return {
+      done: 0,
+      label: labels.waiting,
+      stuck: false,
+      recording: "waiting",
+    };
   if (unavailable) return { done: -1, label: labels.unavailable, stuck: false };
   return null;
 }
@@ -230,8 +258,10 @@ export function CallTrack({
         </span>
       ) : null}
       <small role="status">
-        {track.stuck ? "Stuck · " : ""}
-        {track.label}
+        {track.recording && track.recording !== "arrived"
+          ? // Waiting or not found: the recording is the whole story.
+            `Recording: ${track.recording}`
+          : `${track.recording ? "Recording: arrived · " : ""}${track.stuck ? "Stuck · " : ""}${track.label}`}
       </small>
       {links && track.fix ? (
         track.fix.sheet ? (

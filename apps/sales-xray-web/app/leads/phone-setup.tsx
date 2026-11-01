@@ -17,6 +17,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "../ui/kit";
 import { Sheet } from "./sheet-frame";
 import { usePhoneOnboarded } from "./phone-onboarding";
+import { reportRecordingHealth } from "../capture-setup/capture-setup-client";
 import { reportPhone } from "./leads-client";
 import {
   inPhoneApp,
@@ -99,7 +100,14 @@ export function reportedChecks(status: SetupStatus): Record<string, boolean> {
 export async function reportSetup(status: SetupStatus): Promise<void> {
   if (!status.device) return;
   const checks = reportedChecks(status);
-  const sign = JSON.stringify([status.device, status.version, checks]);
+  // A newer recording, to the hour, is news for Team's recording line too.
+  const newest = status.recorder?.newestMs ?? null;
+  const sign = JSON.stringify([
+    status.device,
+    status.version,
+    checks,
+    newest ? Math.floor(newest / 3_600_000) : null,
+  ]);
   try {
     const last = JSON.parse(localStorage.getItem(REPORT_KEY) ?? "null") as {
       sign?: string;
@@ -117,6 +125,11 @@ export async function reportSetup(status: SetupStatus): Promise<void> {
       family: status.family,
       checks,
     });
+    // Its newest call recording (competitor teardown #7); only in an organisation.
+    await reportRecordingHealth({
+      device: status.device,
+      newest_recording_at: newest ? new Date(newest).toISOString() : null,
+    }).catch(() => undefined);
     try {
       localStorage.setItem(
         REPORT_KEY,

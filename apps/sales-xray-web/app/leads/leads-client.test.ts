@@ -209,6 +209,8 @@ describe("calling from the desk", () => {
   it("shows Indian mobiles the way people read them", () => {
     expect(displayPhone("+919876543210")).toBe("+91 98765 43210");
     expect(displayPhone("+14155550100")).toBe("+14155550100");
+    // ph2-22 (1 Nov 2026): any ten-digit Indian number reads in its groups.
+    expect(displayPhone("+910000019999")).toBe("+91 00000 19999");
   });
 
   it("opens WhatsApp with the number's digits", () => {

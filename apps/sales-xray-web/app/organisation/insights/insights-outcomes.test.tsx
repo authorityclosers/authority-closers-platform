@@ -57,7 +57,7 @@ it("reconciles nested counts and draws seven exact, directly labelled outcomes o
   );
   expect(host.textContent).toContain("Agreed a next step75");
   expect(host.textContent).toContain("Other endings25");
-  expect(host.textContent).toContain("3 pending");
+  expect(host.textContent).toContain("3 calls pending");
   expect(rows[6].textContent).toBe("No clear next step00%");
 });
 it("keeps missing fields as dashes rather than creating zero outcomes or a funnel", () => {
@@ -99,15 +99,15 @@ it("opens the exact outcome, and treats a real zero as zero", () => {
       />,
     ),
   );
-  // Zero is a real number, and below ten calls there is no funnel to draw.
+  // Zero is a real number, and below five calls there is no funnel to draw.
   expect(
     host.querySelector('[aria-label="Counted call funnel"]')?.textContent,
-  ).toContain("Not enough calls yet (0 of 10)");
+  ).toContain("Needs 5 more calls");
 });
 
 // Dipak's walk, ph1-22 (1 Nov 2026): one analysed call claimed "Wins held
 // steady" and 100%, and a Won deal on the Lead Desk was nowhere.
-it("makes no claims below ten analysed calls, and counts wins from Won leads", () => {
+it("makes no claims below five analysed calls, and counts wins from Won leads", () => {
   const one = {
     ...body,
     totals: { calls: 1, next_step: 1, won: 1 },
@@ -123,9 +123,41 @@ it("makes no claims below ten analysed calls, and counts wins from Won leads", (
       />,
     ),
   );
-  expect(host.textContent).toContain("Not enough calls yet (1 of 10)");
+  expect(host.textContent).toContain("Needs 4 more calls");
   expect(host.textContent).not.toContain("held steady");
   expect(host.textContent).not.toContain("100%");
   expect(host.textContent).toContain("1lead won this month");
   expect(host.textContent).toContain("₹2.5 L won this month");
+});
+
+// Competitor teardown 14 (1 Nov 2026): no insight from one seller's calls, and
+// each says what it rests on, opening those calls.
+it("needs two sellers, unless one person is picked, and says what each insight rests on", () => {
+  const onCalls = vi.fn();
+  const solo = { ...body, totals: { ...body.totals, people: 1 } };
+  act(() =>
+    root.render(<OutcomeStory data={parseInsights(solo)} onCalls={onCalls} />),
+  );
+  expect(host.textContent).toContain("Needs calls from 1 more seller");
+  expect(host.textContent).not.toContain("more won calls");
+  expect(host.textContent).not.toContain("40%");
+  act(() =>
+    root.render(
+      <OutcomeStory data={parseInsights(solo)} onCalls={onCalls} onePerson />,
+    ),
+  );
+  expect(host.textContent).toContain("2 more won calls");
+  const team = { ...body, totals: { ...body.totals, people: 3 } };
+  act(() =>
+    root.render(<OutcomeStory data={parseInsights(team)} onCalls={onCalls} />),
+  );
+  const lines = [...host.querySelectorAll("button")].filter(
+    (button) => button.textContent === "Based on 100 calls · 3 sellers",
+  );
+  // The story, the next-step ring, the funnel and every ending.
+  expect(lines).toHaveLength(4);
+  onCalls.mockClear();
+  act(() => lines[0].click());
+  expect(onCalls).toHaveBeenCalledTimes(1);
+  expect(onCalls.mock.calls[0][0]).toBeUndefined();
 });
