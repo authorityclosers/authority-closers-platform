@@ -28,6 +28,7 @@ import { Button, Dialog, Field, kitStyles, Segmented } from "../ui/kit";
 import { Picker } from "../ui/picker";
 import { Sheet } from "../ui/sheet";
 import { several, usePipelines } from "./use-pipelines";
+import { ImportHistory, UndoImportButton } from "./import-undo";
 import {
   addLead,
   matchLead,
@@ -1134,6 +1135,10 @@ export function ImportDialog({
             those leads went by the lead rules.
           </p>
         ) : null}
+        {/* Undo import for 48 hours, owners and admins (competitor teardown 22). */}
+        {result?.import_id && result.undo_until ? (
+          <UndoImportButton importId={result.import_id} onUndone={onDone} />
+        ) : null}
         {result ? null : !preview ? (
           <>
             {googleMissing ? (
@@ -1205,6 +1210,7 @@ export function ImportDialog({
             >
               Download a sample file
             </a>
+            {canManage ? <ImportHistory onChanged={onDone} /> : null}
           </>
         ) : (
           <>

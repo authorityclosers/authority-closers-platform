@@ -395,6 +395,26 @@ export type ImportResult = {
   /** Bulk upload: who got how many of the new leads, and their side. */
   given?: { person_id: string; name: string; leads: number }[];
   side?: "live" | "cold";
+  /** Undo import (competitor teardown 22): owners and admins, until this time. */
+  import_id?: string | null;
+  undo_until?: string | null;
+};
+
+/** Undo import: the untouched leads went; the worked ones stayed, each with why. */
+export type ImportUndone = {
+  removed: number;
+  kept: { lead_id: string; name: string; why: string }[];
+};
+
+/** One recent import in Import history (the last 48 hours, owners and admins). */
+export type ImportView = {
+  import_id: string;
+  file_name: string;
+  at: string;
+  by_name: string;
+  leads: number;
+  undone: boolean;
+  undo_until: string | null;
 };
 
 /** Bulk upload's choices (stages-views-sources.md section 5): Inbound ("live") or Cold,
@@ -1595,6 +1615,20 @@ export function commitImport(
       ...(preview.detected ? { source_name: preview.detected } : {}),
       ...options,
     }),
+  );
+}
+
+/** Import history: the last 48 hours' imports (empty for anyone but owners and admins). */
+export async function readImports(signal?: AbortSignal) {
+  const page = await request<{ imports: ImportView[] }>("/imports", { signal });
+  return page.imports;
+}
+
+/** Undo import: its leads nobody worked go; the rest stay, each with why. */
+export function undoImport(importId: string, command = commandId()) {
+  return request<ImportUndone>(
+    `/imports/${encodeURIComponent(importId)}/undo`,
+    json("POST", { command_id: command }),
   );
 }
 

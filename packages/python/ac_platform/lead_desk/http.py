@@ -77,6 +77,8 @@ from ac_platform.lead_desk.contracts import (
     ImportCommand,
     ImportPreview,
     ImportResult,
+    Imports,
+    ImportUndone,
     LeadDetail,
     LeadDue,
     LeadEdit,
@@ -135,10 +137,12 @@ from ac_platform.lead_desk.contracts import (
     TaskView,
     Team,
     TeamTargets,
+    UndoImport,
     UndoMerge,
     WorkDay,
     WorkHoursCommand,
 )
+from ac_platform.lead_desk.imports import ImportBook
 from ac_platform.lead_desk.intake import MAX_FILE_BYTES, Intake
 from ac_platform.lead_desk.sides import Side, SideNumbers, side_numbers
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
@@ -1142,6 +1146,24 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await Intake(lead_desk, app_url=app_url()).commit(command)
+
+    @router.get("/imports", response_model=Imports, response_model_by_alias=True)
+    async def recent_imports(request: Request, response: Response) -> Imports:
+        """Import history: the last 48 hours' imports, for owners and admins."""
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await ImportBook(lead_desk).recent()
+
+    @router.post(
+        "/imports/{import_id}/undo", response_model=ImportUndone, response_model_by_alias=True
+    )
+    async def undo_import(
+        import_id: UUID, command: UndoImport, request: Request, response: Response
+    ) -> ImportUndone:
+        """Undo import: its untouched leads go, the worked ones stay with why (audited)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await ImportBook(lead_desk).undo(import_id, command)
 
     @router.get("/sources", response_model=Sources, response_model_by_alias=True)
     async def sources(request: Request, response: Response) -> Sources:

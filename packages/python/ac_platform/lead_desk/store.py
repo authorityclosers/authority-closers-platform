@@ -2795,13 +2795,15 @@ class LeadDesk:
         pipeline: str | None = None,
         received_at: datetime | None = None,
         kind: str | None = None,
+        batch: tuple[UUID, str] | None = None,
     ) -> tuple[Lead | None, Literal["created", "repeat", "known", "skipped"]]:
         """Store one record as a lead. The same record again (same source id) is "known"
         and changes nothing; another record with the same phone, or with no phone and the
         same email, is a "repeat". A new lead
         goes to the pipeline picked, else the one that takes its source (pipelines.route).
         ``received_at``: when the person sent it, when the source says (a Meta form's
-        created_time); a time ahead of now is taken as now."""
+        created_time); a time ahead of now is taken as now. ``batch``: the file import
+        (its id and file name) a new lead came in, for Undo import (imports.py)."""
         _, config = await self.settings()
         found = extract(record, mapping, default_country=config["default_country"])
         if not (found.name or found.phone or found.email):
@@ -2903,6 +2905,7 @@ class LeadDesk:
                 "source": source,
                 "source_label": source_label or SOURCE_LABELS.get(source, source),
                 "used": found.used,
+                **({"import": str(batch[0]), "import_file": batch[1]} if batch else {}),
             },
             actor=actor,
             command_id=command_id,

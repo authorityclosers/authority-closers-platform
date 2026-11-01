@@ -1266,6 +1266,44 @@ class ImportResult(Model):
     # Bulk upload (section 5): who got how many of the new leads, and their side.
     given: tuple[ImportGiven, ...] = ()
     side: Literal["live", "cold"] = "live"
+    # Undo import (competitor teardown 22): this import, and until when an owner or admin
+    # may undo it; None for anyone else.
+    import_id: UUID | None = None
+    undo_until: datetime | None = None
+
+
+class ImportKept(Model):
+    """A lead an undo kept: someone already worked it."""
+
+    lead_id: UUID
+    name: str
+    why: str
+
+
+class ImportUndone(Model):
+    """Undo import: the leads nobody had touched are gone; the rest stay, each with why."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    removed: int
+    kept: tuple[ImportKept, ...]
+
+
+class ImportView(Model):
+    """One recent import in Import history (competitor teardown 22)."""
+
+    import_id: UUID
+    file_name: str
+    at: datetime
+    by_name: str
+    # Its leads still here (an undo takes the untouched ones away).
+    leads: int
+    undone: bool
+    undo_until: datetime | None
+
+
+class Imports(Model):
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    imports: tuple[ImportView, ...]
 
 
 class SourceView(Model):
@@ -1530,6 +1568,10 @@ class DeleteLeads(Command):
 
 
 class DeleteLead(Command):
+    command_id: UUID
+
+
+class UndoImport(Command):
     command_id: UUID
 
 

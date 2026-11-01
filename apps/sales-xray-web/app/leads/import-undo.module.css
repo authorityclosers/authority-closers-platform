@@ -1,0 +1,91 @@
+/* Undo import and Import history (competitor teardown 22, 1 Nov 2026). */
+
+/* The leads an undo kept, each with why. */
+.kept {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kept li {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--sx-line);
+}
+
+.kept li:first-child {
+  border-top: 0;
+}
+
+.kept span {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--sx-ink);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kept small {
+  flex: none;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+/* Recent imports under the import's first step: one line each, Undo at the end. */
+.history {
+  display: grid;
+  gap: 4px;
+  padding-top: 8px;
+}
+
+.history h3 {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.history ul {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history li {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--sx-line);
+}
+
+.what {
+  display: grid;
+  min-width: 0;
+}
+
+.what strong,
+.what small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.what small {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.undone {
+  flex: none;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}

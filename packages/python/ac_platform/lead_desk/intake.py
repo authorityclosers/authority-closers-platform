@@ -24,6 +24,7 @@ from ac_platform.conversation_intelligence.synthetic_import_models import (
     ConversationSyntheticRecord,
 )
 from ac_platform.identity.models import Person
+from ac_platform.lead_desk import imports
 from ac_platform.lead_desk.capture import (
     CRM_EXPORTS,
     FIELDS,
@@ -444,6 +445,7 @@ class Intake:
                     test_data=self.desk.sandbox,
                     reps=reps,
                     pipeline=command.pipeline,
+                    batch=(command.command_id, command.file_name[:120]),
                 )
             except CaptureError:
                 lead, outcome = None, "skipped"
@@ -512,6 +514,15 @@ class Intake:
                     for person_id, count in handed.items()
                 ),
                 "side": command.side,
+                # Undo import, for owners and admins, for 48 hours (imports.py).
+                **(
+                    {
+                        "import_id": command.command_id,
+                        "undo_until": self.desk.now + imports.UNDO_FOR,
+                    }
+                    if self.desk.viewer.can_delete and any(o == "created" for o in outcomes)
+                    else {}
+                ),
             }
         )
 
