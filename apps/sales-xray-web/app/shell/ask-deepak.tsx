@@ -53,7 +53,8 @@ export function leadNotes(detail: LeadDetail): LeadEvent[] {
   return detail.events
     .filter(
       (event) =>
-        (event.kind === "note" || event.kind === "result") &&
+        (event.kind === "note" ||
+          (event.kind === "result" && !event.answer_undone)) &&
         Boolean(event.note?.trim()),
     )
     .slice(0, NOTES);
@@ -67,7 +68,9 @@ export function leadNotes(detail: LeadDetail): LeadEvent[] {
  */
 export function standing(detail: LeadDetail): string {
   const call = detail.events.find((event) => event.kind === "call");
-  const answer = detail.events.find((event) => event.kind === "result");
+  const answer = detail.events.find(
+    (event) => event.kind === "result" && !event.answer_undone,
+  );
   const how = answer
     ? answer.connected
       ? "talked"

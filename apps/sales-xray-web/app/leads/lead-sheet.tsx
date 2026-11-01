@@ -383,7 +383,9 @@ export function lastWord(
   detail: { events: LeadDetail["events"]; lead: LeadDetail["lead"] },
   now: Date = new Date(),
 ): { last: string | null; tries: string | null } {
-  const answer = detail.events.find((event) => event.kind === "result");
+  const answer = detail.events.find(
+    (event) => event.kind === "result" && !event.answer_undone,
+  );
   const said = answer?.note?.replace(/\s+/g, " ").trim();
   const last = answer
     ? [
@@ -4264,7 +4266,13 @@ function PaneOrSheet({
 }) {
   if (!inline)
     return (
-      <Sheet open={open} footer={footer} label={label} onClose={onClose}>
+      <Sheet
+        open={open}
+        footer={footer}
+        label={label}
+        onClose={onClose}
+        className={styles.leadSheetFrame}
+      >
         {children}
       </Sheet>
     );

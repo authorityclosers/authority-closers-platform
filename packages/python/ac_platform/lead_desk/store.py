@@ -2431,6 +2431,12 @@ class LeadDesk:
             if value
         )
         row = self._row(lead, names, day_end)
+        # After-call answers their seller undid: marked, so they count nowhere (ph2-37).
+        answers_undone = frozenset(
+            str(event.data[transitions.UNDONE_RESULT])
+            for event in events
+            if event.kind == "edited" and isinstance(event.data.get(transitions.UNDONE_RESULT), str)
+        )
         return LeadDetail(
             lead=row.model_copy(
                 update={
@@ -2454,6 +2460,7 @@ class LeadDesk:
                     undone=undone,
                     lead_owner=lead.owner_person_id,
                     photos=photos,
+                    answers_undone=answers_undone,
                 )
                 for event in events
                 if not (event.kind == "edited" and event.data.get(PRIVATE_CALL))
@@ -2579,6 +2586,7 @@ class LeadDesk:
         undone: frozenset[str] = frozenset(),
         lead_owner: UUID | None = None,
         photos: Mapping[UUID, str | None] | None = None,
+        answers_undone: frozenset[str] = frozenset(),
     ) -> LeadEventView:
         phone_call = event.kind == "call" and event.data.get("via") in {
             "phone",
@@ -2690,6 +2698,7 @@ class LeadDesk:
             app_label=str(by_app["label"])[:80] if by_app and by_app.get("label") else None,
             change_id=change_id,
             can_undo=can_undo,
+            answer_undone=event.kind == "result" and str(event.id) in answers_undone,
         )
 
     # ----- capture ---------------------------------------------------------------

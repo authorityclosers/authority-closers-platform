@@ -420,6 +420,11 @@ export function Sheet({
         event.preventDefault();
         onClose();
       }}
+      onClick={(event) => {
+        // A tap outside a sheet that leaves room around it (the lead sheet
+        // above a phone's tab bar) closes it, never a dead tap.
+        if (event.target === event.currentTarget) onClose();
+      }}
       onClickCapture={(event) => {
         // Pointer clicks only (detail counts the presses): a keyboard's
         // Enter or Space is always meant.

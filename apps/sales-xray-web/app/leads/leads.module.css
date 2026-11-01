@@ -7778,3 +7778,14 @@ fieldset.form {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* A phone's lead sheet ends above the tab bar: the tabs stay where they are
+   and the Call bar never takes their place, so a tap meant for a tab never
+   dials (phone QA ph2-35, 1 Nov 2026: Ask Dipak's tab dialled the lead). A
+   tap on the tab bar closes the sheet. */
+@media (max-width: 899.98px) {
+  .leadSheetFrame {
+    inset: 0 0 calc(var(--lx-bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+    height: auto;
+  }
+}

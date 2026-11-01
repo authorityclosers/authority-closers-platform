@@ -161,6 +161,8 @@ export type LeadEvent = {
     | "stage"
     | "meeting"
     | "suggestion";
+  /** An after-call answer its seller undid: it counts nowhere (ph2-37). */
+  answer_undone?: boolean;
   at: string;
   actor_name: string | null;
   /** Who did it, for their photo or character (#31), once the server sends it. */
