@@ -8,9 +8,10 @@ nothing falls out of the list. Reads only."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from datetime import datetime, timedelta
 from typing import Any, Literal
+from uuid import UUID
 
 from sqlalchemy import and_, case, false, func, or_
 
@@ -22,15 +23,19 @@ WorkView = Literal["to_call", "follow_ups"]
 FollowUpWhen = Literal["today", "overdue", "upcoming"]
 
 
-def in_view(view: WorkView, day_end: datetime) -> Any:
-    """SQL for one work view."""
+def in_view(view: WorkView, day_end: datetime, waiting: Collection[UUID] = ()) -> Any:
+    """SQL for one work view. ``waiting``: the leads who called and weren't reached since
+    (LeadDesk._waiting_call_back), which To Call holds too."""
     if view == "to_call":
-        # Due before today ends (late, retries, today's follow-ups), or new and never called.
+        # Due before today ends (late, retries, today's follow-ups), or new and never called,
+        # or a missed call not yet called back (orchestrator, 1 Nov 2026, #9 option A: the
+        # badge counts exactly these rows, so a missed call is a row, not a number alone).
         return and_(
             Lead.stage.in_(OPEN_STAGES),
             or_(
                 Lead.next_action_at < day_end,
                 and_(Lead.stage == "new", Lead.next_action_at.is_(None)),
+                Lead.id.in_(list(waiting)) if waiting else false(),
             ),
         )
     # Planned contact: any open lead with a time, on its side (phone personas, 1 Nov 2026:
@@ -58,6 +63,12 @@ def call_order(now: datetime, day_start: datetime) -> tuple[Any, ...]:
         Lead.created_at,
         Lead.id,
     )
+
+
+def call_backs_first(waiting: Collection[UUID]) -> tuple[Any, ...]:
+    """Ahead of call_order: the leads waiting for a call back, who rang while nobody
+    picked up (#9 option A). Nothing when none wait."""
+    return (case((Lead.id.in_(list(waiting)), 0), else_=1),) if waiting else ()
 
 
 def in_when(when: FollowUpWhen, day_start: datetime) -> Any:

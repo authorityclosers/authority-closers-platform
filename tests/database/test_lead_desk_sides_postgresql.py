@@ -112,6 +112,13 @@ def test_each_side_lists_counts_and_numbers_its_own_leads(
             badge = (await here.client.get(f"{BASE}/badge")).json()
             assert badge["to_call"] == numbers.json()["inbound"]["to_call"]
             assert badge["overdue"] == sum(row["overdue"] for row in inbound["leads"])
+            # It counts exactly the Inbound To Call list's rows, and the work views' tabs
+            # carry each view's count (#9 option A; competitor teardown #9).
+            listed = await page(scope="mine", side="inbound", view="to_call")
+            assert listed["total"] == badge["to_call"] == listed["view_counts"]["to_call"]
+            assert listed["view_counts"] == {"to_call": 2, "follow_ups": 1, "all": 3}
+            more = await page(scope="mine", side="inbound", view="to_call", offset="2")
+            assert more["view_counts"] == {}
 
             # Home's "Follow-ups late" is the Late list it opens, on Inbound (phone personas,
             # 1 Nov 2026: "2 late" over a list of 0).

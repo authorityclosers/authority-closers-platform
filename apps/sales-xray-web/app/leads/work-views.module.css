@@ -222,6 +222,32 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* A count beside a view's name ("To Call 7"); where both don't fit (360 px at
+   large text) the count drops under the name instead of being cut. */
+.tabs .tab {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  column-gap: 4px;
+  line-height: 1.15;
+  white-space: normal;
+}
+
+.tabWord,
+.tabCount {
+  white-space: nowrap;
+}
+
+.tabCount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.tab[aria-selected="true"] .tabCount {
+  font-weight: 700;
+}
+
 .subTabs .tab {
   flex: none;
   min-height: 36px;

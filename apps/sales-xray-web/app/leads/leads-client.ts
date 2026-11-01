@@ -10,6 +10,7 @@ import { withDisplayNames } from "../display-name";
 import { sendWrite } from "../sync/write-queue";
 import { earlyFetch, forgetSharedReads } from "../early-reads";
 import { noteLeadMoved } from "./lead-moves";
+import type { Badge } from "./badge-client";
 import type { MeetingView, MoveOption } from "./pipeline/pipeline-client";
 
 export const LEADS_PATH = "/leads";
@@ -128,6 +129,8 @@ export type Desk = {
   templates?: MessageTemplate[];
   /** Missed calls from my leads, newest first, until someone calls back. */
   call_back?: LeadRow[];
+  /** The Leads badge as GET /badge counts it: the Inbound To Call list's rows. */
+  badge?: Badge | null;
 };
 
 export type { Badge } from "./badge-client";
@@ -267,6 +270,8 @@ export type LeadPage = {
   step_counts?: Record<string, number>;
   /** Leads per seller ("none": nobody's) for the same filters, without the seller picked. */
   owner_counts?: Record<string, number>;
+  /** Each work view's count for the same filters (a side's first page): the tabs. */
+  view_counts?: Partial<Record<WorkView, number>>;
 };
 
 export type RepView = {

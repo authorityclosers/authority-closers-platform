@@ -706,12 +706,15 @@ export function LeadsRoute({
           readNextAhead(toCallPipeline);
         }
         setError(null);
-        // The app's badge counts the whole day, never one pipeline's.
+        // The app's badge counts the whole day, never one pipeline's: the
+        // server's own count, the Inbound To Call list's rows (#9 option A).
         if (!toCallPipeline)
-          publishBadge({
-            overdue: next.counts.overdue ?? 0,
-            to_call: toCallNow(next),
-          });
+          publishBadge(
+            next.badge ?? {
+              overdue: next.counts.overdue ?? 0,
+              to_call: toCallNow(next),
+            },
+          );
         settle();
       })
       .catch((reason: unknown) => {
@@ -992,6 +995,24 @@ export function LeadsRoute({
     (value: Record<string, number>) =>
       setStepCounts({ key: stepCountsKey, value }),
     [stepCountsKey],
+  );
+  // The work views' counts for the same filters ("To Call 7"), from a side's
+  // first page; Inbound To Call is the badge's number (competitor teardown #9).
+  const [viewCounts, setViewCounts] = useState<{
+    key: string;
+    value: Partial<Record<WorkView, number>>;
+  } | null>(null);
+  const viewCountsKey = JSON.stringify([
+    contextKey,
+    scope,
+    query,
+    pipeline,
+    { ...more, view: null, when: null },
+  ]);
+  const onViewCounts = useCallback(
+    (value: Partial<Record<WorkView, number>>) =>
+      setViewCounts({ key: viewCountsKey, value }),
+    [viewCountsKey],
   );
   // A bare /leads opens the last work view (type, view, stage and filters),
   // remembered per person and workspace on this device (owner, 31 Oct 2026).
@@ -1774,6 +1795,11 @@ export function LeadsRoute({
                   views={
                     <ViewTabs
                       value={workView}
+                      counts={
+                        viewCounts?.key === viewCountsKey
+                          ? viewCounts.value
+                          : null
+                      }
                       onChange={(next) =>
                         pickWork({
                           view: next,
@@ -1900,6 +1926,7 @@ export function LeadsRoute({
                 onCounts={onCounts}
                 onTable={setTableMode}
                 onStepCounts={onStepCounts}
+                onViewCounts={onViewCounts}
                 pipeline={pipeline}
                 more={
                   listMore && stepShown !== (listMore.step ?? null)

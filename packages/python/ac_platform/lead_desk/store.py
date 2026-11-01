@@ -185,6 +185,7 @@ from ac_platform.lead_desk.vocabulary import (
 from ac_platform.lead_desk.work_views import (
     FollowUpWhen,
     WorkView,
+    call_backs_first,
     call_order,
     count_steps,
     in_step,
@@ -1131,7 +1132,8 @@ class LeadDesk:
                 or 0
             )
 
-        call_back = await self._call_back(in_pipeline)
+        waiting = await self._waiting_call_back(in_pipeline)
+        call_back = await self._call_back(in_pipeline, waiting)
         who = await self.me()
         # The workspace's open leads beside mine: Home and Leads say what is there to take
         # when none are mine (owner, 25 Oct 2026).
@@ -1165,7 +1167,7 @@ class LeadDesk:
         cards, new_key, open_key = await self._side_cards(mine, journey, day_start)
         sides: dict[str, SideDay] = {}
         for side in SIDES:
-            first = await self._next_on(mine, side, day_start)
+            first = await self._next_on(mine, side, day_start, waiting)
             next_up = (
                 await self.db.scalars(
                     select(Lead)
@@ -1239,6 +1241,8 @@ class LeadDesk:
             call_back=call_back,
             to_call_today=to_call[None],
             breaks=await self._breaks_today(today_calls),
+            # The badge as the Leads page hands it over (the whole day's, never one pipeline's).
+            badge=await self.badge(waiting) if pipeline is None else None,
         )
 
     async def _numbers(
@@ -1472,15 +1476,23 @@ class LeadDesk:
                 )
         return found
 
-    async def _next_on(self, mine: Any, side: Side, day_start: datetime) -> Lead | None:
+    async def _next_on(
+        self,
+        mine: Any,
+        side: Side,
+        day_start: datetime,
+        waiting: Mapping[UUID, tuple[datetime, int]] | None = None,
+    ) -> Lead | None:
         """The next lead to call on one side: the first row of the side's To Call list, in
         its calling order (work_views.call_order), so Home and the dialler agree (phone
-        personas, 1 Nov 2026: Home said Kiara while Leads dialled Krishna)."""
+        personas, 1 Nov 2026: Home said Kiara while Leads dialled Krishna). A lead waiting
+        for a call back comes first there, and here (#9 option A)."""
         day_end = day_start + timedelta(days=1)
+        held = waiting or {}
         found: Lead | None = await self.db.scalar(
             select(Lead)
-            .where(mine, on_side(side), in_view("to_call", day_end))
-            .order_by(*call_order(self.now, day_start))
+            .where(mine, on_side(side), in_view("to_call", day_end, held))
+            .order_by(*call_backs_first(held), *call_order(self.now, day_start))
             .limit(1)
         )
         return found
@@ -1573,9 +1585,14 @@ class LeadDesk:
                 found.append(now.get(lead_id))
         return found
 
-    async def _call_back(self, in_pipeline: Any = None) -> tuple[LeadRow, ...]:
+    async def _call_back(
+        self,
+        in_pipeline: Any = None,
+        waiting: dict[UUID, tuple[datetime, int]] | None = None,
+    ) -> tuple[LeadRow, ...]:
         """My leads who called in the last few days and weren't reached since, newest first."""
-        waiting = await self._waiting_call_back(in_pipeline)
+        if waiting is None:
+            waiting = await self._waiting_call_back(in_pipeline)
         if not waiting:
             return ()
         leads = (
@@ -1592,9 +1609,12 @@ class LeadDesk:
             if lead_id in found
         )[:QUEUE_LIMIT]
 
-    async def _waiting_call_back(self, in_pipeline: Any = None) -> dict[UUID, tuple[datetime, int]]:
+    async def _waiting_call_back(
+        self, in_pipeline: Any = None, *, team: bool = False
+    ) -> dict[UUID, tuple[datetime, int]]:
         """My leads who called in the last few days and weren't reached since: when each
-        last called, and how many of their calls were missed."""
+        last called, and how many of their calls were missed. ``team``: every lead this
+        person may list (the team's To Call), not only their own."""
         rows = (
             await self.db.execute(
                 select(
@@ -1610,18 +1630,19 @@ class LeadDesk:
                 )
                 .where(
                     LeadEvent.tenant_id == self.tenant_id,
-                    Lead.owner_person_id == self.viewer.person_id,
+                    self._seen() if team else Lead.owner_person_id == self.viewer.person_id,
                     LeadEvent.kind.in_(("call", "result")),
                     LeadEvent.created_at >= self.now - timedelta(days=CALL_BACK_DAYS),
                     true() if in_pipeline is None else in_pipeline,
                 )
-                .order_by(LeadEvent.created_at)
+                # The newest calls when there are more than the limit (a team's three days).
+                .order_by(LeadEvent.created_at.desc())
                 .limit(5000)
             )
         ).all()
         hidden = await self._private_calls(self.now - timedelta(days=CALL_BACK_DAYS))
         waiting: dict[UUID, tuple[datetime, int]] = {}
-        for event_id, lead_id, kind, data, at in rows:
+        for event_id, lead_id, kind, data, at in reversed(rows):
             if str(event_id) in hidden:
                 continue
             if missed_call(kind, data):
@@ -1630,37 +1651,30 @@ class LeadDesk:
                 waiting.pop(lead_id, None)
         return waiting
 
-    async def badge(self) -> Badge:
-        """What is due for me now: the Leads tab's badge and the phone's icon count. A lead
-        who called and wasn't reached counts too, once (Redmi check, 23 Oct 2026: the badge,
-        the To call tab and its rows tell the same story). Inbound leads only, as on Home: a
-        Cold lead is never late or due on it (persona QA, 31 Oct 2026: "99+" over 7 leads)."""
+    async def badge(self, waiting: dict[UUID, tuple[datetime, int]] | None = None) -> Badge:
+        """What is due for me: the Leads tab's badge and the phone's icon count. It counts
+        exactly the rows of my Inbound To Call list (orchestrator, 1 Nov 2026, #9 option A:
+        the badge said 4 over a list of 8), a lead who called and wasn't reached among them,
+        once. Inbound leads only, as on Home: a Cold lead is never late or due on it
+        (persona QA, 31 Oct 2026: "99+" over 7 leads)."""
         mine = and_(
             Lead.tenant_id == self.tenant_id,
             Lead.owner_person_id == self.viewer.person_id,
             Lead.stage.in_(OPEN_STAGES),
-            func.coalesce(Lead.pipeline, "live") != "cold",
+            on_side("inbound"),
         )
-        due = or_(
-            Lead.next_action_at <= self.now,
-            and_(Lead.stage == "new", Lead.next_action_at.is_(None)),
-        )
+        if waiting is None:
+            waiting = await self._waiting_call_back()
+        day_end = self._day_start() + timedelta(days=1)
         row = (
             await self.db.execute(
                 select(
                     func.count().filter(overdue_filter(self.now)),
-                    func.count().filter(due),
+                    func.count().filter(in_view("to_call", day_end, waiting)),
                 ).where(mine)
             )
         ).one()
-        waiting = list(await self._waiting_call_back())
-        also = 0
-        if waiting:
-            counted = await self.db.scalar(
-                select(func.count()).where(mine, due, Lead.id.in_(waiting))
-            )
-            also = len(waiting) - int(counted or 0)
-        return Badge(overdue=int(row[0]), to_call=int(row[1]) + also, generated_at=self.now)
+        return Badge(overdue=int(row[0]), to_call=int(row[1]), generated_at=self.now)
 
     async def next_lead(
         self, skip: UUID | None = None, pipeline: str | None = None
@@ -1720,12 +1734,21 @@ class LeadDesk:
         if side is not None:
             # Inbound Leads or Cold Leads (migration 0146): the stage tabs count one side.
             where.append(on_side(side))
+        # To Call holds the leads who rang and weren't reached since, first (#9 option A).
+        waiting: dict[UUID, tuple[datetime, int]] = {}
+        if view == "to_call" or (side is not None and offset == 0):
+            waiting = await self._waiting_call_back(team=scope != "mine")
+        day_end = self._day_start() + timedelta(days=1)
+        view_clause: Any = None
         if view is not None:
             # A work view (Dipak's mockup, 31 Oct 2026): what to call today, the follow-ups.
-            where.append(in_view(view, self._day_start() + timedelta(days=1)))
+            view_clause = in_view(view, day_end, waiting)
+            where.append(view_clause)
+        when_clause: Any = None
         if when is not None:
             # Follow-ups due today, overdue or upcoming.
-            where.append(in_when(when, self._day_start()))
+            when_clause = in_when(when, self._day_start())
+            where.append(when_clause)
         # The stage picker's numbers come with a side's first page (owner, 31 Oct 2026).
         counting = side is not None and offset == 0
         journey: journeys.Journey | None = None
@@ -1796,6 +1819,26 @@ class LeadDesk:
                 )
             ).all()
         }
+        # Each work view's count for the same people, search, filters and stage pick, on a
+        # side's first page: the tabs read "To Call 7 · Follow-ups 4 · All Leads 1,178", and
+        # a seller's own Inbound To Call is the badge's number (competitor teardown #9).
+        view_counts: dict[str, int] = {}
+        if counting:
+            rest = [item for item in where if item is not view_clause and item is not when_clause]
+            found = (
+                await self.db.execute(
+                    select(
+                        func.count().filter(in_view("to_call", day_end, waiting)),
+                        func.count().filter(in_view("follow_ups", day_end)),
+                        func.count(),
+                    ).where(*rest)
+                )
+            ).one()
+            view_counts = {
+                "to_call": int(found[0]),
+                "follow_ups": int(found[1]),
+                "all": int(found[2]),
+            }
         if stage == "open":
             where.append(Lead.stage.in_(OPEN_STAGES))
         elif stage is not None:
@@ -1818,7 +1861,8 @@ class LeadDesk:
         # their times, as an import's do, otherwise came back on two pages.
         order: tuple[Any, ...] = (
             # To Call in its calling order, next lead first: Home's next lead is its first row.
-            call_order(self.now, self._day_start())
+            # Who rang and wasn't reached comes before it.
+            (*call_backs_first(waiting), *call_order(self.now, self._day_start()))
             if view == "to_call"
             else (func.coalesce(Lead.next_action_at, Lead.created_at), Lead.created_at, Lead.id)
             if stage == "open" or stage in OPEN_STAGES or view is not None
@@ -1832,6 +1876,19 @@ class LeadDesk:
             )
         ).all()
         rows = await self._rows(leads)
+        if view == "to_call" and waiting:
+            # A missed call's row says so: "Missed call 4 min ago · 2 calls".
+            rows = tuple(
+                row.model_copy(
+                    update={
+                        "missed_at": waiting[row.lead_id][0],
+                        "missed_calls": waiting[row.lead_id][1],
+                    }
+                )
+                if row.lead_id in waiting
+                else row
+                for row in rows
+            )
         return LeadPage(
             leads=rows,
             total=total,
@@ -1839,6 +1896,7 @@ class LeadDesk:
             stage_counts=stage_counts,
             step_counts=step_counts,
             owner_counts=owner_counts,
+            view_counts=view_counts,
         )
 
     def _list_filters(

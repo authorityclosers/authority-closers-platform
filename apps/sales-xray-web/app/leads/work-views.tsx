@@ -220,18 +220,31 @@ export function WorkSplit({
   );
 }
 
+/** A tab's count, short enough for a phone: 7, 999, 1.2K, 1.2L. */
+export function tabCount(count: number): string {
+  return count < 1000
+    ? String(count)
+    : new Intl.NumberFormat("en-IN", {
+        notation: "compact",
+        maximumFractionDigits: 1,
+      }).format(count);
+}
+
 function Tabs<T extends string>({
   label,
   items,
   value,
   onChange,
   small = false,
+  counts = null,
 }: {
   label: string;
   items: readonly { key: T; label: string }[];
   value: T | null;
   onChange: (key: T) => void;
   small?: boolean;
+  /** Each tab's count, when the list has counted them. */
+  counts?: Partial<Record<T, number>> | null;
 }) {
   return (
     <div
@@ -250,19 +263,32 @@ function Tabs<T extends string>({
             if (item.key !== value) onChange(item.key);
           }}
         >
-          {item.label}
+          <span className={styles.tabWord}>{item.label}</span>
+          {typeof counts?.[item.key] === "number" ? (
+            <>
+              {" "}
+              <span className={styles.tabCount}>
+                {tabCount(counts[item.key] as number)}
+              </span>
+            </>
+          ) : null}
         </button>
       ))}
     </div>
   );
 }
 
+/** To Call, Follow-ups and All Leads, each with its count once the list has one
+ *  ("To Call 7"): Inbound To Call is the Leads badge's own number (competitor
+ *  teardown #9, one count rule). */
 export function ViewTabs({
   value,
   onChange,
+  counts = null,
 }: {
   value: WorkView;
   onChange: (view: WorkView) => void;
+  counts?: Partial<Record<WorkView, number>> | null;
 }) {
   return (
     <Tabs
@@ -270,6 +296,7 @@ export function ViewTabs({
       items={WORK_VIEWS}
       value={value}
       onChange={onChange}
+      counts={counts}
     />
   );
 }
