@@ -111,6 +111,10 @@ function writeSeen(list: string[]) {
   }
 }
 const wasSeen = (key: string) => readSeen().includes(key);
+// Cards on screen now, folded or not: a card that moves (out of a sheet that
+// closed) comes back as it was, without arriving again (phone personas ph2-36,
+// 1 Nov 2026: the after-call Undo jumped and vanished).
+const placed = new Map<string, boolean>();
 function markSeen(key: string) {
   const list = readSeen();
   if (!list.includes(key)) writeSeen([...list, key]);
@@ -288,17 +292,25 @@ function NoticeCard({
   const key = seenKey(notice);
   const arrivesFolded = () =>
     docked || notice.folded === true || notice.slim === true || wasSeen(key);
-  const [folded, setFolded] = useState(arrivesFolded);
+  // Already on screen elsewhere (a sheet that closed): as it was, no arrival.
+  const [again] = useState(() => placed.has(key));
+  const [folded, setFolded] = useState(
+    () => placed.get(key) ?? arrivesFolded(),
+  );
   const [cardKey, setCardKey] = useState(key);
   if (cardKey !== key) {
     setCardKey(key);
     setFolded(arrivesFolded());
   }
+  useEffect(() => {
+    placed.set(key, folded);
+  }, [key, folded]);
   const Icon = ICON[notice.tone];
-  const remove = useCallback(
-    () => (leave ? leave() : dismissNotice(notice.id)),
-    [leave, notice.id],
-  );
+  const remove = useCallback(() => {
+    placed.delete(key);
+    if (leave) leave();
+    else dismissNotice(notice.id);
+  }, [key, leave, notice.id]);
   const dismiss = async () => {
     if (dismissing) return;
     setDismissing(true);
@@ -370,6 +382,7 @@ function NoticeCard({
         className={styles.pill}
         data-tone={notice.tone}
         data-docked={docked || undefined}
+        data-again={again || undefined}
       >
         <button
           type="button"
@@ -383,7 +396,10 @@ function NoticeCard({
           <Icon className={styles.icon} size={16} aria-hidden="true" />
           <span className={styles.pillText}>{notice.title}</span>
         </button>
-        {notice.action && (notice.pillAction || docked) ? (
+        {/* A short-lived card's action stays too: its Undo is the point of
+            it (ph2-36: Undo vanished once the card folded). */}
+        {notice.action &&
+        (notice.pillAction || docked || Boolean(notice.timeout)) ? (
           <CardAction
             action={notice.action}
             onRun={() => {
@@ -407,6 +423,7 @@ function NoticeCard({
       ref={card}
       className={styles.card}
       data-tone={notice.tone}
+      data-again={again || undefined}
       role={notice.tone === "error" ? "alert" : "status"}
       tabIndex={-1}
     >
@@ -542,6 +559,8 @@ export function NoticeCenter() {
   );
   const [expanded, setExpanded] = useState(false);
   const [stack, setStack] = useState<HTMLDivElement | null>(null);
+  // How high the stack sat over a sheet's footer, for its glide back down.
+  const lifted = useRef(0);
   const sheet = useTopModal();
   const pageDock = useSyncExternalStore(subscribeDock, () => dock, noDock);
   // A sheet on top takes every card; otherwise a phone page's dock takes the
@@ -552,6 +571,13 @@ export function NoticeCenter() {
   const workGone = useCallback(() => {
     if (work) clearAlert(work.id);
   }, [work]);
+  // A card that left the list is gone for good: it arrives anew next time.
+  useEffect(() => {
+    const live = new Set(
+      [...list, ...(workCard ? [workCard] : [])].map(seenKey),
+    );
+    for (const key of placed.keys()) if (!live.has(key)) placed.delete(key);
+  }, [list, workCard]);
 
   // The page keeps room for the stack, so content scrolls clear of it: the
   // band from the stack's top to the window's bottom, which the shell adds to
@@ -601,12 +627,13 @@ export function NoticeCenter() {
         edge &&
         edge.height > 0 &&
         across(stack.getBoundingClientRect(), edge)
-      )
-        stack.style.setProperty(
-          "--sx-stack-lift",
-          `${Math.ceil(window.innerHeight - edge.top + 8)}px`,
-        );
-      else stack.style.removeProperty("--sx-stack-lift");
+      ) {
+        lifted.current = Math.ceil(window.innerHeight - edge.top + 8);
+        stack.style.setProperty("--sx-stack-lift", `${lifted.current}px`);
+      } else {
+        lifted.current = 0;
+        stack.style.removeProperty("--sx-stack-lift");
+      }
       body?.style.removeProperty("--sx-sheet-room");
       body = sheet.querySelector<HTMLElement>("[data-sheet-body]");
       if (!body) return;
@@ -631,6 +658,31 @@ export function NoticeCenter() {
       window.removeEventListener("resize", place);
       body?.style.removeProperty("--sx-sheet-room");
       stack.style.removeProperty("--sx-stack-lift");
+    };
+  }, [sheet, stack]);
+
+  // Out of a sheet that closed (the after-call sheet, with its Undo card), the
+  // stack glides down from where it sat over the sheet's footer instead of
+  // jumping (phone personas ph2-36, 1 Nov 2026: about 160 px within 2 s).
+  useEffect(() => {
+    if (sheet || !stack) return;
+    const from = lifted.current;
+    lifted.current = 0;
+    if (!from) return;
+    stack.style.setProperty("--sx-stack-lift", `${from}px`);
+    stack.setAttribute("data-glide", "");
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() =>
+        stack.style.removeProperty("--sx-stack-lift"),
+      );
+    });
+    const done = window.setTimeout(
+      () => stack.removeAttribute("data-glide"),
+      600,
+    );
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(done);
     };
   }, [sheet, stack]);
 

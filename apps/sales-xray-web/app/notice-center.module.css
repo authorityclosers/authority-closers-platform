@@ -401,9 +401,24 @@
   }
 }
 
+/* Out of a sheet that closed: down to its place in one glide (ph2-36). */
+.stack[data-glide] {
+  transition: bottom var(--sx-dur-sheet, 280ms) var(--sx-ease-out, ease-out);
+}
+
+/* A card that only moved (out of a closed sheet) doesn't arrive again. */
+.card[data-again],
+.pill[data-again] {
+  animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .card,
   .pill {
     animation: none;
+  }
+
+  .stack[data-glide] {
+    transition: none;
   }
 }

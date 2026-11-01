@@ -417,3 +417,34 @@ it("on a phone page with a dock, new leads and work are one line in it; problems
     vi.unstubAllGlobals();
   }
 });
+it("keeps a short-lived card's Undo in its folded pill", async () => {
+  // Phone personas ph2-36 (1 Nov 2026): the after-call card folded, its Undo
+  // vanished, and a second tap opened the lead underneath.
+  vi.useFakeTimers();
+  try {
+    const undo = vi.fn();
+    await act(async () =>
+      notify({
+        id: "fictional",
+        tone: "success",
+        title: "Moved to Interested",
+        message: "Asha Fictional",
+        action: { label: "Undo", run: undo, icon: "none" },
+        timeout: 10_000,
+      }),
+    );
+    await act(async () => vi.advanceTimersByTime(8000));
+    expect(host.textContent).not.toContain("Asha Fictional");
+    expect(
+      host.querySelector('button[aria-expanded="false"]')?.textContent,
+    ).toBe("Moved to Interested");
+    const back = [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "Undo",
+    );
+    expect(back).toBeDefined();
+    await act(async () => back!.click());
+    expect(undo).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
