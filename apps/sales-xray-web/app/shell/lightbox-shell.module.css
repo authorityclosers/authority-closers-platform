@@ -2297,8 +2297,11 @@
     background: var(--sx-fill);
   }
 
+  /* Lit, its name takes the lit place rows' deeper accent (.place below): the
+     accent on its lit fill read 4.48:1 in light, 3.91:1 under the pointer
+     (the test robot, 125aed9b, 1 Nov 2026). */
   .panelNew[aria-current="page"] {
-    color: var(--sx-accent);
+    color: color-mix(in oklab, var(--sx-accent) 80%, var(--lx-ink));
     font-weight: 600;
   }
 
