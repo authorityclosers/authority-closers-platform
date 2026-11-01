@@ -206,6 +206,24 @@ describe("the fetch layer", () => {
     expect(elsewhere.seen).toHaveLength(1);
   });
 
+  it("waits out the app's own same-each-time writes, never keeping them as a change", async () => {
+    // Phone personas ph1-43 (1 Nov 2026): "Your change is kept" with nothing changed.
+    for (const path of [
+      "/v1/context",
+      "/v1/notifications/read",
+      "/v1/updates/seen",
+    ]) {
+      const { base, seen } = scripted([hold, ok]);
+      const answer = await holdingFetch(base, deps())(path, {
+        method: "POST",
+        body: "{}",
+      });
+      expect(answer.status).toBe(200);
+      expect(seen).toHaveLength(2);
+      expect(holdState().kept).toBe(0);
+    }
+  });
+
   it("stops waiting when the caller cancels", async () => {
     const { base } = scripted([hold, ok]);
     const controller = new AbortController();
