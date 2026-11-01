@@ -15,13 +15,16 @@ export type RoundNumbers = {
   talk_seconds: number;
 };
 
-/** A round closed before its end, kept to continue (this tab, this side). */
+/** A round closed before its end, kept to continue (this tab, this side).
+ *  ``on``: the lead on screen when it paused, its answer not yet saved (the
+ *  round moves only on Save, Skip or "I didn't call"). */
 export type PausedRound = {
   side: string;
   served: string[];
   skipped: string[];
   at: number;
   start: RoundNumbers | null;
+  on?: string | null;
 };
 
 /** A running round's bookkeeping: whether one runs, the leads skipped to its
@@ -74,6 +77,57 @@ export function nextInRound({
   );
   if (fresh) return { next: fresh, again: false };
   return { next: skipped[0] ?? null, again: skipped.length > 0 };
+}
+
+/**
+ * Where a round starts: from the top, or where a paused one stopped. Continue
+ * opens the lead it paused on first while that lead still waits on the list
+ * (an answer saved for it since takes it off To Call), even when it was tried
+ * in the last hour; then the list past the leads already offered and those
+ * tried lately, then the skipped (QA robot, 2 Nov 2026: Continue skipped the
+ * paused lead, and a round could end without offering it).
+ */
+export function startFrom({
+  paused,
+  order,
+  tried = [],
+}: {
+  paused: PausedRound | null;
+  order: readonly string[];
+  tried?: readonly string[];
+}): {
+  next: string | null;
+  again: boolean;
+  served: Set<string>;
+  skipped: string[];
+  passOver: string[];
+} {
+  const served = new Set(paused?.served ?? []);
+  const skipped = [...(paused?.skipped ?? [])];
+  const passOver = paused ? [...tried] : [];
+  const on = paused?.on;
+  if (on && order.includes(on))
+    return {
+      next: on,
+      again: false,
+      served: served.add(on),
+      skipped: skipped.filter((id) => id !== on),
+      passOver,
+    };
+  const { next, again } = nextInRound({
+    order,
+    served,
+    skipped,
+    recent: new Set(passOver),
+  });
+  if (next) served.add(next);
+  return {
+    next,
+    again,
+    served,
+    skipped: again ? skipped.slice(1) : skipped,
+    passOver,
+  };
 }
 
 /** What the round did, from the desk's numbers at its start and now. */
