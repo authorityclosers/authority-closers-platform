@@ -33,6 +33,7 @@ from uuid import UUID
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ac_platform.lead_desk.journey.engine import not_undone
 from ac_platform.lead_desk.journey.model import Journey, Stage, lead_in
 from ac_platform.lead_desk.journey.templates import FUNNEL_ORDER
 from ac_platform.lead_desk.journey.transitions import reasons_of, stages_changed
@@ -426,6 +427,8 @@ async def pipeline_report(
                         LeadEvent.tenant_id == tenant_id,
                         LeadEvent.lead_id.in_(chunk),
                         LeadEvent.kind.in_(("stage", "result", "repeat", "call")),
+                        # An answer its seller undid moved and spoke to nobody (ph1-40).
+                        not_undone(),
                     )
                 )
             ).tuples()

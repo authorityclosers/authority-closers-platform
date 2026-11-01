@@ -212,7 +212,7 @@ async def over_limit(
                     LeadEvent.tenant_id == tenant_id,
                     LeadEvent.created_at >= now - LOOK_BACK,
                     LeadEvent.kind.in_(("call", "result")),
-                    Lead.test_data.is_(False),
+                    sla.counted(tenant_id),
                 )
                 .order_by(LeadEvent.created_at)
                 .limit(ROWS)
@@ -236,7 +236,7 @@ async def over_limit(
                 .where(
                     Lead.tenant_id == tenant_id,
                     Lead.stage == "interested",
-                    Lead.test_data.is_(False),
+                    sla.counted(tenant_id),
                     # A follow-up still ahead is a plan, not a lapse.
                     or_(Lead.next_action_at.is_(None), Lead.next_action_at < now),
                 )

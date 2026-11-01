@@ -24,10 +24,13 @@ from datetime import datetime, timedelta
 from typing import Any, Final
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ac_platform.conversation_intelligence.synthetic_import_models import (
+    ConversationSandboxOrganisation,
+)
 from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk.models import (
     Lead,
@@ -148,6 +151,16 @@ async def find_breaches(db: AsyncSession, *, now: datetime) -> list[Breached]:
     return out
 
 
+def counted(tenant_id: UUID) -> Any:
+    """The leads alerts and their lists count: real ones, or all of a sandbox
+    organisation's, whose leads are all test data, as its reports count them (ph1-39, 1 Nov
+    2026: a first-call alert switched on in the sandbox never came)."""
+    return or_(
+        Lead.test_data.is_(False),
+        exists().where(ConversationSandboxOrganisation.tenant_id == tenant_id),
+    )
+
+
 async def overdue(
     db: AsyncSession,
     tenant_id: UUID,
@@ -168,7 +181,7 @@ async def overdue(
                 LeadEvent.created_at >= now - LOOK_BACK,
                 LeadEvent.kind.in_(("captured", "repeat", "result", "call", "message")),
                 Lead.stage.in_(OPEN_STAGES),
-                Lead.test_data.is_(False),
+                counted(tenant_id),
             )
         )
     ).all()
@@ -404,7 +417,7 @@ async def report(
             await db.execute(
                 select(Lead.id, Lead.owner_person_id).where(
                     Lead.tenant_id == tenant_id,
-                    Lead.test_data.is_(False),
+                    counted(tenant_id),
                     Lead.id.in_({event.lead_id for event in events}),
                 )
             )

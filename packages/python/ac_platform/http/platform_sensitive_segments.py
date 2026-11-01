@@ -5,7 +5,6 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Request, Response
-from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -131,12 +130,12 @@ def _no_store(response: Response) -> None:
 
 
 async def _validation_without_input(request: Request, error: Exception) -> Response:
-    """Never echo a request body back on these routes; report locations and messages only."""
+    """Never echo a request body back; report locations and messages only. Every route since
+    1 Nov 2026 (simulation lab: a call-log batch of 201 calls answered with all its phone
+    numbers); the message still says how many and the limit. The app has this one."""
 
     if not isinstance(error, RequestValidationError):  # pragma: no cover - FastAPI contract
         raise error
-    if not request.url.path.startswith(PREFIX):
-        return await request_validation_exception_handler(request, error)
     detail = [
         {"loc": item.get("loc", ()), "msg": item.get("msg", ""), "type": item.get("type", "")}
         for item in error.errors()
