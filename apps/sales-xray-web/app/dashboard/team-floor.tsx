@@ -199,13 +199,14 @@ function pages(
         ? [
             {
               key: "open",
-              label: "Open leads",
+              // The Open Leads stage, in words of its own (ph1-33, as on Home).
+              label: "In discussion",
               value: count(counts?.open),
               href: leadsHref(side, {
                 view: "all",
                 step: stages?.openKey ?? "open_leads",
               }),
-              help: "Leads called and still in discussion",
+              help: "The Open Leads stage: leads called and still in discussion",
             },
           ]
         : []),

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Collection, Iterable
 from datetime import datetime, timedelta
-from typing import Any, Literal
+from typing import Any, Final, Literal
 from uuid import UUID
 
 from sqlalchemy import and_, case, false, func, or_
@@ -21,6 +21,8 @@ from ac_platform.lead_desk.vocabulary import OPEN_STAGES
 
 WorkView = Literal["to_call", "follow_ups"]
 FollowUpWhen = Literal["today", "overdue", "upcoming"]
+# A new Inbound enquiry this recent and never called is the top of To Call (teardown #4).
+FRESH_ENQUIRY: Final = timedelta(hours=24)
 
 
 def in_view(view: WorkView, day_end: datetime, waiting: Collection[UUID] = ()) -> Any:
@@ -45,20 +47,34 @@ def in_view(view: WorkView, day_end: datetime, waiting: Collection[UUID] = ()) -
 
 
 def call_order(now: datetime, day_start: datetime) -> tuple[Any, ...]:
-    """To Call's order, next lead first (Dipak's handoff p.12: a promised follow-up stays in
-    sight when a new enquiry arrives, and an older backlog doesn't push fresh enquiries
-    down): due today and already due, then new leads never called (oldest first), then the
-    older backlog, then the rest of today; the lead's id last, so a page never repeats one.
+    """To Call's order, next lead first. A new Inbound enquiry nobody has called, received
+    in the last 24 hours, is the top, newest first (competitor teardown #4, speed to lead:
+    it jumps to the top of To Call and is the next card in a round). Then, as Dipak's
+    handoff p.12 has it (a promised follow-up stays in sight when a new enquiry arrives,
+    and an older backlog doesn't push fresh enquiries down): due today and already due,
+    then new leads never called (oldest first), then the older backlog, then the rest of
+    today; the lead's id last, so a page never repeats one. A missed call not yet returned
+    goes ahead of all of it (call_backs_first).
     Home's next lead is the first row of this order (phone personas, 1 Nov 2026: Home said
     Kiara while Leads dialled Krishna)."""
+    arrived = func.coalesce(Lead.received_at, Lead.created_at)
+    fresh = and_(
+        Lead.stage == "new",
+        Lead.next_action_at.is_(None),
+        func.coalesce(Lead.pipeline, "live") != "cold",
+        arrived >= now - FRESH_ENQUIRY,
+    )
     bucket = case(
-        (and_(Lead.next_action_at >= day_start, Lead.next_action_at <= now), 0),
-        (and_(Lead.stage == "new", Lead.next_action_at.is_(None)), 1),
-        (Lead.next_action_at < day_start, 2),
-        else_=3,
+        (fresh, 0),
+        (and_(Lead.next_action_at >= day_start, Lead.next_action_at <= now), 1),
+        (and_(Lead.stage == "new", Lead.next_action_at.is_(None)), 2),
+        (Lead.next_action_at < day_start, 3),
+        else_=4,
     )
     return (
         bucket,
+        # The newest fresh enquiry first; the other buckets keep their order below.
+        case((fresh, arrived), else_=None).desc().nulls_last(),
         func.coalesce(Lead.next_action_at, Lead.created_at),
         Lead.created_at,
         Lead.id,

@@ -282,8 +282,10 @@ export function TodayCards({
     },
     {
       key: "open",
-      label: "Open leads",
-      note: "Further discussion",
+      // The Open Leads stage, in words of its own: the open-lead limit counts
+      // every open Inbound lead (ph1-33, 1 Nov 2026: 0 here beside 908 there).
+      label: "In discussion",
+      note: "Open Leads stage",
       value: counts?.open_leads,
       href: leadsHref(side, {
         view: "all",
