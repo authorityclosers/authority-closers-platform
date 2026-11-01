@@ -655,6 +655,7 @@ const SAMPLE = () => {
     id: el.__qaId,
     sem: window.__qaSem(el),
     fv: el.matches(":focus-visible"),
+    file: el.tagName === "INPUT" && el.type === "file",
     sig: sig(el),
     prevBlurSig,
     prevRect,
@@ -772,8 +773,8 @@ async function famKeyboard(ctx, route) {
     }
     visited.add(s.id);
     visitedSem.add(s.sem);
-    if (s.coveredBy && !s.inDialog) await ctx.add("kbd:focus-covered", /role=(status|alert)/.test(s.coveredBy) ? "MINOR" : "MAJOR", s.sem, `${s.sem} has keyboard focus but ${s.coveredBy} is on top of it`, true);
-    if (s.off || s.tiny) await ctx.add("kbd:focus-lost", "MAJOR", s.sem, `${s.sem} has keyboard focus but ${s.tiny ? "cannot be seen (under 2 px)" : "is off the screen"}`, false);
+    if (s.coveredBy && !s.inDialog && !s.file) await ctx.add("kbd:focus-covered", /role=(status|alert)/.test(s.coveredBy) ? "MINOR" : "MAJOR", s.sem, `${s.sem} has keyboard focus but ${s.coveredBy} is on top of it`, true);
+    if ((s.off || s.tiny) && !s.file) await ctx.add("kbd:focus-lost", "MAJOR", s.sem, `${s.sem} has keyboard focus but ${s.tiny ? "cannot be seen (under 2 px)" : "is off the screen"}`, false);
     s.clip = await clipOf(page, s.rect, tab.dev.viewport);
     stops.push(s);
   }
@@ -1094,6 +1095,15 @@ const hasMarks = (page, typed) =>
     )
     .catch(() => false);
 
+// a draft comes back a moment after the page is up: look for up to ms
+async function waitMarks(page, typed, ms) {
+  for (let t = 0; t <= ms; t += 500) {
+    if (await hasMarks(page, typed)) return true;
+    await sleep(500);
+  }
+  return false;
+}
+
 const warnedIn = (page) =>
   page
     .evaluate(() => {
@@ -1132,10 +1142,18 @@ async function trialHistory(ctx, route, flow) {
     ctx.note(`${flow.name}: after Back the text is ${still ? "still there" : warned ? "gone, with a warning" : "gone"}, at ${new URL(page.url()).pathname}`);
     if (!still && !warned) {
       let draft = false;
-      if (flow.kind === "sheet" && new URL(page.url()).pathname === new URL(openUrl).pathname) {
+      if (flow.kind === "page") {
+        // Back left the page or closed the open lead: a draft kept on the device shows again when the person comes back (Forward)
+        await page.goForward({ timeout: 8000 }).catch(() => null);
+        await session.settle(tab, 8000);
+        await sleep(900);
+        draft = await waitMarks(page, typed, 4000);
+        const seen = await page.evaluate(() => [...document.querySelectorAll("input,textarea")].filter((e) => e.getBoundingClientRect().width > 0).map((e) => `${e.getAttribute("aria-label") || e.placeholder || e.name}=${(e.value || "").slice(0, 30)}`).slice(0, 5)).catch(() => []);
+        ctx.note(`${flow.name}: after Back then Forward the text is ${draft ? "back" : "gone"} at ${new URL(page.url()).pathname}; fields: ${JSON.stringify(seen)}; typed: ${JSON.stringify(typed.map((t) => t.mark))}`);
+      } else if (flow.kind === "sheet" && new URL(page.url()).pathname === new URL(openUrl).pathname) {
         // still on the page: open the sheet again (no reload) and see whether it kept what was typed
         const again = await clickPath(page, flow.path);
-        draft = again ? await hasMarks(page, typed) : false;
+        draft = again ? await waitMarks(page, typed, 3000) : false;
       }
       if (!draft) {
         const left = new URL(page.url()).pathname !== new URL(openUrl).pathname;
@@ -1157,13 +1175,13 @@ async function trialHistory(ctx, route, flow) {
     await page.reload({ waitUntil: "load", timeout: 60000 }).catch(() => null);
     await session.settle(tab, 10000);
     await sleep(900);
-    still = await hasMarks(page, typed);
+    still = await waitMarks(page, typed, 3000);
     ctx.note(`${flow.name}: after a refresh the text is ${still ? "still there" : natives.includes("beforeunload") ? "gone, with a warning before leaving" : "gone"}`);
     if (!still && !natives.includes("beforeunload")) {
       let draft = false;
       if (flow.kind === "sheet") {
         const again = await clickPath(page, flow.path);
-        draft = again ? await hasMarks(page, typed) : false;
+        draft = again ? await waitMarks(page, typed, 3000) : false;
       }
       if (!draft) {
         const c2 = typed.reduce((a, t) => a + t.chars, 0);

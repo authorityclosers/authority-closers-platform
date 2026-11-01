@@ -179,7 +179,7 @@ async function file(finding, ctx) {
     severity: finding.severity,
     description: `${finding.summary}${finding.selector ? ` (${finding.selector})` : ""}: ${finding.detail || ""}`.slice(0, 600),
   };
-  if (known && Date.now() - known.last < windowMs) {
+  if (known && (known.scheduled || Date.now() - known.last < windowMs)) {
     known.seen += 1;
     stats.againByCheck[finding.rule] = (stats.againByCheck[finding.rule] || 0) + 1;
     stats.againByArea[area] = (stats.againByArea[area] || 0) + 1;

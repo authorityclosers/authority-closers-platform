@@ -27,7 +27,7 @@ assert.ok(!inv.findingsFrom({ ...base, textLength: 300 }, { route: "/leads", pho
 // the click map: 99 unique destinations, each with a kind and what that kind needs
 const map = JSON.parse(fs.readFileSync(path.join(__dirname, "data", "click-map.json"), "utf8"));
 const ids = new Set();
-const kinds = new Set(["nav", "select", "sheet", "back", "option", "present", "todo"]);
+const kinds = new Set(["nav", "select", "sheet", "back", "option", "present", "todo", "lead-close"]);
 assert.strictEqual(map.destinations.length, 99);
 for (const d of map.destinations) {
   assert.ok(!ids.has(d.id), `duplicate id ${d.id}`);

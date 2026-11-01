@@ -23,6 +23,9 @@ failure through the app's own bug reporter (`POST /v1/bug-reports`, with a pictu
   `digest`, `rejudge`, `scope`.
 - `lib/clickmap.cjs` + `data/click-map.json` the 99 click destinations of the Home and Leads handoff as checks.
 - `lib/plans.cjs` read-only journey plans (one function per journey id).
+- `lib/aftercall.cjs` the after-call journeys (J211, J212, J215, J219): the only plans that write, and only on the pool of at most five
+  "QA robot" leads in the AC Sales Sandbox (`state/qa-pool.json`), as the seller priya, through /v1, each put back with the app's own Undo;
+  `tel:` is intercepted by a click handler and never followed. Leads are never deleted.
 - `lib/sim.cjs` seeded persona walks; `lib/invariants.cjs` the checks run after every step.
 - `lib/attack.cjs` state attacks: fault injection, 3G, data extremes, text zoom, keyboard-only, dark mode, Back/Forward/refresh
   mid-flow, double submit. One cell is one page x size x role x family; the least recently run goes first.
