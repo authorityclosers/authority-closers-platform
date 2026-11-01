@@ -769,7 +769,7 @@ S: See you Wednesday, Harish. Thank you for your time.
     # S10 2-hour call.
     s10 = _long_call(
         10,
-        120,
+        112,  # about 118 minutes at phone pace: inside the pipeline's 2-hour limit
         seller="Rohan",
         prospect="Devika",
         company="Kalyani Textiles",

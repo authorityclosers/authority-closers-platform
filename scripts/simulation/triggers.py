@@ -78,7 +78,10 @@ class Lab:
         soon = self.get("/v1/lead-desk/soon")
         bell = self.get("/v1/notifications")
         today = self.get("/v1/lead-desk/leads?scope=mine&created=today")
+        # Three different measures, on purpose: Late = past due (open stages); Due today;
+        # Follow-ups Overdue = planned before today; the badge's overdue = over an hour late.
         late = self.get("/v1/lead-desk/leads?scope=mine&due=late")
+        due_today = self.get("/v1/lead-desk/leads?scope=mine&due=today")
         overdue = self.get("/v1/lead-desk/leads?scope=mine&view=follow_ups&when=overdue")
         tasks = self.get("/v1/lead-desk/tasks")
         my_day = self.get("/v1/lead-desk/my-day")
@@ -90,6 +93,7 @@ class Lab:
             "bell_unread": _first(bell, ("unread", "unread_count", "count")),
             "leads_created_today": _first(today, ("total", "count")),
             "leads_late": _first(late, ("total", "count")),
+            "leads_due_today": _first(due_today, ("total", "count")),
             "follow_ups_overdue": _first(overdue, ("total", "count")),
             # Call-backs are a lead's follow-ups, never on the Tasks list (calling kinds).
             "task_counts": (tasks or {}).get("counts"),
@@ -185,6 +189,7 @@ def t_dupes(lab: Lab) -> dict[str, Any]:
     phone = lab.phone(base)
     digits = phone.replace("+91", "").replace(" ", "")
     first = lab.add_lead(f"SIM Dupe {lab.tag}", phone, assign="me")
+    original = ((first[1] or {}).get("lead") or {}).get("lead_id")
     tries = {
         "same_number": phone,
         "no_spaces": phone.replace(" ", ""),
@@ -195,7 +200,13 @@ def t_dupes(lab: Lab) -> dict[str, Any]:
     out: dict[str, Any] = {"first": first[0]}
     for label, value in tries.items():
         status, body, _ = lab.add_lead(f"SIM Dupe {lab.tag} {label}", value, assign="me")
-        out[label] = {"status": status, "detail": (body or {}).get("_detail")}
+        got = ((body or {}).get("lead") or {}).get("lead_id")
+        # A 201 may hand back the existing lead: only a new lead id is a duplicate.
+        out[label] = {
+            "status": status,
+            "same_lead": got == original if got else None,
+            "detail": (body or {}).get("_detail"),
+        }
     twin = lab.add_lead(f"SIM Dupe {lab.tag}", lab.phone(base + 1), assign="me")
     out["name_twin_new_number"] = twin[0]
     match = lab.get(
@@ -417,12 +428,95 @@ def t_leaving(lab: Lab, count: int = 10) -> dict[str, Any]:
     return {"me_before": me_before, "off": off, "burst": burst, "on": on}
 
 
+def t_intake(lab: Lab) -> dict[str, Any]:
+    """The public intake endpoints (website line, Google Ads, capture, Meta webhook) with keys
+    and signatures that are wrong or missing: each is refused, and no lead appears. No cookie
+    is sent; a sandbox organisation has no live source to aim at, so only refusals are tested."""
+    anon = inject.Http(lab.http.base, lab.http.host)
+    bogus = "sxw_" + uuid.uuid4().hex[:24]
+    page = "https://shop.example.com/contact"
+    lead = {"name": "SIM Intake", "phone": lab.phone(990), "email": "sim@example.com"}
+
+    def hit(method: str, path: str, body: Any, headers: dict[str, str] | None = None) -> Any:
+        try:
+            status, answer = anon.call(method, path, body, headers=headers or {}, ok=(200, 202))
+        except inject.Refused as error:
+            status, answer = error.status, error.body
+        detail = answer.get("detail") if isinstance(answer, dict) else None
+        outcome = answer.get("outcome") if isinstance(answer, dict) else None
+        return {"status": status, "detail": detail, "outcome": outcome}
+
+    site = {"Origin": "https://shop.example.com"}
+    before = lab.numbers()["leads_created_today"]
+    out = {
+        "site_no_key": hit("POST", "/v1/lead-desk/site/lead", {"u": page, "fields": lead}, site),
+        "site_unknown_key": hit(
+            "POST", "/v1/lead-desk/site/lead", {"k": bogus, "u": page, "fields": lead}, site
+        ),
+        "site_other_page": hit(
+            "POST",
+            "/v1/lead-desk/site/lead",
+            {"k": bogus, "u": page, "fields": lead},
+            {"Origin": "https://evil.example.org"},
+        ),
+        "site_no_page": hit("POST", "/v1/lead-desk/site/lead", {"k": bogus, "fields": lead}, site),
+        "site_hello_unknown_key": hit(
+            "POST", "/v1/lead-desk/site/hello", {"k": bogus, "u": page}, site
+        ),
+        "google_no_key": hit(
+            "POST",
+            f"/v1/lead-desk/capture/{uuid.uuid4()}/google-ads",
+            {"lead_id": "x", "is_test": True},
+        ),
+        "google_unknown_source": hit(
+            "POST",
+            f"/v1/lead-desk/capture/{uuid.uuid4()}/google-ads",
+            {
+                "google_key": "not-a-real-key",
+                "lead_id": "TeSter-123-ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                "is_test": True,
+                "user_column_data": [
+                    {"column_id": "FULL_NAME", "string_value": "SIM Intake"},
+                    {"column_id": "PHONE_NUMBER", "string_value": lab.phone(991)},
+                ],
+            },
+        ),
+        "capture_no_key": hit("POST", f"/v1/lead-desk/capture/{uuid.uuid4()}", lead),
+        "capture_unknown_key": hit(
+            "POST", f"/v1/lead-desk/capture/{uuid.uuid4()}", lead, {"X-Lead-Desk-Key": "bogus-key"}
+        ),
+        "meta_verify_wrong_token": hit(
+            "GET",
+            "/v1/lead-desk/meta/webhook?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=42",
+            None,
+        ),
+        "meta_no_signature": hit(
+            "POST",
+            "/v1/lead-desk/meta/webhook",
+            {
+                "object": "page",
+                "entry": [
+                    {"id": "0", "changes": [{"field": "leadgen", "value": {"leadgen_id": "0"}}]}
+                ],
+            },
+        ),
+        "meta_bad_signature": hit(
+            "POST",
+            "/v1/lead-desk/meta/webhook",
+            {"object": "page", "entry": []},
+            {"X-Hub-Signature-256": "sha256=" + "0" * 64},
+        ),
+    }
+    out["leads_created_today"] = {"before": before, "after": lab.numbers()["leads_created_today"]}
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("tenant_id")
     parser.add_argument("seller")
     parser.add_argument("out")
-    parser.add_argument("--only", default="burst,dupes,calllog,uploads,due,leaving")
+    parser.add_argument("--only", default="burst,dupes,calllog,uploads,due,leaving,intake")
     parser.add_argument("--burst", type=int, default=100)
     parser.add_argument("--audio", default="out/S05/S05.m4a")
     parser.add_argument("--tag", default=datetime.now(UTC).strftime("%m%d%H%M"))
@@ -441,6 +535,7 @@ def main() -> None:
         "uploads": lambda: t_uploads(lab, Path(args.audio)),
         "due": lambda: t_due(lab),
         "leaving": lambda: t_leaving(lab),
+        "intake": lambda: t_intake(lab),
     }
     try:
         for name in args.only.split(","):

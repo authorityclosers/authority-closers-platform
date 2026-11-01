@@ -232,7 +232,7 @@ def test_the_library_is_thirty_fictional_calls_covering_the_brief() -> None:
         "speakerphone_echo",
     } <= covered
     words = {s["id"]: scenarios.words(s) for s in library}
-    assert words["S09"] >= 45 * 140 and words["S10"] >= 120 * 140
+    assert words["S09"] >= 45 * 140 and words["S10"] >= 112 * 140
 
 
 def test_the_fake_phone_ids_match_the_android_app() -> None:
