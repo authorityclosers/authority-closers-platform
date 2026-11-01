@@ -210,7 +210,14 @@ export function UploadChoicesFields({
             })}
           </div>
           <small className={styles.help}>
-            Open Leads or Interested only when the file has real past talks.
+            {/* Only the stages on offer here (ph1-48: it named Open Leads,
+                which this list didn't offer). */}
+            {`${starts
+              .slice(1)
+              .map((stage) =>
+                stageName(stage, value.side === "cold" ? "cold" : "inbound"),
+              )
+              .join(" or ")} only when the file has real past talks.`}
           </small>
         </div>
       ) : null}

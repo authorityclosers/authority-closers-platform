@@ -1102,7 +1102,9 @@ class LeadDesk:
                     func.count().filter(
                         Lead.next_action_at > self.now, Lead.next_action_at < day_end
                     ),
-                    func.count().filter(overdue_filter(self.now)),
+                    # Late is Inbound's alone, as on the badge: a Cold list is never late
+                    # (phone personas ph1-47, 1 Nov 2026: "904 late" was the Unworked list).
+                    func.count().filter(overdue_filter(self.now), on_side("inbound")),
                 ).where(mine)
             )
         ).one()
