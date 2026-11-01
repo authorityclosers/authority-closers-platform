@@ -1224,6 +1224,20 @@ export function ImportDialog({
               .
             </p>
             {showColumns ? null : (
+              // The first rows as they will be leads, before Import (phone
+              // personas ph1-48 and competitor teardown 5).
+              <ul className={styles.hint} aria-label="The first rows, as leads">
+                {preview.rows.slice(0, 3).map((row, index) => (
+                  <li key={index}>
+                    {[mapping.name, mapping.phone, mapping.source]
+                      .map((column) => (column ? row[column]?.trim() : ""))
+                      .filter(Boolean)
+                      .join(" · ") || "No name or phone in this row"}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {showColumns ? null : (
               <p className={styles.hint}>
                 Columns matched:{" "}
                 {Object.keys(mapping)

@@ -29,7 +29,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import type { LibrarySubmission } from "../acquisition-client";
 import { can } from "../organisation/roles";
 import { FirstRun } from "./first-run";
-import { MyTasks, SellerBlocks } from "./seller-home";
+import { MyTasks, SellerBlocks, useSidesAccess } from "./seller-home";
 import type { Side } from "../ui/side-selector";
 import { SetupStart } from "./home-v2";
 import { TodayBar } from "./home-today";
@@ -206,7 +206,12 @@ function TeamHome({
 
 function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
   const [side, setSide] = useHomeSide();
-  if (state.status === "loading") return <TodaySkeleton />;
+  // Which sides this seller works, read beside the desk: the skeleton stays
+  // until both have answered, so the Inbound | Cold selector never arrives
+  // after Today and pushes it down (the test robot, 1 Nov 2026: 0.06 at 360 px).
+  const access = useSidesAccess();
+  if (state.status === "loading" || (state.status !== "error" && !access))
+    return <TodaySkeleton />;
   if (state.status === "error")
     return (
       <section className={styles.block}>
@@ -225,6 +230,7 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
       desk={desk}
       side={side}
       onSide={setSide}
+      access={access}
       headerExtras={
         <>
           {/* Taking new leads, as a small pill (Dipak, 28 Oct 2026). */}

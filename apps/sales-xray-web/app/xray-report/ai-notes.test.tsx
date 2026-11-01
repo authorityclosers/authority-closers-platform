@@ -136,3 +136,32 @@ it("offers Apply only where the page knows the lead, and writes on a tap", async
   );
   expect(chip.textContent).toBe("Mark Won");
 });
+
+it("keeps a chip ready when its sheet closes unsaved, and shows only updates the lead can take", async () => {
+  const view = real();
+  const apply = vi.fn(async () => false);
+  await act(async () =>
+    root.render(
+      <AiNotes
+        view={view}
+        onApply={apply}
+        applicable={(suggestion) => suggestion.key !== "amount"}
+      />,
+    ),
+  );
+  const labels = [
+    ...host.querySelectorAll('[aria-label="Suggested updates"] button'),
+  ].map((button) => button.textContent);
+  expect(labels).toContain("Apply: Mark Won");
+  expect(labels.some((label) => label?.startsWith("Apply: Amount"))).toBe(
+    false,
+  );
+  const chip = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Apply: Mark Won",
+  )!;
+  await act(async () => chip.click());
+  // Backed out of the sheet: nothing written, the chip as it was, no error.
+  expect(chip.textContent).toBe("Apply: Mark Won");
+  expect(chip.disabled).toBe(false);
+  expect(notify).not.toHaveBeenCalled();
+});

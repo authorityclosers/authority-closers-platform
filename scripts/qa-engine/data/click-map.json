@@ -1,0 +1,2320 @@
+{
+ "source": "Sales_Xray_Home_Leads_Final_UX_Navigation_Handoff.pdf (31 Oct 2026), pp. 14-21 and 24",
+ "sizes": {
+  "phone": [
+   390,
+   844
+  ],
+  "desktop": [
+   1440,
+   900
+  ]
+ },
+ "destinations": [
+  {
+   "id": "01",
+   "area": "home",
+   "element": "Authority Closers / workspace name",
+   "destination": "Workspace picker only for users with multiple accessible businesses; otherwise show workspace name.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "sheet",
+   "start": "/dashboard",
+   "control": {
+    "role": "button",
+    "name": "[Ww]orkspace: ",
+    "regex": true
+   },
+   "expect": {
+    "visible": [
+     "Switch to",
+     "Where your calls, leads and reports live"
+    ]
+   },
+   "status": "live"
+  },
+  {
+   "id": "02",
+   "area": "home",
+   "element": "Notification bell",
+   "destination": "Notifications page with assigned leads, reminders and report alerts.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "sheet",
+   "start": "/dashboard",
+   "control": {
+    "role": "button",
+    "name": "Notifications"
+   },
+   "expect": {
+    "visible": [
+     "Notifications"
+    ]
+   },
+   "status": "live"
+  },
+  {
+   "id": "03",
+   "area": "home",
+   "element": "One notification",
+   "destination": "Exact related lead, task, follow-up or report; check current access.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "04",
+   "area": "home",
+   "element": "Profile icon",
+   "destination": "My Account, notification preferences, Help and Sign out.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "sheet",
+   "start": "/dashboard",
+   "control": {
+    "role": "button",
+    "name": "Account and log out"
+   },
+   "expect": {
+    "visible": [
+     "Log out",
+     "Sign out"
+    ]
+   },
+   "at": {
+    "desktop": {
+     "kind": "nav",
+     "start": "/dashboard",
+     "control": {
+      "role": "link",
+      "name": "Account",
+      "exact": true
+     },
+     "expect": {
+      "path": "/account"
+     },
+     "back": true
+    }
+   },
+   "status": "live"
+  },
+  {
+   "id": "05",
+   "area": "home",
+   "element": "Inbound Leads",
+   "destination": "Change lead-type context: inbound counts, calling work, follow-ups and performance.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "select",
+   "start": "/dashboard",
+   "control": {
+    "role": "radio",
+    "name": "Inbound Leads"
+   },
+   "expect": {
+    "selected": true
+   },
+   "status": "expected-missing"
+  },
+  {
+   "id": "06",
+   "area": "home",
+   "element": "Cold Leads",
+   "destination": "Change lead-type context: cold counts, calling work, follow-ups and performance.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "select",
+   "start": "/dashboard",
+   "control": {
+    "role": "radio",
+    "name": "Cold Leads"
+   },
+   "expect": {
+    "selected": true
+   },
+   "status": "expected-missing"
+  },
+  {
+   "id": "07",
+   "area": "home",
+   "element": "Fresh inbound alert in Cold mode",
+   "destination": "Switch to Inbound and open that lead or the new-lead filtered list.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "08",
+   "area": "home",
+   "element": "New Leads — Inbound",
+   "destination": "Leads → Inbound → To Call → Stage: New Lead.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "nav",
+   "start": "/dashboard",
+   "control": {
+    "role": "link",
+    "name": "^New leads",
+    "regex": true
+   },
+   "expect": {
+    "path": "/leads",
+    "query": {
+     "side": "inbound",
+     "view": "to_call",
+     "step": "new"
+    }
+   },
+   "back": true,
+   "status": "live"
+  },
+  {
+   "id": "09",
+   "area": "home",
+   "element": "Unworked Leads — Cold",
+   "destination": "Leads → Cold → To Call → Stage: Unworked.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "nav",
+   "start": "/dashboard",
+   "control": {
+    "role": "link",
+    "name": "^Unworked",
+    "regex": true
+   },
+   "expect": {
+    "path": "/leads",
+    "query": {
+     "side": "cold",
+     "view": "to_call",
+     "step": "new"
+    }
+   },
+   "back": true,
+   "status": "live",
+   "side": "Cold Leads"
+  },
+  {
+   "id": "10",
+   "area": "home",
+   "element": "Open Leads",
+   "destination": "Leads → selected type → All Leads → Stage: Open Leads.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "nav",
+   "start": "/dashboard",
+   "control": {
+    "role": "link",
+    "name": "Open Leads"
+   },
+   "expect": {
+    "path": "/leads",
+    "query": {
+     "view": "all",
+     "step": "open_leads"
+    }
+   },
+   "back": true,
+   "status": "expected-missing"
+  },
+  {
+   "id": "11",
+   "area": "home",
+   "element": "Follow-ups Today",
+   "destination": "Leads → selected type → Follow-ups → Due Today.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "nav",
+   "start": "/dashboard",
+   "control": {
+    "role": "link",
+    "name": "^Follow-ups today",
+    "regex": true
+   },
+   "expect": {
+    "path": "/leads",
+    "query": {
+     "view": "follow_ups",
+     "when": "today"
+    }
+   },
+   "back": true,
+   "status": "live"
+  },
+  {
+   "id": "12",
+   "area": "home",
+   "element": "Tasks Today",
+   "destination": "Home → All Tasks → Today (shared across lead types; non-calling work count).",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "nav",
+   "start": "/dashboard",
+   "control": {
+    "role": "link",
+    "name": "Tasks Today"
+   },
+   "expect": {
+    "path": "/leads",
+    "query": {
+     "tab": "tasks"
+    }
+   },
+   "back": true,
+   "status": "expected-missing"
+  },
+  {
+   "id": "13",
+   "area": "home",
+   "element": "Customer name",
+   "destination": "Prospect’s Information for the exact lead.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "14",
+   "area": "home",
+   "element": "Customer card / View Lead",
+   "destination": "The same Prospect’s Information page.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "15",
+   "area": "home",
+   "element": "Call Now",
+   "destination": "Launch the supported call route for that exact customer.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing",
+   "no_press": true
+  },
+  {
+   "id": "16",
+   "area": "home",
+   "element": "Call finished",
+   "destination": "After-Call flow for this customer when device/calling route supports it.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing",
+   "no_press": true
+  },
+  {
+   "id": "17",
+   "area": "home",
+   "element": "Save & Next Lead",
+   "destination": "Save outcome/next action; continue to next eligible calling-queue item.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing",
+   "no_press": true
+  },
+  {
+   "id": "18",
+   "area": "home",
+   "element": "Add Task",
+   "destination": "Home → Add Task form.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "19",
+   "area": "home",
+   "element": "Task name / row",
+   "destination": "Home → Task Details.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "20",
+   "area": "home",
+   "element": "Checkbox beside task",
+   "destination": "Complete same task and sync its status everywhere.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing",
+   "no_press": true
+  },
+  {
+   "id": "21",
+   "area": "home",
+   "element": "Customer name within task",
+   "destination": "Leads → that customer’s Prospect’s Information.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "22",
+   "area": "home",
+   "element": "See all",
+   "destination": "Home → All Tasks → Today.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "nav",
+   "start": "/dashboard",
+   "control": {
+    "role": "link",
+    "name": "See all"
+   },
+   "expect": {
+    "path": "/leads",
+    "query": {
+     "tab": "tasks"
+    }
+   },
+   "back": true,
+   "status": "expected-missing"
+  },
+  {
+   "id": "23",
+   "area": "home",
+   "element": "Upcoming inside All Tasks",
+   "destination": "Home → All Tasks → Upcoming.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "24",
+   "area": "home",
+   "element": "Completed inside All Tasks",
+   "destination": "Home → All Tasks → Completed.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "25",
+   "area": "home",
+   "element": "Reschedule in Task Details",
+   "destination": "Date/time picker → update same task → return to Task Details.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing",
+   "no_press": true
+  },
+  {
+   "id": "26",
+   "area": "home",
+   "element": "Follow-up row / customer",
+   "destination": "Prospect’s Information with the related follow-up visible.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "27",
+   "area": "home",
+   "element": "Phone icon on follow-up",
+   "destination": "Call the specific customer.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing",
+   "no_press": true
+  },
+  {
+   "id": "28",
+   "area": "home",
+   "element": "See all",
+   "destination": "Leads → selected type → Follow-ups → Upcoming.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "nav",
+   "start": "/dashboard",
+   "control": {
+    "role": "link",
+    "name": "See all"
+   },
+   "expect": {
+    "path": "/leads",
+    "query": {
+     "view": "follow_ups",
+     "when": "upcoming"
+    }
+   },
+   "back": true,
+   "status": "expected-missing"
+  },
+  {
+   "id": "29",
+   "area": "home",
+   "element": "Reschedule follow-up",
+   "destination": "Date/time picker → save → Home and Leads update.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing",
+   "no_press": true
+  },
+  {
+   "id": "30",
+   "area": "home",
+   "element": "Complete follow-up",
+   "destination": "Complete after work is done; update customer and due lists.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing",
+   "no_press": true
+  },
+  {
+   "id": "31",
+   "area": "home",
+   "element": "Attempted",
+   "destination": "Reports → All Calls → Today → selected lead type.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "nav",
+   "start": "/dashboard",
+   "control": {
+    "role": "link",
+    "name": "Tried",
+    "regex": true
+   },
+   "expect": {
+    "path": "/analysis/calls"
+   },
+   "back": true,
+   "status": "live"
+  },
+  {
+   "id": "32",
+   "area": "home",
+   "element": "Connected",
+   "destination": "Reports → All Calls → Today → Connected → selected lead type.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "nav",
+   "start": "/dashboard",
+   "control": {
+    "role": "link",
+    "name": "Connected"
+   },
+   "expect": {
+    "path": "/analysis/calls"
+   },
+   "back": true,
+   "status": "expected-missing"
+  },
+  {
+   "id": "33",
+   "area": "home",
+   "element": "Talk Time",
+   "destination": "Growth → Analytics → Today → Talk Time details for selected type.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "34",
+   "area": "home",
+   "element": "Follow-ups Done",
+   "destination": "Leads → Follow-ups → Completed Today → selected type.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "35",
+   "area": "home",
+   "element": "See details",
+   "destination": "Growth → Analytics → Today → selected lead type.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "nav",
+   "start": "/dashboard",
+   "control": {
+    "role": "link",
+    "name": "See details"
+   },
+   "expect": {
+    "path": "/performance"
+   },
+   "back": true,
+   "status": "expected-missing"
+  },
+  {
+   "id": "36",
+   "area": "home",
+   "element": "Home",
+   "destination": "Home start page.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "nav",
+   "start": "/leads",
+   "control": {
+    "role": "link",
+    "name": "Home",
+    "exact": true
+   },
+   "expect": {
+    "path": "/dashboard"
+   },
+   "back": true,
+   "status": "live"
+  },
+  {
+   "id": "37",
+   "area": "home",
+   "element": "Leads",
+   "destination": "Leads page with permitted lead type and sensible last-used view.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "nav",
+   "start": "/dashboard",
+   "control": {
+    "role": "link",
+    "name": "Leads",
+    "css": "nav a[href=\"/leads\"], aside a[href=\"/leads\"]"
+   },
+   "expect": {
+    "path": "/leads"
+   },
+   "back": true,
+   "at": {
+    "desktop": {
+     "control": {
+      "role": "link",
+      "name": "Work",
+      "css": "nav a[href=\"/leads\"], aside a[href=\"/leads\"]"
+     }
+    }
+   },
+   "status": "live"
+  },
+  {
+   "id": "38",
+   "area": "home",
+   "element": "Ask Dipak",
+   "destination": "General Ask Dipak chat.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "sheet",
+   "start": "/dashboard",
+   "control": {
+    "role": "button",
+    "name": "Ask Dipak"
+   },
+   "expect": {
+    "visible": [
+     "Ask Dipak"
+    ]
+   },
+   "status": "live"
+  },
+  {
+   "id": "39",
+   "area": "home",
+   "element": "Reports",
+   "destination": "Reports → All Calls or user’s last selected report view.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "nav",
+   "start": "/dashboard",
+   "control": {
+    "role": "link",
+    "name": "Reports"
+   },
+   "expect": {
+    "path": "/analysis/calls"
+   },
+   "back": true,
+   "status": "expected-missing"
+  },
+  {
+   "id": "40",
+   "area": "home",
+   "element": "Growth",
+   "destination": "My Growth → Analytics / Coaching.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "nav",
+   "start": "/dashboard",
+   "control": {
+    "role": "link",
+    "name": "Growth"
+   },
+   "expect": {
+    "path": "/growth"
+   },
+   "back": true,
+   "status": "expected-missing"
+  },
+  {
+   "id": "41",
+   "area": "leads",
+   "element": "Add Lead (+)",
+   "destination": "Open Add Lead form.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "sheet",
+   "start": "/leads",
+   "control": {
+    "role": "button",
+    "name": "Add a lead, a call or a task"
+   },
+   "expect": {
+    "visible": [
+     "Add lead",
+     "Add a call",
+     "Add task"
+    ]
+   },
+   "status": "live"
+  },
+  {
+   "id": "42",
+   "area": "leads",
+   "element": "Save Lead",
+   "destination": "Save or review existing match; open that Prospect’s Information.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing",
+   "no_press": true
+  },
+  {
+   "id": "43",
+   "area": "leads",
+   "element": "Notification bell",
+   "destination": "Notifications; tap exact linked record.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "sheet",
+   "start": "/leads",
+   "control": {
+    "role": "button",
+    "name": "Notifications"
+   },
+   "expect": {
+    "visible": [
+     "Notifications"
+    ]
+   },
+   "status": "live"
+  },
+  {
+   "id": "44",
+   "area": "leads",
+   "element": "Inbound Leads",
+   "destination": "Show authorized inbound records only.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "select",
+   "start": "/leads",
+   "control": {
+    "role": "radio",
+    "name": "Inbound Leads"
+   },
+   "expect": {
+    "selected": true
+   },
+   "status": "live"
+  },
+  {
+   "id": "45",
+   "area": "leads",
+   "element": "Cold Leads",
+   "destination": "Show authorized cold records only.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "select",
+   "start": "/leads",
+   "control": {
+    "role": "radio",
+    "name": "Cold Leads"
+   },
+   "expect": {
+    "selected": true
+   },
+   "status": "live"
+  },
+  {
+   "id": "46",
+   "area": "leads",
+   "element": "Search bar",
+   "destination": "Search accessible leads by name, phone or company.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "present",
+   "start": "/leads",
+   "control": {
+    "role": "searchbox",
+    "name": "Search leads"
+   },
+   "status": "live"
+  },
+  {
+   "id": "47",
+   "area": "leads",
+   "element": "One search result",
+   "destination": "Exact Prospect’s Information.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "nav",
+   "start": "/leads?view=all",
+   "control": {
+    "role": "button",
+    "name": "^Open ",
+    "regex": true
+   },
+   "expect": {
+    "path": "/leads",
+    "query": {
+     "lead": "*"
+    }
+   },
+   "back": true,
+   "status": "expected-missing"
+  },
+  {
+   "id": "48",
+   "area": "leads",
+   "element": "Clear Search (×)",
+   "destination": "Remove search text, keep active filters.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "present",
+   "start": "/leads",
+   "control": {
+    "role": "button",
+    "name": "^Clear search",
+    "regex": true
+   },
+   "status": "live",
+   "type": {
+    "into": "Search leads",
+    "text": "zzqa"
+   }
+  },
+  {
+   "id": "49",
+   "area": "leads",
+   "element": "Filter button",
+   "destination": "Open Filter Leads sheet.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "sheet",
+   "start": "/leads",
+   "control": {
+    "role": "button",
+    "name": "Filter leads"
+   },
+   "expect": {
+    "visible": [
+     "Filter"
+    ]
+   },
+   "status": "live"
+  },
+  {
+   "id": "50",
+   "area": "leads",
+   "element": "Lead Source filter",
+   "destination": "Narrow by available Meta / Google / Website / Import source.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "51",
+   "area": "leads",
+   "element": "Date filter",
+   "destination": "Narrow results by chosen date range.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "52",
+   "area": "leads",
+   "element": "Follow-up filter",
+   "destination": "Narrow due work by Today, Overdue or Upcoming.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "53",
+   "area": "leads",
+   "element": "Show Results",
+   "destination": "Apply choices, close filter sheet and show matching leads.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing",
+   "no_press": true
+  },
+  {
+   "id": "54",
+   "area": "leads",
+   "element": "Clear Filters",
+   "destination": "Remove extra filters and refresh current working view.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "55",
+   "area": "leads",
+   "element": "Close Filter sheet",
+   "destination": "Dismiss draft choices without applying them.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "56",
+   "area": "leads",
+   "element": "To Call",
+   "destination": "Selected-type customers currently needing a calling action.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "select",
+   "start": "/leads",
+   "control": {
+    "role": "tab",
+    "name": "To Call"
+   },
+   "expect": {
+    "selected": true
+   },
+   "status": "live"
+  },
+  {
+   "id": "57",
+   "area": "leads",
+   "element": "Follow-ups",
+   "destination": "Selected-type leads with planned or overdue contact.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "select",
+   "start": "/leads",
+   "control": {
+    "role": "tab",
+    "name": "Follow-ups"
+   },
+   "expect": {
+    "selected": true
+   },
+   "status": "live"
+  },
+  {
+   "id": "58",
+   "area": "leads",
+   "element": "All Leads",
+   "destination": "All permitted leads of the selected type.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "select",
+   "start": "/leads",
+   "control": {
+    "role": "tab",
+    "name": "All Leads"
+   },
+   "expect": {
+    "selected": true
+   },
+   "status": "live"
+  },
+  {
+   "id": "59",
+   "area": "leads",
+   "element": "Due Today inside Follow-ups",
+   "destination": "Planned customer contact due today.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "select",
+   "start": "/leads?view=follow_ups",
+   "control": {
+    "role": "tab",
+    "name": "^Due Today",
+    "regex": true
+   },
+   "expect": {
+    "selected": true
+   },
+   "status": "live"
+  },
+  {
+   "id": "60",
+   "area": "leads",
+   "element": "Overdue inside Follow-ups",
+   "destination": "Past-due customer contact.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "select",
+   "start": "/leads?view=follow_ups",
+   "control": {
+    "role": "tab",
+    "name": "^Overdue",
+    "regex": true
+   },
+   "expect": {
+    "selected": true
+   },
+   "status": "live"
+  },
+  {
+   "id": "61",
+   "area": "leads",
+   "element": "Upcoming inside Follow-ups",
+   "destination": "Scheduled future customer contact.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "select",
+   "start": "/leads?view=follow_ups",
+   "control": {
+    "role": "tab",
+    "name": "^Upcoming",
+    "regex": true
+   },
+   "expect": {
+    "selected": true
+   },
+   "status": "live"
+  },
+  {
+   "id": "62",
+   "area": "leads",
+   "element": "Completed follow-up history",
+   "destination": "Completed customer follow-up work.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "63",
+   "area": "leads",
+   "element": "All Stages",
+   "destination": "All permitted stages in selected type.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "present",
+   "start": "/leads",
+   "control": {
+    "role": "button",
+    "name": "Pipeline stage",
+    "regex": true
+   },
+   "status": "live"
+  },
+  {
+   "id": "64",
+   "area": "leads",
+   "element": "New Lead",
+   "destination": "Only in Inbound: fresh untouched enquiries.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "option",
+   "start": "/leads",
+   "control": {
+    "role": "button",
+    "name": "Pipeline stage",
+    "regex": true
+   },
+   "option": "New Lead",
+   "expect": {
+    "chosen": "New Lead"
+   },
+   "side": "Inbound Leads",
+   "status": "live"
+  },
+  {
+   "id": "65",
+   "area": "leads",
+   "element": "Unworked",
+   "destination": "Only in Cold: imported untouched contacts.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "option",
+   "start": "/leads",
+   "control": {
+    "role": "button",
+    "name": "Pipeline stage",
+    "regex": true
+   },
+   "option": "Unworked",
+   "expect": {
+    "chosen": "Unworked"
+   },
+   "side": "Cold Leads",
+   "status": "live"
+  },
+  {
+   "id": "66",
+   "area": "leads",
+   "element": "Open Leads",
+   "destination": "Discussion is incomplete or future potential remains uncertain.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "option",
+   "start": "/leads",
+   "control": {
+    "role": "button",
+    "name": "Pipeline stage",
+    "regex": true
+   },
+   "option": "Open Leads",
+   "expect": {
+    "chosen": "Open Leads"
+   },
+   "status": "live"
+  },
+  {
+   "id": "67",
+   "area": "leads",
+   "element": "Not Connected",
+   "destination": "Attempted contact, no conversation yet.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "option",
+   "start": "/leads",
+   "control": {
+    "role": "button",
+    "name": "Pipeline stage",
+    "regex": true
+   },
+   "option": "Not Connected",
+   "expect": {
+    "chosen": "Not Connected"
+   },
+   "status": "live"
+  },
+  {
+   "id": "68",
+   "area": "leads",
+   "element": "Interested",
+   "destination": "Customer explicitly showed meaningful interest.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "option",
+   "start": "/leads",
+   "control": {
+    "role": "button",
+    "name": "Pipeline stage",
+    "regex": true
+   },
+   "option": "Interested",
+   "expect": {
+    "chosen": "Interested"
+   },
+   "status": "live"
+  },
+  {
+   "id": "69",
+   "area": "leads",
+   "element": "Meeting Scheduled",
+   "destination": "A real meeting time has been agreed.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "option",
+   "start": "/leads",
+   "control": {
+    "role": "button",
+    "name": "Pipeline stage",
+    "regex": true
+   },
+   "option": "Meeting Scheduled",
+   "expect": {
+    "chosen": "Meeting Scheduled"
+   },
+   "status": "live"
+  },
+  {
+   "id": "70",
+   "area": "leads",
+   "element": "Meeting Done",
+   "destination": "Meeting actually took place.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "option",
+   "start": "/leads",
+   "control": {
+    "role": "button",
+    "name": "Pipeline stage",
+    "regex": true
+   },
+   "option": "Meeting Done",
+   "expect": {
+    "chosen": "Meeting Done"
+   },
+   "status": "live"
+  },
+  {
+   "id": "71",
+   "area": "leads",
+   "element": "Won",
+   "destination": "Successful conversion according to business criteria.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "option",
+   "start": "/leads",
+   "control": {
+    "role": "button",
+    "name": "Pipeline stage",
+    "regex": true
+   },
+   "option": "Won",
+   "expect": {
+    "chosen": "Won"
+   },
+   "status": "live"
+  },
+  {
+   "id": "72",
+   "area": "leads",
+   "element": "Closed / Lost",
+   "destination": "Genuine opportunity closed without conversion.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "option",
+   "start": "/leads",
+   "control": {
+    "role": "button",
+    "name": "Pipeline stage",
+    "regex": true
+   },
+   "option": "Closed / Lost",
+   "expect": {
+    "chosen": "Closed / Lost"
+   },
+   "status": "live"
+  },
+  {
+   "id": "73",
+   "area": "leads",
+   "element": "Junk Lead",
+   "destination": "Confirmed fake, invalid or unusable contact.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "option",
+   "start": "/leads",
+   "control": {
+    "role": "button",
+    "name": "Pipeline stage",
+    "regex": true
+   },
+   "option": "Junk Lead",
+   "expect": {
+    "chosen": "Junk Lead"
+   },
+   "status": "live"
+  },
+  {
+   "id": "74",
+   "area": "leads",
+   "element": "Customer name",
+   "destination": "Exact Prospect’s Information.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "sheet",
+   "start": "/leads?view=all",
+   "control": {
+    "role": "button",
+    "name": "^Open ",
+    "regex": true
+   },
+   "expect": {
+    "visible": [
+     "Log a call"
+    ]
+   },
+   "status": "live"
+  },
+  {
+   "id": "75",
+   "area": "leads",
+   "element": "Lead row background",
+   "destination": "Same Prospect’s Information, excluding the separate action.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "76",
+   "area": "leads",
+   "element": "Phone button",
+   "destination": "Call exact lead through supported calling route.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "present",
+   "start": "/leads?view=all",
+   "control": {
+    "role": "button",
+    "name": "^Call ",
+    "regex": true
+   },
+   "status": "live"
+  },
+  {
+   "id": "77",
+   "area": "leads",
+   "element": "Stage label",
+   "destination": "Read-only on list; edit from Prospect’s Information.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "78",
+   "area": "leads",
+   "element": "Source label",
+   "destination": "Read-only; filtering via Filter button.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "79",
+   "area": "leads",
+   "element": "Next action / time label",
+   "destination": "Informational unless explicitly styled as an Open Follow-up link.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "80",
+   "area": "leads",
+   "element": "Call Next Lead / Start Cold Calling",
+   "destination": "Begin selected eligible sequential calling queue, without covering rows.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "present",
+   "start": "/leads",
+   "control": {
+    "role": "button",
+    "name": "^(Call Next Lead|Start Cold Calling)",
+    "regex": true
+   },
+   "status": "live"
+  },
+  {
+   "id": "81",
+   "area": "prospect",
+   "element": "Back",
+   "destination": "Leads list with same lead type, view, search, filters and scroll.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "back",
+   "start": "/leads?view=all",
+   "control": {
+    "role": "button",
+    "name": "^Open ",
+    "regex": true
+   },
+   "expect": {
+    "visible": [
+     "Log a call"
+    ]
+   },
+   "status": "live"
+  },
+  {
+   "id": "82",
+   "area": "prospect",
+   "element": "Call",
+   "destination": "Call this exact customer.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "present",
+   "start": "/leads?view=all&lead={lead}",
+   "control": {
+    "role": "link",
+    "name": "^Call \\+",
+    "regex": true
+   },
+   "status": "live"
+  },
+  {
+   "id": "83",
+   "area": "prospect",
+   "element": "WhatsApp",
+   "destination": "Contact this customer using supported WhatsApp flow.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "present",
+   "start": "/leads?view=all&lead={lead}",
+   "control": {
+    "role": "button",
+    "name": "WhatsApp"
+   },
+   "status": "live"
+  },
+  {
+   "id": "84",
+   "area": "prospect",
+   "element": "Add Task",
+   "destination": "Form with this customer preselected.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "present",
+   "start": "/leads?view=all&lead={lead}",
+   "control": {
+    "role": "button",
+    "name": "^Add a task",
+    "regex": true
+   },
+   "status": "live"
+  },
+  {
+   "id": "85",
+   "area": "prospect",
+   "element": "Schedule Follow-up",
+   "destination": "Follow-up form with this customer preselected.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "present",
+   "start": "/leads?view=all&lead={lead}",
+   "control": {
+    "role": "button",
+    "name": "^Schedule a follow-up",
+    "regex": true
+   },
+   "status": "live"
+  },
+  {
+   "id": "86",
+   "area": "prospect",
+   "element": "Save Follow-up",
+   "destination": "Save same follow-up; show in customer and Home / Follow-ups.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing",
+   "no_press": true
+  },
+  {
+   "id": "87",
+   "area": "prospect",
+   "element": "Current Stage",
+   "destination": "Open Change Stage selector.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "sheet",
+   "start": "/leads?view=all&lead={lead}",
+   "control": {
+    "role": "button",
+    "name": "^Stage: ",
+    "regex": true
+   },
+   "expect": {
+    "visible": [
+     "Not Connected"
+    ]
+   },
+   "status": "live"
+  },
+  {
+   "id": "88",
+   "area": "prospect",
+   "element": "Save Stage Change",
+   "destination": "Change the current stage on same unique lead; preserve history.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing",
+   "no_press": true
+  },
+  {
+   "id": "89",
+   "area": "prospect",
+   "element": "Edit Customer Details",
+   "destination": "Edit permitted fields on this customer.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "sheet",
+   "start": "/leads?view=all&lead={lead}",
+   "control": {
+    "role": "button",
+    "name": "Edit"
+   },
+   "expect": {
+    "visible": [
+     "Save"
+    ]
+   },
+   "status": "live"
+  },
+  {
+   "id": "90",
+   "area": "prospect",
+   "element": "See More Customer Details",
+   "destination": "Expand six prospect-intelligence sections.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "present",
+   "start": "/leads?view=all&lead={lead}",
+   "control": {
+    "role": "button",
+    "name": "See More Customer Details"
+   },
+   "status": "expected-missing"
+  },
+  {
+   "id": "91",
+   "area": "prospect",
+   "element": "Latest Call",
+   "destination": "Reports → Call Details for exact call.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "92",
+   "area": "prospect",
+   "element": "View Call History",
+   "destination": "Reports → All Calls → this customer.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "present",
+   "start": "/leads?view=all&lead={lead}",
+   "control": {
+    "role": "button",
+    "name": "View Call History"
+   },
+   "status": "expected-missing"
+  },
+  {
+   "id": "93",
+   "area": "prospect",
+   "element": "View Latest Report",
+   "destination": "Open exact finished Xray Report.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "present",
+   "start": "/leads?view=all&lead={lead}",
+   "control": {
+    "role": "button",
+    "name": "View Latest Report"
+   },
+   "status": "expected-missing"
+  },
+  {
+   "id": "94",
+   "area": "prospect",
+   "element": "Generate Xray Report",
+   "destination": "Start only if eligible recording exists and no duplicate job is ready/running.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing",
+   "no_press": true
+  },
+  {
+   "id": "95",
+   "area": "prospect",
+   "element": "Report Processing",
+   "destination": "Show same in-progress job; do not generate again.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing",
+   "no_press": true
+  },
+  {
+   "id": "96",
+   "area": "prospect",
+   "element": "Upload Recording",
+   "destination": "Open permitted manual-upload fallback.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "present",
+   "start": "/leads?view=all&lead={lead}",
+   "control": {
+    "role": "button",
+    "name": "Upload Recording"
+   },
+   "status": "expected-missing"
+  },
+  {
+   "id": "97",
+   "area": "prospect",
+   "element": "Ask Dipak About This Customer",
+   "destination": "Chat with correct authorized customer context.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "present",
+   "start": "/leads?view=all&lead={lead}",
+   "control": {
+    "role": "button",
+    "name": "Ask Dipak About This Customer"
+   },
+   "status": "expected-missing"
+  },
+  {
+   "id": "98",
+   "area": "prospect",
+   "element": "One previous task",
+   "destination": "Open that task’s details.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  },
+  {
+   "id": "99",
+   "area": "prospect",
+   "element": "One previous follow-up",
+   "destination": "Open the specific follow-up record.",
+   "roles": [
+    "owner",
+    "seller"
+   ],
+   "sizes": [
+    "phone",
+    "desktop"
+   ],
+   "kind": "todo",
+   "status": "expected-missing"
+  }
+ ],
+ "journeys": [
+  {
+   "id": "J1",
+   "name": "Inbound first call",
+   "steps": [
+    "08",
+    "13",
+    "15",
+    "16",
+    "17"
+   ]
+  },
+  {
+   "id": "J2",
+   "name": "Cold prospecting",
+   "steps": [
+    "06",
+    "09",
+    "65",
+    "76"
+   ]
+  },
+  {
+   "id": "J3",
+   "name": "Follow-up from Home",
+   "steps": [
+    "28",
+    "57",
+    "74",
+    "82"
+   ]
+  },
+  {
+   "id": "J4",
+   "name": "Report-specific coaching",
+   "steps": [
+    "93",
+    "97"
+   ]
+  },
+  {
+   "id": "J5",
+   "name": "Other work",
+   "steps": [
+    "22",
+    "19",
+    "20"
+   ]
+  },
+  {
+   "id": "J6",
+   "name": "Owner intervention",
+   "steps": [
+    "74",
+    "87"
+   ],
+   "roles": [
+    "owner"
+   ]
+  }
+ ],
+ "states": [
+  {
+   "id": "S1",
+   "situation": "No new leads",
+   "words": "No new leads right now."
+  },
+  {
+   "id": "S2",
+   "situation": "No search matches",
+   "words": "No leads match these filters.",
+   "start": "/leads?view=all",
+   "search": "zzqx no such lead"
+  },
+  {
+   "id": "S3",
+   "situation": "Call did not connect",
+   "words": "Call attempt saved - No Answer."
+  },
+  {
+   "id": "S4",
+   "situation": "Recording unavailable",
+   "words": "Recording unavailable for this call."
+  },
+  {
+   "id": "S5",
+   "situation": "Report processing",
+   "words": "Preparing your report. You can continue working."
+  },
+  {
+   "id": "S6",
+   "situation": "Transcript saved; report failed",
+   "words": "Your transcript is saved. We could not finish the report."
+  },
+  {
+   "id": "S7",
+   "situation": "Task save failed",
+   "words": "Your changes are not saved yet."
+  },
+  {
+   "id": "S8",
+   "situation": "No coaching evidence",
+   "words": "Not enough assessed calls yet."
+  },
+  {
+   "id": "S9",
+   "situation": "Permission removed",
+   "words": "This lead is no longer available to you."
+  },
+  {
+   "id": "S10",
+   "situation": "Owner lead source error",
+   "words": "Lead source needs attention."
+  },
+  {
+   "id": "S11",
+   "situation": "Disconnected network",
+   "words": "We cannot load live data right now."
+  },
+  {
+   "id": "S12",
+   "situation": "Old notification",
+   "words": "This item has changed since the alert."
+  }
+ ]
+}

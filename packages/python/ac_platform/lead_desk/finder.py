@@ -18,6 +18,7 @@ from ac_platform.lead_desk import tasks as task_book
 from ac_platform.lead_desk.contracts import ActivityItem, ActivityPage, SearchResult
 from ac_platform.lead_desk.errors import DeskError
 from ac_platform.lead_desk.journey import model as journeys
+from ac_platform.lead_desk.journey.engine import not_undone
 from ac_platform.lead_desk.models import Lead, LeadEvent, LeadTask
 
 if TYPE_CHECKING:
@@ -67,6 +68,9 @@ async def notes(
         LeadEvent.tenant_id == desk.tenant_id,
         _written(),
         desk._visible(),
+        # An undone answer's words live on as a note of their own: once, never twice
+        # (phone QA ph2-37, 1 Nov 2026).
+        not_undone(),
     ]
     if needle is not None:
         like = _like(needle)

@@ -71,7 +71,7 @@ import { newCallHref } from "../new-call-navigation";
 import { displayName as withCapitals } from "../display-name";
 import { ProfileMenu } from "../profile-menu";
 import { SettingsDialogHost } from "../settings-dialog";
-import { notify } from "../notice-center";
+import { NoticeDock, notify } from "../notice-center";
 import { opensInPlace } from "../settings-open";
 import { useWorkspaceAccess } from "../workspace-access";
 import { BrandLockup } from "./brand-lockup";
@@ -2002,6 +2002,9 @@ function LightboxShellFrame({
                 <RouteLoading pathname={outline} />
               </StandInContext.Provider>
             ) : null}
+            {/* Leads on a phone: a new enquiry or a lead given to you is one
+                line here, never over the rows (competitor teardown 12). */}
+            {phoneTab === "leads" ? <NoticeDock /> : null}
             <div
               className={styles.pageSlot}
               data-page-slot=""

@@ -54,6 +54,8 @@ class Call:
     submission_id: UUID | None = None
     salesperson_id: UUID | None = None
     lead_id: UUID | None = None
+    # When the call itself happened (its Lead Desk call event); None: the upload time.
+    started_at: datetime | None = None
     segments: list[Segment] = field(default_factory=list)
     withheld: frozenset[str] = frozenset()
 
@@ -62,8 +64,10 @@ class Call:
         return self.salesperson_id or self.principal_id
 
     def call_date(self) -> str:
-        local = self.created_at.astimezone(IST)
-        return local.strftime("%A %d %B %Y")
+        """The day and time "tomorrow" and "on Saturday" count from: when the call was made,
+        in India, not when a phone that was offline uploaded it."""
+        local = (self.started_at or self.created_at).astimezone(IST)
+        return local.strftime("%A %d %B %Y, %H:%M India time")
 
 
 # ----- settings ------------------------------------------------------------------
@@ -394,6 +398,7 @@ def load(connection: Any, call: Call) -> Call:
         call.salesperson_id = owner.person_id
     if call.submission_id is not None:
         call.lead_id = lead_for_call(connection, call.tenant_id, call.submission_id)
+        call.started_at = call_started_at(connection, call.tenant_id, call.submission_id)
     return call
 
 
@@ -449,6 +454,29 @@ def lead_for_call(connection: Any, tenant_id: UUID, submission_id: UUID) -> UUID
         {"tenant": tenant_id, "submission": str(submission_id), "submission_id": submission_id},
     )
     return lead_id
+
+
+def call_started_at(connection: Any, tenant_id: UUID, submission_id: UUID) -> datetime | None:
+    """When this call was made: the Lead Desk call the recording was attached to (the
+    phone dates it at the call's start, recording-call); the attach event itself is written
+    at upload and points at it (``for_call``). Same workspace and lead only; None for a call
+    on no lead."""
+    started: datetime | None = connection.scalar(
+        text(
+            """
+            SELECT coalesce(c.created_at, e.created_at)
+            FROM lead_desk_events e
+            LEFT JOIN lead_desk_events c
+              ON c.tenant_id = e.tenant_id AND c.lead_id = e.lead_id AND c.kind = 'call'
+             AND c.id::text = e.data ->> 'for_call'
+            WHERE e.tenant_id = :tenant AND e.kind = 'call'
+              AND e.data ->> 'submission_id' = :submission
+            ORDER BY e.created_at DESC LIMIT 1
+            """
+        ),
+        {"tenant": tenant_id, "submission": str(submission_id)},
+    )
+    return started
 
 
 _ADMISSION = """

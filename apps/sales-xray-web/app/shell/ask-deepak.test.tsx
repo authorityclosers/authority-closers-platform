@@ -159,6 +159,30 @@ it("says plainly when nothing is known yet, and invents nothing", async () => {
   expect(calls.report).not.toHaveBeenCalled();
 });
 
+it("says where a lead stands and its last call even when that call has no report", async () => {
+  // Phone personas ph1-49 (1 Nov 2026): a lead with calls but no report showed
+  // only its follow-up.
+  calls.read.mockResolvedValue(
+    detail([
+      event("result", { connected: false, reason_label: "No answer" }),
+      event("call"),
+    ]),
+  );
+  await act(async () =>
+    root.render(
+      <AskDipakSheet
+        open
+        leadId="lead-1"
+        about="asha fictional"
+        onClose={() => {}}
+      />,
+    ),
+  );
+  await settle();
+  expect(page()).toMatch(/Interested · last call .+, no answer/);
+  expect(calls.report).not.toHaveBeenCalled();
+});
+
 it("opened from a lead without its id, it has already searched its name", async () => {
   calls.search.mockResolvedValue({
     leads: [

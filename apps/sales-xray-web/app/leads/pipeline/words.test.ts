@@ -131,6 +131,10 @@ describe("the timeline", () => {
     expect(events.filter((item) => shows("notes", item))).toHaveLength(1);
     expect(shows("chats", "chat")).toBe(true);
     expect(shows("calls", "chat")).toBe(false);
+    // An answer its seller undid stays in the story, never in Calls (ph2-37).
+    const answered = events.find((item) => item.kind === "result")!;
+    expect(shows("calls", { ...answered, answer_undone: true })).toBe(false);
+    expect(shows("all", { ...answered, answer_undone: true })).toBe(true);
   });
 });
 

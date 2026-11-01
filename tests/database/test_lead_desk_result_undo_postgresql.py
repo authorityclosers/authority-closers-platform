@@ -77,6 +77,13 @@ def test_a_seller_undoes_their_latest_answer_and_the_lead_comes_back(
             # The answer's note stays, a note of its own (ph2-26, 1 Nov 2026).
             notes = [event["note"] for event in back["events"] if event["kind"] == "note"]
             assert notes == ["Wants the EMI sheet"]
+            # The undone answer is marked, so it counts nowhere, and its words show once in
+            # Notes, as the kept note (phone QA ph2-37, 1 Nov 2026).
+            [answer_line] = [event for event in back["events"] if event["kind"] == "result"]
+            assert answer_line["answer_undone"] is True
+            found = await here.client.get(f"{BASE}/notes", params={"q": "EMI sheet"})
+            assert found.status_code == 200, found.text
+            assert [item["event"]["kind"] for item in found.json()["items"]] == ["note"]
             # Once only.
             again = await undo(here, back["lead"], offer["event_id"])
             assert again.status_code == 409, again.text

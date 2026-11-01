@@ -73,6 +73,8 @@ const stageAgain = (row: LeadRow) =>
  *  again (owner, 31 Oct 2026: "New lead" twice on one row; phone personas,
  *  1 Nov 2026: "Won Won", "Interested twice"). Nothing for a closed lead. */
 export function nextLine(row: LeadRow, now: Date = new Date()): string {
+  const wait = waiting(row, now);
+  if (!row.missed_at && wait !== null) return `Waiting ${waitWords(wait)}`;
   if (!row.missed_at && row.why_kind === "new")
     return `Added ${ago(row.created_at, now)}`;
   if (!row.missed_at && row.why_kind === "closed") return "";
@@ -90,6 +92,30 @@ export function nextLine(row: LeadRow, now: Date = new Date()): string {
   )
     return `${why} · ${when(row.next_action_at, now)}`;
   return whyLine({ ...row, why }, now);
+}
+
+/**
+ * Speed to lead (competitor teardown 4, 1 Nov 2026; Privyr's Uncontacted): a
+ * new Inbound enquiry nobody has contacted yet counts its minutes, amber from
+ * 5 and red from 15, for its first day; the first real contact stops it. A
+ * Cold list never waits on anyone. Minutes, or null when it doesn't apply.
+ */
+export function waiting(row: LeadRow, now: Date = new Date()): number | null {
+  if (row.why_kind !== "new" || row.side === "cold") return null;
+  if (row.last_contact_at || (row.attempts ?? 0) > 0) return null;
+  const minutes = Math.floor(
+    (now.getTime() - Date.parse(row.created_at)) / 60_000,
+  );
+  return minutes >= 0 && minutes < 24 * 60 ? minutes : null;
+}
+
+const waitWords = (minutes: number) =>
+  minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h`;
+
+/** The waiting line's colour: amber from 5 minutes, red from 15. */
+export function waitTone(minutes: number | null): Tone | undefined {
+  if (minutes === null || minutes < 5) return undefined;
+  return minutes < 15 ? "warn" : "bad";
 }
 
 /** Truly late: its follow-up time has passed. */
@@ -141,6 +167,7 @@ export function LeadLine({
   stageWord,
   quietLate = false,
   onPick,
+  fresh = false,
 }: {
   row: LeadRow;
   onOpen: (leadId: string) => void;
@@ -155,6 +182,8 @@ export function LeadLine({
   quietLate?: boolean;
   /** An owner's tick beside the row on a computer: start picking (bug report 130). */
   onPick?: (row: LeadRow) => void;
+  /** Just arrived: the row pulses once as it joins the list (competitor teardown 12). */
+  fresh?: boolean;
 }) {
   const reachable = !!row.phone_last4;
   const {
@@ -217,6 +246,7 @@ export function LeadLine({
       data-lead-row=""
       data-row-key={row.lead_id}
       data-overdue={(compact ? red : row.overdue) || undefined}
+      data-fresh={fresh || undefined}
       {...bind}
     >
       {reachable && actions ? (
@@ -269,7 +299,7 @@ export function LeadLine({
                   row.missed_at || red
                     ? "bad"
                     : compact
-                      ? undefined
+                      ? waitTone(waiting(row))
                       : WHY_TONE[row.why_kind]
                 }
               >

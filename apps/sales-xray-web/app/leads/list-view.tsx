@@ -38,6 +38,7 @@ import { notify } from "../notice-center";
 import { useRowKeys } from "../ui/row-keys";
 import { withoutRepeats } from "./page-merge";
 import { useListLoadWatch } from "./load-watch";
+import { triedLately } from "./call-round";
 import { Button, Skeleton } from "../ui/kit";
 import {
   DeleteLeadsSheet,
@@ -135,20 +136,24 @@ export function ListView({
   quietLate = false,
   heading = null,
   empty = null,
+  fresh = null,
 }: {
   canManage: boolean;
   /** A lead's stage, named for the side shown (compact rows). */
   stageWord?: (row: LeadRow) => string | undefined;
   /** Rows never turn red: Cold Leads for a seller (owner, 31 Oct 2026). */
   quietLate?: boolean;
+  /** Leads that just arrived: their rows pulse once (competitor teardown 12). */
+  fresh?: ReadonlySet<string> | null;
   /** The list's own line ("Inbound leads to call"), its count beside it. */
   heading?: string | null;
   /** What an empty list says, when the page knows better than its stage. */
   empty?: { title: string; text: string } | null;
   /** The list's first lead, or null: Start calling opens it. */
   onTopLead?: (leadId: string | null) => void;
-  /** The leads in the list's order, as shown: Call Next goes through them. */
-  onOrder?: (leadIds: readonly string[]) => void;
+  /** The leads in the list's order, as shown: Call Next goes through them;
+   *  with those tried in the last hour, which a continued round passes over. */
+  onOrder?: (leadIds: readonly string[], recent: readonly string[]) => void;
   initial?: ServerLeads | null;
   cacheIdentity?: string | null;
   /** "open", a stage kind, or "test". */
@@ -402,9 +407,20 @@ export function ListView({
     orderTo.current = onOrder;
   });
   const order = rows.map((row) => row.lead_id).join(" ");
+  const lastTries = rows.map((row) => row.last_contact_at ?? "").join(" ");
   useEffect(() => {
-    orderTo.current?.(order ? order.split(" ") : []);
-  }, [order]);
+    const ids = order ? order.split(" ") : [];
+    const tries = lastTries.split(" ");
+    orderTo.current?.(
+      ids,
+      triedLately(
+        ids.map((lead_id, at) => ({
+          lead_id,
+          last_contact_at: tries[at] || null,
+        })),
+      ),
+    );
+  }, [order, lastTries]);
   // Paint the visible phone rows first. Building 50 gesture-enabled rows at
   // once monopolises a mid-range phone even when the data is already cached.
   const [revealed, setRevealed] = useState({ question: "", count: 8 });
@@ -912,6 +928,7 @@ export function ListView({
                       compact={stage === OPENING_STAGE}
                       stageWord={stageWord?.(row)}
                       quietLate={quietLate}
+                      fresh={!!fresh?.has(row.lead_id)}
                     />
                   ),
                 )}

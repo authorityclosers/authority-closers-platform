@@ -80,6 +80,32 @@ it("shows the name, stage and source, the next action and one call button", asyn
   ).toHaveLength(1);
 });
 
+it("pulses a lead that just arrived, and its name keeps its own box for the ellipsis", async () => {
+  await act(async () =>
+    root.render(
+      <ul>
+        <LeadLine row={row} onOpen={() => undefined} compact fresh />
+      </ul>,
+    ),
+  );
+  const line = host.querySelector("[data-lead-row]")!;
+  expect(line.hasAttribute("data-fresh")).toBe(true);
+  // A 300-letter name ends in "…" inside its own span (the test robot, 1 Nov 2026).
+  expect(line.querySelector('[class*="leadNameText"]')?.textContent).toBe(
+    "Fictional Neha",
+  );
+  await act(async () =>
+    root.render(
+      <ul>
+        <LeadLine row={row} onOpen={() => undefined} compact />
+      </ul>,
+    ),
+  );
+  expect(
+    host.querySelector("[data-lead-row]")!.hasAttribute("data-fresh"),
+  ).toBe(false);
+});
+
 it("adds the owner for a team's list, and keeps the full card elsewhere", async () => {
   await act(async () =>
     root.render(

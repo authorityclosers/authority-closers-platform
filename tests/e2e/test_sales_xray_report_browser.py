@@ -560,7 +560,7 @@ def test_real_browser_durable_worker_report_playback(
 @pytest.mark.e2e
 def test_real_browser_waits_out_a_release_hold(live_backend: BrowserBackend) -> None:
     """A release (owner, 27 Oct 2026): while the edge holds requests, the saved calls read
-    waits behind the calm banner and loads when the release ends, with no error shown."""
+    waits behind one calm notice and loads when the release ends, with no error shown."""
     held: list[str] = []
     errors: list[str] = []
     with sync_playwright() as playwright, ExitStack() as cleanup:
@@ -604,12 +604,14 @@ def test_real_browser_waits_out_a_release_hold(live_backend: BrowserBackend) -> 
         page = context.new_page()
         page.on("pageerror", lambda error: errors.append(str(error)[:300]))
         page.goto(live_backend.origin)
-        banner = page.get_by_role("status").filter(
-            has_text="Updating Sales X-Ray, back in a moment"
-        )
-        expect(banner).to_be_visible()
+        # The hold is one notice, where every app notice goes (phone personas ph1-43,
+        # 1 Nov 2026): a status card that folds to a pill after a while, so once the hold
+        # ends its words are checked wherever they are, not the card's role.
+        notice = page.get_by_role("status").filter(has_text="Sales X-Ray is updating")
+        expect(notice).to_be_visible()
+        expect(notice).to_contain_text("Back in a moment")
         expect(page.get_by_role("heading", name="Saved calls")).to_be_visible(timeout=30_000)
         expect(page.locator(".recording-history-item").first).to_be_visible(timeout=30_000)
-        expect(banner).to_have_count(0)
+        expect(page.get_by_text("Sales X-Ray is updating")).to_have_count(0)
         assert len(held) == 3
         assert not errors, errors

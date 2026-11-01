@@ -165,7 +165,8 @@ it("follows upload → processing → report, even when processing finishes betw
   );
   expect(step()).toBe("upload");
   expect(document.querySelector("[data-guide-coach]")).not.toBeNull();
-  expect(button("Next")).toBeUndefined();
+  // The page leads, and Next reads on without a real call (ph1-51).
+  expect(button("Next")).toBeDefined();
   await setPage(
     '<section aria-label="Analysis progress">Checking status</section>',
   );
@@ -182,6 +183,23 @@ it("follows upload → processing → report, even when processing finishes betw
     new GuideProgressStore("fictional-a", FIRST_CALL_GUIDE).getSnapshot()
       .status,
   ).toBe("completed");
+});
+
+it("reads on past the upload step without a real call, to the end", async () => {
+  // Phone personas ph1-51 (1 Nov 2026): step 3 of 6 had no Next until a real
+  // recording was added, so steps 4 to 6 were out of reach.
+  const store = new GuideProgressStore("fictional-a", FIRST_CALL_GUIDE);
+  store.update({ stepId: "upload", status: "active" });
+  await show();
+  expect(step()).toBe("upload");
+  await click("Next");
+  expect(step()).toBe("progress");
+  await click("Next");
+  expect(step()).toBe("report");
+  await click("Next");
+  expect(step()).toBe("moments");
+  await click("Finish");
+  expect(step()).toBeUndefined();
 });
 
 it("switches storage immediately when the account or guide version changes", async () => {

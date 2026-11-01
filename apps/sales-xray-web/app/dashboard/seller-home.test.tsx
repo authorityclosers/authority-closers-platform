@@ -20,6 +20,7 @@ vi.mock("next/link", () => ({
 import type { HomeSide } from "./my-day-client";
 import { SalesHome } from "./sales-home";
 import { NextCall } from "./seller-home";
+import { takeHandedLead } from "../leads/lead-handoff";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -451,4 +452,117 @@ it("says the next lead rang and wasn't reached, and calls them back", async () =
     expect(host.textContent).toContain("Call Meera back");
     expect(host.textContent).not.toContain("Start cold calling");
   }
+});
+
+// Phone personas ph2-33 (1 Nov 2026): Start cold calling opens a round at the
+// card and dials nothing until Call; a call-back or an Inbound lead dials.
+it("starts a cold round at the card, and dials only a call-back or an Inbound lead", async () => {
+  const plain = row("Kunal Fictional", "42");
+  const rang = row("Meera Fictional", "41", {
+    missed_at: new Date(Date.now() - 60_000).toISOString(),
+    missed_calls: 1,
+  });
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  // The links stay on this page: only what they hand over is checked.
+  host.addEventListener("click", (event) => event.preventDefault());
+  const own = (lead: ReturnType<typeof row>) =>
+    side(
+      lead,
+      { new: 1, open_leads: 0, follow_ups_today: 0 },
+      numbers(0, 0, 0, 0),
+    ) as unknown as HomeSide;
+  const press = async (
+    which: "inbound" | "cold",
+    lead: ReturnType<typeof row>,
+  ) => {
+    await act(async () =>
+      root.render(<NextCall side={which} own={own(lead)} />),
+    );
+    takeHandedLead();
+    const link = [...host.querySelectorAll("a")].find((anchor) =>
+      /Start cold calling|Call \S+ (now|back)/.test(anchor.textContent ?? ""),
+    );
+    await act(async () => link?.click());
+    return takeHandedLead();
+  };
+  expect(await press("cold", plain)).toEqual({
+    leadId: plain.lead_id,
+    call: false,
+    round: true,
+  });
+  expect(await press("inbound", plain)).toEqual({
+    leadId: plain.lead_id,
+    call: true,
+  });
+  expect(await press("cold", rang)).toEqual({
+    leadId: rang.lead_id,
+    call: true,
+  });
+});
+
+// Teardown 3 (1 Nov 2026): a call still waiting for its answer is the first
+// thing on Home; Finish opens that lead on Leads at its after-call question.
+it("puts a call waiting for its answer first, and Finish opens its question", async () => {
+  const assign = vi
+    .spyOn(window.location, "assign")
+    .mockImplementation(() => {});
+  const shared = desk as Record<string, unknown>;
+  shared.unanswered = [
+    {
+      lead_id: "00000000-0000-4000-8000-000000000041",
+      name: "meera fictional",
+      called_at: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
+      event_id: "00000000-0000-4000-a000-000000000041",
+    },
+  ];
+  try {
+    answer({ inbound: { leads: 40 }, cold: { imported: 200 } });
+    await mount();
+    const first = host.querySelector("[data-area]");
+    expect(first?.getAttribute("data-area")).toBe("finish");
+    expect(first?.textContent).toContain("Finish: Meera Fictional");
+    expect(first?.textContent).toContain("called 4 min ago · How did it go?");
+    takeHandedLead();
+    const open = [...first!.querySelectorAll("button")].find((button) =>
+      button.textContent?.startsWith("Finish:"),
+    );
+    await act(async () => open?.click());
+    expect(takeHandedLead()).toEqual({
+      leadId: "00000000-0000-4000-8000-000000000041",
+      call: false,
+      log: true,
+    });
+    expect(assign).toHaveBeenCalledWith("/leads");
+  } finally {
+    delete shared.unanswered;
+    assign.mockRestore();
+  }
+});
+
+// The test robot (1 Nov 2026): on a slow network the Inbound | Cold selector
+// arrived after Today's cards and pushed them down (0.06 at 360 px). Home keeps
+// its skeleton until it knows the seller's sides, so they come in together.
+it("waits for the seller's sides before drawing Today, so nothing moves", async () => {
+  answer({ inbound: { leads: 40 }, cold: { imported: 200 } });
+  const served = globalThis.fetch;
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async (input, init) => {
+      if (String(input) === "/v1/lead-desk/sides?scope=mine") await held;
+      return served(input, init);
+    }),
+  );
+  await mount();
+  expect(host.querySelector('[data-area="cards"]')).toBeNull();
+  await act(async () => release());
+  for (let step = 0; step < 4; step += 1)
+    await act(async () => Promise.resolve());
+  expect(host.querySelector('[data-area="side"]')).not.toBeNull();
+  expect(host.querySelector('[data-area="cards"]')).not.toBeNull();
 });

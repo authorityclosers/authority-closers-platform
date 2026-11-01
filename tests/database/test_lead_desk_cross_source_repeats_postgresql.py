@@ -119,3 +119,101 @@ def test_one_person_from_the_website_google_ads_and_facebook_is_one_lead(
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_a_cold_lead_who_enquires_is_back_on_inbound_with_its_seller(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Competitor teardown #23 (1 Nov 2026): someone on a Cold list who sends an ad's or a
+    website's form is an Inbound lead now, on the same record, still with their seller. A
+    file row with the same number moves nothing; Junk stays Junk (Lead OS)."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            tenant = setup.state.tenant_id
+            seller = await seed(setup.engine, tenant_id=tenant, role="member")
+            admin = Viewer(person_id=setup.state.person_id, tenant_id=tenant, role="admin", name="")
+            start = datetime.now(UTC) - timedelta(hours=2)
+
+            async def listed(phone: str, name: str) -> Any:
+                async with setup.sessions() as db, db.begin():
+                    lead, outcome = await LeadDesk(db, admin, now=start).ingest(
+                        {"name": name, "phone": phone},
+                        source="csv",
+                        source_label="Fictional cold list",
+                        assign="person",
+                        person_id=seller.person_id,
+                    )
+                    assert outcome == "created" and lead is not None
+                    lead.pipeline = "cold"
+                    return lead.id
+
+            cold = await listed("+91 98000 00081", "Fictional Cold Asker")
+            junk = await listed("+91 98000 00082", "Fictional Cold Junk")
+            async with setup.sessions() as db, db.begin():
+                stored = await db.get(Lead, junk)
+                assert stored is not None
+                stored.stage = "junk"
+
+            later = start + timedelta(hours=1)
+            async with setup.sessions() as db, db.begin():
+                desk = LeadDesk(db, admin, now=later)
+                # The same number again in a file: still Cold.
+                again, outcome = await desk.ingest(
+                    {"name": "Fictional Cold Asker", "phone": "+91 98000 00081"},
+                    source="csv",
+                    source_label="Fictional cold list",
+                )
+                assert outcome == "repeat" and again is not None and again.id == cold
+                assert again.pipeline == "cold"
+                # The same person fills a Meta form: Inbound now, same record, same seller.
+                again, outcome = await desk.ingest(
+                    {"name": "Fictional Cold Asker", "phone": "+91 98000 00081"},
+                    source="meta",
+                    source_label="Meta lead form",
+                )
+                assert outcome == "repeat" and again is not None and again.id == cold
+                assert again.pipeline == "live"
+                assert again.stage == "new"
+                assert again.owner_person_id == seller.person_id
+                assert again.next_action_at is not None and again.next_action_at <= later
+                # Junk stays Junk, and on its side.
+                kept, outcome = await desk.ingest(
+                    {"name": "Fictional Cold Junk", "phone": "+91 98000 00082"},
+                    source="meta",
+                    source_label="Meta lead form",
+                )
+                assert outcome == "repeat" and kept is not None
+                assert kept.stage == "junk" and kept.pipeline == "cold"
+
+            async with setup.sessions() as db:
+                leads = (
+                    await db.scalar(
+                        select(func.count())
+                        .select_from(Lead)
+                        .where(Lead.tenant_id == tenant, Lead.phone == "+919800000081")
+                    )
+                ) or 0
+                moved = (
+                    await db.scalars(
+                        select(LeadEvent)
+                        .where(LeadEvent.lead_id == cold, LeadEvent.kind == "repeat")
+                        .order_by(LeadEvent.created_at)
+                    )
+                ).all()
+            assert leads == 1
+            assert [event.data.get("to_inbound") for event in moved] == [False, True]
+            detail = await _detail(setup, admin, cold)
+            line = next(event for event in detail.events if event.kind == "repeat")
+            assert line.to_inbound is True
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+async def _detail(setup: Any, viewer: Viewer, lead_id: Any) -> Any:
+    async with setup.sessions() as db:
+        return await LeadDesk(db, viewer, now=datetime.now(UTC)).detail(lead_id)

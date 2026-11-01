@@ -223,10 +223,10 @@ def test_a_sellers_day_on_the_desk(postgres_harness: Any, tmp_path: Path) -> Non
                     headers=WRITE,
                 )
                 assert stale_dispose.status_code == 409
-                # Outcomes logged without a call are not calls: Home counts the calls
-                # Recent Calls lists (owner, 30 Oct 2026).
+                # Answers logged without a call are calls: No answer, then We talked
+                # (phone QA ph1-58, 1 Nov 2026: a logged We talked counted nowhere).
                 numbers = (await client.get(BASE)).json()["numbers"]
-                assert numbers["calls"] == 0 and numbers["connected"] == 0
+                assert numbers["calls"] == 2 and numbers["connected"] == 1
 
                 # The other seller can't see or touch it.
                 as_(await _session(setup, other))
@@ -267,24 +267,22 @@ def test_a_sellers_day_on_the_desk(postgres_harness: Any, tmp_path: Path) -> Non
                 assert report.status_code == 200, report.text
                 week = report.json()
                 assert week["days"] == 7
-                # Outcomes logged without a call are not calls here either, as on Home above
-                # (hardcore phone QA ph1-30, 1 Nov 2026; calls themselves are counted in
-                # test_lead_desk_home_numbers_postgresql).
-                assert week["current"]["calls"] == 0 and week["current"]["connected"] == 0
-                assert week["current"]["leads_called"] == 0
+                # The same two answers, as on Home above (one rule, ph1-30 and ph1-58).
+                assert week["current"]["calls"] == 2 and week["current"]["connected"] == 1
+                assert week["current"]["leads_called"] == 1
                 assert (week["current"]["interested"], week["current"]["won"]) == (1, 0)
                 assert week["current"]["new_leads"] == 1
                 assert week["previous"]["calls"] == 0 and week["previous"]["new_leads"] == 0
                 top = week["sellers"][0]
                 assert top["person_id"] == str(seller.person_id)
-                assert (top["calls"], top["interested"]) == (0, 1)
+                assert (top["calls"], top["interested"]) == (2, 1)
                 assert week["pipeline"] == {"interested": 1}
                 # Each India-time day, oldest first: today holds this test's work.
                 daily = week["daily"]
                 assert [day["day"] for day in daily][-1] == week["end"]
                 assert len(daily) == 7 and daily[0]["day"] == week["start"]
                 today = daily[-1]
-                assert (today["calls"], today["connected"], today["new_leads"]) == (0, 0, 1)
+                assert (today["calls"], today["connected"], today["new_leads"]) == (2, 1, 1)
                 assert (today["interested"], today["won"]) == (1, 0)
                 assert sum(day["calls"] + day["new_leads"] for day in daily[:-1]) == 0
                 odd = await client.get(f"{BASE}/reports/performance", params={"days": 3})
@@ -565,6 +563,21 @@ def test_edit_details_and_notes_keep_history(postgres_harness: Any, tmp_path: Pa
                 assert event["kind"] == "call" and event["recording"] is True
                 assert event["submission_id"] == recording
                 assert attached.json()["lead"]["calls"] == called.json()["lead"]["calls"]
+                # The call's Report finds its lead, for the AI notes' Apply chips (competitor
+                # teardown #24); reading it writes nothing.
+                found = await client.get(f"{BASE}/calls/{recording}/lead")
+                assert found.status_code == 200, found.text
+                assert found.json()["lead"]["lead_id"] == lead_id
+                assert found.json()["can_edit"] is True
+                assert found.json()["lead"]["revision"] == attached.json()["lead"]["revision"]
+                # A call that is no lead's answers null, never an error.
+                stray = await client.get(f"{BASE}/calls/{uuid4()}/lead")
+                assert stray.status_code == 200 and stray.json() is None
+                # A seller who may not open the lead gets null too, never its details.
+                other = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+                client.cookies.set(setup.settings.session_cookie_name, await _session(setup, other))
+                hidden = await client.get(f"{BASE}/calls/{recording}/lead")
+                assert hidden.status_code == 200 and hidden.json() is None
         finally:
             await setup.engine.dispose()
 
@@ -1749,6 +1762,58 @@ def test_person_work_without_reports_and_scope_fences(
                 today = await desk.activity(day="recent", person=seller.person_id)
                 assert today.today_counts["call"] == today.today_counts["connected"] == 1
                 assert today.week_counts["call"] == 2
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_a_call_waits_for_its_answer_on_the_desk(postgres_harness: Any, tmp_path: Path) -> None:
+    """Competitor teardown #3 (1 Nov 2026): a call whose seller left the after-call sheet
+    stays on the desk as "Finish: <lead> · How did it go?" until an answer is saved."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                made = await client.post(
+                    f"{BASE}/leads",
+                    json={
+                        "command_id": str(uuid4()),
+                        "name": "Fictional Finish",
+                        "phone": "9800000031",
+                        "assign": "me",
+                    },
+                    headers=WRITE,
+                )
+                assert made.status_code == 201, made.text
+                lead_id = made.json()["lead"]["lead_id"]
+                assert (await client.get(BASE)).json()["unanswered"] == []
+                called = await client.post(
+                    f"{BASE}/leads/{lead_id}/calls/phone",
+                    json={"command_id": str(uuid4()), "duration_seconds": 40},
+                    headers=WRITE,
+                )
+                assert called.status_code == 200, called.text
+                [waiting] = (await client.get(BASE)).json()["unanswered"]
+                assert waiting["lead_id"] == lead_id
+                assert waiting["name"] == "Fictional Finish"
+                answered = await client.post(
+                    f"{BASE}/leads/{lead_id}/dispose",
+                    json={
+                        "command_id": str(uuid4()),
+                        "expected_revision": called.json()["lead"]["revision"],
+                        "connected": False,
+                        "reason": "did_not_pick",
+                    },
+                    headers=WRITE,
+                )
+                assert answered.status_code == 200, answered.text
+                assert (await client.get(BASE)).json()["unanswered"] == []
         finally:
             await setup.engine.dispose()
 

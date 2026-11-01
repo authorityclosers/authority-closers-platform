@@ -196,14 +196,14 @@ describe("calling from the desk", () => {
     const week = nextCallTime("week", morning);
     expect([week.getDate(), week.getHours()]).toEqual([23, 10]);
 
-    // Someday: three weeks out at 11, never on a Sunday.
+    // In 2 weeks (the old Someday): two weeks out at 11, never on a Sunday.
     const someday = nextCallTime("someday", morning);
     expect([someday.getMonth(), someday.getDate(), someday.getHours()]).toEqual(
-      [10, 6, 11],
+      [9, 30, 11],
     );
     const fromSunday = nextCallTime("someday", new Date(2026, 9, 18, 9, 0));
     expect(fromSunday.getDay()).toBe(1);
-    expect(fromSunday.getDate()).toBe(9);
+    expect(fromSunday.getDate()).toBe(2);
   });
 
   it("shows Indian mobiles the way people read them", () => {

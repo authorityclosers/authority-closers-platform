@@ -229,6 +229,13 @@ it("calls the next lead on Inbound and starts cold calling on Cold", async () =>
   );
   expect(button().textContent).toBe("Start Cold Calling");
   expect(button().disabled).toBe(true);
+  // The round's size on the button (competitor teardown 2).
+  await act(async () =>
+    root.render(
+      <CallNext side="cold" disabled={false} onStart={onStart} count={900} />,
+    ),
+  );
+  expect(button().textContent).toBe("Start Cold Calling · 900");
 });
 
 it("remembers the last work view per person, without a lead, a search or whose leads", () => {

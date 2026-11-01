@@ -3,16 +3,21 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 from ac_platform.lead_desk.journey import signals
-from ac_platform.lead_desk.journey.model import Journey, default_journey, from_template
+from ac_platform.lead_desk.journey.model import Journey, Stage, default_journey, from_template
 
 
 def test_each_fact_points_at_a_sales_moment() -> None:
-    assert signals.milestone_of("outcome.call_outcome", {"value": "meeting_scheduled"}, None) == (
+    # The outcome as the call data engine stores it (call_data/values.py: {"enum": ...}).
+    assert signals.milestone_of("outcome.call_outcome", {"enum": "meeting_scheduled"}, None) == (
         "appointment_booked"
     )
-    assert signals.milestone_of("outcome.call_outcome", {"value": "no_sale"}, None) is None
+    assert signals.milestone_of("outcome.call_outcome", {"enum": "deal_closed"}, None) == "won"
+    assert signals.milestone_of("outcome.call_outcome", {"enum": "no_sale"}, None) is None
+    assert signals.milestone_of("outcome.call_outcome", {"value": "deal_closed"}, None) == "won"
     assert signals.milestone_of("commitment.next_step", None, "Site visit on Saturday 11am") == (
         "appointment_booked"
     )
@@ -40,6 +45,54 @@ def test_moments_heard_often_and_not_covered_are_offered() -> None:
     ]
     assert offered[0]["workflow"] == "heard in 12 calls and notes"
     assert offered[0]["ref"] == "calls:appointment_booked"
+
+
+NINE = Journey(
+    1,
+    "inside_sales",
+    (
+        Stage("new", "Unworked", "new", "lead"),
+        Stage("open_leads", "Open Leads", "follow_up", "contacted"),
+        Stage("interested", "Interested", "interested", "qualified"),
+        Stage("meeting_scheduled", "Meeting Scheduled", "interested", "appointment_booked"),
+        Stage("won", "Won", "won", "won"),
+        Stage("lost", "Closed / Lost", "lost", "lost"),
+    ),
+)
+AT = datetime(2026, 10, 30, 8, 0, tzinfo=UTC)
+
+
+def _offer(rows: list[tuple[str, object, str, datetime, object]]) -> str | None:
+    found = signals.suggest_from(rows, NINE.resolve("new", "new"), NINE)
+    return found["step"] if found else None
+
+
+def test_the_calls_outcome_offers_the_stage_whatever_the_next_step_says() -> None:
+    call = uuid4()
+    closed = [  # a negotiation that closed (simulation lab S04)
+        ("commitment.next_step", {"text": "Invoice today"}, "Send the invoice today", AT, call),
+        ("outcome.call_outcome", {"enum": "deal_closed"}, "Deal closed", AT, call),
+    ]
+    assert _offer(closed) == "won"
+    booked = [  # a proposal meeting booked (S09): no meeting word in the next step
+        ("commitment.next_step", {}, "Proposal presentation at the Pune office", AT, call),
+        ("outcome.call_outcome", {"enum": "meeting_scheduled"}, "Meeting scheduled", AT, call),
+    ]
+    assert _offer(booked) == "meeting_scheduled"
+
+
+def test_a_call_that_ended_in_a_no_offers_nothing_that_reopens_the_lead() -> None:
+    call = uuid4()
+    lost = [  # signed with another firm, a check-in in March (S30)
+        ("commitment.next_step", {}, "Call the prospect in March to check in", AT, call),
+        ("outcome.call_outcome", {"enum": "no_sale"}, "No sale", AT, call),
+    ]
+    assert _offer(lost) is None
+    # An older call's no does not hold back a newer call that went well.
+    newer = uuid4()
+    later = AT + timedelta(days=2)
+    rows = [("outcome.call_outcome", {"enum": "meeting_scheduled"}, "Meeting", later, newer)]
+    assert _offer(rows + lost) == "meeting_scheduled"
 
 
 def test_a_moment_a_stage_already_covers_is_not_offered() -> None:

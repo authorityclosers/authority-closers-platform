@@ -136,6 +136,7 @@ from ac_platform.lead_desk.contracts import (
     Team,
     TeamPool,
     ToCallToday,
+    Unanswered,
     UndoResultView,
     WorkDay,
     WorkHoursCommand,
@@ -251,6 +252,9 @@ PHONES_KEY = "phones"
 REPORT_DAYS = 92
 # A missed call waits on the desk this long for a call back.
 CALL_BACK_DAYS = 3
+# How long a call of mine waits for its answer before it stops asking (teardown #3).
+UNANSWERED_WINDOW = timedelta(hours=12)
+ANSWER_SLACK = timedelta(minutes=30)
 # A dialer call this close to a call the app already logged is that same call.
 IN_APP_BEFORE = timedelta(minutes=2)
 IN_APP_AFTER = timedelta(minutes=20)
@@ -551,12 +555,18 @@ PHONE_SECONDS = "phone_seconds"
 DIAL_MATCH = timedelta(minutes=2)
 # Read beside a dial's data, never saved into it: its seller answered "We talked" after it.
 TALKED = "talked"
+# Read as a call, never saved as one: an after-call answer with no call of its own
+# ("Called from another phone? Log a call"; phone QA ph1-58, 1 Nov 2026).
+LOGGED_CALL = "logged"
 # The after-call answer that belongs to a dial comes within this of it.
 DIAL_ANSWER = timedelta(minutes=30)
 # How long the seller who saved a call's answer may undo it (undo_result).
 RESULT_UNDO = timedelta(minutes=5)
 # History lines that set where a lead stands: the newest of them is the one an undo may take back.
 STANDING_KINDS = ("result", "stage", "meeting", "captured", "repeat")
+# Sources that are not someone asking: a file, a sheet, a row added by hand, test data. A
+# repeat from any other source is an enquiry (teardown #23).
+NOT_ENQUIRIES = frozenset({"manual", "csv", "sheet", "synthetic"})
 
 
 def missed_call(kind: str, data: Any) -> bool:
@@ -1102,7 +1112,9 @@ class LeadDesk:
                     func.count().filter(
                         Lead.next_action_at > self.now, Lead.next_action_at < day_end
                     ),
-                    func.count().filter(overdue_filter(self.now)),
+                    # Late is Inbound's alone, as on the badge: a Cold list is never late
+                    # (phone personas ph1-47, 1 Nov 2026: "904 late" was the Unworked list).
+                    func.count().filter(overdue_filter(self.now), on_side("inbound")),
                 ).where(mine)
             )
         ).one()
@@ -1241,9 +1253,73 @@ class LeadDesk:
             call_back=call_back,
             to_call_today=to_call[None],
             breaks=await self._breaks_today(today_calls),
+            unanswered=await self._unanswered(calls),
             # The badge as the Leads page hands it over (the whole day's, never one pipeline's).
             badge=await self.badge(waiting) if pipeline is None else None,
         )
+
+    async def _unanswered(self, calls: Sequence[CallRow]) -> tuple[Unanswered, ...]:
+        """My calls out of the last hours with nothing saved about them since, newest first,
+        one per lead: an answer is never lost when the seller leaves the after-call sheet
+        (competitor teardown #3, 1 Nov 2026). An answer, a stage move or a meeting after the
+        call answers it; a dial never placed (``calls`` come from _call_rows) never asks."""
+        since = self.now - UNANSWERED_WINDOW
+        latest: dict[UUID, CallRow] = {}
+        for row in calls:  # newest first
+            if row.at < since or row.actor != self.viewer.person_id:
+                continue
+            if not call_out(row.data) or row.data.get("recording") or row.data.get("for_call"):
+                continue
+            latest.setdefault(row.lead_id, row)
+        if not latest:
+            return ()
+        answered: dict[UUID, datetime] = {
+            lead_id: at
+            for lead_id, at in (
+                await self.db.execute(
+                    select(LeadEvent.lead_id, func.max(LeadEvent.created_at))
+                    .where(
+                        LeadEvent.tenant_id == self.tenant_id,
+                        LeadEvent.lead_id.in_(list(latest)),
+                        LeadEvent.kind.in_(("result", "stage", "meeting")),
+                        LeadEvent.created_at >= since - ANSWER_SLACK,
+                        not_undone(),
+                    )
+                    .group_by(LeadEvent.lead_id)
+                )
+            ).all()
+        }
+        # A phone's call log can arrive after the answer: an answer shortly before the
+        # logged call still answers it.
+        waiting = [
+            row
+            for row in latest.values()
+            if row.lead_id not in answered or answered[row.lead_id] < row.at - ANSWER_SLACK
+        ]
+        if not waiting:
+            return ()
+        names: dict[UUID, str] = {
+            lead_id: name
+            for lead_id, name in (
+                await self.db.execute(
+                    select(Lead.id, Lead.name).where(
+                        Lead.tenant_id == self.tenant_id,
+                        Lead.id.in_([row.lead_id for row in waiting]),
+                        Lead.stage.in_(OPEN_STAGES),
+                    )
+                )
+            ).all()
+        }
+        return tuple(
+            Unanswered(
+                lead_id=row.lead_id,
+                name=names[row.lead_id],
+                called_at=row.at,
+                event_id=row.event_id,
+            )
+            for row in waiting
+            if row.lead_id in names
+        )[:3]
 
     async def _numbers(
         self, start: datetime, end: datetime, rows: Sequence[CallRow] | None = None
@@ -1254,8 +1330,9 @@ class LeadDesk:
         past day counts the same way; nothing is rewritten.
 
         Attempted: every call out: placed in the app (it has no direction), logged by
-        the phone or recorded. An outcome logged without a call is not on that list and
-        is not a call here. Connected: those answered (talk time above 0). Not
+        the phone or recorded; an after-call answer saved with no call of its own (Log a
+        call) too (_logged_calls). Connected: those answered (talk time above 0, or the
+        answer said they talked). Not
         connected: the rest. Talk time: the connected calls' seconds. Follow-ups done:
         calls out to a lead that was past New then. A call the seller made private
         (a personal call) stays out, as it does from the lead's calls. A phone or
@@ -1321,10 +1398,91 @@ class LeadDesk:
         beside = [read_beside(row) for row in rows]
         synced = await self._phones_synced() if any(is_dial(r.data) for r in beside) else {}
         # A dial its phone's call log never showed was not placed (dial_placed).
-        return [
+        placed = [
             row
             for row in beside
             if dial_placed(row.data, row.at, synced.get(row.actor) if row.actor else None)
+        ]
+        # An answer saved with no call of its own is a call too (ph1-58).
+        logged = await self._logged_calls(start, end, placed, person=person, team=team)
+        if not logged:
+            return placed
+        return sorted([*placed, *logged], key=lambda row: row.at, reverse=True)
+
+    async def _logged_calls(
+        self,
+        start: datetime,
+        end: datetime,
+        calls: Sequence[CallRow],
+        *,
+        person: UUID | None = None,
+        team: bool = False,
+    ) -> list[CallRow]:
+        """After-call answers saved with no call of their own ("Called from another phone? Log
+        a call"), read as calls out: connected when the answer says they talked (phone QA
+        ph1-58, 1 Nov 2026: two logged "We talked" counted nowhere, on Home, Growth or the
+        day's summary). An answer from just before a call to half an hour after it, by the
+        same person on the same lead, is that call's; an undone answer is none (ph1-40)."""
+        from ac_platform.lead_desk.activity_summary import activity_window
+
+        joined = and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id)
+        answers = (
+            await self.db.execute(
+                select(
+                    LeadEvent.id,
+                    LeadEvent.actor_person_id,
+                    LeadEvent.lead_id,
+                    LeadEvent.created_at,
+                    LeadEvent.data,
+                    Lead.pipeline,
+                )
+                .join(Lead, joined)
+                .where(
+                    *activity_window(self, start, end, person=person, team=team),
+                    LeadEvent.kind == "result",
+                    not_undone(),
+                )
+                .order_by(LeadEvent.created_at.desc())
+                .limit(CALL_ROWS)
+            )
+        ).all()
+        if not answers:
+            return []
+        made: dict[tuple[UUID | None, UUID], list[datetime]] = {}
+        for row in calls:
+            made.setdefault((row.actor, row.lead_id), []).append(row.at)
+        # A call just before the window still owns its answer.
+        for actor, lead_id, at in (
+            await self.db.execute(
+                select(LeadEvent.actor_person_id, LeadEvent.lead_id, LeadEvent.created_at).where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.kind == "call",
+                    LeadEvent.created_at >= start - DIAL_ANSWER,
+                    LeadEvent.created_at < start,
+                    LeadEvent.lead_id.in_(list({answer.lead_id for answer in answers})),
+                )
+            )
+        ).tuples():
+            made.setdefault((actor, lead_id), []).append(at)
+        return [
+            CallRow(
+                event_id,
+                actor,
+                lead_id,
+                at,
+                {
+                    "via": LOGGED_CALL,
+                    "direction": "outgoing",
+                    "connected": isinstance(data, dict) and data.get("connected") is True,
+                    "duration_seconds": 0,
+                },
+                lead_side(pipeline),
+            )
+            for event_id, actor, lead_id, at, data, pipeline in answers
+            if not any(
+                call - DIAL_MATCH <= at <= call + DIAL_ANSWER
+                for call in made.get((actor, lead_id), ())
+            )
         ]
 
     async def _phones_synced(self) -> dict[UUID, datetime]:
@@ -2018,30 +2176,45 @@ class LeadDesk:
         counts = {str(kind): int(total) for kind, total, _, _ in grouped}
         today_counts = {str(kind): int(today) for kind, _, today, _ in grouped}
         week_counts = {str(kind): int(week) for kind, _, _, week in grouped}
-        connected = and_(
-            LeadEvent.kind == "call",
-            or_(
-                LeadEvent.data["connected"].as_boolean().is_(True),
-                LeadEvent.data["duration_seconds"].as_integer() > 0,
-            ),
+        # Calls as Home counts them (_call_rows): a dial its phone's call log never showed
+        # was not placed, and connected is call_answered, never a dial's time away (phone
+        # QA ph1-50, 1 Nov 2026: five "You called" rows that were back-outs from the dialler).
+        placed = await self._call_rows(after, upto, person=person, team=team)
+        placed_ids = {row.event_id for row in placed}
+        unplaced: dict[UUID, datetime] = {
+            event_id: at
+            for event_id, at, data in (
+                await self.db.execute(
+                    select(LeadEvent.id, LeadEvent.created_at, LeadEvent.data)
+                    .join(Lead, joined)
+                    .where(*window, LeadEvent.kind == "call")
+                )
+            ).all()
+            if isinstance(data, dict)
+            and is_dial(data)
+            and event_id not in placed_ids
+            and str(event_id) not in hidden
+        }
+        week_start = start - timedelta(days=6)
+        for at in unplaced.values():
+            counts["call"] = counts.get("call", 0) - 1
+            if at >= start:
+                today_counts["call"] = today_counts.get("call", 0) - 1
+            if at >= week_start:
+                week_counts["call"] = week_counts.get("call", 0) - 1
+        # An answer saved with no call of its own is a call too, as on Home (ph1-58).
+        for row in placed:
+            if row.data.get("via") == LOGGED_CALL:
+                counts["call"] = counts.get("call", 0) + 1
+                if row.at >= start:
+                    today_counts["call"] = today_counts.get("call", 0) + 1
+                if row.at >= week_start:
+                    week_counts["call"] = week_counts.get("call", 0) + 1
+        today_counts["connected"] = sum(
+            1 for row in placed if row.at >= start and call_answered(row.data)
         )
-        today_counts["connected"] = int(
-            await self.db.scalar(
-                select(func.count())
-                .select_from(LeadEvent)
-                .join(Lead, joined)
-                .where(*window, connected, LeadEvent.created_at >= start)
-            )
-            or 0
-        )
-        week_counts["connected"] = int(
-            await self.db.scalar(
-                select(func.count())
-                .select_from(LeadEvent)
-                .join(Lead, joined)
-                .where(*window, connected, LeadEvent.created_at >= start - timedelta(days=6))
-            )
-            or 0
+        week_counts["connected"] = sum(
+            1 for row in placed if row.at >= week_start and call_answered(row.data)
         )
         latest = (
             await self.db.execute(
@@ -2117,9 +2290,12 @@ class LeadDesk:
         labels: dict[str, journeys.Journey] = {}
         items: list[ActivityItem] = []
         for event, lead in rows:
-            if (str(event.id) in hidden and event.actor_person_id != self.viewer.person_id) or str(
-                event.id
-            ) in removed:
+            if (
+                (str(event.id) in hidden and event.actor_person_id != self.viewer.person_id)
+                or str(event.id) in removed
+                # A dial never placed: a back-out from the dialler, never a call (ph1-50).
+                or event.id in unplaced
+            ):
                 continue
             key = journeys.pipeline_of(lead)
             if key not in labels:
@@ -2149,6 +2325,39 @@ class LeadDesk:
             last_call_at=latest[1],
             timezone=str(IST),
         )
+
+    async def lead_for_call(self, submission_id: UUID) -> LeadDetail | None:
+        """The lead a call's report belongs to, when this person may open it, else None
+        (competitor teardown #24: the Report's AI notes offer Apply chips only over a lead
+        the viewer can change; the chips write nothing until the seller taps Save). A lead
+        merged away answers with the lead it went into. Reads only."""
+        lead_id: UUID | None = await self.db.scalar(
+            select(LeadEvent.lead_id)
+            .where(
+                LeadEvent.tenant_id == self.tenant_id,
+                LeadEvent.kind == "call",
+                LeadEvent.data["submission_id"].as_string() == str(submission_id),
+            )
+            .order_by(LeadEvent.created_at.desc())
+            .limit(1)
+        ) or await self.db.scalar(
+            select(Lead.id).where(
+                Lead.tenant_id == self.tenant_id, Lead.last_submission_id == submission_id
+            )
+        )
+        found = (
+            await self.db.scalar(
+                select(Lead).where(Lead.tenant_id == self.tenant_id, Lead.id == lead_id)
+            )
+            if lead_id is not None
+            else None
+        )
+        if found is None:
+            return None
+        try:
+            return await self.detail((await self._live(found)).id)
+        except DeskError:
+            return None
 
     async def detail(self, lead_id: UUID) -> LeadDetail:
         lead, worked_before = await self._readable(lead_id)
@@ -2225,6 +2434,12 @@ class LeadDesk:
             if value
         )
         row = self._row(lead, names, day_end)
+        # After-call answers their seller undid: marked, so they count nowhere (ph2-37).
+        answers_undone = frozenset(
+            str(event.data[transitions.UNDONE_RESULT])
+            for event in events
+            if event.kind == "edited" and isinstance(event.data.get(transitions.UNDONE_RESULT), str)
+        )
         return LeadDetail(
             lead=row.model_copy(
                 update={
@@ -2248,6 +2463,7 @@ class LeadDesk:
                     undone=undone,
                     lead_owner=lead.owner_person_id,
                     photos=photos,
+                    answers_undone=answers_undone,
                 )
                 for event in events
                 if not (event.kind == "edited" and event.data.get(PRIVATE_CALL))
@@ -2373,6 +2589,7 @@ class LeadDesk:
         undone: frozenset[str] = frozenset(),
         lead_owner: UUID | None = None,
         photos: Mapping[UUID, str | None] | None = None,
+        answers_undone: frozenset[str] = frozenset(),
     ) -> LeadEventView:
         phone_call = event.kind == "call" and event.data.get("via") in {
             "phone",
@@ -2484,6 +2701,8 @@ class LeadDesk:
             app_label=str(by_app["label"])[:80] if by_app and by_app.get("label") else None,
             change_id=change_id,
             can_undo=can_undo,
+            answer_undone=event.kind == "result" and str(event.id) in answers_undone,
+            to_inbound=event.kind == "repeat" and data.get("to_inbound") is True,
         )
 
     # ----- capture ---------------------------------------------------------------
@@ -3683,6 +3902,16 @@ class LeadDesk:
         # A Lost lead who asks again is back to work, on the same record. Won and Junk
         # stay as they are (Lead OS, 24 Oct 2026): the history says they came again.
         reopened = lead.stage == "lost"
+        # Someone on a Cold list who sends an enquiry (an ad's or a website's form, never a
+        # file, a sheet or a row added by hand) is an Inbound lead now: the same record moves
+        # sides, its stage stays (competitor teardown #23, 1 Nov 2026).
+        to_inbound = (
+            source not in NOT_ENQUIRIES
+            and lead_side(lead.pipeline) == "cold"
+            and (lead.stage not in CLOSED_STAGES or reopened)
+        )
+        if to_inbound:
+            lead.pipeline = "live"
         lead.repeats += 1
         lead.updated_at = self.now
         for name in ("email", "company", "city", "language", "interest"):
@@ -3696,6 +3925,7 @@ class LeadDesk:
             "source": source,
             "source_label": source_label or SOURCE_LABELS.get(source, source),
             "reopened": reopened,
+            "to_inbound": to_inbound,
             "payload": payload,
         }
         if reopened:
@@ -3717,9 +3947,24 @@ class LeadDesk:
         else:
             lead.revision += 1
             self._event(lead, "repeat", repeat, actor=actor, command_id=command_id)
-        if reopened or lead.owner_person_id is None:
-            previous = lead.owner_person_id
+        # Back to its seller while they are still on the team; else the lead rules decide.
+        gone = lead.owner_person_id is not None and not await self._on_team(lead.owner_person_id)
+        if reopened or lead.owner_person_id is None or gone:
+            previous = None if gone else lead.owner_person_id
             await self._allocate(lead, previous_owner=previous, reps=reps)
+
+    async def _on_team(self, person_id: UUID) -> bool:
+        """Whether this person is still an active seller here."""
+        found = await self.db.scalar(
+            select(Membership.person_id).where(
+                Membership.tenant_id == self.tenant_id,
+                Membership.person_id == person_id,
+                Membership.status == "active",
+                Membership.ended_at.is_(None),
+                Membership.role.in_(SELLER_ROLES),
+            )
+        )
+        return found is not None
 
     async def _require_seller(self, person_id: UUID) -> None:
         member = await self.db.scalar(
@@ -5484,11 +5729,9 @@ class LeadDesk:
                 talk_seconds=sum(part["talk"] for part in parts),
                 talk_estimated_seconds=sum(part["away"] for part in parts),
                 leads_attempted=len(tried),
-                # A lead moved to Interested, given a meeting or won was spoken to: reached
-                # too (ph1-41, 1 Nov 2026: "To Interested 1" beside "Leads reached 0").
-                reached=len(
-                    union("reached") | union("interested") | union("meetings") | union("won")
-                ),
+                # The leads spoken to on calls, a logged answer saying they talked among them:
+                # never more than were called (ph1-59, 1 Nov 2026: 0 attempted, 2 reached).
+                reached=len(union("reached")),
                 interested=len(union("interested")),
                 meetings=len(union("meetings")),
                 won=len(union("won")),

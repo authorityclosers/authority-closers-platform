@@ -304,7 +304,7 @@ def test_the_same_day_counts_the_same_calls_everywhere(
 ) -> None:
     """Hardcore phone QA ph1-30/31 (1 Nov 2026): Reports, Home and Growth counted the same day
     differently. One rule (_call_rows) feeds each: two calls out (one answered), a call in
-    nobody took, and an after-call answer with no call behind it make 2 calls, 1 connected."""
+    nobody took, and an after-call answer to one of them make 2 calls, 1 connected."""
 
     async def exercise() -> None:
         async with world(postgres_harness, tmp_path) as here:
@@ -515,5 +515,108 @@ def test_the_next_lead_who_rang_says_so(postgres_harness: Any, tmp_path: Path) -
             first = (await here.client.get(f"{BASE}")).json()["sides"]["inbound"]["next_lead"]
             assert first["lead_id"] == rang, first
             assert first["missed_calls"] == 2 and first["missed_at"] is not None, first
+
+    run(exercise())
+
+
+def test_a_dial_never_placed_is_never_listed(postgres_harness: Any, tmp_path: Path) -> None:
+    """Phone QA ph1-50 (1 Nov 2026): My work and Calls' Your calls listed five "You called" rows
+    that were back-outs from the dialler, which Home never counted. A dial the phone's call log
+    never showed is neither listed nor counted, and a dial's time away never makes a call
+    connected; the call the phone logged is, as on Home."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            lead = await here.add("Fictional Backed Out", "98760 67061")
+            now = datetime.now(UTC)
+            if (now - timedelta(minutes=30)).astimezone(IST).date() != now.astimezone(IST).date():
+                pytest.skip("the dial would be yesterday's, just after midnight")
+            async with here.setup.sessions() as db, db.begin():
+                for minutes, data in (
+                    # The Call button: 40 s away from the app, and the dialler backed out of.
+                    (30, {"simulated": False, "estimated": True, "duration_seconds": 40}),
+                    # A call the phone logged: one minute.
+                    (20, {"via": "phone", "direction": "outgoing", "duration_seconds": 60}),
+                ):
+                    db.add(
+                        LeadEvent(
+                            id=uuid4(),
+                            tenant_id=here.tenant_id,
+                            lead_id=UUID(lead),
+                            kind="call",
+                            actor_person_id=here.seller.person_id,
+                            data=data,
+                            created_at=now - timedelta(minutes=minutes),
+                        )
+                    )
+            here.as_seller()
+            # The phone's call history arrived after the dial, without it.
+            seen = await here.client.post(
+                f"{BASE}/phone-log", json={"device_id": str(uuid4()), "calls": []}, headers=WRITE
+            )
+            assert seen.status_code == 200, seen.text
+            answer = await here.client.get(f"{BASE}/activity", params={"day": "today"})
+            assert answer.status_code == 200, answer.text
+            work = answer.json()
+            listed = [item for item in work["items"] if item["event"]["kind"] == "call"]
+            assert len(listed) == 1, listed
+            assert (work["today_counts"]["call"], work["today_counts"]["connected"]) == (1, 1)
+            desk = (await here.client.get(BASE)).json()
+            assert (desk["numbers"]["calls"], desk["numbers"]["connected"]) == (1, 1)
+
+    run(exercise())
+
+
+def test_a_logged_answer_is_a_call(postgres_harness: Any, tmp_path: Path) -> None:
+    """Phone QA ph1-58 and ph1-59 (1 Nov 2026): two "We talked" logged on a Cold lead with no call
+    counted nowhere (Home: 0 connected; the day's summary: 0), and Growth said 0 attempted beside
+    2 reached. An answer saved with no call of its own is a call, connected when they talked; an
+    answer to a call is that call's; reached never exceeds attempted."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            now = datetime.now(UTC)
+            if (now - timedelta(minutes=10)).astimezone(IST).date() != now.astimezone(IST).date():
+                pytest.skip("the calls would be yesterday's, just after midnight")
+            logged = await here.add("Fictional Logged Twice", "98760 67071")
+            dialled = await here.add("Fictional Dialled", "98760 67072")
+            async with here.setup.sessions() as db, db.begin():
+                await db.execute(
+                    update(Lead)
+                    .where(Lead.id.in_([UUID(logged), UUID(dialled)]))
+                    .values(pipeline="cold")
+                )
+            here.as_seller()
+            later_on = (now + timedelta(days=1)).isoformat()
+            # Called from another phone, twice: no answer, then they talked.
+            for talked in (False, True):
+                body: dict[str, Any] = {"connected": talked}
+                body.update(
+                    {"step": "interested", "follow_up_at": later_on}
+                    if talked
+                    else {"reason": "did_not_pick"}
+                )
+                saved = await here.dispose(logged, **body)
+                assert saved.status_code == 200, saved.text
+            # A Call-button dial and its answer: one call.
+            placed = await here.client.post(
+                f"{BASE}/leads/{dialled}/calls/phone",
+                json={"command_id": str(uuid4()), "duration_seconds": 30},
+                headers=WRITE,
+            )
+            assert placed.status_code == 200, placed.text
+            answered = await here.dispose(dialled, connected=False, reason="did_not_pick")
+            assert answered.status_code == 200, answered.text
+
+            desk = (await here.client.get(BASE)).json()
+            assert (desk["numbers"]["calls"], desk["numbers"]["connected"]) == (3, 1)
+            cold = desk["sides"]["cold"]["numbers"]
+            assert (cold["calls"], cold["connected"]) == (3, 1)
+            effort = (await here.client.get(f"{BASE}/performance/sellers?days=1")).json()["cold"]
+            assert (effort["attempted"], effort["connected"], effort["reached"]) == (3, 1, 1)
+            assert effort["reached"] <= effort["leads_attempted"] == 2
+            here.as_admin()
+            outcomes = (await here.client.get(f"{BASE}/reports/performance?days=1")).json()
+            assert (outcomes["current"]["calls"], outcomes["current"]["connected"]) == (3, 1)
 
     run(exercise())

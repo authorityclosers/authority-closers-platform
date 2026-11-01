@@ -53,10 +53,38 @@ export function leadNotes(detail: LeadDetail): LeadEvent[] {
   return detail.events
     .filter(
       (event) =>
-        (event.kind === "note" || event.kind === "result") &&
+        (event.kind === "note" ||
+          (event.kind === "result" && !event.answer_undone)) &&
         Boolean(event.note?.trim()),
     )
     .slice(0, NOTES);
+}
+
+/**
+ * Where the lead stands, from its own record, report or not: its stage, then
+ * its last call and how it went ("Interested · last call Tue 4:30 pm, no
+ * answer"). Phone personas ph1-49, 1 Nov 2026: a lead whose calls had no
+ * report showed only its follow-up.
+ */
+export function standing(detail: LeadDetail): string {
+  const call = detail.events.find((event) => event.kind === "call");
+  const answer = detail.events.find(
+    (event) => event.kind === "result" && !event.answer_undone,
+  );
+  const how = answer
+    ? answer.connected
+      ? "talked"
+      : (answer.reason_label ?? "no answer").toLowerCase()
+    : null;
+  const last = call ?? answer;
+  return [
+    detail.lead.stage_label,
+    last
+      ? `last call ${when(last.at)}${how ? `, ${how}` : ""}`
+      : "not called yet",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 async function answerFor(id: string, signal: AbortSignal): Promise<Answer> {
@@ -275,6 +303,9 @@ function LeadAnswer({
         </p>
       ) : (
         <>
+          {read.detail ? (
+            <p className={styles.follow}>{standing(read.detail)}</p>
+          ) : null}
           {brief && read.call ? (
             <section className={styles.part} aria-label="From the last call">
               <h3>From the last call, {when(read.call.at)}</h3>

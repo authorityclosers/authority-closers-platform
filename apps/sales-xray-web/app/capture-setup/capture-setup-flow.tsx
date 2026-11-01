@@ -82,9 +82,12 @@ import { Button, Skeleton } from "../ui/kit";
 import { Picker } from "../ui/picker";
 import { recordCaptureSetup, type CaptureSetup } from "./capture-setup-client";
 import {
+  finishedPhone,
+  markRecordingsLater,
   markTestCall,
   phoneFacts,
   recordingProven,
+  recordingsReady,
   savedWhen,
   stepsFor,
   stepsWith,
@@ -1030,12 +1033,18 @@ function DoneStep({
   setup,
   personal,
   onDone,
+  onRecordings,
+  onLater,
 }: {
   titleId: string;
   phone: Phone;
   setup: CaptureSetup;
   personal: boolean;
   onDone: (next: CaptureSetup | null) => void;
+  /** Back to the recording check, when recordings don't work yet. */
+  onRecordings: () => void;
+  /** Not now with recordings not working: asked again tomorrow. */
+  onLater: () => void;
 }) {
   const facts = phone.facts;
   const [saved, setSaved] = useState<CaptureSetup | null>(null);
@@ -1043,26 +1052,18 @@ function DoneStep({
   const [attempt, setAttempt] = useState(0);
   const [now] = useState(() => Date.now());
   const key = useRef<string | null>(null);
+  // An organisation's phone finishes only with its recordings working
+  // (orchestrator, 1 Nov 2026: one finished with no folder, counted as done for
+  // good, and its seller sent no recording in a week).
+  const stuck = !personal && facts !== null && !recordingsReady(facts);
 
-  // Recorded for Team as soon as the screen shows.
+  // Recorded for Team as soon as the screen shows, once recordings work.
   useEffect(() => {
-    if (personal || !facts) return;
+    if (personal || !facts || stuck) return;
     key.current ??= crypto.randomUUID();
     let alive = true;
     recordCaptureSetup(
-      {
-        outcome: "completed",
-        phone: {
-          device: facts.device,
-          model: facts.model,
-          family: facts.family,
-          app_version: facts.version,
-          recordings: facts.folderPicked && !facts.privateDialler,
-          background:
-            facts.battery && (!facts.autostartNeeded || facts.autostart),
-          uploads: facts.uploadsOn,
-        },
-      },
+      { outcome: "completed", phone: finishedPhone(facts) },
       key.current,
     ).then(
       (next) => {
@@ -1077,7 +1078,7 @@ function DoneStep({
     return () => {
       alive = false;
     };
-  }, [personal, facts, attempt]);
+  }, [personal, facts, attempt, stuck]);
 
   if (!facts) return null;
   const when = savedWhen(facts.newestMs, now);
@@ -1136,18 +1137,41 @@ function DoneStep({
   const left = lines.filter(([, on]) => !on).length;
   return (
     <Screen
-      icon={CheckCircle2}
-      title={left ? "Almost set" : "You're set"}
+      icon={stuck ? Mic : CheckCircle2}
+      title={
+        stuck
+          ? "Recording isn't working yet"
+          : left
+            ? "Almost set"
+            : "You're set"
+      }
       titleId={titleId}
       line={
-        !recordings
-          ? "You can start working. What's left is below."
-          : when
-            ? `Last call recording found ${when}.`
-            : "No call recording found yet. Call a lead: its recording uploads by itself."
+        stuck
+          ? facts.privateDialler
+            ? "Your Phone app keeps call recordings to itself, so none reach Sales X-Ray yet."
+            : !facts.folderPicked
+              ? "No recordings folder is chosen, so no call's recording reaches Sales X-Ray yet."
+              : facts.recorderOff
+                ? "Call recording is off in your Phone app, so calls aren't saved yet."
+                : "No call recording was found yet. A 10-second test call checks it."
+          : !recordings
+            ? "You can start working. What's left is below."
+            : when
+              ? `Last call recording found ${when}.`
+              : "No call recording found yet. Call a lead: its recording uploads by itself."
       }
       actions={
-        failed && !saved ? (
+        stuck ? (
+          <>
+            <Button variant="primary" onClick={onRecordings}>
+              Set up recording
+            </Button>
+            <Button variant="ghost" onClick={onLater}>
+              Not now
+            </Button>
+          </>
+        ) : failed && !saved ? (
           <Button
             variant="primary"
             onClick={() => {
@@ -1339,8 +1363,9 @@ export function CaptureSetupFlow({
   }, [steps, index, setup, onFinish]);
   if (!steps || !step) return null;
 
-  const problem = (fix: "profile" | "consent") => {
-    // A refusal from the phone: that step again, then back here.
+  const problem = (fix: "profile" | "consent" | "recordings") => {
+    // A refusal from the phone, or recordings not working at the end: that
+    // step again, then back here.
     setSteps([...steps.slice(0, index), fix, ...steps.slice(index)]);
   };
 
@@ -1427,6 +1452,19 @@ export function CaptureSetupFlow({
             // This phone went through what "Set up this phone" asks: it never asks again by itself.
             if (inApp) markPhoneOnboarded();
             onFinish(saved ?? setup);
+          }}
+          onRecordings={() => problem("recordings")}
+          onLater={() => {
+            if (phone.facts) markRecordingsLater(phone.facts.device);
+            if (inApp) markPhoneOnboarded();
+            notify({
+              id: "capture-setup",
+              tone: "info",
+              title: "Recording isn't set up",
+              message:
+                "We'll ask again tomorrow. Set it up any time in Settings, Selling.",
+            });
+            onFinish(setup);
           }}
         />
       );

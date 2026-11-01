@@ -259,7 +259,10 @@ export function recorderGuide(
         : [
             "This phone has no other Phone app that saves recordings.",
             "Record meetings and in-person talks in Sales X-Ray: Calls on this phone, then Record.",
-            "Phone calls can be recorded only by phones whose own Phone app saves them (Samsung, Xiaomi's own dialer, OnePlus, Oppo, Realme, Vivo).",
+            // No makers named: a OnePlus Nord or a Vivo sold in India often
+            // comes with Google's Phone app, so "OnePlus, Vivo" read as wrong
+            // on exactly those phones (orchestrator, 1 Nov 2026).
+            "Phone calls reach Sales X-Ray only from a Phone app that saves its recordings as files, not Google's.",
           ],
       closed: true,
     };

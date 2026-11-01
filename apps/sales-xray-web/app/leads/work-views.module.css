@@ -292,6 +292,12 @@
   min-width: 0;
 }
 
+/* The round's size beside the start words (competitor teardown 2). */
+.callNextCount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
 /* Call Next Lead / Start Cold Calling: in the pinned head, never over a row. */
 .callNextButton {
   display: inline-flex;

@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 
 from anyio.to_thread import run_sync
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from ac_platform.conversation_intelligence import reports
 from ac_platform.conversation_intelligence.application import ConversationConflict, utc
@@ -72,10 +72,12 @@ from ac_platform.one_pass.markers import PROMPT_REVISIONS as ONE_PASS_PROMPT_REV
 from ac_platform.one_pass.markers import RECIPE as ONE_PASS_RECIPE
 from ac_platform.one_pass.markers import RECIPE_BY_PROMPT_REVISION as ONE_PASS_RECIPE_BY_PROMPT
 from ac_platform.one_pass.markers import RECIPES as ONE_PASS_RECIPES
-from ac_platform.one_pass.markers import call_date as one_pass_call_date
+from ac_platform.one_pass.markers import call_moment
 from ac_platform.outbox.models import Job
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from ac_platform.conversation_intelligence.inference import ConversationInference
 
 ALIGNMENT_RECIPE = "source-clock-support-v1"
@@ -86,6 +88,34 @@ ONE_PASS_FACT_RECIPE = ONE_PASS_RECIPE
 FACT_RECIPES = frozenset({FACT_RECIPE, *ONE_PASS_RECIPES})
 COACHING_RECIPE = "qualitative-coaching-v1"
 _LOGGER = logging.getLogger(__name__)
+# When a recording's call was made: the Lead Desk call it was attached to, which the phone
+# dates at the call's start (recording-call). The attach event is written at upload and
+# points at that call (for_call). Same workspace and lead only.
+_CALL_STARTED = text(
+    """
+    SELECT coalesce(c.created_at, e.created_at)
+    FROM conversation_guest_submissions s
+    JOIN lead_desk_events e
+      ON e.tenant_id = s.tenant_id AND e.kind = 'call'
+     AND e.data ->> 'submission_id' = s.submission_id::text
+    LEFT JOIN lead_desk_events c
+      ON c.tenant_id = e.tenant_id AND c.lead_id = e.lead_id AND c.kind = 'call'
+     AND c.id::text = e.data ->> 'for_call'
+    WHERE s.recording_id = :recording AND s.tenant_id = :tenant
+    ORDER BY s.created_at DESC, e.created_at DESC
+    LIMIT 1
+    """
+)
+
+
+async def call_date_for(database: Any, recording: ConversationRecording) -> str:
+    """The date the one-pass request resolves relative days ("tomorrow at six") to: when the
+    call was made, not when a phone that was offline uploaded it; the upload, said as such,
+    for a recording on no Lead Desk call (a web upload)."""
+    started: datetime | None = await database.scalar(
+        _CALL_STARTED, {"recording": recording.id, "tenant": recording.tenant_id}
+    )
+    return call_moment(started, recording.created_at)
 
 
 def _raw_response_binding(
@@ -576,6 +606,7 @@ class ReportingPipeline:
         parents: tuple[Checkpoint, ...] = (transcript_checkpoint, alignment)
         if request.stage == "C4":
             one_pass = request.fact_prompt_revision in ONE_PASS_PROMPT_REVISIONS
+            call_date = await call_date_for(self.database, recording) if one_pass else None
             inputs = await run_sync(
                 partial(
                     prepare_fact_inputs,
@@ -586,7 +617,7 @@ class ReportingPipeline:
                     max_completion_tokens=request.max_completion_tokens,
                     prompt_revision=request.fact_prompt_revision,
                     # The one-pass request resolves relative days ("next Friday") to it.
-                    call_date=one_pass_call_date(recording.created_at) if one_pass else None,
+                    call_date=call_date,
                 )
             )
             if len(inputs) > 64 or request.chunk_index > len(inputs):

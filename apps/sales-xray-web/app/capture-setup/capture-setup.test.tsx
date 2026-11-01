@@ -542,9 +542,10 @@ describe("CaptureSetupFlow", () => {
     expect(title()).toBe("Almost set");
   });
 
-  it("says Almost set and why when the Phone app keeps recordings private", async () => {
+  it("says why when the Phone app keeps recordings private, and records nothing finished", async () => {
     // Persona QA, 31 Oct 2026: "You're set" with two empty ticks, and a last
-    // recording "found" although no folder was chosen.
+    // recording "found" although no folder was chosen. Orchestrator, 1 Nov
+    // 2026: such a phone is never done; it is asked again tomorrow.
     fakePhone({
       family: "other",
       autostartNeeded: false,
@@ -557,25 +558,37 @@ describe("CaptureSetupFlow", () => {
         newestMs: Date.now() - 12 * 86_400_000,
       },
     });
-    fakeServer(setup({ consent: "on" }), "on");
-    await flow(setup({ consent: "on" }));
+    const calls = fakeServer(setup({ consent: "on" }), "on");
+    const { finished } = await flow(setup({ consent: "on" }));
     await act(async () => button("Continue").click());
     await settle();
     await act(async () => button("Continue without recordings").click());
     await settle();
-    expect(title()).toBe("Almost set");
+    expect(title()).toBe("Recording isn't working yet");
+    expect(host.textContent).toContain(
+      "Your Phone app keeps call recordings to itself, so none reach Sales X-Ray yet.",
+    );
     // The folder chosen is ticked; the private Phone app is its own line (v1.21).
     expect(host.textContent).toContain("Recordings folder chosen done");
     expect(host.textContent).toContain(
       "Phone app shares its recordings not done",
     );
-    expect(host.textContent).toContain(
-      "Your Phone app keeps its recordings private. Add a call's recording on its lead.",
-    );
-    expect(host.textContent).toContain(
-      "You can start working. What's left is below.",
-    );
     expect(host.textContent).not.toContain("Last call recording found");
+    // Never recorded as finished: the gate asks again.
+    expect(posts(calls, "/capture-setup")).toEqual([]);
+    // Set up recording goes back to the recording check.
+    await act(async () => button("Set up recording").click());
+    await settle();
+    expect(title()).toBe("Phone by Google keeps recordings private here");
+    await act(async () => button("Continue without recordings").click());
+    await settle();
+    // Not now lets the seller in, and asks again tomorrow.
+    await act(async () => button("Not now").click());
+    expect(finished).toHaveBeenCalledOnce();
+    expect(
+      window.localStorage.getItem(`sx-recordings-later:${DEVICE}`),
+    ).not.toBeNull();
+    expect(posts(calls, "/capture-setup")).toEqual([]);
   });
 
   it("has no close button while required, and Skip when it isn't", async () => {
@@ -697,6 +710,57 @@ describe("CaptureSetupGate", () => {
         background: true,
         uploads: true,
       },
+    });
+  });
+
+  it("asks again on a phone that finished without recordings, at the recording check", async () => {
+    // Orchestrator, 1 Nov 2026: a phone finished with recordings=false was
+    // never asked again, and its seller sent no recording in a week.
+    fakePhone({ folderPicked: false });
+    const finishedBefore = {
+      device: DEVICE,
+      model: "Redmi 13",
+      app_version: "1.0.50",
+      at: "2026-10-31T11:24:00Z",
+      recordings: false,
+      background: false,
+      uploads: true,
+    };
+    const calls = await gate(
+      setup({
+        consent: "on",
+        phones: [finishedBefore],
+        finished_devices: [],
+      }),
+    );
+    expect(host.querySelector("dialog")).not.toBeNull();
+    // This workspace's disclosure, the recording check, then done.
+    expect(host.querySelector('ol[aria-label="Step 1 of 3"]')).not.toBeNull();
+    expect(posts(calls, "/capture-setup")).toEqual([]);
+  });
+
+  it("records a phone that finished without recordings once they work, and asks nothing", async () => {
+    fakePhone();
+    const calls = await gate(
+      setup({
+        consent: "on",
+        phones: [
+          {
+            device: DEVICE,
+            model: "Redmi 13",
+            app_version: "1.0.50",
+            at: "2026-10-31T11:24:00Z",
+            recordings: false,
+            background: true,
+            uploads: true,
+          },
+        ],
+      }),
+    );
+    expect(host.querySelector("dialog")).toBeNull();
+    expect(posts(calls, "/capture-setup")[0].body).toMatchObject({
+      outcome: "completed",
+      phone: { device: DEVICE, recordings: true },
     });
   });
 

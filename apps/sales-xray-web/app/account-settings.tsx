@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bug,
   ChartNoAxesCombined,
   ChevronLeft,
   ChevronRight,
@@ -34,6 +35,7 @@ import {
   type Allowance,
 } from "./acquisition-client";
 import { DeleteAccountRow } from "./account-delete";
+import { openBugReport } from "./bug-report/open";
 import { useSalesXraySignOut } from "./account-navigation";
 import type { BillingViewProps } from "./billing/billing-view";
 import { documentStatus } from "./billing/document-status";
@@ -534,7 +536,7 @@ export function AccountSettings({
           <SignInMethods active={shows("security")} />
           <Row
             label="Log out of this device"
-            hint="End your Sales X-Ray session in this browser."
+            hint="End your Sales X-Ray session on this device."
           >
             <button
               type="button"
@@ -562,6 +564,21 @@ export function AccountSettings({
           onBack={back}
         >
           <FirstCallGuideRow onStart={onClose} />
+          {/* In the app, with its picture, and its progress in Your reports
+              (phone personas ph1-54, 1 Nov 2026: help was email only). */}
+          <Row
+            label="Report a problem"
+            hint="Say what went wrong here in the app. The team sees it at once, and Your reports shows when it's fixed."
+          >
+            <button
+              type="button"
+              className={styles.secondary}
+              onClick={() => openBugReport()}
+            >
+              <Bug size={15} aria-hidden="true" />
+              Report a problem
+            </button>
+          </Row>
           <Row
             label="Contact support"
             hint="Questions about a call, a report or your account? Write to the Authority Closers team."
@@ -818,7 +835,7 @@ function FirstCallGuideRow({ onStart }: { onStart?: () => void }) {
   return (
     <Row
       label="First call guide"
-      hint="Turn it on to restart the guide. Your choice is kept in this browser."
+      hint="Turn it on to start it again on New analysis. It's kept on this device."
     >
       <button
         type="button"

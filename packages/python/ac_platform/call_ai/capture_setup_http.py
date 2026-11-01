@@ -281,17 +281,34 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
             for person, member_role in rows:
                 consent = await consent_of(request, auth, tenant_id, person.id)
                 setup = found.get(person.id, capture_setup.Setup())
-                state = capture_setup.team_state(setup, consent.state)
+                report: dict[str, Any] = phones.get(str(person.id)) or {}
+                # Recording on this seller's phone: ok, late or off, and the fix; named
+                # by its phone, since a seller can have more than one (ph1-46).
+                recording = capture_setup.recording_state(
+                    report or None, recordings.get(str(person.id)), now
+                )
+                if recording is not None:
+                    recording["phone"] = capture_setup.phone_label(
+                        report.get("device_id"), report.get("family"), setup
+                    )
+                # Ready only while that phone records (ph1-46).
+                state = capture_setup.team_state(setup, consent.state, recording)
                 # When the line's state began: the phone finished, the no, or the consent.
                 at: datetime | None = None
-                if state == "set_up":
+                if state in ("set_up", "recording_off"):
                     at = setup.phones[0].at
                 elif state == "declined":
                     at = setup.declined_at
                 elif state in ("phone_pending", "turned_off"):
                     at = consent.at
                 newest = setup.phones[0] if setup.phones else None
-                report: dict[str, Any] = phones.get(str(person.id)) or {}
+                # Every phone this seller finished on, newest first, once each by name
+                # (ph1-46: only one of two was listed).
+                names: list[str] = []
+                for phone in setup.phones:
+                    name = capture_setup.phone_name(phone.model, phone.family) or "Phone"
+                    if name not in names:
+                        names.append(name)
                 log_off = (
                     capture_setup.phone_label(report.get("device_id"), report.get("family"), setup)
                     if capture_setup.call_log_off(report)
@@ -309,13 +326,11 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
                             if newest
                             else None
                         ),
+                        "phones": names,
                         "missing_today": missing.by_person.get(person.id, 0),
                         # The phone with work-call logging off, by name, or None.
                         "call_log_off": log_off,
-                        # Recording on this seller's phone: ok, late or off, and the fix.
-                        "recording": capture_setup.recording_state(
-                            phones.get(str(person.id)), recordings.get(str(person.id)), now
-                        ),
+                        "recording": recording,
                     }
                 )
             # Who still needs to set it up first, then by name.

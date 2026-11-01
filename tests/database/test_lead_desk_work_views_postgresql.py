@@ -36,7 +36,8 @@ async def worklist(here: World) -> None:
     shapes = [
         # name, stage, next action, arrived
         ("Fictional new older", "new", None, now - timedelta(days=3)),
-        ("Fictional new newer", "new", None, now - timedelta(days=1)),
+        # A fresh enquiry: arrived two hours ago, never called (teardown #4).
+        ("Fictional new newer", "new", None, now - timedelta(hours=2)),
         (
             "Fictional retry late",
             "not_connected",
@@ -89,17 +90,18 @@ def test_work_views_and_the_stage_filter(postgres_harness: Any, tmp_path: Path) 
                 return [row["name"] for row in answer.json()["leads"]]
 
             # To Call in its calling order, next lead first (Dipak's handoff p.12, one rule
-            # with Home's next lead): due today and already due, then new leads never called
-            # (oldest first), then the older backlog (phone personas, 1 Nov 2026: Home said
-            # Kiara while Leads dialled Krishna).
+            # with Home's next lead): a fresh enquiry on top (teardown #4, speed to lead), then
+            # due today and already due, then new leads never called (oldest first), then the
+            # older backlog (phone personas, 1 Nov 2026: Home said Kiara while Leads dialled
+            # Krishna).
             to_call = await names(scope="mine", side="inbound", view="to_call")
             now = datetime.now(UTC)
             if (now - timedelta(hours=2)).astimezone(IST).date() == now.astimezone(IST).date():
                 assert to_call == [
+                    "Fictional new newer",
                     "Fictional retry late",
                     "Fictional follow-up due",
                     "Fictional new older",
-                    "Fictional new newer",
                     "Fictional follow-up old",
                 ]
             else:

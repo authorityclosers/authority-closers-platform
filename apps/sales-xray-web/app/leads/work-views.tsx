@@ -444,10 +444,13 @@ export function CallNext({
   side,
   disabled,
   onStart,
+  count = null,
 }: {
   side: Side;
   disabled: boolean;
   onStart: () => void;
+  /** How many the round would take: "Start Cold Calling · 900". */
+  count?: number | null;
 }) {
   return (
     <button
@@ -458,6 +461,9 @@ export function CallNext({
     >
       <PhoneCall size={16} aria-hidden="true" />
       {side === "cold" ? "Start Cold Calling" : "Call Next Lead"}
+      {count ? (
+        <span className={styles.callNextCount}>{` · ${tabCount(count)}`}</span>
+      ) : null}
       <ChevronRight size={16} aria-hidden="true" />
     </button>
   );
