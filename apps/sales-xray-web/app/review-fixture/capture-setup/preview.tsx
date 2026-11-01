@@ -12,10 +12,11 @@
  * workspace's first screen, and `?view=team` Team's Call capture list.
  * `?view=permissions` is the permissions checklist after sign-in (two still to
  * allow, one blocked, contacts waiting for an app update) and `?view=missing`
- * the card for a call with no recording.
+ * the line on Calls and Reports for calls with no recording (`&day=2026-10-29`:
+ * as the bell's reminder opens it, its calls listed).
  */
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import type { CaptureSetup } from "../../capture-setup/capture-setup-client";
 import { CaptureSetupFlow } from "../../capture-setup/capture-setup-flow";
@@ -25,8 +26,7 @@ import type {
   PermissionItem,
   PermissionKey,
 } from "../../capture-setup/permissions-rules";
-import { recordingNotice } from "../../capture-setup/recording-check";
-import { NoticeCenter, notify } from "../../notice-center";
+import { MissingLine } from "../../capture-setup/recording-check";
 import { CaptureSetupPanel } from "../../organisation/capture-setup-panel";
 import onboarding from "../../leads/phone-onboarding.module.css";
 
@@ -290,8 +290,7 @@ export function CaptureSetupPreview() {
   if (params.get("view") === "missing")
     return (
       <main data-capture-setup-fixture="" style={{ minHeight: "100dvh" }}>
-        <MissingCard />
-        <NoticeCenter />
+        <MissingFixture day={params.get("day")} />
       </main>
     );
   if (params.get("view") === "team")
@@ -324,8 +323,35 @@ export function CaptureSetupPreview() {
   );
 }
 
-/** The no-recording corner card, as the app posts it (fictional count). */
-function MissingCard() {
-  useEffect(() => notify(recordingNotice(2, null, () => undefined)), []);
-  return null;
+/** The no-recording line on Calls and Reports (fictional calls). */
+function MissingFixture({ day }: { day: string | null }) {
+  return (
+    <div style={{ padding: 16 }}>
+      <MissingLine
+        day={day}
+        onFix={() => undefined}
+        missing={{
+          calls: 2,
+          tried: 9,
+          latest_at: new Date(NOW - 40 * 60_000).toISOString(),
+          items: [
+            {
+              event_id: "00000000-0000-4000-8000-000000000501",
+              lead_id: "00000000-0000-4000-8000-000000000401",
+              lead_name: "Rohan Fictional",
+              at: new Date(NOW - 40 * 60_000).toISOString(),
+              seconds: 95,
+            },
+            {
+              event_id: "00000000-0000-4000-8000-000000000502",
+              lead_id: "00000000-0000-4000-8000-000000000402",
+              lead_name: "Priya Fictional",
+              at: new Date(NOW - 3 * 3_600_000).toISOString(),
+              seconds: 42,
+            },
+          ],
+        }}
+      />
+    </div>
+  );
 }

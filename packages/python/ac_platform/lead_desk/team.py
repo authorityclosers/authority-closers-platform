@@ -43,6 +43,7 @@ from ac_platform.lead_desk.contracts import (
     UpcomingItem,
 )
 from ac_platform.lead_desk.errors import DeskError
+from ac_platform.lead_desk.journey.engine import not_undone
 from ac_platform.lead_desk.models import (
     Lead,
     LeadDeskSettings,
@@ -132,6 +133,8 @@ async def facts(desk: LeadDesk, person: UUID, since: datetime) -> list[goals.Fac
                 LeadEvent.kind.in_(ACTIVITY_KINDS),
                 LeadEvent.created_at >= since - CALL_PAIR,
                 LeadEvent.created_at <= desk.now,
+                # An answer its seller undid connected nothing (ph1-40).
+                not_undone(),
             )
         )
     ).tuples()

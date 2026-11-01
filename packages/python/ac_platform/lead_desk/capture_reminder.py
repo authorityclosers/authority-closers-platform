@@ -32,14 +32,23 @@ def words(count: int, day: date) -> tuple[str, str]:
     )
 
 
-def as_bell(dedupe_key: str | None, title: str, urgent: bool) -> tuple[str, bool]:
-    """The bell's title and urgency for a stored notification: a capture reminder is never
-    urgent (urgent ones pop up) and always names its own day."""
+def calls_href(day: date) -> str:
+    """Calls, opened at that day's calls without a recording and their fix (ph1-27)."""
+    return f"/analysis/calls?no-recording={day.isoformat()}"
+
+
+def as_bell(
+    dedupe_key: str | None, title: str, urgent: bool, href: str | None = None
+) -> tuple[str, bool, str | None]:
+    """The bell's title, urgency and link for a stored notification: a capture reminder is
+    never urgent (urgent ones pop up), always names its own day, and its See why opens
+    that day's calls without a recording (phone personas ph1-27, 1 Nov 2026: it went to
+    Settings, which looked like it did nothing)."""
     if not dedupe_key or not dedupe_key.startswith(KEY):
-        return title, urgent
+        return title, urgent, href
     try:
         day = date.fromisoformat(dedupe_key.rsplit(":", 1)[-1])
     except ValueError:
-        return title, False
+        return title, False, href
     old = OLD.match(title)
-    return (words(int(old.group(1)), day)[0] if old else title), False
+    return (words(int(old.group(1)), day)[0] if old else title), False, calls_href(day)

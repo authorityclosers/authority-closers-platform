@@ -21,6 +21,8 @@ PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
 NoExecPaths=/tmp
+# Restored binaries stay inert in the bounded restore area too (1 Nov 2026).
+NoExecPaths=/srv/authority-closers/recovery-tmp
 RestrictAddressFamilies=AF_INET AF_UNIX
 ReadOnlyPaths=/etc/authority-closers/secrets/infisical-bootstrap.env /usr/local/sbin
-ReadWritePaths=/var/cache/authority-closers-restic /run/lock
+ReadWritePaths=/var/cache/authority-closers-restic /run/lock /srv/authority-closers/recovery-tmp

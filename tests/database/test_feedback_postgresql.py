@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import base64
 import importlib.util
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -195,6 +196,42 @@ def test_people_answer_and_the_team_sees_trends(
                 assert report.area == "leads"
                 assert report.context["feedback"]["moment"] == "call_outcome"
                 assert report.context["feedback"]["rating"] == "bad"
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_half_an_emoji_in_a_comment_never_fails_it(postgres_harness: Any, tmp_path: Path) -> None:
+    """A comment cut mid-emoji carries a lone surrogate, which PostgreSQL refuses: it answered
+    500 (orchestrator, 1 Nov 2026). It goes; a whole emoji stays."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            ctx = RouteContext(
+                setup.settings.model_copy(update={"operations_tenant_id": setup.state.tenant_id}),
+                setup.require_actor,
+                setup.sessions,
+            )
+            feedback_http.install_feedback_http(setup.app, ctx)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as http:
+                http.cookies.set(setup.settings.session_cookie_name, setup.token)
+                body = _answer(rating=1, comment="Wrong next step \U0001f600\ud83d")
+                # As a browser sends it: JSON.stringify writes a lone surrogate as an escape.
+                sent = await http.post(
+                    "/v1/feedback", content=json.dumps(body).encode(), headers=WRITE
+                )
+                assert sent.status_code == 201, sent.text
+                bug_id = sent.json()["bug_id"]
+            async with setup.sessions() as db:
+                report = await db.get(BugReport, bug_id)
+                assert report is not None
+                assert report.words == "Wrong next step \U0001f600"
+                kept = (await db.execute(select(FeedbackResponse.comment))).scalar_one()
+                assert kept == "Wrong next step \U0001f600"
         finally:
             await setup.engine.dispose()
 

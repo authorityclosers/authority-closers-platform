@@ -6,7 +6,7 @@ import {
   recentErrors,
   recordError,
 } from "./recent-errors";
-import { scrubRoute, scrubText } from "./scrub";
+import { scrubRoute, scrubText, wholeCharacters } from "./scrub";
 import { browserFrom, osFrom } from "./device";
 
 afterEach(() => clearRecentErrors());
@@ -26,6 +26,17 @@ it("drops tokens, keys, contacts and long opaque strings from text", () => {
   );
   expect(scrubText("one two three", 7)).toBe("one two");
   expect(scrubText(42, 5)).toBe("");
+});
+
+it("drops half an emoji and keeps whole ones (the server refused a half with a 500)", () => {
+  const smile = "\u{1F600}";
+  expect(wholeCharacters(`Stuck ${smile} here \uD83D`)).toBe(
+    `Stuck ${smile} here `,
+  );
+  expect(wholeCharacters("\uDE00 alone")).toBe(" alone");
+  // Cutting mid-emoji leaves its first half; the cut text keeps neither half.
+  expect(scrubText(`ab${smile}`, 3)).toBe("ab");
+  expect(scrubText(`ab${smile}`, 4)).toBe(`ab${smile}`);
 });
 
 it("keeps a route's screen and drops secret values and the fragment", () => {

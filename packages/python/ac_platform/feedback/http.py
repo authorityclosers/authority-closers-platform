@@ -23,6 +23,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
+from ac_platform.bug_reports.http import WholeTextRoute
 from ac_platform.bug_reports.scrub import area_for, clean_context, scrub_route
 from ac_platform.bug_reports.store import BugReportStore, NewReport
 from ac_platform.conversation_intelligence.application import (
@@ -42,7 +43,9 @@ from ac_platform.http.routes import RouteContext
 from ac_platform.kernel.errors import DomainError
 
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
-_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+# Control characters, and half an emoji (a lone surrogate, which PostgreSQL refuses; the
+# reporter's 500, orchestrator 1 Nov 2026).
+_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\ud800-\udfff]")
 _SUBJECT = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
 _MOMENT_LABEL = {
     "report_read": "reading a call's Report",
@@ -84,7 +87,8 @@ def install_feedback_http(app: FastAPI, ctx: RouteContext) -> None:
         if request.url.hostname not in hosts or request.query_params:
             raise HTTPException(404, "Not found.", headers=PRIVATE)
 
-    router = APIRouter(prefix="/v1/feedback", tags=["feedback"])
+    # Half an emoji leaves the body before it is checked (WholeTextRoute).
+    router = APIRouter(prefix="/v1/feedback", tags=["feedback"], route_class=WholeTextRoute)
 
     @router.post("", status_code=201)
     async def answer(

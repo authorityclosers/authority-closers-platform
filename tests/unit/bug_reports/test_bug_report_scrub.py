@@ -6,6 +6,7 @@ from ac_platform.bug_reports.scrub import (
     area_for,
     clean_context,
     clean_errors,
+    scrub_block,
     scrub_route,
     scrub_text,
 )
@@ -24,6 +25,15 @@ def test_text_loses_tokens_keys_contacts_and_long_opaque_strings() -> None:
     assert scrub_text("a\n\n  b", 10) == "a b"
     assert scrub_text("one two three", 7) == "one two"
     assert scrub_text(None, 5) == ""
+
+
+def test_half_an_emoji_goes_and_a_whole_one_stays() -> None:
+    # A lone surrogate (text cut mid-emoji) would be refused by PostgreSQL (orchestrator,
+    # 1 Nov 2026: the report answered 500); a whole emoji is one character and stays.
+    assert scrub_text("Stuck \ud83d here \ude00", 50) == "Stuck here"
+    assert scrub_text("Fine \U0001f600", 50) == "Fine \U0001f600"
+    assert scrub_route("/leads?q=\ud83d") == "/leads?q="
+    assert scrub_block("line \udcff one\nline two") == "line  one\nline two"
 
 
 def test_routes_keep_the_screen_and_drop_secret_values_and_fragments() -> None:

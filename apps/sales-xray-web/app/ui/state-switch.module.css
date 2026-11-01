@@ -121,9 +121,10 @@
   outline: none;
 }
 
+/* The focus ring is a shadow token, never an outline colour: as an outline it
+   drew nothing (robot 2c14cb32, 1 Nov 2026: "Taking new leads" had no ring). */
 .switch:focus-visible > span {
-  outline: 2px solid var(--sx-focus-ring);
-  outline-offset: 2px;
+  box-shadow: var(--sx-focus-ring);
 }
 
 .switch:disabled {
@@ -191,8 +192,8 @@
 }
 
 .chip:focus-visible {
-  outline: 2px solid var(--sx-focus-ring);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
 }
 
 /* The sheet: what ON means, the row, the override; or the question. */

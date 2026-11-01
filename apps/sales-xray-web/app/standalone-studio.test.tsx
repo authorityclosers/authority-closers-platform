@@ -60,7 +60,7 @@ vi.mock("./capture-setup/permissions-gate", () => ({
   PermissionsGate: () => null,
 }));
 vi.mock("./capture-setup/recording-check", () => ({
-  RecordingCheck: () => null,
+  RecordingLine: () => null,
 }));
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname,

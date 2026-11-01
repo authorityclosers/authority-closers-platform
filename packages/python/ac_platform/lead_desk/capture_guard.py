@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -112,6 +112,54 @@ def daily_rates(calls: list[CaptureCall], names: dict[UUID, str]) -> list[Captur
     return result
 
 
+async def _placed(desk: LeadDesk, events: list[LeadEvent]) -> list[LeadEvent]:
+    """The calls that were placed (store.dial_placed, one rule with Home and Leads): a
+    Call-button dial its phone's call log never showed, though the phone sent its call history
+    after it, was never placed, so it never waits for a recording (phone personas ph2-31, 1 Nov
+    2026: a dial backed out of read "No recording after 30 minutes" with Fix recording)."""
+    from ac_platform.lead_desk.store import (  # the store imports half the app
+        PHONE_SECONDS,
+        TALKED,
+        CallRow,
+        dial_placed,
+        is_dial,
+    )
+
+    dials = [event for event in events if is_dial(event.data)]
+    synced = await desk._phones_synced() if dials else {}
+
+    def at(event: LeadEvent) -> datetime:
+        made = event.created_at
+        return made.replace(tzinfo=UTC) if made.tzinfo is None else made
+
+    def seen(event: LeadEvent) -> datetime | None:
+        return synced.get(event.actor_person_id) if event.actor_person_id else None
+
+    # Only a dial its phone looked after can be unplaced: the rest need no more reads.
+    looked = [event for event in dials if not dial_placed(event.data, at(event), seen(event))]
+    if not looked:
+        return events
+    timed = await desk._call_timings([event.id for event in looked])
+    talked = await desk._dials_talked(
+        [
+            CallRow(event.id, event.actor_person_id, event.lead_id, at(event), event.data)
+            for event in looked
+            if str(event.id) not in timed
+        ]
+    )
+
+    def beside(event: LeadEvent) -> dict[str, Any]:
+        # As _call_rows reads them: the phone's own seconds, or "We talked", never saved.
+        if str(event.id) in timed:
+            return {**event.data, PHONE_SECONDS: timed[str(event.id)]}
+        return {**event.data, TALKED: True} if event.id in talked else event.data
+
+    unplaced = {
+        event.id for event in looked if not dial_placed(beside(event), at(event), seen(event))
+    }
+    return [event for event in events if event.id not in unplaced]
+
+
 async def read(desk: LeadDesk, *, days: int = 7, event_id: UUID | None = None) -> CaptureGuard:
     """Tenant and role scoped; privacy markers apply to totals as well as rows.
 
@@ -150,6 +198,7 @@ async def read(desk: LeadDesk, *, days: int = 7, event_id: UUID | None = None) -
         and not e.data.get("for_call")
         and e.data.get("recording") is not True
     ]
+    events = await _placed(desk, events)
     attachments = []
     if events:
         attachments = list(

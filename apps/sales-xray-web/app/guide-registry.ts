@@ -35,6 +35,9 @@ const UPLOAD = '[role="group"][aria-label="Add sales call audio files"]';
 const PROGRESS = 'section[aria-label="Analysis progress"]';
 const REPORT = "[data-report-modes]";
 
+// Phone words and the phone flow (phone personas ph2-30, 1 Nov 2026: the
+// guide opened over My Growth, spoke only of uploading, and said "Click" and
+// "drop" on a phone). Six short steps, opened only where a call is added.
 export const FIRST_CALL_GUIDE: GuideDefinition = {
   id: "first-call",
   version: "1",
@@ -44,31 +47,19 @@ export const FIRST_CALL_GUIDE: GuideDefinition = {
     {
       id: "welcome",
       title: "Welcome to Sales X-Ray",
-      body: "Start with one conversation. We’ll show you where to look and how to take your next step.",
+      body: "Each call with a lead can become a report: what they said, what holds them back and your next step.",
       visual: "welcome",
     },
     {
       id: "listen",
-      title: "Bring a real conversation",
-      body: "Choose a recording you have permission to analyse. Sales X-Ray brings the conversation and its transcript into one place.",
+      title: "Calls from Leads come in by themselves",
+      body: "In the Sales X-Ray phone app, tap Call on a lead. Once call recording is set up, the recording comes in after the call. Any other call, you add here.",
       visual: "listen",
     },
     {
-      id: "understand",
-      title: "See the evidence",
-      body: "Explore the report, then listen to the moments behind each observation. Keep the source in view as you review.",
-      visual: "evidence",
-    },
-    {
-      id: "practise",
-      title: "Choose your next step",
-      body: "Use the report to choose one thing to practise in your next conversation. Come back to your saved calls to review again.",
-      visual: "practice",
-    },
-    {
       id: "upload",
-      title: "Add your first call",
-      body: "Click Choose a file or drop your recording here. Follow the existing privacy and language checks to start analysis.",
+      title: "Add a recording",
+      body: "Choose a file and pick the call’s recording, then answer the privacy and language questions to start.",
       visual: "listen",
       target: UPLOAD,
       href: "/analysis/new",
@@ -82,7 +73,7 @@ export const FIRST_CALL_GUIDE: GuideDefinition = {
     {
       id: "progress",
       title: "Follow your analysis",
-      body: "This page shows the current analysis status and any action needed. Your guide will continue when the report appears.",
+      body: "This shows how far it has got and anything you need to do. The guide carries on when the report is ready.",
       visual: "listen",
       target: PROGRESS,
       href: "/calls",
@@ -92,8 +83,8 @@ export const FIRST_CALL_GUIDE: GuideDefinition = {
     },
     {
       id: "report",
-      title: "Your report, one section at a time",
-      body: "Start with the overview. Use the report navigation to explore the conversation at your own pace.",
+      title: "Your report, one part at a time",
+      body: "Start with the summary and the next step. Open any other part when you want more.",
       visual: "evidence",
       target: REPORT,
       href: "/calls",
@@ -102,7 +93,7 @@ export const FIRST_CALL_GUIDE: GuideDefinition = {
     {
       id: "moments",
       title: "Listen before you decide",
-      body: "Open Moments or Transcript from the report navigation. Listen to the source behind an observation, then choose what to practise next.",
+      body: "Open Moments or Transcript and play the part behind a point. Then pick one thing to try on your next call.",
       visual: "practice",
       target: "[data-report-sections]",
       href: "/calls",

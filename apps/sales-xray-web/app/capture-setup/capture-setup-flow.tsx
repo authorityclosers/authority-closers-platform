@@ -87,6 +87,7 @@ import {
   recordingProven,
   savedWhen,
   stepsFor,
+  stepsWith,
   type CaptureStep,
   type PhoneFacts,
 } from "./capture-setup-rules";
@@ -1256,7 +1257,8 @@ export function CaptureSetupFlow({
   switchBack?: { name: string; run: () => void } | null;
   onDeclined: (next: CaptureSetup) => void;
   onClose: () => void;
-  /** Review fixtures: open at this step when it is one of the steps. */
+  /** Review fixtures, and a fix (the no-recording line on Calls and Reports):
+      open at this step; a phone step is added when this phone looks set. */
   startAt?: CaptureStep;
 }) {
   const personal = first.workspace === "personal";
@@ -1292,7 +1294,7 @@ export function CaptureSetupFlow({
       if (!alive) return;
       const facts = phoneFacts(status, capture);
       setPhone({ status, facts });
-      const planned = stepsFor(first, facts);
+      const planned = stepsWith(stepsFor(first, facts), startAt);
       setSteps(planned);
       if (startAt) setIndex(Math.max(0, planned.indexOf(startAt)));
     })();

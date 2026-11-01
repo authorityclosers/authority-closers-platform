@@ -231,13 +231,27 @@ export function analysisMinutesOut(
   );
 }
 
+/**
+ * Whose minutes these are: Personal's, an organisation's for someone who
+ * pays there, or for a member, who can only ask the owner.
+ */
+export type MinutesScope = "personal" | "payer" | "member";
+
 export function remainingAllowanceLabel(
   allowance: Allowance | null,
   advertisedSeconds: number | null,
   unknown: boolean,
+  scope: MinutesScope = "personal",
 ): string | null {
   if (allowance) {
     if (allowance.unlimited) return null;
+    // Never given any minutes is not "used up" (simulation lab, 1 Nov 2026).
+    if (allowance.allowance_seconds <= 0 && allowance.committed_seconds <= 0)
+      return scope === "personal"
+        ? "Call analysis isn't on for your account yet."
+        : scope === "member"
+          ? "Call analysis isn't on for this organisation yet. Ask your owner."
+          : "Call analysis isn't on for this organisation yet.";
     if (allowance.available_seconds > 3600)
       return `Remaining analysis time · ${formatAnalysisTime(allowance.available_seconds)}`;
     const minutes = Math.floor(allowance.available_seconds / 60);
@@ -275,6 +289,14 @@ export function AcquisitionStudio({
   const canHere = useCanHere();
   const purchasesAllowed =
     usePurchasesAllowed() && canHere("billing.view") !== false;
+  const minutesScope: MinutesScope =
+    access?.workspaces?.find(
+      (item) => item.tenant_id === access.context?.tenantId,
+    )?.kind !== "organisation"
+      ? "personal"
+      : canHere("billing.view") === false
+        ? "member"
+        : "payer";
   const resolvedTheme = useTheme()?.resolved ?? "light";
   const accessStatus = access?.status ?? null;
   const accessAuthenticated = access?.authenticated ?? null;
@@ -3024,6 +3046,7 @@ export function AcquisitionStudio({
                           allowance,
                           advertisedTrial,
                           allowanceUnknown,
+                          minutesScope,
                         )}
                       </span>
                     )}
@@ -3148,14 +3171,14 @@ export function AcquisitionStudio({
                         />
                       </svg>
                     </span>
-                    <p className={styles.dropTitle}>
-                      Drag and drop your audio file here
-                    </p>
+                    {/* Words for a phone too: no dragging, no clicking
+                        (phone personas ph2-30, 1 Nov 2026). */}
+                    <p className={styles.dropTitle}>Add your audio file</p>
                     <label
                       className={`${styles.dropSelect} ${!policy ? styles.disabled : ""}`}
                       htmlFor="acquisition-file"
                     >
-                      or click to browse
+                      Choose a file
                     </label>
                     <span className="visually-hidden">Choose audio file</span>
                     <div className={styles.formatFacts}>
@@ -3300,6 +3323,7 @@ export function AcquisitionStudio({
                         allowance,
                         advertisedTrial,
                         allowanceUnknown,
+                        minutesScope,
                       )}
                     </span>
                     {minutesOut && purchasesAllowed ? (
@@ -3632,6 +3656,7 @@ export function AcquisitionStudio({
                         allowance,
                         advertisedTrial,
                         allowanceUnknown,
+                        minutesScope,
                       ) ?? undefined
                     }
                     paused={processingProjection.attention}
@@ -3766,6 +3791,7 @@ export function AcquisitionStudio({
                     allowance,
                     advertisedTrial,
                     allowanceUnknown,
+                    minutesScope,
                   )}
                   moreMinutesHref={
                     minutesOut && purchasesAllowed ? "/plans" : undefined

@@ -56,6 +56,17 @@
   text-decoration: underline;
 }
 
+/* The action as a button (Selling's Set up): it reads as the links beside it,
+   never a grey browser button, with a finger-sized target. */
+button.noteAction {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
 /* The app file, under Google Play's button (24 Oct 2026). */
 .fileLink {
   display: flex;

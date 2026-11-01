@@ -38,7 +38,7 @@ afterEach(async () => {
 const step = () =>
   document.querySelector("[data-guide-step]")?.getAttribute("data-guide-step");
 
-it("keeps Home, Calls and saved reports clear of the first-call tour", () => {
+it("opens the first-call tour only where a call is added", () => {
   for (const path of [
     "/dashboard",
     "/dashboard/",
@@ -46,9 +46,20 @@ it("keeps Home, Calls and saved reports clear of the first-call tour", () => {
     "/analysis/calls/",
     "/analysis/calls/fictional-call",
     "/analysis/sample",
+    // Phone personas ph2-30: it opened over My Growth's table.
+    "/growth",
+    "/performance",
+    "/reports",
+    "/tasks",
   ])
     expect(firstCallGuideStartsHere(path)).toBe(false);
   expect(firstCallGuideStartsHere("/analysis/new")).toBe(true);
+  expect(firstCallGuideStartsHere("/analysis/new/")).toBe(true);
+});
+
+it("speaks phone words: no Click, no drop", () => {
+  for (const step of FIRST_CALL_GUIDE.steps)
+    expect(`${step.title} ${step.body}`).not.toMatch(/\bclick|\bdrop/i);
 });
 const button = (text: string) =>
   [...document.querySelectorAll<HTMLButtonElement>("button")].find(

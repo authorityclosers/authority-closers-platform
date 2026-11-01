@@ -176,6 +176,26 @@ def _is_postgres_deadlock(error: DBAPIError) -> bool:
     return getattr(error.orig, "sqlstate", None) == "40P01"
 
 
+def out_of_minutes(allowance: dict[str, Any], *, organisation: bool) -> str:
+    """Why an upload can't start for want of minutes: what's true, never a price.
+
+    A workspace that was never given minutes hasn't used any (simulation lab,
+    1 Nov 2026: every sandbox seller at 0 s was told the allowance "has been used").
+    """
+
+    if not allowance.get("allowance_seconds"):
+        return (
+            "Call analysis isn't on for this organisation yet. Ask your owner."
+            if organisation
+            else "Call analysis isn't on for your account yet."
+        )
+    return (
+        "This organisation's call minutes are used up. Ask your owner."
+        if organisation
+        else "Your current free call allowance has been used."
+    )
+
+
 def _actor_binding(actor: ActorContext | None) -> tuple[UUID, UUID, UUID | None] | None:
     if actor is None:
         return None
@@ -744,14 +764,19 @@ def install_submission_http(
                 and isinstance(available_seconds, int)
                 and available_seconds <= 0
             ):
+                refusal = out_of_minutes(
+                    allowance,
+                    organisation=owner.actor is not None
+                    and owner.actor.tenant_id not in (None, public),
+                )
                 try:
                     existing = await owner.ownership.require_submission_owner(
                         submission_id, **owner.arguments
                     )
                 except ConversationNotFound:
-                    raise fail(409, "Your current free call allowance has been used.") from None
+                    raise fail(409, refusal) from None
                 if existing.source_sha256 != hashes[0]:
-                    raise fail(409, "Your current free call allowance has been used.")
+                    raise fail(409, refusal)
         try:
             capacity.acquire_nowait()
         except anyio.WouldBlock:

@@ -126,11 +126,21 @@ export function AcquisitionFileStage({
         )}
         <div className={styles.dropCopy}>
           <strong>
-            {dragActive
-              ? "Drop your recordings here"
-              : hasFiles
-                ? "Add another recording"
-                : "Drop your call recording here"}
+            {dragActive ? (
+              "Drop your recordings here"
+            ) : hasFiles ? (
+              "Add another recording"
+            ) : (
+              // A phone has nothing to drop: it says what a tap does (phone
+              // personas ph2-30, 1 Nov 2026). CSS picks the line, so the
+              // first paint already has the right one.
+              <>
+                <span className={styles.forMouse}>
+                  Drop your call recording here
+                </span>
+                <span className={styles.forTouch}>Add your call recording</span>
+              </>
+            )}
           </strong>
           {hasFiles ? null : (
             <span
@@ -146,7 +156,7 @@ export function AcquisitionFileStage({
             disabled={disabled}
             onClick={() => input.current?.click()}
           >
-            {hasFiles ? "or click to browse" : "Choose a file"}
+            {hasFiles ? "Choose another file" : "Choose a file"}
           </button>
         </div>
         <input
