@@ -328,7 +328,10 @@ function NoticeCard({
   useEffect(() => {
     const timeout =
       notice.timeout ?? (notice.tone === "error" ? undefined : 5000);
-    if (!timeout || notice.onDismiss) return;
+    // A line in the page's dock stays until it is used or closed: one that
+    // went by itself lifted the whole page by its height (QA robot a4e9034c,
+    // 1 Nov 2026: a layout shift of 0.1 on every Leads load at 390 px).
+    if (!timeout || notice.onDismiss || docked) return;
     let timer = 0;
     // Never from under the pointer or keyboard focus; it tries again shortly.
     const go = () => {
@@ -340,7 +343,7 @@ function NoticeCard({
     };
     timer = window.setTimeout(go, timeout);
     return () => window.clearTimeout(timer);
-  }, [notice, remove]);
+  }, [notice, remove, docked]);
   useEffect(() => {
     if (folded) return;
     const node = card.current;

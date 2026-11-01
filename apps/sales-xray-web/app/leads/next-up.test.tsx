@@ -259,3 +259,26 @@ it.each([true, false])(
     ).toHaveLength(0);
   },
 );
+
+// QA robot bbc3aca3 (1 Nov 2026): "is your lead now" opened a lead that had
+// moved on, and the sheet offered a Try again that could never work.
+it("says a lead that moved off your desk has, with Close and no Try again", async () => {
+  const onClose = vi.fn();
+  await act(async () =>
+    root.render(
+      <LeadSheet
+        leadId="33333333-3333-4333-8333-333333333333"
+        me={null}
+        onClose={onClose}
+        onChanged={() => undefined}
+      />,
+    ),
+  );
+  await flush();
+  expect(document.body.textContent).toContain(
+    "This lead isn't on your desk any more",
+  );
+  expect(tile("Try again")).toBeUndefined();
+  await act(async () => tile("Close").click());
+  expect(onClose).toHaveBeenCalledTimes(1);
+});

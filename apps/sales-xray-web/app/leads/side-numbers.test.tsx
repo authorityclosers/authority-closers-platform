@@ -80,6 +80,19 @@ it("draws without them after the wait, or at once when the read fails", async ()
   expect(seen()).toEqual({ numbers: null, settled: true });
 });
 
+it("counts the wait from when the numbers can be asked for, not from the page's start", async () => {
+  // QA robot 844, 1 Nov 2026: on a slow network sign-in took longer than the
+  // wait, the page drew without the selector, and its arrival moved the head.
+  show("priya:cedar:mine", false);
+  act(() => vi.advanceTimersByTime(SIDES_WAIT_MS * 2));
+  show("priya:cedar:mine", true);
+  expect(seen()?.settled).toBe(false);
+  act(() => vi.advanceTimersByTime(2000));
+  expect(seen()?.settled).toBe(false);
+  await act(async () => reads.answers[0](BOTH));
+  expect(seen()).toEqual({ numbers: BOTH, settled: true });
+});
+
 it("keeps the last answer, so coming back to Leads draws at once", async () => {
   show();
   await act(async () => reads.answers[0](BOTH));

@@ -356,13 +356,19 @@
   position: sticky;
   top: calc(var(--work-head-h, 120px) - 24px + 8px);
   /* Down to 16 px above the window's bottom, from wherever it sits (WorkSplit
-     measures its top as the page moves). */
+     measures its top as the page moves); while a corner card shows, down to
+     8 px above it, so the card never sits over the lead (QA robot, 1 Nov
+     2026: Copy link and Edit under "is your lead now" at 1920). */
   max-height: calc(
-    100dvh - var(--pane-top, calc(var(--work-head-h, 120px) - 16px)) - 16px
+    100dvh - var(--pane-top, calc(var(--work-head-h, 120px) - 16px)) -
+      max(16px, calc(var(--sx-corner-h, 0px) + 8px))
   );
   min-width: 0;
   overflow: auto;
   overscroll-behavior: contain;
+  /* A control scrolled to or focused stops clear of the Call dock pinned at
+     the pane's bottom. */
+  scroll-padding-bottom: 96px;
 }
 
 @media (prefers-reduced-motion: reduce) {

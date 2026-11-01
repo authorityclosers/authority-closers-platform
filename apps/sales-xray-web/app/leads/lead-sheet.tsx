@@ -2977,6 +2977,18 @@ function ActionBox({
 
 /* ---------- Lead card ---------- */
 
+/** The newest call with an Xray Report, for "View latest report" (item 93).
+ *  The story comes newest first: the first one found (QA robot, 1 Nov 2026:
+ *  it opened the oldest report). */
+export function latestReportOf(
+  events: readonly { kind: string; submission_id?: string | null }[],
+): string | null {
+  return (
+    events.find((event) => event.kind === "call" && event.submission_id)
+      ?.submission_id ?? null
+  );
+}
+
 export function LeadCard({
   detail,
   me,
@@ -3023,11 +3035,7 @@ export function LeadCard({
   const [reminding, setReminding] = useState(false);
   // Add task with this customer chosen, and Ask Dipak about them (items 84, 97).
   const [tasking, setTasking] = useState(false);
-  const latestReport =
-    [...(detail.events ?? [])]
-      .reverse()
-      .find((event) => event.kind === "call" && event.submission_id)
-      ?.submission_id ?? null;
+  const latestReport = latestReportOf(detail.events ?? []);
   const [asking, setAsking] = useState(false);
   const [messaging, setMessaging] = useState<{
     round: number;
@@ -4016,6 +4024,8 @@ export function LeadSheet({
   const [failed, setFailed] = useState<{
     leadId: string;
     message: string;
+    /** Not on this person's desk (given to someone else, or deleted): no retry. */
+    gone: boolean;
   } | null>(null);
   // "Try again" on a lead that didn't open reads it once more.
   const [attempt, setAttempt] = useState(0);
@@ -4038,7 +4048,7 @@ export function LeadSheet({
     phoneCall && phoneCall.startedMs !== answered ? phoneCall : null;
   // Only the open lead's own detail (or error) shows; anything else is stale.
   const detail = loaded?.lead.lead_id === leadId ? loaded : null;
-  const error = failed?.leadId === leadId ? failed.message : null;
+  const failure = failed?.leadId === leadId ? failed : null;
   // "How did it go?" only after a real call (owner, 23 Oct 2026).
   const after = detail
     ? afterCall({
@@ -4087,6 +4097,7 @@ export function LeadSheet({
             reason instanceof LeadsError
               ? reason.message
               : "This lead didn't load.",
+          gone: reason instanceof LeadsError && reason.status === 404,
         });
       });
     return () => controller.abort();
@@ -4136,11 +4147,20 @@ export function LeadSheet({
         label={detail?.lead.name ?? "Lead"}
         onClose={onClose}
       >
-        {error ? (
+        {failure?.gone ? (
+          // A notice or an old link to a lead that moved on: nothing to try
+          // again (QA robot bbc3aca3, 1 Nov 2026).
+          <Empty
+            icon={ArrowRightLeft}
+            title="This lead isn't on your desk any more"
+            text="It was given to someone else, or deleted."
+            action={{ label: "Close", onClick: onClose }}
+          />
+        ) : failure ? (
           <Empty
             icon={PhoneOff}
             title="This lead didn't open"
-            text={error}
+            text={failure.message}
             action={{
               label: "Try again",
               onClick: () => {

@@ -30,6 +30,7 @@ from ac_platform.identity import person_photos
 from ac_platform.identity.models import Person
 from ac_platform.lead_desk import (
     allocation,
+    bell,
     choices,
     deletion,
     duplicate_queue,
@@ -4082,6 +4083,9 @@ class LeadDesk:
         # the lead, which must be whole by then.
         if previous != person_id:
             await task_book.follow_owner(self, lead, person_id)
+            # The one who had it is told no more: their "is your lead now" goes quiet.
+            if previous is not None:
+                await bell.retire(self.db, lead.tenant_id, [lead.id], self.now, person_id=previous)
         # The bell's "<name> is your lead now" (owner, 27 Oct 2026; migration 0142): for a
         # seller someone else gave it to (the lead rules, a manager), never for their own pick
         # (an add for oneself passes no actor, so the person asking counts too).
@@ -4113,11 +4117,11 @@ class LeadDesk:
                 id=uuid4(),
                 person_id=person_id,
                 tenant_id=lead.tenant_id,
-                kind="lead_assigned",
+                kind=bell.KIND,
                 dedupe_key=f"lead-assigned:{event.id}",
                 title=f"{name} is your lead now"[:200],
                 body=" ".join(part for part in why if part)[:1000],
-                href=f"/leads?lead={lead.id}",
+                href=bell.link(lead.id),
                 urgent=True,
                 created_at=self.now,
             )
@@ -5034,6 +5038,7 @@ class LeadDesk:
                 "removed": removal.removed,
                 "emptied": removal.emptied,
                 "kept": removal.kept,
+                "retired": removal.retired,
             },
             reason="Deleted in Leads after a confirm",
             now=self.now,
