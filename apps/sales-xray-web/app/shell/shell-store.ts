@@ -126,3 +126,11 @@ export const OPEN_ADD_EVENT = "sales-xray:open-add";
 
 /** Pages dispatch this to open "Create an organisation" (where it is offered). */
 export const CREATE_ORGANISATION_EVENT = "sales-xray:create-organisation";
+
+/** The side Leads shows now (Inbound or Cold), for Add lead's default wherever it
+ *  opens from (phone QA, 1 Nov 2026, ph2-21: from the Cold list it said Inbound). */
+let viewedSide: "inbound" | "cold" = "inbound";
+export const setViewedLeadsSide = (side: "inbound" | "cold") => {
+  viewedSide = side;
+};
+export const viewedLeadsSide = () => viewedSide;

@@ -1811,9 +1811,10 @@ export const SAMPLE_CSV = [
   "Ravi Kumar,+91 91234 56780,,Mumbai,Home loan",
 ].join("\n");
 
-/** A phone number as people read it: "+91 98765 43210" for Indian mobiles. */
+/** A phone number as people read it: "+91 98765 43210" for any Indian number
+ *  of ten digits (ph2-22: "+91 00000 19999", never a run of digits). */
 export function displayPhone(phone: string): string {
-  const india = /^\+91([6-9]\d{4})(\d{5})$/.exec(phone);
+  const india = /^\+91(\d{5})(\d{5})$/.exec(phone);
   return india ? `+91 ${india[1]} ${india[2]}` : phone;
 }
 

@@ -349,6 +349,48 @@ function breakable(label: string): ReactNode {
   ));
 }
 
+/** A draft kept on the phone per lead (ph2-19); storage may be missing. */
+const DRAFTS = "sx-draft:";
+function readDraft(key: string): string {
+  try {
+    return localStorage.getItem(DRAFTS + key) ?? "";
+  } catch {
+    return "";
+  }
+}
+function keepDraft(key: string, text: string) {
+  try {
+    if (text.trim()) localStorage.setItem(DRAFTS + key, text);
+    else localStorage.removeItem(DRAFTS + key);
+  } catch {
+    // Private mode or full storage: the draft lives in the page only.
+  }
+}
+
+/** On a touch screen, true while a field is being typed into: the call bar
+ *  steps aside for the keyboard (ph2-20, 1 Nov 2026). */
+function useTyping(): boolean {
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    if (!window.matchMedia?.("(pointer: coarse)").matches) return;
+    const editable = (target: EventTarget | null) =>
+      target instanceof HTMLTextAreaElement ||
+      (target instanceof HTMLInputElement &&
+        !["checkbox", "radio", "button", "submit"].includes(target.type)) ||
+      (target instanceof HTMLElement && target.isContentEditable);
+    const onIn = (event: FocusEvent) => setTyping(editable(event.target));
+    const onOut = (event: FocusEvent) =>
+      setTyping(editable(event.relatedTarget));
+    document.addEventListener("focusin", onIn);
+    document.addEventListener("focusout", onOut);
+    return () => {
+      document.removeEventListener("focusin", onIn);
+      document.removeEventListener("focusout", onOut);
+    };
+  }, []);
+  return typing;
+}
+
 export function CallOutcome({
   detail,
   submitLabel,
@@ -425,7 +467,15 @@ export function CallOutcome({
   const [custom, setCustom] = useState(() =>
     localInputValue(nextCallTime("morning")),
   );
-  const [note, setNote] = useState("");
+  // The after-call note, kept on the phone until saved (ph2-19).
+  const draftKey = `after-call:${detail.lead.lead_id}`;
+  const [note, setNoteState] = useState(() => readDraft(draftKey));
+  const setNote = (next: string | ((current: string) => string)) =>
+    setNoteState((current) => {
+      const text = typeof next === "function" ? next(current) : next;
+      keepDraft(draftKey, text);
+      return text;
+    });
   const [deal, setDeal] = useState("");
   // ph2-16 (1 Nov 2026): plain answers, each on the organisation's own stage,
   // when What happens next lists its stages (the desk's four say them already).
@@ -631,6 +681,7 @@ export function CallOutcome({
       });
       buzz("done");
       flow.done({ step: "save" });
+      keepDraft(draftKey, "");
       // Says where the lead went and when the next call is (persona QA, 31 Oct
       // 2026: "All changes saved" didn't say where the lead went).
       const moved =
@@ -2591,7 +2642,13 @@ export function NoteBox({
   leadId: string;
   onSaved: (next: LeadDetail) => void;
 }) {
-  const [note, setNote] = useState("");
+  // A draft survives the app being closed (ph2-19, 1 Nov 2026: a 57-word note
+  // was lost): kept on the phone until it is saved or cleared.
+  const [note, setNoteState] = useState(() => readDraft(`note:${leadId}`));
+  const setNote = (text: string) => {
+    setNoteState(text);
+    keepDraft(`note:${leadId}`, text);
+  };
   const [saving, setSaving] = useState(false);
   // Counts the notes saved here, so each "Saved" plays afresh.
   const [saved, setSaved] = useState(0);
@@ -3871,6 +3928,7 @@ export function LeadSheet({
   inline?: boolean;
 }) {
   const [primarySlot, setPrimarySlot] = useState<HTMLDivElement | null>(null);
+  const typing = useTyping();
   const [loaded, setLoaded] = useState<LeadDetail | null>(null);
   const [failed, setFailed] = useState<{
     leadId: string;
@@ -4012,7 +4070,7 @@ export function LeadSheet({
           <>
             <LeadCard
               primarySlot={primarySlot}
-              hidePrimary={questionOpen}
+              hidePrimary={questionOpen || typing}
               onSkip={
                 queue && onNext && leadId ? () => onNext(leadId) : undefined
               }

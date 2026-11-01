@@ -229,3 +229,22 @@ it("keeps an idle recording card in the Calls tab, and one to act on now on top"
   expect(now).not.toBeNull();
   expect(now?.closest('[role="tabpanel"]')).toBeNull();
 });
+
+// ph2-19 (phone QA, 1 Nov 2026): a note draft survives the app being closed.
+it("keeps a note draft on the phone until it is saved", async () => {
+  const { NoteBox } = await import("./lead-sheet");
+  localStorage.setItem("sx-draft:note:lead-1", "wants EMI options");
+  const box = document.createElement("div");
+  document.body.append(box);
+  const here = createRoot(box);
+  await act(async () =>
+    here.render(<NoteBox leadId="lead-1" onSaved={() => undefined} />),
+  );
+  expect(
+    box.querySelector<HTMLTextAreaElement>('textarea[aria-label="Add a note"]')
+      ?.value,
+  ).toBe("wants EMI options");
+  await act(async () => here.unmount());
+  box.remove();
+  localStorage.removeItem("sx-draft:note:lead-1");
+});

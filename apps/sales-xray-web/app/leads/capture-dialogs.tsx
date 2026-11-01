@@ -9,6 +9,7 @@
  * The page gives each opening a new key, so every dialog starts empty.
  */
 
+import { viewedLeadsSide } from "../shell/shell-store";
 import {
   ClipboardPaste,
   Contact,
@@ -218,8 +219,11 @@ export function AddLeadDialog({
     initial ? { ...EMPTY, ...initial } : EMPTY,
   );
   const [source, setSource] = useState<"manual" | "referral">("manual");
-  // Inbound by default: a lead typed in is usually a real enquiry (section 5).
-  const [side, setSide] = useState<"live" | "cold">("live");
+  // Inbound by default: a lead typed in is usually a real enquiry (section 5);
+  // Cold when Leads shows the Cold list (ph2-21, 1 Nov 2026).
+  const [side, setSide] = useState<"live" | "cold">(() =>
+    viewedLeadsSide() === "cold" ? "cold" : "live",
+  );
   const [assign, setAssign] = useState<"rules" | "me">(
     canManage ? "rules" : "me",
   );

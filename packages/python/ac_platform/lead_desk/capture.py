@@ -271,7 +271,13 @@ def normalise_phone(raw: object, *, default_country: str = "91") -> str | None:
         return None
     plus = text.lstrip().startswith("+")
     digits = re.sub(r"\D", "", text)
-    if digits.startswith("00"):
+    if set(digits) == {"0"}:
+        return None
+    if not plus and len(digits) == 10:
+        # A national number, whatever its first digit (phone QA, 1 Nov 2026, ph2-22:
+        # 0000019999 read "+00019999"): the default country's code.
+        digits, plus = default_country + digits, True
+    elif digits.startswith("00"):
         digits, plus = digits[2:], True
     if not plus:
         if len(digits) == 11 and digits.startswith("0"):
