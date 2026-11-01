@@ -53,6 +53,10 @@ export type SellerEffort = {
   tasks_late: number;
   /** Today's connected lead calls with no recording yet. */
   missing_recordings: number;
+  /** In the period: calls to leads past New, as Home counts them, and what their
+   *  Won leads were worth in rupees (teardown #18); absent from an older server. */
+  follow_ups_done?: number;
+  won_amount?: number;
 };
 
 export type Effort = {
@@ -69,6 +73,14 @@ export type Effort = {
 
 export type EffortDays = 1 | 7 | 30;
 
-export function readEffort(days: EffortDays, signal?: AbortSignal) {
-  return deskRequest<Effort>(`/performance/sellers?days=${days}`, { signal });
+/** The engine for today, 7 or 30 days, or with `month` this month so far. */
+export function readEffort(
+  days: EffortDays,
+  signal?: AbortSignal,
+  month = false,
+) {
+  return deskRequest<Effort>(
+    `/performance/sellers?days=${days}${month ? "&month=true" : ""}`,
+    { signal },
+  );
 }

@@ -64,8 +64,10 @@ def test_inbound_and_cold_are_measured_apart(postgres_harness: Any, tmp_path: Pa
             assert (hot["reached"], hot["interested"], hot["worked_interested"]) == (1, 1, 1)
             assert hot["first_call_minutes"] is not None
             assert (cool["attempted"], cool["connected"], cool["leads_attempted"]) == (1, 0, 1)
-            # One Cold lead was never called; coverage's whole is both Cold leads.
-            assert (cool["backlog"], cool["eligible"]) == (1, 2)
+            # Both Cold leads are still in the first stage, as Leads counts Unworked (a call
+            # nobody answered and no answer after it leaves a lead there; ph1-31, 1 Nov 2026);
+            # coverage's whole is both Cold leads.
+            assert (cool["backlog"], cool["eligible"]) == (2, 2)
             # First-call speed is Inbound's only: a list's import time says nothing.
             assert cool["first_call_minutes"] is None
             assert mine["inbound"] == hot and mine["cold"] == cool

@@ -851,7 +851,7 @@ export type TaskKind =
   | "meeting"
   | "other";
 export type TaskBucket = "overdue" | "today" | "upcoming";
-export type TaskSnoozeChoice = "15m" | "1h" | "evening" | "tomorrow";
+export type TaskSnoozeChoice = "15m" | "1h" | "evening" | "tomorrow" | "week";
 
 export type TaskView = {
   task_id: string;

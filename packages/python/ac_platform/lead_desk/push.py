@@ -26,6 +26,7 @@ Infisical, never in git.
 Nudges (team engine) go in the same pass, under the same lock, as their own urgent push
 with no lead in it (``nudge_push``).
 So do the day's 10:00 digest and the two-hourly sweep, counts only (``digest_push``).
+So do revenue milestones, half and all of the month's target (``revenue_push``).
 So do owners' and admins' alerts and their 7 PM summary, counts only (``owner_alerts``).
 
 A second run of the same loop sends gold review alerts to the same phones (``review_push``).
@@ -54,7 +55,15 @@ from fastapi import FastAPI
 from sqlalchemy import and_, delete, exists, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ac_platform.lead_desk import digest_push, hours, nudge_push, reassign, sheet_sync, task_push
+from ac_platform.lead_desk import (
+    digest_push,
+    hours,
+    nudge_push,
+    reassign,
+    revenue_push,
+    sheet_sync,
+    task_push,
+)
 from ac_platform.lead_desk.connectors import google_ads_api, google_files
 from ac_platform.lead_desk.contracts import PushConfig
 from ac_platform.lead_desk.meetings import REMIND_BEFORE
@@ -372,7 +381,11 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
 
 async def send(
     alerts: Sequence[
-        Alert | nudge_push.NudgeAlert | digest_push.DigestAlert | owner_alerts.OwnerAlert
+        Alert
+        | nudge_push.NudgeAlert
+        | digest_push.DigestAlert
+        | revenue_push.RevenueAlert
+        | owner_alerts.OwnerAlert
     ],
     fcm: Fcm,
     client: httpx.AsyncClient,
@@ -407,11 +420,16 @@ async def tick(
         from ac_platform.lead_desk import owner_alerts
 
         alerts: list[
-            Alert | nudge_push.NudgeAlert | digest_push.DigestAlert | owner_alerts.OwnerAlert
+            Alert
+            | nudge_push.NudgeAlert
+            | digest_push.DigestAlert
+            | revenue_push.RevenueAlert
+            | owner_alerts.OwnerAlert
         ] = [
             *await collect(database, now),
             *await nudge_push.collect(database, now),
             *await digest_push.collect(database, now),
+            *await revenue_push.collect(database, now),
             *await owner_alerts.collect(database, now),
         ]
     if not alerts:

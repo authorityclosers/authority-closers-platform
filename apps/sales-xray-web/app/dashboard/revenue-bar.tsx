@@ -31,15 +31,53 @@ export function toneOf(won: number, target: number, monthGone: number): Tone {
   return won / target + 0.05 < monthGone ? "behind" : "on";
 }
 
-/** The line under the bar: what it takes to get there. */
-export function takesLine(revenue: Revenue): string | null {
-  if (revenue.target !== null && revenue.won >= revenue.target)
-    return "Target reached";
-  const needs = revenue.needs;
-  if (!needs) return null;
-  if (needs.working_days_left === 0) return "No working days left this month";
-  const calls = needs.calls_per_day;
-  return `About ${calls} call${calls === 1 ? "" : "s"} a day to get there`;
+/** Days left in the month, today included (India time); none once it is
+ *  past, all of it before it starts. */
+export function daysLeft(month: string, now: Date = new Date()): number {
+  const [year, number] = month.split("-").map(Number);
+  const today = new Date(
+    now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
+  );
+  const length = new Date(year, number, 0).getDate();
+  const here = today.getFullYear() * 12 + today.getMonth();
+  const there = year * 12 + number - 1;
+  if (here > there) return 0;
+  if (here < there) return length;
+  return length - today.getDate() + 1;
+}
+
+/** The bar's line (competitor teardown #8, 1 Nov 2026): "₹3.2 L to go · 18
+ *  days", the working days left when the team's hours say which. */
+export function goLine(revenue: Revenue): string | null {
+  if (revenue.target === null) return null;
+  if (revenue.won >= revenue.target) return "Target reached";
+  const days = revenue.needs?.working_days_left ?? daysLeft(revenue.month);
+  return `${inr(revenue.target - revenue.won)} to go · ${days} day${days === 1 ? "" : "s"}`;
+}
+
+/** On a Monday (India time), the week's pace (competitor teardown #27, 1 Nov
+ *  2026): "Week 2: ₹1.1 L of ₹1.25 L pace", what was won against where the
+ *  target says the month should be by now. None on other days, or once the
+ *  target is reached. */
+export function paceLine(
+  revenue: Revenue,
+  now: Date = new Date(),
+): string | null {
+  if (revenue.target === null || revenue.won >= revenue.target) return null;
+  const local = new Date(
+    now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
+  );
+  if (local.getDay() !== 1) return null;
+  const week = Math.ceil(local.getDate() / 7);
+  const pace = Math.round(revenue.target * revenue.month_gone);
+  return `Week ${week}: ${inr(revenue.won)} of ${inr(pace)} pace`;
+}
+
+/** What it takes, at the team's own rates: "≈ 6 wins → 20 meetings → 70
+ *  interested → 420 calls · 23 a day". */
+export function chainLine(needs: NonNullable<Revenue["needs"]>): string {
+  const wins = `${needs.wins} win${needs.wins === 1 ? "" : "s"}`;
+  return `≈ ${wins} → ${needs.meetings} meetings → ${needs.interested} interested → ${needs.calls} calls · ${needs.calls_per_day} a day`;
 }
 
 function Track({ share, monthGone }: { share: number; monthGone: number }) {
@@ -133,44 +171,41 @@ export function RevenueBar({ scope }: { scope: "mine" | "team" }) {
   const target = revenue.target;
   const share = revenue.won / target;
   const tone = toneOf(revenue.won, target, revenue.month_gone);
-  const takes = takesLine(revenue);
+  const needs = revenue.won < target ? revenue.needs : null;
+  const pace = paceLine(revenue);
+  // A tap shows what it takes, and for the team each seller.
+  const opens = !!needs || scope === "team";
   const body = (
     <>
       <span className={styles.line}>
         <span className={styles.amounts}>
-          <strong>{inr(revenue.won)}</strong>
-          <span>
-            {" "}
-            of {inr(target)} · {monthName(revenue.month)}
-          </span>
+          <strong>{goLine(revenue)}</strong>
         </span>
         <span className={styles.percent}>
           {Math.min(999, Math.round(share * 100))}%
         </span>
       </span>
       <Track share={share} monthGone={revenue.month_gone} />
-      {takes || revenue.amount_not_set || scope === "team" ? (
-        <span className={styles.takes}>
-          {takes ? <span>{takes}</span> : null}
-          {takes && revenue.needs?.estimate && revenue.won < target ? (
-            <span className={styles.estimate}>estimate</span>
-          ) : null}
-          {revenue.amount_not_set ? (
-            <span className={styles.unset}>
-              {revenue.amount_not_set} won without an amount
-            </span>
-          ) : null}
-          {scope === "team" ? (
-            <span className={styles.more}>
-              Each seller
-              <ChevronRight size={14} aria-hidden="true" />
-            </span>
-          ) : null}
+      {pace ? <span className={styles.pace}>{pace}</span> : null}
+      <span className={styles.takes}>
+        <span>
+          {`${inr(revenue.won)} of ${inr(target)} · ${monthName(revenue.month)}`}
         </span>
-      ) : null}
+        {revenue.amount_not_set ? (
+          <span className={styles.unset}>
+            {revenue.amount_not_set} won without an amount
+          </span>
+        ) : null}
+        {opens ? (
+          <span className={styles.more}>
+            What it takes
+            <ChevronRight size={14} aria-hidden="true" />
+          </span>
+        ) : null}
+      </span>
     </>
   );
-  if (scope === "mine")
+  if (!opens)
     return (
       <section
         className={styles.bar}
@@ -187,7 +222,7 @@ export function RevenueBar({ scope }: { scope: "mine" | "team" }) {
         className={styles.bar}
         data-tone={tone}
         aria-haspopup="dialog"
-        aria-label={`This month's revenue: ${inr(revenue.won)} of ${inr(target)}. Each seller`}
+        aria-label={`This month's revenue: ${goLine(revenue)}. What it takes`}
         onClick={() => setOpen(true)}
       >
         {body}
@@ -197,15 +232,25 @@ export function RevenueBar({ scope }: { scope: "mine" | "team" }) {
         onClose={() => setOpen(false)}
         title={`${monthName(revenue.month)} revenue`}
       >
-        <ul className={styles.sellers}>
-          {revenue.sellers.map((seller) => (
-            <SellerLine
-              key={seller.person_id}
-              seller={seller}
-              monthGone={revenue.month_gone}
-            />
-          ))}
-        </ul>
+        {needs ? (
+          <div className={styles.takesBox}>
+            <p className={styles.takesWhy}>
+              {needs.estimate ? "At typical rates" : "At your 90-day rates"}
+            </p>
+            <p className={styles.takesChain}>{chainLine(needs)}</p>
+          </div>
+        ) : null}
+        {scope === "team" ? (
+          <ul className={styles.sellers}>
+            {revenue.sellers.map((seller) => (
+              <SellerLine
+                key={seller.person_id}
+                seller={seller}
+                monthGone={revenue.month_gone}
+              />
+            ))}
+          </ul>
+        ) : null}
       </Sheet>
     </>
   );

@@ -267,21 +267,24 @@ def test_a_sellers_day_on_the_desk(postgres_harness: Any, tmp_path: Path) -> Non
                 assert report.status_code == 200, report.text
                 week = report.json()
                 assert week["days"] == 7
-                assert week["current"]["calls"] == 2 and week["current"]["connected"] == 1
-                assert week["current"]["leads_called"] == 1
+                # Outcomes logged without a call are not calls here either, as on Home above
+                # (hardcore phone QA ph1-30, 1 Nov 2026; calls themselves are counted in
+                # test_lead_desk_home_numbers_postgresql).
+                assert week["current"]["calls"] == 0 and week["current"]["connected"] == 0
+                assert week["current"]["leads_called"] == 0
                 assert (week["current"]["interested"], week["current"]["won"]) == (1, 0)
                 assert week["current"]["new_leads"] == 1
                 assert week["previous"]["calls"] == 0 and week["previous"]["new_leads"] == 0
                 top = week["sellers"][0]
                 assert top["person_id"] == str(seller.person_id)
-                assert (top["calls"], top["interested"]) == (2, 1)
+                assert (top["calls"], top["interested"]) == (0, 1)
                 assert week["pipeline"] == {"interested": 1}
                 # Each India-time day, oldest first: today holds this test's work.
                 daily = week["daily"]
                 assert [day["day"] for day in daily][-1] == week["end"]
                 assert len(daily) == 7 and daily[0]["day"] == week["start"]
                 today = daily[-1]
-                assert (today["calls"], today["connected"], today["new_leads"]) == (2, 1, 1)
+                assert (today["calls"], today["connected"], today["new_leads"]) == (0, 0, 1)
                 assert (today["interested"], today["won"]) == (1, 0)
                 assert sum(day["calls"] + day["new_leads"] for day in daily[:-1]) == 0
                 odd = await client.get(f"{BASE}/reports/performance", params={"days": 3})

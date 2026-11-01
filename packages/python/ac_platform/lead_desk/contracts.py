@@ -204,7 +204,8 @@ class SideEffort(Model):
     # Of the leads called, those moved to Interested or Won: whether the calling makes
     # real chances (Dipak: "Cold Leads Worked -> Interested").
     worked_interested: int = 0
-    # Open leads never called: untouched enquiries (Inbound), unworked imports (Cold).
+    # Open leads still in the first stage, as Leads counts New leads and Unworked:
+    # untouched enquiries (Inbound), unworked imports (Cold).
     backlog: int = 0
     # Leads open now or called in the period: contact coverage is leads_attempted over this.
     eligible: int = 0
@@ -234,6 +235,10 @@ class SellerEffort(Model):
     tasks_late: int = 0
     # Today's connected lead calls with no recording yet.
     missing_recordings: int = 0
+    # In the period: calls out to a lead past New, as Home counts them, and what their Won
+    # leads were worth in whole rupees, as revenue credits them (teardown #18).
+    follow_ups_done: int = 0
+    won_amount: int = 0
 
 
 class Effort(Model):
@@ -651,7 +656,7 @@ TaskKind = Literal["call_back", "whatsapp", "email", "send_file", "meeting", "ot
 TaskSource = Literal["seller", "after_call", "note", "message", "commitment", "assistant"]
 # How long a change an AI app made can be undone (owner order, 25 Oct 2026).
 APP_CHANGE_UNDO_DAYS = 7
-TaskSnoozeChoice = Literal["15m", "1h", "evening", "tomorrow"]
+TaskSnoozeChoice = Literal["15m", "1h", "evening", "tomorrow", "week"]
 TaskBucket = Literal["overdue", "today", "upcoming"]
 
 

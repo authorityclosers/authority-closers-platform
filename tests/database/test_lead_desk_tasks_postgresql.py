@@ -302,6 +302,24 @@ def test_tasks_are_the_non_calling_work(postgres_harness: Any, tmp_path: Path) -
     run(exercise())
 
 
+def test_a_lead_whose_next_step_is_a_whatsapp_says_so(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Hardcore phone QA ph2-24 (1 Nov 2026): a WhatsApp task read "Call booked" on its lead.
+    A lead whose next step is a task other than a call says that task's kind."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            lead_id = await here.add("Fictional Task Eight", "98760 60008")
+            await task(here, lead_id, kind="whatsapp", starts_at=later(hours=2))
+            listed = await here.client.get(f"{BASE}/leads", params={"scope": "mine"})
+            assert listed.status_code == 200, listed.text
+            row = next(item for item in listed.json()["leads"] if item["lead_id"] == lead_id)
+            assert row["why"] == "WhatsApp booked"
+
+    run(exercise())
+
+
 def test_a_task_of_your_own_needs_no_lead_and_is_on_its_creators_list(
     postgres_harness: Any, tmp_path: Path
 ) -> None:

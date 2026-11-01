@@ -22,6 +22,7 @@ import Link from "next/link";
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
@@ -32,11 +33,18 @@ import { AddTaskSheet } from "../leads/add-task-sheet";
 import { handOverLead } from "../leads/lead-handoff";
 import {
   deskRequest,
+  nextCallTime,
   readTasks,
+  setFollowUp,
+  snoozeTask,
   taskAction,
+  type TaskSnoozeChoice,
   type ListedTask,
 } from "../leads/leads-client";
+import { notify } from "../notice-center";
 import { SideSelector, type Side } from "../ui/side-selector";
+import { retryHome } from "./home-load";
+import { LaterSheet, SwipeRow, type Later } from "./home-swipe";
 import { breakLength } from "./home-today";
 import {
   Count,
@@ -235,15 +243,7 @@ export function SideBlock({
   const waiting = side === "cold" ? (inbound?.counts.new ?? 0) : 0;
   return (
     <>
-      <SideSelector
-        value={side}
-        onChange={onSide}
-        notes={{
-          inbound:
-            "Fresh enquiries from ads, your website and other inbound sources",
-          cold: "Your assigned cold prospecting list",
-        }}
-      />
+      <SideSelector value={side} onChange={onSide} />
       {waiting > 0 && own ? (
         <Link
           className={styles.alert}
@@ -540,8 +540,14 @@ export function TodayTasks({
   onAdded,
   title = "Today's tasks",
   overdue = null,
+  side = "inbound",
+  onMoved,
 }: {
   tasks: ListedTask[] | null;
+  /** The side whose next call an empty block offers. */
+  side?: Side;
+  /** A task moved to another time: read the list again. */
+  onMoved?: () => void;
   /** Tasks past their time, one tap from Tasks' Overdue. */
   overdue?: number | null;
   failed: boolean;
@@ -552,6 +558,27 @@ export function TodayTasks({
   title?: string;
 }) {
   const [adding, setAdding] = useState(false);
+  const [later, setLater] = useState<ListedTask | null>(null);
+  const move = async (task: ListedTask, time: Later) => {
+    setLater(null);
+    try {
+      const saved = await snoozeTask(task, SNOOZE[time]);
+      notify({
+        id: "home-later",
+        tone: "success",
+        title: `Moved to ${whenDay(saved.starts_at)}`,
+        timeout: 3000,
+      });
+      onMoved?.();
+    } catch {
+      notify({
+        id: "home-later",
+        tone: "error",
+        title: "Not moved",
+        message: "Try again.",
+      });
+    }
+  };
   return (
     <section className={styles.block} aria-labelledby="tasks-title">
       <Head id="tasks-title" title={title}>
@@ -585,53 +612,67 @@ export function TodayTasks({
         </p>
       ) : tasks.length ? (
         <ul className={styles.rows}>
-          {tasks.slice(0, 3).map((task) => (
-            <li key={task.task_id} className={styles.taskRow}>
-              {/* A 44 px target around the box (QA, 31 Oct 2026). */}
-              <label className={styles.check}>
-                <input
-                  type="checkbox"
-                  aria-label={`Done: ${task.title}`}
-                  checked={task.status === "done"}
-                  onChange={() => onDone(task)}
-                />
-                <span className={styles.box} aria-hidden="true">
-                  <Check size={14} strokeWidth={3} />
+          {[...tasks]
+            // Late first, in red: Tasks' own overdue (competitor teardown #1).
+            .sort((a, b) => Number(late(b)) - Number(late(a)))
+            .slice(0, 3)
+            .map((task) => (
+              <SwipeRow
+                key={task.task_id}
+                className={styles.taskRow}
+                done="Done"
+                late={late(task)}
+                onDone={task.status === "done" ? undefined : () => onDone(task)}
+                onLater={
+                  task.status === "done" ? undefined : () => setLater(task)
+                }
+              >
+                {/* A 44 px target around the box (QA, 31 Oct 2026). */}
+                <label className={styles.check}>
+                  <input
+                    type="checkbox"
+                    aria-label={`Done: ${task.title}`}
+                    checked={task.status === "done"}
+                    onChange={() => onDone(task)}
+                  />
+                  <span className={styles.box} aria-hidden="true">
+                    <Check size={14} strokeWidth={3} />
+                  </span>
+                </label>
+                <span className={styles.rowText}>
+                  <strong>{task.title}</strong>
+                  <span className={styles.taskMeta}>
+                    {when(task.starts_at) ? (
+                      <span data-late-time={late(task) || undefined}>
+                        {when(task.starts_at)}
+                      </span>
+                    ) : null}
+                    {tagOf(task) ? (
+                      <span className={styles.tag} data-tag={tagOf(task)}>
+                        {TAG_WORDS[tagOf(task) as TaskTag]}
+                      </span>
+                    ) : null}
+                    {task.lead_id && task.lead_name ? (
+                      <Link href={`/leads?lead=${task.lead_id}`}>
+                        {displayName(task.lead_name)}
+                      </Link>
+                    ) : null}
+                  </span>
                 </span>
-              </label>
-              <span className={styles.rowText}>
-                <strong>{task.title}</strong>
-                <span className={styles.taskMeta}>
-                  {when(task.starts_at) ? (
-                    <span>{when(task.starts_at)}</span>
-                  ) : null}
-                  {tagOf(task) ? (
-                    <span className={styles.tag} data-tag={tagOf(task)}>
-                      {TAG_WORDS[tagOf(task) as TaskTag]}
-                    </span>
-                  ) : null}
-                  {task.lead_id && task.lead_name ? (
-                    <Link href={`/leads?lead=${task.lead_id}`}>
-                      {displayName(task.lead_name)}
-                    </Link>
-                  ) : null}
-                </span>
-              </span>
-            </li>
-          ))}
+              </SwipeRow>
+            ))}
         </ul>
       ) : (
-        <div className={styles.emptyTasks}>
-          <span>No tasks today</span>
-          <button
-            type="button"
-            className={styles.addTask}
-            onClick={() => setAdding(true)}
-          >
-            + Add task
-          </button>
-        </div>
+        <AllClear side={side} />
       )}
+      <LaterSheet
+        open={later !== null}
+        title={later?.title ?? ""}
+        onClose={() => setLater(null)}
+        onPick={(time) => {
+          if (later) void move(later, time);
+        }}
+      />
       <AddTaskSheet
         open={adding}
         onClose={() => setAdding(false)}
@@ -644,6 +685,80 @@ export function TodayTasks({
   );
 }
 
+/** A task's snooze for each of the after-call's times. */
+const SNOOZE: Record<Later, TaskSnoozeChoice> = {
+  hour: "1h",
+  evening: "evening",
+  morning: "tomorrow",
+  week: "week",
+};
+
+/** Past its time and not done: Tasks' own overdue. */
+const late = (task: ListedTask) =>
+  task.status !== "done" && task.overdue === true;
+
+/** An empty block: one line, and the next thing to do, never a dead end
+ *  (competitor teardown #1, 1 Nov 2026). */
+function AllClear({ side }: { side: Side }) {
+  return (
+    <p className={styles.allClear}>
+      <span>All clear</span>
+      <Link
+        className={styles.nextAction}
+        href={leadsHref(side, { view: "to_call" })}
+      >
+        {side === "cold" ? "Start Cold Calling" : "Call your next lead"}
+        <ChevronRight size={16} aria-hidden="true" />
+      </Link>
+    </p>
+  );
+}
+
+type Upcoming = HomeSide["upcoming"][number];
+
+/** One follow-up: swipe right calls it (its after-call says what happened),
+ *  left moves it. */
+function FollowRow({
+  lead,
+  side,
+  onLater,
+}: {
+  lead: Upcoming;
+  side: Side;
+  onLater: (lead: Upcoming) => void;
+}) {
+  const call = useRef<HTMLAnchorElement>(null);
+  return (
+    <SwipeRow
+      className={styles.followRow}
+      done="Call"
+      onDone={() => call.current?.click()}
+      onLater={() => onLater(lead)}
+    >
+      <Link className={styles.rowText} href={`/leads?lead=${lead.lead_id}`}>
+        <strong>{displayName(lead.name)}</strong>
+        <span>
+          {[
+            lead.next_action_note || lead.stage_label,
+            whenDay(lead.next_action_at),
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </span>
+      </Link>
+      <Link
+        ref={call}
+        className={styles.phone}
+        href={leadsHref(side, { view: "follow_ups", when: "upcoming" })}
+        aria-label={`Call ${displayName(lead.name)}`}
+        onClick={() => handOverLead(lead.lead_id, true)}
+      >
+        <Phone size={18} aria-hidden="true" />
+      </Link>
+    </SwipeRow>
+  );
+}
+
 /** 5. The next two follow-ups, See all for the rest (items 26-28). */
 export function UpcomingFollowUps({
   side,
@@ -652,7 +767,34 @@ export function UpcomingFollowUps({
   side: Side;
   own: HomeSide | null;
 }) {
-  const rows = own?.upcoming ?? [];
+  const [later, setLater] = useState<Upcoming | null>(null);
+  // Moved here: off this list at once, while Home reads again.
+  const [moved, setMoved] = useState<string[]>([]);
+  const rows = (own?.upcoming ?? []).filter(
+    (lead) => !moved.includes(lead.lead_id),
+  );
+  const move = async (lead: Upcoming, time: Later) => {
+    setLater(null);
+    const at = nextCallTime(time);
+    try {
+      await setFollowUp(lead, at);
+      setMoved((ids) => [...ids, lead.lead_id]);
+      notify({
+        id: "home-later",
+        tone: "success",
+        title: `Moved to ${whenDay(at.toISOString())}`,
+        timeout: 3000,
+      });
+      retryHome();
+    } catch {
+      notify({
+        id: "home-later",
+        tone: "error",
+        title: "Not moved",
+        message: "Try again.",
+      });
+    }
+  };
   return (
     <section className={styles.block} aria-labelledby="follow-ups-title">
       <Head id="follow-ups-title" title="Upcoming follow-ups">
@@ -663,35 +805,25 @@ export function UpcomingFollowUps({
       {rows.length ? (
         <ul className={styles.rows}>
           {rows.slice(0, 2).map((lead) => (
-            <li key={lead.lead_id} className={styles.followRow}>
-              <Link
-                className={styles.rowText}
-                href={`/leads?lead=${lead.lead_id}`}
-              >
-                <strong>{displayName(lead.name)}</strong>
-                <span>
-                  {[
-                    lead.next_action_note || lead.stage_label,
-                    whenDay(lead.next_action_at),
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </span>
-              </Link>
-              <Link
-                className={styles.phone}
-                href={leadsHref(side, { view: "follow_ups", when: "upcoming" })}
-                aria-label={`Call ${displayName(lead.name)}`}
-                onClick={() => handOverLead(lead.lead_id, true)}
-              >
-                <Phone size={18} aria-hidden="true" />
-              </Link>
-            </li>
+            <FollowRow
+              key={lead.lead_id}
+              lead={lead}
+              side={side}
+              onLater={setLater}
+            />
           ))}
         </ul>
       ) : (
-        <p className={styles.quiet}>No follow-ups planned.</p>
+        <AllClear side={side} />
       )}
+      <LaterSheet
+        open={later !== null}
+        title={later ? displayName(later.name) : ""}
+        onClose={() => setLater(null)}
+        onPick={(time) => {
+          if (later) void move(later, time);
+        }}
+      />
     </section>
   );
 }
@@ -809,6 +941,8 @@ export function SellerBlocks({
           onDone={done}
           onRetry={reload}
           onAdded={reload}
+          side={shown}
+          onMoved={reload}
         />
       </div>
       <div data-area="follow">
@@ -838,6 +972,8 @@ export function MyTasks({ desk, side }: { desk: HomeDesk; side: Side }) {
         onDone={done}
         onRetry={reload}
         onAdded={reload}
+        side={side}
+        onMoved={reload}
       />
       <UpcomingFollowUps side={side} own={desk.sides?.[side] ?? null} />
     </>
