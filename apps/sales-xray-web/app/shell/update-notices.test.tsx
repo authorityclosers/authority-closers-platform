@@ -26,7 +26,11 @@ vi.mock("./update-card-rules", async (original) => ({
     return true;
   },
 }));
-import { ACTIVITY_BANNER_MS, UpdateNotices } from "./update-notices";
+import {
+  ACTIVITY_BANNER_MS,
+  raiseNotificationLines,
+  UpdateNotices,
+} from "./update-notices";
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -128,6 +132,74 @@ it("shows what the bell received as a top banner, never as a corner card", async
   await act(async () => root.render(null));
   await act(async () => root.render(render()));
   expect(raised()).toHaveLength(2);
+});
+
+it("raises a page's early lines by the bell's rules, once, and clears them as the bell does", async () => {
+  const key = `account-${account}`;
+  const openEvent = vi.fn();
+  const render = (data: Parameters<typeof UpdateNotices>[0]["updates"]) => (
+    <UpdateNotices
+      updates={data}
+      contextKey={key}
+      openNews={() => {}}
+      openEvent={openEvent}
+    />
+  );
+  // The bell has not read yet (its first read waits until the page is 3 s old).
+  const waiting = {
+    ...updates,
+    notes: [],
+    notifications: [],
+    notifications_status: "loading" as const,
+  };
+  await act(async () => root.render(render(waiting)));
+  const older = { ...event, id: "older", created_at: "2026-10-27T08:00:00Z" };
+  await act(async () => raiseNotificationLines([event, older]));
+  const id = `event:${key}:fictional-event`;
+  expect(raised().map((alert) => alert.id)).toEqual([id]);
+  expect(raised()[0].action?.label).toBe("Open lead");
+  raised()[0].action?.run?.();
+  expect(openEvent).toHaveBeenCalledWith("/leads");
+  // The bell's own read finds them shown: no second banner, not even the older.
+  await act(async () =>
+    root.render(
+      render({
+        ...waiting,
+        notifications: [event, older],
+        notifications_status: "ready",
+      }),
+    ),
+  );
+  expect(mocks.raise).toHaveBeenCalledTimes(1);
+  await act(async () =>
+    root.render(
+      render({
+        ...waiting,
+        notifications: [{ ...event, read: true }, older],
+        notifications_status: "ready",
+      }),
+    ),
+  );
+  expect(mocks.clear).toHaveBeenCalledWith(id);
+});
+
+it("raises nothing before the bell is ready, or from what is not a bell line", async () => {
+  raiseNotificationLines([event]);
+  await act(async () =>
+    root.render(
+      <UpdateNotices
+        updates={{ ...updates, notes: [], notifications: [] }}
+        contextKey={`account-${account}`}
+        openNews={() => {}}
+        openEvent={() => {}}
+      />,
+    ),
+  );
+  await act(async () => {
+    raiseNotificationLines("not a list");
+    raiseNotificationLines([{ ...event, href: 7 }]);
+  });
+  expect(mocks.raise).not.toHaveBeenCalled();
 });
 
 it("clears a banner whose line has left the bell, but never on a list that failed", async () => {
