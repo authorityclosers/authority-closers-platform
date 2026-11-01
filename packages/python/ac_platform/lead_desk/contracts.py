@@ -1238,6 +1238,17 @@ class ImportPreview(Model):
     # make a lead with the columns matched: the screen offers one-click Import when most do.
     detected: str | None = None
     importable: int = 0
+    # Rows whose phone cell holds no number we can read, and no email: the import skips
+    # them, and the Check step says so before anything is written (competitor teardown 5).
+    # They aren't in ``importable``.
+    bad_numbers: int = 0
+
+
+class ImportSkip(Model):
+    """A file row an import didn't make a lead from or change, and why (its index in rows)."""
+
+    row: int
+    reason: str
 
 
 class ImportGiven(Model):
@@ -1270,6 +1281,10 @@ class ImportResult(Model):
     # may undo it; None for anyone else.
     import_id: UUID | None = None
     undo_until: datetime | None = None
+    # Leads already here that Fill blanks or Replace changed, and every row that made no
+    # lead and changed none, with why: the result's "Download skipped rows" (teardown 5).
+    updated: int = 0
+    skipped_rows: tuple[ImportSkip, ...] = ()
 
 
 class ImportKept(Model):
@@ -1698,6 +1713,10 @@ class ImportCommand(Command):
     pipeline: str | None = Field(default=None, max_length=40)
     # The CRM the preview recognised: the leads' source says "<CRM> export: <file>".
     source_name: str | None = Field(default=None, max_length=40)
+    # A row whose number or email is already a lead (competitor teardown 5): "skip" leaves
+    # that lead as it is; owners and admins may "fill" its empty details from the row, or
+    # "replace" its details with the row's filled cells. A blank cell never empties one.
+    duplicates: Literal["skip", "fill", "replace"] = "skip"
 
 
 class NewSource(Command):

@@ -112,9 +112,10 @@ def test_a_cold_list_goes_to_the_picked_seller_and_starts_where_the_owner_chose(
                 None,
             ]
             assert [(lead.stage, lead.step) for lead in new] == [("follow_up", "open_leads")] * 3
-            # Already a lead: it keeps its side, its stage and its owner.
+            # Already a lead: it keeps its side, its stage and its owner, and Skip (the default)
+            # doesn't count the list as an enquiry (competitor teardown 5).
             kiran = leads["+919876073009"]
-            assert (kiran.pipeline, kiran.stage, kiran.repeats) == ("live", "new", 1)
+            assert (kiran.pipeline, kiran.stage, kiran.repeats) == ("live", "new", 0)
 
             # A lead typed in says Inbound or Cold too.
             typed = await here.client.post(

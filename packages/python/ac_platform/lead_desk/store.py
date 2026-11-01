@@ -2796,6 +2796,7 @@ class LeadDesk:
         received_at: datetime | None = None,
         kind: str | None = None,
         batch: tuple[UUID, str] | None = None,
+        as_is: bool = False,
     ) -> tuple[Lead | None, Literal["created", "repeat", "known", "skipped"]]:
         """Store one record as a lead. The same record again (same source id) is "known"
         and changes nothing; another record with the same phone, or with no phone and the
@@ -2803,7 +2804,9 @@ class LeadDesk:
         goes to the pipeline picked, else the one that takes its source (pipelines.route).
         ``received_at``: when the person sent it, when the source says (a Meta form's
         created_time); a time ahead of now is taken as now. ``batch``: the file import
-        (its id and file name) a new lead came in, for Undo import (imports.py)."""
+        (its id and file name) a new lead came in, for Undo import (imports.py). ``as_is``:
+        a lead already here comes back untouched, not counted as asking again (a file
+        import's Skip, Fill blanks and Replace; intake.commit decides)."""
         _, config = await self.settings()
         found = extract(record, mapping, default_country=config["default_country"])
         if not (found.name or found.phone or found.email):
@@ -2839,6 +2842,8 @@ class LeadDesk:
         if existing is not None:
             # A lead merged into another: the record joins the lead it went into.
             existing = await self._live(existing, lock=True)
+            if as_is:
+                return existing, "repeat"
             await self._repeat(
                 existing, found, payload, source, source_label, actor, reps, command_id
             )

@@ -30,6 +30,7 @@ from ac_platform.lead_desk.capture import (
     FIELDS,
     REFERENCE_KEYS,
     CaptureError,
+    Extracted,
     clean,
     detect_crm,
     extract,
@@ -44,6 +45,7 @@ from ac_platform.lead_desk.contracts import (
     ImportGiven,
     ImportPreview,
     ImportResult,
+    ImportSkip,
     NewSource,
     SeedCommand,
     Sources,
@@ -245,6 +247,15 @@ UNMATCHED_SHOWN: Final[int] = 10
 # The stages a bulk upload may start new leads in (section 5): the first, or Open Leads or
 # Interested when the file has real past talks.
 START_KINDS: Final[frozenset[str]] = frozenset({"new", "follow_up", "interested"})
+# The details Fill blanks and Replace take from a row for a lead already here; never the
+# phone, which is how the row found that lead (competitor teardown 5).
+REFRESHED: Final[tuple[str, ...]] = ("name", "email", "company", "city", "language", "interest")
+
+
+def unreadable_number(found: Extracted) -> bool:
+    """The row's phone cell has words but no number we can read, and it has no email: no
+    way to reach the person, so the import skips it and says why."""
+    return found.phone is None and bool(found.phone_raw) and not found.email
 
 
 def suggest_columns(headers: Iterable[str], taken: Mapping[str, str]) -> dict[str, str]:
@@ -368,7 +379,12 @@ class Intake:
             repeats_in_file=len(phones) - len(set(phones)),
             known_leads=known,
             detected=detect_crm(sheet.headers),
-            importable=sum(1 for item in found if item.name or item.phone or item.email),
+            importable=sum(
+                1
+                for item in found
+                if (item.name or item.phone or item.email) and not unreadable_number(item)
+            ),
+            bad_numbers=sum(1 for item in found if unreadable_number(item)),
         )
 
     async def commit(self, command: ImportCommand) -> ImportResult:
@@ -379,6 +395,10 @@ class Intake:
             raise DeskError(422, "Choose which column has the name or the phone number.")
         # Only owners and admins give leads to others; anyone else's go on their own desk.
         assign = command.assign if self.desk.viewer.can_manage else "me"
+        # Only they change leads already here, which may be anyone's (competitor teardown 5).
+        if command.duplicates != "skip" and not self.desk.viewer.can_manage:
+            raise DeskError(403, "Only owners and admins change leads that are already here.")
+        _, config = await self.desk.settings()
         reps = await self.desk._reps()
         # The salespeople the owner picked and how many each takes, in order (section 5).
         names = {rep.state.person_id: rep.state.name for rep in reps}
@@ -418,6 +438,11 @@ class Intake:
         missing_owners: dict[str, None] = {}
         outcomes: list[str] = []
         leads: list[Lead | None] = []
+        # The leads earlier rows made or found, and every row that made none and changed
+        # none, with why.
+        used: set[UUID] = set()
+        skips: list[ImportSkip] = []
+        updated = 0
         label = (
             f"{command.source_name} export: {command.file_name}"
             if command.source_name in CRM_NAMES
@@ -425,6 +450,12 @@ class Intake:
         )[:120]
         for index, row in enumerate(command.rows):
             record = {str(k)[:120]: str(v)[:1000] for k, v in row.items() if v not in (None, "")}
+            found = extract(record, mapping, default_country=config["default_country"])
+            if unreadable_number(found):
+                outcomes.append("skipped")
+                leads.append(None)
+                skips.append(ImportSkip(row=index, reason="Number can't be read"))
+                continue
             named = clean(row.get(owner_header)) if owner_header else None
             listed = clean(row.get(source_header)) if source_header else None
             person = people.get(header_key(named)) if named else None
@@ -446,13 +477,30 @@ class Intake:
                     reps=reps,
                     pipeline=command.pipeline,
                     batch=(command.command_id, command.file_name[:120]),
+                    as_is=True,
                 )
-            except CaptureError:
-                lead, outcome = None, "skipped"
+                why = "No name, phone or email"
+            except CaptureError as error:
+                lead, outcome, why = None, "skipped", str(error)
             outcomes.append(outcome)
             leads.append(lead)
-            # Only new leads take the row's stage and owner; a number already a lead keeps its own.
-            if lead is None or outcome != "created":
+            if lead is None:
+                skips.append(ImportSkip(row=index, reason=why))
+                continue
+            # Only new leads take the row's stage and owner; a number already a lead keeps its
+            # own, and only Fill blanks or Replace change its details. A second row for a lead
+            # an earlier row made or found changes nothing: the first row wins.
+            if lead.id in used:
+                skips.append(ImportSkip(row=index, reason="Repeated in the file"))
+                continue
+            used.add(lead.id)
+            if outcome != "created":
+                if command.duplicates == "skip":
+                    skips.append(ImportSkip(row=index, reason="Already a lead"))
+                elif await self._refresh(lead, found, command, index):
+                    updated += 1
+                else:
+                    skips.append(ImportSkip(row=index, reason="Already a lead with these details"))
                 continue
             if person is not None:
                 owned += 1
@@ -514,6 +562,8 @@ class Intake:
                     for person_id, count in handed.items()
                 ),
                 "side": command.side,
+                "updated": updated,
+                "skipped_rows": tuple(skips),
                 # Undo import, for owners and admins, for 48 hours (imports.py).
                 **(
                     {
@@ -525,6 +575,48 @@ class Intake:
                 ),
             }
         )
+
+    async def _refresh(
+        self, lead: Lead, found: Extracted, command: ImportCommand, index: int
+    ) -> bool:
+        """Fill blanks or Replace on a lead already here (competitor teardown 5): only the
+        row's filled cells count, so a blank cell never empties a detail. The change is in
+        the lead's history; Replace keeps what it replaced there. True when anything changed."""
+        lead = (
+            await self.db.scalar(
+                select(Lead)
+                .where(Lead.tenant_id == self.tenant_id, Lead.id == lead.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            or lead
+        )
+        replace = command.duplicates == "replace"
+        before: dict[str, str | None] = {}
+        for name in REFRESHED:
+            value = found.get(name)
+            now = getattr(lead, name)
+            if value is None or value == now or (now is not None and not replace):
+                continue
+            before[name] = now
+            setattr(lead, name, value)
+        if not before:
+            return False
+        lead.revision += 1
+        lead.updated_at = self.desk.now
+        self.desk._event(
+            lead,
+            "edited",
+            {
+                "changed": list(before),
+                "source": "import",
+                "import_file": command.file_name[:120],
+                **({"replaced": before} if replace else {}),
+            },
+            actor=self.desk.viewer.person_id,
+            command_id=uuid5(command.command_id, f"import-edit:{index}"),
+        )
+        return True
 
     async def _start(self, command: ImportCommand) -> str | None:
         """The stage new leads start in when the owner picked one past the first (section 5):
