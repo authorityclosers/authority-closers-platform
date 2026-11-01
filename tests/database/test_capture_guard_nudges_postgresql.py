@@ -18,9 +18,10 @@ from sqlalchemy import Engine, select
 
 from ac_platform.http.product_updates import install_product_updates_http
 from ac_platform.lead_desk.capture_guard_nudges import collect
-from ac_platform.lead_desk.capture_reminder import reminder_key, words
+from ac_platform.lead_desk.capture_reminder import calls_href, reminder_key, words
 from ac_platform.lead_desk.models import LeadEvent
 from ac_platform.product_updates.models import Notification
+from ac_platform.tenancy.models import Tenant
 from tests.database.conversation_harness import conversation_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_submission_http_postgresql import ORIGIN
@@ -83,7 +84,8 @@ def test_daily_capture_nudge_persists_once_and_excludes_private_and_simulated(
                 day = due.astimezone(ZoneInfo("Asia/Kolkata")).date()
                 assert notes[0].title == words(2, day)[0]
                 assert notes[0].kind == "analysis_paused" and not notes[0].urgent
-                assert notes[0].href == "/settings/privacy#calls-setup"
+                # See why opens that day's calls without a recording (ph1-27).
+                assert notes[0].href == calls_href(day)
                 assert notes[0].read_at is None
                 # Yesterday's reminder, written before the rule: urgent and "today".
                 older_id = uuid4()
@@ -95,11 +97,31 @@ def test_daily_capture_nudge_persists_once_and_excludes_private_and_simulated(
                     dedupe_key=reminder_key(here.tenant_id, day - timedelta(days=1)),
                     title="5 calls today have no recording: fix",
                     body=notes[0].body,
-                    href=notes[0].href,
+                    href="/settings/privacy#calls-setup",
                     urgent=True,
                     created_at=due - timedelta(days=1),
                 )
                 db.add(older)
+                # The same day's reminder from another workspace the seller is in: the bell
+                # shows one card per day, this workspace's (ph1-27: 2 and 4 for 30 Oct).
+                elsewhere = uuid4()
+                db.add(Tenant(id=elsewhere, slug=f"other-{elsewhere.hex[:10]}", name="Other"))
+                await db.flush()
+                other_id = uuid4()
+                db.add(
+                    Notification(
+                        id=other_id,
+                        person_id=here.seller.person_id,
+                        tenant_id=elsewhere,
+                        kind="analysis_paused",
+                        dedupe_key=reminder_key(elsewhere, day),
+                        title=words(4, day)[0],
+                        body=notes[0].body,
+                        href=calls_href(day),
+                        urgent=False,
+                        created_at=due,
+                    )
+                )
             # Mount the real notification routes before this separate app starts.
             bell_app = FastAPI()
             install_product_updates_http(
@@ -116,13 +138,17 @@ def test_daily_capture_nudge_persists_once_and_excludes_private_and_simulated(
                     note for note in bell.json()["notifications"] if note["id"] == str(notes[0].id)
                 )
                 assert entry["title"] == words(2, day)[0]
+                assert entry["href"] == calls_href(day)
                 assert not entry["urgent"] and entry["read"] is False
+                ids = [note["id"] for note in bell.json()["notifications"]]
+                assert str(other_id) not in ids
                 # The older row reads as not urgent, named by its day; nothing stored changes.
                 before = next(
                     note for note in bell.json()["notifications"] if note["id"] == str(older_id)
                 )
                 assert before["title"] == words(5, day - timedelta(days=1))[0]
                 assert not before["urgent"]
+                assert before["href"] == calls_href(day - timedelta(days=1))
                 unread = bell.json()["unread_count"]
                 acknowledged = await client.post(
                     "/v1/notifications/read", json={"ids": [entry["id"]]}, headers=WRITE
@@ -138,6 +164,7 @@ def test_daily_capture_nudge_persists_once_and_excludes_private_and_simulated(
                 stored = await db.get(Notification, older_id)
                 assert stored is not None and stored.urgent
                 assert stored.title == "5 calls today have no recording: fix"
+                assert stored.href == "/settings/privacy#calls-setup"
 
     run(exercise())
 

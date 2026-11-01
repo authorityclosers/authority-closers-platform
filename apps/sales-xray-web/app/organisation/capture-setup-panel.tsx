@@ -21,8 +21,11 @@ import { named } from "../capture-setup/product-name";
 import { PersonDisplayName } from "./people/person-display-name";
 import styles from "./seats.module.css";
 
+// "Set up" is always something to do (Settings' Phone setup); a seller who has
+// done it is Ready (phone personas ph1-38, 1 Nov 2026: the same words meant
+// done here and an action there).
 const BADGE: Record<CaptureTeamState, string> = {
-  set_up: "Set up",
+  set_up: "Ready",
   phone_pending: "Phone not set up",
   declined: "Said not now",
   turned_off: "Turned off",

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -361,31 +361,70 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
             await auth.database.flush()
             return {"schema": RECORDING_SCHEMA, "recorded": True}
 
-    @router.get("/missing")
-    async def read_missing(request: Request, response: Response) -> dict[str, Any]:
-        """The caller's own connected lead calls today with no recording after two minutes,
-        from the calls Home counts, and how many they tried (Home's Tried): the banner
-        that says how to turn the Phone app's call recording on."""
+    async def missing_view(
+        request: Request, response: Response, day: date | None
+    ) -> dict[str, Any]:
         try:
             async with member(request, response) as (auth, tenant_id, person_id, role):
-                today = await missing_recordings.calls_today(
+                found = await missing_recordings.calls_today(
                     auth.database,
                     tenant_id=tenant_id,
                     person_id=person_id,
                     role=role,
                     now=datetime.now(UTC),
+                    day=day,
                 )
-                latest = today.missing.latest.get(person_id)
+                latest = found.missing.latest.get(person_id)
+                mine = [item for item in found.items if item.person_id == person_id][:50]
+                names = await missing_recordings.lead_names(
+                    auth.database, tenant_id, [item.lead_id for item in mine]
+                )
                 return {
                     "schema": MISSING_SCHEMA,
-                    "calls": today.missing.by_person.get(person_id, 0),
-                    "tried": today.tried.get(person_id, 0),
+                    "calls": found.missing.by_person.get(person_id, 0),
+                    "tried": found.tried.get(person_id, 0),
                     "latest_at": latest.isoformat() if latest else None,
+                    # The calls themselves: the lead, when and how long, never a number.
+                    "items": [
+                        {
+                            "event_id": str(item.event_id),
+                            "lead_id": str(item.lead_id),
+                            "lead_name": names.get(item.lead_id),
+                            "at": item.at.isoformat(),
+                            "seconds": item.seconds,
+                        }
+                        for item in mine
+                    ],
                 }
         except HTTPException as error:
             # A personal workspace: its calls are checked on the phone, not here.
             if error.status_code == 403 and error.detail == OUTSIDE:
-                return {"schema": MISSING_SCHEMA, "calls": 0, "tried": 0, "latest_at": None}
+                return {
+                    "schema": MISSING_SCHEMA,
+                    "calls": 0,
+                    "tried": 0,
+                    "latest_at": None,
+                    "items": [],
+                }
             raise
+
+    @router.get("/missing")
+    async def read_missing(request: Request, response: Response) -> dict[str, Any]:
+        """The caller's own connected lead calls today with no recording after two minutes,
+        from the calls Home counts, and how many they tried (Home's Tried): the line at the
+        top of Calls and Reports, and its list of those calls (teardown 13)."""
+        return await missing_view(request, response, None)
+
+    @router.get("/missing/{day}")
+    async def read_missing_day(day: str, request: Request, response: Response) -> dict[str, Any]:
+        """One India day's (the bell's reminder opens it, ph1-27): the last 31 days."""
+        try:
+            asked = date.fromisoformat(day)
+        except ValueError:
+            raise HTTPException(422, "That isn't a day.", headers=PRIVATE) from None
+        today = datetime.now(missing_recordings.INDIA).date()
+        if not timedelta(0) <= today - asked <= timedelta(days=31):
+            raise HTTPException(422, "Only the last 31 days.", headers=PRIVATE)
+        return await missing_view(request, response, asked)
 
     application.include_router(router)

@@ -89,6 +89,7 @@ import { csvRows } from "./csv-export";
 import { Panel } from "./ui/kit";
 import { RecentCallsList, RecentCallsSkeleton } from "./dashboard/recent-calls";
 import { PhoneCalls } from "./calls/phone-calls";
+import { RecordingLine } from "./capture-setup/recording-check";
 
 const libraryError =
   "Saved calls could not be loaded. Try again; your completed work remains private.";
@@ -406,7 +407,9 @@ function CallsLibraryContent({
       ? null
       : cachedCallsPage(identityKey),
   );
-  const first = seed ?? cached;
+  // A list read before with no calls in it paints nothing: this read may bring
+  // calls, and "No calls yet" must never show while they are on their way.
+  const first = seed ?? (cached?.submissions.length ? cached : null);
   const [submissions, setSubmissions] = useState<LibrarySubmission[]>(
     first?.submissions ?? [],
   );
@@ -982,7 +985,11 @@ function CallsLibraryContent({
     router.push(callHref(submission.id, studioHref));
   }
 
-  const initialLoading = access?.authenticated === true && loading;
+  // Reading the first page, or still finding out who is signed in: the skeleton
+  // holds the page, never a false "No calls yet" that the calls then push down
+  // (robot 48381a47 and a9001bc8, 1 Nov 2026: CLS 0.26 at 390 and 1440 px).
+  const initialLoading =
+    (access?.authenticated === true && loading) || access?.status === "loading";
   const callsHref = CALLS_PATH;
   const counts = submissions.reduce(
     (total, submission) => {
@@ -1614,6 +1621,10 @@ function CallsLibraryContent({
       data-reps={showReps ? "true" : undefined}
       data-selecting={selecting || picked.size > 0 ? "true" : undefined}
     >
+      {/* Calls with no recording: one line at the very top, above the phone's
+          calls, never a card over a call (teardown #13; on dev it sat under
+          "Your calls", a screen down). */}
+      {preview ? null : <RecordingLine />}
       {/* The phone's calls come first, then saved calls (owner, 27 Oct 2026:
           call logs and recordings were "hidden somewhere"). */}
       {insights &&

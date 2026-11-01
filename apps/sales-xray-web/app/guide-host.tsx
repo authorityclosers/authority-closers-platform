@@ -179,19 +179,14 @@ export function firstCallGuideFits(pathname: string | null): boolean {
   return !/^\/(leads|chats|settings)(\/|$)/.test(pathname);
 }
 
-/** Entry for the upload walkthrough; result pages keep the answer in view. */
+/**
+ * The guide shows only where a call is added, New analysis (phone personas
+ * ph2-30, 1 Nov 2026: it opened over My Growth's table). Home, Calls and saved
+ * reports keep the answer in view, and nowhere else is part of its walk.
+ */
 export function firstCallGuideStartsHere(pathname: string | null): boolean {
   const route = pathname?.replace(/\/$/, "") || "/";
-  return (
-    firstCallGuideFits(pathname) &&
-    !(
-      route === "/dashboard" ||
-      route === "/calls" ||
-      route === "/analysis/calls" ||
-      route.startsWith("/analysis/calls/") ||
-      route === "/analysis/sample"
-    )
-  );
+  return firstCallGuideFits(pathname) && route === "/analysis/new";
 }
 
 export function FirstCallGuide() {

@@ -49,15 +49,22 @@ it("shows the red missing state, and its fix opens the recording check over the 
   await render(<CaptureStateLabel state="missing" />);
   expect(host.textContent).toContain("No recording after 30 minutes");
   expect(host.querySelector('[data-missing="true"]')).not.toBeNull();
-  // Phone personas, v1.21, 1 Nov 2026: the link opened Settings at Usage
-  // analytics, and Back went to Leads instead of the call.
+  // Phone personas ph2-09 and ph2-31 (v1.22, 1 Nov 2026): the link opened
+  // Settings at Usage analytics, and Back closed the lead. Fix opens the
+  // checked list at its failing step, a dialog over the call ("phone" on the web).
   expect(host.querySelector("a")).toBeNull();
   const fix = [...host.querySelectorAll("button")].find(
     (button) => button.textContent === "Fix recording",
   );
-  expect(host.textContent).not.toContain("Call recording check");
+  const asked: unknown[] = [];
+  const listen = (event: Event) =>
+    asked.push((event as CustomEvent<unknown>).detail);
+  window.addEventListener("sx-capture-setup-open", listen);
+  const before = window.location.href;
   await act(async () => fix?.click());
-  expect(host.textContent).toContain("Call recording check");
+  window.removeEventListener("sx-capture-setup-open", listen);
+  expect(asked).toEqual(["phone"]);
+  expect(window.location.href).toBe(before);
 });
 it("brings the recording check into view when a link asks for it", async () => {
   const scrolled = vi.fn();

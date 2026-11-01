@@ -4,6 +4,7 @@ import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 
 import { useInApp } from "./in-app-client";
 import { phoneStatus, setupStatus } from "./leads/native-phone";
+import { useCanHere } from "./workspace-role";
 
 /**
  * The Google Play build is consumption only (owner-approved Play path, 23 Oct 2026). Play
@@ -14,6 +15,16 @@ import { phoneStatus, setupStatus } from "./leads/native-phone";
  * it came from.
  */
 export const PLANS_ON_WEB = "Your workspace owner manages plans on the web.";
+
+/** The same place for whoever pays (an owner, or anyone in Personal): their own plan. */
+export const YOUR_PLANS_ON_WEB = "You manage your plan and minutes on the web.";
+
+/** Which of the two lines this person reads, by their role here (persona QA ph1-42). */
+export function usePlansOnWebLine(): string {
+  return useCanHere()("billing.view") === false
+    ? PLANS_ON_WEB
+    : YOUR_PLANS_ON_WEB;
+}
 
 /**
  * What a member of an organisation sees where plans and prices would be:

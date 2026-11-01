@@ -3834,3 +3834,29 @@ it("a page's own + (the Leads header on a computer) opens the same Add sheet (Di
     signedIn ? "/analysis/new" : null,
   );
 });
+
+it("says call analysis isn't on yet where no minutes were ever given, never 'exhausted'", () => {
+  const none = {
+    allowance_seconds: 0,
+    committed_seconds: 0,
+    available_seconds: 0,
+  };
+  expect(remainingAllowanceLabel(none, null, false)).toBe(
+    "Call analysis isn't on for your account yet.",
+  );
+  expect(remainingAllowanceLabel(none, null, false, "member")).toBe(
+    "Call analysis isn't on for this organisation yet. Ask your owner.",
+  );
+  expect(remainingAllowanceLabel(none, null, false, "payer")).toBe(
+    "Call analysis isn't on for this organisation yet.",
+  );
+  // Minutes given and all used still read as used.
+  expect(
+    remainingAllowanceLabel(
+      { allowance_seconds: 600, committed_seconds: 600, available_seconds: 0 },
+      null,
+      false,
+      "member",
+    ),
+  ).toBe("Remaining analysis time · 0m 00s · exhausted");
+});

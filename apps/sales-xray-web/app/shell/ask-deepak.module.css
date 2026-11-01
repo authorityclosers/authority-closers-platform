@@ -29,34 +29,230 @@
   line-height: 1.4;
 }
 
-.soon {
-  max-width: 36ch;
+/* Which lead: a few letters of its name (ph1-35, 1 Nov 2026). */
+.find {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-muted);
+}
+
+.find:focus-within {
+  border-color: var(--sx-accent);
+  box-shadow: var(--sx-focus-ring);
+}
+
+.find input {
+  flex: 1;
+  min-width: 0;
+  min-height: 46px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  /* 16 px: a phone never zooms into the field. */
+  font-size: 16px;
+  outline: none;
+}
+
+.results {
+  display: grid;
+  width: 100%;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.results button {
+  display: flex;
+  width: 100%;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.results button > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.results strong {
+  overflow-wrap: anywhere;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.results small {
+  color: var(--sx-muted);
+  font-size: 13px;
+}
+
+.results button:active {
+  transform: scale(var(--sx-press-scale));
+}
+
+.results button:focus-visible,
+.other:focus-visible,
+.source:focus-visible,
+.coaching:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.quiet {
+  max-width: 40ch;
   margin: 0;
   color: var(--sx-muted);
   font-size: 14px;
   line-height: 1.45;
 }
 
-.open {
+/* The answer: the last call's Report and the notes, each with its source. */
+.answer {
+  display: grid;
+  gap: 12px;
+  padding: 4px 0 8px;
+}
+
+.other {
   display: inline-flex;
+  min-height: 44px;
+  justify-self: start;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px 0 6px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.part {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.part h3 {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.part dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.part dt {
+  color: var(--sx-muted);
+  font-size: 13px;
+}
+
+.part dd {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.part ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.part li p {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: 15px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.part li small {
+  color: var(--sx-muted);
+  font-size: 12px;
+}
+
+.source {
+  display: inline-flex;
+  min-height: 44px;
+  justify-self: start;
+  align-items: center;
+  gap: 6px;
+  color: var(--sx-accent);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.follow {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Dipak's coaching on the seller's own calls: one tap, under the answer. */
+.coaching {
+  display: flex;
   min-height: 48px;
   align-items: center;
   gap: 8px;
   margin-top: 4px;
-  padding: 0 18px;
-  border-radius: var(--sx-radius-pill);
-  background: var(--sx-accent);
-  color: var(--sx-accent-ink);
+  padding: 0 14px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink);
   font-weight: 600;
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
 }
 
-.open:active {
+.coaching > span {
+  flex: 1;
+}
+
+.coaching:active {
   transform: scale(var(--sx-press-scale));
 }
 
-.open:focus-visible {
-  outline: none;
-  box-shadow: var(--sx-focus-ring);
+@media (prefers-reduced-motion: reduce) {
+  .results button:active,
+  .coaching:active {
+    transform: none;
+  }
 }

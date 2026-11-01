@@ -17,6 +17,7 @@ class Row(NamedTuple):
     actor: UUID | None
     at: datetime
     data: dict[str, Any]
+    lead_id: UUID = UUID(int=0)
 
 
 def test_the_day_starts_at_midnight_india_time() -> None:
@@ -50,8 +51,9 @@ def test_the_count_comes_from_homes_own_calls_and_never_beats_tried() -> None:
     # Persona QA, 31 Oct 2026: "2 calls have no recording" beside Home's "Tried 0".
     seller, other = uuid4(), uuid4()
     earlier = NOW - timedelta(minutes=30)
+    lead = uuid4()
     rows = [
-        Row(uuid4(), seller, earlier, {"duration_seconds": 45}),  # missing
+        Row(missing := uuid4(), seller, earlier, {"duration_seconds": 45}, lead),
         Row(recorded := uuid4(), seller, earlier, {"duration_seconds": 30}),
         Row(uuid4(), seller, earlier, {"duration_seconds": 0}),  # tried, not connected
         Row(uuid4(), seller, earlier, {"direction": "incoming", "duration_seconds": 50}),
@@ -63,5 +65,9 @@ def test_the_count_comes_from_homes_own_calls_and_never_beats_tried() -> None:
     assert today.missing.by_person == {seller: 1, other: 1}
     assert today.missing.total == 2
     assert today.missing.latest[seller] == earlier
+    # The calls themselves, for the line on Calls and Reports (teardown 13, ph1-27).
+    mine = [item for item in today.items if item.person_id == seller]
+    assert mine == [missing_recordings.MissingCall(missing, lead, seller, earlier, 45)]
+    assert len(today.items) == 2
     nothing = missing_recordings.tally([], set(), NOW)
-    assert nothing.tried == {} and nothing.missing.total == 0
+    assert nothing.tried == {} and nothing.missing.total == 0 and nothing.items == ()

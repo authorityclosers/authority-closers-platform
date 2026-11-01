@@ -37,6 +37,7 @@ import base64
 import binascii
 import json
 import re
+from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 from urllib.parse import unquote
@@ -44,6 +45,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
@@ -59,6 +61,7 @@ from ac_platform.bug_reports.screenshots import (
     clean_screenshot,
 )
 from ac_platform.bug_reports.scrub import (
+    HALF_CHARACTER,
     area_for,
     clean_advanced,
     clean_context,
@@ -89,7 +92,9 @@ from ac_platform.kernel.errors import DomainError
 
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
 MAX_BODY_BYTES = 6 * 1024 * 1024
-_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+# Control characters, and half an emoji (a lone surrogate, which PostgreSQL refuses: such a
+# report answered 500, orchestrator 1 Nov 2026).
+_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\ud800-\udfff]")
 _LIST_QUERY = frozenset({"status", "severity", "area", "organisation", "offset"})
 # Files follow a report as it is sent; later, the report is as it was sent.
 FILE_WINDOW = timedelta(minutes=30)
@@ -155,6 +160,38 @@ class BugChange(BaseModel):
     note: str | None = Field(default=None, max_length=2000)
 
 
+def _whole(value: Any) -> Any:
+    """``value`` with half an emoji gone from every string in it, keys too."""
+    if isinstance(value, str):
+        return HALF_CHARACTER.sub("", value)
+    if isinstance(value, list):
+        return [_whole(item) for item in value]
+    if isinstance(value, dict):
+        return {_whole(key): _whole(item) for key, item in value.items()}
+    return value
+
+
+class _WholeTextRequest(Request):
+    async def json(self) -> Any:
+        if not hasattr(self, "_whole_json"):
+            self._whole_json = _whole(json.loads(await self.body()))
+        return self._whole_json
+
+
+class WholeTextRoute(APIRoute):
+    """Reads a JSON body without half an emoji before it is validated: a lone surrogate
+    fails the string check, and the 422 that echoes it back cannot be written, so a report
+    or a comment carrying one answered 500 (orchestrator, 1 Nov 2026)."""
+
+    def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
+        handler = super().get_route_handler()
+
+        async def whole(request: Request) -> Response:
+            return await handler(_WholeTextRequest(request.scope, request.receive))
+
+        return whole
+
+
 def _words(value: str) -> str:
     return _CONTROL.sub("", value).strip()[:4000]
 
@@ -171,7 +208,7 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
 
     # ---------- Sales X-Ray: send a report ----------
 
-    reports = APIRouter(prefix="/v1/bug-reports", tags=["bug-reports"])
+    reports = APIRouter(prefix="/v1/bug-reports", tags=["bug-reports"], route_class=WholeTextRoute)
 
     def on_app_host(request: Request) -> None:
         hosts = {settings.public_app_url.host}

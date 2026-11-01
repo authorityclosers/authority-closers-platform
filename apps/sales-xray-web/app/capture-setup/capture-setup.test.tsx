@@ -17,7 +17,7 @@ import { resetBackCloseForTests } from "../ui/back-close";
 import { WorkspaceAccessContext } from "../workspace-access";
 import type { CaptureSetup } from "./capture-setup-client";
 import { CaptureSetupFlow } from "./capture-setup-flow";
-import { CaptureSetupGate } from "./capture-setup-gate";
+import { CaptureSetupGate, openCaptureSetup } from "./capture-setup-gate";
 import { CAPTURE_SETUP_ATTRIBUTE } from "./capture-setup-rules";
 
 (
@@ -698,6 +698,18 @@ describe("CaptureSetupGate", () => {
         uploads: true,
       },
     });
+  });
+
+  it("opens at the step a fix asks for, even on a phone that looks set", async () => {
+    // Competitor teardown #13, 1 Nov 2026: Fix on the no-recording line of Calls
+    // and Reports opens the step that fails, here the recording check.
+    route.path = "/settings/privacy";
+    fakePhone();
+    await gate(setup({ consent: "on" }));
+    expect(host.querySelector("dialog")).toBeNull();
+    await act(async () => openCaptureSetup("recordings"));
+    await settle();
+    expect(title()).toBe("Recording works");
   });
 
   it("always offers to switch back to the workspace the seller came from", async () => {

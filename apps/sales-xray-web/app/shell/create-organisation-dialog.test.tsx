@@ -105,3 +105,53 @@ it("creates once per name, keeps the same key on a retry, and says why it failed
     )?.disabled,
   ).toBe(true);
 });
+
+it("sends one request with its command id when Create is pressed twice at once", async () => {
+  const onCreated = vi.fn();
+  let answer: (response: Response) => void = () => {};
+  const fetchMock = vi.fn(
+    () =>
+      new Promise<Response>((resolve) => {
+        answer = resolve;
+      }),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  await act(async () =>
+    root.render(
+      <CreateOrganisationDialog
+        open
+        onClose={() => {}}
+        onCreated={onCreated}
+      />,
+    ),
+  );
+  await type("Brightline");
+  const form = host.querySelector("form")!;
+  await act(async () => {
+    form.dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    form.dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+  });
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+  expect(new Headers(init.headers).get("Idempotency-Key")).toMatch(
+    /^[0-9a-f-]{36}$/,
+  );
+  await act(async () =>
+    answer(
+      Response.json(
+        {
+          tenant_id: tenant,
+          handle: "brightline",
+          name: "Brightline",
+          your_role: "owner",
+        },
+        { status: 201 },
+      ),
+    ),
+  );
+  expect(onCreated).toHaveBeenCalledTimes(1);
+});

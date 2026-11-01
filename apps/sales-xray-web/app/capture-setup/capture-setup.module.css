@@ -368,3 +368,102 @@
 .recording[data-state="off"]::before {
   background: var(--sx-bad);
 }
+
+/* Calls and Reports: one line for the calls with no recording, never a card
+   (competitor teardown 13). The count opens the calls, Fix the failing step. */
+.missingLine {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 12px;
+  font-size: var(--sx-text-sm);
+}
+
+.missingLine p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 6px;
+  margin: 0;
+  color: var(--sx-ink);
+}
+
+.missingLine p::before {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sx-warn);
+  content: "";
+}
+
+.missingLine[data-state="fine"] p::before {
+  background: var(--sx-good);
+}
+
+.missingLine button {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.missingLine button[aria-expanded] {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.missingLine button[data-fix] {
+  color: var(--sx-accent);
+  font-weight: 600;
+}
+
+.missingLine button:focus-visible,
+.missingLine a:focus-visible {
+  border-radius: var(--sx-radius-sm);
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 2px;
+}
+
+.missingLine ul {
+  display: grid;
+  margin: 0;
+  padding: 0 0 0 14px;
+  list-style: none;
+}
+
+.missingLine li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+}
+
+.missingLine li a {
+  overflow: hidden;
+  color: var(--sx-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.missingLine li small {
+  flex: none;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (pointer: coarse) {
+  .missingLine button,
+  .missingLine li {
+    min-height: 44px;
+  }
+
+  .missingLine button[data-fix] {
+    min-width: 44px;
+  }
+}
