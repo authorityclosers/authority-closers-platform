@@ -41,7 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.identity.models import Person
 from ac_platform.lead_desk import hours as work_hours
-from ac_platform.lead_desk import sla
+from ac_platform.lead_desk import notify_prefs, sla
 from ac_platform.lead_desk.contracts import AlertText, Command, Model
 from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadDevice, LeadEvent
 from ac_platform.lead_desk.sides import on_side
@@ -541,7 +541,14 @@ async def collect(db: AsyncSession, now: datetime) -> list[OwnerAlert]:
             if (at := _when(entry.get("at"))) is not None and now - at <= WORDS_FOR
         ]
         _, told = first_call_minutes(config)
-        people = [str(person) for person in phones]
+        # Each person's own choice (Notifications, teardown 26): team alerts on, and
+        # inside working hours when they keep quiet hours.
+        hearing = {
+            person: tokens
+            for person, tokens in phones.items()
+            if notify_prefs.allows(config, person, "team_alerts", now)
+        }
+        people = [str(person) for person in hearing]
         for kind in KINDS:
             if not state.on[kind] or (kind == "first_call" and told):
                 continue
@@ -571,7 +578,7 @@ async def collect(db: AsyncSession, now: datetime) -> list[OwnerAlert]:
                     None if kind == "seller_idle" else fresh[0].subject,
                     list(tokens),
                 )
-                for person, tokens in phones.items()
+                for person, tokens in hearing.items()
             )
         sent = dict(state.sent)
         for person, tokens in phones.items():

@@ -31,6 +31,7 @@ import { Panel } from "../ui/kit";
 import { AiAppsSection } from "./ai-apps";
 import { ConnectedApps } from "./connected-apps";
 import { DevelopersSection } from "./developers";
+import { NotificationPrefs } from "./notification-prefs";
 import { ThemeControl } from "../lightbox/theme-provider";
 import { PhoneSetupPanel, VibrationPanel } from "./phone-panel";
 import { PrivacySettings } from "./privacy";
@@ -131,6 +132,8 @@ function PhoneAndAlerts() {
       </Panel>
       <PhoneSetupPanel />
       <AlertsCard />
+      {/* What reaches this phone and when (competitor teardown 26). */}
+      <NotificationPrefs />
       <VibrationPanel />
       <PrivacySettings />
       <AppPanel />

@@ -24,7 +24,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ac_platform.lead_desk import digests
+from ac_platform.lead_desk import digests, notify_prefs
 from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk.contracts import AlertText
 from ac_platform.lead_desk.models import Lead, LeadDevice, LeadDigest
@@ -150,8 +150,13 @@ async def collect(
                 )
             ).all()
         )
+        # The sweep is each person's Missed follow-up, the 10:00 digest their Follow-up
+        # due (Notifications, teardown 26); the on-demand test sends whatever they chose.
+        choice: notify_prefs.Kind = "missed_follow_up" if slot.kind == "sweep" else "follow_up_due"
         for person_id, tokens in people.items():
             if person_id in written:
+                continue
+            if forced is None and not notify_prefs.allows(config, person_id, choice, now):
                 continue
             desk = LeadDesk(
                 database,

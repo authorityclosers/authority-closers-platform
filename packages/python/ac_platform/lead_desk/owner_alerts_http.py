@@ -7,6 +7,8 @@ competitor teardown 19 and 20, 1 Nov 2026).
   an alert opens).
 - ``GET  /owner-alerts/summary``: today so far, per seller (the page the summary opens).
 - ``POST /owner-alerts/summary/test``: the summary to this person's own phones now.
+- ``GET|PUT /notifications``: anyone's own notification choices (teardown 26).
+- ``POST /notifications/test``: a test to this person's own phones now.
 
 Same workspace rule as the CRM's own routes. The work is in ``owner_alerts``.
 """
@@ -26,7 +28,7 @@ from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
-from ac_platform.lead_desk import owner_alerts, push
+from ac_platform.lead_desk import notify_prefs, owner_alerts, push
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
 from ac_platform.tenancy.models import Membership, Organisation
 
@@ -61,7 +63,7 @@ def install_owner_alerts_http(application: FastAPI, ctx: RouteContext) -> None:
 
     @asynccontextmanager
     async def desk_for(
-        request: Request, response: Response, *, write: bool = False
+        request: Request, response: Response, *, write: bool = False, manager: bool = True
     ) -> AsyncIterator[LeadDesk]:
         response.headers.update(PRIVATE)
         same_host(request)
@@ -115,7 +117,8 @@ def install_owner_alerts_http(application: FastAPI, ctx: RouteContext) -> None:
                         name=person_name(row[1]),
                     ),
                 )
-                desk._require_manager()
+                if manager:
+                    desk._require_manager()
                 yield desk
         except DeskError as error:
             raise HTTPException(error.status, str(error), headers=PRIVATE) from None
@@ -182,5 +185,43 @@ def install_owner_alerts_http(application: FastAPI, ctx: RouteContext) -> None:
         async with httpx.AsyncClient(timeout=15) as client:
             sent, _ = await push.send([test.alert], push.Fcm(cfg), client)
         return TestSent(phones=test.phones, sent=sent, ready=True)
+
+    @router.get(
+        "/notifications",
+        response_model=notify_prefs.NotifyView,
+        response_model_by_alias=True,
+    )
+    async def notifications_view(request: Request, response: Response) -> notify_prefs.NotifyView:
+        no_query(request)
+        async with desk_for(request, response, manager=False) as desk:
+            return await notify_prefs.view(desk)
+
+    @router.put(
+        "/notifications",
+        response_model=notify_prefs.NotifyView,
+        response_model_by_alias=True,
+    )
+    async def notifications_save(
+        command: notify_prefs.NotifyCommand, request: Request, response: Response
+    ) -> notify_prefs.NotifyView:
+        no_query(request)
+        async with desk_for(request, response, write=True, manager=False) as desk:
+            return await notify_prefs.save(desk, command)
+
+    @router.post("/notifications/test", response_model=TestSent)
+    async def notifications_test(request: Request, response: Response) -> TestSent:
+        no_query(request)
+        async with desk_for(request, response, write=True, manager=False) as desk:
+            test = await notify_prefs.test(desk)
+        # Kept first (the app reads the words as the push arrives), then sent.
+        cfg = push.config()
+        if not test.tokens or cfg is None:
+            return TestSent(phones=len(test.tokens), sent=0, ready=cfg is not None)
+        fcm = push.Fcm(cfg)
+        sent = 0
+        async with httpx.AsyncClient(timeout=15) as client:
+            for token in test.tokens:
+                sent += await fcm.send(client, token, test.data()) == "sent"
+        return TestSent(phones=len(test.tokens), sent=sent, ready=True)
 
     application.include_router(router)

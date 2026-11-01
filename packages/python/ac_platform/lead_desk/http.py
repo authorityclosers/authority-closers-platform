@@ -40,6 +40,7 @@ from ac_platform.lead_desk import (
     duplicate_queue,
     finder,
     merging,
+    notify_prefs,
     owner_alerts,
     push,
     revenue_push,
@@ -802,8 +803,10 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
             milestone = await revenue_push.words(lead_desk)
             if milestone is not None:
                 return milestone
-            # An owner alert with no lead just sent (idle sellers, the day's summary).
-            owner = await owner_alerts.words(lead_desk)
+            # A test this person just sent, or an owner alert with no lead just sent
+            # (idle sellers, the day's summary).
+            test = await notify_prefs.test_words(lead_desk)
+            owner = test or await owner_alerts.words(lead_desk)
             return owner or await lead_desk.alert_summary()
 
     @router.get("/soon", response_model=Soon, response_model_by_alias=True)

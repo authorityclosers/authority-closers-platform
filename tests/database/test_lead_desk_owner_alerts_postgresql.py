@@ -3,7 +3,9 @@
 minutes reaches the admin's phone once, ids only, and its words name it on the admin's own
 session; its list shows it until someone calls back; a quiet Interested lead is on its list;
 the switches and the admin's own summary days save; the summary goes at 7 PM once a day, and
-a test goes now, at most once a minute. Sellers never see any of it. Made-up people only."""
+a test goes now, at most once a minute. Sellers never see any of it. Anyone sets their own
+notifications (teardown 26): the admin's team alerts off means no owner alert reaches them,
+and a test's words answer their plain alert read. Made-up people only."""
 
 from __future__ import annotations
 
@@ -18,7 +20,7 @@ import pytest
 from sqlalchemy import Engine, update
 
 from ac_platform.http.routes import RouteContext
-from ac_platform.lead_desk import owner_alerts
+from ac_platform.lead_desk import owner_alerts, push
 from ac_platform.lead_desk.models import Lead, LeadEvent
 from ac_platform.lead_desk.owner_alerts_http import install_owner_alerts_http
 from tests.database.conversation_harness import conversation_harness
@@ -178,5 +180,170 @@ def test_owner_alerts_list_words_and_summary(postgres_harness: Any, tmp_path: Pa
             assert (
                 await here.client.get(f"{BASE}/owner-alerts/list", params={"kind": "missed_call"})
             ).status_code == 403
+
+    run(exercise())
+
+
+def test_each_person_sets_their_own_notifications(postgres_harness: Any, tmp_path: Path) -> None:
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            settings = here.setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
+            install_owner_alerts_http(
+                here.setup.app,
+                RouteContext(settings, here.setup.require_actor, here.setup.sessions),
+            )
+            here.as_admin()
+            token = "fictional-phone-" + uuid4().hex
+            registered = await here.client.post(
+                f"{BASE}/devices", json={"token": token}, headers=WRITE
+            )
+            assert registered.status_code == 200, registered.text
+            saved = await here.client.put(
+                f"{BASE}/owner-alerts", json={**SWITCHES, "summary_days": []}, headers=WRITE
+            )
+            assert saved.status_code == 200, saved.text
+
+            # A seller sets their own: every type on and on time by default.
+            here.as_seller()
+            mine = await here.client.get(f"{BASE}/notifications")
+            assert mine.status_code == 200, mine.text
+            assert mine.json()["manager"] is False
+            assert mine.json()["due_lead_minutes"] == 0 and mine.json()["quiet"] is False
+            changed = await here.client.put(
+                f"{BASE}/notifications",
+                json={
+                    "new_enquiry": True,
+                    "follow_up_due": True,
+                    "missed_follow_up": False,
+                    "team_alerts": True,
+                    "due_lead_minutes": 15,
+                    "quiet": False,
+                },
+                headers=WRITE,
+            )
+            assert changed.status_code == 200, changed.text
+            assert changed.json()["missed_follow_up"] is False
+            assert changed.json()["due_lead_minutes"] == 15
+            refused = await here.client.put(
+                f"{BASE}/notifications",
+                json={
+                    "new_enquiry": True,
+                    "follow_up_due": True,
+                    "missed_follow_up": True,
+                    "team_alerts": True,
+                    "due_lead_minutes": 7,
+                    "quiet": True,
+                },
+                headers=WRITE,
+            )
+            assert refused.status_code == 422, refused.text
+
+            # The admin turns team alerts off: a missed call alerts nobody's phone.
+            here.as_admin()
+            off = await here.client.put(
+                f"{BASE}/notifications",
+                json={
+                    "new_enquiry": True,
+                    "follow_up_due": True,
+                    "missed_follow_up": True,
+                    "team_alerts": False,
+                    "due_lead_minutes": 0,
+                    "quiet": False,
+                },
+                headers=WRITE,
+            )
+            assert off.status_code == 200 and off.json()["manager"] is True, off.text
+            caller = await here.add("Fictional Missed", "98760 83011")
+            now = datetime.now(UTC)
+            await call(here, caller, now - timedelta(minutes=40), direction="missed")
+            assert await pushed(here, now - timedelta(minutes=30)) == []
+            assert await pushed(here, now) == []
+
+            # A test reaches the admin's own phone, and its words answer the plain read.
+            here.as_admin()
+            test = await here.client.post(f"{BASE}/notifications/test", headers=WRITE)
+            assert test.status_code == 200, test.text
+            assert test.json()["phones"] == 1
+            words = (await here.client.get(f"{BASE}/alert")).json()
+            assert words["title"] == "Test notification" and words["url"] == "/leads"
+            again = await here.client.post(f"{BASE}/notifications/test", headers=WRITE)
+            assert again.status_code == 429, again.text
+
+    run(exercise())
+
+
+PREFS = {
+    "new_enquiry": True,
+    "follow_up_due": True,
+    "missed_follow_up": True,
+    "team_alerts": True,
+    "due_lead_minutes": 0,
+    "quiet": False,
+}
+
+
+async def lead_pushes(here: World, now: datetime) -> list[tuple[str, str]]:
+    """The seller's lead alerts in one pass: (kind, lead) pairs."""
+    async with here.setup.sessions() as db, db.begin():
+        alerts = await push.collect(db, now)
+    return [
+        (kind, str(lead))
+        for alert in alerts
+        if alert.tenant_id == here.tenant_id and alert.person_id == here.seller.person_id
+        for kind, lead in alert.leads
+    ]
+
+
+def test_lead_alerts_follow_each_persons_choices(postgres_harness: Any, tmp_path: Path) -> None:
+    """The Leads session's conditions (1 Nov 2026): a person with New enquiry off hears no new
+    lead; one who hears follow-ups 15 minutes early hears it then, once; by default a follow-up
+    still comes at the time."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            settings = here.setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
+            install_owner_alerts_http(
+                here.setup.app,
+                RouteContext(settings, here.setup.require_actor, here.setup.sessions),
+            )
+            here.as_seller()
+            token = "fictional-phone-" + uuid4().hex
+            registered = await here.client.post(
+                f"{BASE}/devices", json={"token": token}, headers=WRITE
+            )
+            assert registered.status_code == 200, registered.text
+            off = await here.client.put(
+                f"{BASE}/notifications", json={**PREFS, "new_enquiry": False}, headers=WRITE
+            )
+            assert off.status_code == 200, off.text
+            quiet = await here.add("Fictional Unheard", "98760 83021")
+            now = datetime.now(UTC)
+            assert ("new", quiet) not in await lead_pushes(here, now)
+
+            here.as_seller()
+            early = await here.client.put(
+                f"{BASE}/notifications", json={**PREFS, "due_lead_minutes": 15}, headers=WRITE
+            )
+            assert early.status_code == 200, early.text
+            soon = now + timedelta(minutes=10)
+            async with here.setup.sessions() as db, db.begin():
+                await db.execute(
+                    update(Lead).where(Lead.id == UUID(quiet)).values(next_action_at=soon)
+                )
+            assert ("due", quiet) in await lead_pushes(here, now)
+            assert (await here.stored(quiet)).alerted_due_at == soon
+            assert ("due", quiet) not in await lead_pushes(here, now + timedelta(minutes=1))
+
+            # At the time, as before, for someone who never chose.
+            here.as_seller()
+            back = await here.client.put(f"{BASE}/notifications", json=PREFS, headers=WRITE)
+            assert back.status_code == 200, back.text
+            later = await here.add("Fictional On Time", "98760 83022")
+            async with here.setup.sessions() as db, db.begin():
+                await db.execute(
+                    update(Lead).where(Lead.id == UUID(later)).values(next_action_at=soon)
+                )
+            assert ("due", later) not in await lead_pushes(here, now + timedelta(minutes=2))
+            assert ("due", later) in await lead_pushes(here, soon + timedelta(seconds=5))
 
     run(exercise())
