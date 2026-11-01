@@ -107,7 +107,7 @@ it("keeps navigation, one main landmark and help, without placeholder chrome", a
   trigger.focus();
   await act(async () => trigger.click());
   const legal = shell.querySelector(
-    '[role="region"][aria-label="Profile actions"]',
+    '[role="dialog"][aria-label="Profile actions"]',
   )!;
   expect(legal).not.toBeNull();
   expect(
@@ -385,7 +385,7 @@ it("offers the theme control in the account menu only when the theme is released
     )!;
     await act(async () => trigger.click());
     const menu = host.querySelector(
-      '[role="region"][aria-label="Profile actions"]',
+      '[role="dialog"][aria-label="Profile actions"]',
     );
     expect(menu).not.toBeNull();
     return menu!;

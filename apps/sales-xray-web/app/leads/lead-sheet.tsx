@@ -55,6 +55,7 @@ import { createPortal } from "react-dom";
 
 import { callHref, type UploadPolicy } from "../acquisition-client";
 import { notify } from "../notice-center";
+import { unsentWrites, useWrites } from "../sync/write-queue";
 import { rememberOpened } from "../pick-up";
 import { useWorkspaceAccess } from "../workspace-access";
 import { haptic } from "../ui/haptics";
@@ -670,12 +671,118 @@ export function CallOutcome({
         )
       : undefined;
   const openMessage = useContext(OpenMessage);
+  // The answer arrived: say where the lead went and when the next call is,
+  // with Undo while the server allows it, then go on.
+  const finish = (
+    saved: LeadDetail,
+    before: LeadDetail["lead"],
+    after: (next: LeadDetail) => void,
+  ) => {
+    buzz("done");
+    flow.done({ step: "save" });
+    keepDraft(draftKey, "");
+    // Says where the lead went and when the next call is (persona QA, 31 Oct
+    // 2026: "All changes saved" didn't say where the lead went).
+    const moved =
+      saved.lead.step !== before.step || saved.lead.stage !== before.stage;
+    notify({
+      id: `outcome-${saved.lead.lead_id}`,
+      tone: "success",
+      title: [
+        `${moved ? "Moved to" : "Still"} ${saved.lead.stage_label}`,
+        saved.lead.next_action_at
+          ? `next call ${when(saved.lead.next_action_at)}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      message: saved.lead.name,
+      timeout: saved.undo_result ? 10000 : 6000,
+      // A moment to take it back (the server's undo supersedes; 5 minutes, its seller).
+      action: saved.undo_result
+        ? {
+            label: "Undo",
+            run: () => {
+              const answer = saved.undo_result;
+              if (!answer) return;
+              void undoResult(saved.lead, answer.event_id).then(
+                (back) => {
+                  onUndone?.(back);
+                  notify({
+                    id: `outcome-${saved.lead.lead_id}`,
+                    tone: "info",
+                    title: `Undone: back to ${back.lead.stage_label}`,
+                    // The answer's note stays, in Notes (ph2-26, 1 Nov 2026).
+                    message: note.trim()
+                      ? `${back.lead.name} · your note is kept in Notes`
+                      : back.lead.name,
+                    timeout: 6000,
+                  });
+                },
+                (failure: unknown) =>
+                  notify({
+                    id: `outcome-${saved.lead.lead_id}`,
+                    tone: "error",
+                    title:
+                      failure instanceof LeadsError
+                        ? failure.message
+                        : "Can't undo now.",
+                    message: saved.lead.name,
+                  }),
+              );
+            },
+          }
+        : undefined,
+    });
+    after(saved);
+    // Reviews engine (owner, 23 Oct 2026): asks later, when nothing is in the way.
+    askFeedback("call_outcome");
+  };
+  // An answer kept on this phone (sync/write-queue.ts) that arrives later, by
+  // itself or by Send now, ends as a first-try save does: where the lead went,
+  // with Undo (QA robot J221, 2 Nov 2026: it kept saying "Not sent yet").
+  const [kept, setKept] = useState<{
+    before: LeadDetail["lead"];
+    at: number;
+    after: (next: LeadDetail) => void;
+  } | null>(null);
+  const writes = useWrites();
+  const arrived =
+    kept !== null &&
+    writes.savedAt >= kept.at &&
+    !unsentWrites().some(
+      (item) =>
+        item.lead === kept.before.lead_id && item.url.endsWith("/dispose"),
+    );
+  const finishLatest = useRef(finish);
+  useEffect(() => {
+    finishLatest.current = finish;
+  });
+  useEffect(() => {
+    if (!arrived || !kept) return;
+    let live = true;
+    readLead(kept.before.lead_id).then(
+      (saved) => {
+        if (!live) return;
+        setKept(null);
+        // Only an answer that is there: a change thrown away leaves the lead as it was.
+        if (saved.lead.revision <= kept.before.revision) return;
+        setError(null);
+        finishLatest.current(saved, kept.before, kept.after);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [arrived, kept]);
   const submit = async (after: (next: LeadDetail) => void = onSaved) => {
     if (!valid || saving) return;
     setSaving(true);
     setError(null);
+    let current: LeadDetail | null = null;
     try {
-      const current = await beforeSave();
+      current = await beforeSave();
       const saved = await dispose(current.lead, {
         connected: talk === "talked",
         reason: talk === "missed" ? (reason ?? undefined) : undefined,
@@ -707,67 +814,12 @@ export function CallOutcome({
         remark: note.trim() || undefined,
         deal_value: worth !== null ? String(worth) : deal.trim() || undefined,
       });
-      buzz("done");
-      flow.done({ step: "save" });
-      keepDraft(draftKey, "");
-      // Says where the lead went and when the next call is (persona QA, 31 Oct
-      // 2026: "All changes saved" didn't say where the lead went).
-      const moved =
-        saved.lead.step !== current.lead.step ||
-        saved.lead.stage !== current.lead.stage;
-      notify({
-        id: `outcome-${saved.lead.lead_id}`,
-        tone: "success",
-        title: [
-          `${moved ? "Moved to" : "Still"} ${saved.lead.stage_label}`,
-          saved.lead.next_action_at
-            ? `next call ${when(saved.lead.next_action_at)}`
-            : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        message: saved.lead.name,
-        timeout: saved.undo_result ? 10000 : 6000,
-        // A moment to take it back (the server's undo supersedes; 5 minutes, its seller).
-        action: saved.undo_result
-          ? {
-              label: "Undo",
-              run: () => {
-                const answer = saved.undo_result;
-                if (!answer) return;
-                void undoResult(saved.lead, answer.event_id).then(
-                  (back) => {
-                    onUndone?.(back);
-                    notify({
-                      id: `outcome-${saved.lead.lead_id}`,
-                      tone: "info",
-                      title: `Undone: back to ${back.lead.stage_label}`,
-                      // The answer's note stays, in Notes (ph2-26, 1 Nov 2026).
-                      message: note.trim()
-                        ? `${back.lead.name} · your note is kept in Notes`
-                        : back.lead.name,
-                      timeout: 6000,
-                    });
-                  },
-                  (failure: unknown) =>
-                    notify({
-                      id: `outcome-${saved.lead.lead_id}`,
-                      tone: "error",
-                      title:
-                        failure instanceof LeadsError
-                          ? failure.message
-                          : "Can't undo now.",
-                      message: saved.lead.name,
-                    }),
-                );
-              },
-            }
-          : undefined,
-      });
-      after(saved);
-      // Reviews engine (owner, 23 Oct 2026): asks later, when nothing is in the way.
-      askFeedback("call_outcome");
+      setKept(null);
+      finish(saved, current.lead, after);
     } catch (failure) {
+      // Kept on this phone: it ends here once it arrives (`kept` above).
+      if (failure instanceof LeadsError && failure.kept && current)
+        setKept({ before: current.lead, at: Date.now(), after });
       setError(
         failure instanceof LeadsError
           ? failure.message
@@ -2852,6 +2904,10 @@ function NotesSection({
 
 type LeadTab = "notes" | "calls" | "story";
 
+/** "tomorrow 10:00 AM" → "Tomorrow 10:00 AM", at the start of a line. */
+const upperFirst = (text: string) =>
+  text.charAt(0).toUpperCase() + text.slice(1);
+
 const LEAD_TABS: { key: LeadTab; label: string }[] = [
   { key: "notes", label: "Notes" },
   { key: "calls", label: "Calls" },
@@ -2934,6 +2990,7 @@ function ActionBox({
   href,
   disabled = false,
   why,
+  fix,
 }: {
   /** The kind's colour: messages violet, notes amber, tasks blue, moves slate. */
   kind: "message" | "note" | "task" | "stage";
@@ -2945,8 +3002,11 @@ function ActionBox({
   onClick?: () => void;
   href?: string;
   disabled?: boolean;
-  /** Why a box can't work now; it stays in its place, greyed. */
+  /** Why a box can't work now; it stays in its place, greyed, and a tap on it
+   *  says so (competitor teardown 10, 2 Nov 2026: a disabled button said
+   *  nothing on a phone), with what fixes it when something does. */
   why?: string;
+  fix?: { label: string; run: () => void };
 }) {
   const inside = (
     <>
@@ -2971,9 +3031,20 @@ function ActionBox({
       data-kind={kind}
       data-channel={channel}
       aria-label={disabled && why ? why : name}
-      title={disabled ? why : undefined}
-      disabled={disabled}
-      onClick={onClick}
+      aria-disabled={disabled || undefined}
+      onClick={
+        disabled
+          ? () => {
+              if (!why) return;
+              notify({
+                id: `why-${channel}`,
+                tone: "info",
+                title: why,
+                ...(fix ? { action: fix } : {}),
+              });
+            }
+          : onClick
+      }
     >
       {inside}
     </button>
@@ -3172,6 +3243,20 @@ export function LeadCard({
     act.current();
   }, [intent, detail.phone, detail.email, detail.can_edit]);
   const [editing, setEditing] = useState(false);
+  // A greyed box's fix (competitor teardown 10): the Details editor, in view.
+  const detailsPanel = useRef<HTMLElement>(null);
+  const editDetails = () => {
+    setEditing(true);
+    window.requestAnimationFrame(() =>
+      detailsPanel.current?.scrollIntoView?.({
+        block: "start",
+        behavior: "smooth",
+      }),
+    );
+  };
+  const numberFix = detail.can_edit
+    ? { label: "Add a number", run: editDetails }
+    : undefined;
   const [testing, setTesting] = useState(false);
   // Reassign: its own sheet (owner, #33, 26 Oct 2026).
   const [picking, setPicking] = useState(false);
@@ -3394,6 +3479,24 @@ export function LeadCard({
               {sub}
             </button>
           ) : null}
+          {/* The next follow-up under the name, a tap from its presets
+              (competitor teardown 10, 2 Nov 2026). */}
+          {detail.can_edit && !["won", "lost", "junk"].includes(lead.stage) ? (
+            <button
+              type="button"
+              className={styles.followLine}
+              aria-haspopup="dialog"
+              onClick={() => setReminding(true)}
+            >
+              <span>
+                Follow-up ·{" "}
+                {lead.next_action_at
+                  ? upperFirst(when(lead.next_action_at))
+                  : "None yet"}
+              </span>
+              <Pencil size={14} aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
       </header>
       <div className={styles.cardBadges}>
@@ -3480,6 +3583,7 @@ export function LeadCard({
             icon={<WhatsAppGlyph />}
             disabled={!detail.phone}
             why="WhatsApp: add a phone number first"
+            fix={numberFix}
             onClick={() => openMessage(null, "whatsapp")}
           />
           <ActionBox
@@ -3489,6 +3593,7 @@ export function LeadCard({
             icon={<MessageSquareText size={20} aria-hidden="true" />}
             disabled={!detail.phone}
             why="SMS: add a phone number first"
+            fix={numberFix}
             onClick={() => openMessage(null, "sms")}
           />
           <ActionBox
@@ -3499,6 +3604,11 @@ export function LeadCard({
             href={detail.email ? `mailto:${detail.email}` : undefined}
             disabled={!detail.email}
             why="No email on this lead"
+            fix={
+              detail.can_edit
+                ? { label: "Add an email", run: editDetails }
+                : undefined
+            }
           />
           {detail.can_edit ? (
             <>
@@ -3751,7 +3861,7 @@ export function LeadCard({
         shared={{ chat: conversations.social }}
       />
 
-      <section className={styles.panel} aria-label="Details">
+      <section ref={detailsPanel} className={styles.panel} aria-label="Details">
         <div className={styles.panelHead}>
           <h3>Details</h3>
           {/* Rare, so here rather than among the stage and source. */}

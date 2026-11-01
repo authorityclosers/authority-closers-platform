@@ -73,6 +73,11 @@ const settle = async () =>
     for (let index = 0; index < 6; index += 1) await Promise.resolve();
   });
 
+const press = (dialog: HTMLElement, words: string) =>
+  Array.from(dialog.querySelectorAll("button")).find(
+    (button) => button.textContent?.trim() === words,
+  )!;
+
 const paste = async (target: HTMLElement, text: string) => {
   const event = new Event("paste", { bubbles: true, cancelable: true });
   Object.defineProperty(event, "clipboardData", {
@@ -101,9 +106,9 @@ it("reads rows pasted into quick add as it opens, and adds them all", async () =
     "Name,Phone\nAsha Example,98765 43210\nRavi Sample,91234 56789",
   );
   expect(dialog.textContent).toContain("Pasted: 2 rows");
-  const add = Array.from(dialog.querySelectorAll("button")).find(
-    (button) => button.textContent?.trim() === "Import 2 leads",
-  )!;
+  // Columns, then Check (competitor teardown 5).
+  await act(async () => press(dialog, "Next").click());
+  const add = press(dialog, "Import 2 leads");
   await act(async () => add.click());
   await settle();
   expect(commitImport).toHaveBeenCalledWith(
@@ -191,9 +196,6 @@ it("maps stage and owner columns, says which numbers are already leads, and what
   );
   await settle();
   const dialog = host.querySelector("dialog")!;
-  expect(dialog.textContent).toContain(
-    "1 already a lead (kept as they are, not added again)",
-  );
   const labels = Array.from(
     dialog.querySelectorAll("label > span:first-child"),
     (span) => span.textContent?.trim(),
@@ -202,6 +204,14 @@ it("maps stage and owner columns, says which numbers are already leads, and what
   expect(dialog.textContent).toContain(
     "Stages are matched by name to the pipeline's stages",
   );
+  // Check: the number already a lead is skipped unless asked otherwise.
+  await act(async () => press(dialog, "Next").click());
+  expect(dialog.textContent).toContain("1 number is already a lead");
+  expect(
+    dialog.querySelector(
+      '[aria-label="Numbers already leads"] [aria-pressed="true"]',
+    )?.textContent,
+  ).toBe("Skip");
   const add = Array.from(dialog.querySelectorAll("button")).find((button) =>
     button.textContent?.trim().startsWith("Import"),
   )!;

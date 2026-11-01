@@ -19,6 +19,7 @@ import { AppSession } from "./app-session";
 import {
   AcquisitionStudio,
   analysisMinutesOut,
+  minutesOutNotice,
   remainingAllowanceLabel,
 } from "./acquisition-studio";
 import { AcquisitionError } from "./acquisition-client";
@@ -758,6 +759,22 @@ it("keeps a fresh standalone call focused on upload without empty dashboards or 
   expect(
     container.querySelectorAll('[aria-label="Add sales call audio files"]'),
   ).toHaveLength(1);
+  // One keyboard stop for choosing a file, the visible Choose a file; the
+  // pickers behind it are never Tab stops no one can see (the test robot,
+  // a9e8d053, 1 Nov 2026).
+  const pickers = [
+    ...container.querySelectorAll<HTMLInputElement>('input[type="file"]'),
+  ];
+  expect(pickers.length).toBeGreaterThan(0);
+  for (const picker of pickers) {
+    expect(picker.tabIndex).toBe(-1);
+    expect(picker.getAttribute("aria-hidden")).toBe("true");
+  }
+  expect(
+    [...container.querySelectorAll("button")].filter(
+      (item) => item.textContent?.trim() === "Choose a file",
+    ),
+  ).toHaveLength(1);
   expect(
     container.querySelector('[aria-label="Supported audio file limits"]')
       ?.textContent,
@@ -783,6 +800,22 @@ it("keeps a fresh standalone call focused on upload without empty dashboards or 
   ).toBeNull();
   expect(button("Analyse my call").disabled).toBe(true);
   expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(0);
+});
+
+it("gives New analysis its notice dock at the top of the studio's own scroller", async () => {
+  // The test robot, a9e8d053 (1 Nov 2026): on a phone the corner cards lifted
+  // the first-call guide over Choose a file. The page fits the phone and the
+  // studio scrolls itself, so the dock sits inside that scroller, never above
+  // it, and the room kept for the guide stays below the scroller.
+  await act(async () =>
+    root.render(<AcquisitionStudio requestedCallId={null} noticeDock />),
+  );
+  await flush();
+  const main = container.querySelector(".studio-main");
+  expect(main?.firstElementChild?.hasAttribute("data-notice-dock")).toBe(true);
+  // Other studios (the start page, a saved report) keep the corner.
+  await mount();
+  expect(container.querySelector("[data-notice-dock]")).toBeNull();
 });
 
 it("keeps one source upload alive across client navigation and shows the confirmed result", async () => {
@@ -1976,6 +2009,29 @@ it("sends a signed-in seller with no minutes left to Plans, never a guest", () =
   expect(tooLong.message).toContain("remaining analysis minutes");
   // The same copy shows in the Google Play app: no plans, prices or buying.
   expect(tooLong.message).not.toMatch(/plan|₹|price|cost|buy/i);
+});
+
+it("says minutes ran out in New analysis's dock on a phone, never a corner card over the guide", () => {
+  // The test robot, a9e8d053 (1 Nov 2026): the corner card lifted the
+  // first-call guide over Choose a file at 360 px.
+  const seePlans = vi.fn();
+  const web = minutesOutNotice(true, seePlans);
+  expect(web).toMatchObject({
+    id: "analysis-minutes-out",
+    dock: true,
+    timeout: 0,
+    title: "Get more analysis minutes",
+  });
+  web.action?.run();
+  expect(seePlans).toHaveBeenCalledOnce();
+  const play = minutesOutNotice(false, seePlans);
+  expect(play).toMatchObject({
+    id: "analysis-minutes-out",
+    dock: true,
+    title: "Analysis minutes used up",
+  });
+  expect(play.action).toBeUndefined();
+  expect(`${play.title} ${play.message}`).not.toMatch(/plan|₹|price|buy/i);
 });
 
 it("does not present a legacy tester flag as a plan or finite balance", () => {

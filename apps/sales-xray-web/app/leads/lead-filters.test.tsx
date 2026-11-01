@@ -7,6 +7,7 @@ import { resetBackCloseForTests } from "../ui/back-close";
 import {
   ActiveFilters,
   FilterSheet,
+  filterNames,
   filtersOn,
   type LeadFilters,
 } from "./lead-filters";
@@ -64,6 +65,43 @@ it("counts only the filters that narrow the list", () => {
   expect(
     filtersOn({ who: "unassigned", pipeline: "partner", q: "pune" }, "team"),
   ).toBe(3);
+});
+
+// Robot J181 (2 Nov 2026): an empty filtered list names the filters on, in their
+// chips' words; a sort hides nothing, and Follow-ups' own split isn't a filter.
+it("names the filters that narrow the list, in their chips' words", () => {
+  expect(
+    filterNames(
+      {
+        who: "mine",
+        pipeline: null,
+        q: "",
+        more: {
+          source: "manual",
+          created: "month",
+          when: "upcoming",
+          sort: "name",
+        },
+      },
+      "team",
+    ),
+  ).toEqual([
+    "Mine",
+    "Follow-up upcoming",
+    "Came in this month",
+    "Added by hand",
+  ]);
+  expect(
+    filterNames(
+      {
+        who: "team",
+        pipeline: null,
+        q: "",
+        more: { view: "follow_ups", when: "today" },
+      },
+      "team",
+    ),
+  ).toEqual([]);
 });
 
 it("applies whose leads and a pipeline together", async () => {

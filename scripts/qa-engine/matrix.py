@@ -111,6 +111,26 @@ def cmd_annotate(a):
     print(json.dumps({"annotated": a.id, "rows": hit}))
 
 
+def cmd_reopen(a):
+    """A new report on a fingerprint that has a row: the row takes the new ids; a closed row (fixed or verified) is reopened as new."""
+    with qm.lock():
+        B = qm.rd("bugs.csv")
+        row = next((b for b in B if b["fingerprint"] == a.fingerprint), None)
+        if not row:
+            print(json.dumps({"reopened": 0, "why": "no row for this fingerprint"}))
+            return
+        was, old = row["status"], row["bug_id"]
+        if was in ("fixed", "verified"):
+            row["status"] = "new"
+            row["description"] = f"REOPENED (seen again after it was marked {was}; earlier report {old}): " + row["description"]
+        if a.id:
+            row["bug_id"] = a.id
+        if a.full:
+            row["full_id"] = a.full
+        qm.wr("bugs.csv", qm.BC, B)
+    print(json.dumps({"reopened": 1 if was in ("fixed", "verified") else 0, "was": was, "old_id": old, "bug_id": row["bug_id"]}))
+
+
 def cmd_personas(a):
     rows = []
     for line in qm.PERSONAS.strip().splitlines():
@@ -166,6 +186,11 @@ def main():
     s.add_argument("--builder", default="")
     s.add_argument("--status", default="")
     s.set_defaults(f=cmd_annotate)
+    s = sp.add_parser("reopen")
+    s.add_argument("--fingerprint", required=True)
+    s.add_argument("--id", default="")
+    s.add_argument("--full", default="")
+    s.set_defaults(f=cmd_reopen)
     s = sp.add_parser("list")
     s.add_argument("--status", default="not run")
     s.add_argument("--devices", default="")

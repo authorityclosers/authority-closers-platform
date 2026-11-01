@@ -140,6 +140,13 @@
   font-weight: 750;
   line-height: 1.35;
 }
+/* Choose a file is a button now, so the keyboard reaches it: it reads as the
+   link-like words it was. */
+.dropSelect {
+  border: 0;
+  background: none;
+  font: inherit;
+}
 .app[data-stage="upload"] .dropSelect {
   display: inline-flex;
   min-height: 44px;
