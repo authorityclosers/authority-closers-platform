@@ -81,7 +81,7 @@ it.each(["header", "rail"] as const)(
       host.querySelector('[aria-label="Profile actions"] [aria-hidden="true"]')
         ?.textContent,
     ).toBe("ML");
-    expect(host.querySelector('[role="region"]')?.textContent).toContain(
+    expect(host.querySelector('[role="dialog"]')?.textContent).toContain(
       "Morgan Lee",
     );
     expect(fetch).toHaveBeenCalledWith(
@@ -244,7 +244,7 @@ it("adds the theme choice after the account actions only under a released theme"
   await act(async () =>
     host.querySelector<HTMLButtonElement>("button[aria-expanded]")!.click(),
   );
-  const region = host.querySelector('[role="region"]')!;
+  const region = host.querySelector('[role="dialog"]')!;
   expect(region.querySelector('[aria-hidden="true"]')?.textContent).toBe("AC");
   const theme = region.querySelector("fieldset")!;
   expect(
@@ -423,6 +423,44 @@ it("shows no Pricing to a seller in an organisation", async () => {
   );
   expect(host.querySelector('a[href="/pricing"]')).toBeNull();
   expect(host.textContent).toContain("Report a problem");
+});
+
+it("is a named layer, and a press beside it only closes it", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(Response.json(profile("Morgan Lee"))),
+  );
+  const addTask = vi.fn();
+  const page = document.createElement("button");
+  page.textContent = "Add task";
+  page.addEventListener("click", addTask);
+  document.body.append(page);
+  try {
+    await act(async () =>
+      root.render(<ProfileMenu authenticated accountHref="/calls" />),
+    );
+    const trigger = host.querySelector<HTMLButtonElement>(
+      "button[aria-expanded]",
+    )!;
+    expect(trigger.getAttribute("aria-haspopup")).toBe("dialog");
+    await act(async () => trigger.click());
+    const layer = host.querySelector('[aria-label="Profile actions"]')!;
+    expect(layer.getAttribute("role")).toBe("dialog");
+    expect(layer.getAttribute("aria-modal")).toBe("false");
+    expect(trigger.getAttribute("aria-controls")).toBe(layer.id);
+    // QA robot 850: one tap on Add task under the open menu.
+    await act(async () => {
+      page.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      page.click();
+    });
+    expect(host.querySelector('[aria-label="Profile actions"]')).toBeNull();
+    expect(addTask).not.toHaveBeenCalled();
+    // The next tap is the page's own.
+    await act(async () => page.click());
+    expect(addTask).toHaveBeenCalledTimes(1);
+  } finally {
+    page.remove();
+  }
 });
 
 it("opens the reporter from Help, and brings the hidden report button back", async () => {

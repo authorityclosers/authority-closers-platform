@@ -21,7 +21,7 @@ import {
   User,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 
 import {
   requestSalesXrayLogout,
@@ -128,6 +128,7 @@ export function ProfileMenu({
   const profileName = profile?.name?.trim() || null;
   const profileEmail = profile?.email?.trim() || null;
   const menu = useRef<HTMLDivElement>(null);
+  const popoverId = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const signingOutRef = useRef(false);
   const access = useWorkspaceAccess();
@@ -140,9 +141,29 @@ export function ProfileMenu({
 
   useEffect(() => {
     if (!open) return;
+    // A press outside only closes the menu: the click it would make on the
+    // page under it is dropped (QA robot 850, 1 Nov 2026: one tap beside the
+    // menu also opened Add task under it).
+    const dropClick = (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
     const closeOnOutsidePress = (event: PointerEvent) => {
-      if (event.target instanceof Node && !menu.current?.contains(event.target))
-        setOpen(false);
+      if (
+        !(event.target instanceof Node) ||
+        menu.current?.contains(event.target)
+      )
+        return;
+      setOpen(false);
+      document.addEventListener("click", dropClick, {
+        capture: true,
+        once: true,
+      });
+      // A press that became a scroll makes no click: nothing later is dropped.
+      window.setTimeout(
+        () => document.removeEventListener("click", dropClick, true),
+        600,
+      );
     };
     const closeOnEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -150,10 +171,10 @@ export function ProfileMenu({
         trigger.current?.focus();
       }
     };
-    document.addEventListener("pointerdown", closeOnOutsidePress);
+    document.addEventListener("pointerdown", closeOnOutsidePress, true);
     document.addEventListener("keydown", closeOnEscape);
     return () => {
-      document.removeEventListener("pointerdown", closeOnOutsidePress);
+      document.removeEventListener("pointerdown", closeOnOutsidePress, true);
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [open]);
@@ -237,6 +258,8 @@ export function ProfileMenu({
           type="button"
           className={styles.headerTrigger}
           aria-expanded={open}
+          aria-haspopup="dialog"
+          aria-controls={open ? popoverId : undefined}
           aria-label={
             authenticated ? `Open ${displayName} menu` : "Open profile menu"
           }
@@ -262,6 +285,8 @@ export function ProfileMenu({
           type="button"
           className={styles.trigger}
           aria-expanded={open}
+          aria-haspopup="dialog"
+          aria-controls={open ? popoverId : undefined}
           aria-label={
             authenticated ? `Open ${displayName} menu` : "Open profile menu"
           }
@@ -287,9 +312,13 @@ export function ProfileMenu({
         </button>
       )}
       {open ? (
+        // A layer over the page, named as one (QA robot 850): a dialog that
+        // does not trap focus, as its links and Theme are not menu items.
         <div
+          id={popoverId}
           className={styles.popover}
-          role="region"
+          role="dialog"
+          aria-modal="false"
           aria-label="Profile actions"
           onKeyDown={handleMenuKeyDown}
         >

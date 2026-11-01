@@ -1257,9 +1257,12 @@
   overflow-x: hidden;
 }
 
-/* Compact, modern title in a slimmer top bar. */
+/* Compact, modern title in a slimmer top bar, which grows with its text: a
+   fixed 48 px pushed the workspace line above the window at 200 % text (the
+   test robot, 1 Nov 2026). */
 .topBar {
-  height: 48px;
+  height: auto;
+  min-height: 48px;
 }
 
 /* The workspace sits over the page title, as on phones (r17): the title is
@@ -2222,13 +2225,15 @@
     margin-bottom: 6px;
   }
 
-  /* Search, a quiet row with its key (owner bug #26: the pill was clutter). */
+  /* Search, a quiet row with its key (owner bug #26: the pill was clutter).
+     It and New analysis grow with their text: at 200 % a fixed 32 px row
+     spilled over its neighbours (the test robot, 1 Nov 2026). */
   .panelSearch {
     display: flex;
     align-items: center;
     gap: 10px;
     width: 100%;
-    height: 32px;
+    min-height: 32px;
     box-sizing: border-box;
     padding: 0 6px 0 10px;
     border: 0;
@@ -2270,7 +2275,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    height: 32px;
+    min-height: 32px;
     box-sizing: border-box;
     padding: 0 10px;
     border-radius: 9px;
@@ -2413,10 +2418,14 @@
   }
 
   @media (pointer: coarse) {
-    .place,
+    .place {
+      height: 44px;
+    }
+
+    /* 44 px to touch, and still growing with their text. */
     .panelNew,
     .panelSearch {
-      height: 44px;
+      min-height: 44px;
     }
 
     .placeSub {
