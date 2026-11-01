@@ -2150,6 +2150,39 @@ class LeadDesk:
             timezone=str(IST),
         )
 
+    async def lead_for_call(self, submission_id: UUID) -> LeadDetail | None:
+        """The lead a call's report belongs to, when this person may open it, else None
+        (competitor teardown #24: the Report's AI notes offer Apply chips only over a lead
+        the viewer can change; the chips write nothing until the seller taps Save). A lead
+        merged away answers with the lead it went into. Reads only."""
+        lead_id: UUID | None = await self.db.scalar(
+            select(LeadEvent.lead_id)
+            .where(
+                LeadEvent.tenant_id == self.tenant_id,
+                LeadEvent.kind == "call",
+                LeadEvent.data["submission_id"].as_string() == str(submission_id),
+            )
+            .order_by(LeadEvent.created_at.desc())
+            .limit(1)
+        ) or await self.db.scalar(
+            select(Lead.id).where(
+                Lead.tenant_id == self.tenant_id, Lead.last_submission_id == submission_id
+            )
+        )
+        found = (
+            await self.db.scalar(
+                select(Lead).where(Lead.tenant_id == self.tenant_id, Lead.id == lead_id)
+            )
+            if lead_id is not None
+            else None
+        )
+        if found is None:
+            return None
+        try:
+            return await self.detail((await self._live(found)).id)
+        except DeskError:
+            return None
+
     async def detail(self, lead_id: UUID) -> LeadDetail:
         lead, worked_before = await self._readable(lead_id)
         journey = await self._labels(journeys.pipeline_of(lead))

@@ -221,7 +221,7 @@ function ApplyChip({
   onApply,
 }: {
   suggestion: NoteSuggestion;
-  onApply: (suggestion: NoteSuggestion) => Promise<void>;
+  onApply: (suggestion: NoteSuggestion) => Promise<boolean | void>;
 }) {
   const [state, setState] = useState<"idle" | "busy" | "done">("idle");
   return (
@@ -233,8 +233,8 @@ function ApplyChip({
       onClick={async () => {
         setState("busy");
         try {
-          await onApply(suggestion);
-          setState("done");
+          // False: the sheet it opened was closed without saving.
+          setState((await onApply(suggestion)) === false ? "idle" : "done");
         } catch {
           setState("idle");
           notify({
@@ -258,14 +258,18 @@ export function AiNotes({
   callKey = null,
   onSelect,
   onApply,
+  applicable,
 }: {
   view: XrayView;
   talk?: TalkLine | null;
   /** The call, for feedback; never shown. */
   callKey?: string | null;
   onSelect?: Select;
-  /** Where the page knows the lead (Leads' lead page): applies one update. */
-  onApply?: (suggestion: NoteSuggestion) => Promise<void>;
+  /** Where the page knows the lead and may change it: applies one update,
+   *  resolving false when the seller backed out. */
+  onApply?: (suggestion: NoteSuggestion) => Promise<boolean | void>;
+  /** Which suggestions this lead can take (its stage list's moves). */
+  applicable?: (suggestion: NoteSuggestion) => boolean;
 }) {
   const [open, setOpen] = useState(false);
   // More shows only when the recap is cut at three lines, measured as it lays out.
@@ -285,7 +289,11 @@ export function AiNotes({
   const summary = view.overview.summary;
   const next = view.outcome.nextSteps[0] ?? null;
   const suggestions =
-    onApply && !view.illustrative ? noteSuggestions(view) : [];
+    onApply && !view.illustrative
+      ? noteSuggestions(view).filter(
+          (suggestion) => applicable?.(suggestion) ?? true,
+        )
+      : [];
   const line = talkWords(talk);
   const copy = async () => {
     const text = [

@@ -565,6 +565,21 @@ def test_edit_details_and_notes_keep_history(postgres_harness: Any, tmp_path: Pa
                 assert event["kind"] == "call" and event["recording"] is True
                 assert event["submission_id"] == recording
                 assert attached.json()["lead"]["calls"] == called.json()["lead"]["calls"]
+                # The call's Report finds its lead, for the AI notes' Apply chips (competitor
+                # teardown #24); reading it writes nothing.
+                found = await client.get(f"{BASE}/calls/{recording}/lead")
+                assert found.status_code == 200, found.text
+                assert found.json()["lead"]["lead_id"] == lead_id
+                assert found.json()["can_edit"] is True
+                assert found.json()["lead"]["revision"] == attached.json()["lead"]["revision"]
+                # A call that is no lead's answers null, never an error.
+                stray = await client.get(f"{BASE}/calls/{uuid4()}/lead")
+                assert stray.status_code == 200 and stray.json() is None
+                # A seller who may not open the lead gets null too, never its details.
+                other = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+                client.cookies.set(setup.settings.session_cookie_name, await _session(setup, other))
+                hidden = await client.get(f"{BASE}/calls/{recording}/lead")
+                assert hidden.status_code == 200 and hidden.json() is None
         finally:
             await setup.engine.dispose()
 

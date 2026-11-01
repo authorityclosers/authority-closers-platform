@@ -1181,6 +1181,15 @@ export async function moveToStage(
   return moved(await readLead(lead.lead_id));
 }
 
+/** The lead a call's report belongs to, when this person may open it; else
+ *  null (the Report's Apply chips, competitor teardown 24). */
+export function readCallLead(submissionId: string, signal?: AbortSignal) {
+  return request<LeadDetail | null>(
+    `/calls/${encodeURIComponent(submissionId)}/lead`,
+    { signal },
+  );
+}
+
 /** Book the next call without a call (long-press on the list). */
 export function setFollowUp(
   lead: Pick<LeadRow, "lead_id" | "revision">,
