@@ -633,7 +633,8 @@ export function LeadsRoute({
     const show = (handed: HandedLead | null) => {
       if (!handed) return;
       setHolding(null);
-      setIntent(handed.call ? "call" : null);
+      // Home's Finish row opens the lead on its after-call question (teardown 3).
+      setIntent(handed.call ? "call" : handed.log ? "log" : null);
       // A call handed over from Home starts a round: Save & Next Lead goes on
       // through this list (Dipak's handoff, items 16-17). Home's Start cold
       // calling starts one at its card, which dials only on Call (ph2-33).
