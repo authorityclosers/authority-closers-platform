@@ -1333,19 +1333,28 @@ def test_a_missed_call_from_a_lead_waits_on_the_desk_until_called_back(
                 assert datetime.fromisoformat(row["missed_at"]) < now - timedelta(minutes=2)
                 # The badge counts them once: a new lead is due, and waits for a call back.
                 assert (await client.get(f"{BASE}/badge")).json()["to_call"] == 1
-                # Booked for later today, they still wait for a call back: still counted.
+                to_call = {"scope": "mine", "side": "inbound", "view": "to_call"}
+                # Booked for tomorrow, they still wait for a call back: a To Call row that
+                # says so, first, and the badge counts exactly the list's rows (#9 option A).
                 async with setup.sessions() as db, db.begin():
                     await db.execute(
                         update(Lead)
                         .where(Lead.id == UUID(lead_id))
-                        .values(stage="follow_up", next_action_at=now + timedelta(hours=3))
+                        .values(stage="follow_up", next_action_at=now + timedelta(days=1))
                     )
-                assert (await client.get(f"{BASE}/badge")).json()["to_call"] == 1
+                listed = (await client.get(f"{BASE}/leads", params=to_call)).json()
+                [row] = listed["leads"]
+                assert row["lead_id"] == lead_id and row["missed_calls"] == 2
+                assert listed["total"] == listed["view_counts"]["to_call"] == 1
+                badge = (await client.get(f"{BASE}/badge")).json()
+                desk = (await client.get(BASE)).json()
+                assert badge["to_call"] == desk["badge"]["to_call"] == 1
                 # The seller calls them back from the phone dialer: the row clears.
                 await phone("3", 1, "outgoing", 45)
                 desk = (await client.get(BASE)).json()
                 assert desk["counts"]["call_back"] == 0 and desk["call_back"] == []
                 assert (await client.get(f"{BASE}/badge")).json()["to_call"] == 0
+                assert (await client.get(f"{BASE}/leads", params=to_call)).json()["total"] == 0
         finally:
             await setup.engine.dispose()
 

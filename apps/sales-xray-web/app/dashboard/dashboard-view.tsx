@@ -136,6 +136,11 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
       ? seed.sandbox.value
       : (cached?.sandbox ?? null),
   );
+  // Known at the first paint, the card leads the page, where nothing loading
+  // below it can push it (robot 95650d5c, 1 Nov 2026: 0.17 at 5 s on 3G, Home
+  // filling in above it); learnt later, it closes the page, where it pushes
+  // nothing down.
+  const [sandboxFirst] = useState(() => sandbox !== null);
 
   // A cancelled read (unmount, or a re-run of the effect) must not paint
   // "Not loaded": only the live request may change a panel.
@@ -323,6 +328,7 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
         <DashboardBody
           team={team}
           sandbox={sandbox}
+          sandboxFirst={sandboxFirst}
           summary={summaryState}
           activity={activityState}
           allowance={allowanceState}
@@ -337,6 +343,7 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
         <DashboardBody
           team={team}
           sandbox={sandbox}
+          sandboxFirst={sandboxFirst}
           skeleton
           sales={sales}
           salesRole={salesRole}

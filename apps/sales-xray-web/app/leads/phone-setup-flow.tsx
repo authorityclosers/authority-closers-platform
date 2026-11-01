@@ -278,8 +278,18 @@ export function PhoneSetupFlow({
     if (closed.current) return;
     closed.current = true;
     const left = status ? flowSteps(status, null).length : steps.length;
-    if (status && steps.length) {
-      buzz("done");
+    // Said also when nothing was left as it opened, so Phone setup is never a
+    // silent tap (phone personas ph1-37, 1 Nov 2026: "Set up does nothing").
+    if (!status && !steps.length)
+      notify({
+        id: "phone-setup",
+        tone: "info",
+        title: "Update the Sales X-Ray app",
+        message:
+          "It didn't say how this phone is set up. Update it, then open Phone setup again.",
+      });
+    if (status) {
+      if (steps.length) buzz("done");
       notify({
         id: "phone-setup",
         tone: left ? "info" : "success",

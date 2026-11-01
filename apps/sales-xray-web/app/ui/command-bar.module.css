@@ -97,6 +97,37 @@
   background: var(--sx-fill-strong);
 }
 
+/* A lead's Call beside its row: a small round button (ph2-27). */
+.withAside {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.withAside > .option {
+  flex: 1;
+  min-width: 0;
+}
+
+.aside {
+  display: inline-grid;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.aside:active {
+  background: var(--sx-fill-strong);
+}
+
 .icon {
   display: inline-grid;
   width: 32px;

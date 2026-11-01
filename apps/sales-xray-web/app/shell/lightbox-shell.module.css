@@ -1187,12 +1187,17 @@
   /* Pages scroll down only; the gutter is kept, so a scrollbar appearing
      (a page taller than the window) never narrows the page sideways. The end
      keeps room for the corner cards (notice-center.tsx) or the first-run
-     tour's card (guide-overlay.tsx), so content scrolls clear of them. */
+     tour's card (guide-overlay.tsx), so content scrolls clear of them; and a
+     control given keyboard focus is scrolled clear of them too (the test
+     robot, 1 Nov 2026: 9d1c35d2). */
   .main {
     min-height: 0;
     padding-bottom: max(
       24px,
       calc(max(var(--sx-corner-h, 0px), var(--sx-guide-h, 0px)) + 16px)
+    );
+    scroll-padding-bottom: calc(
+      max(var(--sx-corner-h, 0px), var(--sx-guide-h, 0px)) + 8px
     );
     overflow-x: hidden;
     overflow-y: auto;

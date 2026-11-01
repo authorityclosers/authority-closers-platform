@@ -92,6 +92,8 @@ type DashboardBodyProps = {
   team: boolean | null;
   /** The fictional AC Sandbox's contents, when this workspace is the sandbox. */
   sandbox?: SandboxFacts | null;
+  /** The card leads the page (known at the first paint) or closes it. */
+  sandboxFirst?: boolean;
   summary?: ReadState<CallSummary | null>;
   activity?: ReadState<CallActivity | null>;
   allowance?: ReadState<Allowance>;
@@ -118,6 +120,7 @@ type DashboardBodyProps = {
 export function DashboardBody({
   team,
   sandbox = null,
+  sandboxFirst = false,
   summary: summaryState = LOADING,
   activity: activityState = LOADING,
   allowance: allowanceState = LOADING,
@@ -157,8 +160,12 @@ export function DashboardBody({
   const label = (teamText: string, ownText: string, width: string) =>
     team === null ? <Ph w={width} /> : team ? teamText : ownText;
 
+  const sandboxCard = sandbox?.sandbox ? (
+    <SandboxCard facts={sandbox} team={team === true} />
+  ) : null;
   const content = (
     <>
+      {sandboxFirst ? sandboxCard : null}
       {/* One steady heading; New analysis lives in the shell, not here too.
           The workspace is named in the bar above, so the line stays put. */}
       {sales ?? (
@@ -169,10 +176,6 @@ export function DashboardBody({
           />
         </header>
       )}
-
-      {sandbox?.sandbox ? (
-        <SandboxCard facts={sandbox} team={team === true} />
-      ) : null}
 
       {showGetStarted && !sales ? (
         <FirstRun team={team ? "invite" : "create"} />
@@ -406,6 +409,7 @@ export function DashboardBody({
           )}
         </>
       )}
+      {sandboxFirst ? null : sandboxCard}
     </>
   );
 

@@ -52,11 +52,11 @@ const access = (
   ...value,
 });
 
-function render(value: WorkspaceAccessValue) {
+function render(value: WorkspaceAccessValue, insights = false) {
   root.render(
     <UploadSessionProvider>
       <WorkspaceAccessProvider value={value}>
-        <CallsLibrary />
+        <CallsLibrary insights={insights} />
       </WorkspaceAccessProvider>
     </UploadSessionProvider>,
   );
@@ -122,4 +122,55 @@ it("holds the skeleton until the first answer, never a false No calls yet", asyn
     "No calls yet",
   );
   expect(host.querySelector(SKELETON)).toBeNull();
+});
+
+// Robot f543ab73 (1 Nov 2026): in a workspace, Your calls (the phone's) comes
+// first; the saved calls follow once it has answered, so nothing below it
+// moves as it fills in, and their empty card never says "No calls yet" under
+// a list of calls.
+it("shows the saved calls once Your calls has answered, so nothing below it moves", async () => {
+  const week: ((answer: Response) => void)[] = [];
+  const json = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo) => {
+      const url = String(input);
+      if (url.includes("/lead-desk/activity"))
+        return new Promise<Response>((resolve) => week.push(resolve));
+      if (url.includes("/acquisition/submissions?"))
+        return Promise.resolve(json({ submissions: [], next_cursor: null }));
+      return Promise.resolve(new Response("{}", { status: 404 }));
+    }),
+  );
+  const team = access({
+    workspaces: [
+      {
+        tenant_id: context.tenantId,
+        kind: "organisation",
+        name: "Fictional Team",
+        role: "member",
+        sales_xray_enabled: true,
+      },
+    ],
+  });
+  await act(async () => render(team, true));
+  await flush();
+  const header = host.querySelector("h1#calls-library-title")?.parentElement
+    ?.parentElement as HTMLElement;
+  expect(week.length).toBeGreaterThan(0);
+  expect(header.style.display).toBe("none");
+  expect(host.querySelector("h2#calls-library-empty")).toBeNull();
+
+  await act(async () => {
+    for (const answer of week) answer(json({ items: [], next_before: null }));
+  });
+  await flush();
+  expect(header.style.display).toBe("");
+  expect(host.querySelector("h2#calls-library-empty")?.textContent).toBe(
+    "No call reports yet",
+  );
 });

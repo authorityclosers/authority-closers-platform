@@ -415,3 +415,37 @@ describe("plain answers after a call", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+// ph2-26 (phone QA, 1 Nov 2026): Undo took the answer's note out of sight.
+describe("Undo keeps the answer's note", () => {
+  it("says the note is kept in Notes", async () => {
+    const after = {
+      ...lead("interested"),
+      undo_result: { event_id: "answer-2", until: "2026-11-03T05:35:00.000Z" },
+    } as LeadDetail;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () => new Response(JSON.stringify(after))),
+    );
+    notices.shown.length = 0;
+    await show(lead("new"));
+    await act(async () => tile("We talked").click());
+    await act(async () => tile("Interested").click());
+    const box = host.querySelector<HTMLTextAreaElement>(
+      'textarea[placeholder="What they need, what you promised"]',
+    )!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      )!.set!.call(box, "Wants the EMI sheet");
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => tile("Save").click());
+    const card = notices.shown.at(-1) as { action?: { run: () => void } };
+    await act(async () => card.action?.run());
+    expect(notices.shown.at(-1)?.message).toContain(
+      "your note is kept in Notes",
+    );
+  });
+});

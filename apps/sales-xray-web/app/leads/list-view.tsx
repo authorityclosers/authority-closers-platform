@@ -55,6 +55,7 @@ import {
   type LeadsDeleted,
   type ListMore,
   type ListSort,
+  type WorkView,
 } from "./leads-client";
 import { QuickAddBar, type PasteRows } from "./quick-add";
 import styles from "./leads.module.css";
@@ -114,6 +115,7 @@ export function ListView({
   onCounts,
   onTable,
   onStepCounts,
+  onViewCounts,
   pipeline = null,
   tools = null,
   filtered = false,
@@ -171,6 +173,8 @@ export function ListView({
   onTable?: (table: boolean) => void;
   /** Each of the owner's stages' count, for the Pipeline stage picker. */
   onStepCounts?: (counts: Record<string, number>) => void;
+  /** Each work view's count for these filters, for the To Call / Follow-ups / All tabs. */
+  onViewCounts?: (counts: Partial<Record<WorkView, number>>) => void;
   /** One pipeline's leads; none: every pipeline's. */
   pipeline?: string | null;
   /** Beside Select on the list's head: the saved views. */
@@ -430,9 +434,11 @@ export function ListView({
   // The page's latest counts setter, without reading the list again for it.
   const counts = useRef(onCounts);
   const stepCounts = useRef(onStepCounts);
+  const viewCounts = useRef(onViewCounts);
   useEffect(() => {
     counts.current = onCounts;
     stepCounts.current = onStepCounts;
+    viewCounts.current = onViewCounts;
   });
   // Keys on a computer: J/K, Enter, C (asks before calling), L. Not while ticking.
   const list = useRef<HTMLUListElement>(null);
@@ -505,6 +511,12 @@ export function ListView({
           counts.current?.(first.stage_counts);
         if (first.step_counts && stage !== TEST)
           stepCounts.current?.(first.step_counts);
+        if (
+          first.view_counts &&
+          Object.keys(first.view_counts).length &&
+          stage !== TEST
+        )
+          viewCounts.current?.(first.view_counts);
         const owners = first.owner_counts;
         if (owners && Object.keys(owners).length) ownerCounts.current?.(owners);
       })

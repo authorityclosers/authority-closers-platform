@@ -118,3 +118,28 @@ it("gives owners team alerts and the summary, and sends a test", async () => {
     expect.objectContaining({ tone: "success", title: "Sent to your phone" }),
   );
 });
+
+it("sends one test for two quick taps (the robot's 14836c51)", async () => {
+  serve(false);
+  await act(async () => root.render(<NotificationPrefs />));
+  const test = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Send me a test notification",
+  )!;
+  // Both taps land before the button re-renders as "Sending…".
+  await act(async () => {
+    test.click();
+    test.click();
+  });
+  const tests = sent.filter(
+    (call) => call.path === "/v1/lead-desk/notifications/test",
+  );
+  expect(tests).toHaveLength(1);
+  // Once it has answered, another tap sends again.
+  const again = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Send me a test notification",
+  )!;
+  await act(async () => again.click());
+  expect(
+    sent.filter((call) => call.path === "/v1/lead-desk/notifications/test"),
+  ).toHaveLength(2);
+});

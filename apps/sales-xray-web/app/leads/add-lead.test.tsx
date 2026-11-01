@@ -9,6 +9,14 @@ vi.mock("./leads-client", async (original) => ({
   addLead: (...args: unknown[]) => addLead(...args),
   matchLead: (...args: unknown[]) => matchLead(...args),
 }));
+const notices = vi.hoisted(() => ({
+  shown: [] as Array<{ title: string; message?: string }>,
+}));
+vi.mock("../notice-center", async (load) => ({
+  ...(await load<typeof import("../notice-center")>()),
+  notify: (notice: { title: string; message?: string }) =>
+    notices.shown.push(notice),
+}));
 
 import { resetBackCloseForTests } from "../ui/back-close";
 import { AddLeadDialog } from "./capture-dialogs";
@@ -173,4 +181,32 @@ it("says what is missing instead of sending an empty lead", async () => {
 it("lets owners and admins choose who gets it", async () => {
   const { dialog } = await mount(true);
   expect(dialog.querySelector('[aria-label="Who gets it"]')).not.toBeNull();
+});
+
+// d208a435 (simulation lab; orchestrator, 1 Nov 2026): a number already a lead
+// joins it (the API's 201); Add lead says so and opens that lead.
+it("says a number was already a lead, and opens that lead", async () => {
+  addLead.mockResolvedValue({
+    lead: {
+      lead_id: "lead-7",
+      name: "Asha Fictional",
+      stage_label: "Call back",
+    },
+    events: [{ kind: "repeat" }],
+  });
+  const { dialog, onAdded } = await mount();
+  const [name, phone] = Array.from(dialog.querySelectorAll("input"));
+  await act(async () => {
+    type(name, "Asha Fictional");
+    type(phone, "98765 43210");
+  });
+  await act(async () =>
+    dialog
+      .querySelector("form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+  );
+  expect(onAdded).toHaveBeenCalledWith("lead-7");
+  expect(notices.shown.at(-1)?.title).toBe(
+    "Already a lead: Asha Fictional · Call back",
+  );
 });

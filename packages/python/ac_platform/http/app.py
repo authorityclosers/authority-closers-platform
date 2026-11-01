@@ -63,6 +63,7 @@ from ac_platform.http.staff_billing import install_staff_billing_http
 from ac_platform.http.studio_media import install_studio_media_http
 from ac_platform.http.studio_video_bytes import StudioVideoByteTransport
 from ac_platform.http.surfaces import CoachSurfaceMiddleware
+from ac_platform.http.whole_text import WholeTextMiddleware
 from ac_platform.identity.sign_in_methods import register_pulse_issuer
 from ac_platform.media.runtime import MediaRuntime, create_default_media_runtime
 from ac_platform.media.studio_video_completion import StudioVideoCompletion
@@ -411,6 +412,9 @@ def create_app(
     )
     install_billing_webhook_http(application, sessions=session_factory, commands=billing)
     install_plans_http(application, sessions=session_factory)
+    # Inside the body-size limit, which bounds a body and hands it over whole: half an emoji
+    # leaves a JSON body before any route reads it (whole_text.py).
+    application.add_middleware(WholeTextMiddleware)
     application.add_middleware(
         RequestBodyLimitMiddleware,
         local_avatar_upload_enabled=settings.environment == "local"

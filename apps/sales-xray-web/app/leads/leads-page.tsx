@@ -20,6 +20,7 @@
  * /leads#lead=<id> (ids only, after "#"); pull down to refresh.
  */
 
+import { leadSearchCommands } from "./search-commands";
 import dynamic from "next/dynamic";
 import {
   ArrowLeft,
@@ -27,10 +28,8 @@ import {
   Settings as SettingsIcon,
   ListTodo,
   NotebookPen,
-  Phone,
   PhoneCall,
   Plus,
-  UserRound,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -707,12 +706,15 @@ export function LeadsRoute({
           readNextAhead(toCallPipeline);
         }
         setError(null);
-        // The app's badge counts the whole day, never one pipeline's.
+        // The app's badge counts the whole day, never one pipeline's: the
+        // server's own count, the Inbound To Call list's rows (#9 option A).
         if (!toCallPipeline)
-          publishBadge({
-            overdue: next.counts.overdue ?? 0,
-            to_call: toCallNow(next),
-          });
+          publishBadge(
+            next.badge ?? {
+              overdue: next.counts.overdue ?? 0,
+              to_call: toCallNow(next),
+            },
+          );
         settle();
       })
       .catch((reason: unknown) => {
@@ -994,6 +996,24 @@ export function LeadsRoute({
       setStepCounts({ key: stepCountsKey, value }),
     [stepCountsKey],
   );
+  // The work views' counts for the same filters ("To Call 7"), from a side's
+  // first page; Inbound To Call is the badge's number (competitor teardown #9).
+  const [viewCounts, setViewCounts] = useState<{
+    key: string;
+    value: Partial<Record<WorkView, number>>;
+  } | null>(null);
+  const viewCountsKey = JSON.stringify([
+    contextKey,
+    scope,
+    query,
+    pipeline,
+    { ...more, view: null, when: null },
+  ]);
+  const onViewCounts = useCallback(
+    (value: Partial<Record<WorkView, number>>) =>
+      setViewCounts({ key: viewCountsKey, value }),
+    [viewCountsKey],
+  );
   // A bare /leads opens the last work view (type, view, stage and filters),
   // remembered per person and workspace on this device (owner, 31 Oct 2026).
   const [restoredFor, setRestoredFor] = useState<string | null>(null);
@@ -1040,6 +1060,25 @@ export function LeadsRoute({
   // calling, Add lead, and each lead found to open or to call. A call asks
   // first, as a swipe does; nothing dials from the bar.
   const canStart = current && !!desk && desk.counts.open > 0;
+  const pickWork = (next: ListMore) => {
+    const nextMore = { ...more, ...next };
+    setMore(nextMore);
+    setPicked({ view: OPENING_STAGE, at: addressKey, pipeline });
+    window.history.replaceState(
+      null,
+      "",
+      viewHref(OPENING_STAGE, pipeline, { ...filters, more: nextMore }),
+    );
+  };
+  // Search's Show all: the words over All Leads (phone QA, 1 Nov 2026, ph2-27).
+  const searchAll = useRef<(words: string) => void>(() => undefined);
+  useEffect(() => {
+    searchAll.current = (words) => {
+      setSearch(words);
+      setQuery(words);
+      pickWork({ view: "all", when: null, step: null });
+    };
+  });
   const commands = useMemo<CommandSource | null>(() => {
     if (!authenticated) return null;
     const openLead = (
@@ -1102,28 +1141,12 @@ export function LeadsRoute({
           icon: <ListTodo size={16} aria-hidden="true" />,
           run: () => openLead(task.lead_id),
         }));
-        const leads = found.leads.slice(0, 6).flatMap((row) => [
-          {
-            id: `leads:open:${row.lead_id}`,
-            group: "Leads",
-            label: row.name,
-            hint: [row.stage_label, row.city].filter(Boolean).join(" · "),
-            icon: <UserRound size={16} aria-hidden="true" />,
-            run: () => openLead(row.lead_id),
-          },
-          ...(row.phone_last4
-            ? [
-                {
-                  id: `leads:call:${row.lead_id}`,
-                  group: "Leads",
-                  label: `Call ${row.name}`,
-                  hint: `Ends in ${row.phone_last4}`,
-                  icon: <Phone size={16} aria-hidden="true" />,
-                  run: () => setDialling(row),
-                },
-              ]
-            : []),
-        ]);
+        // One row per lead, Call beside it, then Show all (ph2-27, 1 Nov 2026).
+        const leads = leadSearchCommands(found.leads, text, {
+          open: (leadId) => openLead(leadId),
+          call: (row) => setDialling(row),
+          showAll: (words) => searchAll.current(words),
+        });
         return [...leads, ...written, ...promised];
       },
     };
@@ -1325,16 +1348,6 @@ export function LeadsRoute({
   };
   // Inbound | Cold, the work views, the Follow-ups split and the stage pick
   // change the list in place (items 44-73), so Back leaves Leads.
-  const pickWork = (next: ListMore) => {
-    const nextMore = { ...more, ...next };
-    setMore(nextMore);
-    setPicked({ view: OPENING_STAGE, at: addressKey, pipeline });
-    window.history.replaceState(
-      null,
-      "",
-      viewHref(OPENING_STAGE, pipeline, { ...filters, more: nextMore }),
-    );
-  };
   const leaveSettings = () => {
     setPicked({ view: OPENING_STAGE, at: addressKey });
     if (pushedSettings.current) {
@@ -1782,6 +1795,11 @@ export function LeadsRoute({
                   views={
                     <ViewTabs
                       value={workView}
+                      counts={
+                        viewCounts?.key === viewCountsKey
+                          ? viewCounts.value
+                          : null
+                      }
                       onChange={(next) =>
                         pickWork({
                           view: next,
@@ -1908,6 +1926,7 @@ export function LeadsRoute({
                 onCounts={onCounts}
                 onTable={setTableMode}
                 onStepCounts={onStepCounts}
+                onViewCounts={onViewCounts}
                 pipeline={pipeline}
                 more={
                   listMore && stepShown !== (listMore.step ?? null)

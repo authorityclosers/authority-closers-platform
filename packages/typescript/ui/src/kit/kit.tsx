@@ -566,15 +566,49 @@ const hue = (text: string) => {
   return value;
 };
 
+/** A text's characters as a reader sees them: a Devanagari letter with its
+ *  vowel sign is one (सु, not स), so an initial never splits one. */
+export function graphemes(text: string): string[] {
+  if (typeof Intl.Segmenter !== "function") return Array.from(text);
+  const parts = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  return Array.from(parts.segment(text), (part) => part.segment);
+}
+
+const LETTER = /^[\p{L}\p{N}]/u;
+
+/** Each of the first two words' first letter, by grapheme; an emoji or a
+ *  symbol is never an initial ("?" when the name has no letter at all). Phone
+ *  personas ph1-34, 1 Nov 2026: सुरेश पाटील read "सप", and "Priya 🌸" got a
+ *  flower for an initial. */
 export const initials = (name: string) =>
   name
     .replace(/^(mr|mrs|ms|dr|miss)\.?\s+/i, "")
     .split(/\s+/)
-    .filter(Boolean)
+    .map((part) => graphemes(part).find((one) => LETTER.test(one)))
+    .filter((one): one is string => !!one)
     .slice(0, 2)
-    .map((part) => Array.from(part)[0])
     .join("")
     .toUpperCase() || "?";
+
+/** A name with no letter in it gets a person, never "?" or an emoji. */
+function NoInitials() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="58%"
+      height="58%"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    </svg>
+  );
+}
 
 /** A photo, or initials on a tint that stays the same for the same name. */
 export function Avatar({
@@ -606,9 +640,11 @@ export function Avatar({
           loading="lazy"
           onError={() => setFailed(true)}
         />
+      ) : initials(name) === "?" ? (
+        <NoInitials />
       ) : size < 22 ? (
         // Initials stay at 12 px or more: a small avatar has room for one.
-        Array.from(initials(name))[0]
+        graphemes(initials(name))[0]
       ) : (
         initials(name)
       )}
