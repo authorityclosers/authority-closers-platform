@@ -1768,3 +1768,55 @@ def test_person_work_without_reports_and_scope_fences(
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_a_call_waits_for_its_answer_on_the_desk(postgres_harness: Any, tmp_path: Path) -> None:
+    """Competitor teardown #3 (1 Nov 2026): a call whose seller left the after-call sheet
+    stays on the desk as "Finish: <lead> · How did it go?" until an answer is saved."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                made = await client.post(
+                    f"{BASE}/leads",
+                    json={
+                        "command_id": str(uuid4()),
+                        "name": "Fictional Finish",
+                        "phone": "9800000031",
+                        "assign": "me",
+                    },
+                    headers=WRITE,
+                )
+                assert made.status_code == 201, made.text
+                lead_id = made.json()["lead"]["lead_id"]
+                assert (await client.get(BASE)).json()["unanswered"] == []
+                called = await client.post(
+                    f"{BASE}/leads/{lead_id}/calls/phone",
+                    json={"command_id": str(uuid4()), "duration_seconds": 40},
+                    headers=WRITE,
+                )
+                assert called.status_code == 200, called.text
+                [waiting] = (await client.get(BASE)).json()["unanswered"]
+                assert waiting["lead_id"] == lead_id
+                assert waiting["name"] == "Fictional Finish"
+                answered = await client.post(
+                    f"{BASE}/leads/{lead_id}/dispose",
+                    json={
+                        "command_id": str(uuid4()),
+                        "expected_revision": called.json()["lead"]["revision"],
+                        "connected": False,
+                        "reason": "did_not_pick",
+                    },
+                    headers=WRITE,
+                )
+                assert answered.status_code == 200, answered.text
+                assert (await client.get(BASE)).json()["unanswered"] == []
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())

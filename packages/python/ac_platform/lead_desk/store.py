@@ -136,6 +136,7 @@ from ac_platform.lead_desk.contracts import (
     Team,
     TeamPool,
     ToCallToday,
+    Unanswered,
     UndoResultView,
     WorkDay,
     WorkHoursCommand,
@@ -251,6 +252,9 @@ PHONES_KEY = "phones"
 REPORT_DAYS = 92
 # A missed call waits on the desk this long for a call back.
 CALL_BACK_DAYS = 3
+# How long a call of mine waits for its answer before it stops asking (teardown #3).
+UNANSWERED_WINDOW = timedelta(hours=12)
+ANSWER_SLACK = timedelta(minutes=30)
 # A dialer call this close to a call the app already logged is that same call.
 IN_APP_BEFORE = timedelta(minutes=2)
 IN_APP_AFTER = timedelta(minutes=20)
@@ -1243,9 +1247,73 @@ class LeadDesk:
             call_back=call_back,
             to_call_today=to_call[None],
             breaks=await self._breaks_today(today_calls),
+            unanswered=await self._unanswered(calls),
             # The badge as the Leads page hands it over (the whole day's, never one pipeline's).
             badge=await self.badge(waiting) if pipeline is None else None,
         )
+
+    async def _unanswered(self, calls: Sequence[CallRow]) -> tuple[Unanswered, ...]:
+        """My calls out of the last hours with nothing saved about them since, newest first,
+        one per lead: an answer is never lost when the seller leaves the after-call sheet
+        (competitor teardown #3, 1 Nov 2026). An answer, a stage move or a meeting after the
+        call answers it; a dial never placed (``calls`` come from _call_rows) never asks."""
+        since = self.now - UNANSWERED_WINDOW
+        latest: dict[UUID, CallRow] = {}
+        for row in calls:  # newest first
+            if row.at < since or row.actor != self.viewer.person_id:
+                continue
+            if not call_out(row.data) or row.data.get("recording") or row.data.get("for_call"):
+                continue
+            latest.setdefault(row.lead_id, row)
+        if not latest:
+            return ()
+        answered: dict[UUID, datetime] = {
+            lead_id: at
+            for lead_id, at in (
+                await self.db.execute(
+                    select(LeadEvent.lead_id, func.max(LeadEvent.created_at))
+                    .where(
+                        LeadEvent.tenant_id == self.tenant_id,
+                        LeadEvent.lead_id.in_(list(latest)),
+                        LeadEvent.kind.in_(("result", "stage", "meeting")),
+                        LeadEvent.created_at >= since - ANSWER_SLACK,
+                        not_undone(),
+                    )
+                    .group_by(LeadEvent.lead_id)
+                )
+            ).all()
+        }
+        # A phone's call log can arrive after the answer: an answer shortly before the
+        # logged call still answers it.
+        waiting = [
+            row
+            for row in latest.values()
+            if row.lead_id not in answered or answered[row.lead_id] < row.at - ANSWER_SLACK
+        ]
+        if not waiting:
+            return ()
+        names: dict[UUID, str] = {
+            lead_id: name
+            for lead_id, name in (
+                await self.db.execute(
+                    select(Lead.id, Lead.name).where(
+                        Lead.tenant_id == self.tenant_id,
+                        Lead.id.in_([row.lead_id for row in waiting]),
+                        Lead.stage.in_(OPEN_STAGES),
+                    )
+                )
+            ).all()
+        }
+        return tuple(
+            Unanswered(
+                lead_id=row.lead_id,
+                name=names[row.lead_id],
+                called_at=row.at,
+                event_id=row.event_id,
+            )
+            for row in waiting
+            if row.lead_id in names
+        )[:3]
 
     async def _numbers(
         self, start: datetime, end: datetime, rows: Sequence[CallRow] | None = None

@@ -129,11 +129,21 @@ export type Desk = {
   templates?: MessageTemplate[];
   /** Missed calls from my leads, newest first, until someone calls back. */
   call_back?: LeadRow[];
+  /** My calls of the last hours with no answer saved since (teardown 3). */
+  unanswered?: Unanswered[];
   /** The Leads badge as GET /badge counts it: the Inbound To Call list's rows. */
   badge?: Badge | null;
 };
 
 export type { Badge } from "./badge-client";
+
+/** A call of mine still waiting for its answer: Finish it from Leads. */
+export type Unanswered = {
+  lead_id: string;
+  name: string;
+  called_at: string;
+  event_id: string;
+};
 
 export type LeadEvent = {
   kind:

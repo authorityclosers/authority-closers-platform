@@ -121,6 +121,7 @@ import type { ServerLeads } from "./leads-seed";
 import { legacyLeadSettings } from "./legacy-settings";
 import { ListView, TEST, type Scope } from "./list-view";
 
+import { FinishRow } from "./finish-row";
 import { NewLeadCard, useArrival } from "./new-lead-card";
 import { dueWords } from "./task-words";
 
@@ -1865,7 +1866,18 @@ export function LeadsRoute({
                 // Dipak's handoff (31 Oct 2026, items 44-73): the lead type,
                 // search with one Filter, the work views and one stage pick.
                 <WorkHead
-                  chip={<PhoneLogCard as="chip" />}
+                  chip={
+                    <>
+                      <PhoneLogCard as="chip" />
+                      {/* An answer is never lost (competitor teardown 3). */}
+                      {openLead ? null : (
+                        <FinishRow
+                          calls={desk.unanswered}
+                          onFinish={(leadId) => open(leadId, "log")}
+                        />
+                      )}
+                    </>
+                  }
                   side={
                     bothSides || more.side ? (
                       <SideSelector

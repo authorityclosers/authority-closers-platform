@@ -59,6 +59,16 @@ class Me(Model):
     paused_until: datetime | None = None
 
 
+class Unanswered(Model):
+    """A call of mine with no answer saved since: Leads pins "Finish: <lead> · called 4 min
+    ago · How did it go?" until it is answered (competitor teardown #3)."""
+
+    lead_id: UUID
+    name: str
+    called_at: datetime
+    event_id: UUID
+
+
 class TeamPool(Model):
     """The workspace's open leads, for a person with none of their own (owner, 25 Oct 2026:
     a member saw "No leads yet" while 382 waited): how many are open, how many have no
@@ -326,6 +336,8 @@ class Desk(Model):
     # Each side of my day ("inbound", "cold"), so Home's Inbound | Cold selector switches
     # with no new read.
     sides: dict[str, SideDay] | None = None
+    # My calls of the last hours that nobody has answered yet, newest first, one per lead.
+    unanswered: tuple[Unanswered, ...] = ()
     # The Leads badge, counted as GET /badge counts it (the whole day's desk only), so the
     # Leads page hands the badge the same number (#9 option A).
     badge: Badge | None = None
