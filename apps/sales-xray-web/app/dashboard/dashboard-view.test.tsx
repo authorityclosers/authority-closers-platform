@@ -619,6 +619,10 @@ it("explains the fictional AC Sandbox to its owner, with links to its views", as
   expect(host.textContent).toContain("A made-up sales team");
   expect(host.textContent).toContain("3,360");
   expect(host.textContent).toContain("1,77,615");
+  // Learnt after the first paint, it closes the page: it pushes nothing down
+  // (robot 95650d5c, 1 Nov 2026).
+  const card = host.querySelector('[aria-labelledby="sandbox-title"]');
+  expect(card?.parentElement?.lastElementChild).toBe(card);
   const views = [
     ...host.querySelectorAll<HTMLAnchorElement>(
       'nav[aria-label="Sandbox views"] a',
@@ -754,6 +758,8 @@ it("shows the sandbox card from the server's read, from the first paint", async 
   const card = host.querySelector('[aria-labelledby="sandbox-title"]');
   const figures = host.querySelector('dl[aria-label="Dashboard figures"]');
   expect(card).not.toBeNull();
+  // It leads the page, so nothing loading below it can push it.
+  expect(card?.parentElement?.firstElementChild).toBe(card);
   expect(
     figures === null ||
       Boolean(

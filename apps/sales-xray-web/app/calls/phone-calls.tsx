@@ -14,7 +14,7 @@
 
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { AddLeadDialog } from "../leads/capture-dialogs";
 import { handOverLead } from "../leads/lead-handoff";
@@ -61,9 +61,19 @@ export function CallRowsSkeleton({
   );
 }
 
-export function PhoneCalls() {
+export function PhoneCalls({
+  onSettled,
+}: {
+  /** Told once the week's calls answered (or failed): the Calls page then
+   *  shows what follows, so nothing below moves as the list fills in. */
+  onSettled?: () => void;
+} = {}) {
   const go = useGo();
   const [week, retry] = useWeekActivity();
+  const settled = week.status !== "loading";
+  useEffect(() => {
+    if (settled) onSettled?.();
+  }, [settled, onSettled]);
   const [unknown, setUnknown] = useState<string | null>(null);
   const [now] = useState(() => new Date());
 
