@@ -86,6 +86,26 @@ def test_team_says_set_up_or_why_not(phones: int, declined: bool, consent: str, 
     assert capture_setup.team_state(found, consent) == state
 
 
+def test_a_phone_finished_without_recordings_is_not_set_up() -> None:
+    # Orchestrator, 1 Nov 2026: a seller's phone finished with recordings=false read "set up"
+    # on Team and sent no recording in a week.
+    silent = capture_setup.Phone("install-a", "V2318", "vivo", "1.0.63", NOW, False, False, True)
+    working = capture_setup.Phone(
+        "install-b", "Redmi 13", "xiaomi", "1.0.63", NOW, True, True, True
+    )
+    assert capture_setup.team_state(capture_setup.Setup(phones=(silent,)), "on") == "recording_off"
+    found = capture_setup.Setup(phones=(silent, working))
+    assert capture_setup.team_state(found, "on") == "set_up"
+    # Phone personas ph1-46 (v1.25): Ready beside a red "Call recording off".
+    off = capture_setup.recording_state({"checks": {"recorder": False}}, None, NOW)
+    assert off == {"state": "off", "last_at": None, "fix": "recorder"}
+    assert capture_setup.team_state(found, "on", off) == "recording_off"
+    late = capture_setup.recording_state({"checks": {"recorder": True}}, None, NOW)
+    assert late is not None and late["state"] == "late"
+    # No recording lately is not "off": a seller who made no calls is still set up.
+    assert capture_setup.team_state(found, "on", late) == "set_up"
+
+
 def test_a_finished_phone_keeps_no_number_and_needs_its_install_id() -> None:
     kept = capture_setup.phone_payload(
         {
@@ -135,14 +155,33 @@ def test_a_finished_install_counts_once_newest_first_and_a_no_never() -> None:
     # Persona QA ph2-15, 1 Nov 2026: a workspace switch ran the phone's steps again.
     assert capture_setup.devices_of(
         [
-            {"outcome": "completed", "device": "install-b"},
+            {"outcome": "completed", "device": "install-b", "recordings": True},
             {"outcome": "declined", "device": "install-c"},
-            {"outcome": "completed", "device": " install-a "},
-            {"outcome": "completed", "device": "install-b"},
-            {"outcome": "completed", "device": ""},
+            {"outcome": "completed", "device": " install-a ", "recordings": True},
+            {"outcome": "completed", "device": "install-b", "recordings": True},
+            {"outcome": "completed", "device": "", "recordings": True},
             "not a payload",
         ]
     ) == ["install-b", "install-a"]
+
+
+def test_an_install_finished_without_recordings_is_not_done() -> None:
+    # Orchestrator, 1 Nov 2026: a finish with recordings=false counted as done for good.
+    assert (
+        capture_setup.devices_of(
+            [{"outcome": "completed", "device": "install-a", "recordings": False}]
+        )
+        == []
+    )
+    # The install's newest finish decides: working now, or broken since.
+    assert capture_setup.devices_of(
+        [
+            {"outcome": "completed", "device": "install-a", "recordings": True},
+            {"outcome": "completed", "device": "install-a", "recordings": False},
+            {"outcome": "completed", "device": "install-b", "recordings": False},
+            {"outcome": "completed", "device": "install-b", "recordings": True},
+        ]
+    ) == ["install-a"]
 
 
 def test_call_logging_is_off_only_on_a_phone_that_says_so() -> None:

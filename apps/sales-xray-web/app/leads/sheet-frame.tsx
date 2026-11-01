@@ -20,12 +20,15 @@ export function Sheet({
   onClose,
   children,
   footer,
+  className,
 }: {
   open: boolean;
   label: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  /** The frame's own room, beside the sheet look (the lead sheet's, ph2-35). */
+  className?: string;
 }) {
   return (
     <KitSheet
@@ -34,7 +37,7 @@ export function Sheet({
       title={label}
       hideTitle
       closeButton={false}
-      className={styles.sheet}
+      className={className ? `${styles.sheet} ${className}` : styles.sheet}
       footer={footer}
     >
       <div className={styles.sheetBody}>

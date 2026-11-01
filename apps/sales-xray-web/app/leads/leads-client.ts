@@ -129,11 +129,21 @@ export type Desk = {
   templates?: MessageTemplate[];
   /** Missed calls from my leads, newest first, until someone calls back. */
   call_back?: LeadRow[];
+  /** My calls of the last hours with no answer saved since (teardown 3). */
+  unanswered?: Unanswered[];
   /** The Leads badge as GET /badge counts it: the Inbound To Call list's rows. */
   badge?: Badge | null;
 };
 
 export type { Badge } from "./badge-client";
+
+/** A call of mine still waiting for its answer: Finish it from Leads. */
+export type Unanswered = {
+  lead_id: string;
+  name: string;
+  called_at: string;
+  event_id: string;
+};
 
 export type LeadEvent = {
   kind:
@@ -151,6 +161,10 @@ export type LeadEvent = {
     | "stage"
     | "meeting"
     | "suggestion";
+  /** An after-call answer its seller undid: it counts nowhere (ph2-37). */
+  answer_undone?: boolean;
+  /** A repeat enquiry that brought a Cold lead back to Inbound (teardown 23). */
+  to_inbound?: boolean;
   at: string;
   actor_name: string | null;
   /** Who did it, for their photo or character (#31), once the server sends it. */
@@ -1181,6 +1195,15 @@ export async function moveToStage(
   return moved(await readLead(lead.lead_id));
 }
 
+/** The lead a call's report belongs to, when this person may open it; else
+ *  null (the Report's Apply chips, competitor teardown 24). */
+export function readCallLead(submissionId: string, signal?: AbortSignal) {
+  return request<LeadDetail | null>(
+    `/calls/${encodeURIComponent(submissionId)}/lead`,
+    { signal },
+  );
+}
+
 /** Book the next call without a call (long-press on the list). */
 export function setFollowUp(
   lead: Pick<LeadRow, "lead_id" | "revision">,
@@ -1687,8 +1710,9 @@ export type CallTime = "hour" | "evening" | "morning" | "week" | "someday";
 
 /**
  * When to call again, as a human time: this evening, tomorrow at 10, next
- * week at 10, or Someday (Privyr's, UX study item 9): three weeks out at 11,
- * moved off a Sunday, so a "not now" lead still has a next date.
+ * week at 10, or "In 2 weeks" (the old Someday, Privyr's, UX study item 9):
+ * two weeks out at 11, moved off a Sunday, so a "not now" lead still has a
+ * date it says (competitor teardown 11: no follow-up without a date).
  */
 export function nextCallTime(choice: CallTime, now: Date = new Date()): Date {
   const at = new Date(now);
@@ -1698,7 +1722,7 @@ export function nextCallTime(choice: CallTime, now: Date = new Date()): Date {
     return at;
   }
   if (choice === "someday") {
-    at.setDate(at.getDate() + 21);
+    at.setDate(at.getDate() + 14);
     if (at.getDay() === 0) at.setDate(at.getDate() + 1);
     at.setHours(11, 0, 0, 0);
     return at;

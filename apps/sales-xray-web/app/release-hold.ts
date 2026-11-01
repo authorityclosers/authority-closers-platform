@@ -6,11 +6,14 @@
  * `Retry-After: 30`. Such a request never reached the app, so sending it again is always
  * safe for the server; what may change is only what the person sees. One fetch layer,
  * installed once for the whole app (release-hold-banner.tsx), handles it:
- * - a calm banner says Sales X-Ray is updating while the hold lasts;
+ * - a calm card says Sales X-Ray is updating while the hold lasts
+ *   (release-hold-banner.tsx: a corner card, one line at the top of Leads on a
+ *   phone, never over the page's controls);
  * - reads, and writes that carry an idempotency key, are sent again on their own (2, 4,
  *   8, then every 15 seconds, for up to about 3 minutes), so the screen just waits;
  * - any other write a person just made is kept, with its words still on screen, until
- *   they press Retry (or Not now, which hands the caller the answer it would have had);
+ *   Sales X-Ray is back and they press Send (or Not now, which hands the caller the
+ *   answer it would have had);
  * - background requests (telemetry, keepalive) are left to their own retries.
  */
 
@@ -39,6 +42,13 @@ export function holdDelay(attempt: number): number {
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "PUT", "DELETE"]);
 const KEY_HEADERS = ["idempotency-key", "x-idempotency-key"];
 const KEY_FIELDS = ["command_id", "request_id", "idempotency_key"];
+/**
+ * Writes the app makes by itself that come to the same thing however often
+ * they are sent: the workspace a page opens in, and lines marked read or seen.
+ * They wait out a release like reads, never as "your change" (phone personas
+ * ph1-43, 1 Nov 2026: "Your change is kept" with nothing changed).
+ */
+const SAME_EACH_TIME = /^\/v1\/(?:context|notifications\/read|updates\/seen)$/;
 
 /**
  * May this request be sent again without asking? Reads and HTTP's idempotent methods,
@@ -225,7 +235,7 @@ export function holdingFetch(
     set(true);
     // A stream body can't be sent twice; a background write keeps its own retries.
     if (body instanceof ReadableStream) return response;
-    if (retrySafe(method, headers, body)) {
+    if (retrySafe(method, headers, body) || SAME_EACH_TIME.test(url.pathname)) {
       const started = deps.now();
       for (let attempt = 0; ; attempt++) {
         const delay = holdDelay(attempt);

@@ -112,6 +112,9 @@ def test_each_side_lists_counts_and_numbers_its_own_leads(
             badge = (await here.client.get(f"{BASE}/badge")).json()
             assert badge["to_call"] == numbers.json()["inbound"]["to_call"]
             assert badge["overdue"] == sum(row["overdue"] for row in inbound["leads"])
+            # The desk's own late count is the badge's: Cold is never late (ph1-47).
+            desk = (await here.client.get(BASE)).json()
+            assert desk["counts"]["overdue"] == badge["overdue"]
             # It counts exactly the Inbound To Call list's rows, and the work views' tabs
             # carry each view's count (#9 option A; competitor teardown #9).
             listed = await page(scope="mine", side="inbound", view="to_call")

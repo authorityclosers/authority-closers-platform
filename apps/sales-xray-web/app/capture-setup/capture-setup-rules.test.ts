@@ -6,7 +6,10 @@ import {
   failingStep,
   finishedPhone,
   isGatedRoute,
+  markRecordingsLater,
   phoneFacts,
+  phoneReady,
+  recordingsReady,
   savedWhen,
   setupRequired,
   stepsFor,
@@ -171,6 +174,81 @@ describe("setupRequired", () => {
   });
 });
 
+describe("a phone finished without recordings (orchestrator, 1 Nov 2026)", () => {
+  // A seller's phone finished with no recordings folder, counted as done for
+  // good, and sent no recording in a week.
+  const finish = (recordings: boolean) =>
+    setup({
+      phones: [
+        {
+          device: DEVICE,
+          model: "Nord CE 2 5G",
+          app_version: "1.0.63",
+          at: new Date(NOW).toISOString(),
+          recordings,
+          background: false,
+          uploads: true,
+        },
+      ],
+    });
+  const noFolder = { ...ready, folderPicked: false };
+  const untested = { ...ready, newestMs: null };
+
+  it("is never done: the recording check opens again at the next open", () => {
+    expect(setupRequired(finish(false), noFolder, NOW)).toBe(true);
+    expect(stepsFor(finish(false), noFolder)).toEqual([
+      "consent",
+      "recordings",
+      "done",
+    ]);
+    // Google's Phone app keeps its recordings private: asked again too.
+    expect(
+      setupRequired(finish(false), { ...ready, privateDialler: true }, NOW),
+    ).toBe(true);
+  });
+
+  it("asks again when a finished phone's recordings stop", () => {
+    expect(setupRequired(finish(true), ready, NOW)).toBe(false);
+    expect(setupRequired(finish(true), noFolder, NOW)).toBe(true);
+    expect(
+      setupRequired(finish(true), { ...ready, recorderOff: true }, NOW),
+    ).toBe(true);
+  });
+
+  it("finishes a phone only with a recording found, and records one that works later by itself", () => {
+    expect(recordingsReady(ready)).toBe(true);
+    expect(recordingsReady(untested)).toBe(false);
+    expect(finishedPhone(noFolder).recordings).toBe(false);
+    expect(finishedPhone(untested).recordings).toBe(false);
+    // Went through it before, and a call's recording was found since: nothing
+    // to show (the gate records the phone).
+    expect(phoneReady(finish(false), ready)).toBe(true);
+    expect(setupRequired(finish(false), ready, NOW)).toBe(false);
+  });
+
+  it("lets Not now at the end stand for a day, then asks again", () => {
+    markRecordingsLater(DEVICE, NOW);
+    try {
+      expect(setupRequired(finish(false), noFolder, NOW + 3_600_000)).toBe(
+        false,
+      );
+      expect(setupRequired(finish(false), noFolder, NOW + 86_400_001)).toBe(
+        true,
+      );
+      // Another install is a phone of its own.
+      expect(
+        setupRequired(
+          finish(false),
+          { ...noFolder, device: "install-fresh" },
+          NOW + 3_600_000,
+        ),
+      ).toBe(true);
+    } finally {
+      window.localStorage.clear();
+    }
+  });
+});
+
 describe("stepsFor", () => {
   it("shows all five steps on a phone that has nothing yet, in the owner's order", () => {
     const fresh = phoneFacts(
@@ -217,17 +295,24 @@ describe("stepsFor", () => {
   });
 
   it("skips the phone's own steps when it finished in another workspace (ph2-15)", () => {
-    const restricted = phoneFacts(
-      status({ battery: false }, { folderPicked: false }),
-      { ...on, on: false },
-    )!;
-    // Only this workspace's consent, then done: no folder, battery or uploads again.
+    const restricted = phoneFacts(status({ battery: false }), {
+      ...on,
+      on: false,
+    })!;
+    // Only this workspace's consent, then done: no battery or uploads again.
     expect(
       stepsFor(
         setup({ consent: "ask", finished_devices: [DEVICE] }),
         restricted,
       ),
     ).toEqual(["consent", "done"]);
+    // Its folder gone since: the recording check shows again.
+    expect(
+      stepsFor(setup({ consent: "ask", finished_devices: [DEVICE] }), {
+        ...restricted,
+        folderPicked: false,
+      }),
+    ).toEqual(["consent", "recordings", "background", "uploads", "done"]);
     // Run again from Settings where it finished: the phone's steps show, to fix them.
     const here = setup({
       finished_devices: [DEVICE],
@@ -237,7 +322,7 @@ describe("stepsFor", () => {
           model: "Redmi 13",
           app_version: "1.0.50",
           at: new Date(NOW).toISOString(),
-          recordings: false,
+          recordings: true,
           background: false,
           uploads: false,
         },
@@ -245,7 +330,6 @@ describe("stepsFor", () => {
     });
     expect(stepsFor(here, restricted)).toEqual([
       "consent",
-      "recordings",
       "background",
       "uploads",
       "done",
@@ -256,7 +340,7 @@ describe("stepsFor", () => {
       model: "Redmi 13",
       family: "xiaomi",
       app_version: "1.0.50",
-      recordings: false,
+      recordings: true,
       background: false,
       uploads: false,
     });

@@ -1095,7 +1095,9 @@ function CallsLibraryContent({
   const insightIds = visibleSubmissions
     .filter(
       (submission) =>
-        submission.id === previewId ||
+        // The call in the drawer, when it has a report: one with none has no
+        // report or call record to read (robot 4bd92bb9, f02eecc0: two 404s).
+        (submission.id === previewId && submission.hasReport) ||
         (needsOwnRead(submission) &&
           (rowsSeen === null || rowsSeen.has(submission.id))),
     )
@@ -1770,7 +1772,10 @@ function CallsLibraryContent({
           {stats ? (
             <dl className={styles.strip} aria-label="Calls at a glance">
               <div className={styles.kpi} id="metric-calls">
-                <dt>Calls</dt>
+                {/* The saved recordings, as the header says them: the phone's
+                    calls above count by Home's rule (ph1-50, 1 Nov 2026: "Calls 2"
+                    beside five "You called"). */}
+                <dt>Saved calls</dt>
                 <dd>
                   <b>{stats.calls}</b>
                   {activeDays >= 3 ? (

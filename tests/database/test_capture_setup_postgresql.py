@@ -141,6 +141,19 @@ def test_a_seller_agrees_finishes_on_a_phone_and_team_sees_it(
                 assert (await _agree(client)).status_code == 200
                 bare = await client.post(SETUP, json={"outcome": "completed"}, headers=WRITE)
                 assert bare.status_code == 422
+                # A phone finished without its recordings working is kept for Team, but it
+                # is not done: the app asks again (orchestrator, 1 Nov 2026).
+                silent = await client.post(
+                    SETUP,
+                    json={
+                        "outcome": "completed",
+                        "phone": {**PHONE, "device": "install-fictional-0", "recordings": False},
+                    },
+                    headers={**WRITE, "Idempotency-Key": str(uuid4())},
+                )
+                assert silent.status_code == 200, silent.text
+                assert silent.json()["finished_devices"] == []
+                assert silent.json()["phones"][0]["recordings"] is False
 
                 # Agreed through /auto-analysis: this API records the phone, twice-tapped once.
                 once = {**WRITE, "Idempotency-Key": str(uuid4())}
@@ -158,16 +171,19 @@ def test_a_seller_agrees_finishes_on_a_phone_and_team_sees_it(
                     assert done.status_code == 200, done.text
                 view = done.json()
                 assert view["consent"] == "on"
-                assert [phone["device"] for phone in view["phones"]] == ["install-fictional-1"]
+                assert [phone["device"] for phone in view["phones"]] == [
+                    "install-fictional-1",
+                    "install-fictional-0",
+                ]
                 # The install is done for this person in every workspace (ph2-15).
                 assert view["finished_devices"] == ["install-fictional-1"]
                 assert view["phones"][0]["uploads"] is True
                 events = await _events(setup, seller.person_id)
-                assert len(events) == 1
-                assert events[0].action == capture_setup.ACTION
-                assert events[0].actor_person_id == seller.person_id
-                assert events[0].payload["outcome"] == "completed"
-                assert "number" not in events[0].payload
+                assert len(events) == 2
+                assert events[-1].action == capture_setup.ACTION
+                assert events[-1].actor_person_id == seller.person_id
+                assert events[-1].payload["outcome"] == "completed"
+                assert "number" not in events[-1].payload
 
                 # Agreed, so a no is refused: it is turned off in Settings, Privacy.
                 no = await client.post(SETUP, json={"outcome": "declined"}, headers=WRITE)
@@ -181,6 +197,8 @@ def test_a_seller_agrees_finishes_on_a_phone_and_team_sees_it(
                 rows = {row["person_id"]: row for row in team.json()["people"]}
                 assert rows[str(seller.person_id)]["state"] == "set_up"
                 assert rows[str(seller.person_id)]["phone"] == "Redmi 13"
+                # Every phone this seller finished on, once each by name (ph1-46).
+                assert rows[str(seller.person_id)]["phones"] == ["Redmi 13"]
                 assert rows[str(setup.state.person_id)]["state"] == "not_started"
                 # Who still needs it comes first.
                 assert team.json()["people"][-1]["state"] == "set_up"
@@ -191,6 +209,7 @@ def test_a_seller_agrees_finishes_on_a_phone_and_team_sees_it(
                     "state",
                     "at",
                     "phone",
+                    "phones",
                     "missing_today",
                     "call_log_off",
                     "recording",
@@ -248,7 +267,12 @@ def test_a_seller_agrees_finishes_on_a_phone_and_team_sees_it(
 
                 # Teardown #7: the seller's phone says when it last found a call recording
                 # (never the file or a number), and Team shows the line and its fix.
-                assert row["recording"] == {"state": "late", "last_at": None, "fix": "test"}
+                assert row["recording"] == {
+                    "state": "late",
+                    "last_at": None,
+                    "fix": "test",
+                    "phone": "Redmi 13",
+                }
                 as_(seller_token)
                 last = datetime.now(UTC) - timedelta(minutes=12)
                 told = await client.post(
@@ -274,6 +298,24 @@ def test_a_seller_agrees_finishes_on_a_phone_and_team_sees_it(
                 assert row["recording"]["state"] == "ok"
                 assert row["recording"]["fix"] is None
                 assert row["recording"]["last_at"].startswith(last.isoformat()[:16])
+                # ph1-46 (v1.25): Ready beside a red "Call recording off". A phone that
+                # says its recorder is off is not set up.
+                async with setup.sessions() as db, db.begin():
+                    desk = await db.get(LeadDeskSettings, setup.state.tenant_id)
+                    assert desk is not None
+                    entry = desk.config[PHONES_KEY][str(seller.person_id)]
+                    off_now = {**entry, "checks": {"recorder": False}}
+                    desk.config = {**desk.config, PHONES_KEY: {str(seller.person_id): off_now}}
+                team = await client.get(SETUP + "/team")
+                row = next(
+                    row
+                    for row in team.json()["people"]
+                    if row["person_id"] == str(seller.person_id)
+                )
+                assert row["state"] == "recording_off"
+                assert row["recording"]["state"] == "off"
+                assert row["recording"]["fix"] == "recorder"
+                assert row["recording"]["phone"] == "Redmi 13"
                 as_(seller_token)
                 mine = await client.get(SETUP + "/missing")
                 assert mine.status_code == 200, mine.text

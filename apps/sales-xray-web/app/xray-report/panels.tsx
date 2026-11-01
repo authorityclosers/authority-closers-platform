@@ -15,6 +15,7 @@ import {
   useReportLook,
   type ReportLook,
 } from "../report-settings";
+import { useCallOutcome } from "../report-outcome-context";
 import { useStory, type Select } from "../report-sections/shared";
 import { TargetArrow } from "./icons";
 import {
@@ -25,6 +26,7 @@ import {
   type XrayView,
 } from "./model";
 import type { TalkLine } from "./ai-notes";
+import { useApplyUpdates, useCallLead } from "./apply-updates";
 import { OverviewScore } from "./overview";
 import { readStructure } from "./structure";
 import { Brain4Analysis, Brain4Pending } from "./brain4-view";
@@ -201,13 +203,32 @@ type PartProps = {
 function OverviewPart(props: PartProps) {
   const view = useXrayView(props.data, props.callId, props.illustration);
   const talk = useTalkLine(props.data, props.callId);
+  // The AI notes' Apply chips, over the call's own lead when the viewer may
+  // change it (competitor teardown 24): each opens a filled-in sheet. Only a
+  // saved call of a signed-in team asks (never a fixture, preview or example).
+  const outcome = useCallOutcome().state;
+  const bound = outcome.status !== "off" && outcome.key !== "fixture";
+  const [lead, setLead] = useCallLead(
+    bound && !view.illustrative ? props.callId : null,
+  );
+  const { apply, applicable, sheets } = useApplyUpdates({
+    lead,
+    amount: view.outcome.value?.amount?.trim() || null,
+    date: view.outcome.nextSteps[0]?.date ?? view.outcome.date ?? null,
+    onChanged: setLead,
+  });
   return (
-    <OverviewScore
-      view={view}
-      onSelect={props.onSelect}
-      talk={talk}
-      callKey={props.callId}
-    />
+    <>
+      <OverviewScore
+        view={view}
+        onSelect={props.onSelect}
+        talk={talk}
+        callKey={props.callId}
+        onApply={apply}
+        applicable={applicable}
+      />
+      {sheets}
+    </>
   );
 }
 

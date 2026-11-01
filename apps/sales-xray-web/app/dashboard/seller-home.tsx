@@ -30,7 +30,13 @@ import {
 
 import { displayName } from "../display-name";
 import { AddTaskSheet } from "../leads/add-task-sheet";
-import { handOverLead } from "../leads/lead-handoff";
+import { useGo } from "../calls/call-rows";
+import { FinishRow } from "../leads/finish-row";
+import {
+  handOverAnswer,
+  handOverLead,
+  handOverRound,
+} from "../leads/lead-handoff";
 import {
   ago,
   deskRequest,
@@ -62,9 +68,10 @@ import { talkOrDash } from "./talk-time";
 type SidesAccess = { inbound: boolean; cold: boolean };
 
 /** Both types, until an owner access setting exists (handoff: owner decides). */
-export function useSidesAccess(): SidesAccess | null {
+export function useSidesAccess(enabled = true): SidesAccess | null {
   const [access, setAccess] = useState<SidesAccess | null>(null);
   useEffect(() => {
+    if (!enabled) return;
     const controller = new AbortController();
     deskRequest<{
       inbound?: { leads?: number };
@@ -82,7 +89,7 @@ export function useSidesAccess(): SidesAccess | null {
       },
     );
     return () => controller.abort();
-  }, []);
+  }, [enabled]);
   return access;
 }
 
@@ -282,8 +289,10 @@ export function TodayCards({
     },
     {
       key: "open",
-      label: "Open leads",
-      note: "Further discussion",
+      // The Open Leads stage, in words of its own: the open-lead limit counts
+      // every open Inbound lead (ph1-33, 1 Nov 2026: 0 here beside 908 there).
+      label: "In discussion",
+      note: "Open Leads stage",
       value: counts?.open_leads,
       href: leadsHref(side, {
         view: "all",
@@ -436,7 +445,14 @@ export function NextCall({ side, own }: { side: Side; own: HomeSide | null }) {
             <Link
               className={styles.callNow}
               href={leadsHref(side, { view: "to_call" })}
-              onClick={() => handOverLead(lead.lead_id, true)}
+              // Start cold calling opens a round at this card and dials nothing
+              // until Call (ph2-33: backing out of the dialler left a phantom
+              // call); a call-back or an Inbound lead dials at once.
+              onClick={() =>
+                cold && !missed
+                  ? handOverRound(lead.lead_id)
+                  : handOverLead(lead.lead_id, true)
+              }
             >
               <PhoneCall size={18} aria-hidden="true" />
               {missed
@@ -908,14 +924,18 @@ export function SellerBlocks({
   side,
   onSide,
   headerExtras,
+  access: given,
 }: {
   desk: HomeDesk;
   side: Side;
   onSide: (side: Side) => void;
   /** Taking new leads, and for owners the way back to the team's Home. */
   headerExtras?: ReactNode;
+  /** Which sides this seller works, when the page read them beside the desk. */
+  access?: SidesAccess | null;
 }) {
-  const access = useSidesAccess();
+  const fetched = useSidesAccess(given === undefined);
+  const access = given === undefined ? fetched : given;
   const { tasks, overdue, failed, reload, done } = useTaskList();
   // Only the type this seller works when they don't have both.
   const shown: Side =
@@ -925,8 +945,20 @@ export function SellerBlocks({
         ? "inbound"
         : side;
   const own = desk.sides?.[shown] ?? null;
+  const go = useGo();
   return (
     <div className={styles.me}>
+      {/* A call still waiting for its answer comes first, as on Leads (teardown
+          3: an answer is never lost); Finish opens it at its question there. */}
+      <div data-area="finish">
+        <FinishRow
+          calls={desk.unanswered}
+          onFinish={(leadId) => {
+            handOverAnswer(leadId);
+            go("/leads");
+          }}
+        />
+      </div>
       {access ? (
         <div data-area="side">
           <SideBlock

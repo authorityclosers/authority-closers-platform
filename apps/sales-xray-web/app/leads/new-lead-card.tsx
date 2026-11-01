@@ -51,6 +51,8 @@ export type Arrival = {
   /** The first lead waiting, and how many. */
   lead: LeadRow | null;
   count: number;
+  /** Every lead waiting, first come first. */
+  leads: readonly LeadRow[];
   /** Later: put them all by (they stay in To call). */
   putBy: () => void;
   /** A lead the page opened itself is known: it never pops up. */
@@ -100,6 +102,7 @@ export function useArrival(
   return {
     lead: waiting[0] ?? null,
     count: waiting.length,
+    leads: waiting,
     putBy: () => setWaiting([]),
     know,
   };

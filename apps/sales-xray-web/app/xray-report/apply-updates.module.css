@@ -1,0 +1,32 @@
+/* The follow-up picker an AI-notes Apply chip opens (competitor teardown 24). */
+
+.applyField {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.applyField input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-md, 12px);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md, 16px);
+}
+
+.applyField input:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.applyError {
+  margin: 0 0 12px;
+  color: var(--sx-bad);
+  font-size: var(--sx-text-sm);
+}

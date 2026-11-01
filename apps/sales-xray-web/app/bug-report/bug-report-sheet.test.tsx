@@ -25,6 +25,11 @@ vi.mock("./outbox", () => ({
   keepNow: (kind: string, id: string, body: unknown) =>
     keep(...([{ id, kind, body }] as unknown as [])),
   flush: async () => 0,
+  list: async () => [],
+  keepSending: (send: () => Promise<number>) => {
+    void send();
+    return () => {};
+  },
 }));
 
 import { useRegisteredCommands } from "../ui/command-registry";

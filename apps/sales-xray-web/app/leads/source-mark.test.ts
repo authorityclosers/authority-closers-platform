@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { nextLine } from "./desk-view";
+import { nextLine, waitTone, waiting } from "./desk-view";
 import type { LeadRow } from "./leads-client";
 import { pageWords, shortSource, sourceKind } from "./source-mark";
 
@@ -112,4 +112,33 @@ it("names a file's own list instead of File upload (ph1-18, 1 Nov 2026)", () => 
   expect(shortSource(from("csv", "Zoho export: leads.csv"))).toBe(
     "File upload",
   );
+});
+
+// Competitor teardown 4 (1 Nov 2026): a new Inbound enquiry counts its wait,
+// amber from 5 minutes and red from 15, until the first contact.
+it("counts a new enquiry's wait until someone contacts it", () => {
+  const now = new Date(2026, 9, 31, 12, 0);
+  const fresh = {
+    why: "New lead",
+    why_kind: "new",
+    created_at: new Date(2026, 9, 31, 11, 54).toISOString(),
+    next_action_at: null,
+    missed_at: null,
+    attempts: 0,
+    last_contact_at: null,
+  } as unknown as LeadRow;
+  expect(nextLine(fresh, now)).toBe("Waiting 6 min");
+  expect(waitTone(waiting(fresh, now))).toBe("warn");
+  const longer = {
+    ...fresh,
+    created_at: new Date(2026, 9, 31, 9, 30).toISOString(),
+  };
+  expect(nextLine(longer, now)).toBe("Waiting 2 h");
+  expect(waitTone(waiting(longer, now))).toBe("bad");
+  expect(
+    waitTone(waiting({ ...fresh, created_at: now.toISOString() }, now)),
+  ).toBeUndefined();
+  // A Cold list never waits on anyone; a contact stops the count.
+  expect(waiting({ ...fresh, side: "cold" }, now)).toBeNull();
+  expect(waiting({ ...fresh, attempts: 1 }, now)).toBeNull();
 });

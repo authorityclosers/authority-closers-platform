@@ -797,3 +797,8 @@
   outline: none;
   box-shadow: var(--sx-focus-ring);
 }
+
+/* The Finish row's place holds no gap when no call waits for its answer. */
+.me > [data-area="finish"]:empty {
+  display: none;
+}

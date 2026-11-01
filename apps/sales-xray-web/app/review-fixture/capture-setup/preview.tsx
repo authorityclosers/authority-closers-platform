@@ -7,7 +7,9 @@
  *
  * `?step=profile|consent|recordings|recorder|private|background|autostart|uploads|done`
  * opens that step in the phone app (an organisation's seller); `&agreed=1` shows
- * the consent step for someone who agreed before. `?step=web` is the web's
+ * the consent step for someone who agreed before; `?step=done-private` is the
+ * last screen on a phone whose Phone app is Google's (recordings not working:
+ * Set up recording or Not now, never finished). `?step=web` is the web's
  * last step, `?step=update` an app too old, `?step=personal` a personal
  * workspace's first screen, and `?view=team` Team's Call capture list.
  * `?view=permissions` is the permissions checklist after sign-in (two still to
@@ -41,6 +43,8 @@ const TEAM = [
   ["303", "Meera Fictional", "phone_pending", NOW - 2 * DAY, null],
   ["304", "Karan Fictional", "set_up", NOW - DAY, "Redmi 13"],
   ["305", "Neha Fictional", "set_up", NOW - 3 * DAY, "Galaxy A15"],
+  // Two phones, the newer one with call recording off (ph1-46): never Ready.
+  ["306", "Rohan Fictional", "recording_off", NOW - DAY, "Redmi 13"],
 ] as const;
 
 function answer(body: unknown, status = 200) {
@@ -57,6 +61,7 @@ function read(name: string) {
 /** What the fictional phone says, for the step asked for. */
 function phone(step: string) {
   const recorderOff = step === "recorder";
+  const google = step === "private" || step === "done-private";
   const folder = !["recordings", "private"].includes(step);
   const battery = !["background", "recordings", "recorder", "private"].includes(
     step,
@@ -77,9 +82,9 @@ function phone(step: string) {
       version: "1.0.50-fictional",
       device: "install-fictional-1",
       recorderProfile: {
-        kind: step === "private" ? "private" : "folder",
+        kind: google ? "private" : "folder",
         maker: "xiaomi",
-        dialerLabel: step === "private" ? "Phone by Google" : "Phone (Xiaomi)",
+        dialerLabel: google ? "Phone by Google" : "Phone (Xiaomi)",
         recording: recorderOff ? "off" : "on",
         folders: [],
         otherDialers: [],
@@ -96,7 +101,7 @@ function phone(step: string) {
     },
     capture: {
       supported: true,
-      on: step === "done",
+      on: step === "done" || step === "done-private",
       wifiOnly: false,
       health: "off",
     },
@@ -120,6 +125,17 @@ function install() {
           state,
           at: at ? new Date(at).toISOString() : null,
           phone: model,
+          ...(state === "recording_off"
+            ? {
+                phones: ["Redmi 13", "Nord CE 2 5G"],
+                recording: {
+                  state: "off",
+                  last_at: null,
+                  fix: "recorder",
+                  phone: "Nord CE 2 5G",
+                },
+              }
+            : {}),
         })),
       });
     if (url.includes("/capture-setup"))
@@ -223,6 +239,7 @@ const STARTS: Record<string, CaptureStep> = {
   autostart: "background",
   uploads: "uploads",
   done: "done",
+  "done-private": "done",
   web: "phone",
   update: "phone",
 };

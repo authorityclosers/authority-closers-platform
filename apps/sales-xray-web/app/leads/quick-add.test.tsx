@@ -51,6 +51,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   vi.useRealTimers();
+  localStorage.clear();
 });
 
 const box = (label: string) =>
@@ -108,6 +109,26 @@ it("needs a name, and Escape clears the line", async () => {
   await press(box("New lead's name"), "Escape");
   expect(box("New lead's name").value).toBe("");
   expect(box("New lead's phone").value).toBe("");
+});
+
+// The test robot, 1 Nov 2026 (5fc635af, 2ccf3f9f): Back or a refresh lost a
+// half-typed lead. It is kept as a draft and comes back.
+it("keeps a half-typed lead through Back or a refresh", async () => {
+  await act(async () =>
+    root.render(<QuickAddBar pipeline={null} onAdded={() => undefined} />),
+  );
+  await type(box("New lead's name"), "asha");
+  await type(box("New lead's phone"), "98765 43210");
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await act(async () =>
+    root.render(<QuickAddBar pipeline={null} onAdded={() => undefined} />),
+  );
+  expect(box("New lead's name").value).toBe("asha");
+  expect(box("New lead's phone").value).toBe("98765 43210");
+  // Escape clears the draft too.
+  await press(box("New lead's name"), "Escape");
+  expect(localStorage.length).toBe(0);
 });
 
 it("says a number is already a lead, and doesn't add it again", async () => {

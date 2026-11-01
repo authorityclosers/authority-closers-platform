@@ -46,7 +46,11 @@ export function shows(
         isMove(event) || event.kind === "captured" || event.kind === "repeat"
       );
     case "calls":
-      return event.kind === "call" || event.kind === "result";
+      // An answer its seller undid stays in the story, never in Calls (ph2-37).
+      return (
+        event.kind === "call" ||
+        (event.kind === "result" && !event.answer_undone)
+      );
     case "chats":
       return event.kind === "message";
     case "meetings":

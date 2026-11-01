@@ -70,12 +70,19 @@ export const stageTone = (stage: Looks) => TOKENS[stageColor(stage)];
 
 export const colorTone = (color: StageColor) => TOKENS[color];
 
-/** A stage's name on one side: the New stage may have its own Cold Leads name. */
+/** The stock first-stage names: on Cold Leads they read Unworked. */
+const STOCK_NEW = new Set(["new", "new lead", "new leads"]);
+
+/** A stage's name on one side: the New stage may have its own Cold Leads name;
+ *  a list that never named it says Unworked there, as Home does (phone
+ *  personas ph1-48, 1 Nov 2026: the import said "New lead", Home "Unworked"). */
 export function stageName(
   stage: { kind?: Kind; label: string; coldLabel?: string | null },
   side: Side,
 ): string {
-  return side === "cold" && stage.kind === "new" && stage.coldLabel
-    ? stage.coldLabel
+  if (side !== "cold" || stage.kind !== "new") return stage.label;
+  if (stage.coldLabel) return stage.coldLabel;
+  return STOCK_NEW.has(stage.label.trim().toLowerCase())
+    ? "Unworked"
     : stage.label;
 }

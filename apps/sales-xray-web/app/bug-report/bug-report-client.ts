@@ -4,6 +4,7 @@
  * that waits in the outbox (no connection) is sent later exactly as it was.
  */
 
+import { holdState, subscribeHold } from "../release-hold";
 import type { ReportContext } from "./device";
 import type { RecentError } from "./recent-errors";
 import { wholeCharacters } from "./scrub";
@@ -191,6 +192,48 @@ export async function postBugReport(
     picture: kept(answer.screenshot),
     voice: kept(answer.voice),
   };
+}
+
+const UPDATING = "Sales X-Ray is updating. Your report goes when it's back.";
+
+/**
+ * postBugReport that never waits out a release behind "Sending…": while Sales
+ * X-Ray is updating (release-hold.ts) it answers at once as a 503, and a send
+ * the update catches stops then, so the report is saved here instead (phone
+ * personas ph1-44, 1 Nov 2026: Sending… spun for two minutes).
+ */
+export async function postBugReportNow(
+  request: Record<string, unknown>,
+): Promise<BugReportSent> {
+  if (holdState().holding) throw new BugReportError(UPDATING, 503);
+  const controller = new AbortController();
+  const stop = subscribeHold(() => {
+    if (holdState().holding) controller.abort();
+  });
+  try {
+    return await postBugReport(request, controller.signal);
+  } catch (error) {
+    if (controller.signal.aborted) throw new BugReportError(UPDATING, 503);
+    throw error;
+  } finally {
+    stop();
+  }
+}
+
+/**
+ * Why a report waits on this device, in the words it needs: an update, a
+ * server that didn't answer, or no connection. A busy server is never called
+ * "offline" (phone personas ph1-44: the phone was online).
+ */
+export function savedWords(error: unknown): string {
+  if (
+    holdState().holding ||
+    (error instanceof BugReportError && error.status === 503)
+  )
+    return "Sales X-Ray is updating. It goes by itself as soon as it's back.";
+  if (typeof navigator !== "undefined" && navigator.onLine === false)
+    return "It goes by itself as soon as you're back online.";
+  return "Sales X-Ray didn't answer. It goes by itself as soon as it does.";
 }
 
 export async function sendBugReport(

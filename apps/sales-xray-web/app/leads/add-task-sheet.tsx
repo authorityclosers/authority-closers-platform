@@ -39,6 +39,7 @@ import {
   localInput,
   quickTimes,
 } from "./task-words";
+import { useDraft } from "./drafts";
 import styles from "./add-task-sheet.module.css";
 
 /** The kinds a seller adds by hand, the most used first. Tasks are the
@@ -223,7 +224,9 @@ export function AddTaskSheet({
   // One command per sheet: Add again after a failure never adds twice.
   const [command] = useState(commandId);
   const [times] = useState(() => quickTimes(now()));
-  const [title, setTitle] = useState("");
+  // A draft per lead (or one's own): Back, Forward or a refresh keep it
+  // (robot, 1 Nov 2026: 2e72e8fa, 11ef4f38, 0f5c0fb1); saving clears it.
+  const [title, setTitle] = useDraft(`task:${given?.lead_id ?? "own"}`);
   const [kind, setKind] = useState<TaskKind>(KINDS[0]);
   const [lead, setLead] = useState<TaskLead | null>(given);
   const [at, setAt] = useState<Date>(times[0].at);
@@ -258,6 +261,7 @@ export function AddTaskSheet({
           : {}),
         timeout: 5000,
       });
+      setTitle("");
       onAdded(at);
     } catch (reason) {
       if (reason instanceof LeadsError && reason.kept) {
@@ -267,6 +271,7 @@ export function AddTaskSheet({
           title: `Task kept for ${when}`,
           message: reason.message,
         });
+        setTitle("");
         onAdded(at);
         return;
       }

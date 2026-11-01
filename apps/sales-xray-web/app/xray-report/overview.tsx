@@ -552,6 +552,7 @@ export function OverviewScore({
   talk = null,
   callKey = null,
   onApply,
+  applicable,
 }: {
   view: XrayView;
   onSelect?: Select;
@@ -560,7 +561,9 @@ export function OverviewScore({
   /** The call, for the AI notes' feedback. */
   callKey?: string | null;
   /** Where the page knows the lead: applies a suggested update. */
-  onApply?: (suggestion: NoteSuggestion) => Promise<void>;
+  onApply?: (suggestion: NoteSuggestion) => Promise<boolean | void>;
+  /** Which suggested updates that lead can take. */
+  applicable?: (suggestion: NoteSuggestion) => boolean;
 }) {
   const { score, stats } = view.overview;
   const scoring = scoringNote(view.scoring);
@@ -623,6 +626,7 @@ export function OverviewScore({
         callKey={callKey}
         onSelect={onSelect}
         onApply={onApply}
+        applicable={applicable}
       />
 
       <section

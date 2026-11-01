@@ -997,6 +997,20 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 call_event_id=command.call_event_id,
             )
 
+    @router.get(
+        "/calls/{submission_id}/lead",
+        response_model=LeadDetail | None,
+        response_model_by_alias=True,
+    )
+    async def call_lead(
+        submission_id: UUID, request: Request, response: Response
+    ) -> LeadDetail | None:
+        """The lead this call belongs to, if the viewer may open it; null otherwise (the
+        Report's Apply chips, competitor teardown #24)."""
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.lead_for_call(submission_id)
+
     @router.get("/team", response_model=Team, response_model_by_alias=True)
     async def team(request: Request, response: Response) -> Team:
         no_query(request)

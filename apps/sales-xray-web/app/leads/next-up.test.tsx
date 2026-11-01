@@ -247,7 +247,8 @@ it.each([true, false])(
     }
     const calls = fetchMock.mock.calls.length;
     await act(async () => skip!.click());
-    expect(onNext).toHaveBeenCalledWith(ONE);
+    // Skip sends the lead to the round's end (competitor teardown 2).
+    expect(onNext).toHaveBeenCalledWith(ONE, true);
     // Nothing saved: no request beyond the lead's own read.
     expect(
       fetchMock.mock.calls

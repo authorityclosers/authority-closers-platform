@@ -8,8 +8,16 @@
 
 export const LEAD_ADDED_EVENT = "sx:lead-added";
 
-/** `at`: the line of its history to show, such as the call tapped on Calls. */
-export type HandedLead = { leadId: string; call: boolean; at?: string | null };
+/** `at`: the line of its history to show, such as the call tapped on Calls;
+ *  `round`: start a calling round at this lead (its card first); `log`: open
+ *  it on its after-call question (Home's Finish row). */
+export type HandedLead = {
+  leadId: string;
+  call: boolean;
+  at?: string | null;
+  round?: boolean;
+  log?: boolean;
+};
 
 let waiting: HandedLead | null = null;
 
@@ -20,6 +28,30 @@ export function handOverLead(
   at: string | null = null,
 ) {
   waiting = at ? { leadId, call, at } : { leadId, call };
+  if (typeof window !== "undefined")
+    window.dispatchEvent(
+      new CustomEvent<HandedLead>(LEAD_ADDED_EVENT, { detail: waiting }),
+    );
+}
+
+/**
+ * Start a calling round on Leads at this lead, as Leads' own Start Cold
+ * Calling does: its card first, with Call and Skip, and nothing dials until
+ * Call (phone personas ph2-33, 1 Nov 2026: Home's Start cold calling opened
+ * the dialer at once, and backing out left a phantom call).
+ */
+export function handOverRound(leadId: string) {
+  waiting = { leadId, call: false, round: true };
+  if (typeof window !== "undefined")
+    window.dispatchEvent(
+      new CustomEvent<HandedLead>(LEAD_ADDED_EVENT, { detail: waiting }),
+    );
+}
+
+/** Open this lead on its after-call question, as Leads' own Finish row does
+ *  (teardown 3: Home's Finish row, 1 Nov 2026). */
+export function handOverAnswer(leadId: string) {
+  waiting = { leadId, call: false, log: true };
   if (typeof window !== "undefined")
     window.dispatchEvent(
       new CustomEvent<HandedLead>(LEAD_ADDED_EVENT, { detail: waiting }),

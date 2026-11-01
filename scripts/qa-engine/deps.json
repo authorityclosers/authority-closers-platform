@@ -1,0 +1,11 @@
+{
+  "note": "Install with: npm install --prefix <dir> --no-save <each package@version>; point QA_MODULES at <dir>/node_modules. Playwright comes from the workbench (PLAYWRIGHT_PATH).",
+  "node": ">=20",
+  "packages": {
+    "@axe-core/playwright": "4.11.0",
+    "axe-core": "4.13.0",
+    "gremlins.js": "2.2.0",
+    "pixelmatch": "5.3.0",
+    "pngjs": "7.0.0"
+  }
+}

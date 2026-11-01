@@ -63,3 +63,12 @@ def is_one_pass(system: object) -> bool:
 def call_date(created_at: datetime) -> str:
     """The call's date as the call data instructions read it ("Tuesday 21 October 2026")."""
     return created_at.astimezone(IST).strftime("%A %d %B %Y")
+
+
+def call_moment(started_at: datetime | None, uploaded_at: datetime) -> str:
+    """The day and time a call's "tomorrow" and "on Saturday" count from, in India: when the
+    call was made; without its Lead Desk call, the upload, said as such (64 characters at
+    most, one_pass.stage). A phone that was offline uploads Friday's call on Sunday."""
+    if started_at is not None:
+        return started_at.astimezone(IST).strftime("%A %d %B %Y, %H:%M India time")
+    return uploaded_at.astimezone(IST).strftime("%A %d %B %Y (uploaded then; call time unknown)")

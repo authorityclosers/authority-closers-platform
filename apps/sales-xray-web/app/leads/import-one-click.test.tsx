@@ -121,6 +121,11 @@ it("says which CRM's export it is and imports in one press, columns tucked away"
   const dialog = await mount(2);
   expect(dialog.textContent).toContain("Zoho CRM export.");
   expect(dialog.textContent).toContain("Columns matched: Phone, Stage");
+  // The first rows as leads, before Import (phone personas ph1-48).
+  const first = dialog.querySelector('[aria-label="The first rows, as leads"]');
+  expect(
+    [...(first?.querySelectorAll("li") ?? [])].map((row) => row.textContent),
+  ).toEqual(["98760 72001", "98760 72002"]);
   expect(
     dialog.querySelectorAll('button[aria-haspopup="listbox"]'),
   ).toHaveLength(0);

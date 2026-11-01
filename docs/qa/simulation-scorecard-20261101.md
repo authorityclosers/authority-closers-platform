@@ -28,7 +28,7 @@ fictional seller **ac.priya** (AC Sales Sandbox) through the audited admin route
 | Latency | Upload accepted → report: median **62 s**, p90 93 s, worst 237 s (the 45.6-minute call). Short-call holds 21–23 s |
 | Where calls land | All **25 of 25** phone uploads sit once on their lead with the recording; the call-log sync of the same call is recognised (`already=1`). The Calls tab counts 29 (21 completed; the 8 held short calls are in no bucket) |
 | Long calls | **Fail**: 117.9 min refused "longer than 60 minutes … Split it and try again" (owner order: 120 min everywhere); 126.3 min refused before spend but with "The audio length could not be verified" |
-| AI spend | Round one **₹71.12** for 81.6 analysed minutes (29 calls) = **₹0.87/min**; nothing for the 2 refused calls. Round two ₹56.47 (analyses ₹44.78 with the engine’s ₹7.41, one-pass trial ₹11.69). **Day: ₹127.59** of the approved ₹280 |
+| AI spend | Round one **₹71.12** for 81.6 analysed minutes (29 calls) = **₹0.87/min**; nothing for the 2 refused calls. Round two ₹56.47 (analyses ₹44.78 with the engine’s ₹7.41, one-pass trial ₹11.69). The fix's re-check ₹1.19. **Day: ₹128.78** of the approved ₹280 |
 | Call data engine (round two) | Structured facts recall 88%, precision 94%; lead fills 5 right, 1 wrong; follow-up dates right in 4 of 6 (“tomorrow” counted from the analysis day, `deb67f5f`) |
 | Part 2: triggers | Unchanged from the first pass below (all testable triggers pass) |
 
@@ -178,6 +178,25 @@ before collecting. The engine read every call 3–14 s after its transcript.
 `{"value": …}` and passes. A suggestion then appears only when the next step's words name a term
 ("demo" did; "proposal presentation" and "invoice and first installment" did not).
 
+### The fix and its re-check (`644a6e9b5`, wb-ci 41287987725)
+
+`8d68f322` and `deb67f5f` are fixed on dev/live in `644a6e9b5` (every Python shard the change
+touches green). `milestone_of` reads the stored `{"enum": …}`, a call that ended in a no offers
+nothing, and the engine's prompt dates a call by the lead's call event (the attach event's
+`for_call`) instead of the upload. The new tests failed on the code before and pass after.
+
+- **Stage offers, recomputed read-only from the stored call objects** with the fixed code and the
+  sandbox's real stage list (no AI spend): S04 **Won** (was none), S09 **Meeting Scheduled**
+  (was none), S30 **nothing** (was Open Leads); the other seven unchanged and right. 10 of 10.
+- **Prompt date:** all 10 now read the call's Friday ("Friday 30 October 2026, 13:20 India time"
+  for S05) instead of the Sunday upload.
+- **Follow-ups, one fresh read each** (operator mode, the committed code; AI spend switched on
+  09:06Z and restored 09:07Z, logged; ₹1.19): S05 "Tomorrow at 6 PM" → **Saturday 31 Oct 18:00**
+  (was Monday 2 Nov); S17 "Saturday eleven AM" → **Saturday 31 Oct 11:00** (was 7 Nov).
+- The running dev-live API and engine show this once the change ships. The one-pass report
+  dates its prompt from the upload too (`reporting_pipeline.py`); that is where call data comes
+  from in production, and it is not part of this fix.
+
 ## Part 2: triggers (seller Rohan, AC Sales Sandbox)
 
 | Trigger | What was sent | What came back | Result |
@@ -219,8 +238,8 @@ removed mid-day.
 | `6370dc55` | call analysis / report (Calls, short-call rule) | medium | Short calls: transcript never opens, no Get full report, panel says it is saved |
 | `12b4a31f` | call analysis / report (speaker identity) | medium | S20: Hindi call, the prospect labelled the salesperson |
 | `ee41b4af` | call analysis / report (transcription of money) | low | S15: "forty-five thousand" heard as "four to five thousand" |
-| `8d68f322` | Leads (Lead OS journey signals) with the call data engine | high | Round two: stage suggestions ignore the call outcome (`{"enum"}` stored, `value` read): a closed deal and a booked meeting get no offer |
-| `deb67f5f` | call data engine (follow-up dates) | medium | Round two: "tomorrow" and weekday names count from the analysis day, not the call's (late uploads move the follow-up) |
+| `8d68f322` | Leads (Lead OS journey signals) with the call data engine | high | **Fixed in `644a6e9b5`.** Round two: stage suggestions ignore the call outcome (`{"enum"}` stored, `value` read): a closed deal and a booked meeting get no offer |
+| `deb67f5f` | call data engine (follow-up dates) | medium | **Fixed in `644a6e9b5`** (the fast engine; one-pass not yet). Round two: "tomorrow" and weekday names count from the analysis day, not the call's (late uploads move the follow-up) |
 | `f04037f2` | Leads (Lead OS journey signals) | low | Round two: a clear no is never offered as Lost; a lost deal with a March check-in is offered Open Leads |
 | `26cabf15` | call data engine (lead fills) | low | Round two: Company auto-filled from a misheard name ("Paddle" for Patil) without asking |
 | `5605dd37` | capture-setup (call analysis / billing for the words) | high, blocks work | 0 call minutes in both sandboxes; the upload says the allowance "has been used" (still true for every seller but Priya) |

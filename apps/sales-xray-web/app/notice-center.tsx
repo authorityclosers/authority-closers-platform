@@ -72,6 +72,8 @@ export type Notice = Readonly<{
   pillAction?: boolean;
   /** Error cards offer "Report" (the bug reporter); not on the reporter's own. */
   noReport?: boolean;
+  /** One line in a phone page's dock, as new enquiries and work alerts are. */
+  dock?: boolean;
 }>;
 
 /** At most two cards show (owner via the orchestrator, 31 Oct 2026); older ones
@@ -109,6 +111,10 @@ function writeSeen(list: string[]) {
   }
 }
 const wasSeen = (key: string) => readSeen().includes(key);
+// Cards on screen now, folded or not: a card that moves (out of a sheet that
+// closed) comes back as it was, without arriving again (phone personas ph2-36,
+// 1 Nov 2026: the after-call Undo jumped and vanished).
+const placed = new Map<string, boolean>();
 function markSeen(key: string) {
   const list = readSeen();
   if (!list.includes(key)) writeSeen([...list, key]);
@@ -148,6 +154,49 @@ function subscribe(listener: () => void) {
 }
 
 const EMPTY: readonly Notice[] = [];
+
+// ----- the dock --------------------------------------------------------------------------
+
+/** New enquiries and work alerts; app problems keep the corner (owner, 31 Oct 2026). */
+const DOCKED_TONES: ReadonlySet<NoticeTone> = new Set(["lead", "work", "due"]);
+const DOCK_MEDIA = "(max-width: 759.98px)";
+let dock: HTMLElement | null = null;
+const dockListeners = new Set<() => void>();
+function setDock(node: HTMLElement | null) {
+  if (dock === node) return;
+  dock = node;
+  dockListeners.forEach((listener) => listener());
+}
+function subscribeDock(listener: () => void) {
+  dockListeners.add(listener);
+  return () => {
+    dockListeners.delete(listener);
+  };
+}
+const noDock = () => null;
+
+/**
+ * Where a page puts its new-lead and work notices on a phone: one line in the
+ * page above its rows, never over them, their Call buttons or the tab bar
+ * (competitor teardown 12; the orchestrator, 1 Nov 2026: "Varun Chauhan is
+ * your lead now" covered the second row's Open on Follow-ups at 360 px).
+ * Computers keep the corner, which has room beside the page.
+ */
+export function NoticeDock() {
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!node || typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia(DOCK_MEDIA);
+    const place = () => setDock(media.matches ? node : null);
+    place();
+    media.addEventListener("change", place);
+    return () => {
+      media.removeEventListener("change", place);
+      if (dock === node) setDock(null);
+    };
+  }, [node]);
+  return <div ref={setNode} className={styles.dock} data-notice-dock="" />;
+}
 
 const ICON = {
   error: AlertCircle,
@@ -225,10 +274,13 @@ function CardAction({
 function NoticeCard({
   notice,
   leave,
+  docked = false,
 }: {
   notice: Notice;
   /** How the card goes away; by default it leaves the notice list. */
   leave?: () => void;
+  /** In the page's dock: one line with its action, in the page's flow. */
+  docked?: boolean;
 }) {
   const reporter = useReporterAvailable();
   const report = notice.tone === "error" && !notice.noReport && reporter;
@@ -239,18 +291,26 @@ function NoticeCard({
   const opened = useRef(false);
   const key = seenKey(notice);
   const arrivesFolded = () =>
-    notice.folded === true || notice.slim === true || wasSeen(key);
-  const [folded, setFolded] = useState(arrivesFolded);
+    docked || notice.folded === true || notice.slim === true || wasSeen(key);
+  // Already on screen elsewhere (a sheet that closed): as it was, no arrival.
+  const [again] = useState(() => placed.has(key));
+  const [folded, setFolded] = useState(
+    () => placed.get(key) ?? arrivesFolded(),
+  );
   const [cardKey, setCardKey] = useState(key);
   if (cardKey !== key) {
     setCardKey(key);
     setFolded(arrivesFolded());
   }
+  useEffect(() => {
+    placed.set(key, folded);
+  }, [key, folded]);
   const Icon = ICON[notice.tone];
-  const remove = useCallback(
-    () => (leave ? leave() : dismissNotice(notice.id)),
-    [leave, notice.id],
-  );
+  const remove = useCallback(() => {
+    placed.delete(key);
+    if (leave) leave();
+    else dismissNotice(notice.id);
+  }, [key, leave, notice.id]);
   const dismiss = async () => {
     if (dismissing) return;
     setDismissing(true);
@@ -317,7 +377,13 @@ function NoticeCard({
   }, [folded, key]);
   if (folded)
     return (
-      <div ref={card} className={styles.pill} data-tone={notice.tone}>
+      <div
+        ref={card}
+        className={styles.pill}
+        data-tone={notice.tone}
+        data-docked={docked || undefined}
+        data-again={again || undefined}
+      >
         <button
           type="button"
           className={styles.pillOpen}
@@ -330,7 +396,10 @@ function NoticeCard({
           <Icon className={styles.icon} size={16} aria-hidden="true" />
           <span className={styles.pillText}>{notice.title}</span>
         </button>
-        {notice.action && notice.pillAction ? (
+        {/* A short-lived card's action stays too: its Undo is the point of
+            it (ph2-36: Undo vanished once the card folded). */}
+        {notice.action &&
+        (notice.pillAction || docked || Boolean(notice.timeout)) ? (
           <CardAction
             action={notice.action}
             onRun={() => {
@@ -354,6 +423,7 @@ function NoticeCard({
       ref={card}
       className={styles.card}
       data-tone={notice.tone}
+      data-again={again || undefined}
       role={notice.tone === "error" ? "alert" : "status"}
       tabIndex={-1}
     >
@@ -489,12 +559,25 @@ export function NoticeCenter() {
   );
   const [expanded, setExpanded] = useState(false);
   const [stack, setStack] = useState<HTMLDivElement | null>(null);
+  // How high the stack sat over a sheet's footer, for its glide back down.
+  const lifted = useRef(0);
   const sheet = useTopModal();
+  const pageDock = useSyncExternalStore(subscribeDock, () => dock, noDock);
+  // A sheet on top takes every card; otherwise a phone page's dock takes the
+  // new enquiries and work alerts, and the corner keeps the rest.
+  const docking = sheet ? null : pageDock;
   const work = useNormalAlert();
   const workCard = useMemo(() => (work ? fromAlert(work) : null), [work]);
   const workGone = useCallback(() => {
     if (work) clearAlert(work.id);
   }, [work]);
+  // A card that left the list is gone for good: it arrives anew next time.
+  useEffect(() => {
+    const live = new Set(
+      [...list, ...(workCard ? [workCard] : [])].map(seenKey),
+    );
+    for (const key of placed.keys()) if (!live.has(key)) placed.delete(key);
+  }, [list, workCard]);
 
   // The page keeps room for the stack, so content scrolls clear of it: the
   // band from the stack's top to the window's bottom, which the shell adds to
@@ -544,12 +627,13 @@ export function NoticeCenter() {
         edge &&
         edge.height > 0 &&
         across(stack.getBoundingClientRect(), edge)
-      )
-        stack.style.setProperty(
-          "--sx-stack-lift",
-          `${Math.ceil(window.innerHeight - edge.top + 8)}px`,
-        );
-      else stack.style.removeProperty("--sx-stack-lift");
+      ) {
+        lifted.current = Math.ceil(window.innerHeight - edge.top + 8);
+        stack.style.setProperty("--sx-stack-lift", `${lifted.current}px`);
+      } else {
+        lifted.current = 0;
+        stack.style.removeProperty("--sx-stack-lift");
+      }
       body?.style.removeProperty("--sx-sheet-room");
       body = sheet.querySelector<HTMLElement>("[data-sheet-body]");
       if (!body) return;
@@ -574,6 +658,31 @@ export function NoticeCenter() {
       window.removeEventListener("resize", place);
       body?.style.removeProperty("--sx-sheet-room");
       stack.style.removeProperty("--sx-stack-lift");
+    };
+  }, [sheet, stack]);
+
+  // Out of a sheet that closed (the after-call sheet, with its Undo card), the
+  // stack glides down from where it sat over the sheet's footer instead of
+  // jumping (phone personas ph2-36, 1 Nov 2026: about 160 px within 2 s).
+  useEffect(() => {
+    if (sheet || !stack) return;
+    const from = lifted.current;
+    lifted.current = 0;
+    if (!from) return;
+    stack.style.setProperty("--sx-stack-lift", `${from}px`);
+    stack.setAttribute("data-glide", "");
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() =>
+        stack.style.removeProperty("--sx-stack-lift"),
+      );
+    });
+    const done = window.setTimeout(
+      () => stack.removeAttribute("data-glide"),
+      600,
+    );
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(done);
     };
   }, [sheet, stack]);
 
@@ -614,13 +723,20 @@ export function NoticeCenter() {
     };
   }, []);
 
-  const waiting = Math.max(0, list.length - SHOWN);
+  const docks = (item: Notice) =>
+    item.dock === true || DOCKED_TONES.has(item.tone);
+  const docked = docking ? list.filter(docks) : [];
+  const corner = docking ? list.filter((item) => !docks(item)) : list;
+  const cornerWork = docking ? null : workCard;
+  const dockWork = docking ? workCard : null;
+  const waiting = Math.max(0, corner.length - SHOWN);
   // Once no card waits, the next pile starts folded again.
   if (expanded && waiting === 0) setExpanded(false);
   // The newest first: a card arrives at the top of the stack, so the cards
   // already there never move (orchestrator, 1 Nov 2026: a card joining below
   // lifted the others, a layout shift); older ones wait under "+N more".
-  const shownList = [...(expanded ? list : list.slice(-SHOWN))].reverse();
+  const shownList = [...(expanded ? corner : corner.slice(-SHOWN))].reverse();
+  const dockList = [...docked.slice(-SHOWN)].reverse();
 
   return (
     <>
@@ -639,8 +755,12 @@ export function NoticeCenter() {
           data-capture-skip=""
           popover={sheet ? "manual" : undefined}
         >
-          {workCard ? (
-            <NoticeCard key={workCard.id} notice={workCard} leave={workGone} />
+          {cornerWork ? (
+            <NoticeCard
+              key={cornerWork.id}
+              notice={cornerWork}
+              leave={workGone}
+            />
           ) : null}
           {shownList.map((notice) => (
             <NoticeCard key={notice.id} notice={notice} />
@@ -657,6 +777,29 @@ export function NoticeCenter() {
           ) : null}
         </div>
       </StackHost>
+      {/* On a phone page with a dock: one line each, in the page's flow. */}
+      {docking && (dockWork || dockList.length)
+        ? createPortal(
+            <div
+              className={styles.docked}
+              aria-live="polite"
+              data-capture-skip=""
+            >
+              {dockWork ? (
+                <NoticeCard
+                  key={dockWork.id}
+                  notice={dockWork}
+                  leave={workGone}
+                  docked
+                />
+              ) : null}
+              {dockList.map((notice) => (
+                <NoticeCard key={notice.id} notice={notice} docked />
+              ))}
+            </div>,
+            docking,
+          )
+        : null}
       {/* Urgent work: a centre card over the page, by design. */}
       <AlertHost />
     </>

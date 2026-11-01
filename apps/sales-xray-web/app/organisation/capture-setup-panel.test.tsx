@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import type { CaptureTeamRow } from "../capture-setup/capture-setup-client";
+import { WorkspaceAccessContext } from "../workspace-access";
 import {
   CaptureSetupPanel,
   captureLine,
@@ -49,6 +50,7 @@ async function mount(
   people: CaptureTeamRow[] | null,
   status = 200,
   missingToday = 0,
+  me: string | null = null,
 ) {
   vi.stubGlobal(
     "fetch",
@@ -64,7 +66,24 @@ async function mount(
         ),
     ),
   );
-  await act(async () => root.render(<CaptureSetupPanel />));
+  await act(async () =>
+    root.render(
+      me ? (
+        <WorkspaceAccessContext.Provider
+          value={{
+            status: "ready",
+            authenticated: true,
+            context: { personId: me, sessionId: "s", tenantId: "t" },
+            retry: () => {},
+          }}
+        >
+          <CaptureSetupPanel />
+        </WorkspaceAccessContext.Provider>
+      ) : (
+        <CaptureSetupPanel />
+      ),
+    ),
+  );
   for (let i = 0; i < 6; i++) await act(async () => await Promise.resolve());
 }
 
@@ -172,4 +191,63 @@ it("shows each phone's recording as a dot and a line with its fix", async () => 
   ]);
   const line = host.querySelector('small[data-state="off"]');
   expect(line?.textContent).toBe("No recordings folder · Allow folder");
+});
+
+// Phone personas ph1-46 (v1.25): "Everyone is set up" and Ready beside a red
+// "Call recording off", "Turn on call recording" as dead text, and one of the
+// seller's two phones missing.
+const off = row("Karan Fictional", "recording_off", {
+  phone: "Redmi 13",
+  phones: ["Redmi 13", "Nord CE 2 5G"],
+  recording: {
+    state: "off",
+    last_at: null,
+    fix: "recorder",
+    phone: "Nord CE 2 5G",
+  },
+});
+
+it("never says Ready or everyone is set up beside recording off, and lists every phone", async () => {
+  await mount([off]);
+  expect(host.textContent).toContain("1 of 1 not set up");
+  expect(host.textContent).not.toContain("Everyone is set up");
+  expect(host.querySelector("li > [data-state]")?.textContent).toBe(
+    "Recording off",
+  );
+  expect(host.querySelector("li")?.textContent).toContain(
+    "Redmi 13 · Nord CE 2 5G · since 29 Oct",
+  );
+  expect(host.querySelector('small[data-state="off"]')?.textContent).toBe(
+    "Nord CE 2 5G: Call recording off · Turn on call recording",
+  );
+});
+
+it("makes the fix a button: on another seller's row, what they do on their phone", async () => {
+  await mount([off], 200, 0, "id-someone-else");
+  const fix = host.querySelector<HTMLButtonElement>(
+    'small[data-state="off"] button',
+  );
+  expect(fix?.textContent).toBe("Turn on call recording");
+  await act(async () => fix?.click());
+  expect(document.body.textContent).toContain(
+    "On Nord CE 2 5G, open Sales X-Ray.",
+  );
+  expect(document.body.textContent).toContain(
+    "Settings, Selling, Phone setup, then Set up.",
+  );
+});
+
+it("makes the fix a button: on your own row, the recording check on this phone", async () => {
+  await mount([off], 200, 0, "id-Karan Fictional");
+  const asked: unknown[] = [];
+  const listen = (event: Event) =>
+    asked.push((event as CustomEvent<unknown>).detail);
+  window.addEventListener("sx-capture-setup-open", listen);
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>('small[data-state="off"] button')
+      ?.click(),
+  );
+  window.removeEventListener("sx-capture-setup-open", listen);
+  expect(asked).toEqual(["recordings"]);
 });

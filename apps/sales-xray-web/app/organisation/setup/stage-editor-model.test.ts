@@ -287,5 +287,12 @@ describe("how a stage looks", () => {
     expect(stageName(first, "cold")).toBe("Unworked");
     expect(stageName(first, "inbound")).toBe("New Lead");
     expect(stageName(open, "cold")).toBe("Open Leads");
+    // A list that never named its Cold first stage reads Unworked (ph1-48).
+    expect(
+      stageName({ kind: "new", label: "New lead", coldLabel: null }, "cold"),
+    ).toBe("Unworked");
+    expect(
+      stageName({ kind: "new", label: "Fresh", coldLabel: null }, "cold"),
+    ).toBe("Fresh");
   });
 });

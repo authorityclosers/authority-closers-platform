@@ -174,3 +174,45 @@ it("shows the saved calls once Your calls has answered, so nothing below it move
     "No call reports yet",
   );
 });
+
+// Robot 4bd92bb9 and f02eecc0 (1 Nov 2026): previewing a call with no report
+// reads no report and no call record, so nothing answers 404.
+it("previews a call with no report without asking for its report", async () => {
+  const asked: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo) => {
+      const url = String(input);
+      asked.push(url);
+      if (url.includes("/acquisition/submissions?"))
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              submissions: [
+                {
+                  submission_id: "44444444-4444-4444-8444-444444444444",
+                  created_at: "2026-10-31T06:30:00Z",
+                  duration_seconds: 61,
+                  state: "processing",
+                  has_report: false,
+                },
+              ],
+              next_cursor: null,
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+        );
+      return Promise.resolve(new Response("{}", { status: 404 }));
+    }),
+  );
+  await act(async () => render(access({}), true));
+  await flush();
+  const preview = host.querySelector<HTMLButtonElement>(
+    'button[aria-label^="Preview"]',
+  );
+  expect(preview).not.toBeNull();
+  await act(async () => preview?.click());
+  await flush();
+  expect(asked.some((url) => /\/call-record|\/report$/.test(url))).toBe(false);
+  expect(host.textContent).toContain("View progress");
+});

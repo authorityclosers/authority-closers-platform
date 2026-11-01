@@ -3343,6 +3343,77 @@ a.repName {
 
 /* ---------- Calling from the phone app ---------- */
 
+/* The last answer and the tries, over "Did you talk to them?" (teardown 17). */
+.lastWord {
+  display: grid;
+  gap: 2px;
+  margin: -4px 0 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.lastWord span:first-child {
+  color: var(--sx-ink-2);
+}
+
+/* A call still waiting for its answer, pinned over the list until answered
+   or put away (competitor teardown 3). */
+.finish {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  border: 1px solid var(--sx-accent);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-accent-soft);
+}
+
+.finishOpen {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  background: none;
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.finishOpen strong,
+.finishOpen span {
+  overflow-wrap: anywhere;
+}
+
+.finishOpen span {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.finishAway {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  cursor: pointer;
+}
+
+.finishOpen:focus-visible,
+.finishAway:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
 .heard {
   display: flex;
   gap: 6px;
@@ -3740,6 +3811,32 @@ a.repName {
 .leadFace {
   position: relative;
   background: var(--sx-surface);
+}
+
+/* A new enquiry joins the list with one soft pulse, where its row sits
+   (competitor teardown 12, 1 Nov 2026); without motion, a tint that fades. */
+.leadLine[data-fresh] .leadFace {
+  animation: lead-fresh 1.6s var(--sx-ease-out) 1;
+}
+
+@keyframes lead-fresh {
+  0%,
+  30% {
+    background: var(--sx-accent-soft);
+    box-shadow: inset 3px 0 0 var(--sx-accent);
+  }
+
+  100% {
+    background: var(--sx-surface);
+    box-shadow: inset 3px 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leadLine[data-fresh] .leadFace {
+    animation: none;
+    background: var(--sx-accent-soft);
+  }
 }
 
 .swipeBack {
@@ -7564,6 +7661,70 @@ fieldset.form {
 }
 
 /* A calling round: Call beside Skip (phone personas, 1 Nov 2026). */
+/* A round's place over its Call and Skip: "12 of 900 · 3 skipped", Pause
+   (competitor teardown 2, 1 Nov 2026). */
+.roundBox {
+  display: grid;
+  gap: 6px;
+}
+
+.roundWhere {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.roundPause {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.roundPause:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* The round's end: what it did, in four numbers, then the next work. */
+.roundDone {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.roundDone div {
+  display: grid;
+  gap: 2px;
+}
+
+.roundDone dt {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.roundDone dd {
+  margin: 0;
+  font-size: var(--sx-text-large);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.roundChoices {
+  display: grid;
+  gap: 8px;
+}
+
 .roundActions {
   display: flex;
   gap: 8px;
@@ -7616,4 +7777,15 @@ fieldset.form {
   font: inherit;
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* A phone's lead sheet ends above the tab bar: the tabs stay where they are
+   and the Call bar never takes their place, so a tap meant for a tab never
+   dials (phone QA ph2-35, 1 Nov 2026: Ask Dipak's tab dialled the lead). A
+   tap on the tab bar closes the sheet. */
+@media (max-width: 899.98px) {
+  .leadSheetFrame {
+    inset: 0 0 calc(var(--lx-bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+    height: auto;
+  }
 }

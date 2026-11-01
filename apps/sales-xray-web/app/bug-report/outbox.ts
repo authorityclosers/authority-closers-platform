@@ -1,14 +1,18 @@
 /**
- * Reports and feedback that could not go yet (no connection) wait here, on
- * this device only, and leave as soon as the connection is back: on the
- * `online` event and each time the app frame mounts. Each item keeps its own
- * command id, so a send that half-worked before is never counted twice.
+ * Reports and feedback that could not go yet (no connection, or Sales X-Ray
+ * updating) wait here, on this device only, and leave as soon as they can
+ * (keepSending). Each item keeps its own command id, so a send that
+ * half-worked before is never counted twice.
  *
  * IndexedDB, one store; anything that goes wrong here fails quietly and the
  * person keeps their words in the sheet instead.
  */
 
+import { holdState, subscribeHold } from "../release-hold";
+
 const DB = "sx-outbox";
+/** While anything waits, it is tried again this often. */
+export const RETRY_MS = 60_000;
 const STORE = "items";
 const MAX_ITEMS = 20;
 const MAX_AGE_MS = 7 * 24 * 3600 * 1000;
@@ -91,6 +95,44 @@ export async function forget(id: string): Promise<void> {
   } finally {
     db.close();
   }
+}
+
+/**
+ * Sends what waits whenever it might go now: at once, back online, when Sales
+ * X-Ray is back from an update, when the app is shown again, and every minute
+ * while anything still waits (phone personas ph1-45, 1 Nov 2026: saved reports
+ * went only once the app was closed and opened again). `send` sends and
+ * answers how many still wait. Returns a stop.
+ */
+export function keepSending(send: () => Promise<number>): () => void {
+  let timer = 0;
+  let stopped = false;
+  const go = () => {
+    window.clearTimeout(timer);
+    void send().then(
+      (left) => {
+        if (!stopped && left > 0) timer = window.setTimeout(go, RETRY_MS);
+      },
+      () => undefined,
+    );
+  };
+  const shown = () => {
+    if (document.visibilityState === "visible") go();
+  };
+  const back = () => {
+    if (!holdState().holding) go();
+  };
+  go();
+  window.addEventListener("online", go);
+  document.addEventListener("visibilitychange", shown);
+  const stopHold = subscribeHold(back);
+  return () => {
+    stopped = true;
+    window.clearTimeout(timer);
+    window.removeEventListener("online", go);
+    document.removeEventListener("visibilitychange", shown);
+    stopHold();
+  };
 }
 
 type Sender = (item: OutboxItem) => Promise<"sent" | "retry" | "drop">;
