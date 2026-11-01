@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
 from typing import Any, Final
 from uuid import UUID
@@ -40,12 +40,17 @@ SIGNAL_TYPES: Final[tuple[str, ...]] = (
     "commitment.follow_up",
     "outcome.call_outcome",
 )
+OUTCOME: Final = "outcome.call_outcome"
 OUTCOMES: Final[dict[str, str]] = {
     "meeting_scheduled": "appointment_booked",
     "deal_closed": "won",
     "follow_up_agreed": "contacted",
     "callback_requested": "contacted",
 }
+# A call that ended in a no: nothing that reopens the lead is offered from it (a "check in
+# in March" after "we signed with another firm"). Lost itself is never offered; a person
+# decides that.
+CLOSED_OUTCOMES: Final[frozenset[str]] = frozenset({"no_sale", "not_a_fit"})
 LOOK_BACK: Final[timedelta] = timedelta(days=90)
 READ_LIMIT: Final[int] = 2000
 MIN_HEARD: Final[int] = 3
@@ -64,11 +69,18 @@ _PLAIN: Final[dict[str, str]] = {
 }
 
 
+def outcome_of(value: Any) -> str | None:
+    """A call outcome as the call data engine stores it (``{"enum": ...}``,
+    call_data/values.py); an older ``{"value": ...}`` or a bare string reads too."""
+    found = value.get("enum", value.get("value")) if isinstance(value, Mapping) else value
+    return str(found) if found else None
+
+
 def milestone_of(type_key: str, value: Any, display: str | None) -> str | None:
     """The sales moment one call fact or note points at, or None."""
-    if type_key == "outcome.call_outcome":
-        found = value.get("value") if isinstance(value, Mapping) else value
-        return OUTCOMES.get(str(found)) if found else None
+    if type_key == OUTCOME:
+        found = outcome_of(value)
+        return OUTCOMES.get(found) if found else None
     text = (display or "").strip()
     if not text:
         return None
@@ -197,7 +209,13 @@ async def lead_suggestion(
 ) -> dict[str, Any] | None:
     """Where the lead's newest call says it got to, when that is further than its stage."""
     rows = await db.execute(
-        select(CallObject.type_key, CallObject.value, CallObject.display, CallObject.created_at)
+        select(
+            CallObject.type_key,
+            CallObject.value,
+            CallObject.display,
+            CallObject.created_at,
+            CallObject.recording_id,
+        )
         .where(
             CallObject.tenant_id == tenant_id,
             CallObject.lead_id == lead_id,
@@ -208,8 +226,26 @@ async def lead_suggestion(
         .order_by(CallObject.created_at.desc())
         .limit(20)
     )
-    current = journey.resolve(kind, step)
-    for type_key, value, display, at in rows.tuples():
+    return suggest_from(list(rows.tuples()), journey.resolve(kind, step), journey)
+
+
+def suggest_from(
+    rows: Sequence[tuple[str, Any, str | None, datetime, UUID]],
+    current: Stage | None,
+    journey: Journey,
+) -> dict[str, Any] | None:
+    """The move a lead's call facts (newest first) offer. Within one call its outcome
+    counts first, and a call that ended in a no offers nothing."""
+    if not rows:
+        return None
+    newest = rows[0][4]
+    if any(
+        type_key == OUTCOME and recording == newest and outcome_of(value) in CLOSED_OUTCOMES
+        for type_key, value, _, _, recording in rows
+    ):
+        return None
+    ordered = sorted(rows, key=lambda row: (row[3], row[0] == OUTCOME), reverse=True)
+    for type_key, value, display, at, _ in ordered:
         milestone = milestone_of(type_key, value, display)
         if milestone is None:
             continue
