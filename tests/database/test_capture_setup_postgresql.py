@@ -262,7 +262,7 @@ def test_a_seller_agrees_finishes_on_a_phone_and_team_sees_it(
                         assert health.words == f"Call logging is off on {name}'s Redmi 13."
                         assert line.fix is not None and line.fix.path == "/settings/selling"
                     else:
-                        assert health.words == "1 phone logging calls."
+                        assert health.words == "1 seller logging calls."
                         assert line.fix is None
 
                 # Teardown #7: the seller's phone says when it last found a call recording

@@ -228,10 +228,16 @@ def test_connected_apps_health_and_real_tests(
                 assert found["messenger"]["webhook"]["lastDeliveryAt"]
                 assert found["instagram"]["state"] == "not_connected"  # the Page has no IG
                 assert found["google_ads"]["state"] == "not_set_up"
+                # Why, and what to do (ph1-55: "Not available here" alone).
+                assert found["google_ads"]["words"] == (
+                    "Google Ads lead forms aren't switched on in Sales X-Ray yet. Ask us, and"
+                    " we'll turn them on for you."
+                )
                 assert found["phone_calls"]["state"] == "not_connected"
                 assert found["ai_replies"]["state"] == "off"
                 # Lead stages: nothing sent to an ad platform yet; set up in Leads.
                 stages = found["lead_stages"]
+                assert stages["name"] == "Sales results sent to your ads"  # not an app's name
                 assert (stages["state"], stages["group"], stages["page"]) == (
                     "not_connected",
                     "ads",
@@ -414,7 +420,7 @@ def test_connected_apps_health_and_real_tests(
                 assert partly["status"] == "failed"
                 assert partly["steps"][0]["words"] == (
                     "Meta isn't sending this Page's delivered ticks, read ticks and comments"
-                    " to Sales Xray. Connect the Page again."
+                    " to Sales X-Ray. Connect the Page again."
                 )
                 SubscribedGraph.fields = list(graph.PAGE_FIELDS)
 

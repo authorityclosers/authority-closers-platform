@@ -168,7 +168,7 @@ def test_the_lead_stages_card_says_where_stages_go_and_what_waits() -> None:
         {"waiting_on": {"meta": "190"}, "last_delivered_at": {}},
     )
     assert retrying.state == "problem" and retrying.last_error is not None
-    assert retrying.words == "A stage didn't reach Meta yet. Sales Xray tries again."
+    assert retrying.words == "A stage didn't reach Meta yet. Sales X-Ray tries again."
     assert retrying.last_error.words == "A stage didn't reach Meta yet."
 
     switched = apps.lead_stages_card(

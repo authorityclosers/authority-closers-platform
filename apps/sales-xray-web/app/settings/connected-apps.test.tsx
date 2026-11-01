@@ -959,6 +959,40 @@ it("remembers which card a connect started from, for an error that names no app"
   window.sessionStorage.clear();
 });
 
+it("says why an app isn't switched on here, and offers Ask us", async () => {
+  // Phone personas ph1-55 (1 Nov 2026): "Not available here", no reason, no next step.
+  routes["GET /v1/lead-desk/integrations/health"] = () =>
+    Response.json({
+      ...HEALTH,
+      apps: HEALTH.apps.map((app) =>
+        app.app === "google_ads"
+          ? {
+              ...app,
+              state: "not_set_up",
+              configured: false,
+              connect: null,
+              words:
+                "Google Ads lead forms aren't switched on in Sales X-Ray yet. Ask us, and we'll turn them on for you.",
+            }
+          : app,
+      ),
+    });
+  await act(async () => root.render(<ConnectedApps />));
+  await flush();
+  const google = card("google_ads");
+  expect(google.textContent).toContain("Not switched on");
+  expect(google.textContent).toContain(
+    "Google Ads lead forms aren't switched on in Sales X-Ray yet.",
+  );
+  const ask = [...google.querySelectorAll("a")].find(
+    (link) => link.textContent === "Ask us",
+  );
+  expect(ask?.getAttribute("href")).toBe(
+    "mailto:support@authorityclosers.com?subject=Please%20switch%20on%20Google%20Ads%20lead%20forms",
+  );
+  expect(button(google, "Connect")).toBeUndefined();
+});
+
 it("opens lead stages on their own page, and follows only this app's pages", async () => {
   await act(async () => root.render(<ConnectedApps />));
   await flush();
@@ -969,6 +1003,9 @@ it("opens lead stages on their own page, and follows only this app's pages", asy
   expect(card("lead_stages").textContent).toContain(
     "Tell Meta and Google which leads became customers",
   );
+  // Set up on its own page: not set up, never "Not connected" like an app (ph1-55).
+  expect(card("lead_stages").textContent).toContain("Not set up");
+  expect(card("lead_stages").textContent).not.toContain("Not connected");
   expect(button(card("lead_stages"), "Connect")).toBeUndefined();
   for (const page of [
     "https://elsewhere.example/x",
