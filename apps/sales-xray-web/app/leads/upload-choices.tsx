@@ -252,7 +252,9 @@ export function overLimitLines(
     const after = rep.open_leads + given;
     if (!given || rep.max_open === null || after <= rep.max_open) return [];
     return [
-      `${displayName(rep.name)} would have ${after} open leads, ${after - rep.max_open} over the limit of ${rep.max_open}.`,
+      // The server's own words after an import (store.over_limit), so the two
+      // never disagree; "open Inbound leads", never the Open Leads stage (ph1-33).
+      `${displayName(rep.name)} would have ${after} open Inbound leads, ${after - rep.max_open} over their limit of ${rep.max_open}.`,
     ];
   });
 }

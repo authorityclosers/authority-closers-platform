@@ -142,7 +142,9 @@ const show = async (saved: (team: Team) => void = () => undefined) => {
 
 it("sets taking leads with a switch and the limit with a stepper and presets", async () => {
   await show();
-  expect(document.body.textContent).toContain("12 open leads · 3 due now");
+  expect(document.body.textContent).toContain(
+    "12 open Inbound leads · 3 due now",
+  );
   expect(document.body.textContent).toContain(
     "On: new leads can go to Priya now",
   );
