@@ -3416,12 +3416,20 @@ html[data-sx-app] .sx-web-only {
 
 /* Keyboard focus is never hidden under the phone's bars (robot c18ed243, 1 Nov
    2026: Home's tiles and links took focus under the tab bar). The page keeps a
-   focused control clear of the tab bar and its gap, and of the bar on top. */
+   focused control clear of the tab bar and its gap, and of the bar on top; and
+   of the corner cards or the first-run tour's card above the tab bar, which
+   reach higher when they show (robot 9d1c35d2: Notifications' switches took
+   focus under a card). */
 @media (max-width: 899.98px) and (min-height: 560.02px) {
   html:has(> body.sales-xray-document) {
     scroll-padding-top: calc(52px + env(safe-area-inset-top, 0px));
     scroll-padding-bottom: calc(
-      var(--lx-bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 8px
+      max(
+          var(--lx-bottom-nav-h) + env(safe-area-inset-bottom, 0px),
+          var(--sx-corner-h, 0px),
+          var(--sx-guide-h, 0px)
+        ) +
+        8px
     );
   }
 }
