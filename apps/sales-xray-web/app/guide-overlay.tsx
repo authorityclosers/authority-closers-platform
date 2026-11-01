@@ -241,26 +241,27 @@ export function GuideOverlay({
                 <ChevronLeft size={17} />
               </button>
             ) : null}
-            {!step.waitForPage ? (
-              <button
-                type="button"
-                className={styles.next}
-                onClick={() => {
-                  if (index === count - 1) leave(onNext);
-                  else {
-                    card.current?.focus({ preventScroll: true });
-                    onNext();
-                  }
-                }}
-              >
-                {index === count - 1 ? "Finish" : "Next"}
-                {index === count - 1 ? (
-                  <Check size={16} />
-                ) : (
-                  <ArrowRight size={16} />
-                )}
-              </button>
-            ) : null}
+            {/* Also on a step that follows the page: the rest of the guide can
+                be read before a real call is added (phone personas ph1-51,
+                1 Nov 2026: steps 4 to 6 were out of reach). */}
+            <button
+              type="button"
+              className={styles.next}
+              onClick={() => {
+                if (index === count - 1) leave(onNext);
+                else {
+                  card.current?.focus({ preventScroll: true });
+                  onNext();
+                }
+              }}
+            >
+              {index === count - 1 ? "Finish" : "Next"}
+              {index === count - 1 ? (
+                <Check size={16} />
+              ) : (
+                <ArrowRight size={16} />
+              )}
+            </button>
           </div>
         </footer>
       </aside>
