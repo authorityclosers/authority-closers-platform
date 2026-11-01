@@ -26,6 +26,7 @@ Infisical, never in git.
 Nudges (team engine) go in the same pass, under the same lock, as their own urgent push
 with no lead in it (``nudge_push``).
 So do the day's 10:00 digest and the two-hourly sweep, counts only (``digest_push``).
+So do owners' and admins' alerts and their 7 PM summary, counts only (``owner_alerts``).
 
 A second run of the same loop sends gold review alerts to the same phones (``review_push``).
 
@@ -45,7 +46,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequenc
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
 
 import httpx
@@ -61,6 +62,9 @@ from ac_platform.lead_desk.models import Lead, LeadDevice, LeadMeeting
 from ac_platform.lead_desk.store import LeadDesk, Viewer
 from ac_platform.lead_desk.vocabulary import OPEN_STAGES
 from ac_platform.tenancy.models import Membership
+
+if TYPE_CHECKING:
+    from ac_platform.lead_desk import owner_alerts
 
 log = logging.getLogger(__name__)
 
@@ -367,7 +371,9 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
 
 
 async def send(
-    alerts: Sequence[Alert | nudge_push.NudgeAlert | digest_push.DigestAlert],
+    alerts: Sequence[
+        Alert | nudge_push.NudgeAlert | digest_push.DigestAlert | owner_alerts.OwnerAlert
+    ],
     fcm: Fcm,
     client: httpx.AsyncClient,
 ) -> tuple[int, list[str]]:
@@ -398,10 +404,15 @@ async def tick(
             text("SELECT pg_try_advisory_xact_lock(:a, :b)"), {"a": _LOCK[0], "b": _LOCK[1]}
         ):
             return 0
-        alerts: list[Alert | nudge_push.NudgeAlert | digest_push.DigestAlert] = [
+        from ac_platform.lead_desk import owner_alerts
+
+        alerts: list[
+            Alert | nudge_push.NudgeAlert | digest_push.DigestAlert | owner_alerts.OwnerAlert
+        ] = [
             *await collect(database, now),
             *await nudge_push.collect(database, now),
             *await digest_push.collect(database, now),
+            *await owner_alerts.collect(database, now),
         ]
     if not alerts:
         return 0

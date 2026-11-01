@@ -9,17 +9,20 @@
  * 1. Working hours & breaks: they drive late, overdue and break detection.
  * 2. First call on new enquiries: the first-response target (5-30 minutes).
  * 3. Seller nudges: on for everyone, except the sellers picked.
- * 4. Alert me when an enquiry waits past the first-call limit.
- * 5. The month's revenue target.
+ * 4. Alert me when… an enquiry isn't called in time, a missed call isn't
+ *    returned, an Interested lead has no follow-up, a seller makes no call
+ *    (owner-alerts.tsx; competitor teardown 19, 1 Nov 2026).
+ * 5. The day's summary at 7 PM, on the days each owner picks (teardown 20).
+ * 6. The month's revenue target.
  *
  * Only what works is here (the owner's rule, no dead ends; Dipak, ph1-19,
- * 1 Nov 2026): the idle and no-recording alerts and the 7 PM summary come
- * back when the server does them.
+ * 1 Nov 2026).
  */
 
 import {
   AlarmClock,
   BellRing,
+  CalendarClock,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -41,10 +44,22 @@ import {
 import { saveNudges, type NudgeSettings } from "../leads/team-engine-client";
 import { waCall, type Sla } from "../leads/whatsapp-client";
 import { Sheet } from "../ui/sheet";
+import {
+  DailySummaryDetail,
+  OwnerAlertsDetail,
+  useOwnerAlerts,
+} from "./owner-alerts";
+import { alertsOn, summaryWhen } from "./owner-alerts-client";
 import { RevenueTargetCard, RevenueTargetDetail } from "./revenue-target-card";
 import styles from "./team-controls.module.css";
 
-type Card = "hours" | "first_call" | "nudges" | "alerts" | "revenue";
+type Card =
+  | "hours"
+  | "first_call"
+  | "nudges"
+  | "alerts"
+  | "summary"
+  | "revenue";
 type Loaded = { team: Team; sla: Sla | null };
 
 const TITLES: Record<Card, string> = {
@@ -52,6 +67,7 @@ const TITLES: Record<Card, string> = {
   first_call: "First call on new enquiries",
   nudges: "Seller nudges",
   alerts: "Alert me when…",
+  summary: "Daily summary",
   revenue: "Monthly revenue target",
 };
 
@@ -515,6 +531,9 @@ export function TeamControls() {
   const [card, setCard] = useState<Card | null>(null);
   const [round, setRound] = useState(0);
   const state = useControls(open, round);
+  // Owner alerts and the summary: owners' and admins' own read (teardown 19,
+  // 20); without it the alert card keeps the first-call one alone.
+  const [owner, setOwner] = useOwnerAlerts(open, round);
   const [team, setTeam] = useState<Team | null>(null);
   const [sla, setSla] = useState<Sla | null>(null);
   const loaded = state && state !== "error" ? state : null;
@@ -530,7 +549,11 @@ export function TeamControls() {
   const settings = shownTeam?.settings as NudgeSettings | undefined;
   const nudgesOn = settings ? settings.nudges !== false : false;
   const except = settings?.nudges_off_for?.length ?? 0;
-  const alertsOn = shownSla?.on && shownSla.alertManagers ? 1 : 0;
+  const alertCount = owner
+    ? alertsOn(owner, shownSla)
+    : shownSla?.on && shownSla.alertManagers
+      ? 1
+      : 0;
   const cards: {
     key: Card;
     icon: ReactNode;
@@ -568,9 +591,19 @@ export function TeamControls() {
     {
       key: "alerts",
       icon: <AlarmClock size={20} />,
-      value: alertsOn ? "On" : "Off",
-      tone: alertsOn ? undefined : "off",
+      value: owner ? `${alertCount} of 4 on` : alertCount ? "On" : "Off",
+      tone: alertCount ? undefined : "off",
     },
+    ...(owner
+      ? [
+          {
+            key: "summary" as const,
+            icon: <CalendarClock size={20} />,
+            value: summaryWhen(owner.summary_days),
+            tone: owner.summary_days.length ? undefined : ("off" as const),
+          },
+        ]
+      : []),
   ];
   return (
     <>
@@ -650,11 +683,22 @@ export function TeamControls() {
             ) : card === "nudges" ? (
               <NudgesDetail team={shownTeam} onSaved={setTeam} />
             ) : card === "alerts" ? (
-              <AlertsDetail
-                sla={shownSla}
-                onSaved={setSla}
-                onFirstCall={() => setCard("first_call")}
-              />
+              owner ? (
+                <OwnerAlertsDetail
+                  view={owner}
+                  onView={setOwner}
+                  sla={shownSla}
+                  onSla={setSla}
+                />
+              ) : (
+                <AlertsDetail
+                  sla={shownSla}
+                  onSaved={setSla}
+                  onFirstCall={() => setCard("first_call")}
+                />
+              )
+            ) : card === "summary" && owner ? (
+              <DailySummaryDetail view={owner} onView={setOwner} />
             ) : (
               <RevenueTargetDetail />
             )}

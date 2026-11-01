@@ -35,6 +35,8 @@ let sent: { method: string; path: string; body: unknown }[];
 let hours: Record<string, unknown> | null;
 let offFor: string[];
 let sla: Record<string, unknown>;
+// Owner alerts (teardown 19, 20): null answers 404, as for a seller.
+let owner: Record<string, unknown> | null;
 const team = () => ({
   reps: [rep("p1", "priya sample"), rep("p2", "rohan example")],
   settings: {
@@ -58,6 +60,8 @@ const answer = (
   body: Record<string, unknown>,
 ) => {
   if (path === "/v1/lead-desk/team") return team();
+  if (path === "/v1/lead-desk/owner-alerts" && owner)
+    return (owner = { ...owner, ...body });
   if (path === "/v1/lead-desk/sla" && method === "GET") return sla;
   if (path === "/v1/lead-desk/sla") return (sla = { ...sla, ...body });
   if (path === "/v1/lead-desk/nudges") {
@@ -77,6 +81,7 @@ beforeEach(() => {
   sent = [];
   hours = null;
   offFor = ["p2"];
+  owner = null;
   sla = {
     on: true,
     minutes: 10,
@@ -250,4 +255,50 @@ it("shows only the alert that works, and switches it", async () => {
     minutes: 10,
     alertManagers: true,
   });
+});
+
+// Competitor teardown 19 and 20 (1 Nov 2026): four owner alerts, three on by
+// default, and the day's summary on the days each owner picks.
+it("counts the owner alerts on, and opens the day's summary", async () => {
+  owner = {
+    first_call: true,
+    missed_call: true,
+    no_follow_up: true,
+    seller_idle: false,
+    first_call_minutes: 15,
+    first_call_by_target: false,
+    work_hours: false,
+    summary_days: [],
+    phones: 1,
+  };
+  await openControls();
+  // The target is on and doesn't alert managers: two of the other three.
+  expect(chips().slice(3, 5)).toEqual([
+    ["alerts", "2 of 4 on"],
+    ["summary", "Off"],
+  ]);
+  await card("alerts");
+  expect(
+    Array.from(sheet()?.querySelectorAll("[role=switch]") ?? []).map((each) =>
+      each.getAttribute("aria-label"),
+    ),
+  ).toEqual([
+    "An enquiry isn’t called in 10 min",
+    "A missed call isn’t returned in 30 min",
+    "An Interested lead has no follow-up for 7 days",
+    "A seller makes no call for 45 min",
+  ]);
+  await act(async () => button("Team controls")?.click());
+  await settle();
+  await card("summary");
+  await act(async () => button("Send me the day’s summary at 7 PM")?.click());
+  await settle();
+  expect(sent.at(-1)).toMatchObject({
+    method: "PUT",
+    path: "/v1/lead-desk/owner-alerts",
+    body: { summary_days: [0, 1, 2, 3, 4, 5] },
+  });
+  await act(async () => button("Team controls")?.click());
+  await settle();
+  expect(chips()[4]).toEqual(["summary", "7 PM · Mon–Sat"]);
 });

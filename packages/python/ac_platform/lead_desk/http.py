@@ -40,6 +40,7 @@ from ac_platform.lead_desk import (
     duplicate_queue,
     finder,
     merging,
+    owner_alerts,
     push,
     simulation,
     spool,
@@ -796,7 +797,9 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 return await team_engine.nudge_words(lead_desk)
             if kind in ("digest", "sweep"):
                 return await digest_push.words(lead_desk, kind)
-            return await lead_desk.alert_summary()
+            # An owner alert with no lead just sent (idle sellers, the day's summary).
+            owner = await owner_alerts.words(lead_desk)
+            return owner or await lead_desk.alert_summary()
 
     @router.get("/soon", response_model=Soon, response_model_by_alias=True)
     async def due_within_the_hour(request: Request, response: Response) -> Soon:
@@ -810,7 +813,9 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
     async def alert_text(lead_id: UUID, request: Request, response: Response) -> AlertText:
         no_query(request)
         async with desk_for(request, response) as lead_desk:
-            return await lead_desk.alert_text(lead_id)
+            # An owner alert about this lead just sent to this owner or admin.
+            owner = await owner_alerts.words(lead_desk, lead_id=lead_id)
+            return owner or await lead_desk.alert_text(lead_id)
 
     @router.get("/push", response_model=PushConfig, response_model_by_alias=True)
     async def push_config(request: Request, response: Response) -> PushConfig:
