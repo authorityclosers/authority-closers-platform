@@ -16,7 +16,12 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-import { dismissNotice, NoticeCenter, notify } from "./notice-center";
+import {
+  dismissNotice,
+  NoticeCenter,
+  NoticeDock,
+  notify,
+} from "./notice-center";
 import { clearAlert, raiseAlert } from "./ui/alerts";
 
 (
@@ -346,4 +351,69 @@ it("keeps a new enquiry's Call now in its one-line pill", async () => {
   await act(async () => close().click());
   expect(later).toHaveBeenCalledTimes(1);
   expect(host.textContent).not.toContain("New enquiry");
+});
+it("on a phone page with a dock, new leads and work are one line in it; problems keep the corner", async () => {
+  // Competitor teardown 12; the orchestrator, 1 Nov 2026: "Varun Chauhan is
+  // your lead now" covered the second row's Open on Follow-ups at 360 px.
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+  const page = document.createElement("div");
+  document.body.append(page);
+  const pageRoot = createRoot(page);
+  try {
+    await act(async () => pageRoot.render(<NoticeDock />));
+    await act(async () => {
+      notify({
+        id: "fictional",
+        tone: "lead",
+        title: "New enquiry · Asha Fictional · Meta",
+        action: { label: "Call now", run: () => {}, icon: "none" },
+        pillAction: true,
+        folded: true,
+        timeout: 0,
+      });
+      notify({
+        id: "fictional-problem",
+        tone: "error",
+        title: "Leads didn't load",
+      });
+      raiseAlert({
+        id: "fictional-work",
+        level: "normal",
+        title: "Varun Fictional is your lead now",
+        message: "New from your website form.",
+        action: { label: "Open lead", href: "/leads" },
+        timeout: 600_000,
+      });
+    });
+    const docked = page.querySelector("[data-notice-dock]")!;
+    // One line each, with its action, and the work alert's words only on a tap.
+    expect(docked.textContent).toContain("New enquiry · Asha Fictional · Meta");
+    expect(docked.textContent).toContain("Call now");
+    expect(docked.textContent).toContain("Varun Fictional is your lead now");
+    expect(docked.textContent).toContain("Open lead");
+    expect(docked.textContent).not.toContain("New from your website form.");
+    expect(docked.textContent).not.toContain("Leads didn't load");
+    // The corner keeps the app's problem, and only that.
+    expect(host.textContent).toContain("Leads didn't load");
+    expect(host.textContent).not.toContain("Asha Fictional");
+    expect(host.textContent).not.toContain("Varun Fictional");
+    // Without the dock (a computer, or another page) they go back to the corner.
+    await act(async () => pageRoot.unmount());
+    expect(host.textContent).toContain("New enquiry · Asha Fictional · Meta");
+    expect(host.textContent).toContain("Varun Fictional is your lead now");
+  } finally {
+    await act(async () => {
+      clearAlert("fictional-work");
+      dismissNotice("fictional-problem");
+    });
+    page.remove();
+    vi.unstubAllGlobals();
+  }
 });

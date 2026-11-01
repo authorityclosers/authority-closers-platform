@@ -284,6 +284,39 @@
   margin: 0;
 }
 
+/* The dock (NoticeDock): on a phone, new enquiries and work alerts are one
+   line each at the top of the page, in its flow, so they never sit over the
+   rows, their Call buttons or the tab bar (competitor teardown 12). */
+.dock {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dock:empty {
+  display: none;
+}
+
+/* Never wider than the page: a long name ends in "…", the action and the X
+   stay in sight. */
+.docked {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.docked .pill,
+.docked .card {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  justify-self: stretch;
+}
+
+.pill[data-docked] .pillOpen {
+  flex: 1 1 auto;
+}
+
 /* The action kept in the pill ("Call now"). */
 .pill .action {
   flex: none;
