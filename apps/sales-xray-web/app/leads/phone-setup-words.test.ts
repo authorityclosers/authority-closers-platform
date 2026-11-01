@@ -1,11 +1,32 @@
 import { expect, it } from "vitest";
 
+import { parseRecorder } from "./native-phone";
 import {
   CHECK_LABELS,
   EXPLAINERS,
   checkLabel,
   explainerFor,
+  recorderGuide,
 } from "./phone-setup-words";
+
+it("names no maker when Google's Phone app is the only one, so a OnePlus Nord or a Vivo reads right", () => {
+  // Orchestrator, 1 Nov 2026: a OnePlus Nord CE 2 seller (Google's Phone app)
+  // was told OnePlus phones record calls.
+  const google = parseRecorder({
+    kind: "private",
+    maker: "google",
+    dialerLabel: "Phone by Google",
+    recording: "private",
+    folders: [],
+  });
+  const guide = recorderGuide(google, "oneplus");
+  expect(guide.closed).toBe(true);
+  expect(guide.lead).toContain("keeps call recordings inside itself");
+  expect(guide.steps.join(" ")).not.toMatch(/OnePlus|Vivo|Samsung|Xiaomi/);
+  expect(guide.steps).toContain(
+    "Phone calls reach Sales X-Ray only from a Phone app that saves its recordings as files, not Google's.",
+  );
+});
 
 // The Google Play build reads no call history (Play's call log policy): the
 // screen before Android's question says what that build really reads.

@@ -255,6 +255,12 @@
   color: var(--sx-accent);
 }
 
+/* Finished, but the phone doesn't record: never Ready (phone personas ph1-46). */
+.badge[data-state="recording_off"] {
+  background: var(--sx-bad-soft);
+  color: var(--sx-bad);
+}
+
 /* The permissions checklist (permissions-gate.tsx): every item on one screen. */
 .permissions {
   display: grid;
@@ -344,14 +350,16 @@
 /* Team: recording on a seller's phone, a dot and one line (competitor teardown, item 7). */
 .team small.recording {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
 }
 
+/* On the first line, when the line wraps around its fix (ph1-46). */
 .recording::before {
   flex: none;
   width: 8px;
   height: 8px;
+  margin-top: 5px;
   border-radius: 50%;
   background: var(--sx-muted);
   content: "";
@@ -367,6 +375,40 @@
 
 .recording[data-state="off"]::before {
   background: var(--sx-bad);
+}
+
+/* The line's fix is a button, never dead text (phone personas ph1-46). */
+.fixLink {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fixLink:focus-visible {
+  border-radius: var(--sx-radius-sm);
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 2px;
+}
+
+/* What that seller does on their own phone, in a sheet. */
+.fixSteps {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+  font-size: var(--sx-text-sm);
+}
+
+.fixAfter {
+  margin: 12px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
 }
 
 /* Calls and Reports: one line for the calls with no recording, never a card
@@ -465,5 +507,9 @@
 
   .missingLine button[data-fix] {
     min-width: 44px;
+  }
+
+  .fixLink {
+    min-height: 44px;
   }
 }

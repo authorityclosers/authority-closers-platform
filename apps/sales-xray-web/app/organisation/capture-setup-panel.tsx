@@ -16,16 +16,21 @@ import {
   type CaptureTeamRow,
   type CaptureTeamState,
 } from "../capture-setup/capture-setup-client";
+import { openCaptureSetup } from "../capture-setup/capture-setup-gate";
 import own from "../capture-setup/capture-setup.module.css";
 import { named } from "../capture-setup/product-name";
+import { Sheet } from "../ui/sheet";
+import { useWorkspaceAccess } from "../workspace-access";
 import { PersonDisplayName } from "./people/person-display-name";
 import styles from "./seats.module.css";
 
 // "Set up" is always something to do (Settings' Phone setup); a seller who has
 // done it is Ready (phone personas ph1-38, 1 Nov 2026: the same words meant
-// done here and an action there).
+// done here and an action there). Ready only while the phone records: never
+// beside a red "Call recording off" (ph1-46).
 const BADGE: Record<CaptureTeamState, string> = {
   set_up: "Ready",
+  recording_off: "Recording off",
   phone_pending: "Phone not set up",
   declined: "Said not now",
   turned_off: "Turned off",
@@ -83,13 +88,25 @@ export function recordingLine(
   recording: CaptureRecording | null | undefined,
   now: number,
 ): string | null {
+  const parts = recordingParts(recording, now);
+  return parts ? [parts.what, parts.fix].filter(Boolean).join(" · ") : null;
+}
+
+/** The line's words, and its fix apart: the fix is a button (ph1-46: it was dead text). */
+export function recordingParts(
+  recording: CaptureRecording | null | undefined,
+  now: number,
+): { what: string; fix: string | null } | null {
   if (!recording) return null;
   const last = recording.last_at ? Date.parse(recording.last_at) : NaN;
   const fix = recording.fix ? RECORDING_FIX[recording.fix] : null;
   if (recording.state === "ok")
-    return Number.isFinite(last)
-      ? `Recording OK · last file ${since(last, now)}`
-      : "Recording OK";
+    return {
+      what: Number.isFinite(last)
+        ? `Recording OK · last file ${since(last, now)}`
+        : "Recording OK",
+      fix: null,
+    };
   const what =
     recording.state === "off"
       ? recording.fix === "folder"
@@ -98,7 +115,62 @@ export function recordingLine(
       : Number.isFinite(last)
         ? `No recordings since ${dayName(last, now)}`
         : "No call recording found yet";
-  return [what, fix].filter(Boolean).join(" · ");
+  return { what, fix };
+}
+
+/** What a seller does on their own phone for each fix (Selling's Set up opens the check). */
+const FIX_STEP: Record<NonNullable<CaptureRecording["fix"]>, string> = {
+  folder: "Choose the recordings folder when Android asks.",
+  recorder:
+    "Turn on call recording in the Phone app, as the check shows for that phone.",
+  test: "Place the 10-second test call the check asks for.",
+};
+
+/**
+ * A recording line's fix, as a button (phone personas ph1-46, v1.25: "Turn on
+ * call recording" was dead text). A seller's own row opens the recording check
+ * on this phone; anyone else's says what that seller does on their phone.
+ */
+function RecordingFixButton({
+  row,
+  recording,
+  label,
+  mine,
+}: {
+  row: CaptureTeamRow;
+  recording: CaptureRecording;
+  label: string;
+  mine: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const phone = recording.phone ?? row.phone ?? "their phone";
+  return (
+    <>
+      <button
+        type="button"
+        className={own.fixLink}
+        onClick={() => (mine ? openCaptureSetup("recordings") : setOpen(true))}
+      >
+        {label}
+      </button>
+      {mine ? null : (
+        <Sheet
+          open={open}
+          onClose={() => setOpen(false)}
+          title={`${label}: ${row.name}`}
+        >
+          <ol className={own.fixSteps}>
+            <li>{`On ${phone}, open Sales X-Ray.`}</li>
+            <li>Settings, Selling, Phone setup, then Set up.</li>
+            {recording.fix ? <li>{FIX_STEP[recording.fix]}</li> : null}
+          </ol>
+          <p className={own.fixAfter}>
+            This line reads Recording OK once a call&apos;s recording arrives.
+          </p>
+        </Sheet>
+      )}
+    </>
+  );
 }
 
 /** The one line under a seller's name, with today's calls that have no recording
@@ -119,9 +191,12 @@ export function captureLine(row: CaptureTeamRow): string {
 
 function stateLine(row: CaptureTeamRow): string {
   const on = day(row.at);
+  // Every phone they finished on, not only the newest (ph1-46).
+  const phones = row.phones?.length ? row.phones : row.phone ? [row.phone] : [];
   switch (row.state) {
     case "set_up":
-      return [row.phone, on ? `since ${on}` : null].filter(Boolean).join(" · ");
+    case "recording_off":
+      return [...phones, on ? `since ${on}` : null].filter(Boolean).join(" · ");
     case "phone_pending":
       return "Agreed, but hasn't opened the app on a phone yet";
     case "declined":
@@ -138,6 +213,7 @@ function stateLine(row: CaptureTeamRow): string {
 }
 
 export function CaptureSetupPanel() {
+  const me = useWorkspaceAccess()?.context?.personId ?? null;
   const [team, setTeam] = useState<CaptureTeam | null>(null);
   const [failed, setFailed] = useState(false);
   const [now] = useState(() => Date.now());
@@ -185,27 +261,50 @@ export function CaptureSetupPanel() {
           <span className={styles.skeletonLine} />
         ) : (
           <ul className={own.team} aria-label="Call capture, not set up first">
-            {rows.map((row) => (
-              <li key={row.person_id}>
-                <span>
-                  <strong>
-                    <PersonDisplayName name={row.name} />
-                  </strong>
-                  <small>{named(captureLine(row))}</small>
-                  {row.recording ? (
-                    <small
-                      className={own.recording}
-                      data-state={row.recording.state}
-                    >
-                      {recordingLine(row.recording, now)}
-                    </small>
-                  ) : null}
-                </span>
-                <span className={own.badge} data-state={row.state}>
-                  {BADGE[row.state]}
-                </span>
-              </li>
-            ))}
+            {rows.map((row) => {
+              const parts = recordingParts(row.recording, now);
+              // Which phone, when a seller has more than one (ph1-46).
+              const which =
+                (row.phones?.length ?? 0) > 1 && row.recording?.phone
+                  ? `${row.recording.phone}: `
+                  : "";
+              return (
+                <li key={row.person_id}>
+                  <span>
+                    <strong>
+                      <PersonDisplayName name={row.name} />
+                    </strong>
+                    <small>{named(captureLine(row))}</small>
+                    {row.recording && parts ? (
+                      <small
+                        className={own.recording}
+                        data-state={row.recording.state}
+                      >
+                        {/* One run of words, so the fix flows with them. */}
+                        <span>
+                          {which}
+                          {parts.what}
+                          {parts.fix ? (
+                            <>
+                              {" · "}
+                              <RecordingFixButton
+                                row={row}
+                                recording={row.recording}
+                                label={parts.fix}
+                                mine={row.person_id === me}
+                              />
+                            </>
+                          ) : null}
+                        </span>
+                      </small>
+                    ) : null}
+                  </span>
+                  <span className={own.badge} data-state={row.state}>
+                    {BADGE[row.state]}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

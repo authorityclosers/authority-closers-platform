@@ -126,6 +126,46 @@ export function recordingProven(phone: PhoneFacts): boolean {
   }
 }
 
+/** Nothing on this phone stops a call's recording reaching Sales X-Ray now. */
+export function recordingsLive(phone: PhoneFacts): boolean {
+  return phone.folderPicked && !phone.privateDialler && !phone.recorderOff;
+}
+
+/**
+ * Recordings work: nothing stops them, and one was found (orchestrator, 1 Nov
+ * 2026: a phone finished with no folder counted as done for good, and its
+ * seller sent no recording in a week). A run finishes only with this.
+ */
+export function recordingsReady(phone: PhoneFacts): boolean {
+  return recordingsLive(phone) && recordingProven(phone);
+}
+
+const RECORDINGS_LATER = (device: string) => `sx-recordings-later:${device}`;
+const LATER_MS = 24 * 60 * 60 * 1000;
+
+/** The seller chose Not now at the end with recordings not working: asked again a day later. */
+export function markRecordingsLater(device: string, now = Date.now()) {
+  try {
+    window.localStorage.setItem(
+      RECORDINGS_LATER(device),
+      new Date(now).toISOString(),
+    );
+  } catch {
+    // Private storage off: it asks again at the next open.
+  }
+}
+
+export function recordingsLater(device: string, now: number): boolean {
+  try {
+    const at = Date.parse(
+      window.localStorage.getItem(RECORDINGS_LATER(device)) ?? "",
+    );
+    return Number.isFinite(at) && now >= at && now < at + LATER_MS;
+  } catch {
+    return false;
+  }
+}
+
 const ORDER: CaptureStep[] = [
   "profile",
   "consent",
@@ -209,21 +249,35 @@ export function noStillStands(setup: CaptureSetup, now: number): boolean {
   return Number.isFinite(again) && now < again;
 }
 
-/** This phone finished before in this workspace (an earlier run on this same install). */
+/** This install's newest finish in this workspace, whatever it found. */
+function finishHere(setup: CaptureSetup, phone: PhoneFacts | null) {
+  return phone?.device
+    ? setup.phones.find((item) => item.device === phone.device)
+    : undefined;
+}
+
+/** This phone finished before in this workspace with its recordings working. */
 export function phoneFinished(
   setup: CaptureSetup,
   phone: PhoneFacts | null,
 ): boolean {
-  return Boolean(
-    phone?.device && setup.phones.some((item) => item.device === phone.device),
-  );
+  return finishHere(setup, phone)?.recordings === true;
+}
+
+/** This phone went through the setup here before, even without recordings. */
+export function phoneTried(
+  setup: CaptureSetup,
+  phone: PhoneFacts | null,
+): boolean {
+  return finishHere(setup, phone) !== undefined;
 }
 
 /**
  * This phone's own steps (recordings folder, background, uploads) are done: this
- * person finished setup on this install here or in any other workspace. A
- * workspace switch asks only for that workspace's consent (persona QA ph2-15,
- * 1 Nov 2026: switching ran all five steps again, and after every restart).
+ * person finished setup on this install, with its recordings working, here or in
+ * any other workspace (the server lists only those). A workspace switch asks only
+ * for that workspace's consent (persona QA ph2-15, 1 Nov 2026: switching ran all
+ * five steps again, and after every restart).
  */
 export function phoneDone(
   setup: CaptureSetup,
@@ -244,17 +298,29 @@ export function phoneDoneElsewhere(
   return phoneDone(setup, phone) && !phoneFinished(setup, phone);
 }
 
-/** What a finished phone records for Team: never a number, only what is on. */
-export function finishedPhone(phone: PhoneFacts): CaptureFinishedPhone {
+/**
+ * What a finished phone records for Team: never a number, only what is on.
+ * Recordings count only when they work (recordingsReady); `proven` is for a
+ * phone that already proved them in another workspace.
+ */
+export function finishedPhone(
+  phone: PhoneFacts,
+  proven = recordingProven(phone),
+): CaptureFinishedPhone {
   return {
     device: phone.device,
     model: phone.model,
     family: phone.family,
     app_version: phone.version,
-    recordings: phone.folderPicked && !phone.privateDialler,
+    recordings: recordingsLive(phone) && proven,
     background: phone.battery && (!phone.autostartNeeded || phone.autostart),
     uploads: phone.uploadsOn,
   };
+}
+
+/** Everything this phone's own steps check is on now (none of them would show). */
+export function phoneReady(setup: CaptureSetup, phone: PhoneFacts): boolean {
+  return !stepsFor(setup, phone).some((step) => PHONE_STEPS.has(step));
 }
 
 /** Whether an organisation's seller must go through it before Home, Leads and Calls. */
@@ -268,9 +334,16 @@ export function setupRequired(
   if (!setup.profile_complete || setup.consent !== "on") return true;
   // The web, or an app too old to upload calls by itself: the first two steps are all.
   if (!phone?.captureSupported) return false;
-  // Finished on this phone in another workspace: nothing to ask here (the gate
-  // records the phone for this workspace's Team by itself).
-  return !phoneDone(setup, phone);
+  // Finished with its recordings working, here or in another workspace (the gate
+  // records the phone for this workspace's Team by itself): asked again only
+  // when they stop (no folder, a private Phone app, the recorder off).
+  if (phoneDone(setup, phone) && recordingsLive(phone)) return false;
+  // Went through it before without recordings, and they work now (a call's
+  // recording was found): nothing to show; the gate records it.
+  if (phoneTried(setup, phone) && phoneReady(setup, phone)) return false;
+  // A finish without recordings is never done (orchestrator, 1 Nov 2026): the
+  // recordings step opens again at the next open, a day after a Not now.
+  return !recordingsLater(phone.device, now);
 }
 
 /** The steps, in order, for this workspace and this place. */
@@ -289,8 +362,9 @@ export function stepsFor(
     return steps;
   }
   // The phone's own steps, once per install for this person (ph2-15); a run
-  // again from Settings in a workspace it finished in still shows them.
-  if (phoneDoneElsewhere(setup, phone)) {
+  // again from Settings in a workspace it finished in still shows them, and so
+  // does a phone whose recordings stopped since.
+  if (phoneDoneElsewhere(setup, phone) && recordingsLive(phone)) {
     steps.push("done");
     return steps;
   }

@@ -38,6 +38,8 @@ export type CaptureSetup = Readonly<{
 
 export type CaptureTeamState =
   | "set_up"
+  /** Finished, but its recordings don't work, or its phone says recording is off (ph1-46). */
+  | "recording_off"
   | "phone_pending"
   | "declined"
   | "turned_off"
@@ -51,6 +53,8 @@ export type CaptureTeamRow = Readonly<{
   state: CaptureTeamState;
   at: string | null;
   phone: string | null;
+  /** Every phone they finished on, newest first, by name (ph1-46). */
+  phones?: readonly string[];
   /** Their connected lead calls today with no recording (owner, fix 5). */
   missing_today?: number;
   /** The phone, by name, with work-call logging off: Connections' rule (ph1-23). */
@@ -64,6 +68,8 @@ export type CaptureRecording = Readonly<{
   state: "ok" | "late" | "off";
   last_at: string | null;
   fix: "folder" | "recorder" | "test" | null;
+  /** The phone this is about, by name (a seller can have two, ph1-46). */
+  phone?: string;
 }>;
 
 export type CaptureTeam = Readonly<{
@@ -106,6 +112,7 @@ export const CAPTURE_SETUP_PATH = "/v1/sales-xray/call-ai/capture-setup";
 const CONSENTS = ["on", "off", "ask", "unavailable"];
 const TEAM_STATES = [
   "set_up",
+  "recording_off",
   "phone_pending",
   "declined",
   "turned_off",
@@ -153,13 +160,24 @@ export function parseCaptureTeam(body: unknown): CaptureTeam {
   )
     throw new Error("Call capture could not be read.");
   return {
-    people: body.people.filter(
-      (row): row is CaptureTeamRow =>
-        record(row) &&
-        typeof row.person_id === "string" &&
-        typeof row.name === "string" &&
-        TEAM_STATES.includes(String(row.state)),
-    ),
+    people: body.people
+      .filter(
+        (row): row is CaptureTeamRow =>
+          record(row) &&
+          typeof row.person_id === "string" &&
+          typeof row.name === "string" &&
+          TEAM_STATES.includes(String(row.state)),
+      )
+      .map((row) => ({
+        ...row,
+        phones: Array.isArray(row.phones)
+          ? row.phones.filter(
+              (name): name is string => typeof name === "string",
+            )
+          : row.phone
+            ? [row.phone]
+            : [],
+      })),
     missingToday: count(body.missing_today),
   };
 }

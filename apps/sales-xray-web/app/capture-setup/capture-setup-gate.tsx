@@ -14,6 +14,10 @@
  * After a workspace switch (persona QA ph2-15, 1 Nov 2026) a phone that finished
  * in another workspace asks only for this one's consent, or nothing: its Team
  * learns of the phone by itself. The gate always offers to switch back.
+ *
+ * A phone is done only with its recordings working (orchestrator, 1 Nov 2026:
+ * one finished with no folder and was never asked again). Without them the
+ * recording check opens again at the next open, a day after a Not now.
  */
 
 import dynamic from "next/dynamic";
@@ -41,8 +45,12 @@ import {
   isGatedRoute,
   markPersonalSeen,
   personalSeen,
+  phoneDone,
   phoneDoneElsewhere,
   phoneFacts,
+  phoneReady,
+  phoneTried,
+  recordingsLive,
   setupRequired,
   type CaptureStep,
 } from "./capture-setup-rules";
@@ -185,9 +193,11 @@ export function CaptureSetupGate() {
         if (stopped) return;
         const facts = phoneFacts(status, capture);
         const required = setupRequired(setup, facts, Date.now());
-        // Finished on this phone in another workspace, and agreed here: this
-        // workspace's Team learns of the phone, with nothing to ask (ph2-15).
-        if (
+        // Agreed here, and nothing to ask: this workspace's Team learns of the
+        // phone by itself when it finished in another workspace (ph2-15), or
+        // when it went through here without recordings and they work now (a
+        // call's recording was found; orchestrator, 1 Nov 2026).
+        const quiet =
           !manual &&
           !required &&
           facts &&
@@ -195,12 +205,22 @@ export function CaptureSetupGate() {
           setup.workspace === "organisation" &&
           setup.consent === "on" &&
           setup.profile_complete !== false &&
-          facts.captureSupported &&
-          phoneDoneElsewhere(setup, facts)
-        )
+          facts.captureSupported
+            ? facts
+            : null;
+        const finished = !quiet
+          ? null
+          : phoneDoneElsewhere(setup, quiet) && recordingsLive(quiet)
+            ? finishedPhone(quiet, true)
+            : !phoneDone(setup, quiet) &&
+                phoneTried(setup, quiet) &&
+                phoneReady(setup, quiet)
+              ? finishedPhone(quiet)
+              : null;
+        if (finished)
           void recordCaptureSetup({
             outcome: "completed",
-            phone: finishedPhone(facts),
+            phone: finished,
           }).catch(() => undefined);
         setDecision({
           key,

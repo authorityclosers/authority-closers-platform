@@ -41,7 +41,13 @@ _READ_LIMIT: Final = 200
 
 Outcome = Literal["completed", "declined"]
 TeamState = Literal[
-    "set_up", "phone_pending", "declined", "turned_off", "consent_changed", "not_started"
+    "set_up",
+    "recording_off",
+    "phone_pending",
+    "declined",
+    "turned_off",
+    "consent_changed",
+    "not_started",
 ]
 
 
@@ -247,13 +253,21 @@ async def setup(database: Any, tenant_id: UUID, person_id: UUID) -> Setup:
 
 
 def devices_of(payloads: list[Any]) -> list[str]:
-    """Installs that finished setup, newest first, once each."""
+    """Installs that finished setup with their recordings working, newest first, once each.
+    An install's newest finish decides: one that finished without recordings (no folder, a
+    private Phone app, no recording found) is not done, so the app asks again (orchestrator,
+    1 Nov 2026: a seller's phone finished with recordings=false was never asked again and
+    sent no recording in a week)."""
     devices: list[str] = []
+    seen: set[str] = set()
     for payload in payloads:
         if not isinstance(payload, dict) or payload.get("outcome") != "completed":
             continue
         device = _text(payload.get("device"), 80)
-        if device and device not in devices:
+        if not device or device in seen:
+            continue
+        seen.add(device)
+        if payload.get("recordings") is True:
             devices.append(device)
     return devices
 
@@ -315,10 +329,18 @@ def ask_again_at(no: datetime | None) -> datetime | None:
     return no + ASK_AGAIN_AFTER if no is not None else None
 
 
-def team_state(found: Setup, consent: str) -> TeamState:
-    """One line per seller on Team: set up, or why not."""
+def team_state(found: Setup, consent: str, recording: dict[str, Any] | None = None) -> TeamState:
+    """One line per seller on Team: set up, or why not. Set up means a phone that finished
+    with its recordings working and, by its newest report, still records (``recording``,
+    recording_state). One that finished without them, or reports recording off now, is
+    "recording_off" (orchestrator, 1 Nov 2026, phone personas ph1-46: "Everyone is set up"
+    and Ready beside a red "Call recording off")."""
     if consent == "on":
-        return "set_up" if found.phones else "phone_pending"
+        if not found.phones:
+            return "phone_pending"
+        working = any(phone.recordings for phone in found.phones)
+        off = recording is not None and recording.get("state") == "off"
+        return "set_up" if working and not off else "recording_off"
     if consent == "off":
         return "turned_off"
     if found.declined_at is not None:
