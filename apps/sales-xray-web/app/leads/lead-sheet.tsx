@@ -3521,9 +3521,12 @@ export function LeadCard({
           }}
         />
       ) : null}
+      {/* It answers about this lead at once: its last call and its notes
+          (phone personas ph1-35, 1 Nov 2026). */}
       <AskDipakSheet
         open={asking}
         about={lead.name}
+        leadId={lead.lead_id}
         onClose={() => setAsking(false)}
       />
       {detail.can_edit ? (
