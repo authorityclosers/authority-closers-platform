@@ -16,6 +16,7 @@ import Link from "next/link";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -181,10 +182,15 @@ const noDock = () => null;
  * (competitor teardown 12; the orchestrator, 1 Nov 2026: "Varun Chauhan is
  * your lead now" covered the second row's Open on Follow-ups at 360 px).
  * Computers keep the corner, which has room beside the page.
+ *
+ * It takes its lines before the page is first drawn, so lines already waiting
+ * are there from the first frame instead of arriving one frame later and
+ * moving the page down (the test robot, 3c6e780e, 1 Nov 2026: on 3G New
+ * analysis jumped 68 px as they came in).
  */
 export function NoticeDock() {
   const [node, setNode] = useState<HTMLDivElement | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!node || typeof window.matchMedia !== "function") return;
     const media = window.matchMedia(DOCK_MEDIA);
     const place = () => setDock(media.matches ? node : null);
@@ -196,6 +202,37 @@ export function NoticeDock() {
     };
   }, [node]);
   return <div ref={setNode} className={styles.dock} data-notice-dock="" />;
+}
+
+// ----- a page's own corner card --------------------------------------------------------------
+
+let ownHost: HTMLElement | null = null;
+const ownHostListeners = new Set<() => void>();
+function setOwnHost(node: HTMLElement | null) {
+  if (ownHost === node) return;
+  ownHost = node;
+  ownHostListeners.forEach((listener) => listener());
+}
+function subscribeOwnHost(listener: () => void) {
+  ownHostListeners.add(listener);
+  return () => {
+    ownHostListeners.delete(listener);
+  };
+}
+const noOwnHost = () => null;
+
+/**
+ * A page's own card in the corner stack, with the cards notify() raises, for a
+ * card with more than one action (New analysis's "That didn't go through").
+ * The first-call guide rises above the stack, the page keeps room for it and
+ * it sits above Report a problem, so they all keep clear of this card too
+ * (the test robot, a5ceb915, 60244251 and 7ead7db2, 1 Nov 2026: the card
+ * floated on its own, under the guide's Skip guide and Next and over Report a
+ * problem). Without a notice centre (a test) it stays where it is.
+ */
+export function InCorner({ children }: { children: ReactNode }) {
+  const node = useSyncExternalStore(subscribeOwnHost, () => ownHost, noOwnHost);
+  return node ? createPortal(children, node) : children;
 }
 
 const ICON = {
@@ -562,6 +599,14 @@ export function NoticeCenter() {
   );
   const [expanded, setExpanded] = useState(false);
   const [stack, setStack] = useState<HTMLDivElement | null>(null);
+  // The stack's place for a page's own card (InCorner).
+  const [own, setOwn] = useState<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    setOwnHost(own);
+    return () => {
+      if (ownHost === own) setOwnHost(null);
+    };
+  }, [own]);
   // How high the stack sat over a sheet's footer, for its glide back down.
   const lifted = useRef(0);
   const sheet = useTopModal();
@@ -778,6 +823,8 @@ export function NoticeCenter() {
               {expanded ? "Show fewer" : `+${waiting} more`}
             </button>
           ) : null}
+          {/* A page's own card (InCorner), nearest the corner. */}
+          <div ref={setOwn} className={styles.own} data-corner-own="" />
         </div>
       </StackHost>
       {/* On a phone page with a dock: one line each, in the page's flow. */}

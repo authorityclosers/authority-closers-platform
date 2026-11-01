@@ -197,8 +197,11 @@ export function AnalysisWave({
         );
       })}
       {/* The scanning light the owner liked on the upload screen: across the
-          whole call while it arrives, then over the current step's stretch. */}
-      <span className={styles.beam} aria-hidden="true" />
+          whole call while it arrives, then over the current step's stretch.
+          It moves along its rail by transform, never moving the page. */}
+      <span className={styles.beamRail} aria-hidden="true">
+        <span className={styles.beam} />
+      </span>
     </div>
   );
 }

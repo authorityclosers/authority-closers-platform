@@ -154,6 +154,7 @@ import {
 import { track } from "./telemetry";
 import {
   dismissNotice,
+  InCorner,
   notify,
   NoticeDock,
   type Notice,
@@ -2891,92 +2892,98 @@ export function AcquisitionStudio({
             </aside>
           )}
           {savedCallRecovery}
+          {/* A corner card, in the corner stack with the others: the guide,
+              the page's room and Report a problem keep clear of it there. */}
           {visibleError && !savedCallNeedsSession && (
-            <div className={`notice error ${styles.error}`} role="alert">
-              <div className={styles.errorHead}>
-                <AlertCircle
-                  size={18}
-                  aria-hidden="true"
-                  className={styles.errorIcon}
+            <InCorner>
+              <div className={`notice error ${styles.error}`} role="alert">
+                <div className={styles.errorHead}>
+                  <AlertCircle
+                    size={18}
+                    aria-hidden="true"
+                    className={styles.errorIcon}
+                  />
+                  <p className={styles.errorTitle}>
+                    {errorTitle(visibleError, Boolean(statusIssue && !error))}
+                  </p>
+                  {error ? (
+                    <button
+                      type="button"
+                      className={styles.errorClose}
+                      aria-label="Dismiss"
+                      onClick={() => setError("")}
+                    >
+                      <X size={15} aria-hidden="true" />
+                    </button>
+                  ) : null}
+                </div>
+                {statusIssue && !error && !isFinalStatusAnswer(statusIssue) && (
+                  <p>
+                    Your call is saved. Sales X-Ray keeps checking by itself.
+                  </p>
+                )}
+                <ErrorMessage
+                  message={
+                    visibleError instanceof AcquisitionError
+                      ? visibleError.message
+                      : String(visibleError)
+                  }
                 />
-                <p className={styles.errorTitle}>
-                  {errorTitle(visibleError, Boolean(statusIssue && !error))}
-                </p>
-                {error ? (
+                <div className={styles.errorActions}>
                   <button
+                    className="secondary-button"
                     type="button"
-                    className={styles.errorClose}
-                    aria-label="Dismiss"
-                    onClick={() => setError("")}
+                    disabled={!!busy}
+                    onClick={() => {
+                      setError("");
+                      if (submission) {
+                        setConsentedSubmissionId(null);
+                        setPollAttempt((n) => n + 1);
+                      } else setAttempt((n) => n + 1);
+                    }}
                   >
-                    <X size={15} aria-hidden="true" />
+                    {statusIssue && !error ? "Try again" : "Check again"}
                   </button>
-                ) : null}
-              </div>
-              {statusIssue && !error && !isFinalStatusAnswer(statusIssue) && (
-                <p>Your call is saved. Sales X-Ray keeps checking by itself.</p>
-              )}
-              <ErrorMessage
-                message={
-                  visibleError instanceof AcquisitionError
-                    ? visibleError.message
-                    : String(visibleError)
-                }
-              />
-              <div className={styles.errorActions}>
-                <button
-                  className="secondary-button"
-                  type="button"
-                  disabled={!!busy}
-                  onClick={() => {
-                    setError("");
-                    if (submission) {
-                      setConsentedSubmissionId(null);
-                      setPollAttempt((n) => n + 1);
-                    } else setAttempt((n) => n + 1);
-                  }}
-                >
-                  {statusIssue && !error ? "Try again" : "Check again"}
-                </button>
-                {error &&
-                  submission &&
-                  progress?.local_state === "completed" && (
+                  {error &&
+                    submission &&
+                    progress?.local_state === "completed" && (
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={
+                          !!busy || analysisPaused || analysisWriteBlocked
+                        }
+                        onClick={() =>
+                          void (processingTerminal
+                            ? freshPlan()
+                            : retryAnalysis())
+                        }
+                      >
+                        {processingTerminal
+                          ? "Request a fresh plan"
+                          : "Retry analysis"}
+                      </button>
+                    )}
+                  {(!submission || !progress || (plan && !plan.accepted)) && (
                     <button
                       type="button"
                       className="secondary-button"
-                      disabled={
-                        !!busy || analysisPaused || analysisWriteBlocked
-                      }
-                      onClick={() =>
-                        void (processingTerminal
-                          ? freshPlan()
-                          : retryAnalysis())
-                      }
+                      disabled={!!busy}
+                      onClick={startAnotherCall}
                     >
-                      {processingTerminal
-                        ? "Request a fresh plan"
-                        : "Retry analysis"}
+                      <ArrowRight size={16} aria-hidden="true" />
+                      Analyse another call
                     </button>
                   )}
-                {(!submission || !progress || (plan && !plan.accepted)) && (
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={!!busy}
-                    onClick={startAnotherCall}
-                  >
-                    <ArrowRight size={16} aria-hidden="true" />
-                    Analyse another call
-                  </button>
-                )}
-                {visibleError instanceof AcquisitionError &&
-                  visibleError.status === 401 && (
-                    <Link className="text-button" href="/login">
-                      Sign in
-                    </Link>
-                  )}
+                  {visibleError instanceof AcquisitionError &&
+                    visibleError.status === 401 && (
+                      <Link className="text-button" href="/login">
+                        Sign in
+                      </Link>
+                    )}
+                </div>
               </div>
-            </div>
+            </InCorner>
           )}
           <div
             className={`${styles.layout} ${!embedded && !report && !submission && !deletionOnlyId ? styles.quietIntake : ""} ${report ? styles.withReport : submission ? styles.withProcessing : busy && !submission ? styles.withBusy : ""}`}

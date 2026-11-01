@@ -18,6 +18,7 @@ vi.mock("next/link", () => ({
 
 import {
   dismissNotice,
+  InCorner,
   NoticeCenter,
   NoticeDock,
   notify,
@@ -503,5 +504,41 @@ it("keeps a short-lived card's Undo in its folded pill", async () => {
     expect(undo).toHaveBeenCalledTimes(1);
   } finally {
     vi.useRealTimers();
+  }
+});
+it("puts a page's own card in the corner stack, beside the cards notify() raises", async () => {
+  // The test robot, a5ceb915, 60244251 and 7ead7db2 (1 Nov 2026): New
+  // analysis's error card floated on its own, so the first-call guide sat on
+  // its buttons and the card sat on Report a problem.
+  const page = document.createElement("div");
+  document.body.append(page);
+  const pageRoot = createRoot(page);
+  try {
+    await act(async () => {
+      notify({
+        id: "fictional-problem",
+        tone: "error",
+        title: "Leads didn't load",
+      });
+      pageRoot.render(
+        <InCorner>
+          <div role="alert">That didn&apos;t go through</div>
+        </InCorner>,
+      );
+    });
+    const own = host.querySelector("[data-corner-own]")!;
+    expect(own.textContent).toBe("That didn't go through");
+    expect(own.parentElement!.textContent).toContain("Leads didn't load");
+    expect(page.textContent).toBe("");
+    // Without a notice centre it stays where the page put it.
+    await act(async () => root.unmount());
+    expect(page.textContent).toBe("That didn't go through");
+  } finally {
+    await act(async () => {
+      pageRoot.unmount();
+      dismissNotice("fictional-problem");
+    });
+    page.remove();
+    root = createRoot(host);
   }
 });
