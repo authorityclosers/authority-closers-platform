@@ -10,12 +10,20 @@ const pass = (reason, route, selector = "") => ({ outcome: "pass", reason, route
 const fail = (reason, route, selector = "", severity = "MAJOR") => ({ outcome: "fail", reason, route, selector, severity });
 const blocked = (reason, route, selector = "") => ({ outcome: "blocked", reason, route, selector });
 
+// A slow-network row (400 ms latency, 400 kbit/s) is given four times the patience: a page that is slow there is not the finding of a journey about what the page shows.
+// Orchestrator: slow-network rows stay blocked on dev by design (it compiles pages on demand; they need the staging build), so a journey that fails on one is answered "blocked",
+// never "fail"; the same journey is judged on the normal-speed rows. A RESTORE FAILED is never softened.
+let patience = 1;
+const slowIsBlocked = (ctx, out) =>
+  ctx.row && ctx.row.state === "slow network" && out && out.outcome === "fail" && !/^RESTORE FAILED/.test(out.reason)
+    ? { outcome: "blocked", reason: `slow network on a dev build (it compiles pages on demand; judged on the normal-speed rows): ${String(out.reason).slice(0, 200)}`, route: out.route, selector: out.selector }
+    : out;
 const until = async (fn, ms = 10000) => {
   const t0 = Date.now();
   for (;;) {
     const v = await fn().catch(() => null);
     if (v) return v;
-    if (Date.now() - t0 > ms) return null;
+    if (Date.now() - t0 > ms * patience) return null;
     await sleep(400);
   }
 };
@@ -147,6 +155,7 @@ const writeGuarded = (plan) => ({
   ...plan,
   as: "priya",
   async run(ctx) {
+    patience = ctx.row && ctx.row.state === "slow network" ? 4 : 1;
     if (fs.existsSync(RESTORE_FLAG)) return blocked(`held: an earlier row could not put its change back (state/restore-failed.txt); nothing is changed until that file is cleared`, plan.route, "restore");
     const st = { writes: [] };
     const handler = async (route) => {
@@ -162,7 +171,7 @@ const writeGuarded = (plan) => ({
     };
     await ctx.tab.context.route("**/*", handler);
     try {
-      return await plan.run({ ...ctx, st });
+      return slowIsBlocked(ctx, await plan.run({ ...ctx, st }));
     } finally {
       await ctx.tab.context.unroute("**/*", handler).catch(() => null);
     }
@@ -811,10 +820,11 @@ const J254 = {
 const guarded = (plan) => ({
   ...plan,
   async run(ctx) {
+    patience = ctx.row && ctx.row.state === "slow network" ? 4 : 1;
     const refuse = (route) => (["GET", "HEAD", "OPTIONS"].includes(route.request().method()) ? route.fallback() : route.abort("blockedbyclient"));
     await ctx.tab.context.route("**/*", refuse);
     try {
-      return await plan.run(ctx);
+      return slowIsBlocked(ctx, await plan.run(ctx));
     } finally {
       await ctx.tab.context.unroute("**/*", refuse).catch(() => null);
     }

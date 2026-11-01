@@ -1430,7 +1430,8 @@ async function fileAll(ctx, cell, route, dry) {
 async function runCell(cell, opts = {}) {
   const t0 = Date.now();
   const owner = cell.role === "owner";
-  const alias = owner ? "owner" : SELLERS[aliasTurn++ % SELLERS.length];
+  // QA_ATTACK_ALIAS pins one person for a by-hand replay (a new hire, whose first-call guide and welcome card are not dismissed); the loop rotates through SELLERS
+  const alias = owner ? "owner" : process.env.QA_ATTACK_ALIAS || SELLERS[aliasTurn++ % SELLERS.length];
   let route = cell.route;
   const tab = await session.openTab({ alias, device: cell.size, theme: cell.family === "dark" ? "dark" : "light", state: "normal", keep: true });
   const ctx = makeCtx(tab, cell, alias);
