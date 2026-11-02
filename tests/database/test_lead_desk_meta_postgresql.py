@@ -1,9 +1,10 @@
 """Meta Lead Ads in the Sales Xray CRM on PostgreSQL, with Meta's Graph API faked.
 
-Turning a Page on files its last week at once and starts bringing in the rest Meta
-keeps (90 days); the puller finishes that in the background; every form on the Page
-is covered (a new form too); "Bring in older leads" again adds nothing twice. Leads
-imported from a file before the Page was connected are linked, not made repeats.
+Turning a Page on brings in only the leads sent after it (owner, 2 Nov 2026); the
+older ones Meta keeps (90 days) come in only when a manager asks, and the puller
+finishes that in the background; every form on the Page is covered (a new form too);
+"Bring in older leads" again adds nothing twice. Leads imported from a file before the
+Page was connected are linked, not made repeats.
 """
 
 import base64
@@ -18,7 +19,7 @@ import pytest
 from sqlalchemy import func, select, update
 
 from ac_platform.http.routes import RouteContext
-from ac_platform.lead_desk.connectors import meta, meta_pull
+from ac_platform.lead_desk.connectors import meta, meta_backfill, meta_pull
 from ac_platform.lead_desk.connectors.http import install_connectors_http
 from ac_platform.lead_desk.models import Lead, LeadEvent, LeadMerge, LeadSource
 from ac_platform.lead_desk.store import LeadDesk, Viewer
@@ -135,13 +136,24 @@ class FakeGraph:
 USER_TOKEN = "fake-user-token"  # noqa: S105 - a stand-in, never a real token
 
 
-def test_turning_a_page_on_brings_in_all_90_days_and_every_form(
+def test_turning_a_page_on_brings_in_only_newer_leads_and_older_ones_on_purpose(
     postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Owner, 2 Nov 2026: connecting a Page filed its last week at once and its last 90
+    days in the background, as fresh enquiries. Now nothing sent before it comes in by
+    itself, from the pull or the webhook's path; a lead sent after it does; the older
+    ones come in when a manager asks; changing a live Page's forms keeps its time."""
     for name, value in ENV.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setattr(meta, "Graph", FakeGraph)
     FakeGraph.forms_listed = ["fa"]
+    # Sent a minute after the Page is switched on (Meta's fake answers by time sent).
+    fresh = {
+        **_lead(9, "fa", 0),
+        "created_time": time.strftime("%Y-%m-%dT%H:%M:%S+0000", time.gmtime(int(time.time()) + 60)),
+    }
+    monkeypatch.setitem(LEADS, "fa", [*LEADS["fa"], fresh])
+    monkeypatch.setitem(CREATED, fresh["id"], int(time.time()) + 60)
     cfg = meta.config()
     assert cfg is not None
 
@@ -183,42 +195,85 @@ def test_turning_a_page_on_brings_in_all_90_days_and_every_form(
                 on = await client.post(f"{META}/pages/p1", json={}, headers=WRITE)
                 assert on.status_code == 200, on.text
                 body = on.json()
-                assert body["imported"] == 2  # this week's two leads, at once
+                assert body["imported"] == 0  # this week's two stay at Meta
                 page = body["page"]
                 assert page["active"] is True and page["forms"] == "all"
                 assert [f["name"] for f in page["formsCovered"]] == ["Enquiry"]
-                assert page["backfill"]["state"] == "running"
+                assert page["backfill"] is None  # no older leads started
+                async with setup.sessions() as db:
+                    assert await db.scalar(select(func.count()).select_from(Lead)) == 0
+                    source = await db.scalar(select(LeadSource).where(LeadSource.kind == "meta"))
+                    assert source is not None
+                    connected = source.config["connected_at"]
+                    assert abs(connected - time.time()) < 60
 
-                # A form made after connecting is covered without asking.
+                # A form made after connecting is covered without asking. The pull reads
+                # from when the Page went on: the lead sent since comes in, nothing older.
                 FakeGraph.forms_listed = ["fa", "fb"]
                 async with setup.sessions() as db, db.begin():
                     source = await db.scalar(select(LeadSource).where(LeadSource.kind == "meta"))
                     assert source is not None
-                    source.config = {
-                        **source.config,
-                        "backfill": {**source.config["backfill"], "forms": ["fa", "fb"]},
-                        "last_pulled_at": 1,
-                    }
+                    source.config = {**source.config, "last_pulled_at": 1}
+                    assert meta_pull.since(source.config, int(time.time())) == connected - 1
                 pulled = await meta_pull.pull_due(
                     setup.sessions, cfg, FakeGraph(cfg), now=int(time.time())
                 )
                 assert pulled == 1
+                async with setup.sessions() as db:
+                    refs = set((await db.scalars(select(Lead.source_ref))).all())
+                    assert refs == {fresh["id"]}
+
+                # The webhook's path, handed a lead sent before the Page went on (a late
+                # or repeated delivery): left out, unless older leads were asked for.
+                async with setup.sessions() as db, db.begin():
+                    source = await db.scalar(select(LeadSource).where(LeadSource.kind == "meta"))
+                    assert source is not None
+                    desk = LeadDesk(
+                        db,
+                        Viewer(
+                            person_id=setup.state.person_id,
+                            tenant_id=setup.state.tenant_id,
+                            role="system",
+                            name=source.label,
+                        ),
+                    )
+                    old = LEADS["fa"][0]
+                    assert await meta_backfill.file_lead(desk, source, old, page_name="P") == (
+                        "older"
+                    )
+                    assert await db.scalar(select(func.count()).select_from(Lead)) == 1
+
+                # Changing a live Page's forms keeps its time and starts nothing.
+                kept = await client.post(f"{META}/pages/p1", json={"forms": ["fa"]}, headers=WRITE)
+                assert kept.status_code == 200, kept.text
+                assert kept.json()["imported"] == 0 and kept.json()["page"]["backfill"] is None
+                back = await client.post(f"{META}/pages/p1", json={"forms": "all"}, headers=WRITE)
+                assert back.status_code == 200, back.text
+                async with setup.sessions() as db:
+                    source = await db.scalar(select(LeadSource).where(LeadSource.kind == "meta"))
+                    assert source is not None and source.config["connected_at"] == connected
+                    assert await db.scalar(select(func.count()).select_from(Lead)) == 1
+
+                # Older leads on purpose: every form's 90 days, the fresh lead already here.
+                older = await client.post(f"{META}/pages/p1/backfill", headers=WRITE)
+                assert older.status_code == 200, older.text
+                assert older.json()["imported"] == 5
 
                 status = (await client.get(f"{META}/status")).json()
                 page = status["pages"][0]
                 assert page["backfill"]["state"] == "done"
-                assert page["backfill"]["created"] == 3  # 20, 45 and 80 days old
+                assert page["backfill"]["created"] == 5  # 1, 3, 20, 45 and 80 days old
                 assert [f["name"] for f in page["formsCovered"]] == ["Enquiry", "Site visit"]
-                assert page["received"] == 5 and page["problem"] is None
+                assert page["received"] == 6 and page["problem"] is None
 
                 again = await client.post(f"{META}/pages/p1/backfill", headers=WRITE)
                 assert again.status_code == 200, again.text
                 assert again.json()["imported"] == 0
                 assert again.json()["page"]["backfill"]["state"] == "done"
-                assert again.json()["page"]["backfill"]["seen"] == 5
+                assert again.json()["page"]["backfill"]["seen"] == 6
 
             async with setup.sessions() as db:
-                assert await db.scalar(select(func.count()).select_from(Lead)) == 5
+                assert await db.scalar(select(func.count()).select_from(Lead)) == 6
                 refs = set((await db.scalars(select(Lead.source_ref))).all())
                 assert refs == {lead["id"] for leads in LEADS.values() for lead in leads}
         finally:
@@ -231,9 +286,9 @@ def test_leads_imported_from_a_file_first_are_linked_not_made_repeats(
     postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Owner's demo prep, 25 Oct 2026: a team imports its Page's leads from a file (one is
-    already Lost), then connects the Page. Turning it on, the pull and bringing in older
-    leads find the same people: each lead gets one note with its Meta lead id, and no
-    follow-up, stage or repeat count changes."""
+    already Lost), then connects the Page. Turning it on and the pull file nothing sent
+    before it; bringing in older leads finds the same people: each lead gets one note with
+    its Meta lead id, and no follow-up, stage or repeat count changes."""
     for name, value in ENV.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setattr(meta, "Graph", FakeGraph)
@@ -308,7 +363,7 @@ def test_leads_imported_from_a_file_first_are_linked_not_made_repeats(
                 client.cookies.set(setup.settings.session_cookie_name, setup.token)
                 on = await client.post(f"{META}/pages/p1", json={}, headers=WRITE)
                 assert on.status_code == 200, on.text
-                assert on.json()["imported"] == 0  # this week's two are linked, not new
+                assert on.json()["imported"] == 0  # nothing from before the Page went on
 
                 async with setup.sessions() as db, db.begin():
                     source = await db.scalar(select(LeadSource).where(LeadSource.kind == "meta"))

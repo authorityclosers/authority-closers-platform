@@ -573,7 +573,7 @@ it("turns a Page on with only the forms ticked, then reads the apps again", asyn
       { id: "f2", name: "Old form", status: "ARCHIVED" },
     ]);
   routes["POST /v1/lead-desk/meta/pages/111"] = () =>
-    Response.json({ page: {}, imported: 2 });
+    Response.json({ page: {}, imported: 0 });
   await act(async () => root.render(<ConnectedApps />));
   await flush();
   await act(async () => button(card("meta_leads"), "Set up")!.click());
@@ -605,7 +605,8 @@ it("turns a Page on with only the forms ticked, then reads the apps again", asyn
     expect.objectContaining({
       tone: "success",
       title: "Brightline Coaching is on",
-      message: expect.stringContaining("2 leads from the last week came in"),
+      // Owner, 2 Nov 2026: nothing sent before the Page went on comes in.
+      message: "New leads from its forms come into Leads from now on.",
     }),
   ]);
   expect(

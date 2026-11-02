@@ -1,7 +1,9 @@
 """Bring in older Meta leads: everything Meta still keeps for a Page (90 days).
 
-Connecting a Page files its last week at once. The rest of what Meta keeps comes in
-the background: each step reads a few pages of one form's leads, files them through
+Connecting a Page brings in only the leads sent after it was connected (``connected_at``,
+owner, 2 Nov 2026: old enquiries came in as fresh ones, topped To Call and filled the
+15-minute alert). Older ones come in only when a manager asks, in the background: each
+step reads a few pages of one form's leads, files them through
 ``LeadDesk.ingest`` exactly like the webhook and the pull, and keeps its place (the
 form and Meta's cursor) in the source's config. A step runs when a manager asks
 ("Bring in older leads") and then once a minute in the puller until every form is
@@ -42,8 +44,17 @@ from ac_platform.lead_desk.models import Lead, LeadEvent, LeadSource
 from ac_platform.lead_desk.store import LeadDesk
 
 KEY: Final[str] = "backfill"
+# When the Page was switched on (epoch seconds): the webhook and the pull file only the
+# leads sent from then on. A Page switched on before this was kept has none, and its
+# pull goes on as it did.
+CONNECTED: Final[str] = "connected_at"
 STEP_LEADS: Final[int] = 300  # leads read in one step (one request, or one puller tick)
 _STOPS: Final[frozenset[str]] = frozenset({"token", "permission", "lead_access"})
+
+
+def connected_at(config: Mapping[str, Any]) -> int | None:
+    value = config.get(CONNECTED)
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
 
 
 class _Graph(Protocol):
@@ -184,17 +195,23 @@ async def file_lead(
     *,
     page_name: str,
     made: list[UUID] | None = None,
+    older: bool = False,
 ) -> str:
     """One Meta lead into the CRM, like the webhook and the pull; returns the outcome.
     A lead Meta's testing tools made is test data, so it stays out of partner sends,
     SLA reports and lead stages sent back to the ad platforms like any test lead. A form
     sent before its person's lead was made is "linked" to that lead (``earlier_lead``).
     A new lead arrives when the person sent the form (``received_at``), not when we filed it.
-    A new lead's id is added to ``made``, for the duplicate engine after the batch."""
+    A new lead's id is added to ``made``, for the duplicate engine after the batch.
+    A form sent before the Page was switched on is "older" and left out, unless older
+    leads were asked for (``older``)."""
     record = meta.lead_record(lead, page_name=page_name)
     ref = str(lead.get("id") or "")[:200] or None
     test = meta.is_test_lead(lead)
     sent = submitted_at(lead)
+    since = connected_at(source.config or {})
+    if not older and since is not None and sent is not None and sent.timestamp() < since:
+        return "older"
     if ref is not None and sent is not None and not test:
         earlier = await earlier_lead(desk, record, ref, sent)
         if earlier is not None:
@@ -282,7 +299,7 @@ async def apply(desk: LeadDesk, source: LeadSource, piece: Slice, *, now: int) -
     counts = dict.fromkeys(("created", "linked", "repeat", "known"), 0)
     made: list[UUID] = []
     for lead in piece.leads:
-        outcome = await file_lead(desk, source, lead, page_name=page_name, made=made)
+        outcome = await file_lead(desk, source, lead, page_name=page_name, made=made, older=True)
         if outcome in counts:
             counts[outcome] += 1
     await duplicate_intake.after_intake(desk, made)

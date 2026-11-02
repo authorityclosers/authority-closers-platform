@@ -879,13 +879,13 @@ function MetaTile() {
     }
   };
 
-  // Turn a Page on with these forms, or change which forms come in live; the
-  // last week's leads come in now and the older ones follow.
+  // Turn a Page on with these forms, or change which forms come in live; only
+  // leads sent from now on come in (owner, 2 Nov 2026).
   const keepLive = async (page: MetaPage, forms: "all" | string[]) => {
     setBusy(page.pageId);
     setNote(null);
     try {
-      const result = await metaCall<{ imported: number; linked?: number }>(
+      await metaCall<{ imported: number }>(
         `/pages/${encodeURIComponent(page.pageId)}`,
         {
           method: "POST",
@@ -893,10 +893,7 @@ function MetaTile() {
           body: JSON.stringify({ forms }),
         },
       );
-      const here = result.linked ?? 0;
-      setNote(
-        `${result.imported} new lead${result.imported === 1 ? "" : "s"} from the last week${here ? `, ${here} already in your leads` : ""}. Older leads, up to 90 days, follow in the next few minutes.`,
-      );
+      setNote("New leads come in from now on.");
       await load();
     } catch (reason) {
       setNote(

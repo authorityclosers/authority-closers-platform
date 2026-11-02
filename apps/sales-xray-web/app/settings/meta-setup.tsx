@@ -194,16 +194,14 @@ function FormPicker({
   async function save() {
     setSaving(true);
     try {
-      const imported = await turnOnPage(page.pageId, all ? "all" : picked);
+      await turnOnPage(page.pageId, all ? "all" : picked);
       notify({
         id: "meta-setup",
         tone: "success",
         title: page.active
           ? `Forms saved for ${page.name}`
           : `${page.name} is on`,
-        message: imported
-          ? `${leads(imported)} from the last week came in. Older ones, up to 90 days, follow in a few minutes.`
-          : "New leads from its forms now come into Leads by themselves.",
+        message: "New leads from its forms come into Leads from now on.",
         timeout: 6000,
       });
       onSaved();
@@ -472,14 +470,13 @@ export function MetaSetup({
   }
 
   // Every Page on, every form, in one press (dev report #2: "pick all Pages and
-  // connect every form"). Each Page's last week comes in now.
+  // connect every form"). Only leads sent from now on come in (owner, 2 Nov 2026).
   async function turnOnAll() {
     setWorking("all");
-    let count = 0;
     const failures: string[] = [];
     for (const page of pages.filter((item) => !item.active)) {
       try {
-        count += await turnOnPage(page.pageId, "all");
+        await turnOnPage(page.pageId, "all");
       } catch (error) {
         failures.push(`${page.name}: ${failed(error)}`);
       }
@@ -493,7 +490,7 @@ export function MetaSetup({
         : "Every Page is on, with all its forms",
       message: failures.length
         ? failures.join(" ")
-        : `${leads(count)} from the last week came in. Bring in the older ones below.`,
+        : "New leads come into Leads from now on.",
       timeout: failures.length ? undefined : 6000,
     });
     changed();

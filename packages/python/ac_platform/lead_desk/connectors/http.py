@@ -149,8 +149,9 @@ class ConnectPage(BaseModel):
 class Connected(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     page: MetaPage
+    # Switching a Page on files no lead from before it (owner, 2 Nov 2026): always 0 now,
+    # kept for the apps already installed.
     imported: int
-    # Leads from the last week that were already here: linked, not filed again.
     linked: int = 0
 
 
@@ -969,6 +970,8 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         page_id: str, command: ConnectPage, request: Request, response: Response
     ) -> Connected:
         cfg = meta_config()
+        # Before Meta is asked to send leads: one sent while this request runs is new.
+        now = int(time.time())
         async with desk_for(request, response, write=True) as desk:
             desk._require_manager()
             source = await page_source(desk, page_id)
@@ -985,35 +988,26 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 else [str(f)[:40] for f in command.forms][:100]
             )
             listed = await graph.forms(page_id, token)
-            form_ids = [form["id"] for form in listed] if forms == "all" else forms
-            now = int(time.time())
-            source.config = meta_backfill.begin(
-                meta_backfill.remember_forms({**source.config, "forms": forms}, listed),
-                form_ids=form_ids,
-                now=now,
-            )
+            config = meta_backfill.remember_forms({**source.config, "forms": forms}, listed)
+            if not source.active:
+                # Switched on: only leads sent from now on come in (owner, 2 Nov 2026).
+                # Nothing older is filed and no older leads start: a manager brings
+                # those in on purpose ("Bring in older leads"). Changing the forms of a
+                # Page that is on keeps its time, so no lead waiting for the pull is lost.
+                config = {
+                    **{
+                        k: v
+                        for k, v in config.items()
+                        if k not in {"last_error", meta_backfill.KEY}
+                    },
+                    meta_backfill.CONNECTED: now,
+                    "last_pulled_at": now,
+                }
+            source.config = config
             source.active = True
             source.updated_at = desk.now
-            # The last week comes in now; the rest Meta keeps (90 days) follows in the
-            # background, a slice a minute (meta_backfill).
-            imported = linked = 0
-            page_name = str(source.config.get("page_name") or "")
-            made: list[UUID] = []
-            for lead in await graph.recent_leads(
-                form_ids, token, since=now - meta.PULL_DAYS * 86400
-            ):
-                outcome = await meta_backfill.file_lead(
-                    desk, source, lead, page_name=page_name, made=made
-                )
-                imported += outcome == "created"
-                linked += outcome == "linked"
-            await duplicate_intake.after_intake(desk, made)
-            source.config = {
-                **{k: v for k, v in source.config.items() if k != "last_error"},
-                "last_pulled_at": now,
-            }
             await desk.db.flush()
-            return Connected(page=page_view(source), imported=imported, linked=linked)
+            return Connected(page=page_view(source), imported=0)
 
     @router.post(
         "/meta/pages/{page_id}/backfill",

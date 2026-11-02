@@ -7,6 +7,7 @@ the customer and then goes out; the page shows the delivery log.
 """
 
 import json
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
@@ -18,13 +19,14 @@ import pytest
 from sqlalchemy import delete, func, select
 
 from ac_platform.http.routes import RouteContext
-from ac_platform.lead_desk.connectors import meta, meta_capi
+from ac_platform.lead_desk.connectors import meta, meta_capi, meta_pull
 from ac_platform.lead_desk.connectors.http import install_connectors_http
 from ac_platform.lead_desk.models import (
     Lead,
     LeadEvent,
     LeadMetaConversion,
     LeadMetaConversionAttempt,
+    LeadSource,
 )
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run
@@ -124,7 +126,21 @@ def test_lead_stages_go_back_to_the_organisations_meta_dataset(
 
                 on = await client.post(f"{META}/pages/p1", json={}, headers=WRITE)
                 assert on.status_code == 200, on.text
-                assert on.json()["imported"] == 2
+                assert on.json()["imported"] == 0  # nothing sent before the Page went on
+                # The two leads of the week are this test's: they come in by the pull as if
+                # sent after the Page went on (owner, 2 Nov 2026: connecting files nothing older).
+                async with setup.sessions() as db, db.begin():
+                    source = await db.scalar(select(LeadSource).where(LeadSource.kind == "meta"))
+                    assert source is not None
+                    source.config = {
+                        **source.config,
+                        "connected_at": int(time.time()) - 7 * 86400,
+                        "last_pulled_at": 1,
+                    }
+                pulled = await meta_pull.pull_due(
+                    setup.sessions, cfg, FakeGraph(cfg), now=int(time.time())
+                )
+                assert pulled == 1
                 async with setup.sessions() as db:
                     leads = {lead.source_ref: lead for lead in (await db.scalars(select(Lead)))}
                 for ref, stage in (("100000000000001", "won"), ("100000000000002", "lost")):
