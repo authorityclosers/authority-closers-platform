@@ -1336,6 +1336,16 @@
     width: auto;
   }
 }
+/* In the corner stack (notice-center.tsx InCorner) it is one of its rows: the
+   stack already sits in the corner, above the tab bar and Report a problem,
+   and the first-call guide rises above it (the test robot, 7ead7db2). */
+:global([data-corner-own]) > .error.error:global(.notice) {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  width: auto;
+}
 @media (prefers-reduced-motion: reduce) {
   .error.error:global(.notice) {
     animation: none;
@@ -1858,8 +1868,12 @@
 }
 
 /* The reference layout keeps the upload and supporting cards in one column. */
+/* One column as wide as its box: nothing in it may widen it, so text wraps
+   inside at any size (the test robot, 42137527: an auto column grew to 400 px
+   in a 328 px page at 200 % text). */
 .primaryColumn {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 16px;
   min-width: 0;

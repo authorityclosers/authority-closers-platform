@@ -46,6 +46,39 @@ async function axeFindings(tab, route) {
       return [{ rule: "robot:axe-failed", selector: "", severity: "POLISH", summary: "axe could not run", detail: String(second).split("\n")[0].slice(0, 160), route, internal: true }];
     }
   }
+  // target-size: axe-core 4.13 flags a target that is "partially obscured" at a scroll edge, so the same button is 32x44 at rest and "too small" at the edge of a scrolled page. Judge every flagged node again
+  // at rest (scrolled to the middle, axe re-run on that node alone, 2 Nov 2026, Leads 2) and keep only the ones that still fail.
+  let AB = null;
+  try {
+    AB = require("@axe-core/playwright").AxeBuilder;
+  } catch {
+    AB = null;
+  }
+  if (AB) {
+    const at = await tab.page.evaluate(() => [window.scrollX, window.scrollY]).catch(() => [0, 0]);
+    for (const v of result.violations) {
+      if (v.id !== "target-size") continue;
+      const keep = [];
+      for (const n of v.nodes || []) {
+        const sel = [].concat(n.target || []);
+        let still = true;
+        if (sel.length === 1 && !String(sel[0]).includes("iframe")) {
+          try {
+            await tab.page.locator(sel[0]).first().evaluate((el) => el.scrollIntoView({ block: "center", inline: "center" }));
+            await tab.page.waitForTimeout(250);
+            const again = await new AB({ page: tab.page }).include(sel[0]).withRules(["target-size"]).analyze();
+            still = again.violations.some((x) => x.id === "target-size");
+          } catch {
+            still = true;
+          }
+        }
+        if (still) keep.push(n);
+      }
+      v.nodes = keep;
+    }
+    result.violations = result.violations.filter((v) => v.id !== "target-size" || (v.nodes || []).length);
+    await tab.page.evaluate(([x, y]) => window.scrollTo(x, y), at).catch(() => null);
+  }
   return result.violations.map((v) => {
     const nodes = v.nodes || [];
     const first = nodes[0] ? [].concat(nodes[0].target || []).join(" ") : "";
@@ -118,7 +151,12 @@ function inPage(phone) {
   // controls with something on top of them (a banner, a bar, a sheet that should not be there)
   const controls = [...document.querySelectorAll("a[href],button,[role=button],[role=tab],input:not([type=hidden]),select,textarea,[role=switch]")]
     .filter(visible)
-    .filter((el) => !el.disabled && el.getAttribute("aria-hidden") !== "true");
+    .filter((el) => !el.disabled && el.getAttribute("aria-hidden") !== "true")
+    // a visually hidden control (a custom file picker's real input is 1x1 px; its visible button or label is the control a person uses) cannot be covered or tapped
+    .filter((el) => {
+      const b = el.getBoundingClientRect();
+      return !(b.width <= 2 && b.height <= 2);
+    });
   let modals = [];
   try {
     modals = [...document.querySelectorAll(":modal")];
@@ -186,7 +224,32 @@ function inPage(phone) {
       const r = el.getBoundingClientRect();
       if (r.bottom < 0 || r.top > vh * 2) continue;
       if (getComputedStyle(el).display === "inline" && el.tagName === "A") continue; // a link inside a sentence
-      if (r.width < 24 || r.height < 24) out.small.push(`${css(el)} ${Math.round(r.width)}x${Math.round(r.height)}`);
+      if (r.width < 24 || r.height < 24) {
+        // judge the tap area, not the box: a ::after band can make a 23 px line a 47 px target (the lead's "Follow-up · Tomorrow" line, 2 Nov 2026), so probe 6 px beyond each short side
+        const hit = (px, py) => {
+          if (px < 0 || py < 0 || px >= vw || py >= vh) return false;
+          const t = document.elementFromPoint(px, py);
+          return !!t && (t === el || el.contains(t));
+        };
+        // below the fold: bring it into view for the test, then put the page back
+        const sx0 = window.scrollX;
+        const sy0 = window.scrollY;
+        if (r.top < 0 || r.bottom > vh) el.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
+        const q = el.getBoundingClientRect();
+        const mx = q.left + q.width / 2;
+        const my = q.top + q.height / 2;
+        const tallEnough = q.height >= 24 || (hit(mx, q.top - 6) && hit(mx, q.bottom + 6));
+        const wideEnough = q.width >= 24 || (hit(q.left - 6, my) && hit(q.right + 6, my));
+        window.scrollTo(sx0, sy0);
+        if (tallEnough && wideEnough) continue;
+        // a tick or radio inside its label: the label is the tap area (the consent tick in the first-sign-in form is 20x20 inside a 316x113 label)
+        const wrap = el.closest("label,a,button,[role=button],[role=tab],[role=radio]");
+        if (wrap && wrap !== el) {
+          const w = wrap.getBoundingClientRect();
+          if (w.width >= 24 && w.height >= 24) continue;
+        }
+        out.small.push(`${css(el)} ${Math.round(r.width)}x${Math.round(r.height)}`);
+      }
     }
   }
   return out;

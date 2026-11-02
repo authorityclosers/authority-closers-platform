@@ -845,6 +845,9 @@ export function readLeads(
 export type SideNumbers = {
   inbound: { leads: number; new: number; to_call: number; follow_ups: number };
   cold: { imported: number; unworked: number; attempted: number };
+  /** The person's unread "<name> is your lead now" lines here, as the bell
+   *  lists them: raised as Leads draws (shell/update-notices). */
+  bell_lines?: unknown[];
 };
 
 /** Both sides' numbers for the seller's own leads, or the team's. */
