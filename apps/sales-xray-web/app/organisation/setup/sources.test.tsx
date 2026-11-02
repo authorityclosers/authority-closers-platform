@@ -2,6 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { notify } from "../../notice-center";
+import { runLine } from "./meta-accounts";
 import { OrganisationSources } from "./sources";
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
@@ -258,6 +259,25 @@ it("adds Pages within each account and another account at the end", async () => 
       'a[href="/v1/lead-desk/meta/connect-sources"]',
     ),
   ).not.toBeNull();
+});
+
+// Orchestrator, 2 Nov 2026 (the live run on dev): with none new, the line says
+// how many were already here, never "0 older leads brought in · on Cold".
+it("says what a run of older leads brought, or that they were already here", () => {
+  const done = { state: "done" as const, seen: 2 };
+  expect(runLine({ ...done, created: 0, known: 2 })).toBe(
+    "2 older leads already here",
+  );
+  expect(runLine({ ...done, created: 0, linked: 1 })).toBe(
+    "1 older lead already here",
+  );
+  expect(runLine({ ...done, created: 0 })).toBe("No older leads in those days");
+  expect(runLine({ ...done, created: 9, known: 2 })).toBe(
+    "9 older leads brought in · on Cold",
+  );
+  expect(runLine({ state: "running", created: 3, seen: 5 })).toBe(
+    "Bringing in older leads… 3 so far",
+  );
 });
 
 // /settings/sources redirects to this hub: linking to it here would send people in a loop.

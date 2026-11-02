@@ -14,7 +14,11 @@ import { History, Plus } from "lucide-react";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 
 import { ago } from "../../leads/leads-client";
-import type { MetaForm, MetaPage } from "../../leads/sources-view";
+import type {
+  MetaBackfill,
+  MetaForm,
+  MetaPage,
+} from "../../leads/sources-view";
 import { notify } from "../../notice-center";
 import { metaFormStatus, metaRequest } from "./meta-client";
 import styles from "./setup.module.css";
@@ -108,6 +112,20 @@ export function pageLine(page: MetaPage, now: Date = new Date()): string {
       : "no lead yet",
     plural(page.received, "lead"),
   ].join(" · ");
+}
+
+/** Where a run of older leads got to. With none new, it says how many were
+ *  already here, never "0 brought in · on Cold" (orchestrator, 2 Nov 2026). */
+export function runLine(run: MetaBackfill): string {
+  if (run.state === "running")
+    return `Bringing in older leads… ${run.created} so far`;
+  if (run.state === "blocked") return "Older leads stopped: see above";
+  if (run.created)
+    return `${plural(run.created, "older lead")} brought in · on Cold`;
+  const here = (run.linked ?? 0) + (run.repeat ?? 0) + (run.known ?? 0);
+  return here
+    ? `${plural(here, "older lead")} already here`
+    : "No older leads in those days";
 }
 
 /** What disconnecting an account stops, said before it does. */
@@ -497,11 +515,7 @@ function PageCard({
       {run ? (
         <p className={styles.rowNote} role="status">
           <History size={14} aria-hidden="true" />
-          {run.state === "running"
-            ? `Bringing in older leads… ${run.created} so far`
-            : run.state === "blocked"
-              ? "Older leads stopped: see above"
-              : `${plural(run.created, "older lead")} brought in · on Cold`}
+          {runLine(run)}
         </p>
       ) : null}
       {older ? (
