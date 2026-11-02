@@ -57,6 +57,7 @@ import {
   type Move,
 } from "./table-edit";
 import { SourceMark, shortSource, sourceKind } from "./source-mark";
+import { sideStage } from "./work-views";
 import styles from "./leads-table.module.css";
 
 // Wide enough beside the sidebar for every column to read (1000 px left
@@ -305,8 +306,11 @@ export function LeadsTable({
   quickAdd = null,
   edit = null,
   serverSort = null,
+  sides = false,
 }: {
   rows: LeadRow[];
+  /** All Leads lists both sides: a Cold row's stage says so. */
+  sides?: boolean;
   onOpen: (leadId: string) => void;
   /** Whose leads: everyone's or no owner's lists show the Owner column. */
   showOwner: boolean;
@@ -544,7 +548,7 @@ export function LeadsTable({
               </strong>
               {statusUnderName ? (
                 <small>
-                  {row.stage_label}
+                  {sides ? sideStage(row, row.stage_label) : row.stage_label}
                   {columns.includes("next") && row.next_action_at ? (
                     <span data-late={row.overdue ? "" : undefined}>
                       {` · ${when(row.next_action_at, now)}`}
@@ -584,7 +588,9 @@ export function LeadsTable({
       case "stage":
         return nextWithStage ? (
           <span className={styles.stageStack}>
-            <span className={styles.stage}>{row.stage_label}</span>
+            <span className={styles.stage}>
+              {sides ? sideStage(row, row.stage_label) : row.stage_label}
+            </span>
             {row.next_action_at ? (
               <small data-late={row.overdue ? "" : undefined}>
                 {when(row.next_action_at, now)}
@@ -594,7 +600,9 @@ export function LeadsTable({
             )}
           </span>
         ) : (
-          <span className={styles.stage}>{row.stage_label}</span>
+          <span className={styles.stage}>
+            {sides ? sideStage(row, row.stage_label) : row.stage_label}
+          </span>
         );
       case "pipeline":
         return pipelineNames?.get(row.pipeline ?? "main") ?? row.pipeline;

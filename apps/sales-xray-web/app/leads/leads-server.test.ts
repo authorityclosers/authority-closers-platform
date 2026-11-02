@@ -147,6 +147,27 @@ it("uses mine for a seller, leaving team permission to the ordinary API", async 
     });
   expect(await load()).toMatchObject({ firstPage: { scope: "mine", page } });
 });
+it("uses the team's for a Viewer, who sees the team but changes nothing", async () => {
+  vi.mocked(serverReads)
+    .mockReset()
+    .mockResolvedValueOnce({
+      ...reads(),
+      "/v1/lead-desk": {
+        status: 200,
+        body: {
+          ...desk,
+          me: { ...desk.me, can_manage: false, can_see_team: true },
+        },
+      },
+    })
+    .mockResolvedValueOnce({
+      "/v1/lead-desk/leads?scope=team&side=inbound&view=to_call": {
+        status: 200,
+        body: page,
+      },
+    });
+  expect(await load()).toMatchObject({ firstPage: { scope: "team", page } });
+});
 it("a server page never answers another identity, scope, pipeline or filter", () => {
   const seed = {
     identity,

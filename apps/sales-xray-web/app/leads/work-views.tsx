@@ -56,7 +56,17 @@ export function listTitle(
     const part = FOLLOW_UPS.find((item) => item.key === when);
     return part ? `${part.label} · ${type}` : `${type} follow-ups`;
   }
-  return `All ${type.toLowerCase()} leads`;
+  // Every lead on both sides (owner, 2 Nov 2026: "All leads" lists every lead).
+  return "All leads";
+}
+
+/** A row's stage on All Leads, which lists both sides: a Cold lead says so
+ *  ("Cold · Unworked"); an Inbound one reads as before. */
+export function sideStage(
+  row: { side?: "inbound" | "cold" },
+  stage: string,
+): string {
+  return row.side === "cold" ? `Cold · ${stage}` : stage;
 }
 
 /** The last work view (type, view, stage and filters), remembered per person and
@@ -237,11 +247,14 @@ function Tabs<T extends string>({
   onChange,
   small = false,
   counts = null,
+  onClear,
 }: {
   label: string;
   items: readonly { key: T; label: string }[];
   value: T | null;
   onChange: (key: T) => void;
+  /** Tapping the chosen tab again clears it (Follow-ups' split). */
+  onClear?: () => void;
   small?: boolean;
   /** Each tab's count, when the list has counted them. */
   counts?: Partial<Record<T, number>> | null;
@@ -261,6 +274,7 @@ function Tabs<T extends string>({
           className={styles.tab}
           onClick={() => {
             if (item.key !== value) onChange(item.key);
+            else onClear?.();
           }}
         >
           <span className={styles.tabWord}>{item.label}</span>
@@ -301,12 +315,15 @@ export function ViewTabs({
   );
 }
 
+/** Due Today, Overdue and Upcoming over every follow-up: none chosen lists them
+ *  all, so the tab's count is its rows (owner, 2 Nov 2026); tapping the chosen one
+ *  again goes back to all. */
 export function FollowUpTabs({
   value,
   onChange,
 }: {
   value: FollowUpWhen | null;
-  onChange: (when: FollowUpWhen) => void;
+  onChange: (when: FollowUpWhen | null) => void;
 }) {
   return (
     <Tabs
@@ -314,6 +331,7 @@ export function FollowUpTabs({
       items={FOLLOW_UPS}
       value={value}
       onChange={onChange}
+      onClear={() => onChange(null)}
       small
     />
   );

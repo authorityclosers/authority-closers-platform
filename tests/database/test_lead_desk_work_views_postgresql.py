@@ -36,8 +36,7 @@ async def worklist(here: World) -> None:
     shapes = [
         # name, stage, next action, arrived
         ("Fictional new older", "new", None, now - timedelta(days=3)),
-        # A fresh enquiry: arrived two hours ago, never called (teardown #4).
-        ("Fictional new newer", "new", None, now - timedelta(hours=2)),
+        ("Fictional new newer", "new", None, now - timedelta(days=1)),
         (
             "Fictional retry late",
             "not_connected",
@@ -76,6 +75,20 @@ async def worklist(here: World) -> None:
                 created_at=arrived,
             )
             db.add(Lead(**values))
+        # A Cold lead: All Leads lists it beside the Inbound ones (owner, 2 Nov 2026).
+        values = {key: getattr(base, key) for key in keys}
+        values.update(
+            id=uuid4(),
+            name="Fictional cold unworked",
+            phone="+919870060001",
+            source_ref=None,
+            pipeline="cold",
+            stage="new",
+            step=None,
+            next_action_at=None,
+            created_at=now - timedelta(days=2),
+        )
+        db.add(Lead(**values))
 
 
 def test_work_views_and_the_stage_filter(postgres_harness: Any, tmp_path: Path) -> None:
@@ -90,18 +103,17 @@ def test_work_views_and_the_stage_filter(postgres_harness: Any, tmp_path: Path) 
                 return [row["name"] for row in answer.json()["leads"]]
 
             # To Call in its calling order, next lead first (Dipak's handoff p.12, one rule
-            # with Home's next lead): a fresh enquiry on top (teardown #4, speed to lead), then
-            # due today and already due, then new leads never called (oldest first), then the
-            # older backlog (phone personas, 1 Nov 2026: Home said Kiara while Leads dialled
-            # Krishna).
+            # with Home's next lead): due today and already due, then new leads never called
+            # (oldest first), then the older backlog (phone personas, 1 Nov 2026: Home said
+            # Kiara while Leads dialled Krishna).
             to_call = await names(scope="mine", side="inbound", view="to_call")
             now = datetime.now(UTC)
             if (now - timedelta(hours=2)).astimezone(IST).date() == now.astimezone(IST).date():
                 assert to_call == [
-                    "Fictional new newer",
                     "Fictional retry late",
                     "Fictional follow-up due",
                     "Fictional new older",
+                    "Fictional new newer",
                     "Fictional follow-up old",
                 ]
             else:
@@ -138,8 +150,26 @@ def test_work_views_and_the_stage_filter(postgres_harness: Any, tmp_path: Path) 
             assert await names(
                 scope="mine", side="inbound", view="follow_ups", when="upcoming"
             ) == ["Fictional follow-up later"]
-            # All Leads: every lead on the side, the closed one too.
+            # A side without a work view (Home's counts) is still that side only.
             assert len(await names(scope="mine", side="inbound")) == 7
+            # All Leads: every lead the seller may see on both sides, the closed one and the
+            # Cold one too (owner, 2 Nov 2026), and its tab counts the same leads; To Call and
+            # Follow-ups keep to the side picked.
+            every = await here.client.get(
+                f"{BASE}/leads", params={"scope": "mine", "side": "inbound", "view": "all"}
+            )
+            assert every.status_code == 200, every.text
+            page = every.json()
+            assert len(page["leads"]) == page["total"] == 8
+            cold = next(row for row in page["leads"] if row["name"] == "Fictional cold unworked")
+            assert cold["side"] == "cold"
+            assert page["view_counts"] == {"to_call": len(to_call), "follow_ups": 4, "all": 8}
+            assert sum(page["step_counts"].values()) == 8
+            calling = await here.client.get(
+                f"{BASE}/leads", params={"scope": "mine", "side": "inbound", "view": "to_call"}
+            )
+            assert calling.status_code == 200, calling.text
+            assert calling.json()["view_counts"]["all"] == 8
 
             # The stage filter: the owner's first New stage takes the new leads with no step.
             journey = await here.client.get(f"{BASE}/journey")

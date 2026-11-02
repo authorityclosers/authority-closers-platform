@@ -249,7 +249,8 @@ const counts = (
 ) => ({
   [`/v1/lead-desk/leads?scope=team&side=${side}&view=to_call&step=new`]:
     page(fresh),
-  [`/v1/lead-desk/leads?scope=team&side=${side}&step=open_leads`]: page(open),
+  [`/v1/lead-desk/leads?scope=team&side=${side}&view=all&step=open_leads`]:
+    page(open),
   [`/v1/lead-desk/leads?scope=unassigned&side=${side}`]: page(unowned),
 });
 
@@ -386,7 +387,8 @@ it("opens each lead card's stage as the server found it by meaning", async () =>
     "/v1/lead-desk/performance/sellers*": effort(false),
     "/v1/lead-desk/leads?scope=team&side=inbound&view=to_call&step=enquiry":
       page(2),
-    "/v1/lead-desk/leads?scope=team&side=inbound&step=contacted": page(5),
+    "/v1/lead-desk/leads?scope=team&side=inbound&view=all&step=contacted":
+      page(5),
     "/v1/lead-desk/leads?scope=unassigned&side=inbound": page(0),
   });
   await mount(true);

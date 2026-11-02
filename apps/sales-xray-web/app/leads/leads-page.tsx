@@ -132,7 +132,8 @@ import { dueWords } from "./task-words";
 import { asScope, type ViewSpec } from "./saved-views";
 import { KIND_ORDER, stageTabs } from "./stage-tabs";
 import { TakingSwitch } from "./taking-switch";
-import { OPENING_STAGE, OPENING_WORK } from "./opening";
+import { can as roleCan } from "../organisation/roles";
+import { listScope, OPENING_STAGE, OPENING_WORK } from "./opening";
 import {
   CallNext,
   FollowUpTabs,
@@ -147,6 +148,7 @@ import {
   listTitle,
   pickableStages,
   rememberView,
+  sideStage,
   useWide,
 } from "./work-views";
 import {
@@ -903,10 +905,12 @@ export function LeadsRoute({
     leads: number;
   } | null>(null);
   const can = current && desk ? desk.me.can_manage : false;
-  // Only owners and admins pick whose leads; a seller's are always their own.
-  const scope: Scope = can ? (scopeChoice ?? "team") : "mine";
+  // Whoever sees the team (Viewers too) picks whose leads; a seller's are always
+  // their own. Changing leads stays with `can`.
+  const sees = current && desk ? listScope(desk.me) === "team" : false;
+  const scope: Scope = sees ? (scopeChoice ?? "team") : "mine";
   const filters = {
-    who: can ? scopeChoice : null,
+    who: sees ? scopeChoice : null,
     q: query,
     more,
     seller: sellerOwner,
@@ -964,13 +968,13 @@ export function LeadsRoute({
   const role = access?.workspaces?.find(
     (item) => item.tenant_id === access.context?.tenantId,
   )?.role;
-  const warmManager =
-    role === "owner" || role === "admin" || role === "manager";
-  const warmScope = warmManager ? (scopeChoice ?? "team") : "mine";
+  // Whoever sees the team (roles.ts "team.view"), Viewers too.
+  const warmTeam = roleCan(role, "team.view");
+  const warmScope = warmTeam ? (scopeChoice ?? "team") : "mine";
   // Inbound Leads or Cold Leads (Dipak's handoff, items 05-06 and 44-45): both
   // sides' numbers say whether someone has both lead types. The selector shows
   // only then; someone with Cold Leads only works Cold.
-  const sidesScope = warmManager ? "team" : "mine";
+  const sidesScope = warmTeam ? "team" : "mine";
   const sidesKey = JSON.stringify([identity, sidesScope]);
   // The page waits for them before it draws (side-numbers.ts).
   const { numbers, settled: sidesSettled } = useSideNumbers({
@@ -1176,12 +1180,12 @@ export function LeadsRoute({
       null,
       "",
       viewHref(view, pipeline, {
-        who: can ? scopeChoice : null,
+        who: sees ? scopeChoice : null,
         q: query,
         more,
       }),
     );
-  }, [stageView, query, addressQuery, view, pipeline, can, scopeChoice, more]);
+  }, [stageView, query, addressQuery, view, pipeline, sees, scopeChoice, more]);
 
   // The command bar (Ctrl K, the header's search) while Leads is open: Start
   // calling, Add lead, and each lead found to open or to call. A call asks
@@ -1495,7 +1499,7 @@ export function LeadsRoute({
   // An empty list's "Clear filters": everyone's (or your own) leads, no search.
   const filtersOn =
     !!query ||
-    (can && scopeChoice !== null && scopeChoice !== "team") ||
+    (sees && scopeChoice !== null && scopeChoice !== "team") ||
     !!sellerOwner ||
     !!(more.source || more.due || more.contact || more.created) ||
     !!more.step ||
@@ -1543,13 +1547,15 @@ export function LeadsRoute({
     heading ??
     tabs.find((tab) => tab.key === view)?.label ??
     (view === "open" ? "All leads" : "this stage");
-  // A row's stage by the organisation's own name, on the side shown.
+  // A row's stage by the organisation's own name, on the row's side. All Leads
+  // lists both sides: a Cold row says so (owner, 2 Nov 2026).
   const stagesShown = journey?.key === journeyKey ? journey.view.stages : [];
   const stageWord = (row: LeadRow) => {
     const own =
       stagesShown.find((stage) => stage.key === row.step) ??
       stagesShown.find((stage) => stage.kind === row.stage && !stage.archived);
-    return own ? stageName(own, side) : undefined;
+    const word = own ? stageName(own, row.side ?? side) : undefined;
+    return workView === "all" ? sideStage(row, word ?? row.stage_label) : word;
   };
   // The Pipeline stage pick: every stage this person sees, in the list's order.
   const pickable = pickableStages(
@@ -1578,7 +1584,7 @@ export function LeadsRoute({
 
   // Leads → Filter (stage lists only): whose leads, the pipeline, a name or number.
   const filterable = (stageView || board) && view !== TEST;
-  const defaultWho: Scope = can ? "team" : "mine";
+  const defaultWho: Scope = sees ? "team" : "mine";
   const shownFilters: LeadFilters = { who: scope, pipeline, q: query, more };
 
   const applyFilters = (next: LeadFilters) =>
@@ -1596,7 +1602,7 @@ export function LeadsRoute({
     setSellerOwner(seller);
     const stage = stageKeys.has(spec.stage) ? spec.stage : "open";
     const inPipeline = several(pipes) ? spec.pipeline : null;
-    const who = can ? spec.who : null;
+    const who = sees ? spec.who : null;
     setScopeChoice(who);
     setSearch(spec.q);
     setQuery(spec.q);
@@ -2025,7 +2031,9 @@ export function LeadsRoute({
                       onChange={(next) =>
                         pickWork({
                           view: next,
-                          when: next === "follow_ups" ? "today" : null,
+                          // Every follow-up, so the tab's count is its rows;
+                          // Due Today stays one tap away (owner, 2 Nov 2026).
+                          when: null,
                         })
                       }
                     />
@@ -2111,7 +2119,7 @@ export function LeadsRoute({
             <PipelineBoard
               filters={{
                 pipeline,
-                owner: can && scope === "mine" ? desk.me.person_id : null,
+                owner: sees && scope === "mine" ? desk.me.person_id : null,
                 q: query,
               }}
               canManage={can}
@@ -2222,7 +2230,7 @@ export function LeadsRoute({
             }
             filters={shownFilters}
             defaultWho={defaultWho}
-            canPickWho={can}
+            canPickWho={sees}
             pipes={several(pipes) ? pipes.pipelines : []}
             onApply={applyFilters}
             onClearAll={() =>

@@ -882,6 +882,7 @@ export function ListView({
                 onOpen={onOpen}
                 showOwner={scope !== "mine"}
                 pipelineNames={pipeline ? null : pipelineNames}
+                sides={refine?.view === "all"}
                 selecting={selecting}
                 ticks={canManage}
                 chosen={chosen}

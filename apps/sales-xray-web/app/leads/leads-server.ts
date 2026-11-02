@@ -7,7 +7,7 @@ import {
 } from "../server-reads";
 import type { Desk, LeadPage } from "./leads-client";
 import type { ServerLeads } from "./leads-seed";
-import { OPENING_QUERY, OPENING_WORK } from "./opening";
+import { listScope, OPENING_QUERY, OPENING_WORK } from "./opening";
 
 const DESK = "/v1/lead-desk";
 const NAMES = new Set(["name", "owner_name", "actor_name"]);
@@ -65,7 +65,7 @@ export async function serverLeads(
     person.session_id,
     tenant,
   ]);
-  const scope = desk.me.can_manage ? "team" : "mine";
+  const scope = listScope(desk.me);
   const path = `/v1/lead-desk/leads?scope=${scope}&${OPENING_QUERY}`;
   const left = deadline - Date.now();
   // None left: the desk comes with the page and the browser reads the list.

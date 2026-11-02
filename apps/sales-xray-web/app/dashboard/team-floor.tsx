@@ -85,7 +85,10 @@ function useSideCounts(side: Side, stages: StageKeys | undefined) {
             )
           : null,
         stages.openKey
-          ? total(`scope=team&side=${side}&step=${step(stages.openKey)}`)
+          ? // All Leads at that stage, both sides: the list the card opens.
+            total(
+              `scope=team&side=${side}&view=all&step=${step(stages.openKey)}`,
+            )
           : null,
         total(`scope=unassigned&side=${side}`),
       ]);
@@ -199,14 +202,13 @@ function pages(
         ? [
             {
               key: "open",
-              // The Open Leads stage, in words of its own (ph1-33, as on Home).
-              label: "In discussion",
+              label: "Open leads",
               value: count(counts?.open),
               href: leadsHref(side, {
                 view: "all",
                 step: stages?.openKey ?? "open_leads",
               }),
-              help: "The Open Leads stage: leads called and still in discussion",
+              help: "Leads called and still in discussion",
             },
           ]
         : []),

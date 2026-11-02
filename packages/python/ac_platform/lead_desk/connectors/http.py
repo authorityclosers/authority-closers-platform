@@ -124,6 +124,20 @@ class MetaAccount(BaseModel):
     connected_at: str | None = Field(default=None, alias="connectedAt")
 
 
+class MetaAssign(BaseModel):
+    """A Page's "Who gets these leads?" (owner, 2 Nov 2026)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+    mode: Literal["share", "one", "none"]
+    person_id: str | None = Field(default=None, alias="personId")
+
+
+class AssignPage(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    mode: Literal["share", "one", "none"]
+    person_id: UUID | None = Field(default=None, alias="personId")
+
+
 class MetaPage(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     page_id: str = Field(alias="pageId")
@@ -146,6 +160,8 @@ class MetaPage(BaseModel):
     real_leads: bool = Field(default=False, alias="realLeads")
     # Removed by a manager: off and out of the list, until put back.
     removed: bool = False
+    # Who gets its new leads: shared between the sellers, one seller, or left for the owner.
+    assign: MetaAssign = Field(default_factory=lambda: MetaAssign(mode="share"))
 
 
 class MetaStatus(BaseModel):
@@ -516,6 +532,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             connected_at=_epoch_iso(meta_backfill.connected_at(config)),
             real_leads=real,
             removed=config.get("removed") is True,
+            assign=_assign_view(config),
             page_id=str(config.get("page_id", "")),
             name=str(config.get("page_name") or source.label),
             active=bool(source.active),
@@ -1275,6 +1292,30 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             return page_view(source)
 
     @router.post(
+        "/meta/pages/{page_id}/assign", response_model=MetaPage, response_model_by_alias=True
+    )
+    async def meta_assign_page(
+        page_id: str, command: AssignPage, request: Request, response: Response
+    ) -> MetaPage:
+        """Who gets this Page's new leads (owner, 2 Nov 2026): shared between the sellers,
+        all to one seller, or left for the owner to assign."""
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            source = await page_source(desk, page_id)
+            await desk.db.refresh(source, with_for_update=True)
+            if command.mode == "one":
+                if command.person_id is None:
+                    raise DeskError(422, "Pick the seller.")
+                await desk._require_seller(command.person_id)
+            choice: dict[str, Any] = {"mode": command.mode}
+            if command.mode == "one":
+                choice["person"] = str(command.person_id)
+            source.config = {**(source.config or {}), meta_backfill.ASSIGN: choice}
+            source.updated_at = desk.now
+            await desk.db.flush()
+            return page_view(source)
+
+    @router.post(
         "/meta/pages/{page_id}/restore", response_model=MetaPage, response_model_by_alias=True
     )
     async def meta_restore_page(page_id: str, request: Request, response: Response) -> MetaPage:
@@ -1899,6 +1940,11 @@ def _account_view(value: object) -> MetaAccount | None:
         picture=picture if isinstance(picture, str) and picture.startswith("https://") else None,
         connected_at=_epoch_iso(value.get("at")),
     )
+
+
+def _assign_view(config: Mapping[str, Any]) -> MetaAssign:
+    mode, person = meta_backfill.assign_choice(config)
+    return MetaAssign(mode=mode, person_id=str(person) if person else None)
 
 
 def _account_id(config: Mapping[str, Any]) -> str:

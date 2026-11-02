@@ -219,6 +219,8 @@ JUST_IN = timedelta(minutes=15)
 MANY_NEW = 40
 WhyKind = Literal["due", "new", "retry", "later", "open", "closed", "waiting"]
 SELLER_ROLES = roles_with("leads.work")
+# Who sells: new leads go by themselves to sellers, never to owners (owner, 2 Nov 2026).
+SELLER_ROLE = "member"
 QUEUE_LIMIT = 30
 UPCOMING_LIMIT = 20
 PAGE_SIZE = 50
@@ -724,6 +726,16 @@ def _short(name: str, limit: int = 60) -> str:
     return name if len(name) <= limit else name[: limit - 1] + "…"
 
 
+def takes_new_leads(role: str | None, rules: LeadRep | None) -> bool:
+    """Whether the lead rules give this person new leads by themselves (owner, 2 Nov 2026:
+    leads go to sellers, not owners). A seller does unless they switched "Taking new leads"
+    off; an owner, admin or manager only once they switched it on, saying they also sell.
+    Anyone may still be given a lead by hand."""
+    if rules is not None:
+        return bool(rules.available)
+    return role == SELLER_ROLE
+
+
 def _strings(values: Any) -> tuple[str, ...]:
     if not isinstance(values, list):
         return ()
@@ -838,7 +850,7 @@ class LeadDesk:
                     allocation.RepState(
                         person_id=person_id,
                         name=person_name(person),
-                        available=row.available if row else True,
+                        available=takes_new_leads(role, row),
                         max_open=row.max_open if row else cap,
                         open_leads=int(loads.get(person_id, 0)),
                         languages=_strings(row.languages) if row else (),
@@ -1790,6 +1802,12 @@ class LeadDesk:
             found[str(side)] = SideCounts(
                 new=int(new), open_leads=int(open_leads), follow_ups_today=int(today)
             )
+        # The Open Leads card opens All Leads at that stage, which lists both sides (owner,
+        # 2 Nov 2026), so each side's card counts both.
+        both = sum(counts.open_leads for counts in found.values())
+        found = {
+            side: counts.model_copy(update={"open_leads": both}) for side, counts in found.items()
+        }
         return found, new_key, open_key
 
     async def _stages_then(self, moments: Sequence[tuple[UUID, datetime]]) -> list[str | None]:
@@ -1983,16 +2001,18 @@ class LeadDesk:
         if scope != "mine" and not self.viewer.can_see_team:
             raise DeskError(403, "Your role sees your own leads only.")
         where: list[Any] = [self._seen()]
-        if side is not None:
-            # Inbound Leads or Cold Leads (migration 0146): the stage tabs count one side.
-            where.append(on_side(side))
+        # Inbound Leads or Cold Leads (migration 0146): the stage tabs count one side. All
+        # Leads lists both (owner, 2 Nov 2026); the side still counts To Call and Follow-ups.
+        side_clause: Any = on_side(side) if side is not None else None
+        if side_clause is not None and view != "all":
+            where.append(side_clause)
         # To Call holds the leads who rang and weren't reached since, first (#9 option A).
         waiting: dict[UUID, tuple[datetime, int]] = {}
         if view == "to_call" or (side is not None and offset == 0):
             waiting = await self._waiting_call_back(team=scope != "mine")
         day_end = self._day_start() + timedelta(days=1)
         view_clause: Any = None
-        if view is not None:
+        if view is not None and view != "all":
             # A work view (Dipak's mockup, 31 Oct 2026): what to call today, the follow-ups.
             view_clause = in_view(view, day_end, waiting)
             where.append(view_clause)
@@ -2082,12 +2102,21 @@ class LeadDesk:
             # The follow-up filter counts as the list applies it (robot J181, 2 Nov 2026: To
             # Call said 3 over an empty list); only inside Follow-ups is it the tab's own split.
             split = when_clause if view == "follow_ups" else None
-            rest = [item for item in where if item is not view_clause and item is not split]
+            rest = [
+                item
+                for item in where
+                if item is not view_clause and item is not split and item is not side_clause
+            ]
+            to_call = in_view("to_call", day_end, waiting)
+            follow_ups = in_view("follow_ups", day_end)
+            if side_clause is not None:
+                # To Call and Follow-ups on the side picked; All Leads on both.
+                to_call, follow_ups = and_(side_clause, to_call), and_(side_clause, follow_ups)
             found = (
                 await self.db.execute(
                     select(
-                        func.count().filter(in_view("to_call", day_end, waiting)),
-                        func.count().filter(in_view("follow_ups", day_end)),
+                        func.count().filter(to_call),
+                        func.count().filter(follow_ups),
                         func.count(),
                     ).where(*rest)
                 )
@@ -2123,7 +2152,7 @@ class LeadDesk:
             (*call_backs_first(waiting), *call_order(self.now, self._day_start()))
             if view == "to_call"
             else (func.coalesce(Lead.next_action_at, Lead.created_at), Lead.created_at, Lead.id)
-            if stage == "open" or stage in OPEN_STAGES or view is not None
+            if stage == "open" or stage in OPEN_STAGES or view in ("to_call", "follow_ups")
             else (Lead.updated_at.desc(), Lead.id)
         )
         if sort is not None:
@@ -4191,6 +4220,14 @@ class LeadDesk:
                 [rep.state for rep in team],
                 strict_language=bool(config.get("strict_language")),
             )
+            if fallback.person_id is None and not any(
+                rep.role == SELLER_ROLE or rep.state.available for rep in team
+            ):
+                # Nobody here sells yet: owners and admins take new leads only when they
+                # say they also sell (owner, 2 Nov 2026).
+                fallback = allocation.Allocation(
+                    None, "No sellers yet: it waits for you to give it out.", "none"
+                )
             # A rule matched but its people were away or full: the reason says so.
             passed = f"{decision.reason}; then " if decision is not None else ""
             decision = allocation.Allocation(
@@ -6604,7 +6641,7 @@ class LeadDesk:
             role=self.viewer.role,
             can_manage=self.viewer.can_manage,
             can_see_team=self.viewer.can_see_team,
-            taking_leads=rules.available if rules else True,
+            taking_leads=takes_new_leads(self.viewer.role, rules),
             paused_until=work_hours.next_start(hours, self.now)
             if hours is not None and work_hours.paused(hours, self.now)
             else None,
