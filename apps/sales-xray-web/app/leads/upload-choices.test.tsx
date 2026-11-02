@@ -80,6 +80,14 @@ const settle = () =>
   act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+// An answer to "Who gets these leads?": a radio, as on the Page card.
+const pick = async (words: string) => {
+  const label = [...host.querySelectorAll("label")].find(
+    (item) => item.textContent === words,
+  );
+  expect(label, words).toBeDefined();
+  await act(async () => label!.querySelector("input")!.click());
+};
 const tap = async (words: string) => {
   const found = [...host.querySelectorAll("button")].find(
     (item) => item.textContent === words,
@@ -88,16 +96,31 @@ const tap = async (words: string) => {
   await act(async () => found!.click());
 };
 
-it("splits new leads evenly among the salespeople picked and says what's left", async () => {
+// Owner, 2 Nov 2026: one question, "Who gets these leads?", with three answers.
+it("splits new leads evenly among the sellers picked and says what's left", async () => {
   await act(async () => root.render(<Harness canManage />));
   await settle();
-  await tap("Salespeople I pick");
+  const group = host.querySelector("fieldset")!;
+  expect(group.querySelector("legend")!.textContent).toBe(
+    "Who gets these leads?",
+  );
+  expect(
+    [...group.querySelectorAll(":scope > label")].map(
+      (item) => item.textContent,
+    ),
+  ).toEqual([
+    "Share between my sellers",
+    "One seller",
+    "Leave them for me to assign",
+  ]);
+  await pick("Share between my sellers");
   const counts = [
     ...host.querySelectorAll<HTMLInputElement>('input[type="number"]'),
   ];
   expect(counts.map((input) => input.value)).toEqual(["3", "2"]);
   expect(host.textContent).toContain("Asha Example");
-  expect(host.textContent).toContain("Every new lead has a salesperson.");
+  // Every lead has a seller: no line of its own (the step's line says who gets how many).
+  expect(host.textContent).not.toContain("stay unassigned");
   // One person off: the other takes all five.
   const boxes = host.querySelectorAll<HTMLInputElement>(
     'input[type="checkbox"]',
@@ -117,6 +140,32 @@ it("splits new leads evenly among the salespeople picked and says what's left", 
     asha.dispatchEvent(new Event("input", { bubbles: true }));
   });
   expect(host.textContent).toContain("That's 2 more than the 5 new leads.");
+});
+
+it("gives them all to one seller, picked first", async () => {
+  await act(async () => root.render(<Harness canManage />));
+  await settle();
+  await pick("One seller");
+  expect(seen().assign).toBe("one");
+  // The sellers sit under "One seller", before the last answer (ux-audit, 2 Nov 2026).
+  const fieldset = host.querySelector("fieldset")!;
+  expect(
+    [...fieldset.querySelectorAll(":scope > label, :scope > ul")].map((item) =>
+      item.tagName === "UL" ? "sellers" : item.textContent,
+    ),
+  ).toEqual([
+    "Share between my sellers",
+    "One seller",
+    "sellers",
+    "Leave them for me to assign",
+  ]);
+  expect(sharesLine(seen(), team, 5)).toBe("Pick the seller.");
+  const ravi = [...host.querySelectorAll("label")]
+    .find((label) => label.textContent === "Ravi Sample")!
+    .querySelector<HTMLInputElement>('input[type="radio"]')!;
+  await act(async () => ravi.click());
+  expect(seen().one).toBe("p2");
+  expect(sharesLine(seen(), team, 5)).toBe("All 5 to Ravi Sample.");
 });
 
 it("offers the first stage by its Cold name, Open Leads and Interested", async () => {

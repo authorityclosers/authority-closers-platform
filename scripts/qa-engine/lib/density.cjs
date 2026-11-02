@@ -164,7 +164,8 @@ const PEOPLE = (process.env.QA_DENSITY_PEOPLE || "priya,karan").split(",");
 async function openTabAs(alias, variant) {
   for (let attempt = 0; attempt < 6; attempt++) {
     try {
-      const tab = await session.openTab({ alias, device: "360 px", theme: "light", state: "normal" });
+      // the owner is only looked at: no first-run gate is clicked through (that would try to save a consent, even if the write is then refused)
+      const tab = await session.openTab({ alias, device: "360 px", theme: "light", state: "normal", noGates: alias === "owner" });
       await tab.page.setViewportSize({ width: variant.width, height: variant.height });
       await tab.context.route("**/*", (rt) => (["GET", "HEAD", "OPTIONS"].includes(rt.request().method()) ? rt.fallback() : rt.abort("blockedbyclient")));
       return tab;

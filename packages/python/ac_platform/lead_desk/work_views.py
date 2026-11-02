@@ -19,13 +19,16 @@ from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.models import Lead
 from ac_platform.lead_desk.vocabulary import OPEN_STAGES
 
-WorkView = Literal["to_call", "follow_ups"]
+# All Leads is every lead the person may see, on both sides (owner, 2 Nov 2026: "All leads"
+# lists every lead); To Call and Follow-ups keep to the side picked.
+WorkView = Literal["to_call", "follow_ups", "all"]
+CallView = Literal["to_call", "follow_ups"]
 FollowUpWhen = Literal["today", "overdue", "upcoming"]
 # A new Inbound enquiry this recent and never called is the top of To Call (teardown #4).
 FRESH_ENQUIRY: Final = timedelta(hours=24)
 
 
-def in_view(view: WorkView, day_end: datetime, waiting: Collection[UUID] = ()) -> Any:
+def in_view(view: CallView, day_end: datetime, waiting: Collection[UUID] = ()) -> Any:
     """SQL for one work view. ``waiting``: the leads who called and weren't reached since
     (LeadDesk._waiting_call_back), which To Call holds too."""
     if view == "to_call":

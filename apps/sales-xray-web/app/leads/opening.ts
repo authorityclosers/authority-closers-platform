@@ -12,3 +12,10 @@ export const OPENING_WORK: Readonly<Record<string, string>> = {
 };
 /** The opening list's question, in the order the list asks it. */
 export const OPENING_QUERY = "side=inbound&view=to_call";
+/** Whose leads the lists hold: the team's for whoever sees the team (owners,
+ *  admins, managers and Viewers, Roles B; owner, 2 Nov 2026: All leads lists
+ *  every lead a person may see), a seller's own otherwise. */
+export const listScope = (me: {
+  can_manage: boolean;
+  can_see_team?: boolean;
+}): "team" | "mine" => (me.can_manage || me.can_see_team ? "team" : "mine");

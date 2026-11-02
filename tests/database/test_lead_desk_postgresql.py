@@ -19,7 +19,7 @@ from sqlalchemy import func, select, update
 
 from ac_platform.http.routes import RouteContext
 from ac_platform.lead_desk.http import install_lead_desk_http
-from ac_platform.lead_desk.models import Lead, LeadEvent
+from ac_platform.lead_desk.models import Lead, LeadEvent, LeadRep
 from ac_platform.tenancy.models import Membership, Organisation
 from tests.database.test_conversation_account_library_postgresql import _session
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
@@ -52,6 +52,26 @@ async def _organisation(setup: Any) -> None:
         )
     settings = setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
     install_lead_desk_http(setup.app, RouteContext(settings, setup.require_actor, setup.sessions))
+
+
+async def _admin_sells(setup: Any) -> None:
+    """The signed-in admin also sells, "Taking new leads" on: owners and admins take new
+    leads only once they say so (owner, 2 Nov 2026). For tests whose admin is the seller."""
+    async with setup.sessions() as db, db.begin():
+        db.add(
+            LeadRep(
+                tenant_id=setup.state.tenant_id,
+                person_id=setup.state.person_id,
+                revision=1,
+                available=True,
+                max_open=None,
+                languages=[],
+                areas=[],
+                interests=[],
+                updated_by_person_id=None,
+                updated_at=datetime.now(UTC),
+            )
+        )
 
 
 def _far_column_xlsx() -> bytes:
@@ -1814,6 +1834,75 @@ def test_a_call_waits_for_its_answer_on_the_desk(postgres_harness: Any, tmp_path
                 )
                 assert answered.status_code == 200, answered.text
                 assert (await client.get(BASE)).json()["unanswered"] == []
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_new_leads_go_to_sellers_never_to_owners_unless_they_say_they_sell(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Owner, 2 Nov 2026: leads went to the owner. The lead rules give new leads to sellers
+    only; with none yet, a lead waits unassigned and says so. An owner or admin takes new
+    leads only after switching "Taking new leads" on, and may always be given one by hand."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)  # the signed-in person is an admin
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+
+                async def add(name: str, phone: str) -> dict[str, Any]:
+                    added = await client.post(
+                        f"{BASE}/leads",
+                        json={"command_id": str(uuid4()), "name": name, "phone": phone},
+                        headers=WRITE,
+                    )
+                    assert added.status_code == 201, added.text
+                    return cast(dict[str, Any], added.json())
+
+                # No sellers yet: the admin isn't given it, and it says why.
+                assert (await client.get(BASE)).json()["me"]["taking_leads"] is False
+                first = await add("Asha Fictional", "98765 41001")
+                assert first["lead"]["owner_person_id"] is None
+                assert first["owner_reason"] == "No sellers yet: it waits for you to give it out."
+                team = (await client.get(f"{BASE}/team")).json()
+                admin = next(
+                    r for r in team["reps"] if r["person_id"] == str(setup.state.person_id)
+                )
+                assert admin["available"] is False
+
+                # A seller joins: new leads go to them, never to the admin.
+                seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+                for index in range(2):
+                    lead = await add(f"Ravi Fictional {index}", f"98765 4110{index}")
+                    assert lead["lead"]["owner_person_id"] == str(seller.person_id)
+
+                # The admin says they also sell: they share new leads by load from now on.
+                on = await client.put(f"{BASE}/me/taking", json={"taking": True}, headers=WRITE)
+                assert on.status_code == 200 and on.json()["taking_leads"] is True
+                shared = await add("Meena Fictional", "98765 41200")
+                assert shared["lead"]["owner_person_id"] == str(setup.state.person_id)
+
+                # By hand, anyone may be given a lead, the admin included.
+                off = await client.put(f"{BASE}/me/taking", json={"taking": False}, headers=WRITE)
+                assert off.json()["taking_leads"] is False
+                mine = await client.post(
+                    f"{BASE}/leads",
+                    json={
+                        "command_id": str(uuid4()),
+                        "name": "Kiran Fictional",
+                        "phone": "98765 41300",
+                        "assign": "me",
+                    },
+                    headers=WRITE,
+                )
+                assert mine.status_code == 201, mine.text
+                assert mine.json()["lead"]["owner_person_id"] == str(setup.state.person_id)
         finally:
             await setup.engine.dispose()
 

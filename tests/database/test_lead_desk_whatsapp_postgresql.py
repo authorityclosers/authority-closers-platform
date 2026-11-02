@@ -38,7 +38,7 @@ from ac_platform.lead_desk.whatsapp.http import install_whatsapp_http
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_submission_http_postgresql import ORIGIN, _setup
-from tests.database.test_lead_desk_postgresql import _organisation
+from tests.database.test_lead_desk_postgresql import _admin_sells, _organisation
 from tests.unit.lead_desk_whatsapp.test_whatsapp_cloud import ENV
 
 WRITE = {"Origin": ORIGIN, "Content-Type": "application/json"}
@@ -201,6 +201,7 @@ def test_whatsapp_conversations_from_connect_to_sla(
         setup = await _setup(postgres_harness, tmp_path)
         try:
             await _organisation(setup)
+            await _admin_sells(setup)
             settings = setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
             install_whatsapp_http(
                 setup.app, RouteContext(settings, setup.require_actor, setup.sessions)
@@ -677,6 +678,7 @@ def test_a_whatsapp_business_app_number_joins_without_registering_and_its_echoes
         setup = await _setup(postgres_harness, tmp_path)
         try:
             await _organisation(setup)
+            await _admin_sells(setup)
             settings = setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
             install_whatsapp_http(
                 setup.app, RouteContext(settings, setup.require_actor, setup.sessions)
@@ -750,6 +752,7 @@ def test_every_new_lead_gets_the_first_reply_once_a_manager_confirms_people_agre
         setup = await _setup(postgres_harness, tmp_path)
         try:
             await _organisation(setup)
+            await _admin_sells(setup)
             settings = setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
             install_whatsapp_http(
                 setup.app, RouteContext(settings, setup.require_actor, setup.sessions)

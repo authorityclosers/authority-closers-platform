@@ -73,6 +73,41 @@
   box-shadow: var(--sx-focus-ring);
 }
 
+/* "Who gets these leads?": the Facebook Page card's radios, one per line. */
+.answers {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.answers legend {
+  margin-bottom: 4px;
+  padding: 0;
+}
+
+.answer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  cursor: pointer;
+}
+
+.answer input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--sx-accent);
+}
+
+.answer input:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
 .people {
   display: grid;
   margin: 0;

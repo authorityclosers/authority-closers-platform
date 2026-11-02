@@ -10,7 +10,10 @@ const calls = vi.hoisted(() => ({
   notify: vi.fn(),
 }));
 
-vi.mock("../notice-center", () => ({ notify: calls.notify }));
+vi.mock("../notice-center", () => ({
+  notify: calls.notify,
+  dismissNotice: vi.fn(),
+}));
 // The Add task form loads on demand; here a stand-in saves a task due
 // tomorrow at 10 (owner order, 30 Oct 2026, fix 4).
 vi.mock("next/dynamic", async () => {
@@ -123,6 +126,17 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   vi.clearAllMocks();
+});
+
+// Simplify pass, 2 Nov 2026: Tasks never stays on its loading boxes.
+it("says a failed read in place of the loading boxes, and Try again reads again", async () => {
+  calls.read.mockRejectedValueOnce(new LeadsError("Tasks are busy.", 503));
+  await show();
+  expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+  expect(container.textContent).toContain("Tasks are busy.");
+  await act(async () => button("Try again")!.click());
+  expect(calls.read).toHaveBeenCalledTimes(2);
+  expect(container.textContent).toContain("Call back Asha Fictional");
 });
 
 it("lists today's tasks with what, for whom, where and when, and counts each list", async () => {

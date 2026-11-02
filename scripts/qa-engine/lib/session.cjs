@@ -290,7 +290,7 @@ async function go(tab, address, { wait = 25000, onLoad } = {}) {
   }
   if (onLoad) await onLoad().catch(() => null);
   const waited = await settle(tab, wait);
-  const gates = ["aditya", "vikas"].includes(tab.opts.alias) ? [] : await dismissGates(tab); // those two keep their first sign-in untouched
+  const gates = ["aditya", "vikas"].includes(tab.opts.alias) || tab.opts.noGates ? [] : await dismissGates(tab); // those two keep their first sign-in untouched
   if (gates.length) await settle(tab, 8000);
   return { ok: true, waited, gates };
 }

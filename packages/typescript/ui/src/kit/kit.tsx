@@ -566,29 +566,50 @@ const hue = (text: string) => {
   return value;
 };
 
+/** One segmenter for every text, and initials read only up to the letters they
+ *  need: a new segmenter per word per avatar, over every grapheme of every
+ *  word, made each render of a seller's 50 lead rows build 100+ (2 Nov 2026:
+ *  the slowest tester's tab switches). */
+let segmenter: Intl.Segmenter | null = null;
+const segments = (text: string): Iterable<{ segment: string }> => {
+  segmenter ??= new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  return segmenter.segment(text);
+};
+
 /** A text's characters as a reader sees them: a Devanagari letter with its
  *  vowel sign is one (सु, not स), so an initial never splits one. */
 export function graphemes(text: string): string[] {
   if (typeof Intl.Segmenter !== "function") return Array.from(text);
-  const parts = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-  return Array.from(parts.segment(text), (part) => part.segment);
+  return Array.from(segments(text), (part) => part.segment);
 }
 
 const LETTER = /^[\p{L}\p{N}]/u;
+const TITLE = /^(mr|mrs|ms|dr|miss)\.?\s+/i;
+
+/** A word's first letter or digit, by grapheme. */
+function firstLetter(word: string): string | undefined {
+  if (typeof Intl.Segmenter !== "function")
+    return Array.from(word).find((one) => LETTER.test(one));
+  for (const { segment } of segments(word))
+    if (LETTER.test(segment)) return segment;
+  return undefined;
+}
 
 /** Each of the first two words' first letter, by grapheme; an emoji or a
  *  symbol is never an initial ("?" when the name has no letter at all). Phone
  *  personas ph1-34, 1 Nov 2026: सुरेश पाटील read "सप", and "Priya 🌸" got a
  *  flower for an initial. */
-export const initials = (name: string) =>
-  name
-    .replace(/^(mr|mrs|ms|dr|miss)\.?\s+/i, "")
-    .split(/\s+/)
-    .map((part) => graphemes(part).find((one) => LETTER.test(one)))
-    .filter((one): one is string => !!one)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase() || "?";
+export function initials(name: string): string {
+  let letters = "";
+  let found = 0;
+  for (const word of name.replace(TITLE, "").split(/\s+/)) {
+    const one = firstLetter(word);
+    if (!one) continue;
+    letters += one;
+    if (++found === 2) break;
+  }
+  return letters.toUpperCase() || "?";
+}
 
 /** A name with no letter in it gets a person, never "?" or an emoji. */
 function NoInitials() {
@@ -623,6 +644,7 @@ export function Avatar({
   shape?: "square";
 }) {
   const [failed, setFailed] = useState(false);
+  const letters = initials(name);
   return (
     <span
       className={styles.avatar}
@@ -640,13 +662,13 @@ export function Avatar({
           loading="lazy"
           onError={() => setFailed(true)}
         />
-      ) : initials(name) === "?" ? (
+      ) : letters === "?" ? (
         <NoInitials />
       ) : size < 22 ? (
         // Initials stay at 12 px or more: a small avatar has room for one.
-        graphemes(initials(name))[0]
+        graphemes(letters)[0]
       ) : (
-        initials(name)
+        letters
       )}
     </span>
   );

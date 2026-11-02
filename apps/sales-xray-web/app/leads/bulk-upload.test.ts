@@ -6,7 +6,10 @@ import {
   evenSplit,
   firstChoices,
   freshRows,
+  sellersOf,
+  serverAssign,
   sharesFor,
+  sharing,
   startStages,
 } from "./bulk-upload";
 
@@ -14,7 +17,22 @@ const rep = (person_id: string) => ({ person_id, name: person_id }) as RepView;
 const team = [rep("asha"), rep("ravi"), rep("meera")];
 
 describe("bulk upload's choices", () => {
-  it("starts on Cold Leads, split evenly among the salespeople; sellers keep theirs", () => {
+  // Owner, 2 Nov 2026: leads are shared between sellers only; "One seller" is a share
+  // of all of them.
+  it("shares between sellers only, or gives all to one seller", () => {
+    const sellers = sellersOf([
+      { ...rep("asha"), available: true },
+      { ...rep("owner"), available: false },
+    ]);
+    expect(sellers.map((item) => item.person_id)).toEqual(["asha"]);
+    const one = { ...firstChoices(true), assign: "one" as const, one: "ravi" };
+    expect(countsFor(one, team, 7)).toEqual({ ravi: 7 });
+    expect(countsFor({ ...one, one: "nobody" }, team, 7)).toEqual({});
+    expect(sharing("one") && sharing("people") && !sharing("none")).toBe(true);
+    expect(serverAssign("one")).toBe("people");
+  });
+
+  it("starts on Cold Leads, split evenly among the sellers; sellers keep theirs", () => {
     expect(firstChoices(true)).toMatchObject({
       side: "cold",
       assign: "people",

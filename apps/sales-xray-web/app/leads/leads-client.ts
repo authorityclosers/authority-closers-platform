@@ -99,6 +99,8 @@ export type Desk = {
     name: string;
     role: string;
     can_manage: boolean;
+    /** Reads the team's leads: managers, and Viewers, who change nothing (Roles B). */
+    can_see_team?: boolean;
     /** Off: the lead rules give this seller no new leads (UX study item 8). */
     taking_leads?: boolean;
     /** Outside work hours with the pause on: new leads wait until then. */
@@ -831,9 +833,9 @@ export function readLeads(
   signal?: AbortSignal,
 ) {
   const params = new URLSearchParams({ scope });
-  // All Leads is the list with no work view.
-  for (const [key, value] of moreParams(more))
-    if (key !== "view" || value !== "all") params.set(key, value);
+  // All Leads (view=all) is every lead on both sides; the side still counts To
+  // Call and Follow-ups (owner, 2 Nov 2026).
+  for (const [key, value] of moreParams(more)) params.set(key, value);
   if (owner) params.set("owner", owner);
   if (pipeline) params.set("pipeline", pipeline);
   if (stage) params.set("stage", stage);

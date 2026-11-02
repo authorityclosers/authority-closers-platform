@@ -17,6 +17,7 @@ import {
   emptyWords,
   lastView,
   listTitle,
+  sideStage,
   pickableStages,
   rememberView,
   tabCount,
@@ -126,6 +127,11 @@ it("splits Follow-ups into Due Today, Overdue and Upcoming", async () => {
     host.querySelectorAll<HTMLButtonElement>("button")[1].click(),
   );
   expect(onChange).toHaveBeenCalledWith("overdue");
+  // The chosen one again: back to every follow-up, so the tab's count is its rows.
+  await act(async () =>
+    host.querySelectorAll<HTMLButtonElement>("button")[0].click(),
+  );
+  expect(onChange).toHaveBeenLastCalledWith(null);
 });
 
 it("names every stage a seller sees, on the chosen side, in the list's order", async () => {
@@ -264,7 +270,12 @@ it("says what each list holds and what an empty one means", () => {
     "Overdue · Inbound",
   );
   expect(listTitle("follow_ups", "cold", null)).toBe("Cold follow-ups");
-  expect(listTitle("all", "cold", null)).toBe("All cold leads");
+  // All Leads is both sides (owner, 2 Nov 2026); a Cold row says so.
+  expect(listTitle("all", "cold", null)).toBe("All leads");
+  expect(listTitle("all", "inbound", null)).toBe("All leads");
+  expect(sideStage({ side: "cold" }, "Unworked")).toBe("Cold · Unworked");
+  expect(sideStage({ side: "inbound" }, "New Lead")).toBe("New Lead");
+  expect(sideStage({}, "New Lead")).toBe("New Lead");
   expect(emptyWords("to_call").title).toBe("Nobody to call right now");
   expect(emptyWords("all").title).toBe("No leads yet");
 });

@@ -25,7 +25,7 @@ from ac_platform.lead_desk.connectors.http import install_connectors_http
 from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadEvent, LeadMerge, LeadSource
 from ac_platform.lead_desk.store import LeadDesk, Viewer
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
-from tests.database.test_conversation_postgresql import run
+from tests.database.test_conversation_postgresql import run, seed
 from tests.database.test_conversation_submission_http_postgresql import ORIGIN, _setup
 from tests.database.test_lead_desk_postgresql import _organisation
 
@@ -818,6 +818,124 @@ def test_a_wrong_facebook_account_is_disconnected_and_an_old_page_removed(
                 assert row is not None and "meta_connection" not in row.config
             # The pull reads only Pages that are on: none now.
             assert await meta_pull.pull_due(setup.sessions, cfg, FakeGraph(cfg), now=1) == 0
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_a_pages_new_leads_go_to_the_sellers_or_to_who_the_owner_picked(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Owner, 2 Nov 2026: leads went to the owner. A Page's new leads are shared between
+    the sellers by default, never given to the admin; "Who gets these leads?" can send them
+    all to one seller, or leave them for the owner to assign."""
+    for name, value in ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(meta, "Graph", FakeGraph)
+    cfg = meta.config()
+    assert cfg is not None
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)  # the signed-in person is an admin
+            settings = setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
+            install_connectors_http(
+                setup.app, RouteContext(settings, setup.require_actor, setup.sessions)
+            )
+            tenant = setup.state.tenant_id
+            asha = await seed(setup.engine, tenant_id=tenant, role="member")
+            ravi = await seed(setup.engine, tenant_id=tenant, role="member")
+            async with setup.sessions() as db, db.begin():
+                db.add(
+                    LeadSource(
+                        id=uuid4(),
+                        tenant_id=tenant,
+                        kind="meta",
+                        label="Meta · Fictional Homes",
+                        token_sha256=None,
+                        config={
+                            "page_id": "p1",
+                            "page_name": "Fictional Homes",
+                            "token": meta.seal(cfg.token_key, "page-token-1", page_id="p1"),
+                            "forms": "all",
+                        },
+                        active=True,
+                        received=0,
+                        created_by_person_id=setup.state.person_id,
+                        created_at=datetime.now(UTC),
+                        updated_at=datetime.now(UTC),
+                    )
+                )
+
+            async def file(n: int) -> Lead:
+                async with setup.sessions() as db, db.begin():
+                    source = await db.scalar(select(LeadSource).where(LeadSource.kind == "meta"))
+                    assert source is not None
+                    desk = LeadDesk(
+                        db,
+                        Viewer(
+                            person_id=source.created_by_person_id,
+                            tenant_id=tenant,
+                            role="system",
+                            name=source.label,
+                        ),
+                    )
+                    outcome = await meta_backfill.file_lead(
+                        desk, source, _lead(700 + n, "fa", 0), page_name="Fictional Homes"
+                    )
+                    assert outcome == "created"
+                    lead = await db.scalar(
+                        select(Lead).where(Lead.source_ref == str(100000000000700 + n))
+                    )
+                    assert lead is not None
+                    return lead
+
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                status = (await client.get(f"{META}/status")).json()
+                assert status["pages"][0]["assign"] == {"mode": "share", "personId": None}
+
+                # Shared between the sellers: the admin never gets one.
+                shared = [await file(n) for n in range(3)]
+                owners = {lead.owner_person_id for lead in shared}
+                assert owners <= {asha.person_id, ravi.person_id} and len(owners) == 2
+
+                # All to one seller.
+                picked = await client.post(
+                    f"{META}/pages/p1/assign",
+                    json={"mode": "one", "personId": str(ravi.person_id)},
+                    headers=WRITE,
+                )
+                assert picked.status_code == 200, picked.text
+                assert picked.json()["assign"] == {"mode": "one", "personId": str(ravi.person_id)}
+                one = await file(10)
+                assert one.owner_person_id == ravi.person_id
+                assert (one.owner_reason or "").startswith(
+                    "Meta · Fictional Homes: its new leads go to "
+                )
+                stranger = await client.post(
+                    f"{META}/pages/p1/assign",
+                    json={"mode": "one", "personId": str(uuid4())},
+                    headers=WRITE,
+                )
+                assert stranger.status_code == 422
+                lonely = await client.post(
+                    f"{META}/pages/p1/assign", json={"mode": "one"}, headers=WRITE
+                )
+                assert lonely.status_code == 422
+
+                # Left for the owner to assign.
+                left = await client.post(
+                    f"{META}/pages/p1/assign", json={"mode": "none"}, headers=WRITE
+                )
+                assert left.status_code == 200, left.text
+                waiting = await file(20)
+                assert waiting.owner_person_id is None
+                assert waiting.owner_reason == "Meta · Fictional Homes: left for you to assign."
         finally:
             await setup.engine.dispose()
 

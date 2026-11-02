@@ -9,14 +9,16 @@
  * your own has no lead (migration 0147): its row says so and opens nothing.
  */
 
-import { Check, Clock, ListTodo, MapPin, Plus } from "lucide-react";
+import { Check, Clock, CloudOff, ListTodo, MapPin, Plus } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
 import { displayName } from "../display-name";
 import { notify } from "../notice-center";
-import { Empty, Segmented, Skeleton } from "../ui/kit";
+import { Button, Empty, Segmented, Skeleton } from "../ui/kit";
 import { ActionSheet } from "./action-sheet";
+import { InlineEmpty } from "./desk-view";
+import { useListLoadWatch } from "./load-watch";
 import {
   LeadsError,
   readTasks,
@@ -72,6 +74,12 @@ export function TasksView({
   });
   const [round, setRound] = useState(0);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  // A read that failed: its words, for the list's own Try again.
+  const [failed, setFailed] = useState<{
+    view: TaskBucket;
+    round: number;
+    message: string;
+  } | null>(null);
   // Taken off this list while the change is on its way (or kept on the phone).
   const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
   const [later, setLater] = useState<ListedTask | null>(null);
@@ -85,11 +93,13 @@ export function TasksView({
       (reason: unknown) => {
         if (reason instanceof DOMException && reason.name === "AbortError")
           return;
-        notify({
-          id: "tasks-failed",
-          tone: "error",
-          title: "Your tasks didn't load",
-          message: reason instanceof LeadsError ? reason.message : "Try again.",
+        setFailed({
+          view,
+          round,
+          message:
+            reason instanceof LeadsError
+              ? reason.message
+              : "Your tasks didn't load",
         });
       },
     );
@@ -97,6 +107,17 @@ export function TasksView({
   }, [view, round]);
 
   const shown = loaded && loaded.view === view ? loaded : null;
+  const failure =
+    failed && failed.view === view && failed.round === round ? failed : null;
+  // Never loading boxes for ever (simplify pass, 2 Nov 2026): a slow or failed
+  // read says so in the corner card with Retry, as the Leads list does.
+  useListLoadWatch({
+    question: `tasks:${view}`,
+    waiting: !shown && !failure,
+    failed: !!failure,
+    showing: !!shown,
+    onRetry: () => setRound((value) => value + 1),
+  });
   const tasks = (shown?.tasks ?? []).filter((task) => !gone.has(task.task_id));
   const reload = () => setRound((value) => value + 1);
   const hide = (task: ListedTask, hidden: boolean) =>
@@ -220,7 +241,14 @@ export function TasksView({
           <Plus size={20} aria-hidden="true" />
         </button>
       </div>
-      {!shown ? (
+      {failure && !shown ? (
+        <InlineEmpty
+          icon={CloudOff}
+          title={failure.message}
+          text="Your tasks are safe. Try again in a moment."
+          action={<Button onClick={reload}>Try again</Button>}
+        />
+      ) : !shown ? (
         <ol className={styles.list} aria-busy="true">
           {Array.from({ length: 5 }, (_, index) => (
             <li key={index} className={styles.skeleton}>
