@@ -48,6 +48,9 @@ export type LeadRow = {
   why_kind: WhyKind;
   next_action_at: string | null;
   created_at: string;
+  /** When the person sent it, when its source said and that differs from created_at
+   *  (a Meta form's time): an older enquiry brought in later says its own day. */
+  received_at?: string | null;
   attempts: number;
   calls: number;
   last_result: string | null;

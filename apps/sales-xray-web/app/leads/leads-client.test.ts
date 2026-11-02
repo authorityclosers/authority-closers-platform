@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { whyLine } from "./desk-view";
+import { nextLine, olderEnquiry, waiting, whyLine } from "./desk-view";
 import {
   ago,
   CONNECTED_STAGES,
@@ -108,6 +108,26 @@ describe("plain numbers and times", () => {
       next_action_at: new Date(2026, 9, 16, 10, 0).toISOString(),
     });
     expect(whyLine(due, NOW)).toMatch(/^Follow-up due · was today /);
+  });
+
+  // Owner, 2 Nov 2026: a Facebook Page's lead sent before the Page was
+  // connected, brought in on purpose, waits on Cold and says its own day.
+  it("an older enquiry says so, with the day it was sent, never new", () => {
+    const sent = new Date(2026, 9, 12, 18, 0).toISOString();
+    const older = row({ source: "meta", side: "cold", received_at: sent });
+    const day = new Date(sent).toLocaleDateString(undefined, {
+      day: "numeric",
+      month: "short",
+    });
+    expect(olderEnquiry(older)).toBe(`Older enquiry · ${day}`);
+    expect(whyLine(older, NOW)).toBe(`Older enquiry · ${day}`);
+    expect(nextLine(older, NOW)).toBe(`Older enquiry · ${day}`);
+    expect(waiting(older, NOW)).toBeNull();
+    // A lead sent after connecting is Inbound and new as ever.
+    const fresh = row({ source: "meta", side: "inbound", received_at: sent });
+    expect(olderEnquiry(fresh)).toBeNull();
+    expect(whyLine(fresh, NOW)).toBe("New lead · 6 min ago");
+    expect(olderEnquiry(row({ side: "cold" }))).toBeNull();
   });
 });
 
