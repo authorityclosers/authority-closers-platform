@@ -151,7 +151,12 @@ function inPage(phone) {
   // controls with something on top of them (a banner, a bar, a sheet that should not be there)
   const controls = [...document.querySelectorAll("a[href],button,[role=button],[role=tab],input:not([type=hidden]),select,textarea,[role=switch]")]
     .filter(visible)
-    .filter((el) => !el.disabled && el.getAttribute("aria-hidden") !== "true");
+    .filter((el) => !el.disabled && el.getAttribute("aria-hidden") !== "true")
+    // a visually hidden control (a custom file picker's real input is 1x1 px; its visible button or label is the control a person uses) cannot be covered or tapped
+    .filter((el) => {
+      const b = el.getBoundingClientRect();
+      return !(b.width <= 2 && b.height <= 2);
+    });
   let modals = [];
   try {
     modals = [...document.querySelectorAll(":modal")];
