@@ -47,6 +47,7 @@ def test_capture_retries_and_non_lead_rejection(postgres_harness: Any, tmp_path:
                 headers=WRITE,
             )
             assert unknown.status_code == 409, unknown.text
+            assert unknown.json()["detail"] == "This number must match exactly one of your leads."
             assert (
                 await here.client.post(f"{BASE}/recording-call", json=command)
             ).status_code == 403
@@ -72,6 +73,20 @@ def test_capture_retries_and_non_lead_rejection(postgres_harness: Any, tmp_path:
             assert private.status_code == 200, private.text
             held = await here.client.post(f"{BASE}/recording-call", json=command, headers=WRITE)
             assert held.status_code == 409
+            # A call from before the lead was added has its own words: the phone tells the seller.
+            async with here.setup.sessions() as db, db.begin():
+                await db.execute(
+                    update(Lead)
+                    .where(Lead.id == UUID(lead))
+                    .values(created_at=datetime.now(UTC) + timedelta(minutes=5))
+                )
+            early = await here.client.post(
+                f"{BASE}/recording-call",
+                json=command | {"command_id": str(uuid4())},
+                headers=WRITE,
+            )
+            assert early.status_code == 409, early.text
+            assert early.json()["detail"] == "This call was made before this lead was added."
             # A changed owner removes the old seller's right to send this recording.
             async with here.setup.sessions() as db, db.begin():
                 await db.execute(

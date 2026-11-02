@@ -5346,8 +5346,11 @@ class LeadDesk:
                 .with_for_update()
             )
         ).all()
-        if len(found) != 1 or start < found[0].created_at:
+        if len(found) != 1:
             raise DeskError(409, "This number must match exactly one of your leads.")
+        # Its own words: the phone tells the seller this one (simulation lab, 2 Nov 2026).
+        if start < found[0].created_at:
+            raise DeskError(409, "This call was made before this lead was added.")
         lead = found[0]
         private = await self._private_calls(lead_id=lead.id)
         seen = await self._command_seen(command.command_id)
