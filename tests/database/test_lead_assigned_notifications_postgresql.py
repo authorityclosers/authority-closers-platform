@@ -335,6 +335,17 @@ def test_the_bell_reads_a_line_whose_lead_moved_on_as_history(
                 mine = lines["Asha Fictional is your lead now"]
                 assert mine["href"] == f"/leads?lead={lead['lead_id']}"
                 assert mine["read"] is False and mine["urgent"] is True
+                # Leads' side numbers carry the same line, so Leads raises it as it draws
+                # (QA robot 10572d93: it arrived 3 s later and pushed the page down).
+                sides = await client.get(f"{BASE}/sides")
+                assert sides.status_code == 200, sides.text
+
+                def same(line: dict[str, Any]) -> tuple[Any, ...]:
+                    return tuple(
+                        line[key] for key in ("id", "kind", "title", "href", "urgent", "read")
+                    )
+
+                assert [same(line) for line in sides.json()["bell_lines"]] == [same(mine)]
 
                 # Lines that outlived their lead, never retired: one whose lead is gone, one
                 # from no workspace of this one (a line elsewhere opens nothing here), and the
@@ -372,6 +383,8 @@ def test_the_bell_reads_a_line_whose_lead_moved_on_as_history(
                     assert lines[title]["href"] is None and lines[title]["urgent"] is False
                 # The seller's own line was counted; now none of the three is.
                 assert unread == counted - 1
+                # Nor does Leads raise any of them.
+                assert (await client.get(f"{BASE}/sides")).json()["bell_lines"] == []
         finally:
             await setup.engine.dispose()
 

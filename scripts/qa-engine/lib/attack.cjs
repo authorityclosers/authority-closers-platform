@@ -144,7 +144,9 @@ const FACTS = () => {
   const visible = (el) => el.checkVisibility && el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0;
   const main = document.querySelector("main") || document.body;
   const text = (main.innerText || "").replace(/\s+/g, " ").trim();
-  const loadingEls = [...document.querySelectorAll('[role=progressbar],[aria-busy="true"],[class*="skeleton" i],[class*="spinner" i],[class*="shimmer" i]')].filter(visible);
+  // a clip player's own progress bar ("Clip progress", value 0 of 34 on the Coaching page) is not a page loading
+  const mediaBar = (e) => e.getAttribute("role") === "progressbar" && (/clip|playback|audio|video|seek|player|position/i.test(e.getAttribute("aria-label") || "") || !!e.closest("audio,video,[class*='player' i]"));
+  const loadingEls = [...document.querySelectorAll('[role=progressbar],[aria-busy="true"],[class*="skeleton" i],[class*="spinner" i],[class*="shimmer" i]')].filter(visible).filter((e) => !mediaBar(e));
   const loading = loadingEls.length;
   const loadingIn = loadingEls.slice(0, 3).map((e) => ({ s: window.__qaSem ? window.__qaSem(e) : e.tagName, main: main.contains(e) }));
   const BITS = /couldn['’]?t|could not|can['’]?t|unable|try again|retry|something went wrong|didn['’]?t load|did not load|not available|offline|too many|problem|failed|went wrong|\b(?:500|429|502|503)\b|internal server error|too many requests|TypeError|SyntaxError|unexpected token|JSON|failed to fetch|networkerror|undefined|\bNaN\b|\[object|"detail"/i;
@@ -247,6 +249,20 @@ function makeCtx(tab, cell, alias) {
   return ctx;
 }
 
+// The page as it looks once it has filled in: text and loading marks unchanged over two reads a second apart (at most 9 s).
+// A page that paints its header first reads 50 characters at 0.7 s and 600 at 2 s: a baseline taken early makes every later difference look like the fault's doing.
+async function settledFacts(tab) {
+  let prev = await facts(tab);
+  for (let i = 0; i < 9; i++) {
+    await sleep(1000);
+    const cur = await facts(tab);
+    const steady = cur.textLength >= 25 && cur.loading === 0 && Math.abs(cur.textLength - prev.textLength) <= 2;
+    prev = cur;
+    if (steady) break;
+  }
+  return prev;
+}
+
 async function loadPage(ctx, route, wait = 25000) {
   const r = await session.go(ctx.tab, route, { wait });
   if (!r.ok) {
@@ -270,8 +286,7 @@ async function famFault(ctx, route) {
   const { tab } = ctx;
   const calls = trackCalls(tab);
   if (!(await loadPage(ctx, route))) return;
-  await sleep(700);
-  const base = await facts(tab);
+  const base = await settledFacts(tab);
   calls.stop();
   if (base.textLength < 25 || base.overlay) return ctx.note("the page itself is blank or crashed without a fault: no trials");
   const endpoints = [...calls.seen.keys()].slice(0, 8);
@@ -513,8 +528,7 @@ const keyOfFinding = (f) => `${f.rule}|${stripQ(f.selector)}`;
 async function famExtremes(ctx, route) {
   const { tab } = ctx;
   if (!(await loadPage(ctx, route))) return;
-  await sleep(700);
-  const base = await facts(tab);
+  const base = await settledFacts(tab);
   if (base.textLength < 25 || base.overlay) return ctx.note("the page is blank or crashed without the data: no trials");
   const baseKeys = new Set(((await layoutFindings(tab, route, LAYOUT_RULES)) || []).map(keyOfFinding));
   for (const variant of ["rows1000", "long300", "emoji", "indic", "zerowidth", "bignum"]) {
@@ -560,7 +574,12 @@ async function famExtremes(ctx, route) {
         ctx.note(`${variant}: dev API 502/503/504, dropped`);
         continue;
       }
-      const f = await facts(tab);
+      // a page that is only slow to paint (a busy box, a long answer to parse) is not a blank page: give it up to 6 s to show text before judging (2 Nov 2026, f004ec6a: replayed with 41 to 110 characters of text and no error)
+      let f = await facts(tab);
+      for (let wait = 0; wait < 8 && f.textLength < 25 && f.loading === 0 && !f.overlay; wait++) {
+        await sleep(800);
+        f = await facts(tab);
+      }
       const errs = tab.since(mark).pageerrors.filter((e) => !EXPECTED.test(e));
       if (f.textLength < 25 && f.loading === 0) await ctx.add("data:blank", "MAJOR", `${variant}: the page went blank${errs[0] ? ` (${errs[0].slice(0, 80)})` : ""}`, "");
       else if (f.overlay) await ctx.add("data:crash", "MAJOR", `${variant}: crash screen "${f.overlay.slice(0, 80)}"`, "");
@@ -612,8 +631,7 @@ const CUT = () => {
 async function famZoom(ctx, route) {
   const { tab } = ctx;
   if (!(await loadPage(ctx, route))) return;
-  await sleep(700);
-  const base = await facts(tab);
+  const base = await settledFacts(tab);
   if (base.textLength < 25 || base.overlay) return ctx.note("the page is blank without zoom: no trials");
   const baseKeys = new Set(((await layoutFindings(tab, route, LAYOUT_RULES)) || []).map(keyOfFinding));
   const baseCut = new Set(((await tab.page.evaluate(CUT).catch(() => [])) || []).map((c) => stripQ(c.s)));
@@ -1056,7 +1074,18 @@ async function openFlow(ctx, route, flow, prior = false) {
   if (!(await loadPage(ctx, route))) return null;
   await sleep(500);
   if (flow.kind === "page") return page.locator("main");
-  return clickPath(page, flow.path);
+  // the lead page's own sheet mounts a moment after the load: let the page settle before counting what is already open
+  await session.settle(ctx.tab, 8000);
+  await sleep(1500);
+  // a sheet already open at this address (the lead page) covers the header's buttons: the press then does nothing, and what is typed next would go into the sheet underneath, not the one named
+  const before = await dlgOf(page).count();
+  const sig = before ? await dlgOf(page).last().innerText().catch(() => "") : "";
+  const root = await clickPath(page, flow.path);
+  if (root && before && (await dlgOf(page).count()) === before && (await root.innerText().catch(() => "")) === sig) {
+    ctx.note(`${flow.name}: pressing it opened nothing new (a sheet already open covers it): not judged`);
+    return null;
+  }
+  return root;
 }
 
 let markN = 0;
@@ -1164,7 +1193,8 @@ async function trialHistory(ctx, route, flow) {
     if (flow.kind === "sheet" && !still) {
       await page.goForward({ timeout: 8000 }).catch(() => null);
       await sleep(1200);
-      if ((await dlgOf(page).count()) && !(await hasMarks(page, typed))) await ctx.add("flow:forward-empty", "MINOR", `${flow.name}`, `After Back, Forward reopens "${flow.name}" with the text typed before gone`, false);
+      // a draft comes back a moment after the sheet is up: give it up to 4 s before calling the sheet empty
+      if ((await dlgOf(page).count()) && !(await waitMarks(page, typed, 4000))) await ctx.add("flow:forward-empty", "MINOR", `${flow.name}`, `After Back, Forward reopens "${flow.name}" with the text typed before gone`, false);
     }
     // refresh with text typed
     natives.length = 0;
@@ -1430,7 +1460,8 @@ async function fileAll(ctx, cell, route, dry) {
 async function runCell(cell, opts = {}) {
   const t0 = Date.now();
   const owner = cell.role === "owner";
-  const alias = owner ? "owner" : SELLERS[aliasTurn++ % SELLERS.length];
+  // QA_ATTACK_ALIAS pins one person for a by-hand replay (a new hire, whose first-call guide and welcome card are not dismissed); the loop rotates through SELLERS
+  const alias = owner ? "owner" : process.env.QA_ATTACK_ALIAS || SELLERS[aliasTurn++ % SELLERS.length];
   let route = cell.route;
   const tab = await session.openTab({ alias, device: cell.size, theme: cell.family === "dark" ? "dark" : "light", state: "normal", keep: true });
   const ctx = makeCtx(tab, cell, alias);
@@ -1489,4 +1520,4 @@ async function runOne(opts = {}) {
   }
 }
 
-module.exports = { runOne, runCell, pickCell, digestLine, FAMILIES, SIZES, PAGES };
+module.exports = { runOne, runCell, pickCell, digestLine, FAMILIES, SIZES, PAGES, mutate };

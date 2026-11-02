@@ -291,6 +291,18 @@
 /* The dock (NoticeDock): on a phone, new enquiries and work alerts are one
    line each at the top of the page, in its flow, so they never sit over the
    rows, their Call buttons or the tab bar (competitor teardown 12). */
+/* A page's own card (InCorner): a row of the stack, as wide as its cards, and
+   tappable (the stack itself lets taps through). Nothing in it, no row. */
+.own {
+  display: grid;
+  min-width: 0;
+  pointer-events: auto;
+}
+
+.own:empty {
+  display: none;
+}
+
 .dock {
   min-width: 0;
   max-width: 100%;

@@ -77,6 +77,7 @@
   background: var(--sx-surface);
   list-style: none;
   overflow: hidden;
+  container: tasks-list / inline-size;
 }
 
 .list > li + li {
@@ -180,6 +181,24 @@
 .row time[data-late] {
   color: var(--sx-bad);
   font-weight: 700;
+}
+
+/* A narrow list, on a phone: the due time goes under the task's words, so
+   the title has the row's width (the test robot, a95ec3bf and d1aa3a23,
+   1 Nov 2026: beside a 136 px due time and Later and Done, a WhatsApp
+   task's title had 77 px and lost its last word). In em, so large text
+   moves it too. */
+@container tasks-list (max-width: 30em) {
+  .row {
+    grid-template-columns: 32px minmax(0, 1fr);
+    row-gap: 2px;
+  }
+
+  .row time {
+    grid-column: 2;
+    padding-top: 0;
+    text-align: left;
+  }
 }
 
 .acts {

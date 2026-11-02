@@ -71,7 +71,12 @@ function scan(phone) {
   }
   const interactive = [...document.querySelectorAll("a[href],button,[role=button],[role=tab],[role=radio],[role=switch],[role=checkbox],[role=menuitem],input:not([type=hidden]),select,textarea")]
     .filter(visible)
-    .filter((el) => !el.disabled && el.getAttribute("aria-hidden") !== "true");
+    .filter((el) => !el.disabled && el.getAttribute("aria-hidden") !== "true")
+    // a visually hidden control (a custom file picker's real input, 1x1 px) is not what people tap: the visible button or label is
+    .filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 2 || r.height > 2;
+    });
   const inView = interactive.filter((el) => {
     const r = el.getBoundingClientRect();
     return r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw;

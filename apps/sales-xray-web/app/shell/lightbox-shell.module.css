@@ -738,6 +738,13 @@
   gap: 12px;
 }
 
+/* The bell's place while the session settles: its 44 px, nothing drawn. */
+.barSlot {
+  flex: none;
+  width: 44px;
+  height: 44px;
+}
+
 .trust {
   display: inline-flex;
   height: 30px;
@@ -1735,6 +1742,10 @@
   background: transparent;
   color: inherit;
   font: inherit;
+  /* After font, which resets it: the same lines as the span it replaces once
+     the workspaces arrive, so the bar keeps its height (the test robot,
+     3c6e780e: the button's lines were 21 px to the span's 14). */
+  line-height: 1.15;
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -1762,6 +1773,13 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+}
+
+/* On a phone, as tall as its 18 px tile from the first paint, before the tile
+   arrives, so the page's name under it never drops (the test robot,
+   3c6e780e, 1 Nov 2026). */
+.mobileWorkspace .contextRow {
+  min-height: 18px;
 }
 
 /* A long organisation name stays on its line instead of pushing the title

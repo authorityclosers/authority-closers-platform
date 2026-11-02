@@ -16,6 +16,7 @@ from ac_platform.lead_desk.errors import DeskError
 from ac_platform.lead_desk.models import Lead
 from ac_platform.lead_desk.vocabulary import NEEDS_FOLLOW_UP
 from ac_platform.lead_desk.work_views import in_view
+from ac_platform.product_updates.reading import lead_lines
 
 if TYPE_CHECKING:
     from ac_platform.lead_desk.store import LeadDesk
@@ -57,6 +58,10 @@ class SideNumbers(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
     inbound: InboundNumbers
     cold: ColdNumbers
+    # The person's unread "<name> is your lead now" lines here, as the bell lists them:
+    # Leads waits for this answer before it draws, and raises them with it, so a docked
+    # line never pushes the page after it drew (QA robot 10572d93, 2 Nov 2026).
+    bell_lines: tuple[dict[str, Any], ...] = ()
 
 
 async def side_numbers(desk: LeadDesk, *, scope: Literal["mine", "team"]) -> SideNumbers:
@@ -92,4 +97,5 @@ async def side_numbers(desk: LeadDesk, *, scope: Literal["mine", "team"]) -> Sid
             leads=int(row[0]), new=int(row[1]), to_call=int(row[2]), follow_ups=int(row[3])
         ),
         cold=ColdNumbers(imported=int(row[4]), unworked=int(row[5]), attempted=int(row[6])),
+        bell_lines=tuple(await lead_lines(desk.db, desk.viewer.person_id, desk.tenant_id)),
     )

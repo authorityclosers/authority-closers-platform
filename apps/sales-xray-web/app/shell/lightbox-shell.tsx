@@ -1903,7 +1903,14 @@ function LightboxShellFrame({
                 <Search size={20} aria-hidden="true" />
               </button>
             )}
-            {bell}
+            {/* The bell's place is kept while the session settles, so the
+                page's name wraps as it will and the bar never grows under it
+                (the test robot, 3c6e780e, 1 Nov 2026: on 3G "New analysis"
+                went to two lines when the bell came, and the page moved). */}
+            {bell ??
+              (guest ? null : (
+                <span className={styles.barSlot} aria-hidden="true" />
+              ))}
           </div>
         </header>
         <header className={styles.topBar}>

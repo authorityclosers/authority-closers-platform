@@ -154,25 +154,6 @@ const LIST =
   "GET /v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true";
 const insightPath = (id: string, kind: string) =>
   `GET /v1/conversation/acquisition/submissions/${id}/${kind}`;
-const measuredRecord = {
-  version: "call-record/1",
-  numbers: {
-    duration_ms: 120000,
-    overlaps: 0,
-    speakers: [
-      {
-        speaker_id: "seller",
-        talk_ms: 120000,
-        talk_share: 1,
-        questions: 6,
-        longest_monologue_ms: 1000,
-      },
-    ],
-  },
-  facts: [],
-  tags: null,
-  call_type: null,
-};
 const labelPath = (id: string) =>
   `/v1/conversation/acquisition/submissions/${id}/label`;
 const setInput = (input: HTMLInputElement, value: string) => {
@@ -214,8 +195,6 @@ it("puts the no-recording line first on the page, above the phone's calls and th
 it("sums the recorded lengths and counts report outcomes", async () => {
   routeFetch({
     [LIST]: () => ok(page([row(firstId, true), row(secondId, true)])),
-    [insightPath(firstId, "call-record")]: () => ok(measuredRecord),
-    [insightPath(secondId, "call-record")]: () => ok({}, 404),
     [insightPath(firstId, "report")]: () =>
       ok({
         verdict: "Measured report",
@@ -234,8 +213,15 @@ it("sums the recorded lengths and counts report outcomes", async () => {
     Array.from(stats.children)
       .find((child) => child.querySelector("dt")?.textContent === label)
       ?.querySelector("dd b")?.textContent;
-  // 2 min from the first call plus the second call's 61 s.
-  expect(value("Call time")).toBe("3 min");
+  // Each call's length as measured at upload: 61 s and 61 s.
+  expect(value("Call time")).toBe("2 min");
+  // The report alone: no call-record route exists (the test robot,
+  // e5219038, 2 Nov 2026: each preview cost a 404).
+  expect(
+    fetchMock.mock.calls.some(([input]) =>
+      String(input).endsWith("/call-record"),
+    ),
+  ).toBe(false);
   expect(stats.textContent).toContain("length of 2 calls");
   expect(value("Next step agreed")).toBe("1");
   expect(stats.textContent).toContain("of 2 reports read · 1 closed");
@@ -246,7 +232,6 @@ it("sums the recorded lengths and counts report outcomes", async () => {
 it("uses the length measured at upload when no report gives one", async () => {
   routeFetch({
     [LIST]: () => ok(page([row(firstId, true)])),
-    [insightPath(firstId, "call-record")]: () => ok({}, 404),
     [insightPath(firstId, "report")]: () => ok({ verdict: "No outcome" }),
   });
   await act(async () => renderLibrary({ insights: true }));
@@ -265,8 +250,6 @@ it("shows unavailable summaries and lets failed report reads recover from the li
   let recovered = false;
   routeFetch({
     [LIST]: () => ok(page([row(firstId, true)])),
-    [insightPath(firstId, "call-record")]: () =>
-      recovered ? ok(measuredRecord) : ok({}, 503),
     [insightPath(firstId, "report")]: () =>
       recovered ? ok({ verdict: "Recovered report" }) : ok({}, 503),
   });
@@ -1607,8 +1590,6 @@ it("posts logout once while pending, preserves the selector on failure, and clea
 it("shows four figures from the loaded calls and one labelled list", async () => {
   routeFetch({
     [LIST]: () => ok(page([row(firstId, true), row(secondId, true)])),
-    [insightPath(firstId, "call-record")]: () => ok(measuredRecord),
-    [insightPath(secondId, "call-record")]: () => ok({}, 404),
     [insightPath(firstId, "report")]: () => ok({ verdict: "Measured report" }),
     [insightPath(secondId, "report")]: () =>
       ok({ verdict: "Report without measurements" }),
@@ -1678,8 +1659,6 @@ it("lists calls with Reports first and names never-analysed calls honestly", asy
           imported(fourthId),
         ]),
       ),
-    [insightPath(firstId, "call-record")]: () => ok({}, 404),
-    [insightPath(secondId, "call-record")]: () => ok({}, 404),
     [insightPath(firstId, "report")]: () => ok({ verdict: "First report" }),
     [insightPath(secondId, "report")]: () => ok({ verdict: "Second report" }),
   });

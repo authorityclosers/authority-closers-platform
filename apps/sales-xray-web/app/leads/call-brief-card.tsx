@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 
 import { acquisition, callHref, submissionPath } from "../acquisition-client";
 import { Button, Skeleton } from "../ui/kit";
+import { watchCapture } from "./auto-capture-state";
 import { callBrief, type CallBrief } from "./call-brief";
 import { LeadsError, setFollowUp, when, type LeadDetail } from "./leads-client";
 import styles from "./leads.module.css";
@@ -24,18 +25,37 @@ export function LastCallBrief({
   detail: LeadDetail;
   onChanged: (next: LeadDetail) => void;
 }) {
-  const id =
-    detail.events.find((event) => event.kind === "call" && event.submission_id)
-      ?.submission_id ?? null;
+  const call =
+    detail.events.find(
+      (event) => event.kind === "call" && event.submission_id,
+    ) ?? null;
+  const id = call?.submission_id ?? null;
+  const eventId = call?.event_id ?? null;
   const [read, setRead] = useState<{
     id: string;
     brief: CallBrief | null;
   } | null>(null);
+  const [gate, setGate] = useState<{ id: string; ready: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
+  // The call's own state, from the read its History row already makes: when the capture guard
+  // has this very recording and it isn't Report ready (a short call never is), there is no
+  // Report to ask for. Asking anyway got 404 and a console error on every open (QA robot
+  // f3525cfb, 2 Nov 2026). A call the guard doesn't follow is read as before.
   useEffect(() => {
-    if (!id) return;
+    if (!id || !eventId) return;
+    return watchCapture(eventId, ({ server }) =>
+      setGate({
+        id,
+        ready: server?.submission_id !== id || server.state === "report_ready",
+      }),
+    );
+  }, [id, eventId]);
+  const ready = !eventId ? true : gate?.id === id ? gate.ready : null;
+
+  useEffect(() => {
+    if (!id || !ready) return;
     const controller = new AbortController();
     acquisition(`${submissionPath(id)}/report`, { signal: controller.signal })
       .then((payload) => setRead({ id, brief: callBrief(payload) }))
@@ -44,9 +64,9 @@ export function LastCallBrief({
         if (!controller.signal.aborted) setRead({ id, brief: null });
       });
     return () => controller.abort();
-  }, [id]);
+  }, [id, ready]);
 
-  if (!id) return null;
+  if (!id || ready === false) return null;
   const loading = read?.id !== id;
   const brief = loading ? null : (read?.brief ?? null);
   if (!loading && !brief) return null;

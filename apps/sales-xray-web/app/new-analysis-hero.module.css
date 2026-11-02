@@ -52,10 +52,14 @@
   color: var(--lx-teal);
 }
 
+/* The steps wrap at large text instead of widening the column (the test
+   robot, 42137527, 1 Nov 2026: at 200 % text this row was 400 px in a 328 px
+   page and pushed the heading past its edge). */
 .trail {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 4px 10px;
   margin: 0;
   padding: 0;
   list-style: none;

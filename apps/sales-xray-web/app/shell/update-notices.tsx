@@ -20,6 +20,7 @@ import {
 } from "./update-card-rules";
 import {
   isRelativeUpdateHref,
+  parseNotifications,
   type UpdateNotification,
 } from "./updates-client";
 import type { useShellUpdates } from "./updates-store";
@@ -66,6 +67,61 @@ function rememberPopped(ids: readonly string[]) {
   }
 }
 
+/** The mounted bell's account and workspace, its way to open a line, and the
+    banners it has up (to clear once read or gone). */
+type Raiser = Readonly<{
+  contextKey: string;
+  openEvent: (href: string) => void;
+  active: Set<string>;
+}>;
+let raiser: Raiser | null = null;
+
+/** The newest of these lines not shown on this device yet; the others wait in
+    the bell, and none of them pops later. */
+function raiseNewest(to: Raiser, entries: readonly UpdateNotification[]) {
+  const fresh = eligibleEvents(entries).filter(
+    (event) => !poppedBefore(`${to.contextKey}:${event.id}`),
+  );
+  rememberPopped(fresh.map((event) => `${to.contextKey}:${event.id}`));
+  const event = fresh[0];
+  if (!event) return;
+  const id = `event:${to.contextKey}:${event.id}`;
+  to.active.add(id);
+  const href = event.href;
+  raiseAlert({
+    id,
+    level: "normal",
+    title: event.title,
+    message: event.body,
+    timeout: ACTIVITY_BANNER_MS,
+    ...(isRelativeUpdateHref(href)
+      ? { action: { label: VERB[event.kind], run: () => to.openEvent(href) } }
+      : {}),
+  });
+}
+
+/**
+ * Bell lines a page already holds before the bell's own first read, which
+ * waits until the page is 3 s old: raised now by the bell's rules, so that read
+ * finds them shown (QA robot 10572d93, 1 Nov 2026: Leads' "<name> is your lead
+ * now" line arrived at 3.2 s and pushed Leads down 52 px). The entries are
+ * /v1/notifications lines; anything that is not one raises nothing, and so does
+ * a call before the shell's bell is ready.
+ */
+export function raiseNotificationLines(entries: unknown) {
+  if (!raiser) return;
+  let lines: UpdateNotification[];
+  try {
+    lines = parseNotifications({
+      notifications: entries,
+      unread_count: 0,
+    }).notifications;
+  } catch {
+    return;
+  }
+  raiseNewest(raiser, lines);
+}
+
 export function UpdateNotices({
   updates,
   contextKey,
@@ -85,6 +141,15 @@ export function UpdateNotices({
       ids.clear();
     };
   }, [contextKey]);
+  // Lines a page raises early share this bell's account, banners and memory.
+  useEffect(() => {
+    if (!contextKey) return;
+    const mine: Raiser = { contextKey, openEvent, active: active.current };
+    raiser = mine;
+    return () => {
+      if (raiser === mine) raiser = null;
+    };
+  }, [contextKey, openEvent]);
 
   useEffect(() => {
     if (!contextKey) return;
@@ -105,27 +170,10 @@ export function UpdateNotices({
         timeout: ACTIVITY_BANNER_MS,
       });
     }
-    // The newest event not shown yet; the others wait in the bell.
-    const fresh = eligibleEvents(updates.notifications).filter(
-      (event) => !poppedBefore(`${contextKey}:${event.id}`),
+    raiseNewest(
+      { contextKey, openEvent, active: active.current },
+      updates.notifications,
     );
-    rememberPopped(fresh.map((event) => `${contextKey}:${event.id}`));
-    const event = fresh[0];
-    if (event) {
-      const id = `event:${contextKey}:${event.id}`;
-      active.current.add(id);
-      const href = event.href;
-      raiseAlert({
-        id,
-        level: "normal",
-        title: event.title,
-        message: event.body,
-        timeout: ACTIVITY_BANNER_MS,
-        ...(isRelativeUpdateHref(href)
-          ? { action: { label: VERB[event.kind], run: () => openEvent(href) } }
-          : {}),
-      });
-    }
     for (const item of updates.notes.filter((n) => n.seen)) {
       const id = `update:${contextKey}:${item.key}`;
       clearAlert(id);
