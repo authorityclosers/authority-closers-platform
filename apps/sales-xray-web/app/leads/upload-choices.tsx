@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 import { displayName } from "../display-name";
 import { Segmented } from "../ui/kit";
@@ -9,17 +9,18 @@ import { stageName } from "./journey/stage-look";
 import type { RepView } from "./leads-client";
 import {
   countsFor,
+  sharing,
   startStages,
   type Recipients,
   type UploadChoices,
 } from "./bulk-upload";
 import styles from "./upload-choices.module.css";
 
+// One question, three answers (owner, 2 Nov 2026: leads go to sellers, not owners).
 const RECIPIENTS: { key: Recipients; label: string }[] = [
-  { key: "people", label: "Salespeople I pick" },
-  { key: "rules", label: "The lead rules" },
-  { key: "me", label: "Me" },
-  { key: "none", label: "Nobody yet" },
+  { key: "people", label: "Share between my sellers" },
+  { key: "one", label: "One seller" },
+  { key: "none", label: "Leave them for me to assign" },
 ];
 
 /**
@@ -95,103 +96,141 @@ export function UploadChoicesFields({
       {part === "side" ? null : (
         <>
           {canManage ? (
-            <div className={styles.choice}>
-              <span className={styles.label} aria-hidden="true">
-                Who should receive them?
-              </span>
-              <div
-                className={styles.chips}
-                role="group"
-                aria-label="Who should receive them?"
-              >
-                {RECIPIENTS.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    className={styles.chip}
-                    aria-pressed={value.assign === item.key}
-                    onClick={() => onChange({ ...value, assign: item.key })}
-                  >
+            // The Page card's radios (ux-audit, 2 Nov 2026: the same question,
+            // the same control).
+            <fieldset className={`${styles.choice} ${styles.answers}`}>
+              <legend className={styles.label}>Who gets these leads?</legend>
+              {RECIPIENTS.map((item) => (
+                <Fragment key={item.key}>
+                  <label className={styles.answer}>
+                    <input
+                      type="radio"
+                      name="who-gets"
+                      checked={value.assign === item.key}
+                      onChange={() => onChange({ ...value, assign: item.key })}
+                    />
                     {item.label}
-                  </button>
-                ))}
-              </div>
-              {value.assign === "people" ? (
-                team === null ? (
-                  <small className={styles.help}>Reading your team…</small>
-                ) : team.length === 0 ? (
-                  <small className={styles.help}>
-                    Nobody on your team takes leads yet.
-                  </small>
-                ) : (
-                  <>
-                    <ul className={styles.people} aria-label="Salespeople">
-                      {team.map((rep) => {
-                        const on = !value.off.includes(rep.person_id);
-                        const name = displayName(rep.name);
-                        return (
-                          <li key={rep.person_id} className={styles.person}>
-                            <label className={styles.personName}>
-                              <input
-                                type="checkbox"
-                                checked={on}
-                                onChange={(event) =>
-                                  onChange({
-                                    ...value,
-                                    // Turning someone on or off splits evenly again.
-                                    counts: null,
-                                    off: event.target.checked
-                                      ? value.off.filter(
-                                          (id) => id !== rep.person_id,
-                                        )
-                                      : [...value.off, rep.person_id],
-                                  })
+                  </label>
+                  {/* The answer's sellers sit under it, never after the last
+                      answer (ux-audit, 2 Nov 2026). */}
+                  {item.key === value.assign ? (
+                    <>
+                      {(value.assign === "people" || value.assign === "one") &&
+                      team !== null &&
+                      team.length === 0 ? (
+                        <small className={styles.help}>
+                          No sellers yet: invite one in Team, or leave them for
+                          you to assign.
+                        </small>
+                      ) : null}
+                      {value.assign === "one" &&
+                      team !== null &&
+                      team.length ? (
+                        <ul className={styles.people} aria-label="Sellers">
+                          {team.map((rep) => (
+                            <li key={rep.person_id} className={styles.person}>
+                              <label className={styles.personName}>
+                                <input
+                                  type="radio"
+                                  name="one-seller"
+                                  checked={value.one === rep.person_id}
+                                  onChange={() =>
+                                    onChange({ ...value, one: rep.person_id })
+                                  }
+                                />
+                                <span>{displayName(rep.name)}</span>
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {value.assign === "people" ? (
+                        team === null ? (
+                          <small className={styles.help}>
+                            Reading your team…
+                          </small>
+                        ) : team.length === 0 ? null : (
+                          <>
+                            <ul className={styles.people} aria-label="Sellers">
+                              {team.map((rep) => {
+                                const on = !value.off.includes(rep.person_id);
+                                const name = displayName(rep.name);
+                                return (
+                                  <li
+                                    key={rep.person_id}
+                                    className={styles.person}
+                                  >
+                                    <label className={styles.personName}>
+                                      <input
+                                        type="checkbox"
+                                        checked={on}
+                                        onChange={(event) =>
+                                          onChange({
+                                            ...value,
+                                            // Turning someone on or off splits evenly again.
+                                            counts: null,
+                                            off: event.target.checked
+                                              ? value.off.filter(
+                                                  (id) => id !== rep.person_id,
+                                                )
+                                              : [...value.off, rep.person_id],
+                                          })
+                                        }
+                                      />
+                                      <span>{name}</span>
+                                    </label>
+                                    <input
+                                      className={styles.count}
+                                      type="number"
+                                      inputMode="numeric"
+                                      min={0}
+                                      max={fresh}
+                                      aria-label={`New leads for ${name}`}
+                                      disabled={!on}
+                                      value={
+                                        on ? (counts[rep.person_id] ?? 0) : ""
+                                      }
+                                      onChange={(event) =>
+                                        onChange({
+                                          ...value,
+                                          counts: {
+                                            ...counts,
+                                            [rep.person_id]: Math.max(
+                                              0,
+                                              Math.floor(
+                                                Number(event.target.value) || 0,
+                                              ),
+                                            ),
+                                          },
+                                        })
+                                      }
+                                    />
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                            {/* Nothing when every lead has a seller: the line under the
+                              step says who gets how many (ux-audit, 2 Nov 2026). */}
+                            {left ? (
+                              <small
+                                className={
+                                  left < 0 ? styles.problem : styles.help
                                 }
-                              />
-                              <span>{name}</span>
-                            </label>
-                            <input
-                              className={styles.count}
-                              type="number"
-                              inputMode="numeric"
-                              min={0}
-                              max={fresh}
-                              aria-label={`New leads for ${name}`}
-                              disabled={!on}
-                              value={on ? (counts[rep.person_id] ?? 0) : ""}
-                              onChange={(event) =>
-                                onChange({
-                                  ...value,
-                                  counts: {
-                                    ...counts,
-                                    [rep.person_id]: Math.max(
-                                      0,
-                                      Math.floor(
-                                        Number(event.target.value) || 0,
-                                      ),
-                                    ),
-                                  },
-                                })
-                              }
-                            />
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    <small
-                      className={left < 0 ? styles.problem : styles.help}
-                      role={left < 0 ? "alert" : undefined}
-                    >
-                      {left < 0
-                        ? `That's ${-left} more than the ${fresh} new leads.`
-                        : left > 0
-                          ? `${left} stay unassigned.`
-                          : "Every new lead has a salesperson."}
-                    </small>
-                  </>
-                )
-              ) : null}
-            </div>
+                                role={left < 0 ? "alert" : undefined}
+                              >
+                                {left < 0
+                                  ? `That's ${-left} more than the ${fresh} new leads.`
+                                  : `${left} stay unassigned.`}
+                              </small>
+                            ) : null}
+                          </>
+                        )
+                      ) : null}
+                    </>
+                  ) : null}
+                </Fragment>
+              ))}
+            </fieldset>
           ) : (
             <small className={styles.help}>They go on your desk.</small>
           )}
@@ -255,6 +294,12 @@ export function sharesLine(
   if (value.assign === "me") return `All ${fresh} on your desk.`;
   if (value.assign === "none") return `All ${fresh} stay unassigned.`;
   if (!team) return "";
+  if (value.assign === "one") {
+    const seller = team.find((rep) => rep.person_id === value.one);
+    return seller
+      ? `All ${fresh} to ${displayName(seller.name)}.`
+      : "Pick the seller.";
+  }
   const counts = countsFor(value, team, fresh);
   const named = team
     .filter((rep) => (counts[rep.person_id] ?? 0) > 0)
@@ -272,7 +317,7 @@ export function overLimitLines(
   fresh: number,
 ): string[] {
   // The limit counts Inbound only (ph1-17: a Cold list is handed over on purpose).
-  if (value.assign !== "people" || !team || value.side === "cold") return [];
+  if (!sharing(value.assign) || !team || value.side === "cold") return [];
   const counts = countsFor(value, team, fresh);
   return team.flatMap((rep) => {
     const given = counts[rep.person_id] ?? 0;

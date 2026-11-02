@@ -98,6 +98,9 @@ export type MetaPage = {
   realLeads?: boolean;
   /** Removed by a manager: off, and out of the list until put back. */
   removed?: boolean;
+  /** Who gets its new leads (owner, 2 Nov 2026): shared between the sellers,
+   *  all to one seller, or left for the owner to assign. */
+  assign?: { mode: "share" | "one" | "none"; personId: string | null } | null;
   /** When Sales Xray last asked Meta for this Page's leads (every 10 minutes). */
   lastPulledAt?: string | null;
   /** "all" takes every form on the Page, ones made later too. */

@@ -101,6 +101,15 @@ function answer(path: string): unknown {
   if (path === "/v1/lead-desk/google/status")
     return { configured: false, accounts: [] };
   if (path === "/v1/lead-desk/sources") return { sources: [] };
+  // The sellers, for each Page's "Who gets these leads?"; the owner doesn't sell.
+  if (path === "/v1/lead-desk/team")
+    return {
+      reps: [
+        { person_id: "s1", name: "Meera Fictional", available: true },
+        { person_id: "s2", name: "Kabir Example", available: true },
+        { person_id: "o1", name: "Asha Fictional", available: false },
+      ],
+    };
   if (path === "/v1/me/sales-xray-workspaces")
     return {
       selected_tenant_id: TENANT,

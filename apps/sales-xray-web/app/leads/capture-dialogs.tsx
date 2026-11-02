@@ -57,7 +57,10 @@ import {
   countsFor,
   firstChoices,
   freshRows,
+  sellersOf,
+  serverAssign,
   sharesFor,
+  sharing,
   type UploadChoices,
 } from "./bulk-upload";
 import {
@@ -803,7 +806,8 @@ const IMPORT_STEPS: { key: ImportStep; label: string }[] = [
   { key: "file", label: "File" },
   { key: "columns", label: "Columns" },
   { key: "check", label: "Check" },
-  { key: "who", label: "Who gets them" },
+  // "Assign" keeps the four steps on one line at 390 (ux-audit, 2 Nov 2026).
+  { key: "who", label: "Assign" },
 ];
 
 /** The columns matched and nearly every row makes a lead: the file opens on
@@ -863,7 +867,8 @@ export function ImportDialog({
     let live = true;
     readTeam().then(
       (next) => {
-        if (live) setTeam(next.reps);
+        // New leads are shared between sellers only (owner, 2 Nov 2026).
+        if (live) setTeam(sellersOf(next.reps));
       },
       () => {
         if (live) setTeam([]);
@@ -881,7 +886,7 @@ export function ImportDialog({
   // Rows pasted from a sheet, a CSV or a chat (owner P0, 23 Oct 2026).
   const [text, setText] = useState("");
   const [dropped, setDropped] = useState(0);
-  // File, Columns, Check, Who gets them (competitor teardown 5): a file whose
+  // File, Columns, Check, Assign (competitor teardown 5): a file whose
   // columns matched opens on Check, Import there with the defaults (the owner's
   // one click, 25 Oct 2026); otherwise Columns first. Numbers already leads are
   // skipped unless an owner or admin picks Fill blanks or Replace.
@@ -1005,14 +1010,16 @@ export function ImportDialog({
 
   const fresh = preview ? freshRows(preview) : 0;
   const overGiven =
-    choices.assign === "people" &&
+    sharing(choices.assign) &&
     team !== null &&
     Object.values(countsFor(choices, team, fresh)).reduce(
       (sum, count) => sum + count,
       0,
     ) > fresh;
   // An even split needs the team: Import waits for it.
-  const teamPending = canManage && choices.assign === "people" && team === null;
+  const teamPending = canManage && sharing(choices.assign) && team === null;
+  // "One seller" waits for the seller to be picked.
+  const nobodyPicked = choices.assign === "one" && !choices.one;
   const noColumn = !mapping.name && !mapping.phone;
   const limits = canManage ? overLimitLines(choices, team, fresh) : [];
 
@@ -1029,12 +1036,12 @@ export function ImportDialog({
         await commitImport(
           preview,
           mapping,
-          choices.assign,
+          serverAssign(choices.assign),
           command.current,
           pipeline || null,
           {
             side: choices.side,
-            ...(choices.assign === "people" && team
+            ...(sharing(choices.assign) && team
               ? { shares: sharesFor(choices, team, fresh) }
               : {}),
             ...(choices.step ? { step: choices.step } : {}),
@@ -1128,7 +1135,9 @@ export function ImportDialog({
               <Button
                 variant="primary"
                 onClick={run}
-                disabled={busy || overGiven || teamPending || noColumn}
+                disabled={
+                  busy || overGiven || teamPending || nobodyPicked || noColumn
+                }
               >
                 {busy
                   ? "Importing…"

@@ -1,11 +1,12 @@
 /* The import's steps, check and skipped rows (competitor teardown 5, 1 Nov 2026). Tokens
    only. */
 
-/* File · Columns · Check · Who gets them: where you are, in one line that wraps. */
+/* File · Columns · Check · Assign: where you are, in one line that wraps (one line
+   at 390, ux-audit 2 Nov 2026). */
 .steps {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
+  gap: 4px 10px;
   margin: 0;
   padding: 0;
   color: var(--sx-muted);

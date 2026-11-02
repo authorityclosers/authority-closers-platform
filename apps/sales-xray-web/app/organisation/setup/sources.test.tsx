@@ -80,6 +80,13 @@ beforeEach(() => {
           { id: "two", name: "Second form", status: "ACTIVE" },
           { id: "archived", name: "Earlier campaign", status: "ARCHIVED" },
         ]);
+      if (path.endsWith("/v1/lead-desk/team"))
+        return Response.json({
+          reps: [
+            { person_id: "s1", name: "Asha Seller", available: true },
+            { person_id: "o1", name: "Owner Person", available: false },
+          ],
+        });
       if (path.endsWith("/p1/older"))
         return Response.json({
           until: "2026-11-02T05:00:00Z",
@@ -278,6 +285,45 @@ it("says what a run of older leads brought, or that they were already here", () 
   expect(runLine({ state: "running", created: 3, seen: 5 })).toBe(
     "Bringing in older leads… 3 so far",
   );
+});
+
+// Owner, 2 Nov 2026: leads go to sellers, never to owners; a Page asks "Who gets
+// these leads?" with three answers.
+it("says who gets a Page's new leads, and changes it to one seller", async () => {
+  await render();
+  const mira = account("Mira Fictional");
+  expect(mira.textContent).toContain("New leads: shared between your sellers");
+  await tap("Change", mira);
+  const choice = mira.querySelector("fieldset")!;
+  expect(choice.textContent).toContain("Who gets these leads?");
+  const radio = (words: string) =>
+    [...choice.querySelectorAll("label")]
+      .find((label) => label.textContent === words)!
+      .querySelector<HTMLInputElement>('input[type="radio"]')!;
+  await act(async () => radio("One seller").click());
+  // Sellers only: the owner, who doesn't take new leads, isn't offered.
+  expect(choice.textContent).toContain("Asha Seller");
+  expect(choice.textContent).not.toContain("Owner Person");
+  // The sellers sit under "One seller", before the last answer (ux-audit, 2 Nov 2026).
+  expect(
+    [...choice.querySelectorAll(":scope > label, :scope > ul")].map((item) =>
+      item.tagName === "UL" ? "sellers" : item.textContent,
+    ),
+  ).toEqual([
+    "Share between my sellers",
+    "One seller",
+    "sellers",
+    "Leave them for me to assign",
+  ]);
+  const save = [...choice.querySelectorAll("button")].find(
+    (button) => button.textContent === "Save",
+  )!;
+  expect(save.disabled).toBe(true);
+  await act(async () => radio("Asha Seller").click());
+  await tap("Save", choice);
+  expect(
+    calls.find((call) => call.path.endsWith("/pages/p1/assign"))?.body,
+  ).toEqual({ mode: "one", personId: "s1" });
 });
 
 // /settings/sources redirects to this hub: linking to it here would send people in a loop.
