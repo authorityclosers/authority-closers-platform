@@ -1072,7 +1072,18 @@ async function openFlow(ctx, route, flow, prior = false) {
   if (!(await loadPage(ctx, route))) return null;
   await sleep(500);
   if (flow.kind === "page") return page.locator("main");
-  return clickPath(page, flow.path);
+  // the lead page's own sheet mounts a moment after the load: let the page settle before counting what is already open
+  await session.settle(ctx.tab, 8000);
+  await sleep(1500);
+  // a sheet already open at this address (the lead page) covers the header's buttons: the press then does nothing, and what is typed next would go into the sheet underneath, not the one named
+  const before = await dlgOf(page).count();
+  const sig = before ? await dlgOf(page).last().innerText().catch(() => "") : "";
+  const root = await clickPath(page, flow.path);
+  if (root && before && (await dlgOf(page).count()) === before && (await root.innerText().catch(() => "")) === sig) {
+    ctx.note(`${flow.name}: pressing it opened nothing new (a sheet already open covers it): not judged`);
+    return null;
+  }
+  return root;
 }
 
 let markN = 0;
@@ -1180,7 +1191,8 @@ async function trialHistory(ctx, route, flow) {
     if (flow.kind === "sheet" && !still) {
       await page.goForward({ timeout: 8000 }).catch(() => null);
       await sleep(1200);
-      if ((await dlgOf(page).count()) && !(await hasMarks(page, typed))) await ctx.add("flow:forward-empty", "MINOR", `${flow.name}`, `After Back, Forward reopens "${flow.name}" with the text typed before gone`, false);
+      // a draft comes back a moment after the sheet is up: give it up to 4 s before calling the sheet empty
+      if ((await dlgOf(page).count()) && !(await waitMarks(page, typed, 4000))) await ctx.add("flow:forward-empty", "MINOR", `${flow.name}`, `After Back, Forward reopens "${flow.name}" with the text typed before gone`, false);
     }
     // refresh with text typed
     natives.length = 0;
