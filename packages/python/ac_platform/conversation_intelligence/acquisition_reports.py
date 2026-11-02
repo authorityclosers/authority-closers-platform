@@ -361,7 +361,8 @@ class AcquisitionReports:
         if run is None:
             raise ConversationConflict("The stored report needs review.")
         report, _ = await self.reports.validated(draft, recording)
-        await self.reports._canonical_draft(draft, recording)
+        # A report read keeps a proved chain until a chain row changes.
+        await self.reports._canonical_draft(draft, recording, memo=True)
         envelope = project_bound_report(
             report,
             access=access,

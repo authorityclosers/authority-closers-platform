@@ -1,8 +1,9 @@
-"""A report is parsed once per process for the same draft content (the test robot, 2 Nov 2026:
-a seller's Coaching parsed all 20 reports again on every visit, part of its 3.5-5.4 s). A
-second read skips the parse; the content hashes are still checked on every read, and any
-change to the draft or its recording parses it again."""
+"""A report is parsed, and a report read's durable chain proved, once per process for the same
+draft content (the test robot, 2 Nov 2026: a seller's Coaching parsed and proved all 20 reports
+again on every visit, 3.5-5.4 s). The content hashes are still checked on every read, and any
+change to the draft, its recording or a chain row checks it again."""
 
+import asyncio
 from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
@@ -133,6 +134,57 @@ def test_another_recording_parses_again(monkeypatch: pytest.MonkeyPatch) -> None
     stored.source_revision = 2
     ConversationReports._validated(stored, recording)
     assert len(parsed) == 2
+
+
+def test_a_report_read_keeps_a_proved_chain_until_a_row_changes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The orchestrator's rules (2 Nov 2026): a durable chain is proved once per
+    report version, keyed by the report's content hashes and a digest of every
+    chain row, and proved again whenever either changes; integrity checks read
+    the whole chain every time."""
+    chains: list[Any] = []
+    rows = ["digest-1"]
+    failing = [False]
+
+    async def chain(self: Any, draft: Any, recording: Any) -> None:
+        chains.append(draft.id)
+        if failing[0]:
+            raise ConversationConflict("The stored report's canonical evidence differs.")
+
+    async def chain_rows(self: Any, recording: Any) -> str:
+        return rows[0]
+
+    monkeypatch.setattr(ConversationReports, "_canonical_chain", chain)
+    monkeypatch.setattr(ConversationReports, "_chain_rows", chain_rows)
+    reports = ConversationReports.__new__(ConversationReports)
+    stored, recording = durable_case()
+
+    def read(memo: bool = True) -> None:
+        asyncio.run(reports._canonical_draft(stored, recording, memo=memo))
+
+    read()
+    read()
+    assert len(chains) == 1
+    # An integrity check reads the whole chain, cached or not.
+    read(memo=False)
+    assert len(chains) == 2
+    # A chain row changed (a tampered receipt, say): proved again, and caught.
+    rows[0] = "digest-2"
+    failing[0] = True
+    for _ in range(2):
+        with pytest.raises(ConversationConflict):
+            read()
+    assert len(chains) == 4
+    # A changed report is another key too.
+    failing[0] = False
+    stored.report_sha256 = "f" * 64
+    read()
+    assert len(chains) == 5
+    # A private (not durable) draft has no chain to read.
+    stored.evidence_receipt = {"schema_id": "ac.sales-xray.private-proof-reference/1"}
+    read()
+    assert len(chains) == 5
 
 
 def test_the_memo_is_bounded_and_forgets() -> None:

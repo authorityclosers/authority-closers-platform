@@ -592,7 +592,10 @@ def test_validated_acquisition_publication_and_terminal_recovery_race(
     from ac_platform.conversation_intelligence.customer_terminal_settlement import (
         settle_recovered_customer_failure,
     )
-    from ac_platform.conversation_intelligence.models import ConversationProcessingPlan
+    from ac_platform.conversation_intelligence.models import (
+        ConversationProcessingPlan,
+        ConversationRecording,
+    )
     from ac_platform.conversation_intelligence.processing_actor import ProcessingActor
     from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
     from ac_platform.conversation_intelligence.worker import OfflineConversationWorker
@@ -797,6 +800,63 @@ def test_validated_acquisition_publication_and_terminal_recovery_race(
                     assert job.provider_receipt["validation_state"] == (
                         "validated" if winner == "publication" else "provider_returned"
                     )
+                if winner == "publication":
+                    # A report read proves the durable chain once while its rows stay
+                    # the same (orchestrator, 2 Nov 2026), and a stored chain row that
+                    # changes is caught on the next read: here the provider receipt
+                    # rewritten in the database.
+                    chains: list[UUID] = []
+
+                    class Counted(ConversationReports):
+                        async def _canonical_chain(self, draft: Any, recording: Any) -> None:
+                            chains.append(draft.id)
+                            await super()._canonical_chain(draft, recording)
+
+                    async def prove() -> None:
+                        async with setup.sessions() as db, db.begin():
+                            recording = await db.get(ConversationRecording, task.recording_id)
+                            draft = await db.scalar(
+                                select(ConversationReportDraft).where(
+                                    ConversationReportDraft.recording_id == task.recording_id
+                                )
+                            )
+                            assert recording is not None and draft is not None
+                            assert draft.evidence_receipt is not None
+                            assert draft.evidence_receipt["schema_id"] == (
+                                "ac.sales-xray.durable-draft-proof/1"
+                            )
+                            await Counted(ConversationApplication(db))._canonical_draft(
+                                draft, recording, memo=True
+                            )
+
+                    # The report reads above already proved this chain: start afresh.
+                    ConversationReports.proven.clear()
+                    await prove()
+                    await prove()
+                    assert len(chains) == 1
+                    async with setup.sessions() as db, db.begin():
+                        stored = await db.get(Job, work.job_id)
+                        assert stored is not None and stored.provider_receipt is not None
+                        receipt = stored.provider_receipt
+                        await db.execute(
+                            update(Job)
+                            .where(Job.id == work.job_id)
+                            .values(provider_receipt={**receipt, "raw_blob_id": str(uuid4())})
+                        )
+                    with pytest.raises(ConversationConflict):
+                        await prove()
+                    assert len(chains) == 2
+                    async with setup.sessions() as db, db.begin():
+                        await db.execute(
+                            update(Job)
+                            .where(Job.id == work.job_id)
+                            .values(provider_receipt=receipt)
+                        )
+                    # Put back, the row is another write: it is proved again, passes,
+                    # and the next read keeps it.
+                    await prove()
+                    await prove()
+                    assert len(chains) == 3
                 assert broker.routes == ["elevenlabs", "gemini", "gemini"]
                 assert broker.calls == 3
                 client.cookies.clear()

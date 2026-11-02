@@ -18,7 +18,7 @@ from uuid import UUID, uuid4
 
 from anyio.to_thread import run_sync
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from ac_platform.conversation_intelligence.alignment import project_transcript_for_playback
 from ac_platform.conversation_intelligence.application import (
@@ -128,9 +128,10 @@ class ProvenDrafts:
     depends only on the draft's bound content. A key holds the draft's
     content hashes, which every read still checks against the stored content,
     and the recording's identity, so a hit stands for the same verdict. A
-    durable draft's chain is still read and compared on every read (a broken
-    receipt is never shown as a report), and access, the recording's state,
-    the draft's erasure and withholding are read fresh by every caller.
+    report read keeps a durable draft's proved chain the same way, keyed
+    also by a digest of every chain row taken fresh on each read (see
+    _canonical_draft). Access, the recording's state, the draft's erasure
+    and withholding are read fresh by every caller.
     Bounded process memory, no database writes; a failed parse is never kept.
     """
 
@@ -320,14 +321,72 @@ class ConversationReports:
         )
 
     async def _canonical_draft(
-        self, draft: ConversationReportDraft, recording: ConversationRecording
+        self,
+        draft: ConversationReportDraft,
+        recording: ConversationRecording,
+        *,
+        memo: bool = False,
     ) -> None:
-        """A durable proof must resolve to actual immutable task/checkpoint receipts."""
+        """A durable proof must resolve to actual immutable task/checkpoint receipts.
+
+        `memo`: a report read keeps a proved chain while the draft's content
+        and every chain row stay as they were (orchestrator, 2 Nov 2026: a
+        seller's Coaching proved every report's chain on every visit). Any
+        change to a chain row gives another key, so the chain is read and
+        compared again and a changed or tampered row is caught on that read.
+        Integrity checks (the admin inventory, reviews, history) leave it
+        False and always read the whole chain.
+        """
         if (
             draft.evidence_receipt is None
             or draft.evidence_receipt.get("schema_id") != "ac.sales-xray.durable-draft-proof/1"
         ):
             return
+        if not memo:
+            await self._canonical_chain(draft, recording)
+            return
+        key = _proof_key("canonical", draft, recording) + (
+            str(draft.run_id),
+            recording.generation,
+            await self._chain_rows(recording),
+        )
+        if self.proven.seen(key):
+            return
+        await self._canonical_chain(draft, recording)
+        self.proven.remember(key)
+
+    async def _chain_rows(self, recording: ConversationRecording) -> str:
+        """A digest of every row the durable chain check reads for a recording.
+
+        Postgres hashes each whole row where it is stored, so nothing large
+        travels: a change to any checkpoint, provider task, its job, run or
+        quote of the recording gives another digest.
+        """
+        rows = (
+            await self.database.execute(
+                text(
+                    "SELECT 'c', c.id::text, md5(row_to_json(c)::text)"
+                    " FROM conversation_checkpoints c WHERE c.recording_id = :recording"
+                    " UNION ALL SELECT 't', t.run_id::text, md5(row_to_json(t)::text)"
+                    " FROM conversation_inference_tasks t WHERE t.recording_id = :recording"
+                    " UNION ALL SELECT 'j', j.id::text, md5(row_to_json(j)::text)"
+                    " FROM jobs j JOIN conversation_inference_tasks t ON t.job_id = j.id"
+                    " WHERE t.recording_id = :recording"
+                    " UNION ALL SELECT 'r', r.id::text, md5(row_to_json(r)::text)"
+                    " FROM conversation_runs r WHERE r.recording_id = :recording"
+                    " UNION ALL SELECT 'q', q.id::text, md5(row_to_json(q)::text)"
+                    " FROM conversation_quotes q WHERE q.recording_id = :recording"
+                    " ORDER BY 1, 2, 3"
+                ),
+                {"recording": recording.id},
+            )
+        ).all()
+        return hashlib.sha256(json.dumps([list(row) for row in rows]).encode()).hexdigest()
+
+    async def _canonical_chain(
+        self, draft: ConversationReportDraft, recording: ConversationRecording
+    ) -> None:
+        """The durable proof's receipts, read and compared (see _canonical_draft)."""
         from ac_platform.conversation_intelligence.inference import ConversationInference
         from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline
 
