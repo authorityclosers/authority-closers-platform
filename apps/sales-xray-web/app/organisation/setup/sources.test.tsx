@@ -1,6 +1,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { notify } from "../../notice-center";
 import { OrganisationSources } from "./sources";
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
@@ -12,13 +13,20 @@ vi.mock("../../notice-center", () => ({ notify: vi.fn() }));
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
+// Owner, 2 Nov 2026: Facebook & Instagram by the account that shared each Page,
+// the Pages bringing leads first, a wrong account disconnected and old Pages
+// removed, older leads only when asked. Made-up accounts and Pages only.
 let host: HTMLDivElement, root: Root;
 const calls: { path: string; body: Record<string, unknown> | null }[] = [];
+let real = false;
+const hourAgo = new Date(Date.now() - 2 * 3600_000).toISOString();
 beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
   calls.length = 0;
+  real = false;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: string, init?: RequestInit) => {
@@ -32,39 +40,56 @@ beforeEach(() => {
             {
               pageId: "p1",
               name: "Sample One",
-              account: { name: "Mira Fictional" },
+              account: {
+                id: "77",
+                name: "Mira Fictional",
+                connectedAt: "2026-10-12T05:00:00Z",
+              },
               active: true,
               received: 2,
-              forms: "all",
+              lastReceivedAt: hourAgo,
+              realLeads: real,
+              forms: ["one"],
+              formsCovered: [{ id: "one", name: "New form", status: "ACTIVE" }],
               formsOnPage: [
                 { id: "old", name: "Cached form", status: "ACTIVE" },
               ],
             },
             {
               pageId: "p2",
-              name: "Sample Two",
-              account: { name: "Tali Example" },
-              active: true,
-              received: 1,
-              forms: ["two"],
+              name: "Old Brand Page",
+              account: { id: "77", name: "Mira Fictional" },
+              active: false,
+              received: 0,
+              formsOnPage: [{ id: "x", name: "Form", status: "ARCHIVED" }],
+            },
+            {
+              pageId: "p3",
+              name: "Sample Three",
+              account: { id: "88", name: "Tali Example" },
+              active: false,
+              received: 0,
+              removed: true,
             },
           ],
         });
       if (path.endsWith("/p1/forms"))
         return Response.json([
           { id: "one", name: "New form", status: "ACTIVE" },
+          { id: "two", name: "Second form", status: "ACTIVE" },
           { id: "archived", name: "Earlier campaign", status: "ARCHIVED" },
         ]);
-      if (path.endsWith("/p2/forms"))
-        return Response.json([
-          { id: "two", name: "Course form", status: "ACTIVE" },
-        ]);
-      return Response.json({
-        page: {
-          pageId: "p1",
-          backfill: { state: "done", seen: 5, created: 1, known: 4 },
-        },
-      });
+      if (path.endsWith("/p1/older"))
+        return Response.json({
+          until: "2026-11-02T05:00:00Z",
+          counts: [
+            { days: 7, leads: 2 },
+            { days: 30, leads: 9 },
+            { days: 90, leads: 40 },
+          ],
+          capped: false,
+        });
+      return Response.json({ pages: [] });
     }),
   );
 });
@@ -73,55 +98,170 @@ afterEach(async () => {
   host.remove();
   vi.unstubAllGlobals();
 });
-// The summary keeps each count with its word through no-break spaces.
-const plain = () =>
-  (host.textContent ?? "").split(String.fromCharCode(160)).join(" ");
-async function render() {
-  await act(async () => {
-    root.render(<OrganisationSources />);
-  });
+async function settle() {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     for (let i = 0; i < 12; i++) await Promise.resolve();
   });
 }
-async function tap(text: string) {
-  const button = [...host.querySelectorAll("button")].find((item) =>
-    item.textContent?.includes(text),
-  );
-  expect(button).toBeDefined();
+async function render() {
   await act(async () => {
-    button!.click();
-    for (let i = 0; i < 12; i++) await Promise.resolve();
+    root.render(<OrganisationSources />);
   });
+  await settle();
 }
-it("shows fresh forms across accounts, including archived forms, without saving on load", async () => {
+async function tap(text: string, within: ParentNode = host) {
+  const button = [...within.querySelectorAll("button")].find(
+    (item) => item.textContent?.trim() === text,
+  );
+  expect(button, text).toBeDefined();
+  await act(async () => button!.click());
+  await settle();
+}
+const account = (name: string) =>
+  host.querySelector(`section[aria-label="Facebook account ${name}"]`)!;
+
+it("says what is connected and working, by account, without saving on load", async () => {
   await render();
-  expect(host.textContent).toContain("Mira Fictional");
-  expect(host.textContent).toContain("Tali Example");
-  expect(host.textContent).toContain("Earlier campaign");
-  expect(host.textContent).not.toContain("Cached form");
+  expect(host.textContent).toContain(
+    "2 Facebook accounts · 1 Page bringing leads · last lead 2 h ago",
+  );
+  const mira = account("Mira Fictional");
+  expect(mira.textContent).toContain("Connected");
+  expect(mira.textContent).toContain("Sample One");
+  expect(mira.textContent).toContain(
+    "On · 1 form · last lead 2 h ago · 2 leads",
+  );
+  // Fresh forms from Meta, active ones; archived behind their fold.
+  expect(mira.textContent).toContain("Second form");
+  expect(mira.textContent).not.toContain("Cached form");
+  expect(mira.textContent).toContain("Show archived (1)");
+  expect(mira.textContent).toContain("Other Pages from this account (1)");
+  expect(account("Tali Example").textContent).toContain("Removed Pages (1)");
   expect(calls.every((call) => call.body === null)).toBe(true);
-  expect(host.textContent).toContain("existing duplicate checks");
+  // No real form has sent a lead yet: said plainly.
+  expect(host.textContent).toContain(
+    "Only Meta test leads so far: no real form has sent a lead yet",
+  );
 });
-it("keeps selection local until Save and sends history requests for all selected forms", async () => {
+
+it("drops the test-leads line once a real form has sent a lead", async () => {
+  real = true;
   await render();
-  await tap("Fetch old leads");
+  expect(host.textContent).not.toContain("Only Meta test leads");
+});
+
+it("asks before disconnecting an account, naming what stops", async () => {
+  await render();
+  const mira = account("Mira Fictional");
+  await tap("Disconnect", mira);
+  expect(calls.some((call) => call.path.includes("/disconnect"))).toBe(false);
+  expect(mira.textContent).toContain(
+    "Disconnect Mira Fictional? 2 Pages and 1 form stop bringing leads. Leads already here stay.",
+  );
+  await tap("Keep", mira);
+  expect(calls.some((call) => call.path.includes("/disconnect"))).toBe(false);
+  await tap("Disconnect", mira);
+  await tap("Disconnect", mira.querySelector('[role="alertdialog"]')!);
   expect(
-    calls
-      .filter((call) => call.path.endsWith("/backfill"))
-      .map((call) => call.body),
-  ).toEqual([{ forms: ["one", "archived"] }, { forms: ["two"] }]);
-  await tap("Earlier campaign");
-  expect(calls.filter((call) => call.path.endsWith("/p1"))).toHaveLength(0);
-  await tap("Save forms");
-  expect(calls.find((call) => call.path.endsWith("/p1"))?.body).toEqual({
-    forms: ["one"],
+    calls.find((call) => call.path.endsWith("/accounts/77/disconnect"))?.body,
+  ).toEqual({});
+});
+
+it("turns another Page on, removes one and puts one back", async () => {
+  await render();
+  const mira = account("Mira Fictional");
+  await tap("Turn on", mira);
+  expect(calls.find((call) => call.path.endsWith("/pages/p2"))?.body).toEqual({
+    forms: "all",
+  });
+  await tap("Remove", mira);
+  expect(calls.some((call) => call.path.endsWith("/pages/p2/remove"))).toBe(
+    true,
+  );
+  await tap("Put back", account("Tali Example"));
+  expect(calls.some((call) => call.path.endsWith("/pages/p3/restore"))).toBe(
+    true,
+  );
+});
+
+it("counts older leads first and brings in only the days picked", async () => {
+  await render();
+  const mira = account("Mira Fictional");
+  await tap("Bring in older leads", mira);
+  expect(calls.some((call) => call.path.endsWith("/pages/p1/older"))).toBe(
+    true,
+  );
+  expect(mira.textContent).toContain("Last 7 days · 2 leads");
+  expect(mira.textContent).toContain("Last 90 days · 40 leads");
+  const radios = mira.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+  await act(async () => radios[1].click());
+  await tap("Bring in 9 leads", mira);
+  expect(
+    calls.find((call) => call.path.endsWith("/pages/p1/backfill"))?.body,
+  ).toEqual({ days: 30 });
+});
+
+it("keeps every form with one switch, or the forms picked", async () => {
+  await render();
+  const mira = account("Mira Fictional");
+  const all = mira.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+  expect(all.checked).toBe(false);
+  await act(async () => all.click());
+  await settle();
+  expect(calls.find((call) => call.path.endsWith("/pages/p1"))?.body).toEqual({
+    forms: "all",
+  });
+  calls.length = 0;
+  // The last form on stays on, enabled, and says why (ux-audit).
+  const only = [...mira.querySelectorAll("label")]
+    .find((label) => label.textContent?.includes("New form"))!
+    .querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+  expect(only.disabled).toBe(false);
+  await act(async () => only.click());
+  await settle();
+  expect(only.checked).toBe(true);
+  expect(calls.some((call) => call.body !== null)).toBe(false);
+  expect(vi.mocked(notify)).toHaveBeenCalledWith(
+    expect.objectContaining({ title: expect.stringContaining("at least one") }),
+  );
+  // Square boxes beside each name, like All forms (ux-audit): several can be on.
+  const second = [...mira.querySelectorAll("label")].find((label) =>
+    label.textContent?.includes("Second form"),
+  )!;
+  const box = second.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+  expect(box.checked).toBe(false);
+  await act(async () => box.click());
+  await settle();
+  expect(calls.find((call) => call.path.endsWith("/pages/p1"))?.body).toEqual({
+    forms: ["one", "two"],
   });
 });
 
+it("adds Pages within each account and another account at the end", async () => {
+  await render();
+  const links = [...host.querySelectorAll("a")].map((link) => [
+    link.textContent,
+    link.getAttribute("href"),
+  ]);
+  expect(links).toEqual(
+    expect.arrayContaining([
+      ["Add Pages", "/v1/lead-desk/meta/connect-sources"],
+      [
+        "Connect another Facebook account",
+        "/v1/lead-desk/meta/connect-another",
+      ],
+    ]),
+  );
+  expect(
+    account("Mira Fictional").querySelector(
+      'a[href="/v1/lead-desk/meta/connect-sources"]',
+    ),
+  ).not.toBeNull();
+});
+
 // /settings/sources redirects to this hub: linking to it here would send people in a loop.
-it("keeps the other source controls on the screen instead of linking back to itself", async () => {
+it("keeps the other source controls on the screen, without a second Facebook card", async () => {
   await render();
   expect(host.querySelector('a[href="/settings/sources"]')).toBeNull();
   const details = [...host.querySelectorAll("details")].find(
@@ -134,49 +274,9 @@ it("keeps the other source controls on the screen instead of linking back to its
   });
   expect(host.querySelector('[data-brand="google"]')).not.toBeNull();
   expect(host.textContent).toContain("Website form");
-});
-
-// Owner bugs #75 and #76: no save bar until something changes; Discard puts the checks back.
-it("shows the save bar only while a choice is unsaved, and Discard restores it", async () => {
-  await render();
-  const saveBar = () => host.querySelector('[aria-label="Unsaved forms"]');
-  const pressed = () =>
-    [...host.querySelectorAll("button[aria-pressed]")].map((item) =>
-      item.getAttribute("aria-pressed"),
-    );
-  expect(saveBar()).toBeNull();
-  expect(plain()).toContain("3 of 3 forms bring in leads · 2 Pages");
-  const before = pressed();
-  await tap("Earlier campaign");
-  expect(saveBar()?.textContent).toContain("1 change");
-  expect(plain()).toContain("2 of 3 forms");
-  await tap("Discard");
-  expect(saveBar()).toBeNull();
-  expect(pressed()).toEqual(before);
-  expect(calls.filter((call) => call.body !== null)).toHaveLength(0);
-});
-
-it("selects or clears every form of one Page from its header", async () => {
-  await render();
-  await tap("Clear");
-  const first = host.querySelector(
-    'section[aria-label="Forms on Sample One"]',
-  )!;
   expect(
-    [...first.querySelectorAll("button[aria-pressed]")].map((item) =>
-      item.getAttribute("aria-pressed"),
-    ),
-  ).toEqual(["false", "false"]);
-  const second = host.querySelector(
-    'section[aria-label="Forms on Sample Two"]',
-  )!;
-  expect(
-    second.querySelector("button[aria-pressed]")?.getAttribute("aria-pressed"),
-  ).toBe("true");
-  await tap("Save forms");
-  expect(
-    calls.find((call) => call.path.endsWith("/p1/disconnect")),
-  ).toBeDefined();
+    calls.filter((call) => call.path.endsWith("/meta/status")),
+  ).toHaveLength(1);
 });
 
 it("does not send people to an unavailable Facebook connector", async () => {

@@ -15,14 +15,14 @@ import {
   Copy,
   FileSpreadsheet,
   FlaskConical,
-  History,
   Plus,
   RefreshCw,
 } from "lucide-react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { Badge, Button, Field, initials } from "../ui/kit";
+import { Badge, Button, Field } from "../ui/kit";
 import {
   AppCard,
   AppCardSkeleton,
@@ -47,6 +47,7 @@ import formStyles from "./meta-forms.module.css";
 import { SpendSummary } from "./ad-spend";
 import { JourneyStrip } from "./journey/journey-strip";
 import { WebsitesCard } from "./websites/websites-card";
+import { topLine } from "../organisation/setup/meta-accounts";
 
 /* ---------- Meta connector API (lead_desk/connectors) ---------- */
 
@@ -66,6 +67,8 @@ export type MetaBackfill = {
   known?: number;
   /** How many forms this run reads. */
   forms?: number;
+  /** The older leads asked for: sent in these days before the Page went on. */
+  days?: number | null;
   seen: number;
   finishedAt?: string | null;
   error?: string | null;
@@ -74,14 +77,27 @@ export type MetaProblem = {
   kind: "token" | "permission" | "lead_access" | "other";
   text: string;
 };
-/** The Facebook account a Page was shared through (bug report #8). */
-export type MetaAccount = { name: string; picture?: string | null };
+/** The Facebook account a Page was shared through (bug report #8), and since
+ *  when it is connected here. */
+export type MetaAccount = {
+  id?: string | null;
+  name: string;
+  picture?: string | null;
+  connectedAt?: string | null;
+};
 export type MetaPage = {
   pageId: string;
   name: string;
   active: boolean;
   account?: MetaAccount | null;
   received: number;
+  lastReceivedAt?: string | null;
+  /** When it was switched on: only leads sent since come in by themselves. */
+  connectedAt?: string | null;
+  /** A real form has sent it a lead, not only Meta's testing tool. */
+  realLeads?: boolean;
+  /** Removed by a manager: off, and out of the list until put back. */
+  removed?: boolean;
   /** When Sales Xray last asked Meta for this Page's leads (every 10 minutes). */
   lastPulledAt?: string | null;
   /** "all" takes every form on the Page, ones made later too. */
@@ -156,13 +172,6 @@ export function backfillLine(backfill?: MetaBackfill | null): string | null {
     : "Older leads: Meta has none from the last 90 days";
 }
 
-const FORM_STATUS: Record<string, string> = {
-  ACTIVE: "Active",
-  ARCHIVED: "Archived",
-  DRAFT: "Draft",
-  DELETED: "Deleted",
-};
-
 /** A run of older leads as a chip: what it found, in a few words. */
 export function backfillChip(backfill?: MetaBackfill | null): string | null {
   if (!backfill) return null;
@@ -173,243 +182,6 @@ export function backfillChip(backfill?: MetaBackfill | null): string | null {
     : "No old leads on Meta";
 }
 
-type PageActions = {
-  busy: string | null;
-  /** Turn the Page on with every form, or switch it off. */
-  onPage: (page: MetaPage, on: boolean) => void;
-  /** Which forms come in live ("all" for every form, new ones too). */
-  onForms: (page: MetaPage, forms: "all" | string[]) => void;
-  /** Older leads from these forms, or every form the Page takes (null). */
-  onOlder: (page: MetaPage, forms: string[] | null) => void;
-  onCheck: (page: MetaPage) => void;
-};
-
-/**
- * Facebook accounts, their Pages, and each Page's forms, as rows (owner, 26 Oct
- * 2026, bug reports #21 and #22: "too much text", "so much side spacing", "all
- * forms and pages management should be nicer ... sliders"): a switch per Page
- * and per form, one icon for a form's old leads, status as chips, and no
- * paragraphs.
- */
-function MetaAccounts({
-  pages,
-  ...actions
-}: { pages: MetaPage[] } & PageActions) {
-  const groups = new Map<
-    string,
-    { account: MetaAccount | null; pages: MetaPage[] }
-  >();
-  for (const page of pages) {
-    const key = page.account?.name ?? "";
-    const group = groups.get(key) ?? {
-      account: page.account ?? null,
-      pages: [],
-    };
-    group.pages.push(page);
-    groups.set(key, group);
-  }
-  return (
-    <div className={formStyles.accounts}>
-      {[...groups.values()].map(({ account, pages: own }) => (
-        <section
-          key={account?.name ?? ""}
-          className={formStyles.account}
-          aria-label={
-            account ? `Pages through ${account.name}` : "Facebook Pages"
-          }
-        >
-          {account ? (
-            <header className={formStyles.accountHead}>
-              {account.picture ? (
-                // eslint-disable-next-line @next/next/no-img-element -- Facebook's own small photo
-                <img
-                  src={account.picture}
-                  alt=""
-                  width={24}
-                  height={24}
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <span className={formStyles.avatar} aria-hidden="true">
-                  {initials(account.name)}
-                </span>
-              )}
-              <strong>{account.name}</strong>
-              <span className={cardStyles.fact}>
-                {own.length} Page{own.length === 1 ? "" : "s"}
-              </span>
-            </header>
-          ) : null}
-          {own.map((page) => (
-            <MetaPageRows key={page.pageId} page={page} {...actions} />
-          ))}
-        </section>
-      ))}
-    </div>
-  );
-}
-
-function MetaPageRows({
-  page,
-  busy,
-  onPage,
-  onForms,
-  onOlder,
-  onCheck,
-}: { page: MetaPage } & PageActions) {
-  const forms = page.formsOnPage?.length
-    ? page.formsOnPage
-    : (page.formsCovered ?? []);
-  const takesAll = !page.forms || page.forms === "all";
-  const live = new Set(
-    page.active ? (takesAll ? forms.map((form) => form.id) : page.forms) : [],
-  );
-  const working = busy === page.pageId;
-  const running = page.backfill?.state === "running";
-  const problem = page.active
-    ? (page.problem?.text ?? page.backfill?.error ?? null)
-    : null;
-  const chip = page.active ? backfillChip(page.backfill) : null;
-  // A form's switch: the forms that come in live, this one on or off. No form
-  // left means the Page is switched off.
-  const setForm = (id: string, on: boolean) => {
-    const next = forms
-      .map((form) => form.id)
-      .filter((formId) => (formId === id ? on : live.has(formId)));
-    if (!next.length) onPage(page, false);
-    else onForms(page, next.length === forms.length ? "all" : next);
-  };
-  return (
-    <article
-      className={formStyles.page}
-      data-off={page.active ? undefined : ""}
-    >
-      <div className={formStyles.pageHead}>
-        <div className={formStyles.pageTitle}>
-          <strong>{page.name}</strong>
-          <span className={cardStyles.facts}>
-            <span
-              className={cardStyles.fact}
-              data-tone={page.active ? "good" : undefined}
-            >
-              {page.active
-                ? `${page.received} lead${page.received === 1 ? "" : "s"}`
-                : "Off"}
-            </span>
-            {page.active && page.lastPulledAt ? (
-              <span className={cardStyles.fact}>
-                Checked {ago(page.lastPulledAt)}
-              </span>
-            ) : null}
-            {chip ? (
-              <span
-                className={cardStyles.fact}
-                data-state={page.backfill?.state}
-                title={backfillLine(page.backfill) ?? undefined}
-              >
-                {chip}
-              </span>
-            ) : null}
-          </span>
-        </div>
-        <span className={formStyles.pageTools}>
-          {page.active ? (
-            <button
-              type="button"
-              className={formStyles.iconButton}
-              aria-label={`Check ${page.name} for new leads now`}
-              title="Check now"
-              disabled={working}
-              onClick={() => onCheck(page)}
-            >
-              <RefreshCw size={16} aria-hidden="true" />
-            </button>
-          ) : null}
-          <input
-            type="checkbox"
-            role="switch"
-            className={cardStyles.switch}
-            aria-label={`Leads from ${page.name}`}
-            checked={page.active}
-            disabled={working}
-            onChange={(event) => onPage(page, event.target.checked)}
-          />
-        </span>
-      </div>
-      {problem ? (
-        <small className={cardStyles.problem} role="status">
-          {problem}
-        </small>
-      ) : null}
-      {forms.length ? (
-        <ul className={formStyles.forms} aria-label={`Forms on ${page.name}`}>
-          {forms.map((form) => (
-            <li key={form.id} className={formStyles.formRow}>
-              <input
-                type="checkbox"
-                role="switch"
-                className={cardStyles.switch}
-                aria-label={`Keep ${form.name} live`}
-                checked={live.has(form.id)}
-                disabled={working}
-                onChange={(event) => setForm(form.id, event.target.checked)}
-              />
-              <span className={formStyles.formText}>
-                <span className={formStyles.formName}>{form.name}</span>
-                {form.status !== "ACTIVE" || typeof form.leads === "number" ? (
-                  <span className={cardStyles.facts}>
-                    {form.status !== "ACTIVE" ? (
-                      <span className={cardStyles.fact}>
-                        {FORM_STATUS[form.status] ??
-                          (form.status.toLowerCase() || "Form")}
-                      </span>
-                    ) : null}
-                    {typeof form.leads === "number" ? (
-                      <span className={cardStyles.fact}>
-                        {form.leads} on Meta
-                      </span>
-                    ) : null}
-                  </span>
-                ) : null}
-              </span>
-              <button
-                type="button"
-                className={formStyles.iconButton}
-                aria-label={`Bring old leads from ${form.name}`}
-                title="Bring old leads"
-                disabled={working || !page.active || running}
-                onClick={() => onOlder(page, [form.id])}
-              >
-                <History size={16} aria-hidden="true" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {page.active ? (
-        <span className={formStyles.pageFoot}>
-          <button
-            type="button"
-            className={cardStyles.chip}
-            disabled={working || running}
-            onClick={() => onOlder(page, null)}
-          >
-            <History size={14} aria-hidden="true" />
-            {running ? "Bringing in old leads…" : "Bring old leads, all forms"}
-          </button>
-        </span>
-      ) : null}
-    </article>
-  );
-}
-type MetaPull = {
-  page: MetaPage;
-  fetched: number;
-  created: number;
-  repeat: number;
-  known: number;
-  skipped: number;
-};
 type MetaStatus = { configured: boolean; pages: MetaPage[] };
 const META = "/v1/lead-desk/meta";
 const RETURNED: Record<string, string> = {
@@ -796,7 +568,6 @@ function MetaTile() {
   const [note, setNote] = useState<string | null>(
     RETURNED[params.get("meta") ?? ""] ?? null,
   );
-  const [busy, setBusy] = useState<string | null>(null);
   // Bug report #14 (25 Oct 2026: "this loading takes forever"): a read that
   // hangs stops after 15 seconds and says so, with Try again.
   const [failed, setFailed] = useState(false);
@@ -835,107 +606,6 @@ function MetaTile() {
     const timer = setInterval(() => void load(), 20000);
     return () => clearInterval(timer);
   }, [filling]);
-
-  const toggle = async (page: MetaPage) => {
-    setBusy(page.pageId);
-    setNote(null);
-    try {
-      if (page.active) {
-        await metaCall(`/pages/${encodeURIComponent(page.pageId)}/disconnect`, {
-          method: "POST",
-        });
-      } else {
-        await keepLive(page, "all");
-        return;
-      }
-      await load();
-    } catch (reason) {
-      setNote(
-        reason instanceof LeadsError ? reason.message : "That didn't work.",
-      );
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  // Meta's push can be late or missing (apps in development mode never get it),
-  // so Sales Xray also asks every 10 minutes; this asks now.
-  const pull = async (page: MetaPage) => {
-    setBusy(page.pageId);
-    setNote(null);
-    try {
-      const result = await metaCall<MetaPull>(
-        `/pages/${encodeURIComponent(page.pageId)}/pull`,
-        { method: "POST" },
-      );
-      setNote(checkedLine(page.name, result.created, result.repeat));
-      await load();
-    } catch (reason) {
-      setNote(
-        reason instanceof LeadsError ? reason.message : "That didn't work.",
-      );
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  // Turn a Page on with these forms, or change which forms come in live; only
-  // leads sent from now on come in (owner, 2 Nov 2026).
-  const keepLive = async (page: MetaPage, forms: "all" | string[]) => {
-    setBusy(page.pageId);
-    setNote(null);
-    try {
-      await metaCall<{ imported: number }>(
-        `/pages/${encodeURIComponent(page.pageId)}`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ forms }),
-        },
-      );
-      setNote("New leads come in from now on.");
-      await load();
-    } catch (reason) {
-      setNote(
-        reason instanceof LeadsError ? reason.message : "That didn't work.",
-      );
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  // Every lead Meta still keeps (90 days), from every form or the ones picked;
-  // leads already here are linked, never filed twice.
-  const older = async (page: MetaPage, forms: string[] | null = null) => {
-    setBusy(page.pageId);
-    setNote(null);
-    try {
-      const result = await metaCall<{ imported: number; page: MetaPage }>(
-        `/pages/${encodeURIComponent(page.pageId)}/backfill`,
-        forms
-          ? {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ forms }),
-            }
-          : { method: "POST" },
-      );
-      const run = result.page.backfill;
-      const more = run?.state === "running";
-      setNote(
-        run
-          ? `${run.seen} older lead${run.seen === 1 ? "" : "s"} read: ${run.created} new, ${alreadyHere(run)} already in your leads${more ? "; the rest follow in the next few minutes" : ""}.`
-          : `${result.imported} older lead${result.imported === 1 ? "" : "s"} came in.`,
-      );
-      await load();
-    } catch (reason) {
-      setNote(
-        reason instanceof LeadsError ? reason.message : "That didn't work.",
-      );
-    } finally {
-      setBusy(null);
-    }
-  };
 
   const live = status?.pages.filter((page) => page.active).length ?? 0;
   const blocked = status?.pages.some(
@@ -1003,17 +673,13 @@ function MetaTile() {
         ) : null
       }
     >
+      {/* Pages, forms and older leads are managed in one place, Leads setup →
+          Sources (owner, 2 Nov 2026); here, what is connected and working. */}
       {status?.configured && status.pages.length ? (
-        <MetaAccounts
-          pages={status.pages}
-          busy={busy}
-          onPage={(page, on) =>
-            void (on ? keepLive(page, "all") : page.active && toggle(page))
-          }
-          onForms={(page, forms) => void keepLive(page, forms)}
-          onOlder={(page, forms) => void older(page, forms)}
-          onCheck={(page) => void pull(page)}
-        />
+        <p className={styles.hint}>
+          {topLine(status.pages)} ·{" "}
+          <Link href="/organisation?tab=leads&part=sources">Manage Pages</Link>
+        </p>
       ) : null}
       {note ? (
         <p className={styles.hint} role="status">
@@ -1327,11 +993,14 @@ function OtherWays({
 
 export function SourcesView({
   sandbox,
+  withoutMeta = false,
   onChanged,
   onImport,
   onImportGoogle,
 }: {
   sandbox: boolean;
+  /** Leads setup → Sources has Facebook & Instagram as its own card above. */
+  withoutMeta?: boolean;
   onChanged: () => void;
   onImport: () => void;
   /** Import a Sheet picked in Google's Picker (Lead OS, 27 Oct 2026). */
@@ -1344,7 +1013,7 @@ export function SourcesView({
         aria-label="Connect where your leads come from"
       >
         <WebsitesCard />
-        <MetaTile />
+        {withoutMeta ? null : <MetaTile />}
         <GoogleTile />
         <SourceRow
           kind="linkedin"
