@@ -131,42 +131,26 @@ it("says where bringing in older leads has got to", () => {
   );
 });
 
-it("shows each Page's forms as rows and brings in all their older leads on request", async () => {
+// Owner, 2 Nov 2026: Pages, forms and older leads are managed in one place,
+// Leads setup → Sources; this tile says what is connected and working.
+it("says what is connected and sends Page changes to Leads setup", async () => {
   await render();
-  // Bug reports #21 and #22: rows and chips, not paragraphs.
-  expect(tile().textContent).not.toContain("All forms, new ones too");
-  const rows = [
-    ...tile().querySelectorAll('[aria-label="Forms on Fictional Homes"] li'),
-  ];
-  expect(rows.map((row) => row.textContent)).toEqual([
-    "Enquiry",
-    "Site visitArchived",
-  ]);
-  expect(tile().textContent).toContain("Old leads: 12 new, 0 already here");
-  const older = [...tile().querySelectorAll("button")].find((button) =>
-    button.textContent?.includes("Bring old leads, all forms"),
-  ) as HTMLButtonElement;
-  await act(async () => older.click());
-  expect(calls).toContainEqual({
-    url: "/v1/lead-desk/meta/pages/1326368220570095/backfill",
-    method: "POST",
+  await act(async () => {
+    for (let i = 0; i < 6; i++) await Promise.resolve();
   });
   expect(tile().textContent).toContain(
-    "30 older leads read: 30 new, 0 already in your leads; the rest follow in the next few minutes.",
+    "1 Facebook account · 1 Page bringing leads",
   );
-  expect(tile().textContent).toContain("Old leads: 30 read");
-  // While it runs, nothing brings older leads in again.
-  const running = [...tile().querySelectorAll("button")].find((button) =>
-    button.textContent?.includes("Bringing in old leads"),
-  ) as HTMLButtonElement;
-  expect(running.disabled).toBe(true);
-  expect(
-    (
-      tile().querySelector(
-        '[aria-label="Bring old leads from Enquiry"]',
-      ) as HTMLButtonElement
-    ).disabled,
-  ).toBe(true);
+  const manage = [...tile().querySelectorAll("a")].find(
+    (link) => link.textContent === "Manage Pages",
+  );
+  expect(manage?.getAttribute("href")).toBe(
+    "/organisation?tab=leads&part=sources",
+  );
+  // No Page or form rows, switches or older-leads buttons here any more.
+  expect(tile().querySelector('[role="switch"]')).toBeNull();
+  expect(tile().textContent).not.toContain("Bring old leads");
+  expect(calls.every((call) => call.method === "GET")).toBe(true);
 });
 
 it("walks the customer through Leads Access Manager when Meta blocks the app", async () => {
@@ -180,7 +164,8 @@ it("walks the customer through Leads Access Manager when Meta blocks the app", a
     }),
   ];
   await render();
-  expect(tile().textContent).toContain("Allow Sales Xray there");
+  // The Page's own words are on its card in Leads setup → Sources; here the
+  // steps open by themselves.
   const help = [...tile().querySelectorAll("details")].find((item) =>
     item.textContent?.includes("Leads Access Manager"),
   ) as HTMLDetailsElement;
@@ -200,76 +185,6 @@ it("keeps the Leads Access Manager steps folded away when nothing is wrong", asy
   expect(help.querySelector("summary")?.textContent).toBe(
     "Does your business use Leads Access Manager?",
   );
-});
-
-it("groups Pages by account, switches forms live one by one, and brings in one form's old leads", async () => {
-  pages = [
-    page({
-      account: { name: "Fictional Owner", picture: null },
-      formsOnPage: [
-        { id: "f1", name: "Enquiry", status: "ACTIVE", leads: 31 },
-        { id: "f2", name: "Site visit", status: "ARCHIVED", leads: 4 },
-        { id: "f3", name: "Old offer", status: "ACTIVE", leads: 0 },
-      ],
-    }),
-  ];
-  const bodies: { url: string; body: unknown }[] = [];
-  const base = globalThis.fetch;
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.body)
-        bodies.push({
-          url: String(input),
-          body: JSON.parse(String(init.body)),
-        });
-      return base(input, init);
-    }),
-  );
-  await render();
-  // Bug report #8: which Facebook account the Pages came through, and another one.
-  expect(
-    tile().querySelector('[aria-label="Pages through Fictional Owner"]')
-      ?.textContent,
-  ).toContain("Fictional Owner1 Page");
-  expect(
-    tile()
-      .querySelector('[aria-label="Use another Facebook account"]')
-      ?.getAttribute("href"),
-  ).toBe("/v1/lead-desk/meta/connect?switch=1");
-  expect(tile().textContent).toContain("31 on Meta");
-  // One form's switch: the others stay live.
-  const keep = tile().querySelector(
-    '[aria-label="Keep Old offer live"]',
-  ) as HTMLInputElement;
-  expect(keep.checked).toBe(true);
-  await act(async () => keep.click());
-  expect(bodies).toContainEqual({
-    url: "/v1/lead-desk/meta/pages/1326368220570095",
-    body: { forms: ["f1", "f2"] },
-  });
-  // One form's old leads, archived ones too.
-  const bring = tile().querySelector(
-    '[aria-label="Bring old leads from Site visit"]',
-  ) as HTMLButtonElement;
-  await act(async () => bring.click());
-  expect(bodies).toContainEqual({
-    url: "/v1/lead-desk/meta/pages/1326368220570095/backfill",
-    body: { forms: ["f2"] },
-  });
-});
-
-it("switches a Page off from its switch", async () => {
-  await render();
-  const page = tile().querySelector(
-    '[aria-label="Leads from Fictional Homes"]',
-  ) as HTMLInputElement;
-  expect(page.checked).toBe(true);
-  await act(async () => page.click());
-  expect(calls).toContainEqual({
-    url: "/v1/lead-desk/meta/pages/1326368220570095/disconnect",
-    method: "POST",
-  });
 });
 
 it("says the Pages didn't load, with Try again, instead of loading forever", async () => {

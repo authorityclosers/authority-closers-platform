@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
+from collections import OrderedDict
 from dataclasses import replace
+from time import monotonic
 from types import SimpleNamespace
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
@@ -116,7 +119,74 @@ class DurableDraftProof(BaseModel):
     numeric_publication: Literal[False]
 
 
+class ProvenDrafts:
+    """Report drafts whose bound content this process has already parsed.
+
+    Every report read parsed its report against its transcript again, so a
+    seller's Coaching (a read of every report) spent about a second of its
+    3-5 s on parsing with 20 reports (the test robot, 2 Nov 2026). The parse
+    depends only on the draft's bound content. A key holds the draft's
+    content hashes, which every read still checks against the stored content,
+    and the recording's identity, so a hit stands for the same verdict. A
+    durable draft's chain is still read and compared on every read (a broken
+    receipt is never shown as a report), and access, the recording's state,
+    the draft's erasure and withholding are read fresh by every caller.
+    Bounded process memory, no database writes; a failed parse is never kept.
+    """
+
+    def __init__(self, *, capacity: int = 4096, ttl_seconds: float = 3600) -> None:
+        self.capacity, self.ttl_seconds = capacity, ttl_seconds
+        self._entries: OrderedDict[tuple[Any, ...], float] = OrderedDict()
+        # Parsing runs in worker threads.
+        self._lock = threading.Lock()
+
+    def seen(self, key: tuple[Any, ...]) -> bool:
+        now = monotonic()
+        with self._lock:
+            expires = self._entries.get(key)
+            if expires is None or expires <= now:
+                self._entries.pop(key, None)
+                return False
+            self._entries.move_to_end(key)
+            return True
+
+    def remember(self, key: tuple[Any, ...]) -> None:
+        with self._lock:
+            self._entries[key] = monotonic() + self.ttl_seconds
+            self._entries.move_to_end(key)
+            while len(self._entries) > self.capacity:
+                self._entries.popitem(last=False)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._entries.clear()
+
+
+def _proof_key(stage: str, draft: Any, recording: Any) -> tuple[Any, ...]:
+    """A proof stage for the draft's bound content, on the recording it belongs to."""
+    return (
+        stage,
+        str(draft.recording_id),
+        str(draft.tenant_id),
+        str(draft.person_id),
+        draft.source_revision,
+        draft.source_sha256,
+        draft.report_sha256,
+        draft.transcript_sha256,
+        draft.evidence_receipt_sha256,
+        draft.profile_sha256,
+        str(recording.id),
+        str(recording.tenant_id),
+        str(recording.person_id),
+        recording.source_revision,
+        recording.source_sha256,
+    )
+
+
 class ConversationReports:
+    # Drafts this process has parsed, shared by every read (see ProvenDrafts).
+    proven = ProvenDrafts()
+
     def __init__(self, application: ConversationApplication) -> None:
         self.application = application
         self.database = application.database
@@ -140,6 +210,10 @@ class ConversationReports:
             or content_hash(draft.evidence_receipt) != draft.evidence_receipt_sha256
         ):
             raise ConversationConflict("The stored report evidence is unavailable.")
+        # The same bound content, parsed before by this process: the same verdict.
+        key = _proof_key("validated", draft, recording)
+        if ConversationReports.proven.seen(key):
+            return ReportDraft.model_validate(draft.payload), draft.transcript["normalized"]
         try:
             transcript = draft.transcript["normalized"]
             durable_draft = (
@@ -196,6 +270,7 @@ class ConversationReports:
                 raise ValueError("unbound report")
         except (ValueError, TypeError, KeyError):
             raise ConversationConflict("The stored report needs review.") from None
+        ConversationReports.proven.remember(key)
         return report, transcript
 
     async def validated(

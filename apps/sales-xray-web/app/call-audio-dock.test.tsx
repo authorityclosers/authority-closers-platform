@@ -94,8 +94,11 @@ it("shows a measured playhead and one readable clock without waveform data or au
     '[aria-label="Seek recording"]',
   )!;
   const timeline = seek.parentElement!;
+  // An image to assistive technology (the test robot, 36f95a0c).
   expect(
-    timeline.querySelector('[aria-label="Audio level preview unavailable"]'),
+    timeline.querySelector(
+      '[role="img"][aria-label="Audio level preview unavailable"]',
+    ),
   ).not.toBeNull();
   expect(timeline.style.getPropertyValue("--progress")).toBe("0");
   await act(async () => {

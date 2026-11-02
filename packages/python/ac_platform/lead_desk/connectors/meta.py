@@ -31,6 +31,7 @@ import secrets
 import time
 from collections.abc import AsyncIterator, Iterable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Final, Literal
 from urllib.parse import urlencode
 from uuid import UUID
@@ -46,8 +47,12 @@ LEAD_FIELDS: Final[str] = (
     "campaign_name,form_id,platform,is_organic"
 )
 MAX_PAGES: Final[int] = 50
-# Meta keeps a form's leads for 90 days; "Bring in older leads" reads all of them.
+# Meta keeps a form's leads for 90 days; "Bring in older leads" reads the last 7, 30 or
+# all 90, as the manager picks (owner, 2 Nov 2026).
 BACKFILL_DAYS: Final[int] = 90
+OLDER_DAYS: Final[tuple[int, ...]] = (7, 30, 90)
+# "How many older leads": the most read to count them; past it the page says "2,000+".
+COUNT_MAX: Final[int] = 2000
 # Connecting and the scheduled pull read the last week straight away.
 PULL_DAYS: Final[int] = 7
 PULL_MAX: Final[int] = 1000
@@ -704,6 +709,38 @@ class Graph:
             if len(out) >= limit:
                 break
         return out[:limit]
+
+    async def lead_times(
+        self, form_ids: Iterable[str], page_token: str, *, since: int, limit: int = COUNT_MAX
+    ) -> list[int]:
+        """When each of the forms' leads since ``since`` was sent (epoch seconds), at most
+        ``limit``: only the time is read, never a person's answers (for "how many")."""
+        out: list[int] = []
+        for form_id in form_ids:
+            async for rows in self._pages(
+                f"{form_id}/leads",
+                limit=limit - len(out),
+                fields="created_time",
+                filtering=_since(since),
+                access_token=page_token,
+            ):
+                for row in rows:
+                    sent = _epoch(row.get("created_time"))
+                    if sent is not None:
+                        out.append(sent)
+            if len(out) >= limit:
+                break
+        return out[:limit]
+
+
+def _epoch(value: object) -> int | None:
+    """Meta's created_time (2026-09-01T10:00:00+0000) as epoch seconds."""
+    if not isinstance(value, str):
+        return None
+    try:
+        return int(datetime.strptime(value, "%Y-%m-%dT%H:%M:%S%z").timestamp())
+    except ValueError:
+        return None
 
 
 # Every form, whatever its state: Meta lists only some by default on some Pages.

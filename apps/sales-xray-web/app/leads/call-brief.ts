@@ -77,6 +77,8 @@ export function callBrief(
   const pillars = bag(content.pillars);
   const concern = bag(pillars.biggest_concern);
   const step = bag(pillars.next_step);
+  // Current Reports name it once, for the whole call: { title, explanation, evidence }.
+  const action = bag(content.next_action);
   const outcome = words(final.outcome, 40);
 
   const summary =
@@ -95,6 +97,7 @@ export function callBrief(
   const stepText =
     words(first(final.next_steps)?.text) ??
     words(step.text) ??
+    words(action.title) ??
     (at ? "Follow up" : null);
   const when = words(first(final.next_steps)?.when, 60) ?? words(step.when, 60);
   const next = stepText

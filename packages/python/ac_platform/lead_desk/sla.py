@@ -4,7 +4,9 @@ A manager sets how fast a new lead must hear from a person (5 minutes to 2 hours
 The clock starts when the lead arrives or comes back (a repeat that reopens it); with
 work hours set, a lead that arrives outside them starts its clock when work starts. It
 stops at the first contact by a person: a call or its result, a WhatsApp sent by a
-seller, or a ready message opened from the lead. Auto replies don't stop it.
+seller, or a ready message opened from the lead. Auto replies don't stop it. Only
+Inbound leads have a clock: Cold never alerts (a bulk list, or older enquiries brought
+in from a Facebook Page; owner, 2 Nov 2026).
 
 When the target passes without a reply, the breach is kept (``lead_desk_sla_breaches``)
 and the lead's seller (and, if the manager wants, the owners and admins) get a phone
@@ -39,6 +41,7 @@ from ac_platform.lead_desk.models import (
     LeadEvent,
     LeadSlaBreach,
 )
+from ac_platform.lead_desk.sides import on_side
 from ac_platform.lead_desk.store import counted_phone_call
 from ac_platform.lead_desk.vocabulary import OPEN_STAGES
 from ac_platform.tenancy.models import Membership
@@ -182,6 +185,7 @@ async def overdue(
                 LeadEvent.kind.in_(("captured", "repeat", "result", "call", "message")),
                 Lead.stage.in_(OPEN_STAGES),
                 counted(tenant_id),
+                on_side("inbound"),
             )
         )
     ).all()
@@ -418,6 +422,7 @@ async def report(
                 select(Lead.id, Lead.owner_person_id).where(
                     Lead.tenant_id == tenant_id,
                     counted(tenant_id),
+                    on_side("inbound"),
                     Lead.id.in_({event.lead_id for event in events}),
                 )
             )

@@ -99,8 +99,17 @@ def lead(n: int) -> dict[str, Any]:
     }
 
 
-def test_the_first_pull_reads_the_same_week_as_connecting() -> None:
+def test_a_page_connected_before_its_time_was_kept_reads_a_week() -> None:
     assert meta_pull.since({}, NOW) == NOW - WEEK
+
+
+def test_a_page_never_reads_from_before_it_was_switched_on() -> None:
+    # Owner, 2 Nov 2026: connecting brings in only the leads sent after it.
+    on = {"connected_at": NOW - 600}
+    assert meta_pull.since(on, NOW) == NOW - 601
+    assert meta_pull.since({**on, "last_pulled_at": NOW - 300}, NOW) == NOW - 601
+    assert meta_pull.since({**on, "last_pulled_at": NOW + 3000}, NOW + 7200) == NOW - 600
+    assert meta_pull.since({"connected_at": True}, NOW) == NOW - WEEK
 
 
 def test_later_pulls_reread_the_last_hour_but_never_beyond_a_week() -> None:

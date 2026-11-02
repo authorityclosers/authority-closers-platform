@@ -161,7 +161,7 @@ from ac_platform.lead_desk.models import (
     LeadRep,
 )
 from ac_platform.lead_desk.scheduler import OVERDUE_FROM as TASK_OVERDUE_FROM
-from ac_platform.lead_desk.sides import Side, is_cold, on_side
+from ac_platform.lead_desk.sides import Side, is_cold, older_enquiry, on_side
 from ac_platform.lead_desk.vocabulary import (
     CHANNEL_LABELS,
     CLOSED_STAGES,
@@ -1956,6 +1956,7 @@ class LeadDesk:
         offset: int,
         limit: int = PAGE_SIZE,
         test_only: bool = False,
+        older_only: bool = False,
         owner: UUID | None = None,
         pipeline: str | None = None,
         sort: LeadSort | None = None,
@@ -2021,6 +2022,9 @@ class LeadDesk:
             # Test and sample leads (sandbox seed, practice workspaces, Meta's testing
             # tool): easy to find and clear.
             where.append(or_(Lead.test_data.is_(True), Lead.name.like(META_TEST_LEAD)))
+        if older_only:
+            # Older enquiries from a Facebook Page, to give out in bulk or leave on Cold.
+            where.append(older_enquiry())
         if duplicates:
             # Leads that may be one person, for owners and managers to review (D4).
             if not self.viewer.can_manage:
@@ -2186,7 +2190,9 @@ class LeadDesk:
         elif contact is not None:
             where.append(Lead.last_contact_at >= day - timedelta(days=BACK_DAYS[contact]))
         if created is not None:
-            where.append(Lead.created_at >= day - timedelta(days=BACK_DAYS[created]))
+            # When it came in, as the person sent it: an older enquiry brought in today
+            # came in on its own day, not today (owner, 2 Nov 2026).
+            where.append(day - timedelta(days=BACK_DAYS[created]) <= ARRIVED)
         return where
 
     @staticmethod

@@ -295,6 +295,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         view: WorkView | None = None,
         step: str | None = Query(default=None, max_length=40),
         when: FollowUpWhen | None = None,
+        older: Literal["only"] | None = None,
     ) -> LeadPage:
         no_query(
             request,
@@ -305,6 +306,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                     "search",
                     "offset",
                     "test",
+                    "older",
                     "owner",
                     "pipeline",
                     "sort",
@@ -334,6 +336,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 search=search,
                 offset=offset,
                 test_only=test == "only",
+                older_only=older == "only",
                 owner=owner,
                 pipeline=pipeline,
                 sort=sort,

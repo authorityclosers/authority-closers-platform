@@ -44,13 +44,25 @@ const WHY_TONE: Record<LeadRow["why_kind"], Tone> = {
   waiting: "bad",
 };
 
+/**
+ * An older enquiry: a Facebook Page's lead sent before the Page was connected,
+ * brought in on purpose and kept on Cold (owner, 2 Nov 2026). It says so, with
+ * the day the person sent it, never "New lead · just now". Null for any other.
+ */
+export function olderEnquiry(row: LeadRow): string | null {
+  if (row.source !== "meta" || row.side !== "cold") return null;
+  const sent = new Date(row.received_at ?? row.created_at);
+  return `Older enquiry · ${sent.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`;
+}
+
 /** "Why now" plus the time that makes it urgent, in the seller's own clock. */
 export function whyLine(row: LeadRow, now: Date = new Date()): string {
   if (row.missed_at)
     return `Missed call ${ago(row.missed_at, now)}${
       (row.missed_calls ?? 0) > 1 ? ` · ${row.missed_calls} calls` : ""
     } · call back`;
-  if (row.why_kind === "new") return `${row.why} · ${ago(row.created_at, now)}`;
+  if (row.why_kind === "new")
+    return olderEnquiry(row) ?? `${row.why} · ${ago(row.created_at, now)}`;
   if (
     row.next_action_at &&
     (row.why_kind === "due" || row.why_kind === "retry")
@@ -76,7 +88,7 @@ export function nextLine(row: LeadRow, now: Date = new Date()): string {
   const wait = waiting(row, now);
   if (!row.missed_at && wait !== null) return `Waiting ${waitWords(wait)}`;
   if (!row.missed_at && row.why_kind === "new")
-    return `Added ${ago(row.created_at, now)}`;
+    return olderEnquiry(row) ?? `Added ${ago(row.created_at, now)}`;
   if (!row.missed_at && row.why_kind === "closed") return "";
   const why = !stageAgain(row)
     ? row.why
