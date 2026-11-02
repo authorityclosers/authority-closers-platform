@@ -144,7 +144,9 @@ const FACTS = () => {
   const visible = (el) => el.checkVisibility && el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0;
   const main = document.querySelector("main") || document.body;
   const text = (main.innerText || "").replace(/\s+/g, " ").trim();
-  const loadingEls = [...document.querySelectorAll('[role=progressbar],[aria-busy="true"],[class*="skeleton" i],[class*="spinner" i],[class*="shimmer" i]')].filter(visible);
+  // a clip player's own progress bar ("Clip progress", value 0 of 34 on the Coaching page) is not a page loading
+  const mediaBar = (e) => e.getAttribute("role") === "progressbar" && (/clip|playback|audio|video|seek|player|position/i.test(e.getAttribute("aria-label") || "") || !!e.closest("audio,video,[class*='player' i]"));
+  const loadingEls = [...document.querySelectorAll('[role=progressbar],[aria-busy="true"],[class*="skeleton" i],[class*="spinner" i],[class*="shimmer" i]')].filter(visible).filter((e) => !mediaBar(e));
   const loading = loadingEls.length;
   const loadingIn = loadingEls.slice(0, 3).map((e) => ({ s: window.__qaSem ? window.__qaSem(e) : e.tagName, main: main.contains(e) }));
   const BITS = /couldn['’]?t|could not|can['’]?t|unable|try again|retry|something went wrong|didn['’]?t load|did not load|not available|offline|too many|problem|failed|went wrong|\b(?:500|429|502|503)\b|internal server error|too many requests|TypeError|SyntaxError|unexpected token|JSON|failed to fetch|networkerror|undefined|\bNaN\b|\[object|"detail"/i;
