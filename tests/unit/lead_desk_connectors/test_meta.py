@@ -293,6 +293,26 @@ def test_recent_leads_stops_at_its_limit() -> None:
     assert len(seen) == 1 and seen[0]["limit"] == "2"
 
 
+def test_counting_older_leads_reads_only_when_each_was_sent() -> None:
+    # Owner, 2 Nov 2026: "how many older leads" is read before anything is filed, and
+    # never asks Meta for a person's answers.
+    timed = {
+        None: {
+            "data": [
+                {"id": "L1", "created_time": "2026-10-30T09:00:00+0000"},
+                {"id": "L2", "created_time": "not a time"},
+            ],
+            "paging": {"cursors": {"after": "c1"}, "next": "https://graph.facebook.com/next"},
+        },
+        "c1": {"data": [{"id": "L3", "created_time": "2026-10-01T09:00:00+0000"}]},
+    }
+    seen, handler = _leads_handler(timed)
+    times = asyncio.run(_graph(handler).lead_times(["F1"], "t", since=100))
+    assert times == [1793350800, 1790845200]
+    assert {params["fields"] for params in seen} == {"created_time"}
+    assert json.loads(seen[0]["filtering"])[0]["value"] == 100
+
+
 def test_one_page_of_leads_returns_metas_next_cursor() -> None:
     _, handler = _leads_handler(PAGED)
     graph = _graph(handler)

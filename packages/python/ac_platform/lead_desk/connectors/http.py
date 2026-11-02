@@ -25,7 +25,7 @@ import json
 import logging
 import secrets
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager, suppress
 from dataclasses import asdict
 from datetime import UTC, date, datetime, timedelta
@@ -63,7 +63,7 @@ from ac_platform.lead_desk.connectors import google_ads_api as gads
 from ac_platform.lead_desk.connectors.app_return import AppComplete, AppCompleted
 from ac_platform.lead_desk.contracts import ImportPreview
 from ac_platform.lead_desk.intake import Intake, token_hash
-from ac_platform.lead_desk.models import LeadDeskSettings, LeadSource
+from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadSource
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
 
@@ -97,6 +97,9 @@ class MetaBackfill(BaseModel):
     known: int = 0
     forms: int = 0
     since: str | None = None
+    # The older leads asked for: those sent in these days before the Page went on.
+    days: int | None = None
+    until: str | None = None
     started_at: str | None = Field(default=None, alias="startedAt")
     finished_at: str | None = Field(default=None, alias="finishedAt")
     error: str | None = None
@@ -111,10 +114,14 @@ class MetaProblem(BaseModel):
 
 
 class MetaAccount(BaseModel):
-    """The Facebook account a Page was shared through, as Meta names it."""
+    """The Facebook account a Page was shared through, as Meta names it, and when it was
+    first connected here (its first Page's time, for one connected before that was kept)."""
 
+    model_config = ConfigDict(populate_by_name=True)
+    id: str | None = None
     name: str
     picture: str | None = None
+    connected_at: str | None = Field(default=None, alias="connectedAt")
 
 
 class MetaPage(BaseModel):
@@ -133,6 +140,12 @@ class MetaPage(BaseModel):
     forms_on_page: list[MetaForm] = Field(default_factory=list, alias="formsOnPage")
     backfill: MetaBackfill | None = None
     problem: MetaProblem | None = None
+    # When it was switched on (only leads sent since come in by themselves).
+    connected_at: str | None = Field(default=None, alias="connectedAt")
+    # A real form has sent it a lead, not only Meta's testing tool.
+    real_leads: bool = Field(default=False, alias="realLeads")
+    # Removed by a manager: off and out of the list, until put back.
+    removed: bool = False
 
 
 class MetaStatus(BaseModel):
@@ -156,10 +169,28 @@ class Connected(BaseModel):
 
 
 class BackfillPage(BaseModel):
-    """Which forms to bring older leads in from; none named: every form the Page takes."""
+    """Which forms to bring older leads in from (none named: every form the Page takes),
+    and how far back before the Page went on: 7, 30 or all 90 days Meta keeps."""
 
     model_config = ConfigDict(extra="forbid")
     forms: list[str] | None = Field(default=None, max_length=100)
+    days: Literal[7, 30, 90] = 90
+
+
+class OlderCount(BaseModel):
+    days: int
+    leads: int
+
+
+class OlderCounts(BaseModel):
+    """How many older leads Meta keeps for a Page, before anything is filed: those sent in
+    the last 7, 30 and 90 days before it went on (before now, while it is off)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+    until: str
+    counts: list[OlderCount]
+    # Meta held more than were read to count: the numbers are "at least".
+    capped: bool = False
 
 
 class BackfillStarted(BaseModel):
@@ -476,11 +507,14 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             ).all()
         )
 
-    def page_view(source: LeadSource) -> MetaPage:
+    def page_view(source: LeadSource, *, real: bool = False) -> MetaPage:
         config = source.config or {}
         forms = config.get("forms", "all")
         forms = forms if forms == "all" or isinstance(forms, list) else "all"
         return MetaPage(
+            connected_at=_epoch_iso(meta_backfill.connected_at(config)),
+            real_leads=real,
+            removed=config.get("removed") is True,
             page_id=str(config.get("page_id", "")),
             name=str(config.get("page_name") or source.label),
             active=bool(source.active),
@@ -499,7 +533,9 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
 
     async def page_source(desk: LeadDesk, page_id: str) -> LeadSource:
         for source in await meta_sources(desk):
-            if str((source.config or {}).get("page_id")) == page_id:
+            config = source.config or {}
+            # A Page whose Facebook account was disconnected has no token: not connected.
+            if str(config.get("page_id")) == page_id and isinstance(config.get("token"), dict):
                 return source
         raise DeskError(
             404, "That Page isn't connected to this workspace. Continue with Meta first."
@@ -509,10 +545,46 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
     async def meta_status(request: Request, response: Response) -> MetaStatus:
         async with desk_for(request, response) as desk:
             desk._require_manager()
-            return MetaStatus(
-                configured=meta.config() is not None,
-                pages=[page_view(source) for source in await meta_sources(desk)],
+            return await status_view(desk)
+
+    async def status_view(desk: LeadDesk) -> MetaStatus:
+        """Every connected Page (a disconnected account's are gone), each saying whether a
+        real form has sent it a lead, and when its Facebook account was first connected."""
+        sources = [
+            source
+            for source in await meta_sources(desk)
+            if isinstance((source.config or {}).get("token"), dict)
+        ]
+        labels = {source.label for source in sources}
+        real = (
+            set(
+                (
+                    await desk.db.scalars(
+                        select(Lead.source_label)
+                        .where(
+                            Lead.tenant_id == desk.viewer.tenant_id,
+                            Lead.source == "meta",
+                            Lead.test_data.is_(False),
+                            Lead.source_label.in_(labels),
+                        )
+                        .distinct()
+                    )
+                ).all()
             )
+            if labels
+            else set()
+        )
+        first: dict[str, datetime] = {}
+        for source in sources:
+            key = _account_id(source.config or {})
+            first[key] = min(first.get(key, source.created_at), source.created_at)
+        pages = []
+        for source in sources:
+            page = page_view(source, real=source.label in real)
+            if page.account is not None and page.account.connected_at is None:
+                page.account.connected_at = first[_account_id(source.config or {})].isoformat()
+            pages.append(page)
+        return MetaStatus(configured=meta.config() is not None, pages=pages)
 
     # ----- Connect from the Sales Xray app (system browser; see app_return) ----------
 
@@ -697,8 +769,19 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 "expires_at": user.expires_at,
                 "by": str(desk.viewer.person_id),
                 "at": int(time.time()),
+                # Whose it is, so disconnecting that Facebook account drops it too.
+                **({"account": str(account["id"])} if account.get("id") else {}),
             },
         }
+        now = int(time.time())
+
+        def shared_by(prior: object) -> dict[str, Any]:
+            """The account, keeping when it was first connected here (owner, 2 Nov 2026)."""
+            kept = None
+            if isinstance(prior, dict) and prior.get("id") == account.get("id"):
+                kept = prior.get("at")
+            return {**account, "at": kept or now}
+
         existing = {str((s.config or {}).get("page_id")): s for s in await meta_sources(desk)}
         count = int(
             await desk.db.scalar(
@@ -711,10 +794,15 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             source = existing.get(page["id"])
             if source is not None:
                 source.config = {
-                    **(source.config or {}),
+                    # Connected again: a disconnected account's Page is back, off.
+                    **{k: v for k, v in (source.config or {}).items() if k != "disconnected_at"},
                     "page_name": page["name"],
                     "token": sealed,
-                    **({"account": account} if account else {}),
+                    **(
+                        {"account": shared_by((source.config or {}).get("account"))}
+                        if account
+                        else {}
+                    ),
                 }
                 source.label = f"Meta · {page['name']}"[:120]
                 source.updated_at = desk.now
@@ -734,7 +822,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                         "page_name": page["name"],
                         "token": sealed,
                         "forms": "all",
-                        **({"account": account} if account else {}),
+                        **({"account": shared_by(None)} if account else {}),
                     },
                     active=False,
                     received=0,
@@ -965,6 +1053,48 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             token = meta.unseal(cfg.token_key, source.config["token"], page_id=page_id)
             return [MetaForm(**form) for form in await meta.Graph(cfg).forms(page_id, token)]
 
+    @router.get(
+        "/meta/pages/{page_id}/older", response_model=OlderCounts, response_model_by_alias=True
+    )
+    async def meta_older_count(
+        page_id: str,
+        request: Request,
+        response: Response,
+        forms: str | None = Query(default=None, max_length=2000),
+    ) -> OlderCounts:
+        """How many older leads there are to bring in, read from Meta (only when each was
+        sent) before anything is filed: the forms named (comma-separated), else the forms
+        the Page takes, else every form on it."""
+        cfg = meta_config()
+        async with desk_for(request, response) as desk:
+            desk._require_manager()
+            source = await page_source(desk, page_id)
+            config = dict(source.config or {})
+            token = meta.unseal(cfg.token_key, config["token"], page_id=page_id)
+            graph = meta.Graph(cfg)
+            picked = [form for form in (forms or "").split(",") if form][:100]
+            taken = config.get("forms", "all")
+            if picked:
+                form_ids = picked
+            elif isinstance(taken, list) and taken:
+                form_ids = [str(form) for form in taken]
+            else:
+                form_ids = [str(form["id"]) for form in await graph.forms(page_id, token)]
+            connected = meta_backfill.connected_at(config) if source.active else None
+            until = connected or int(time.time())
+            read = await graph.lead_times(
+                form_ids, token, since=until - max(meta.OLDER_DAYS) * 86400
+            )
+        sent = [at for at in read if at < until]
+        return OlderCounts(
+            until=_epoch_iso(until) or "",
+            counts=[
+                OlderCount(days=days, leads=sum(at >= until - days * 86400 for at in sent))
+                for days in meta.OLDER_DAYS
+            ],
+            capped=len(read) >= meta.COUNT_MAX,
+        )
+
     @router.post("/meta/pages/{page_id}", response_model=Connected, response_model_by_alias=True)
     async def meta_connect_page(
         page_id: str, command: ConnectPage, request: Request, response: Response
@@ -998,7 +1128,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                     **{
                         k: v
                         for k, v in config.items()
-                        if k not in {"last_error", meta_backfill.KEY}
+                        if k not in {"last_error", meta_backfill.KEY, "removed"}
                     },
                     meta_backfill.CONNECTED: now,
                     "last_pulled_at": now,
@@ -1017,9 +1147,10 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
     async def meta_backfill_page(
         page_id: str, request: Request, response: Response, command: BackfillPage | None = None
     ) -> BackfillStarted:
-        """Bring in every lead Meta still keeps for this Page (90 days), from every form it
-        takes or from the forms named (paused and archived ones too). Leads already here
-        are linked or skipped; the first slice is filed now and the rest in the background."""
+        """Bring in this Page's older leads: those sent in the 7, 30 or 90 days before it
+        went on, from every form it takes or from the forms named (paused and archived ones
+        too), as older enquiries on Cold. Leads already here are linked or skipped; the
+        first slice is filed now and the rest in the background."""
         cfg = meta_config()
         async with desk_for(request, response, write=True) as desk:
             desk._require_manager()
@@ -1045,7 +1176,10 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                     raise DeskError(422, "Those forms aren't on this Page any more.")
             now = int(time.time())
             source.config = meta_backfill.begin(
-                meta_backfill.remember_forms(source.config, listed), form_ids=form_ids, now=now
+                meta_backfill.remember_forms(source.config, listed),
+                form_ids=form_ids,
+                now=now,
+                days=command.days if command is not None else meta.BACKFILL_DAYS,
             )
             imported = await meta_backfill.step(desk, source, graph, cfg, now=now)
             source.updated_at = desk.now
@@ -1067,6 +1201,86 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             except meta.MetaError:
                 pass  # Already gone at Meta's end; switching it off here is what matters.
             source.active = False
+            source.updated_at = desk.now
+            await desk.db.flush()
+            return page_view(source)
+
+    async def stop_page(cfg: meta.MetaConfig, source: LeadSource, page_id: str) -> None:
+        """Switch a Page off: Meta stops sending its leads, and the pull skips it."""
+        if source.active and isinstance((source.config or {}).get("token"), dict):
+            try:
+                token = meta.unseal(cfg.token_key, source.config["token"], page_id=page_id)
+                await meta.Graph(cfg, timeout=6).unsubscribe(page_id, token)
+            except meta.MetaError:
+                pass  # Already gone at Meta's end; switching it off here is what matters.
+        source.active = False
+
+    @router.post(
+        "/meta/accounts/{account_id}/disconnect",
+        response_model=MetaStatus,
+        response_model_by_alias=True,
+    )
+    async def meta_disconnect_account(
+        account_id: str, request: Request, response: Response
+    ) -> MetaStatus:
+        """Disconnect one Facebook account (owner, 2 Nov 2026: a wrong account brought in
+        many Pages): every Page shared through it stops (no webhook, no pull) and its
+        token is dropped, as is the workspace's Meta connection when it is this account's.
+        Leads already filed stay, with their history; connecting it again brings its Pages
+        back, off."""
+        cfg = meta_config()
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            sources = [
+                source
+                for source in await meta_sources(desk)
+                if _account_id(source.config or {}) == account_id[:40]
+                and isinstance((source.config or {}).get("token"), dict)
+            ]
+            if not sources:
+                raise DeskError(404, "That Facebook account isn't connected here.")
+            for source in sources:
+                await desk.db.refresh(source, with_for_update=True)
+                config = dict(source.config or {})
+                await stop_page(cfg, source, str(config.get("page_id") or ""))
+                config.pop("token", None)
+                source.config = {**config, "disconnected_at": int(time.time())}
+                source.updated_at = desk.now
+            row = await lead_settings(desk)
+            box = (row.config or {}).get(meta_capi.CONNECTION)
+            if isinstance(box, dict) and box.get("account") == account_id:
+                row.config = {
+                    k: v for k, v in (row.config or {}).items() if k != meta_capi.CONNECTION
+                }
+            await desk.db.flush()
+            return await status_view(desk)
+
+    @router.post(
+        "/meta/pages/{page_id}/remove", response_model=MetaPage, response_model_by_alias=True
+    )
+    async def meta_remove_page(page_id: str, request: Request, response: Response) -> MetaPage:
+        """Remove a Page from the list: switched off and hidden, until put back."""
+        cfg = meta_config()
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            source = await page_source(desk, page_id)
+            await desk.db.refresh(source, with_for_update=True)
+            await stop_page(cfg, source, page_id)
+            source.config = {**(source.config or {}), "removed": True}
+            source.updated_at = desk.now
+            await desk.db.flush()
+            return page_view(source)
+
+    @router.post(
+        "/meta/pages/{page_id}/restore", response_model=MetaPage, response_model_by_alias=True
+    )
+    async def meta_restore_page(page_id: str, request: Request, response: Response) -> MetaPage:
+        """Put a removed Page back in the list, off: switching it on is a choice of its own."""
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            source = await page_source(desk, page_id)
+            await desk.db.refresh(source, with_for_update=True)
+            source.config = {k: v for k, v in (source.config or {}).items() if k != "removed"}
             source.updated_at = desk.now
             await desk.db.flush()
             return page_view(source)
@@ -1670,9 +1884,19 @@ def _account_view(value: object) -> MetaAccount | None:
         return None
     picture = value.get("picture")
     return MetaAccount(
+        id=str(value["id"])[:40] if value.get("id") else None,
         name=str(value["name"])[:100],
         picture=picture if isinstance(picture, str) and picture.startswith("https://") else None,
+        connected_at=_epoch_iso(value.get("at")),
     )
+
+
+def _account_id(config: Mapping[str, Any]) -> str:
+    """The id of the Facebook account a Page was shared through; "none" when Meta never
+    said (Pages connected before accounts were kept)."""
+    account = config.get("account")
+    value = account.get("id") if isinstance(account, Mapping) else None
+    return str(value)[:40] if value else "none"
 
 
 def _covered(form_list: object, forms: object) -> list[MetaForm]:
@@ -1705,6 +1929,8 @@ def _backfill_view(state: dict[str, Any] | None) -> MetaBackfill | None:
         known=int(state.get("known") or 0),
         forms=len(state.get("forms") or []),
         since=_epoch_iso(state.get("since")),
+        days=state["days"] if isinstance(state.get("days"), int) else None,
+        until=_epoch_iso(state.get("until")),
         started_at=_epoch_iso(state.get("started_at")),
         finished_at=_epoch_iso(state.get("finished_at")),
         error=str(state["error"])[:300] if state.get("error") else None,

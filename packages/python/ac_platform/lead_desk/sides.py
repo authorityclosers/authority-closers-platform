@@ -9,7 +9,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Final, Literal
 
 from pydantic import Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 
 from ac_platform.lead_desk.contracts import SCHEMA, Model
 from ac_platform.lead_desk.errors import DeskError
@@ -34,6 +34,13 @@ def on_side(side: Side) -> Any:
 
 def is_cold(lead: Lead) -> bool:
     return lead.pipeline == COLD
+
+
+def older_enquiry() -> Any:
+    """SQL for older enquiries: a Facebook Page's leads sent before it was connected,
+    brought in on purpose and kept on Cold (owner, 2 Nov 2026). A Meta lead is on Cold
+    only that way; a new form from the same person brings it back to Inbound."""
+    return and_(Lead.source == "meta", Lead.pipeline == COLD)
 
 
 class InboundNumbers(Model):

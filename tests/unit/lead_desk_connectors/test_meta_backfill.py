@@ -143,6 +143,18 @@ def test_bringing_in_older_leads_covers_the_90_days_meta_keeps() -> None:
     assert meta.BACKFILL_DAYS == 90 and meta.PULL_DAYS == 7
 
 
+def test_older_leads_are_those_sent_in_the_days_picked_before_the_page_went_on() -> None:
+    # Owner, 2 Nov 2026: 7, 30 or 90 days, counted back from when the Page was switched
+    # on; a Page switched on before that was kept counts back from now.
+    on = {**source().config, "connected_at": NOW - 600}
+    state = meta_backfill.state(meta_backfill.begin(on, form_ids=["f1"], now=NOW, days=7))
+    assert state is not None
+    assert (state["since"], state["until"], state["days"]) == (NOW - 600 - 7 * 86400, NOW - 600, 7)
+    state = meta_backfill.state(source().config)
+    assert state is not None and (state["until"], state["days"]) == (NOW, 90)
+    assert meta.OLDER_DAYS == (7, 30, 90)
+
+
 def test_one_step_reads_every_form_page_by_page_and_finishes() -> None:
     src, graph, desk = source(), Graph(), Desk()
     created = asyncio.run(meta_backfill.step(desk, src, graph, cfg(), now=NOW + 60))

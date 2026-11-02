@@ -2,10 +2,12 @@
 
 Connecting a Page brings in only the leads sent after it was connected (``connected_at``,
 owner, 2 Nov 2026: old enquiries came in as fresh ones, topped To Call and filled the
-15-minute alert). Older ones come in only when a manager asks, in the background: each
-step reads a few pages of one form's leads, files them through
-``LeadDesk.ingest`` exactly like the webhook and the pull, and keeps its place (the
-form and Meta's cursor) in the source's config. A step runs when a manager asks
+15-minute alert). Older ones come in only when a manager asks (the last 7, 30 or 90
+days before the Page went on), as older enquiries: on Cold, given to nobody, so they
+start no clock, alert or push. In the background, each step reads a few pages of one
+form's leads, files them through ``LeadDesk.ingest`` like the webhook and the pull, and
+keeps its place (the form and Meta's cursor) in the source's config. A step runs when a
+manager asks
 ("Bring in older leads") and then once a minute in the puller until every form is
 read. The Meta lead id is the source reference, so a lead already here is "known"
 and changes nothing: running it twice adds nothing. A Meta lead whose person is already
@@ -15,7 +17,8 @@ nothing else changes. New leads then go through the duplicate engine at once
 (``duplicate_intake``): a certain pair is merged, any other waits for review.
 
 State, under ``config["backfill"]``:
-``{"state": "running" | "done" | "blocked", "since": epoch, "forms": [form ids],
+``{"state": "running" | "done" | "blocked", "since": epoch, "until": epoch, "days": n,
+"forms": [form ids],
 "form": index, "after": cursor | None, "created": n, "linked": n, "repeat": n,
 "known": n, "seen": n, "started_at": epoch,
 "finished_at": epoch | None, "error": text | None}``. "blocked" means Meta refused in
@@ -41,6 +44,7 @@ from ac_platform.lead_desk import duplicate_intake
 from ac_platform.lead_desk.capture import extract
 from ac_platform.lead_desk.connectors import meta
 from ac_platform.lead_desk.models import Lead, LeadEvent, LeadSource
+from ac_platform.lead_desk.sides import COLD
 from ac_platform.lead_desk.store import LeadDesk
 
 KEY: Final[str] = "backfill"
@@ -75,13 +79,24 @@ def running(config: Mapping[str, Any]) -> bool:
     return current is not None and current.get("state") == "running"
 
 
-def begin(config: Mapping[str, Any], *, form_ids: list[str], now: int) -> dict[str, Any]:
-    """The source config with a fresh backfill over the last 90 days of these forms."""
+def begin(
+    config: Mapping[str, Any],
+    *,
+    form_ids: list[str],
+    now: int,
+    days: int = meta.BACKFILL_DAYS,
+) -> dict[str, Any]:
+    """The source config with a fresh backfill of these forms' older leads: those sent in
+    the ``days`` before the Page was switched on (before now, for a Page switched on
+    before that was kept). Leads sent after it are the pull's."""
+    until = connected_at(config) or now
     return {
         **config,
         KEY: {
             "state": "running",
-            "since": now - meta.BACKFILL_DAYS * 86400,
+            "since": until - days * 86400,
+            "until": until,
+            "days": days,
             "forms": [str(form) for form in form_ids][: meta.MAX_FORMS],
             "form": 0,
             "after": None,
@@ -204,7 +219,9 @@ async def file_lead(
     A new lead arrives when the person sent the form (``received_at``), not when we filed it.
     A new lead's id is added to ``made``, for the duplicate engine after the batch.
     A form sent before the Page was switched on is "older" and left out, unless older
-    leads were asked for (``older``)."""
+    leads were asked for (``older``): then it is an older enquiry, kept on Cold and given
+    to nobody, so it starts no clock, alert or push; a person already a lead is left as
+    they are (owner, 2 Nov 2026)."""
     record = meta.lead_record(lead, page_name=page_name)
     ref = str(lead.get("id") or "")[:200] or None
     test = meta.is_test_lead(lead)
@@ -226,7 +243,11 @@ async def file_lead(
         actor=None,
         test_data=test,
         received_at=sent,
+        assign="none" if older else "rules",
+        as_is=older,
     )
+    if older and outcome == "created" and filed is not None:
+        filed.pipeline = COLD
     if outcome == "created" and filed is not None and made is not None:
         made.append(filed.id)
     if outcome in {"created", "repeat"}:
@@ -298,8 +319,12 @@ async def apply(desk: LeadDesk, source: LeadSource, piece: Slice, *, now: int) -
     page_name = str(config.get("page_name") or "")
     counts = dict.fromkeys(("created", "linked", "repeat", "known"), 0)
     made: list[UUID] = []
+    until = current.get("until") if isinstance(current.get("until"), int) else None
     for lead in piece.leads:
-        outcome = await file_lead(desk, source, lead, page_name=page_name, made=made, older=True)
+        # One sent after the Page went on is a new lead, filed as the pull files it.
+        sent = submitted_at(lead)
+        older = until is None or sent is None or sent.timestamp() < until
+        outcome = await file_lead(desk, source, lead, page_name=page_name, made=made, older=older)
         if outcome in counts:
             counts[outcome] += 1
     await duplicate_intake.after_intake(desk, made)
