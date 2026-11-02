@@ -247,6 +247,20 @@ function makeCtx(tab, cell, alias) {
   return ctx;
 }
 
+// The page as it looks once it has filled in: text and loading marks unchanged over two reads a second apart (at most 9 s).
+// A page that paints its header first reads 50 characters at 0.7 s and 600 at 2 s: a baseline taken early makes every later difference look like the fault's doing.
+async function settledFacts(tab) {
+  let prev = await facts(tab);
+  for (let i = 0; i < 9; i++) {
+    await sleep(1000);
+    const cur = await facts(tab);
+    const steady = cur.textLength >= 25 && cur.loading === 0 && Math.abs(cur.textLength - prev.textLength) <= 2;
+    prev = cur;
+    if (steady) break;
+  }
+  return prev;
+}
+
 async function loadPage(ctx, route, wait = 25000) {
   const r = await session.go(ctx.tab, route, { wait });
   if (!r.ok) {
@@ -270,8 +284,7 @@ async function famFault(ctx, route) {
   const { tab } = ctx;
   const calls = trackCalls(tab);
   if (!(await loadPage(ctx, route))) return;
-  await sleep(700);
-  const base = await facts(tab);
+  const base = await settledFacts(tab);
   calls.stop();
   if (base.textLength < 25 || base.overlay) return ctx.note("the page itself is blank or crashed without a fault: no trials");
   const endpoints = [...calls.seen.keys()].slice(0, 8);
@@ -513,8 +526,7 @@ const keyOfFinding = (f) => `${f.rule}|${stripQ(f.selector)}`;
 async function famExtremes(ctx, route) {
   const { tab } = ctx;
   if (!(await loadPage(ctx, route))) return;
-  await sleep(700);
-  const base = await facts(tab);
+  const base = await settledFacts(tab);
   if (base.textLength < 25 || base.overlay) return ctx.note("the page is blank or crashed without the data: no trials");
   const baseKeys = new Set(((await layoutFindings(tab, route, LAYOUT_RULES)) || []).map(keyOfFinding));
   for (const variant of ["rows1000", "long300", "emoji", "indic", "zerowidth", "bignum"]) {
@@ -560,7 +572,12 @@ async function famExtremes(ctx, route) {
         ctx.note(`${variant}: dev API 502/503/504, dropped`);
         continue;
       }
-      const f = await facts(tab);
+      // a page that is only slow to paint (a busy box, a long answer to parse) is not a blank page: give it up to 6 s to show text before judging (2 Nov 2026, f004ec6a: replayed with 41 to 110 characters of text and no error)
+      let f = await facts(tab);
+      for (let wait = 0; wait < 8 && f.textLength < 25 && f.loading === 0 && !f.overlay; wait++) {
+        await sleep(800);
+        f = await facts(tab);
+      }
       const errs = tab.since(mark).pageerrors.filter((e) => !EXPECTED.test(e));
       if (f.textLength < 25 && f.loading === 0) await ctx.add("data:blank", "MAJOR", `${variant}: the page went blank${errs[0] ? ` (${errs[0].slice(0, 80)})` : ""}`, "");
       else if (f.overlay) await ctx.add("data:crash", "MAJOR", `${variant}: crash screen "${f.overlay.slice(0, 80)}"`, "");
@@ -612,8 +629,7 @@ const CUT = () => {
 async function famZoom(ctx, route) {
   const { tab } = ctx;
   if (!(await loadPage(ctx, route))) return;
-  await sleep(700);
-  const base = await facts(tab);
+  const base = await settledFacts(tab);
   if (base.textLength < 25 || base.overlay) return ctx.note("the page is blank without zoom: no trials");
   const baseKeys = new Set(((await layoutFindings(tab, route, LAYOUT_RULES)) || []).map(keyOfFinding));
   const baseCut = new Set(((await tab.page.evaluate(CUT).catch(() => [])) || []).map((c) => stripQ(c.s)));
@@ -1490,4 +1506,4 @@ async function runOne(opts = {}) {
   }
 }
 
-module.exports = { runOne, runCell, pickCell, digestLine, FAMILIES, SIZES, PAGES };
+module.exports = { runOne, runCell, pickCell, digestLine, FAMILIES, SIZES, PAGES, mutate };
