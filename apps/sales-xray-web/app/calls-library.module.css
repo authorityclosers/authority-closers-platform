@@ -500,8 +500,11 @@
   text-align: center;
 }
 
+/* A shade of the ink, not of the text, under the chosen chip's count: in
+   light and dark alike it moves away from the count's colour (the test
+   robot, 80f01104, 2 Nov 2026: white on a lightened teal was 4.13:1). */
 .filters button[aria-pressed="true"] .chipCount {
-  background: color-mix(in oklab, var(--lx-on-teal) 16%, transparent);
+  background: color-mix(in oklab, var(--lx-ink) 16%, transparent);
   color: var(--lx-on-teal);
 }
 
