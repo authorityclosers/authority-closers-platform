@@ -2,7 +2,7 @@
 
 /*
  * Per-call insights for the Calls workspace (AUT-999 v2, owner 5 Oct 2026).
- * Reads the existing GET-only endpoints (`/call-record`, `/report`) for calls
+ * Reads each call's report (GET `/report`; no call-record route exists) for calls
  * that have a report, three at a time, cached for this mounted workspace. Extraction is
  * tolerant: a missing or changed field hides that insight, never the row.
  */
@@ -202,23 +202,16 @@ async function readJson(path: string, signal: AbortSignal) {
 }
 
 async function loadInsight(id: string, signal: AbortSignal) {
-  const base = submissionPath(id);
-  const reads = await Promise.allSettled([
-    readJson(`${base}/call-record`, signal),
-    readJson(`${base}/report`, signal),
-  ]);
-  const [callRecord, report] = reads.map((read) =>
-    read.status === "fulfilled" ? read.value : null,
+  // The report alone: no call-record route exists, so asking for one cost
+  // every preview a 404 (the test robot, e5219038, 2 Nov 2026).
+  const read = await readJson(`${submissionPath(id)}/report`, signal).then(
+    (report) => ({ report, failed: false }),
+    () => ({ report: null, failed: true }),
   );
-  const insight =
-    callRecord || report ? extractInsight(callRecord, report) : null;
+  const insight = read.report ? extractInsight(null, read.report) : null;
   return {
     insight,
-    status: reads.some((read) => read.status === "rejected")
-      ? "error"
-      : insight
-        ? "ready"
-        : "unavailable",
+    status: read.failed ? "error" : insight ? "ready" : "unavailable",
   } as InsightRead;
 }
 

@@ -81,8 +81,8 @@ it.each([{ ids: [a] }, { ids: [b, a] }])(
     const stale = [...reads];
     await render(ids);
     expect(stale.every((read) => read.signal.aborted)).toBe(true);
-    const replacement = reads.slice(4);
-    expect(replacement).toHaveLength(ids.length * 2);
+    const replacement = reads.slice(2);
+    expect(replacement).toHaveLength(ids.length);
     await resolve(replacement, "Current report");
     await resolve(stale, "Stale report");
     await flush();
@@ -99,11 +99,14 @@ it("limits loading to three calls and drains the queue", async () => {
     "44444444-4444-4444-8444-444444444444",
   ];
   await render(ids);
-  expect(reads).toHaveLength(6);
-  await resolve(reads.slice(0, 2), "First report");
+  // One read a call, its report: never a call record (the test robot,
+  // e5219038, 2 Nov 2026: that route does not exist).
+  expect(reads).toHaveLength(3);
+  expect(reads.every((read) => read.path.endsWith("/report"))).toBe(true);
+  await resolve(reads.slice(0, 1), "First report");
   await flush();
-  expect(reads).toHaveLength(8);
-  await resolve(reads.slice(2), "Remaining reports");
+  expect(reads).toHaveLength(4);
+  await resolve(reads.slice(1), "Remaining reports");
   await flush();
   for (const id of ids) expect(latest.statusOf(id)).toBe("ready");
 });
@@ -116,31 +119,14 @@ it("exposes failed reads and retries after service recovery", async () => {
   await flush();
   expect(latest.statusOf(a)).toBe("error");
   expect(latest.insightOf(a)).toBeNull();
-  expect(reads).toHaveLength(2); // No uncontrolled retry loop.
+  expect(reads).toHaveLength(1); // No uncontrolled retry loop.
   await act(async () => latest.retry());
   expect(latest.statusOf(a)).toBe("loading");
-  expect(reads).toHaveLength(4);
-  await resolve(reads.slice(2), "Recovered report");
+  expect(reads).toHaveLength(2);
+  await resolve(reads.slice(1), "Recovered report");
   await flush();
   expect(latest.statusOf(a)).toBe("ready");
   expect(latest.insightOf(a)?.assessment).toBe("Recovered report");
-});
-
-it("retains partial report content but allows the failed measurement read to recover", async () => {
-  await render([a]);
-  await act(async () => {
-    reads[0].reject(new Error("offline"));
-    reads[1].resolve({ verdict: "Available report" });
-  });
-  await flush();
-  expect(latest.statusOf(a)).toBe("error");
-  expect(latest.insightOf(a)?.assessment).toBe("Available report");
-  await render([]);
-  await render([a]);
-  expect(reads).toHaveLength(4);
-  await resolve(reads.slice(2), "Recovered");
-  await flush();
-  expect(latest.statusOf(a)).toBe("ready");
 });
 
 it("distinguishes successful absence from a read failure", async () => {
@@ -159,8 +145,8 @@ it("does not reuse successful reads across workspace/session remounts", async ()
   await flush();
   await render([a], true, "other-workspace");
   expect(latest.insightOf(a)).toBeNull();
-  expect(reads).toHaveLength(4);
-  await resolve(reads.slice(2), "Other workspace");
+  expect(reads).toHaveLength(2);
+  await resolve(reads.slice(1), "Other workspace");
   await flush();
   expect(latest.insightOf(a)?.assessment).toBe("Other workspace");
 });
