@@ -3652,6 +3652,15 @@
     justify-self: start;
   }
 }
+/* Touch screens: the facts row scrolls sideways, which clips what is in
+   it, so it reaches 8 px above and below without moving and the lead's
+   name keeps its 44 px target (the test robot, c9091f68, 2 Nov 2026). */
+@media (max-width: 760px) and (pointer: coarse) {
+  .app.app[data-stage="report"] .reportMetadata {
+    padding-block: 8px;
+    margin-block: -8px;
+  }
+}
 
 /* The About note's mail link: a full thumb target without moving its line
    (Report fit, owner program 25 Oct 2026). */
