@@ -1,0 +1,51 @@
+{
+  "format": 1,
+  "version": 1,
+  "sha256": "120612f4f74a4fc41a60f6a1b786ce7b56fbe9808259522abcc4ef84ccb5741d",
+  "generated_at": "2026-11-02T20:24:50Z",
+  "source": "coaching-questions-template.csv",
+  "welcome": "",
+  "examples": true,
+  "starters": ["EXAMPLE-1", "EXAMPLE-2"],
+  "questions": [
+    {
+      "id": "EXAMPLE-1",
+      "tab": "Example",
+      "question": "EXAMPLE: How do I open a cold call?",
+      "answer": "EXAMPLE answer. Write the full answer here in your own words, the way you would tell a seller.\nShort sentences read best on a phone.\nStart a new line for each step.",
+      "next": ["EXAMPLE-2", "EXAMPLE-3"],
+      "category": "rapport building",
+      "tags": ["cold call", "first call"],
+      "sale_stage": "opening",
+      "difficulty": "easy",
+      "example_line": "EXAMPLE: one line the seller can say word for word.",
+      "start": true
+    },
+    {
+      "id": "EXAMPLE-2",
+      "tab": "Example",
+      "question": "EXAMPLE: What do I say when the buyer says the price is too high?",
+      "answer": "EXAMPLE answer. Keep one idea in each answer.\nPut the next idea in its own row and list its id in next_1, next_2 or next_3.",
+      "next": ["EXAMPLE-3", "EXAMPLE-1"],
+      "category": "objection handling",
+      "tags": ["price", "budget"],
+      "sale_stage": "objection",
+      "difficulty": "medium",
+      "example_line": "",
+      "start": true
+    },
+    {
+      "id": "EXAMPLE-3",
+      "tab": "Example",
+      "question": "EXAMPLE: How do I ask for the next meeting?",
+      "answer": "EXAMPLE answer. A next question can lead back to an earlier one, so the seller can keep going.\nThis row has no yes in start: it is reached from the two rows above.",
+      "next": ["EXAMPLE-1", "EXAMPLE-2"],
+      "category": "closing",
+      "tags": ["next step", "meeting"],
+      "sale_stage": "closing",
+      "difficulty": "medium",
+      "example_line": "EXAMPLE: one line the seller can say word for word.",
+      "start": false
+    }
+  ]
+}
