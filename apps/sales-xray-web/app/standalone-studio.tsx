@@ -610,7 +610,14 @@ function StandaloneStudioView({
   }
 
   const retry = () => {
-    if (view.kind !== "unauthenticated" && view.kind !== "ready")
+    // A check that failed keeps its notice until the read answers, so the
+    // page is never left with only its skeleton while it tries again (the
+    // test robot, 0320c84e, 2 Nov 2026).
+    if (
+      view.kind !== "unauthenticated" &&
+      view.kind !== "ready" &&
+      view.kind !== "unavailable"
+    )
       setView({ kind: "loading" });
     setAttempt((value) => value + 1);
   };

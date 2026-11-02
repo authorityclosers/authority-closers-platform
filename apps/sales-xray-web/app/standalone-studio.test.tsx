@@ -883,3 +883,37 @@ it("keeps Academy embeds on their existing identity workspace contract", async (
   expect(fetchMock).toHaveBeenCalledOnce();
   expect(readSalesXrayWorkspaces).not.toHaveBeenCalled();
 });
+
+// The test robot (0320c84e, 2 Nov 2026): each automatic retry dropped Home to
+// its bare skeleton while the read was out. A failed check keeps its notice
+// until the read answers.
+it("keeps its could-not-be-checked notice while it tries again", async () => {
+  fetchMock.mockResolvedValueOnce(response({}, 503));
+  await act(async () =>
+    root.render(
+      <StandaloneStudio>
+        <p>Home</p>
+      </StandaloneStudio>,
+    ),
+  );
+  await flush();
+  const notice = () =>
+    container.querySelector('[role="alert"]')?.textContent ?? "";
+  expect(notice()).toContain("Workspace access could not be checked");
+  let answer: (value: Response) => void = () => {};
+  fetchMock.mockReturnValueOnce(
+    new Promise<Response>((resolve) => {
+      answer = resolve;
+    }),
+  );
+  await act(async () =>
+    [...container.querySelectorAll("button")]
+      .find((button) => button.textContent?.includes("Try again"))
+      ?.click(),
+  );
+  await flush();
+  expect(notice()).toContain("Workspace access could not be checked");
+  await act(async () => answer(response({}, 503)));
+  await flush();
+  expect(notice()).toContain("Workspace access could not be checked");
+});
