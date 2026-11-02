@@ -128,8 +128,7 @@ def install_execution_control_http(
     @router.get("/v1/conversation/acquisition/availability")
     async def availability(request: Request, response: Response) -> dict[str, bool]:
         allowed = {settings.public_app_url.host}
-        if settings.sales_xray_app_url is not None:
-            allowed.add(settings.sales_xray_app_url.host)
+        allowed.update(settings.sales_xray_hosts)
         if request.url.hostname not in allowed or request.query_params:
             raise HTTPException(404, "Availability not found.")
         response.headers["Cache-Control"] = "no-store"

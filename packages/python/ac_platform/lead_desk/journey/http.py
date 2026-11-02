@@ -543,10 +543,7 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
     read_actor = getattr(ctx.require_actor, "read_only", ctx.require_actor)
 
     def same_host(request: Request) -> None:
-        if (
-            settings.sales_xray_app_url is None
-            or request.url.hostname != settings.sales_xray_app_url.host
-        ):
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise HTTPException(404, "Leads are unavailable here.", headers=NO_STORE)
 
     @asynccontextmanager
@@ -1373,8 +1370,10 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
 
     # ----- connecting LinkedIn, TikTok and Microsoft Advertising -------------------------
 
-    def app_url() -> str:
-        return str(settings.sales_xray_app_url or "").rstrip("/")
+    def app_url(request: Request) -> str:
+        # Back to the address the person started on, where their host-only session cookie
+        # is (salesxray.in or the old address, 2 Nov 2026).
+        return settings.sales_xray_origin_for(request.url.hostname) or ""
 
     def install_connect(provider: str, slug: str) -> None:
         adapter = mapping.module(provider)
@@ -1391,7 +1390,7 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
                     cfg, tenant_id=desk.tenant_id, person_id=desk.viewer.person_id
                 )
             url = adapter.consent_url(
-                cfg, redirect_uri=f"{app_url()}/v1/lead-desk/{slug}/callback", state=state
+                cfg, redirect_uri=f"{app_url(request)}/v1/lead-desk/{slug}/callback", state=state
             )
             return RedirectResponse(url, status_code=303, headers=PRIVATE)
 
@@ -1400,7 +1399,7 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
             """The platform sends the person back here: keep its tokens, sealed."""
 
             def done(outcome: str) -> Response:
-                url = f"{app_url()}/leads?tab=stages&{slug}={outcome}"
+                url = f"{app_url(request)}/leads?tab=stages&{slug}={outcome}"
                 return RedirectResponse(url, status_code=303, headers=PRIVATE)
 
             if request.query_params.get("error"):
@@ -1427,7 +1426,7 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
                         client,
                         cfg,
                         code=code,
-                        redirect_uri=f"{app_url()}/v1/lead-desk/{slug}/callback",
+                        redirect_uri=f"{app_url(request)}/v1/lead-desk/{slug}/callback",
                     )
             except (oauth.ConnectError, httpx.HTTPError, ValueError):
                 return done("failed")

@@ -68,14 +68,14 @@ def install_websites_http(application: FastAPI, ctx: RouteContext) -> None:
     settings = ctx.settings
     read_actor = getattr(ctx.require_actor, "read_only", ctx.require_actor)
 
-    def app_url() -> str:
-        return str(settings.sales_xray_app_url or "").rstrip("/")
+    def app_url(request: Request) -> str:
+        # The website line a new install copies names the app of the address the owner is on:
+        # app.salesxray.in or the old one. Lines already on customers' sites keep the old
+        # address, which stays served for good (2 Nov 2026).
+        return settings.sales_xray_origin_for(request.url.hostname) or ""
 
     def same_host(request: Request, headers: dict[str, str]) -> None:
-        if (
-            settings.sales_xray_app_url is None
-            or request.url.hostname != settings.sales_xray_app_url.host
-        ):
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise HTTPException(404, "Leads are unavailable here.", headers=headers)
 
     # ----- the script (no session) ----------------------------------------------------
@@ -192,7 +192,7 @@ def install_websites_http(application: FastAPI, ctx: RouteContext) -> None:
                         name=person_name(row[1]),
                     ),
                 )
-                yield websites.SiteBook(desk, app_url=app_url())
+                yield websites.SiteBook(desk, app_url=app_url(request))
         except DeskError as error:
             raise HTTPException(error.status, str(error), headers=PRIVATE) from None
         except DomainError:

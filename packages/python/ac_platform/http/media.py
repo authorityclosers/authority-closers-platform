@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Path, Query, Request, Response, status
+from pydantic import AnyHttpUrl
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.application.settings import Settings
@@ -83,7 +84,8 @@ def _filesystem_avatar_surface_origin(
         raise RequestOriginDenied("Profile media requires an exact configured app surface.")
     request_origin = origins[0] if origins else None
     request_host_header = host_headers[0]
-    for configured in (settings.public_app_url, settings.sales_xray_app_url):
+    sales_xray_urls = [AnyHttpUrl(origin) for origin in settings.sales_xray_app_origins.values()]
+    for configured in (settings.public_app_url, *sales_xray_urls):
         if configured is None:
             continue
         origin = str(configured).rstrip("/")

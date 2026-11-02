@@ -61,8 +61,7 @@ def install_product_updates_http(
     router = APIRouter(prefix="/v1", tags=["product-updates"])
 
     def surface(request: Request) -> None:
-        allowed_hosts = {settings.sales_xray_app_url.host} if settings.sales_xray_app_url else set()
-        if request.url.hostname not in allowed_hosts:
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise HTTPException(404, "Product updates route not found.")
 
     async def write_surface(request: Request) -> None:

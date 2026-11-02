@@ -82,8 +82,7 @@ def install_feedback_http(app: FastAPI, ctx: RouteContext) -> None:
 
     def on_app_host(request: Request) -> None:
         hosts = {settings.public_app_url.host}
-        if settings.sales_xray_app_url is not None:
-            hosts.add(settings.sales_xray_app_url.host)
+        hosts.update(settings.sales_xray_hosts)
         if request.url.hostname not in hosts or request.query_params:
             raise HTTPException(404, "Not found.", headers=PRIVATE)
 

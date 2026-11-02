@@ -121,10 +121,7 @@ def install_prospect_http(
         offset: int = 0,
     ) -> Any:
         response.headers.update(_PRIVATE)
-        if (
-            settings.sales_xray_app_url is None
-            or request.url.hostname != settings.sales_xray_app_url.host
-        ):
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise HTTPException(404, "Prospects are unavailable.", headers=_PRIVATE)
         allowed = {"offset"} if operation == "suggest" else set()
         if any(
@@ -213,10 +210,7 @@ def install_prospect_http(
     @router.post("/{prospect_id}/confirm")
     async def confirm_detected(prospect_id: UUID, request: Request, response: Response) -> Any:
         response.headers.update(_PRIVATE)
-        if (
-            settings.sales_xray_app_url is None
-            or request.url.hostname != settings.sales_xray_app_url.host
-        ):
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise HTTPException(404, "Prospects are unavailable.", headers=_PRIVATE)
         if request.query_params:
             raise HTTPException(422, "Use the current prospect and workspace.", headers=_PRIVATE)
@@ -260,10 +254,7 @@ def install_prospect_http(
         fields: bool = False,
     ) -> Any:
         response.headers.update(_PRIVATE)
-        if (
-            settings.sales_xray_app_url is None
-            or request.url.hostname != settings.sales_xray_app_url.host
-        ):
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise HTTPException(404, "Prospects are unavailable.", headers=_PRIVATE)
         if request.query_params:
             raise HTTPException(422, "Use the current prospect and workspace.", headers=_PRIVATE)
@@ -342,10 +333,7 @@ def install_prospect_http(
         offset: int = 0,
     ) -> Any:
         response.headers.update(_PRIVATE)
-        if (
-            settings.sales_xray_app_url is None
-            or request.url.hostname != settings.sales_xray_app_url.host
-        ):
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise HTTPException(404, "Prospects are unavailable.", headers=_PRIVATE)
         allowed = {"offset"} if prospect_id is not None else {"search", "stage", "offset"}
         if any(

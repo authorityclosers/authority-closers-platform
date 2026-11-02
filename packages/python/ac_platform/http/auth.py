@@ -1108,38 +1108,22 @@ def require_safe_origin(
         return
     origin = request.headers.get("origin")
     normalized_origin = None if origin is None else origin.rstrip("/")
-    sales_host = settings.sales_xray_app_url.host if settings.sales_xray_app_url else None
-    if (
-        allow_missing_sales_xray_origin
-        and normalized_origin is None
-        and sales_host is not None
-        and request.url.hostname == sales_host
-    ):
+    on_sales_xray = settings.is_sales_xray_host(request.url.hostname)
+    if allow_missing_sales_xray_origin and normalized_origin is None and on_sales_xray:
         return
     studio_origin = settings.sales_xray_studio_origin
-    if (
-        studio_origin is not None
-        and normalized_origin == studio_origin
-        and sales_host is not None
-        and request.url.hostname == sales_host
-    ):
+    if studio_origin is not None and normalized_origin == studio_origin and on_sales_xray:
         # The owner's UI studio reaches this Sales Xray host through its own proxy (staging only).
         return
     if normalized_origin not in settings.allowed_origins:
         raise RequestOriginDenied("Cookie-authenticated state changes require an allowed Origin.")
     coach_origin = str(settings.coach_app_url).rstrip("/")
-    sales_origin = (
-        str(settings.sales_xray_app_url).rstrip("/")
-        if settings.sales_xray_app_url is not None
-        else None
-    )
-    sales_host = settings.sales_xray_app_url.host if settings.sales_xray_app_url else None
     if (
         settings.environment not in {"staging", "production"}
         and request.url.hostname != settings.coach_app_url.host
         and normalized_origin != coach_origin
-        and request.url.hostname != sales_host
-        and normalized_origin != sales_origin
+        and not on_sales_xray
+        and normalized_origin not in settings.sales_xray_app_origins.values()
     ):
         return
 
@@ -1150,8 +1134,9 @@ def require_safe_origin(
         expected_origin = str(settings.admin_app_url).rstrip("/")
     elif request.url.hostname == settings.coach_app_url.host:
         expected_origin = coach_origin
-    elif sales_host is not None and request.url.hostname == sales_host:
-        expected_origin = sales_origin
+    elif on_sales_xray:
+        # Each Sales Xray address is its own surface (salesxray.in, 2 Nov 2026).
+        expected_origin = settings.sales_xray_origin_for(request.url.hostname)
     if normalized_origin != expected_origin:
         raise RequestOriginDenied(
             "Cookie-authenticated state changes require a same-surface Origin."
@@ -1607,10 +1592,11 @@ def _sales_xray_auth_result_response(
         "account_closed",
     ],
     transaction_cookie_names: tuple[str, ...],
+    host: str | None,
     flow_id: UUID | None = None,
     app_handoff: bool = False,
 ) -> Response:
-    """Return only a bounded outcome on the configured Sales Xray host."""
+    """Return only a bounded outcome on the Sales Xray address ``host`` (or the canonical one)."""
 
     if app_handoff and result != "success":
         # The sign-in ran in the app's Custom Tab: tell the app, not the browser.
@@ -1625,7 +1611,8 @@ def _sales_xray_auth_result_response(
     parameters: dict[str, str] = {"auth_result": result}
     if flow_id is not None:
         parameters = {"flow": str(flow_id), **parameters}
-    location = f"{_surface_origin(settings, 'sales_xray')}/auth/complete?{urlencode(parameters)}"
+    origin = _surface_origin(settings, "sales_xray", host)
+    location = f"{origin}/auth/complete?{urlencode(parameters)}"
     response = RedirectResponse(location, status_code=status.HTTP_303_SEE_OTHER)
     _delete_oauth_transaction_cookies(response, settings, transaction_cookie_names)
     if result != "success":
@@ -1649,7 +1636,7 @@ async def _oauth_identity_problem_response(
     return response
 
 
-def _surface_origin(settings: Settings, surface: str) -> str:
+def _surface_origin(settings: Settings, surface: str, host: str | None = None) -> str:
     values = {
         "learner": settings.public_app_url,
         "admin": settings.admin_app_url,
@@ -1659,6 +1646,10 @@ def _surface_origin(settings: Settings, surface: str) -> str:
         values["sales_xray"] = settings.sales_xray_app_url
     if surface not in values:
         raise InvalidAuthTransaction("The requested application surface is not allowed.")
+    if surface == "sales_xray":
+        # Sales Xray answers on more than one address (salesxray.in, 2 Nov 2026). A sign-in
+        # stays on the address ``host`` it started on, where its host-only cookies are.
+        return settings.sales_xray_origin_for(host) or str(values[surface]).rstrip("/")
     value = values[surface]
     return str(value).rstrip("/")
 
@@ -1673,8 +1664,10 @@ def _email_login_return_path(surface: str, candidate: str) -> str:
     return normalized
 
 
-def _surface_callback_uri(settings: Settings, surface: str, provider: str = "google") -> str:
-    return f"{_surface_origin(settings, surface)}/v1/auth/{provider}/callback"
+def _surface_callback_uri(
+    settings: Settings, surface: str, provider: str = "google", *, host: str | None
+) -> str:
+    return f"{_surface_origin(settings, surface, host)}/v1/auth/{provider}/callback"
 
 
 # Providers offered next to Google, on Sales Xray only.
@@ -1716,6 +1709,7 @@ def _settings_connect_response(
     stored_return: str,
     *,
     transaction_cookie_names: tuple[str, ...],
+    host: str | None,
     connected: str | None = None,
     error: Literal["in_use", "cancelled", "failed"] | None = None,
 ) -> Response:
@@ -1729,7 +1723,7 @@ def _settings_connect_response(
         fragment = "#settings" + (f"/{match['section']}" if match["section"] else "")
     query = urlencode({"connected": connected} if connected else {"connect_error": error})
     response = RedirectResponse(
-        f"{_surface_origin(settings, 'sales_xray')}{match['path']}?{query}{fragment}",
+        f"{_surface_origin(settings, 'sales_xray', host)}{match['path']}?{query}{fragment}",
         status_code=status.HTTP_303_SEE_OTHER,
     )
     _delete_oauth_transaction_cookies(response, settings, transaction_cookie_names)
@@ -1821,8 +1815,7 @@ def _learner_oauth_recovery_response(
 
 def _sales_xray_host(request: Request, settings: Settings) -> bool:
     """A request made on Sales X-Ray's own address (its password sign-in has no surface)."""
-    app = settings.sales_xray_app_url
-    return app is not None and request.url.hostname == app.host
+    return settings.is_sales_xray_host(request.url.hostname)
 
 
 def _require_surface_host(request: Request, settings: Settings, surface: str) -> None:
@@ -1830,11 +1823,10 @@ def _require_surface_host(request: Request, settings: Settings, surface: str) ->
         settings.environment not in {"staging", "production"}
         and surface not in {"coach", "sales_xray"}
         and request.url.hostname != settings.coach_app_url.host
-        and request.url.hostname
-        != (settings.sales_xray_app_url.host if settings.sales_xray_app_url else None)
+        and request.url.hostname not in settings.sales_xray_app_origins
     ):
         return
-    expected_host = urlsplit(_surface_origin(settings, surface)).hostname
+    expected_host = urlsplit(_surface_origin(settings, surface, request.url.hostname)).hostname
     if request.url.hostname != expected_host:
         raise InvalidAuthTransaction("The sign-in surface does not match the request host.")
 
@@ -2059,7 +2051,7 @@ def install_identity_http(
         return tenant_id
 
     def require_handoff_surface(request: Request, surface: str) -> str:
-        origin = _surface_origin(settings, surface)
+        origin = _surface_origin(settings, surface, request.url.hostname)
         _require_surface_host(request, settings, surface)
         require_safe_origin(request, settings)
         # This credential bridge stays strict in dev too; no local/studio exception.
@@ -3335,6 +3327,7 @@ def install_identity_http(
             if app_challenge is not None:
                 return _sales_xray_auth_result_response(
                     settings,
+                    host=request.url.hostname,
                     result="failed",
                     transaction_cookie_names=(),
                     flow_id=connect_flow,
@@ -3407,6 +3400,7 @@ def install_identity_http(
                         raise
                     return _sales_xray_auth_result_response(
                         settings,
+                        host=request.url.hostname,
                         result="failed",
                         transaction_cookie_names=(),
                         flow_id=connect_flow,
@@ -3417,6 +3411,7 @@ def install_identity_http(
                 ):
                     return _sales_xray_auth_result_response(
                         settings,
+                        host=request.url.hostname,
                         result="fresh_sign_in",
                         transaction_cookie_names=(),
                         flow_id=connect_flow,
@@ -3441,7 +3436,9 @@ def install_identity_http(
                 {"state": transaction.state, "nonce": transaction.nonce, **native_answer}
             )
         else:
-            redirect_uri = _surface_callback_uri(settings, surface, provider_name)
+            redirect_uri = _surface_callback_uri(
+                settings, surface, provider_name, host=request.url.hostname
+            )
             await _prepare_provider(selected_provider)
             authorization_url = selected_provider.authorization_url(
                 transaction,
@@ -3488,6 +3485,7 @@ def install_identity_http(
         def failed() -> Response:
             return _sales_xray_auth_result_response(
                 settings,
+                host=request.url.hostname,
                 result="failed",
                 transaction_cookie_names=(),
             )
@@ -3528,8 +3526,8 @@ def install_identity_http(
         except InvalidAuthTransaction:
             return failed()
         response = RedirectResponse(
-            f"{_surface_origin(settings, 'sales_xray')}/v1/auth/apple/callback?"
-            + urlencode({"state": state}),
+            f"{_surface_origin(settings, 'sales_xray', request.url.hostname)}"
+            "/v1/auth/apple/callback?" + urlencode({"state": state}),
             status_code=status.HTTP_303_SEE_OTHER,
         )
         response.set_cookie(
@@ -3642,7 +3640,9 @@ def install_identity_http(
             {
                 "redirect_url": selected_provider.authorization_url(
                     transaction,
-                    redirect_uri=_surface_callback_uri(settings, "sales_xray", provider_name),
+                    redirect_uri=_surface_callback_uri(
+                        settings, "sales_xray", provider_name, host=request.url.hostname
+                    ),
                 )
             },
             headers={"cache-control": "no-store", "pragma": "no-cache"},
@@ -3677,6 +3677,7 @@ def install_identity_http(
             return _settings_connect_response(
                 settings,
                 settings_return,
+                host=request.url.hostname,
                 transaction_cookie_names=transaction_cookie_names,
                 connected=connected,
                 error=error,
@@ -3699,7 +3700,9 @@ def install_identity_http(
                 code,
                 transaction,
                 callback_state=state_value,
-                redirect_uri=_surface_callback_uri(settings, "sales_xray", provider_name),
+                redirect_uri=_surface_callback_uri(
+                    settings, "sales_xray", provider_name, host=request.url.hostname
+                ),
             )
         except (IdentityProviderRejected, IdentityProviderUnavailable):
             return back(error="failed")
@@ -3815,12 +3818,10 @@ def install_identity_http(
         )
         if malformed_callback:
             error = InvalidAuthTransaction("The callback parameters are invalid.")
-            if (
-                settings.sales_xray_app_url is not None
-                and request.url.hostname == settings.sales_xray_app_url.host
-            ):
+            if settings.is_sales_xray_host(request.url.hostname):
                 return _sales_xray_auth_result_response(
                     settings,
+                    host=request.url.hostname,
                     result="failed",
                     transaction_cookie_names=(),
                 )
@@ -3890,15 +3891,14 @@ def install_identity_http(
                 return _settings_connect_response(
                     settings,
                     settings_return,
+                    host=request.url.hostname,
                     transaction_cookie_names=transaction_cookie_names,
                     error="failed",
                 )
-            if (
-                settings.sales_xray_app_url is not None
-                and request.url.hostname == settings.sales_xray_app_url.host
-            ):
+            if settings.is_sales_xray_host(request.url.hostname):
                 return _sales_xray_auth_result_response(
                     settings,
+                    host=request.url.hostname,
                     result="failed",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
@@ -3932,6 +3932,7 @@ def install_identity_http(
             if transaction.surface == "sales_xray":
                 return _sales_xray_auth_result_response(
                     settings,
+                    host=request.url.hostname,
                     result="failed",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
@@ -3947,6 +3948,7 @@ def install_identity_http(
             if transaction.surface == "sales_xray":
                 return _sales_xray_auth_result_response(
                     settings,
+                    host=request.url.hostname,
                     result="failed",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
@@ -3964,6 +3966,7 @@ def install_identity_http(
             if transaction.surface == "sales_xray":
                 return _sales_xray_auth_result_response(
                     settings,
+                    host=request.url.hostname,
                     result="failed",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
@@ -3991,6 +3994,7 @@ def install_identity_http(
                 if transaction.surface == "sales_xray":
                     return _sales_xray_auth_result_response(
                         settings,
+                        host=request.url.hostname,
                         result="review_terms",
                         transaction_cookie_names=transaction_cookie_names,
                         flow_id=completion_flow_id,
@@ -4012,6 +4016,7 @@ def install_identity_http(
             if transaction.surface == "sales_xray":
                 return _sales_xray_auth_result_response(
                     settings,
+                    host=request.url.hostname,
                     result="failed",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
@@ -4023,7 +4028,9 @@ def install_identity_http(
                 AuthenticationRequired("A valid Authority Closers session is required."),
                 transaction_cookie_names=transaction_cookie_names,
             )
-        redirect_uri = _surface_callback_uri(settings, transaction.surface, provider_name)
+        redirect_uri = _surface_callback_uri(
+            settings, transaction.surface, provider_name, host=request.url.hostname
+        )
         selected_provider = sign_in_providers.get(provider_name, DisabledIdentityProvider())
         try:
             if native:
@@ -4050,6 +4057,7 @@ def install_identity_http(
             if transaction.surface == "sales_xray":
                 return _sales_xray_auth_result_response(
                     settings,
+                    host=request.url.hostname,
                     result=(
                         "no_email"
                         if isinstance(rejection, IdentityProviderEmailMissing)
@@ -4076,6 +4084,7 @@ def install_identity_http(
             if transaction.surface == "sales_xray":
                 return _sales_xray_auth_result_response(
                     settings,
+                    host=request.url.hostname,
                     result="unavailable",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
@@ -4336,6 +4345,7 @@ def install_identity_http(
                     result = "unavailable"
                 return _sales_xray_auth_result_response(
                     settings,
+                    host=request.url.hostname,
                     result=result,
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
@@ -4372,6 +4382,7 @@ def install_identity_http(
             if transaction.surface == "sales_xray":
                 return _sales_xray_auth_result_response(
                     settings,
+                    host=request.url.hostname,
                     result="failed",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
@@ -4398,6 +4409,7 @@ def install_identity_http(
             if transaction.surface == "sales_xray":
                 return _sales_xray_auth_result_response(
                     settings,
+                    host=request.url.hostname,
                     result=(
                         "already_linked"
                         if transaction.authorization_type is ProviderAuthorizationType.LINK
@@ -4418,6 +4430,7 @@ def install_identity_http(
             if transaction.surface == "sales_xray":
                 return _sales_xray_auth_result_response(
                     settings,
+                    host=request.url.hostname,
                     result="account_exists",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
@@ -4443,6 +4456,7 @@ def install_identity_http(
             if transaction.surface == "sales_xray":
                 return _sales_xray_auth_result_response(
                     settings,
+                    host=request.url.hostname,
                     result="failed",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
@@ -4458,6 +4472,7 @@ def install_identity_http(
             if transaction.surface == "sales_xray":
                 return _sales_xray_auth_result_response(
                     settings,
+                    host=request.url.hostname,
                     # Its deletion request closed the account: say so, not "failed".
                     result=(
                         "account_closed" if isinstance(error, AccountClosedError) else "failed"
@@ -4476,6 +4491,7 @@ def install_identity_http(
             if transaction.surface == "sales_xray":
                 return _sales_xray_auth_result_response(
                     settings,
+                    host=request.url.hostname,
                     result="unavailable",
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
@@ -4517,6 +4533,7 @@ def install_identity_http(
             # Connected; the session stays the one that started it.
             linked_page = _sales_xray_auth_result_response(
                 settings,
+                host=request.url.hostname,
                 result="linked",
                 transaction_cookie_names=transaction_cookie_names,
                 flow_id=completion_flow_id,
@@ -4528,6 +4545,7 @@ def install_identity_http(
             # must never be accepted by the browser as completed sign-in.
             response = _sales_xray_auth_result_response(
                 settings,
+                host=request.url.hostname,
                 result="unavailable",
                 transaction_cookie_names=transaction_cookie_names,
                 flow_id=completion_flow_id,
@@ -4536,13 +4554,14 @@ def install_identity_http(
         elif transaction.surface == "sales_xray":
             response = _sales_xray_auth_result_response(
                 settings,
+                host=request.url.hostname,
                 result="success",
                 transaction_cookie_names=transaction_cookie_names,
                 flow_id=completion_flow_id,
                 app_handoff=app_handoff,
             )
         else:
-            base_url = _surface_origin(settings, transaction.surface)
+            base_url = _surface_origin(settings, transaction.surface, request.url.hostname)
             response = RedirectResponse(
                 f"{str(base_url).rstrip('/')}{transaction.return_path}",
                 status_code=status.HTTP_303_SEE_OTHER,
@@ -4588,6 +4607,7 @@ def install_identity_http(
         def outcome(result: Literal["failed", "unavailable"]) -> Response:
             return _sales_xray_auth_result_response(
                 settings,
+                host=request.url.hostname,
                 result=result,
                 transaction_cookie_names=(),
                 flow_id=flow_id,
@@ -4640,6 +4660,7 @@ def install_identity_http(
             return outcome("unavailable")
         response = _sales_xray_auth_result_response(
             settings,
+            host=request.url.hostname,
             result="success",
             transaction_cookie_names=(),
             flow_id=flow_id,

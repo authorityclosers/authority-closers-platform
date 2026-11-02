@@ -161,10 +161,7 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
     read_actor = getattr(ctx.require_actor, "read_only", ctx.require_actor)
 
     def same_host(request: Request) -> None:
-        if (
-            settings.sales_xray_app_url is None
-            or request.url.hostname != settings.sales_xray_app_url.host
-        ):
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise HTTPException(404, "Leads are unavailable here.", headers=NO_STORE)
 
     def social_config() -> graph.SocialConfig:
@@ -177,11 +174,13 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
             )
         return cfg
 
-    def app_url() -> str:
-        return str(settings.sales_xray_app_url or "").rstrip("/")
+    def app_url(request: Request) -> str:
+        # Back to the address the person started on, where their host-only session cookie
+        # is (salesxray.in or the old address, 2 Nov 2026).
+        return settings.sales_xray_origin_for(request.url.hostname) or ""
 
-    def callback_url() -> str:
-        return f"{app_url()}/v1/lead-desk/messaging/callback"
+    def callback_url(request: Request) -> str:
+        return f"{app_url(request)}/v1/lead-desk/messaging/callback"
 
     @asynccontextmanager
     async def desk_for(
@@ -315,14 +314,16 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
                 app_challenge=app_challenge,
                 card=settings_card,
             )
-        url = graph.dialog_url(cfg, redirect_uri=callback_url(), state=state)
+        url = graph.dialog_url(cfg, redirect_uri=callback_url(request), state=state)
         if reply == "json":
             return JSONResponse({"url": url}, headers=PRIVATE)
         return RedirectResponse(url, status_code=303, headers=PRIVATE)
 
-    async def finish(desk: LeadDesk, cfg: graph.SocialConfig, code: str) -> tuple[str, list[str]]:
+    async def finish(
+        desk: LeadDesk, cfg: graph.SocialConfig, code: str, redirect_uri: str
+    ) -> tuple[str, list[str]]:
         api = graph.Graph(cfg)
-        user = await api.user_token(code=code, redirect_uri=callback_url())
+        user = await api.user_token(code=code, redirect_uri=redirect_uri)
         pages = await api.pages(user)
         done = await inbox.connect_pages(desk, cfg, api, pages)
         if done.accounts:
@@ -356,7 +357,7 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
         def done(outcome: str) -> Response:
             # Always Settings → Connected apps, at the card it started from or the
             # Messenger card (the old Integrations address now opens Developers).
-            url = app_return.settings_url(app_url(), card or "messenger", outcome)
+            url = app_return.settings_url(app_url(request), card or "messenger", outcome)
             return RedirectResponse(url, status_code=303, headers=PRIVATE)
 
         if params.get("error"):
@@ -376,7 +377,7 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
                     )
                 except meta.MetaError:
                     return done("failed")
-                outcome, _ = await finish(desk, cfg, code)
+                outcome, _ = await finish(desk, cfg, code, callback_url(request))
         except HTTPException as error:
             if error.status_code in (401, 403):
                 raise
@@ -404,7 +405,7 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
                 raise DeskError(403, str(error)) from None
             if not app_return.answers(body.get("a"), command.verifier):
                 raise DeskError(403, "That didn't come from this app. Connect again.")
-            outcome, _ = await finish(desk, cfg, code)
+            outcome, _ = await finish(desk, cfg, code, callback_url(request))
             return AppCompleted(result=outcome)
 
     @router.post(

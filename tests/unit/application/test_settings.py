@@ -564,3 +564,116 @@ def test_trusted_proxy_addresses_are_normalized_and_deduplicated() -> None:
         "172.18.0.2",
         "2001:db8::2",
     }
+
+
+# The customer domain (owner, 2 Nov 2026): salesxray.in beside the old address, which stays.
+OLD_SALES_XRAY = "https://salesxray.authorityclosers.com"
+NEW_SALES_XRAY = "https://app.salesxray.in"
+
+
+def _production_sales_xray(origin: str) -> Settings:
+    values = {**_production_values(), "sales_xray_app_url": origin}
+    return Settings(environment="production", _env_file=None, **values)  # type: ignore[arg-type]
+
+
+def test_production_sales_xray_answers_on_both_addresses_and_its_api_host() -> None:
+    settings = _production_sales_xray(OLD_SALES_XRAY)
+
+    assert settings.sales_xray_app_origins == {
+        "salesxray.authorityclosers.com": OLD_SALES_XRAY,
+        "app.salesxray.in": NEW_SALES_XRAY,
+    }
+    assert settings.sales_xray_hosts == {
+        "salesxray.authorityclosers.com",
+        "app.salesxray.in",
+        "api.salesxray.in",
+        "mcp.salesxray.in",
+    }
+    assert {"app.salesxray.in", "api.salesxray.in", "mcp.salesxray.in"} <= set(
+        settings.allowed_hosts
+    )
+    assert "salesxray.in" not in settings.allowed_hosts
+    assert {OLD_SALES_XRAY, NEW_SALES_XRAY} <= set(settings.allowed_origins)
+    assert "https://api.salesxray.in" not in settings.allowed_origins
+    assert "https://mcp.salesxray.in" not in settings.allowed_origins
+    for host in settings.sales_xray_hosts:
+        assert settings.is_sales_xray_host(host)
+    for host in (None, "salesxray.in", "app.salesxray.in.example.com", "api.authorityclosers.com"):
+        assert not settings.is_sales_xray_host(host)
+
+
+def test_a_person_is_sent_back_to_the_address_they_are_on() -> None:
+    settings = _production_sales_xray(OLD_SALES_XRAY)
+
+    assert settings.sales_xray_origin_for("app.salesxray.in") == NEW_SALES_XRAY
+    assert settings.sales_xray_origin_for("salesxray.authorityclosers.com") == OLD_SALES_XRAY
+    # Nobody signs in on the API or MCP host: their family's app. Elsewhere: the canonical.
+    assert settings.sales_xray_origin_for("api.salesxray.in") == NEW_SALES_XRAY
+    assert settings.sales_xray_origin_for("mcp.salesxray.in") == NEW_SALES_XRAY
+    assert settings.sales_xray_origin_for("evil.example.com") == OLD_SALES_XRAY
+    assert settings.sales_xray_origin_for(None) == OLD_SALES_XRAY
+
+
+def test_each_address_family_names_its_own_api_and_mcp_hosts() -> None:
+    settings = _production_sales_xray(OLD_SALES_XRAY)
+
+    for host in ("app.salesxray.in", "api.salesxray.in", "mcp.salesxray.in"):
+        assert settings.sales_xray_origin_for(host, "api") == "https://api.salesxray.in"
+        assert settings.sales_xray_origin_for(host, "mcp") == "https://mcp.salesxray.in"
+        assert settings.sales_xray_host_origin(host) == f"https://{host}"
+    # The old address serves its API and MCP itself, for the keys, connectors and website
+    # lines already using it.
+    for role in ("app", "api", "mcp"):
+        assert settings.sales_xray_origin_for("salesxray.authorityclosers.com", role) == (
+            OLD_SALES_XRAY
+        )
+        assert settings.sales_xray_origin_for(None, role) == OLD_SALES_XRAY
+    assert settings.sales_xray_host_origin("salesxray.authorityclosers.com") == OLD_SALES_XRAY
+    assert settings.sales_xray_host_origin("evil.example.com") == OLD_SALES_XRAY
+
+
+def test_production_may_make_the_new_address_canonical_and_keep_the_old_one() -> None:
+    settings = _production_sales_xray(f"{NEW_SALES_XRAY}/")
+
+    assert list(settings.sales_xray_app_origins.values()) == [NEW_SALES_XRAY, OLD_SALES_XRAY]
+    assert settings.sales_xray_origin_for(None) == NEW_SALES_XRAY
+    assert settings.sales_xray_origin_for(None, "api") == "https://api.salesxray.in"
+    assert settings.sales_xray_origin_for("salesxray.authorityclosers.com") == OLD_SALES_XRAY
+    assert settings.is_sales_xray_host("api.salesxray.in")
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "https://salesxray.in",
+        "https://api.salesxray.in",
+        "https://mcp.salesxray.in",
+        "https://www.salesxray.in",
+        "https://app.salesxray.com",
+        "http://app.salesxray.in",
+        "https://app.salesxray.in:8443",
+    ],
+)
+def test_production_sales_xray_url_is_only_one_of_its_known_addresses(origin: str) -> None:
+    with pytest.raises(ValidationError, match="AC_SALES_XRAY_APP_URL"):
+        _production_sales_xray(origin)
+
+
+def test_staging_keeps_only_its_own_sales_xray_address() -> None:
+    values = {**_staging_values(), "sales_xray_app_url": NEW_SALES_XRAY}
+    with pytest.raises(ValidationError, match="AC_SALES_XRAY_APP_URL"):
+        Settings(environment="staging", _env_file=None, **values)  # type: ignore[arg-type]
+
+    values["sales_xray_app_url"] = "https://salesxray-staging.authorityclosers.com"
+    settings = Settings(environment="staging", _env_file=None, **values)  # type: ignore[arg-type]
+    assert settings.sales_xray_hosts == {"salesxray-staging.authorityclosers.com"}
+    assert settings.sales_xray_origin_for("app.salesxray.in") == values["sales_xray_app_url"]
+
+
+def test_local_sales_xray_has_no_other_addresses() -> None:
+    settings = Settings(_env_file=None, sales_xray_app_url="http://127.0.0.1:3016")
+
+    assert settings.sales_xray_hosts == {"127.0.0.1"}
+    assert settings.sales_xray_origin_for("app.salesxray.in") == "http://127.0.0.1:3016"
+    assert Settings(_env_file=None).sales_xray_hosts == frozenset()
+    assert Settings(_env_file=None).sales_xray_origin_for("app.salesxray.in") is None

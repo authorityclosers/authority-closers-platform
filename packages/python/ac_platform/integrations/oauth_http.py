@@ -183,18 +183,25 @@ def server_metadata(base: str) -> dict[str, Any]:
     }
 
 
-def protected_resource_metadata(base: str, path: str) -> dict[str, Any] | None:
-    """RFC 9728 metadata for /v1/mcp (also the bare path) or /v1/api; None for anything else."""
+def protected_resource_metadata(
+    base: str, path: str, authorization_server: str | None = None
+) -> dict[str, Any] | None:
+    """RFC 9728 metadata for /v1/mcp (also the bare path) or /v1/api; None for anything else.
+
+    ``base`` is the resource's own origin; ``authorization_server`` the app where people sign
+    in to Connect, when that is elsewhere (mcp.salesxray.in signs in on app.salesxray.in).
+    """
+    server = authorization_server or base
     resource = "/" + path.strip("/") if path.strip("/") else "/v1/mcp"
     if resource not in RESOURCES:
         return None
     return {
         "resource": f"{base}{resource}",
-        "authorization_servers": [base],
+        "authorization_servers": [server],
         "bearer_methods_supported": ["header"],
         "scopes_supported": list(MCP_SCOPES),
         "resource_name": "Sales X-Ray",
-        "resource_documentation": f"{base}/developers",
+        "resource_documentation": f"{server}/developers",
     }
 
 
@@ -207,17 +214,17 @@ def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
     limiter = InMemoryTokenBucketLimiter()
 
     def served(request: Request) -> bool:
-        return (
-            settings.sales_xray_app_url is not None
-            and request.url.hostname == settings.sales_xray_app_url.host
-        )
+        return settings.is_sales_xray_host(request.url.hostname)
 
     def here(request: Request) -> None:
         if not served(request):
             raise HTTPException(404, "Connect is not served here.")
 
-    def base() -> str:
-        return str(settings.sales_xray_app_url).rstrip("/")
+    def base(request: Request) -> str:
+        # Each app address is its own Connect sign-in (salesxray.in or the old one, 2 Nov 2026),
+        # as the web app's /.well-known answers say; an API or MCP host names its family's app.
+        # Tokens are stored, not bound to an issuer, so connections made on either keep working.
+        return settings.sales_xray_origin_for(request.url.hostname) or ""
 
     async def organisation_manager(auth: Any) -> tuple[Any, dict[str, Any]]:
         actor = auth.resolved.actor
@@ -533,7 +540,9 @@ def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
     async def metadata(request: Request) -> JSONResponse:
         if not served(request):
             return _oauth_error("invalid_request", 404)
-        return JSONResponse(server_metadata(base()), headers={"Cache-Control": "max-age=300"})
+        return JSONResponse(
+            server_metadata(base(request)), headers={"Cache-Control": "max-age=300"}
+        )
 
     def not_found() -> JSONResponse:
         return JSONResponse({"error": "not_found"}, status_code=404, headers=NO_STORE)
@@ -543,12 +552,13 @@ def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
     async def server_discovery(request: Request) -> JSONResponse:
         if not served(request):
             return not_found()
-        return JSONResponse(server_metadata(base()), headers=DISCOVERY)
+        return JSONResponse(server_metadata(base(request)), headers=DISCOVERY)
 
     @discovery.get("/.well-known/oauth-protected-resource")
     @discovery.get("/.well-known/oauth-protected-resource/{path:path}")
     async def resource_discovery(request: Request, path: str = "") -> JSONResponse:
-        body = protected_resource_metadata(base(), path) if served(request) else None
+        own = settings.sales_xray_host_origin(request.url.hostname) or ""
+        body = protected_resource_metadata(own, path, base(request)) if served(request) else None
         return JSONResponse(body, headers=DISCOVERY) if body else not_found()
 
     @mine.get("")

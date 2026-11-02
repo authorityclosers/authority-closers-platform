@@ -243,7 +243,6 @@ def install_submission_http(
 ) -> None:
     if settings.sales_xray_app_url is None or settings.public_learner_tenant_id is None:
         raise ValueError("An exact Sales Xray host and public Academy are required.")
-    hostname = settings.sales_xray_app_url.host
     if settings.public_learner_tenant_id not in runtime.policy.tenant_ids:
         raise ValueError("The private upload policy must include the public Academy.")
     if (
@@ -274,7 +273,7 @@ def install_submission_http(
         allowed: frozenset[str] = frozenset(),
     ) -> str:
         response.headers.update(_PRIVATE)
-        if request.url.hostname == hostname:
+        if settings.is_sales_xray_host(request.url.hostname):
             host = "sales"
         elif request.url.hostname == settings.public_app_url.host:
             host = "learner"
@@ -322,7 +321,7 @@ def install_submission_http(
         return current if actor.tenant_id == public else None
 
     def surface(request: Request) -> str | None:
-        if request.url.hostname == hostname:
+        if settings.is_sales_xray_host(request.url.hostname):
             return "sales"
         if request.url.hostname == settings.public_app_url.host:
             return "learner"

@@ -24,15 +24,22 @@ class UploadChallenge:
         *,
         secret: SecretStr,
         hostname: str,
+        also: tuple[str, ...] = (),
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
+        # ``also``: the app's other addresses (salesxray.in beside the old one, 2 Nov 2026);
+        # a check solved on any of them passes.
         if (
             not isinstance(secret, SecretStr)
             or not 1 <= len(secret.get_secret_value()) <= 256
-            or not re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?", hostname)
+            or not all(
+                re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?", name)
+                for name in (hostname, *also)
+            )
         ):
             raise ValueError("A configured upload challenge is required.")
         self._secret, self.hostname, self.clock = secret, hostname, clock
+        self.hostnames = frozenset((hostname, *also))
 
     async def verify(self, token: str) -> None:
         if not isinstance(token, str) or not 1 <= len(token) <= 2048:
@@ -61,7 +68,7 @@ class UploadChallenge:
             if (
                 type(value) is not dict
                 or value.get("success") is not True
-                or value.get("hostname") != self.hostname
+                or value.get("hostname") not in self.hostnames
                 or value.get("action") != UPLOAD_ACTION
                 or not isinstance(value.get("challenge_ts"), str)
             ):

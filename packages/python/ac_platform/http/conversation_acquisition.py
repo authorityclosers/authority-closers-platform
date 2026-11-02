@@ -93,7 +93,7 @@ def install_acquisition_http(
         return actor.tenant_id
 
     def surface(request: Request) -> str | None:
-        if request.url.hostname == challenge.hostname:
+        if settings.is_sales_xray_host(request.url.hostname):
             return "sales"
         if request.url.hostname == settings.public_app_url.host:
             return "learner"

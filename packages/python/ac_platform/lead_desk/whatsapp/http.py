@@ -313,10 +313,7 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
     read_actor = getattr(ctx.require_actor, "read_only", ctx.require_actor)
 
     def same_host(request: Request) -> None:
-        if (
-            settings.sales_xray_app_url is None
-            or request.url.hostname != settings.sales_xray_app_url.host
-        ):
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise HTTPException(404, "Leads are unavailable here.", headers=NO_STORE)
 
     def whatsapp_config() -> cloud.WhatsAppConfig:
@@ -462,11 +459,13 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
             desk._require_manager()
             return await status_view(desk)
 
-    def app_url() -> str:
-        return str(settings.sales_xray_app_url or "").rstrip("/")
+    def app_url(request: Request) -> str:
+        # Back to the address the person started on, where their host-only session cookie
+        # is (salesxray.in or the old address, 2 Nov 2026).
+        return settings.sales_xray_origin_for(request.url.hostname) or ""
 
-    def callback_url() -> str:
-        return f"{app_url()}/v1/lead-desk/whatsapp/callback"
+    def callback_url(request: Request) -> str:
+        return f"{app_url(request)}/v1/lead-desk/whatsapp/callback"
 
     @router.get("/whatsapp/start", response_model=None)
     async def whatsapp_start(
@@ -498,17 +497,19 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                 card=settings_card,
             )
         url = cloud.dialog_url(
-            cfg, redirect_uri=callback_url(), state=state, business_app=business_app
+            cfg, redirect_uri=callback_url(request), state=state, business_app=business_app
         )
         if reply == "json":
             return JSONResponse({"url": url}, headers=PRIVATE)
         return RedirectResponse(url, status_code=303, headers=PRIVATE)
 
-    async def finish_whatsapp(desk: LeadDesk, cfg: cloud.WhatsAppConfig, code: str) -> str:
+    async def finish_whatsapp(
+        desk: LeadDesk, cfg: cloud.WhatsAppConfig, code: str, redirect_uri: str
+    ) -> str:
         """Swap Embedded Signup's code and connect every number the customer shared."""
         api = cloud.Cloud(cfg)
         try:
-            token = await api.exchange(code, redirect_uri=callback_url())
+            token = await api.exchange(code, redirect_uri=redirect_uri)
             rows = await inbox.connect_shared(desk, cfg, api, token)
         except (HTTPException, cloud.WhatsAppError) as error:
             signup_log("failed", detail=str(getattr(error, "detail", None) or error))
@@ -541,7 +542,9 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                 raise DeskError(403, str(error)) from None
             if not app_return.answers(body.get("a"), command.verifier):
                 raise DeskError(403, "That didn't come from this app. Connect again.")
-            return AppCompleted(result=await finish_whatsapp(desk, cfg, code))
+            return AppCompleted(
+                result=await finish_whatsapp(desk, cfg, code, callback_url(request))
+            )
 
     @router.get("/whatsapp/callback", response_model=None)
     async def whatsapp_callback(request: Request, response: Response) -> Response:
@@ -576,7 +579,7 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
         def done(outcome: str) -> Response:
             # Always Settings → Connected apps, at the card it started from or the
             # WhatsApp card (the old Integrations address now opens Developers).
-            url = app_return.settings_url(app_url(), card or "whatsapp", outcome)
+            url = app_return.settings_url(app_url(request), card or "whatsapp", outcome)
             return RedirectResponse(url, status_code=303, headers=PRIVATE)
 
         if request.query_params.get("error"):
@@ -600,7 +603,7 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                 except meta.MetaError:
                     signup_log("failed", detail="the start doesn't match this person")
                     return done("failed")
-                outcome = await finish_whatsapp(desk, cfg, code)
+                outcome = await finish_whatsapp(desk, cfg, code, callback_url(request))
         except HTTPException as error:
             if error.status_code in (401, 403):
                 raise

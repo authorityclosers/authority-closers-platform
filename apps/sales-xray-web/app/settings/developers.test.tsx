@@ -201,6 +201,14 @@ it("writes each assistant's setup, naming the API address only off production", 
     type: "stdio",
     env: { SX_API_BASE: "https://salesxray-dev.authorityclosers.com/v1/api" },
   });
+  // On salesxray.in the local server is pointed at the API host.
+  const customerDomain = JSON.parse(
+    assistantSnippet("claude-desktop", "https://app.salesxray.in"),
+  );
+  expect(customerDomain.mcpServers["sales-xray"].env).toEqual({
+    SX_API_KEY: "paste-your-key-here",
+    SX_API_BASE: "https://api.salesxray.in/v1/api",
+  });
   expect(
     assistantSnippet("claude-code", "https://salesxray.authorityclosers.com"),
   ).toBe(
@@ -225,6 +233,13 @@ it("writes the remote server's setup for each assistant at this site's address",
   expect(JSON.parse(remoteSnippet("vscode", dev))).toEqual({
     servers: { "sales-xray": { type: "http", url: `${dev}/v1/mcp` } },
   });
+  // On salesxray.in the assistant connects to the MCP host; the old address keeps its own.
+  expect(remoteSnippet("chatgpt", "https://app.salesxray.in")).toBe(
+    "https://mcp.salesxray.in/v1/mcp",
+  );
+  expect(
+    remoteSnippet("chatgpt", "https://salesxray.authorityclosers.com"),
+  ).toBe("https://salesxray.authorityclosers.com/v1/mcp");
   // Drawn on the server first: production's address until the page knows its own.
   expect(remoteSnippet("claude-desktop", "")).toBe(
     "https://salesxray.authorityclosers.com/v1/mcp",

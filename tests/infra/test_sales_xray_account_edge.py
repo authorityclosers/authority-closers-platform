@@ -57,6 +57,8 @@ class Edge:
     seen: list[tuple[str, str, bytes, str, str]]
 
     def host(self, surface: str = "salesxray") -> str:
+        if "." in surface:  # a whole hostname: the customer domain salesxray.in
+            return surface
         suffix = "-staging" if self.environment == "staging" else ""
         return f"{surface}{suffix}.authorityclosers.com"
 
@@ -276,3 +278,70 @@ def test_denial_does_not_wait_for_any_upload_body(edge: Edge):
         response = connection.recv(4096)
     assert response.startswith(b"HTTP/1.1 401 "), response
     assert edge.seen == [("GET", ELIGIBILITY, b"", "PUT", path)]
+
+
+# The customer domain (owner, 2 Nov 2026), production only: app.salesxray.in is the same
+# Sales Xray as the old address, api.salesxray.in carries only the API, and salesxray.in
+# and www go to the app until the landing site exists.
+def _production_only(edge: Edge) -> None:
+    if edge.environment != "production":
+        pytest.skip("salesxray.in serves production only")
+
+
+def _page(edge: Edge, method: str, host: str, path: str) -> tuple[int, str | None]:
+    edge.seen.clear()
+    connection = http.client.HTTPConnection("127.0.0.1", edge.port, timeout=5)
+    try:
+        connection.request(method, path, headers={"Host": host})
+        response = connection.getresponse()
+        response.read()
+        assert response.getheader("Cache-Control") == "no-store"
+        return response.status, response.getheader("Location")
+    finally:
+        connection.close()
+
+
+@pytest.mark.parametrize("host", ("app.salesxray.in", "api.salesxray.in", "mcp.salesxray.in"))
+def test_the_customer_domain_checks_eligibility_and_reaches_the_api(edge: Edge, host: str):
+    _production_only(edge)
+    path = "/v1/conversation/acquisition/submissions/item/source"
+    assert edge.request("PUT", path, surface=host)[0] == 401
+    assert len(edge.seen) == 1 and edge.seen[0][2] == b""
+    webhook = "/v1/lead-desk/meta/webhook"
+    assert edge.request("POST", webhook, surface=host)[0] == 200
+    assert edge.seen[0][:3] == ("POST", webhook, b"synthetic-audio-bytes")
+
+
+def test_the_customer_domain_app_serves_its_pages(edge: Edge):
+    _production_only(edge)
+    assert _page(edge, "GET", "app.salesxray.in", "/leads") == (200, None)
+    assert edge.seen[0][:2] == ("GET", "/leads")
+
+
+@pytest.mark.parametrize(
+    "host", ("salesxray.in", "www.salesxray.in", "api.salesxray.in", "mcp.salesxray.in")
+)
+def test_the_customer_domain_pages_go_to_the_app(edge: Edge, host: str):
+    _production_only(edge)
+    assert _page(edge, "GET", host, "/leads?tab=sources") == (
+        302,
+        "https://app.salesxray.in/leads?tab=sources",
+    )
+    assert _page(edge, "POST", host, "/leads") == (404, None)
+    assert edge.seen == []
+
+
+@pytest.mark.parametrize("host", ("api.salesxray.in", "mcp.salesxray.in"))
+def test_the_api_and_mcp_hosts_describe_themselves_and_send_sign_in_to_the_app(
+    edge: Edge, host: str
+):
+    _production_only(edge)
+    metadata = "/.well-known/oauth-protected-resource/v1/mcp"
+    assert _page(edge, "GET", host, metadata) == (200, None)
+    assert edge.seen[0][:2] == ("GET", metadata)
+    # The sign-in (authorization server) is the app's; an older client looking for it here
+    # is sent there.
+    assert _page(edge, "GET", host, "/.well-known/oauth-authorization-server") == (
+        302,
+        "https://app.salesxray.in/.well-known/oauth-authorization-server",
+    )

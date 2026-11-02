@@ -482,10 +482,9 @@ def compose_filesystem_avatar_runtime(settings: Settings, base: MediaRuntime) ->
         ),
         fallback=base.service.storage,
         origin=str(settings.public_app_url).rstrip("/"),
-        upload_origins=tuple(
-            str(value).rstrip("/")
-            for value in (settings.public_app_url, settings.sales_xray_app_url)
-            if value is not None
+        upload_origins=(
+            str(settings.public_app_url).rstrip("/"),
+            *settings.sales_xray_app_origins.values(),
         ),
     )
     service = LocalAvatarMediaService(
