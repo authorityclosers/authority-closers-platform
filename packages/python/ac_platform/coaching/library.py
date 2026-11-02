@@ -110,6 +110,7 @@ class CoachingLibrary:
                     actor=actor,
                     shared_identity_locks=True,
                     allow_organisation_read=True,
+                    previous_context=False,
                 )
                 call = from_report(
                     envelope,
@@ -233,11 +234,13 @@ class CoachingLibrary:
                 summary(usage, "pending" if plan_state == "active" else "unavailable")
                 continue
             try:
+                # Coaching never shows the previous call's context: leave it out.
                 envelope = await reports.report(
                     usage.submission_id,
                     actor=actor,
                     shared_identity_locks=True,
                     allow_organisation_read=organisation,
+                    previous_context=False,
                 )
                 UUID(envelope["recording_id"]), UUID(envelope["run_id"])
                 readable.append((usage, envelope))
