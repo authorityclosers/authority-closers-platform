@@ -56,6 +56,7 @@ const save = () => fs.writeFileSync(FILE, JSON.stringify(state));
 let aliasTurn = Math.floor(Math.random() * 100);
 
 function ownerAvailable() {
+  if (fs.existsSync(path.join(cfg.STATE, "NO-OWNER"))) return false; // not approved for the robot right now
   try {
     return Date.now() - fs.statSync(OWNER_COOKIE).mtimeMs < 8 * 3600 * 1000;
   } catch {
@@ -534,7 +535,7 @@ async function famExtremes(ctx, route) {
   for (const variant of ["rows1000", "long300", "emoji", "indic", "zerowidth", "bignum"]) {
     if ((await headroom(() => {})) === "stop") throw new Error("stop");
     let changed = 0;
-    const handler = async (rt) => {
+    const inner = async (rt) => {
       const req = rt.request();
       const u = new URL(req.url());
       if (req.method() !== "GET" || !u.pathname.startsWith("/v1/") || SKIP_CALL.test(u.pathname) || SKIP_DATA.test(u.pathname)) return rt.fallback();
@@ -561,6 +562,8 @@ async function famExtremes(ctx, route) {
       if (body !== JSON.stringify(data)) changed++;
       return rt.fulfill({ status: res.status(), headers: { "content-type": ct }, body });
     };
+    // an answer given after the page closed or navigated away ("Fetch response has been disposed") must not end the run
+    const handler = (rt) => inner(rt).catch(() => rt.fallback().catch(() => rt.abort().catch(() => null)));
     await tab.context.route("**/v1/**", handler);
     const mark = tab.mark();
     try {

@@ -166,6 +166,8 @@ async function cookieHeader(alias) {
 
 // opts: { alias, device (matrix name), theme, state, locale, fontScale }
 async function openTab(opts) {
+  // the owner session is not the robot's to use unless the orchestrator has approved it: a NO-OWNER file in this run's state directory blocks it
+  if (opts.alias === "owner" && require("fs").existsSync(require("path").join(cfg.STATE, "NO-OWNER"))) throw new Error("the owner session is not approved for the robot right now (state/NO-OWNER)");
   const dev = cfg.DEVICES[opts.device];
   if (!dev) throw new Error(`no headless size for "${opts.device}"`);
   await signedIn(opts.alias);

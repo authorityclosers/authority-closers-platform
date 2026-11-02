@@ -45,6 +45,13 @@ const args = (() => {
 })();
 const SIZES = (args.sizes || "390 px,360 px,1440,1920").split(",").map((s) => s.trim());
 const log = (text) => console.log(`${new Date().toISOString().slice(11, 19)} ${text}`);
+// a browser-side promise rejection (a route answered after its page closed: "Fetch response has been disposed") must not end the whole robot
+process.on("unhandledRejection", (error) => {
+  const text = String((error && error.message) || error).split("\n")[0];
+  if (/Fetch response has been disposed|Route is already handled|has been closed|Target (page, context or browser )?closed|Protocol error|Navigation failed|ERR_ABORTED/i.test(text)) return log(`  (ignored a browser-side error: ${text.slice(0, 110)})`);
+  console.error(error);
+  process.exit(1);
+});
 fs.mkdirSync(cfg.OUT, { recursive: true });
 fs.mkdirSync(cfg.STATE, { recursive: true });
 
