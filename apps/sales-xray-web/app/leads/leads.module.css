@@ -2391,6 +2391,10 @@ a.repName {
   border: 0;
   border-radius: var(--lx-radius-lg);
   background: var(--lx-gradient-primary);
+  /* The gradient's own first colour under it, so the text is always read on
+     teal, also where no gradient is drawn (QA robot cb0cbac4, 2 Nov 2026: in
+     dark it judged the number line on the card behind, 1.1:1). */
+  background-color: var(--lx-teal);
   color: var(--lx-on-teal);
   box-shadow: var(--lx-shadow-cta);
   font: inherit;
