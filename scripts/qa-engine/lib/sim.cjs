@@ -213,6 +213,14 @@ async function walk(job) {
     }
     // an offline walk: the browser's own offline page has no title or language, and every call fails by design
     if (row.state === "offline") found = found.filter((f) => !/^(page:|axe:|script:|api:)/.test(f.rule));
+    // still blank after the patience above: dev may have answered an empty document (the 22:31Z blip). Hold, reload after two minutes, judge once more.
+    if (!again && found.some((f) => f.rule === "page:blank")) {
+      note("the page was blank: held, reloaded and judged again in 2 minutes");
+      await sleep(120000);
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => null);
+      await sleep(2000);
+      return inspect(true);
+    }
     if (!again && found.length && (await rebuilding(tab))) {
       note("dev was rebuilding: findings held, looked again after the rebuild");
       await waitOutRebuild(tab, 150000);
