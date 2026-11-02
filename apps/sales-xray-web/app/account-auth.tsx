@@ -277,6 +277,7 @@ const LEARNER_ORIGINS_BY_SOURCE_HOST = {
   "salesxray-staging.authorityclosers.com":
     "https://learner-staging.authorityclosers.com",
   "salesxray.authorityclosers.com": "https://learner.authorityclosers.com",
+  "app.salesxray.in": "https://learner.authorityclosers.com",
 } as const;
 
 /** Only source-owned hosts may provide a learner recovery destination. */

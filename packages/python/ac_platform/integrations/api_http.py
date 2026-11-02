@@ -217,8 +217,11 @@ class Reader:
         environment: str,
         tier: tiers.Tier | None = None,
         platform: tiers.Platform | None = None,
+        resource: str | None = None,
     ) -> None:
         self.session, self.caller, self.base = session, caller, base
+        # The origin the caller reached (app, API or MCP host): its own resource metadata.
+        self.resource = resource or base
         self.environment = environment
         # What the workspace's plan lets apps do (integrations/tiers.py).
         self.platform = platform or tiers.DEFAULT_PLATFORM
@@ -579,7 +582,6 @@ def make_opener(ctx: RouteContext) -> Any:
     """``open(request)``: check the bearer key or token and yield a ``Reader``."""
     settings = ctx.settings
     limiter = InMemoryTokenBucketLimiter()
-    base = str(settings.sales_xray_app_url).rstrip("/") if settings.sales_xray_app_url else None
 
     async def caller_for(session: AsyncSession, key: keys.KeyContext, personal: bool) -> Caller:
         if not personal:
@@ -602,10 +604,7 @@ def make_opener(ctx: RouteContext) -> Any:
 
     @asynccontextmanager
     async def open_reader(request: Request) -> AsyncIterator[Reader]:
-        if (
-            settings.sales_xray_app_url is None
-            or request.url.hostname != settings.sales_xray_app_url.host
-        ):
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise ApiError(404, "not_here", "The Sales X-Ray API is not served here.")
         header = request.headers.get("authorization", "")
         scheme, _, presented = header.partition(" ")
@@ -657,7 +656,16 @@ def make_opener(ctx: RouteContext) -> Any:
                     raise ApiError(
                         429, "rate_limited", "Too many requests.", retry_after=max(1, retry)
                     )
-            yield Reader(session, caller, base, settings.environment, tier=tier, platform=platform)
+            # Links go to the app of the family the caller reached (salesxray.in or the old one).
+            yield Reader(
+                session,
+                caller,
+                settings.sales_xray_origin_for(request.url.hostname),
+                settings.environment,
+                tier=tier,
+                platform=platform,
+                resource=settings.sales_xray_host_origin(request.url.hostname),
+            )
 
     return open_reader
 

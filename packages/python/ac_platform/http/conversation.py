@@ -52,11 +52,8 @@ def install_conversation_http(
             raise HTTPException(422, "Scope comes from your current AC session.")
         sign_in_url = None
         if settings is not None:
-            if (
-                settings.sales_xray_app_url is not None
-                and request.url.hostname == settings.sales_xray_app_url.host
-            ):
-                sign_in_url = str(settings.sales_xray_app_url).rstrip("/") + "/login"
+            if settings.is_sales_xray_host(request.url.hostname):
+                sign_in_url = f"{settings.sales_xray_origin_for(request.url.hostname)}/login"
             else:
                 sign_in_url = str(settings.public_app_url).rstrip("/") + "/login?next=/sales-xray"
         answer: dict[str, Any] = {

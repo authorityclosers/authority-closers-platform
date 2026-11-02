@@ -30,7 +30,7 @@ import { OrganisationView } from "../organisation/organisation-view";
 import { AssistantSetup } from "./assistant-setup";
 import { DevFold } from "./dev-card";
 import { TryApi } from "./try-api";
-import { useOrigin } from "./use-origin";
+import { addressesFor, useOrigin } from "./use-origin";
 import styles from "./developers.module.css";
 
 const PRODUCTION = "https://salesxray.authorityclosers.com";
@@ -73,11 +73,20 @@ function CopyAddress({ text, label }: { text: string; label: string }) {
 
 /** The two addresses a developer needs, on a card that looks like a console. */
 function Console() {
-  const origin = useOrigin() || PRODUCTION;
-  const host = origin.replace(/^https?:\/\//, "");
+  const where = addressesFor(useOrigin() || PRODUCTION);
   const addresses = [
-    { tag: "MCP", path: "/v1/mcp", label: "Copy the MCP address" },
-    { tag: "API", path: "/v1/api", label: "Copy the API address" },
+    {
+      tag: "MCP",
+      at: where.mcp,
+      path: "/v1/mcp",
+      label: "Copy the MCP address",
+    },
+    {
+      tag: "API",
+      at: where.api,
+      path: "/v1/api",
+      label: "Copy the API address",
+    },
   ];
   return (
     <section className={styles.console} aria-label="Developers">
@@ -95,10 +104,12 @@ function Console() {
           <li key={item.tag}>
             <span className={styles.tag}>{item.tag}</span>
             <code className={styles.address}>
-              <span className={styles.host}>{host}</span>
+              <span className={styles.host}>
+                {item.at.replace(/^https?:\/\//, "")}
+              </span>
               <span className={styles.path}>{item.path}</span>
             </code>
-            <CopyAddress text={`${origin}${item.path}`} label={item.label} />
+            <CopyAddress text={`${item.at}${item.path}`} label={item.label} />
           </li>
         ))}
       </ul>

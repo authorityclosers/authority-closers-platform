@@ -103,9 +103,11 @@ def install_integrations_http(application: FastAPI, ctx: RouteContext) -> None:
     read_actor = getattr(ctx.require_actor, "read_only", ctx.require_actor)
     settings = ctx.settings
 
-    def api_base() -> str | None:
-        app_url = settings.sales_xray_app_url
-        return None if app_url is None else f"{str(app_url).rstrip('/')}/v1/api"
+    def api_base(request: Request) -> str | None:
+        # The API address of the family this page is on: api.salesxray.in from the new app,
+        # the old address from the old one (both serve it, 2 Nov 2026).
+        origin = settings.sales_xray_origin_for(request.url.hostname, "api")
+        return None if origin is None else f"{origin}/v1/api"
 
     @asynccontextmanager
     async def manager(
@@ -113,10 +115,7 @@ def install_integrations_http(application: FastAPI, ctx: RouteContext) -> None:
     ) -> AsyncIterator[Any]:
         """The signed-in owner or admin of the selected registered organisation."""
         response.headers.update(PRIVATE)
-        if (
-            settings.sales_xray_app_url is None
-            or request.url.hostname != settings.sales_xray_app_url.host
-        ):
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise HTTPException(404, "Integrations are unavailable here.", headers=PRIVATE)
         if any(True for _ in request.query_params):
             raise HTTPException(422, "Remove the extra address options.", headers=PRIVATE)
@@ -170,7 +169,7 @@ def install_integrations_http(application: FastAPI, ctx: RouteContext) -> None:
             )
             return {
                 "schema": "sx-integrations/1",
-                "api_base": api_base(),
+                "api_base": api_base(request),
                 "key_mode": keys.mode(settings.environment),
                 "scopes": scopes.public(),
                 "expiry_days": list(keys.EXPIRY_DAYS),

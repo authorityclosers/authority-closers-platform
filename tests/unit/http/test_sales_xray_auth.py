@@ -1503,3 +1503,87 @@ def test_sales_xray_app_exchange_is_only_on_the_sales_xray_host() -> None:
 
     assert response.status_code >= 400
     assert _session_cookies(response) == []
+
+
+# salesxray.in beside the old address (owner, 2 Nov 2026). Both stay signed-in surfaces of
+# their own: host-only cookies never cross between them, so each sign-in ends where it began.
+SALES_NEW_ORIGIN = "https://app.salesxray.in"
+
+
+def _sales_production_settings() -> Settings:
+    values = _deployment_values("production")
+    values.update(
+        {
+            "sales_xray_app_url": SALES_PRODUCTION_ORIGIN,
+            "learner_consent_version": "production-test-document-v1",
+            "public_learner_tenant_id": "22222222-2222-4222-8222-222222222222",
+            "operations_tenant_id": "33333333-3333-4333-8333-333333333333",
+        }
+    )
+    return Settings(environment="production", _env_file=None, **values)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("origin", [SALES_PRODUCTION_ORIGIN, SALES_NEW_ORIGIN])
+def test_google_sign_in_ends_on_the_sales_xray_address_it_started_on(
+    origin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(auth_module, "AsyncIdentityApplication", _CallbackIdentityApplication)
+    provider = _SuccessfulProvider()
+    settings = _sales_production_settings()
+    client = _client(settings=settings, provider=provider)
+    host = urlsplit(origin).hostname
+    started = client.get(
+        "/v1/auth/google/start",
+        params={
+            "action": "authenticate",
+            "surface": "sales_xray",
+            "return_path": f"/auth/complete?flow={uuid4()}",
+        },
+        headers={"host": host},
+        follow_redirects=False,
+    )
+    assert started.status_code == 303
+    provider_query = parse_qs(urlsplit(started.headers["location"]).query)
+    assert provider_query["redirect_uri"] == [f"{origin}/v1/auth/google/callback"]
+    encoded = started.cookies[DEPLOYMENT_OAUTH_COOKIE]
+    transaction = AuthTransactionCodec(settings.oauth_transaction_secret.get_secret_value()).decode(
+        encoded
+    )
+
+    callback = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "google-authorization-code"},
+        headers={"host": host, "cookie": f"{DEPLOYMENT_OAUTH_COOKIE}={encoded}"},
+        follow_redirects=False,
+    )
+
+    assert callback.status_code == 303
+    assert callback.headers["location"] == (
+        f"{origin}/auth/complete?flow={_completion_flow_id(transaction)}&auth_result=success"
+    )
+    assert provider.redirect_uris == [f"{origin}/v1/auth/google/callback"]
+    session_cookie = next(
+        value.lower()
+        for value in callback.headers.get_list("set-cookie")
+        if value.lower().startswith(f"{DEPLOYMENT_SESSION_COOKIE.lower()}=")
+    )
+    assert "domain=" not in session_cookie
+
+
+def test_nobody_starts_a_sales_xray_sign_in_on_the_api_only_host() -> None:
+    settings = _sales_production_settings()
+    client = _client(settings=settings, provider=_RecordingProvider())
+
+    response = client.get(
+        "/v1/auth/google/start",
+        params={
+            "action": "authenticate",
+            "surface": "sales_xray",
+            "return_path": f"/auth/complete?flow={uuid4()}",
+        },
+        headers={"host": "api.salesxray.in"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert DEPLOYMENT_OAUTH_COOKIE not in response.cookies

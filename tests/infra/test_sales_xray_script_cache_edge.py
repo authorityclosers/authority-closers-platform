@@ -28,9 +28,11 @@ def test_the_website_line_passes_the_app_cache_and_nothing_else_does(environment
     site = _block(routes, f"handle @{site_name}")
     host = "salesxray" + ("-staging" if environment == "staging" else "")
     assert f"host {host}.authorityclosers.com" in matcher["body"]
+    # Production's customer domain serves the same app (salesxray.in, 2 Nov 2026).
+    also = " app.salesxray.in" if environment == "production" else ""
     # Only the one file: every other path keeps the page's no-store.
     assert [line.strip() for line in matcher["body"].strip().splitlines()] == [
-        f"host {host}.authorityclosers.com",
+        f"host {host}.authorityclosers.com{also}",
         "path /sx.js",
     ]
     # Caddy picks the first handle that matches, so the line's comes before the page's.

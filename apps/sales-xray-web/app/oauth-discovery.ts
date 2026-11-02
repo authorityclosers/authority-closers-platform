@@ -32,7 +32,9 @@ export const MCP_SCOPES = [
 ] as const;
 
 const AUTH_METHODS = ["none", "client_secret_basic", "client_secret_post"];
-const PUBLIC_HOST = /^salesxray(-[a-z0-9]+)?\.authorityclosers\.com$/;
+// The customer domain's app host joined the old addresses on 2 Nov 2026 (owner).
+const PUBLIC_HOST =
+  /^(salesxray(-[a-z0-9]+)?\.authorityclosers\.com|app\.salesxray\.in)$/;
 const LOCAL_HOST = /^(127\.0\.0\.1|localhost)(:[0-9]{2,5})?$/;
 const RESOURCES = new Set(["/v1/mcp", "/v1/api"]);
 

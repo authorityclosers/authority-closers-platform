@@ -325,9 +325,7 @@ def install_app_uploads_http(application: FastAPI, ctx: RouteContext) -> None:
 
     @asynccontextmanager
     async def mine(request: Request, *, write: bool = False) -> AsyncIterator[Any]:
-        if settings.sales_xray_app_url is None or (
-            request.url.hostname != settings.sales_xray_app_url.host
-        ):
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise HTTPException(404, "Not here.", headers=PRIVATE)
         if not settings.pulse_configured:
             raise HTTPException(404, PULSE_OFF, headers=PRIVATE)
@@ -366,11 +364,7 @@ def install_app_uploads_http(application: FastAPI, ctx: RouteContext) -> None:
         # Off here (no Pulse, or not Sales X-Ray's own address): an empty list that says
         # so, never a refusal for every page that looks (QA robot, 1 Nov 2026: New
         # analysis logged a 404 and a console error on every visit). Nothing is read.
-        if (
-            settings.sales_xray_app_url is None
-            or request.url.hostname != settings.sales_xray_app_url.host
-            or not settings.pulse_configured
-        ):
+        if not settings.is_sales_xray_host(request.url.hostname) or not settings.pulse_configured:
             return {"uploads": [], "on": False}
         async with mine(request) as auth:
             actor = auth.resolved.actor

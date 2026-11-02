@@ -32,7 +32,7 @@ def _response(**changes):
     }
 
 
-def _verify(monkeypatch, payload, *, status=200):
+def _verify(monkeypatch, payload, *, status=200, also=()):
     secret, challenge = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
     calls = []
 
@@ -51,7 +51,9 @@ def _verify(monkeypatch, payload, *, status=200):
         return real_client(transport=httpx.MockTransport(request), **kwargs)
 
     monkeypatch.setattr(httpx, "AsyncClient", client)
-    verifier = UploadChallenge(secret=SecretStr(secret), hostname=HOST, clock=lambda: NOW)
+    verifier = UploadChallenge(
+        secret=SecretStr(secret), hostname=HOST, also=also, clock=lambda: NOW
+    )
     return verifier, challenge, calls
 
 
@@ -59,6 +61,22 @@ def test_only_current_success_for_the_exact_host_and_action_passes(monkeypatch):
     verifier, token, calls = _verify(monkeypatch, _response())
     asyncio.run(verifier.verify(token))
     assert len(calls) == 1
+
+
+def test_a_check_solved_on_another_app_address_passes(monkeypatch):
+    """salesxray.in beside the old address (2 Nov 2026): either address's check counts."""
+    also = ("app.example.test",)
+    verifier, token, calls = _verify(monkeypatch, _response(hostname="app.example.test"), also=also)
+    asyncio.run(verifier.verify(token))
+    assert len(calls) == 1
+    verifier, token, _ = _verify(monkeypatch, _response(hostname="other.example.test"), also=also)
+    with pytest.raises(ConversationDenied):
+        asyncio.run(verifier.verify(token))
+
+
+def test_every_address_must_be_a_plain_hostname():
+    with pytest.raises(ValueError):
+        UploadChallenge(secret=SecretStr("s" * 32), hostname=HOST, also=("https://x.test",))
 
 
 @pytest.mark.parametrize(

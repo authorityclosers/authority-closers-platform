@@ -17,7 +17,7 @@ import { ClaudeMark, CodeMark, CursorMark } from "./assistant-marks";
 import { Button } from "../ui/kit";
 import { CopyButton } from "./copy-button";
 import { DevCard, InfoFold } from "./dev-card";
-import { useOrigin } from "./use-origin";
+import { addressesFor, useOrigin } from "./use-origin";
 import styles from "./developers.module.css";
 
 type Assistant =
@@ -62,7 +62,8 @@ const ASSISTANTS: { key: Assistant; label: string; where: string }[] = [
 
 /** The setup for one assistant; the API address is named only off production. */
 export function assistantSnippet(assistant: Assistant, origin: string): string {
-  const base = origin && origin !== PRODUCTION ? `${origin}/v1/api` : null;
+  const api = origin ? addressesFor(origin).api : "";
+  const base = api && api !== PRODUCTION ? `${api}/v1/api` : null;
   const env: Record<string, string> = { SX_API_KEY: KEY };
   if (base) env.SX_API_BASE = base;
   const server = { command: "python3", args: ["/path/to/sx.py", "mcp"], env };
@@ -94,7 +95,7 @@ const REMOTE_WHERE: Record<Assistant, string> = {
 
 /** The remote server's setup for one assistant, at this site's address. */
 export function remoteSnippet(assistant: Assistant, origin: string): string {
-  const url = `${origin || PRODUCTION}/v1/mcp`;
+  const url = `${addressesFor(origin || PRODUCTION).mcp}/v1/mcp`;
   if (assistant === "claude-desktop" || assistant === "chatgpt") return url;
   if (assistant === "claude-code")
     return `claude mcp add --transport http sales-xray ${url}`;

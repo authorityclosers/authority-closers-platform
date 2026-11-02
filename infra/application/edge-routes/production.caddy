@@ -3,7 +3,7 @@
 	# Existing report reads, explicit claims, and privacy deletion stay outside
 	# this matcher. The foundation bootstrap routes do not activate this feature.
 	@production_xray_processing_write {
-		host learner.authorityclosers.com salesxray.authorityclosers.com api.authorityclosers.com admin.authorityclosers.com coach.authorityclosers.com
+		host learner.authorityclosers.com salesxray.authorityclosers.com app.salesxray.in api.salesxray.in mcp.salesxray.in api.authorityclosers.com admin.authorityclosers.com coach.authorityclosers.com
 		method POST PUT PATCH
 		path_regexp production_xray_write ^/v1/conversation/(acquisition/(session|submissions/[^/]+/(source|plan(/quote)?))|recordings(/[^/]+/(source|analysis(/quote)?|plan(/quote)?))?|runs|intake/quote|quotes/[^/]+/approve)/?$
 	}
@@ -122,6 +122,40 @@
 		reverse_proxy ac-production-coach:3002
 	}
 
+	# api.salesxray.in carries only the API: every client, and the providers' callbacks and
+	# webhooks. mcp.salesxray.in is where AI assistants connect (/v1/mcp); both describe
+	# themselves for OAuth (RFC 9728) and name app.salesxray.in as where people sign in.
+	# salesxray.in and www are the landing site's; until it exists they, and any page asked
+	# of the API or MCP host, go to the app (302: the landing page will take the root).
+	@production_sales_xray_api_host {
+		host api.salesxray.in mcp.salesxray.in
+		path /v1 /v1/* /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/*
+	}
+	handle @production_sales_xray_api_host {
+		import base_security_headers
+		header X-Authority-Closers-Route "api-production"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		reverse_proxy ac-production-api:8000
+	}
+	@production_sales_xray_domain_pages {
+		host salesxray.in www.salesxray.in api.salesxray.in mcp.salesxray.in
+		method GET HEAD
+	}
+	handle @production_sales_xray_domain_pages {
+		import base_security_headers
+		header Cache-Control "no-store"
+		redir https://app.salesxray.in{uri} 302
+	}
+	@production_sales_xray_domain host salesxray.in www.salesxray.in api.salesxray.in mcp.salesxray.in
+	handle @production_sales_xray_domain {
+		import base_security_headers
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		respond "Sales X-Ray is at https://app.salesxray.in
+" 404
+	}
+
 	@api host api.authorityclosers.com
 	handle @api {
 		import base_security_headers
@@ -131,8 +165,10 @@
 		reverse_proxy ac-production-api:8000
 	}
 
+	# The customer domain (owner, 2 Nov 2026): app.salesxray.in is the same Sales Xray as the
+	# old address, which stays for good (installed apps and Meta's webhooks use it).
 	@production_sales_xray_api {
-		host salesxray.authorityclosers.com
+		host salesxray.authorityclosers.com app.salesxray.in
 		path /v1 /v1/*
 	}
 	handle @production_sales_xray_api {
@@ -144,7 +180,7 @@
 	}
 	# Content-hashed build files are immutable: let browsers and Cloudflare keep them (AUT-1342).
 	@production_sales_xray_static {
-		host salesxray.authorityclosers.com
+		host salesxray.authorityclosers.com app.salesxray.in
 		path /_next/static/*
 	}
 	handle @production_sales_xray_static {
@@ -155,7 +191,7 @@
 	# The website line runs on customers' own sites on every page view. The app lets browsers and
 	# Cloudflare keep it a few minutes (next.config.ts); it holds no key (30 Oct 2026).
 	@production_sales_xray_script {
-		host salesxray.authorityclosers.com
+		host salesxray.authorityclosers.com app.salesxray.in
 		path /sx.js
 	}
 	handle @production_sales_xray_script {
@@ -163,7 +199,7 @@
 		header X-Authority-Closers-Route "sales-xray-production"
 		reverse_proxy ac-production-sales-xray-web:3016
 	}
-	@production_sales_xray host salesxray.authorityclosers.com
+	@production_sales_xray host salesxray.authorityclosers.com app.salesxray.in
 	handle @production_sales_xray {
 		# base_security_headers, but this site may use the microphone itself (voice notes, #11,
 		# 26 Oct 2026). Like the snippet, the block deletes Server, so Caddy applies it last:

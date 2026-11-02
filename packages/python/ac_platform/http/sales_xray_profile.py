@@ -138,8 +138,7 @@ def install_sales_xray_profile_http(
 
     async def require_profile_surface(request: Request, auth: AuthenticatedTransaction) -> None:
         allowed_hosts = {settings.public_app_url.host}
-        if settings.sales_xray_app_url is not None:
-            allowed_hosts.add(settings.sales_xray_app_url.host)
+        allowed_hosts.update(settings.sales_xray_hosts)
         if request.url.hostname not in allowed_hosts or request.query_params:
             raise HTTPException(404, "Profile route not found.")
         if not await sales_xray_workspace_served(
@@ -154,8 +153,7 @@ def install_sales_xray_profile_http(
             settings.admin_app_url.host,
             settings.coach_app_url.host,
         }
-        if settings.sales_xray_app_url is not None:
-            allowed_hosts.add(settings.sales_xray_app_url.host)
+        allowed_hosts.update(settings.sales_xray_hosts)
         if request.url.hostname not in allowed_hosts or request.query_params:
             raise HTTPException(404, "Profile eligibility route not found.")
         if not await sales_xray_workspace_served(
@@ -453,8 +451,7 @@ def install_sales_xray_profile_http(
 
     def on_app_host(request: Request) -> bool:
         allowed_hosts = {settings.public_app_url.host}
-        if settings.sales_xray_app_url is not None:
-            allowed_hosts.add(settings.sales_xray_app_url.host)
+        allowed_hosts.update(settings.sales_xray_hosts)
         return request.url.hostname in allowed_hosts
 
     # The characters (owner #32, 26 Oct 2026): the list for the picker and each picture,

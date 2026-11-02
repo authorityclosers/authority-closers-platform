@@ -439,6 +439,10 @@ def test_the_settings_return_survives_the_round_trip(
     assert kept == stored
     assert normalize_return_path(stored) == stored  # the transaction can carry it
     response = auth_module._settings_connect_response(
-        _sales_staging_settings(), stored, transaction_cookie_names=(), connected="apple"
+        _sales_staging_settings(),
+        stored,
+        transaction_cookie_names=(),
+        host=SALES_STAGING_ORIGIN.removeprefix("https://"),
+        connected="apple",
     )
     assert response.headers["location"] == f"{SALES_STAGING_ORIGIN}{back}"

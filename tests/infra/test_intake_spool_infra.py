@@ -64,7 +64,8 @@ def test_the_spool_runs_the_api_image_with_no_database_and_no_secrets(profile: s
 @pytest.mark.parametrize(
     ("environment", "host"),
     [
-        ("production", "salesxray.authorityclosers.com"),
+        # Production's customer domain posts there too (salesxray.in, 2 Nov 2026).
+        ("production", "salesxray.authorityclosers.com app.salesxray.in api.salesxray.in"),
         ("staging", "salesxray-staging.authorityclosers.com"),
     ],
 )

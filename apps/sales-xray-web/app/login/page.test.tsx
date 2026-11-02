@@ -294,6 +294,10 @@ it("keeps learner recovery URLs limited to source-owned hosts", () => {
     registerHref: "https://learner.authorityclosers.com/register",
     forgotPasswordHref: "https://learner.authorityclosers.com/forgot-password",
   });
+  expect(learnerAuthLinksForHost("app.salesxray.in")).toEqual({
+    registerHref: "https://learner.authorityclosers.com/register",
+    forgotPasswordHref: "https://learner.authorityclosers.com/forgot-password",
+  });
   expect(learnerAuthLinksForHost("localhost")).toEqual({
     registerHref: null,
     forgotPasswordHref: null,

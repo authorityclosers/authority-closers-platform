@@ -258,7 +258,6 @@ def _install_sales_xray(
     intake: ConversationIntakeRuntime | None,
 ) -> None:
     assert settings.sales_xray_app_url is not None
-    hostname = settings.sales_xray_app_url.host
     read_actor = getattr(require_actor, "read_only", require_actor)
     router = APIRouter(prefix="/v1/conversation/acquisition", tags=["conversation-insights"])
 
@@ -286,7 +285,7 @@ def _install_sales_xray(
 
     def guard(request: Request, response: Response, *, write: bool = False) -> None:
         response.headers.update(PRIVATE)
-        if request.url.hostname != hostname:
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise fail(404, "Not found.")
         if write:
             if request.query_params:
