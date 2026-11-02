@@ -6,6 +6,7 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from pydantic import AnyHttpUrl, SecretStr, field_validator, model_validator
@@ -39,9 +40,26 @@ _DEPLOYMENT_LEARNER_ORIGINS = {
     "staging": "https://learner-staging.authorityclosers.com",
     "production": "https://learner.authorityclosers.com",
 }
+# Every family of addresses Sales Xray answers on, per environment: its app and, where it has them,
+# its own API and MCP hosts. AC_SALES_XRAY_APP_URL names one family's app, the canonical one used
+# for links made without a request (emails); the others work the same. The customer domain
+# salesxray.in joined on 2 Nov 2026 (owner); the authorityclosers.com address stays for good, since
+# installed apps, Meta's webhooks, existing MCP connections and website snippets use it. Nobody
+# signs in on an API or MCP host, so a sign-in or a link back into the app uses its family's app.
+_SALES_XRAY_FAMILIES: dict[str, tuple[dict[str, str], ...]] = {
+    "staging": ({"app": "https://salesxray-staging.authorityclosers.com"},),
+    "production": (
+        {"app": "https://salesxray.authorityclosers.com"},
+        {
+            "app": "https://app.salesxray.in",
+            "api": "https://api.salesxray.in",
+            "mcp": "https://mcp.salesxray.in",
+        },
+    ),
+}
 _SALES_XRAY_ORIGINS = {
-    "staging": "https://salesxray-staging.authorityclosers.com",
-    "production": "https://salesxray.authorityclosers.com",
+    environment: tuple(family["app"] for family in families)
+    for environment, families in _SALES_XRAY_FAMILIES.items()
 }
 # The owner's live UI studio (the Cloudflare-Access-protected dev site) proxies Sales Xray API
 # calls to staging so new screens are designed against real staging reports. One exact origin,
@@ -63,6 +81,10 @@ _DEPLOYMENT_COOKIE_NAMES = {
     "session_cookie_name": "__Host-ac_session",
     "oauth_transaction_cookie_name": "__Host-ac_oauth_transaction",
 }
+
+
+def _origin_host(origin: str) -> str:
+    return urlsplit(origin).hostname or ""
 
 
 class Settings(BaseSettings):
@@ -292,8 +314,9 @@ class Settings(BaseSettings):
             not isinstance(sales_origin, str)
             or sales_origin
             not in {
-                _SALES_XRAY_ORIGINS[environment],
-                _SALES_XRAY_ORIGINS[environment] + "/",
+                candidate
+                for origin in _SALES_XRAY_ORIGINS[environment]
+                for candidate in (origin, f"{origin}/")
             }
         ):
             raise ValueError("AC_SALES_XRAY_APP_URL must be the canonical HTTPS origin")
@@ -444,10 +467,16 @@ class Settings(BaseSettings):
             expected_origin=expected_origins["api_url"],
         )
         if self.sales_xray_app_url is not None:
+            sales_origins = _SALES_XRAY_ORIGINS[self.environment]
+            configured_sales_origin = str(self.sales_xray_app_url).rstrip("/")
             self._validate_deployment_url(
                 self.sales_xray_app_url,
                 field="AC_SALES_XRAY_APP_URL",
-                expected_origin=_SALES_XRAY_ORIGINS[self.environment],
+                expected_origin=(
+                    configured_sales_origin
+                    if configured_sales_origin in sales_origins
+                    else sales_origins[0]
+                ),
             )
         expected_internal_api_host = _DEPLOYMENT_INTERNAL_API_HOSTS[self.environment]
         if self.internal_api_host != expected_internal_api_host:
@@ -910,8 +939,7 @@ class Settings(BaseSettings):
             for value in (self.public_app_url, self.admin_app_url, self.coach_app_url, self.api_url)
             if value.host is not None
         }
-        if self.sales_xray_app_url is not None and self.sales_xray_app_url.host is not None:
-            hosts.add(self.sales_xray_app_url.host)
+        hosts.update(self.sales_xray_hosts)
         hosts.add(self.internal_api_host)
         if self.environment in {"local", "test"}:
             hosts.update({"localhost", "127.0.0.1", "test"})
@@ -923,9 +951,77 @@ class Settings(BaseSettings):
             str(value).rstrip("/")
             for value in (self.public_app_url, self.admin_app_url, self.coach_app_url)
         ]
-        if self.sales_xray_app_url is not None:
-            origins.append(str(self.sales_xray_app_url).rstrip("/"))
+        origins.extend(self.sales_xray_app_origins.values())
         return origins
+
+    @property
+    def sales_xray_families(self) -> tuple[dict[str, str], ...]:
+        """Sales Xray's address families here (role to origin), the canonical one first."""
+
+        if self.sales_xray_app_url is None or self.sales_xray_app_url.host is None:
+            return ()
+        canonical = str(self.sales_xray_app_url).rstrip("/")
+        known = _SALES_XRAY_FAMILIES.get(self.environment, ())
+        if not any(family["app"] == canonical for family in known):
+            return ({"app": canonical},)
+        return tuple(
+            sorted(known, key=lambda family: family["app"] != canonical)  # stable: canonical first
+        )
+
+    @property
+    def sales_xray_app_origins(self) -> dict[str, str]:
+        """Host to origin for every address the Sales Xray app answers on, the canonical first."""
+
+        return {_origin_host(family["app"]): family["app"] for family in self.sales_xray_families}
+
+    @property
+    def sales_xray_hosts(self) -> frozenset[str]:
+        """Every host where the API serves Sales Xray's routes: each family's app, API and MCP."""
+
+        return frozenset(
+            _origin_host(origin)
+            for family in self.sales_xray_families
+            for origin in family.values()
+        )
+
+    def is_sales_xray_host(self, hostname: str | None) -> bool:
+        """True when a request reached one of Sales Xray's hosts (app, API or MCP)."""
+
+        return hostname is not None and hostname in self.sales_xray_hosts
+
+    def sales_xray_origin_for(
+        self, hostname: str | None, role: Literal["app", "api", "mcp"] = "app"
+    ) -> str | None:
+        """The ``role`` origin of the family ``hostname`` belongs to (else the canonical family's).
+
+        For "app" that is where a person on ``hostname`` signs in, so a sign-in or a provider's
+        redirect comes back where the person's (host-only) session cookie is. A family without
+        its own API or MCP host serves them on its app's address.
+        """
+
+        families = self.sales_xray_families
+        if not families:
+            return None
+        family = next(
+            (
+                found
+                for found in families
+                if hostname is not None
+                and any(_origin_host(origin) == hostname for origin in found.values())
+            ),
+            families[0],
+        )
+        return family.get(role, family["app"])
+
+    def sales_xray_host_origin(self, hostname: str | None) -> str | None:
+        """The origin of ``hostname`` itself when it is a Sales Xray host (an app, API or MCP
+        address), else the canonical app's: what a resource names as its own identifier."""
+
+        for family in self.sales_xray_families:
+            for origin in family.values():
+                if _origin_host(origin) == hostname:
+                    return origin
+        return self.sales_xray_origin_for(None)
 
     @property
     def sales_xray_studio_origin(self) -> str | None:

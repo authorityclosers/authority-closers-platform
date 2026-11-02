@@ -87,10 +87,7 @@ def install_call_ai_http(application: FastAPI, ctx: RouteContext) -> None:
     settings = ctx.settings
 
     def same_host(request: Request) -> None:
-        if (
-            settings.sales_xray_app_url is None
-            or request.url.hostname != settings.sales_xray_app_url.host
-        ):
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise HTTPException(404, "AI on calls is unavailable here.", headers=PRIVATE)
 
     @asynccontextmanager

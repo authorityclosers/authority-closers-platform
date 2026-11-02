@@ -24,9 +24,14 @@ describe("OAuth discovery", () => {
     expect(of("salesxray-dev.authorityclosers.com")).toBe(
       "https://salesxray-dev.authorityclosers.com",
     );
+    expect(of("app.salesxray.in")).toBe("https://app.salesxray.in");
     expect(of("127.0.0.1:3026")).toBe("http://127.0.0.1:3026");
     expect(of("evil.example")).toBeNull();
     expect(of("salesxray.authorityclosers.com.evil.example")).toBeNull();
+    // The API host and the bare domain serve no pages of the app.
+    expect(of("api.salesxray.in")).toBeNull();
+    expect(of("salesxray.in")).toBeNull();
+    expect(of("app.salesxray.in.evil.example")).toBeNull();
     expect(
       publicOrigin(
         new Headers({

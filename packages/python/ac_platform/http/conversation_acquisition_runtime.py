@@ -116,7 +116,11 @@ def compose_acquisition(
     secret = _challenge_secret(Path(settings.sales_xray_challenge_secret_file))
     return AcquisitionRuntime(
         intake,
-        UploadChallenge(secret=secret, hostname=str(settings.sales_xray_app_url.host)),
+        UploadChallenge(
+            secret=secret,
+            hostname=str(settings.sales_xray_app_url.host),
+            also=tuple(settings.sales_xray_app_origins),
+        ),
         NativeUploadPreflight(native),
         settings.sales_xray_challenge_site_key,
         settings.sales_xray_acquisition_policy_revision,
@@ -132,7 +136,6 @@ def install_acquisition_runtime(
     require_actor: RequireActor,
     runtime: AcquisitionRuntime | None,
 ) -> None:
-    sales_host = settings.sales_xray_app_url.host if settings.sales_xray_app_url else None
     learner_host = settings.public_app_url.host
     trial_policy = TrialPolicy(
         settings.sales_xray_trial_policy, settings.sales_xray_trial_policy_switch_at
@@ -140,7 +143,7 @@ def install_acquisition_runtime(
     public = settings.public_learner_tenant_id
 
     def surface(request: Request) -> str | None:
-        if request.url.hostname == sales_host:
+        if settings.is_sales_xray_host(request.url.hostname):
             return "sales"
         if request.url.hostname == learner_host:
             return "learner"

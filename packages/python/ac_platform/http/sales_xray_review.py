@@ -77,8 +77,7 @@ def install_sales_xray_review_http(
     def surface(request: Request, response: Response, *, write: bool = False) -> None:
         response.headers.update(_PRIVATE)
         hosts = {settings.public_app_url.host}
-        if settings.sales_xray_app_url is not None:
-            hosts.add(settings.sales_xray_app_url.host)
+        hosts.update(settings.sales_xray_hosts)
         if request.url.hostname not in hosts:
             raise HTTPException(404, "Review is unavailable here.", headers=_PRIVATE)
         if request.query_params:

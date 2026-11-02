@@ -365,14 +365,15 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
     settings = ctx.settings
     read_actor = getattr(ctx.require_actor, "read_only", ctx.require_actor)
 
-    def app_url() -> str:
-        return str(settings.sales_xray_app_url or "").rstrip("/")
+    def app_url(request: Request | None = None) -> str:
+        # A provider's redirect comes back to the address the person started on, where their
+        # host-only session cookie is (salesxray.in or the old address, 2 Nov 2026). Links
+        # kept for later (webhooks, intake) use the canonical address.
+        host = request.url.hostname if request is not None else None
+        return settings.sales_xray_origin_for(host) or ""
 
     def same_host(request: Request) -> None:
-        if (
-            settings.sales_xray_app_url is None
-            or request.url.hostname != settings.sales_xray_app_url.host
-        ):
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise HTTPException(404, "Leads are unavailable here.", headers=NO_STORE)
 
     def meta_config() -> meta.MetaConfig:
@@ -385,8 +386,8 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             )
         return cfg
 
-    def callback_url() -> str:
-        return f"{app_url()}/v1/lead-desk/meta/callback"
+    def callback_url(request: Request) -> str:
+        return f"{app_url(request)}/v1/lead-desk/meta/callback"
 
     # The same workspace rule as the CRM's own routes: a signed-in member of an
     # organisation workspace. ``origin`` is off only for Meta's redirect back, which a
@@ -676,7 +677,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         return started(
             meta.dialog_url(
                 cfg,
-                redirect_uri=callback_url(),
+                redirect_uri=callback_url(request),
                 state=state,
                 switch=switch or request.url.path.endswith("/connect-another"),
             ),
@@ -700,11 +701,11 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         except meta.MetaError:
             hub_sources = False
         back_path = "/organisation?tab=leads&part=sources" if hub_sources else "/leads?tab=sources"
-        back = f"{app_url()}{back_path}"
+        back = f"{app_url(request)}{back_path}"
 
         def done(outcome: str) -> Response:
             url = (
-                app_return.settings_url(app_url(), card, outcome)
+                app_return.settings_url(app_url(request), card, outcome)
                 if card
                 else f"{back}&meta={outcome}"
             )
@@ -723,7 +724,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 tenant_id=desk.viewer.tenant_id,
                 person_id=desk.viewer.person_id,
             )
-            found = await finish_meta(desk, cfg, code)
+            found = await finish_meta(desk, cfg, code, callback_url(request))
         return done(found)
 
     @router.post("/meta/app-complete", response_model=AppCompleted)
@@ -745,12 +746,14 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             except meta.MetaError as error:
                 raise DeskError(403, str(error)) from None
             check_verifier(body, command.verifier)
-            return AppCompleted(result=await finish_meta(desk, cfg, code))
+            return AppCompleted(result=await finish_meta(desk, cfg, code, callback_url(request)))
 
-    async def finish_meta(desk: LeadDesk, cfg: meta.MetaConfig, code: str) -> str:
+    async def finish_meta(
+        desk: LeadDesk, cfg: meta.MetaConfig, code: str, redirect_uri: str
+    ) -> str:
         """Swap Meta's code, keep the organisation's connection and its Pages (off)."""
         graph = meta.Graph(cfg)
-        user = await graph.user_token(code=code, redirect_uri=callback_url())
+        user = await graph.user_token(code=code, redirect_uri=redirect_uri)
         pages = await graph.pages(user.token)
         # Who shared these Pages: each Page shows the account it came through, so a team
         # with several Facebook accounts sees which is which (bug report #8).
@@ -1398,8 +1401,8 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             )
         return cfg
 
-    def google_callback_url() -> str:
-        return f"{app_url()}/v1/lead-desk/google/callback"
+    def google_callback_url(request: Request) -> str:
+        return f"{app_url(request)}/v1/lead-desk/google/callback"
 
     async def google_sources(desk: LeadDesk) -> list[LeadSource]:
         rows = (
@@ -1475,7 +1478,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 card=settings_card,
             )
         return started(
-            gads.consent_url(cfg, redirect_uri=google_callback_url(), state=state), reply
+            gads.consent_url(cfg, redirect_uri=google_callback_url(request), state=state), reply
         )
 
     @router.get("/google/callback", response_model=None)
@@ -1485,11 +1488,11 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         if from_app(lambda: gads.peek_state(cfg, state)):
             return hand_off("google", cfg.token_key, request)
         card = returning(lambda: gads.peek_state(cfg, state), GOOGLE_CARDS)
-        back = f"{app_url()}/leads?tab=sources"
+        back = f"{app_url(request)}/leads?tab=sources"
 
         def done(outcome: str) -> Response:
             url = (
-                app_return.settings_url(app_url(), card, outcome)
+                app_return.settings_url(app_url(request), card, outcome)
                 if card
                 else f"{back}&google={outcome}"
             )
@@ -1506,9 +1509,9 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 cfg, state, tenant_id=desk.viewer.tenant_id, person_id=desk.viewer.person_id
             )
             if card == google_files.CARD:
-                found = await finish_files(desk, cfg, code)
+                found = await finish_files(desk, cfg, code, google_callback_url(request))
             else:
-                found = await finish_google(desk, cfg, code)
+                found = await finish_google(desk, cfg, code, google_callback_url(request))
         return done(found)
 
     @router.post("/google/app-complete", response_model=AppCompleted)
@@ -1528,17 +1531,21 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 raise DeskError(403, str(error)) from None
             check_verifier(body, command.verifier)
             if app_return.card_of(body, GOOGLE_CARDS) == google_files.CARD:
-                return AppCompleted(result=await finish_files(desk, cfg, code))
-            return AppCompleted(result=await finish_google(desk, cfg, code))
+                return AppCompleted(
+                    result=await finish_files(desk, cfg, code, google_callback_url(request))
+                )
+            return AppCompleted(
+                result=await finish_google(desk, cfg, code, google_callback_url(request))
+            )
 
     # ----- Google Sheets and Drive (slice 1: connectors/google_files.py) -----------------
 
-    async def finish_files(desk: LeadDesk, cfg: gads.GoogleAdsConfig, code: str) -> str:
+    async def finish_files(
+        desk: LeadDesk, cfg: gads.GoogleAdsConfig, code: str, redirect_uri: str
+    ) -> str:
         """Swap Google's code and keep it as the organisation's Google connection."""
         try:
-            granted = await google_files.Files(cfg).exchange(
-                code=code, redirect_uri=google_callback_url()
-            )
+            granted = await google_files.Files(cfg).exchange(code=code, redirect_uri=redirect_uri)
         except google_files.GoogleFilesError as error:
             log.warning("google files connect failed: %s", error)
             return "failed"
@@ -1600,7 +1607,8 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 card=google_files.CARD,
             )
         return started(
-            google_files.consent_url(cfg, redirect_uri=google_callback_url(), state=state), reply
+            google_files.consent_url(cfg, redirect_uri=google_callback_url(request), state=state),
+            reply,
         )
 
     @router.post(
@@ -1727,11 +1735,13 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 await desk.db.flush()
             return await files_status(desk)
 
-    async def finish_google(desk: LeadDesk, cfg: gads.GoogleAdsConfig, code: str) -> str:
+    async def finish_google(
+        desk: LeadDesk, cfg: gads.GoogleAdsConfig, code: str, redirect_uri: str
+    ) -> str:
         """Swap Google's code and keep each Ads account it can see (off until turned on)."""
         ads = gads.Ads(cfg)
         try:
-            refresh = await ads.refresh_token(code=code, redirect_uri=google_callback_url())
+            refresh = await ads.refresh_token(code=code, redirect_uri=redirect_uri)
             accounts = await ads.accounts(await ads.access_token(refresh))
         except gads.GoogleAdsApiError as error:
             log.warning("google ads connect failed: %s", error)

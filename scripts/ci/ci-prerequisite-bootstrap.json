@@ -10,13 +10,13 @@
     "review": "Orchestrator 28 Oct 2026 (v1.3.0 cut): producer run 40724365608 (workbench-checks.yml, push, success, wb-ci --full) on request 5a168c24, whose only parent is the v1.3.0 hold 77b745d3b and which changes only .wb-ci/request.json. Same identity 4db81fe7 (no lockfile change); artifact digest from the API. Replaces the 2e9f74de pin, which passed its 36-hour reuse window at 15:51Z and left e2e unable to admit a new bundle."
   },
   {
-    "artifact_id": 13064480252,
-    "digest": "ef8f8b9e6c42156dc000cc831c0ecfe17cf35e27172c7811c87e630fa0d79f56",
+    "artifact_id": 13152235151,
+    "digest": "eea82268d8e868c78fb08dccb284c75915bf5e3634263dd1b44db71fe33c1b4b",
     "identity": "8fed5c6dc9d51ab364d8a09a7d5f66c7d58d9ba10f20f36f5113d2bee337c733",
     "repository": "authorityclosers/authority-closers-platform",
-    "run_id": 41258128399,
-    "source_sha": "7732c0464d07cf58f60322c868c7d75055890a6a",
-    "reviewed_source_sha": "32828411623fcf40e34f9de69d374c1a662579b8",
-    "review": "Orchestrator 1 Nov 2026 (after the v1.23.0 release): producer run 41258128399 (workbench-checks.yml, push, success) on request 7732c046, whose only parent is the Home session's tested tree 328284116 (workbench baf34ac6f plus Home and revenue web/py files; no lockfile, package, workflow or scripts/ci change, checked by diff) and which changes only .wb-ci/request.json. Same identity 8fed5c6d; artifact digest from the API. Replaces the 12975829203 pin, which passed its 36-hour reuse window at about 00:40Z and was deleted with the unpinnable 13063612794 (failed run 41256705383 on a feature tree)."
+    "run_id": 41465491081,
+    "source_sha": "a47fec1dff7e9d0c6d427f81df5246414746087a",
+    "reviewed_source_sha": "35462bf9bd26078be6f9b634627e3056111bfd94",
+    "review": "Orchestrator 2 Nov 2026: producer run 41465491081 (workbench-checks.yml, push, success, targeted py job) on request a47fec1d, whose only parent is workbench 35462bf9b (no lockfile, package, workflow or scripts/ci change since the 1 Nov reviewed tree 328284116 other than this pin file, checked by diff) and which changes only .wb-ci/request.json. Same identity 8fed5c6d; artifact digest from the API. Replaces the 13064480252 pin, which passed its 36-hour reuse window at about 12:50Z and was deleted with the unpinnable 13144455387 (failed run 41448198620)."
   }
 ]

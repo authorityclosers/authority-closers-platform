@@ -385,7 +385,7 @@ def _challenge(reader: Reader, tool: dict[str, Any]) -> dict[str, Any] | None:
         text = tiers.not_included(reader.platform, beyond[0])
         return {"content": [{"type": "text", "text": text}], "isError": True}
     words = ", ".join(tiers.LABELS.get(scope, scope).lower() for scope in missing)
-    metadata = f"{reader.base or ''}/.well-known/oauth-protected-resource/v1/mcp"
+    metadata = f"{reader.resource or ''}/.well-known/oauth-protected-resource/v1/mcp"
     return {
         "content": [
             {
@@ -641,18 +641,24 @@ def install_mcp_http(application: FastAPI, ctx: RouteContext) -> None:
     router = APIRouter(prefix="/v1/mcp", tags=["mcp"])
     settings = ctx.settings
     open_reader = make_opener(ctx)
-    base = str(settings.sales_xray_app_url).rstrip("/") if settings.sales_xray_app_url else ""
-    # RFC 9728 and MCP 2025-11-25: where to find Connect, and the scopes to ask for (reading).
-    challenge = (
-        f'resource_metadata="{base}/.well-known/oauth-protected-resource/v1/mcp", '
-        f'scope="{DEFAULT_SCOPES}"'
-    )
 
-    def refused(error: ApiError) -> JSONResponse:
+    def challenge(request: Request) -> str:
+        # RFC 9728 and MCP 2025-11-25: where to find Connect, and the scopes to ask for
+        # (reading). The metadata is on the host the assistant reached: mcp.salesxray.in, or
+        # the old address for connections made there (2 Nov 2026).
+        base = settings.sales_xray_host_origin(request.url.hostname) or ""
+        return (
+            f'resource_metadata="{base}/.well-known/oauth-protected-resource/v1/mcp", '
+            f'scope="{DEFAULT_SCOPES}"'
+        )
+
+    def refused(error: ApiError, request: Request) -> JSONResponse:
         headers = {"Cache-Control": "no-store"}
         if error.status == 401:
             invalid = ', error="invalid_token"' if error.code == "key_invalid" else ""
-            headers["WWW-Authenticate"] = f'Bearer realm="sales-xray", {challenge}{invalid}'
+            headers["WWW-Authenticate"] = (
+                f'Bearer realm="sales-xray", {challenge(request)}{invalid}'
+            )
         if error.retry_after is not None:
             headers["Retry-After"] = str(error.retry_after)
         return JSONResponse(
@@ -678,7 +684,7 @@ def install_mcp_http(application: FastAPI, ctx: RouteContext) -> None:
                 else:
                     answer = await handle(reader, message)
         except ApiError as error:
-            return refused(error)
+            return refused(error, request)
         if answer is None:
             return Response(status_code=202)
         return JSONResponse(answer, headers={"Cache-Control": "no-store"})

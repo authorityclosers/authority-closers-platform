@@ -66,6 +66,7 @@ async def test_public_availability_is_non_sensitive_and_follows_durable_budget(m
         operations_tenant_id=uuid4(),
         public_app_url=SimpleNamespace(host="learner.test"),
         sales_xray_app_url=SimpleNamespace(host="xray.test"),
+        sales_xray_hosts=frozenset({"xray.test"}),
     )
     monkeypatch.setattr(
         module, "execution_state", AsyncMock(return_value={"paused": case == "paused"})
@@ -126,6 +127,7 @@ async def test_public_availability_reads_the_database_once_per_window(monkeypatc
         operations_tenant_id=uuid4(),
         public_app_url=SimpleNamespace(host="learner.test"),
         sales_xray_app_url=SimpleNamespace(host="xray.test"),
+        sales_xray_hosts=frozenset({"xray.test"}),
     )
 
     async def require_actor():

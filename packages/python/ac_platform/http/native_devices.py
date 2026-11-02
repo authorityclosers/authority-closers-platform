@@ -145,10 +145,7 @@ def install_native_devices_http(
         await limit("address:" + digest(address), operation)
 
     async def browser_surface(request: Request) -> None:
-        if (
-            settings.sales_xray_app_url is None
-            or request.url.hostname != settings.sales_xray_app_url.host
-        ):
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise HTTPException(404, "Native browser route not found.")
 
     async def browser_write(request: Request) -> None:

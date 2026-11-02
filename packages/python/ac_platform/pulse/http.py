@@ -106,9 +106,7 @@ def install_pulse_http(
         return client, key, app_url
 
     def on_host(request: Request) -> None:
-        if settings.sales_xray_app_url is None or (
-            request.url.hostname != settings.sales_xray_app_url.host
-        ):
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise HTTPException(404, "Pulse isn't available here.", headers=PRIVATE)
 
     def refuse(error: PulseLinkError) -> HTTPException:
@@ -336,7 +334,7 @@ def install_pulse_http(
                     live_key,
                     tenant_id=actor.tenant_id,
                     person_id=actor.person_id,
-                    redirect_uri=f"{base}{org_link.CALLBACK_PATH}",
+                    redirect_uri=f"{here(request)}{org_link.CALLBACK_PATH}",
                     now=datetime.now(UTC),
                 )
             except IdentityProviderUnavailable:
@@ -347,8 +345,13 @@ def install_pulse_http(
                 ) from None
             return {"redirect_url": address}
 
-    def back(outcome: str) -> RedirectResponse:
-        base = app_url or ""
+    def here(request: Request) -> str:
+        # Pulse returns the admin to the address they started on, where their host-only
+        # session cookie is (salesxray.in or the old address, 2 Nov 2026).
+        return settings.sales_xray_origin_for(request.url.hostname) or app_url or ""
+
+    def back(request: Request, outcome: str) -> RedirectResponse:
+        base = here(request)
         response = RedirectResponse(
             f"{base}{HUB_RETURN}&{urlencode({'pulse': outcome})}", status_code=303
         )
@@ -364,12 +367,12 @@ def install_pulse_http(
         codes = params.getlist("code")
         errors = params.getlist("error")
         if len(states) != 1 or len(codes) > 1 or len(errors) > 1 or len(states[0]) > 200:
-            return back("failed")
+            return back(request, "failed")
         now = datetime.now(UTC)
         try:
             async with asynccontextmanager(ctx.require_actor)(request) as auth:
                 if await role_of(auth) not in MANAGER_ROLES:
-                    return back("not_manager")
+                    return back(request, "not_manager")
                 attempt = await org_link.take_attempt(
                     auth.database,
                     live_key,
@@ -379,19 +382,19 @@ def install_pulse_http(
                 )
                 person_id = auth.resolved.actor.person_id
                 if attempt.tenant_id != auth.resolved.actor.tenant_id:
-                    return back("other_workspace")
+                    return back(request, "other_workspace")
         except PulseLinkError as error:
-            return back(error.code)
+            return back(request, error.code)
         except DomainError:
-            return back("sign_in")
+            return back(request, "sign_in")
         if errors or not codes:
-            return back("cancelled")
+            return back(request, "cancelled")
         try:
             grant = await org_link.exchange(
                 live_client,
                 attempt,
                 code=codes[0],
-                redirect_uri=f"{base}{org_link.CALLBACK_PATH}",
+                redirect_uri=f"{here(request)}{org_link.CALLBACK_PATH}",
             )
             async with sessions() as database, database.begin():
                 link = await org_link.activate(
@@ -400,7 +403,7 @@ def install_pulse_http(
                 remote = org_link.LinkSession(live_client, live_key, link)
                 link_id = link.id
         except PulseLinkError as error:
-            return back(error.code)
+            return back(request, error.code)
         try:
             hook = await remote.add_webhook(f"{base}{org_link.WEBHOOK_APP_PATH}")
             if hook is not None:
@@ -411,8 +414,8 @@ def install_pulse_http(
         try:
             await sync(link_id, full=True)
         except (PulseLinkError, HTTPException):
-            return back("linked_sync_failed")
-        return back("connected")
+            return back(request, "linked_sync_failed")
+        return back(request, "connected")
 
     @router.post("/v1/sales-xray/pulse/sync")
     async def sync_now(request: Request, response: Response) -> dict[str, Any]:

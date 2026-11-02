@@ -57,10 +57,7 @@ def install(app: FastAPI, ctx: RouteContext) -> None:
         request: Request, response: Response, *, write: bool = False
     ) -> AsyncIterator[AuthenticatedTransaction]:
         response.headers.update(PRIVATE)
-        if (
-            settings.sales_xray_app_url is None
-            or request.url.hostname != settings.sales_xray_app_url.host
-        ):
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise HTTPException(404, "Sign-in methods are unavailable here.", headers=PRIVATE)
         if write:
             try:

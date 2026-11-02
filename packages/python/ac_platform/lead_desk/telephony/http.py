@@ -160,10 +160,7 @@ def install_telephony_http(application: FastAPI, ctx: RouteContext) -> None:
     development = environment == "development"
 
     def same_host(request: Request) -> None:
-        if (
-            settings.sales_xray_app_url is None
-            or request.url.hostname != settings.sales_xray_app_url.host
-        ):
+        if not settings.is_sales_xray_host(request.url.hostname):
             raise HTTPException(404, "Leads are unavailable here.", headers=NO_STORE)
 
     def provider() -> providers.Provider | None:
