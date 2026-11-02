@@ -116,6 +116,8 @@ function scan(phone) {
     const y = Math.min(vh - 1, Math.max(0, r.top + Math.min(r.height / 2, vh - r.top - 1)));
     const top = document.elementFromPoint(x, y);
     if (!top || top === el || el.contains(top) || top.contains(el)) continue;
+    // clipped by its own scroll container (scrolled out of it): not covered by anything
+    if (outsideOwnScroller(el, x, y)) continue;
     const lab = top.closest && top.closest("label");
     if (lab && (lab.contains(el) || lab.htmlFor === el.id)) continue;
     if (getComputedStyle(top).pointerEvents === "none") continue;

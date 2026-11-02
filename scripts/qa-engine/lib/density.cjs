@@ -178,7 +178,14 @@ async function openTabAs(alias, variant) {
 async function gotoScreen(tab, alias, screen) {
   const page = tab.page;
   if (screen.route) {
-    await session.go(tab, screen.route, { wait: 40000 });
+    // the owner session is refused (and the tab blanked) when the header does not say sandbox, which a busy box can delay: look again a few times; a page that never opens is recorded as not opened, never measured blank
+    let opened = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      opened = await session.go(tab, screen.route, { wait: 40000 });
+      if (opened && opened.ok) break;
+      await sleep(15000);
+    }
+    if (!opened || !opened.ok) return false;
     await sleep(4500);
     return true;
   }
