@@ -313,6 +313,7 @@ export function SourceWaveform({
     return (
       <span
         className={`${styles.unavailable} ${className}`}
+        role="img"
         aria-label="Audio level preview unavailable"
       />
     );

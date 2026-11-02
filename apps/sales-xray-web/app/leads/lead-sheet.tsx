@@ -3952,7 +3952,11 @@ export function LeadCard({
         <small className={styles.ownerNote}>
           {[
             ownerNote(detail.owner_reason),
-            firstCallWords(detail.first_call_minutes, ago(lead.created_at)),
+            // When the person sent it: an older enquiry came in on its own day.
+            firstCallWords(
+              detail.first_call_minutes,
+              ago(lead.received_at ?? lead.created_at),
+            ),
           ]
             .filter(Boolean)
             .join(" · ")}

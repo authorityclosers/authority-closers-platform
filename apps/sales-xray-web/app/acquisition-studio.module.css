@@ -3635,6 +3635,22 @@
     align-self: center;
     flex-wrap: nowrap;
   }
+  /* With the call's lead, Prospect's Information joins Transcript and the
+     menu: then the title takes its own row and wraps by words, and the
+     actions sit under it (the test robot, 2 Nov 2026: at 390 px the three
+     actions left the title about 25 px, a letter a line). */
+  .app.app[data-stage="report"] .reportHeader:has([data-report-lead-action]) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "title"
+      "actions"
+      "meta";
+  }
+  .app.app[data-stage="report"]
+    .reportHeader:has([data-report-lead-action])
+    .reportActions {
+    justify-self: start;
+  }
 }
 
 /* The About note's mail link: a full thumb target without moving its line

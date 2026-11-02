@@ -510,7 +510,7 @@ export async function readMetaPages(signal?: AbortSignal): Promise<MetaPage[]> {
     .filter((page): page is MetaPage => page !== null);
 }
 
-/** Turn a Page on with the forms picked (or change them); the last week's leads come in now. */
+/** Turn a Page on with the forms picked (or change them); only leads sent from now on come in. */
 export async function turnOnPage(
   pageId: string,
   forms: "all" | string[],

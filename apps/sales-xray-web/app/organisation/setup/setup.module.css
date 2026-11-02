@@ -744,6 +744,219 @@
 .stageRow .stageMoves {
   gap: 0;
 }
+/* Facebook & Instagram by account (owner, 2 Nov 2026): a Page that brings leads is
+   one card; the account's other Pages and removed ones are one-line rows. */
+.pageCard {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+  box-sizing: border-box;
+}
+.groupTitle h4 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pageCard .rowNote {
+  min-height: 0;
+  padding: 0;
+}
+/* A Page's status line wraps rather than ending in "…" (360 px at 130% text). */
+.pageCard .groupTitle small,
+.pageRow .pickCopy small,
+.group > .groupHead .groupTitle small {
+  white-space: normal;
+}
+/* An account's other and removed Pages, and a Page's archived forms: folds
+   with the chevron the folded rows below use. */
+.group > .details > summary,
+.pageCard > .details > summary {
+  padding: 0 8px;
+  font-size: var(--sx-text-sm);
+  list-style: none;
+}
+.group > .details > summary::-webkit-details-marker,
+.pageCard > .details > summary::-webkit-details-marker {
+  display: none;
+}
+.group > .details > summary::after,
+.pageCard > .details > summary::after {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin: 0 4px 0 auto;
+  border-right: 2px solid var(--sx-muted);
+  border-bottom: 2px solid var(--sx-muted);
+  transform: rotate(-45deg);
+}
+.group > .details[open] > summary::after,
+.pageCard > .details[open] > summary::after {
+  transform: rotate(45deg);
+}
+.group > .details > .rows {
+  margin-top: 4px;
+}
+.pageRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 60px;
+  padding: 6px 8px 6px 16px;
+  box-sizing: border-box;
+}
+/* Destructive or rare: plain ink, never the accent (ux-audit, 2 Nov 2026). */
+.quietButton {
+  flex: none;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.quietButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.quietButton:focus-visible,
+.quietRow:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+.pageActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.pageActions > .quietButton {
+  margin-left: auto;
+}
+/* A form: its square box on the left, beside its name, on every width. */
+.formRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 10px 16px;
+  color: var(--sx-ink);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.formRow input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--sx-accent);
+}
+.formRow:has(input:disabled) {
+  cursor: default;
+}
+/* Add Pages, and Connect another Facebook account: one quiet row each. */
+.quietRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 8px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+.quietRow svg {
+  flex: none;
+  color: var(--sx-muted);
+}
+.allForms {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.allForms input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--sx-accent);
+}
+.confirm {
+  display: grid;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-bad-soft);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+}
+.confirm p {
+  margin: 0;
+}
+.danger {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-bad);
+  /* The on-accent ink reads on the danger fill in both themes. */
+  color: var(--sx-accent-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.danger:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.olderChoice {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 12px 0 0;
+  border: 0;
+  border-top: 1px solid var(--sx-line);
+  font-size: var(--sx-text-sm);
+}
+.olderChoice legend {
+  padding: 0;
+  font-weight: 600;
+}
+.olderChoice label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.olderChoice input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--sx-accent);
+}
+.olderChoice small {
+  color: var(--sx-muted);
+}
 .spin {
   animation: setupSpin 900ms linear infinite;
 }

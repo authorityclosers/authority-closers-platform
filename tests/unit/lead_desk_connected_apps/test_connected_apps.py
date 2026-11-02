@@ -1,9 +1,11 @@
 """Connected apps: how a test's progress reads, and the plain words of a report."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
+
+import pytest
 
 from ac_platform.lead_desk import connected_apps as apps
 
@@ -63,7 +65,20 @@ def test_views_are_camel_case_and_name_no_amount() -> None:
     assert all("₹" not in name for name in apps.NAMES.values())
 
 
-def test_meta_lead_ads_say_honestly_where_meta_review_stands() -> None:
+def test_meta_approved_the_lead_ads_app_on_2_nov() -> None:
+    # Meta approved Sales Xray Leads on 2 Nov 2026: no "waiting" note, no blocker.
+    review = apps.meta_review()
+    assert review.state == "approved" and review.since.isoformat() == "2026-11-02"
+    assert "Meta approved" in review.works_now and review.after is None
+    assert apps.meta_blockers() == []
+    # The Messaging app is still in review.
+    assert apps.MESSAGING_APPROVED is False
+
+
+def test_meta_lead_ads_say_honestly_where_meta_review_stands(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(apps, "META_REVIEW", ("pending", date(2026, 10, 19)))
     review = apps.meta_review()
     assert review.state == "pending" and review.since.isoformat() == "2026-10-19"
     # Meta lets an app under review read only its testers' test leads, never ad leads.
@@ -73,7 +88,10 @@ def test_meta_lead_ads_say_honestly_where_meta_review_stands() -> None:
     assert "worksNow" in dumped and dumped["state"] == "pending"
 
 
-def test_lead_ads_say_why_ad_leads_dont_come_yet_and_where_to_bring_them_in() -> None:
+def test_lead_ads_say_why_ad_leads_dont_come_yet_and_where_to_bring_them_in(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(apps, "META_REVIEW", ("pending", date(2026, 10, 19)))
     [blocker] = apps.meta_blockers()
     assert "19 Oct" in blocker.reason and "not leads from your ads" in blocker.reason
     assert "Website form" in blocker.fix and blocker.page == apps.SOURCES_PAGE
@@ -95,7 +113,10 @@ def test_messaging_cards_say_meta_hasnt_approved_them_and_what_instagram_lacks()
     assert len(apps.messaging_blockers("whatsapp", pages=0, accounts=0)) == 1
 
 
-def test_a_card_keeps_its_blockers_through_the_settings_shape() -> None:
+def test_a_card_keeps_its_blockers_through_the_settings_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(apps, "META_REVIEW", ("pending", date(2026, 10, 19)))
     health = apps.AppHealth(
         app="meta_leads",
         name=apps.NAMES["meta_leads"],

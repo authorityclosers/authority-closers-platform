@@ -366,8 +366,9 @@ def _source_problem(source: LeadSource) -> Problem | None:
 # with the owner's approval). Until Meta approves it, only people with a role on the
 # app (its admins, developers and testers) can connect their Pages, and Meta lets the
 # app read only the leads such people submit: its test leads, not leads from ads
-# (Meta's Lead Ads docs, "Limitations"). When Meta approves it, set ("approved", <the day>).
-META_REVIEW: Final[tuple[Literal["pending", "approved"], date]] = ("pending", date(2026, 10, 19))
+# (Meta's Lead Ads docs, "Limitations"). Meta approved it on 2 Nov 2026 (its developer
+# tools: last_reviewed_is_approved, completed 1793592824): any business connects its Pages.
+META_REVIEW: Final[tuple[Literal["pending", "approved"], date]] = ("approved", date(2026, 11, 2))
 # WhatsApp, Messenger and Instagram run on the "Sales Xray Messaging" Meta app, which
 # Meta hasn't approved yet (25 Oct 2026): only people with a role on it can connect, and
 # only their messages arrive. Set True when Meta approves it.

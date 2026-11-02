@@ -145,14 +145,21 @@ const VARIANTS = [
   { key: "390x844", width: 390, height: 844, zoom: null },
   { key: "360x800-large-text", width: 360, height: 800, zoom: 1.3 },
 ];
-const SCREENS = [
+const SELLER_SCREENS = [
   { key: "home", route: "/dashboard" },
   { key: "leads-to-call", route: "/leads" },
   { key: "lead-page", route: null, open: "lead" },
   { key: "after-call-sheet", route: null, open: "after-call" },
   { key: "analysis-calls", route: "/analysis/calls" },
 ];
-const PEOPLE = ["priya", "karan"];
+// the owner's side (QA_DENSITY_SET=owner QA_DENSITY_PEOPLE=owner, with an owner session the orchestrator has approved): Home as the owner sees it, Team, Reports
+const OWNER_SCREENS = [
+  { key: "owner-home", route: "/dashboard" },
+  { key: "team", route: "/organisation" },
+  { key: "reports", route: "/reports" },
+];
+const SCREENS = process.env.QA_DENSITY_SET === "owner" ? OWNER_SCREENS : SELLER_SCREENS;
+const PEOPLE = (process.env.QA_DENSITY_PEOPLE || "priya,karan").split(",");
 
 async function openTabAs(alias, variant) {
   for (let attempt = 0; attempt < 6; attempt++) {

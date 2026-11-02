@@ -4,7 +4,8 @@ Meta holds real-time lead webhooks while an app is in development mode, and a te
 app (dev, staging) never leaves it, so without a pull their leads would arrive only
 when a Page is connected. Every few minutes the pull reads each active Page's recent
 leads with its sealed token and files them through the same ``LeadDesk.ingest`` path
-as the webhook. The Meta lead id is the source reference, so a lead that arrives by
+as the webhook, only those sent since the Page was switched on. The Meta lead id is the
+source reference, so a lead that arrives by
 webhook and by pull is filed once. On production the pull is the safety net for a
 webhook Meta drops.
 
@@ -74,9 +75,12 @@ def _last(config: Mapping[str, Any]) -> int | None:
 
 
 def since(config: Mapping[str, Any], now: int) -> int:
-    """From the last pull minus an hour, never further back than a week (older leads come
-    in through the backfill)."""
+    """From the last pull minus an hour, never further back than a week, nor than when the
+    Page was switched on (older leads come in only through the backfill)."""
     floor = now - meta.PULL_DAYS * 86400
+    connected = meta_backfill.connected_at(config)
+    if connected is not None:
+        floor = max(floor, connected - 1)
     last = _last(config)
     return floor if last is None else max(floor, last - OVERLAP)
 

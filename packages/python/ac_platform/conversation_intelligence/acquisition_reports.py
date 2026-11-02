@@ -275,7 +275,10 @@ class AcquisitionReports:
         actor: ActorContext | None = None,
         shared_identity_locks: bool = False,
         allow_organisation_read: bool = False,
+        previous_context: bool = True,
     ) -> dict[str, Any]:
+        """`previous_context`: False leaves out the previous call's context, which
+        Coaching never shows (it reads every report a seller has)."""
         scope, recording = await self.recording(
             submission_id,
             token=token,
@@ -288,6 +291,7 @@ class AcquisitionReports:
             submission_id=submission_id,
             access=ReportAccess.ACCOUNT if scope.claimed_account else ReportAccess.GUEST,
             actor=actor if scope.claimed_account else None,
+            previous_context=previous_context,
         )
 
     async def render_report(
@@ -297,6 +301,7 @@ class AcquisitionReports:
         submission_id: UUID,
         access: ReportAccess,
         actor: ActorContext | None = None,
+        previous_context: bool = True,
     ) -> dict[str, Any]:
         """The post-authorization report projection, withheld per the recording's marks."""
 
@@ -336,7 +341,7 @@ class AcquisitionReports:
                         "official_score": False,
                     },
                 },
-                actor=actor if access is ReportAccess.ACCOUNT else None,
+                actor=actor if access is ReportAccess.ACCOUNT and previous_context else None,
                 submission_id=submission_id,
                 report_created_at=recovered.created_at,
             )
@@ -368,7 +373,7 @@ class AcquisitionReports:
             recording,
             report.transcript_revision,
             {"submission_id": str(submission_id), **envelope},
-            actor=actor if access is ReportAccess.ACCOUNT else None,
+            actor=actor if access is ReportAccess.ACCOUNT and previous_context else None,
             submission_id=submission_id,
             report_created_at=draft.created_at,
         )
