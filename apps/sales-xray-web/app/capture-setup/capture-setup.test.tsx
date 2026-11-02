@@ -647,6 +647,7 @@ async function gate(view: CaptureSetup | Error, workspaces = [HOMES]) {
 
 describe("CaptureSetupGate", () => {
   it("opens over Leads for a seller who hasn't agreed, and holds Set up this phone", async () => {
+    fakePhone();
     await gate(setup());
     expect(title()).toBe("What Sales X-Ray captures");
     expect(document.documentElement.hasAttribute(CAPTURE_SETUP_ATTRIBUTE)).toBe(
@@ -664,6 +665,7 @@ describe("CaptureSetupGate", () => {
   });
 
   it("waits for the Terms card first", async () => {
+    fakePhone();
     document.documentElement.setAttribute("data-sx-consent", "");
     await gate(setup());
     expect(host.querySelector("dialog")).toBeNull();
@@ -675,6 +677,7 @@ describe("CaptureSetupGate", () => {
   });
 
   it("still opens when the screens before it took longer than the read's time limit", async () => {
+    fakePhone();
     // Redmi, 31 Oct 2026: the permissions checklist took a minute on a fresh
     // install, and the setup never opened after it.
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -777,6 +780,7 @@ describe("CaptureSetupGate", () => {
   });
 
   it("always offers to switch back to the workspace the seller came from", async () => {
+    fakePhone();
     window.localStorage.setItem(
       "sx-workspaces-seen:p",
       JSON.stringify({ current: "t-old", previous: null }),
@@ -809,5 +813,19 @@ describe("CaptureSetupGate", () => {
     expect(document.documentElement.hasAttribute(CAPTURE_SETUP_ATTRIBUTE)).toBe(
       false,
     );
+  });
+
+  it("never opens in a browser, at any width, and holds nothing", async () => {
+    // Owner via the orchestrator, 2 Nov 2026: the capture setup is the
+    // Android app's, never a browser's.
+    const calls = await gate(setup());
+    expect(host.querySelector("dialog")).toBeNull();
+    expect(document.documentElement.hasAttribute(CAPTURE_SETUP_ATTRIBUTE)).toBe(
+      false,
+    );
+    await act(async () => openCaptureSetup());
+    await settle();
+    expect(host.querySelector("dialog")).toBeNull();
+    expect(calls).toEqual([]);
   });
 });
