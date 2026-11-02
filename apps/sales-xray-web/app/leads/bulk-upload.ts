@@ -8,11 +8,16 @@ import type { ImportPreview, RepView } from "./leads-client";
 import type { StageView } from "./journey/journey-client";
 
 export type Side = "cold" | "live";
-export type Recipients = "people" | "rules" | "me" | "none";
+/** Who gets the new leads (owner, 2 Nov 2026: "Who gets these leads?"): shared between
+ *  the sellers, one seller, or left for the owner to assign; a seller's go on their own
+ *  desk ("me"). "rules" is the lead rules, kept for older callers. */
+export type Recipients = "people" | "one" | "rules" | "me" | "none";
 
 export type UploadChoices = {
   side: Side;
   assign: Recipients;
+  /** "One seller": who. */
+  one?: string | null;
   /** Salespeople turned off in the list. */
   off: string[];
   /** Counts the owner typed; null: an even split among those on. */
@@ -21,7 +26,7 @@ export type UploadChoices = {
   step: string;
 };
 
-/** Cold Leads, and for owners and admins an even split among the salespeople
+/** Cold Leads, and for owners and admins an even split among the sellers
  *  (competitor teardown 5, 1 Nov 2026); a seller's go on their own desk. */
 export const firstChoices = (canManage: boolean): UploadChoices => ({
   side: "cold",
@@ -62,6 +67,10 @@ export function countsFor(
   team: RepView[],
   fresh: number,
 ): Record<string, number> {
+  if (choices.assign === "one")
+    return choices.one && team.some((rep) => rep.person_id === choices.one)
+      ? { [choices.one]: fresh }
+      : {};
   const on = team
     .map((rep) => rep.person_id)
     .filter((id) => !choices.off.includes(id));
@@ -92,3 +101,18 @@ export function startStages(stages: StageView[]): StageView[] {
       (stage.kind === "interested" && stage.milestone === "qualified"),
   );
 }
+
+/** The sellers new leads are shared between: those who take new leads. Owners and admins
+ *  are among them only once they switched "Taking new leads" on (owner, 2 Nov 2026). */
+export function sellersOf(team: RepView[]): RepView[] {
+  return team.filter((rep) => rep.available);
+}
+
+/** Whether these choices give leads to people the owner picked (shares). */
+export const sharing = (assign: Recipients): boolean =>
+  assign === "people" || assign === "one";
+
+/** The server's word for these choices: "One seller" is a share of all of them. */
+export const serverAssign = (
+  assign: Recipients,
+): "people" | "rules" | "me" | "none" => (assign === "one" ? "people" : assign);

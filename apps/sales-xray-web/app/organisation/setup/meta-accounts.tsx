@@ -11,9 +11,11 @@
  */
 
 import { History, Plus } from "lucide-react";
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type MouseEvent } from "react";
 
-import { ago } from "../../leads/leads-client";
+import { sellersOf } from "../../leads/bulk-upload";
+import { ago, readTeam, type RepView } from "../../leads/leads-client";
+import { displayName } from "../../display-name";
 import type {
   MetaBackfill,
   MetaForm,
@@ -158,12 +160,25 @@ export function MetaAccounts({
   onAnother: Connect;
 }) {
   const groups = byAccount(pages);
+  // The sellers, for each Page's "Who gets these leads?" (owner, 2 Nov 2026).
+  const [sellers, setSellers] = useState<RepView[]>([]);
+  const any = pages.length > 0;
+  useEffect(() => {
+    if (!any) return;
+    const controller = new AbortController();
+    readTeam(controller.signal).then(
+      (team) => setSellers(sellersOf(team.reps)),
+      () => undefined,
+    );
+    return () => controller.abort();
+  }, [any]);
   return (
     <>
       {groups.map((group) => (
         <AccountCard
           key={group.id}
           group={group}
+          sellers={sellers}
           onChanged={onChanged}
           onAdd={onAdd}
         />
@@ -184,10 +199,12 @@ export function MetaAccounts({
 
 function AccountCard({
   group,
+  sellers,
   onChanged,
   onAdd,
 }: {
   group: AccountGroup;
+  sellers: RepView[];
   onChanged: () => void;
   onAdd: Connect;
 }) {
@@ -272,7 +289,12 @@ function AccountCard({
         </div>
       ) : null}
       {group.on.map((page) => (
-        <PageCard key={page.pageId} page={page} onChanged={onChanged} />
+        <PageCard
+          key={page.pageId}
+          page={page}
+          sellers={sellers}
+          onChanged={onChanged}
+        />
       ))}
       {group.other.length ? (
         <details className={styles.details}>
@@ -405,13 +427,16 @@ function OtherPage({
 
 function PageCard({
   page,
+  sellers,
   onChanged,
 }: {
   page: MetaPage;
+  sellers: RepView[];
   onChanged: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [older, setOlder] = useState(false);
+  const [choosing, setChoosing] = useState(false);
   const all = page.forms === "all" || !page.forms;
   const picked = new Set(
     all
@@ -512,6 +537,24 @@ function PageCard({
           <ul className={styles.rows}>{archived.map(row)}</ul>
         </details>
       ) : null}
+      {choosing ? (
+        <WhoGets
+          page={page}
+          sellers={sellers}
+          onClose={() => setChoosing(false)}
+          onChanged={onChanged}
+        />
+      ) : (
+        <p className={styles.whoLine}>
+          <span>New leads: {whoWords(page, sellers)}</span>
+          <button
+            className={styles.textButton}
+            onClick={() => setChoosing(true)}
+          >
+            Change
+          </button>
+        </p>
+      )}
       {run ? (
         <p className={styles.rowNote} role="status">
           <History size={14} aria-hidden="true" />
@@ -546,6 +589,118 @@ function PageCard({
         </div>
       )}
     </div>
+  );
+}
+
+/** Who gets a Page's new leads, in a few words. */
+export function whoWords(page: MetaPage, sellers: RepView[]): string {
+  const mode = page.assign?.mode ?? "share";
+  if (mode === "none") return "left for you to assign";
+  if (mode === "one") {
+    const seller = sellers.find(
+      (rep) => rep.person_id === page.assign?.personId,
+    );
+    return seller ? `all to ${displayName(seller.name)}` : "all to one seller";
+  }
+  return "shared between your sellers";
+}
+
+const WHO: { key: "share" | "one" | "none"; label: string }[] = [
+  { key: "share", label: "Share between my sellers" },
+  { key: "one", label: "One seller" },
+  { key: "none", label: "Leave them for me to assign" },
+];
+
+/** "Who gets these leads?" for one Page: one question, three answers (owner, 2 Nov 2026). */
+function WhoGets({
+  page,
+  sellers,
+  onClose,
+  onChanged,
+}: {
+  page: MetaPage;
+  sellers: RepView[];
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [mode, setMode] = useState(page.assign?.mode ?? "share");
+  const [person, setPerson] = useState<string | null>(
+    page.assign?.personId ?? null,
+  );
+  const [busy, setBusy] = useState(false);
+  const ready = mode !== "one" || !!person;
+  const save = async () => {
+    setBusy(true);
+    try {
+      await metaRequest(`/pages/${encodeURIComponent(page.pageId)}/assign`, {
+        mode,
+        ...(mode === "one" ? { personId: person } : {}),
+      });
+      onChanged();
+      onClose();
+    } catch (error) {
+      notify({
+        id: "meta-who",
+        tone: "error",
+        title: "Not saved",
+        message: failed(error),
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <fieldset className={styles.olderChoice}>
+      <legend>Who gets these leads?</legend>
+      {WHO.map((item) => (
+        <Fragment key={item.key}>
+          <label>
+            <input
+              type="radio"
+              name={`who-${page.pageId}`}
+              checked={mode === item.key}
+              onChange={() => setMode(item.key)}
+            />
+            {item.label}
+          </label>
+          {/* The sellers sit under "One seller", not after the last answer
+              (ux-audit, 2 Nov 2026). */}
+          {item.key === "one" && mode === "one" ? (
+            sellers.length ? (
+              <ul className={styles.rows} aria-label="Sellers">
+                {sellers.map((rep) => (
+                  <li key={rep.person_id}>
+                    <label className={styles.formRow}>
+                      <input
+                        type="radio"
+                        name={`who-one-${page.pageId}`}
+                        checked={person === rep.person_id}
+                        onChange={() => setPerson(rep.person_id)}
+                      />
+                      {displayName(rep.name)}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <small>No sellers yet: invite one in Team.</small>
+            )
+          ) : null}
+        </Fragment>
+      ))}
+      <div className={styles.chips}>
+        <button
+          className={styles.primary}
+          disabled={busy || !ready}
+          onClick={() => void save()}
+        >
+          {busy ? "Saving…" : "Save"}
+        </button>
+        <button className={styles.chip} disabled={busy} onClick={onClose}>
+          Not now
+        </button>
+      </div>
+    </fieldset>
   );
 }
 

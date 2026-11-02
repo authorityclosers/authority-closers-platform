@@ -44,7 +44,7 @@ from ac_platform.tenancy.models import Membership
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_submission_http_postgresql import ORIGIN, _setup
-from tests.database.test_lead_desk_postgresql import _organisation
+from tests.database.test_lead_desk_postgresql import _admin_sells, _organisation
 from tests.database.test_lead_desk_social_postgresql import FakeGraph
 from tests.database.test_lead_desk_whatsapp_postgresql import FakeCloud
 from tests.unit.lead_desk_ai_replies.businesses import HOMES
@@ -93,6 +93,7 @@ def test_ai_replies_answer_hand_off_stop_and_wait_for_budget(
         setup = await _setup(postgres_harness, tmp_path)
         try:
             await _organisation(setup)
+            await _admin_sells(setup)
             tenant, me = setup.state.tenant_id, setup.state.person_id
             settings = setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
             context = RouteContext(settings, setup.require_actor, setup.sessions)

@@ -323,6 +323,12 @@ it("starts the desk and All leads' first page once the directory says Sales X-Ra
   expect(await start("/leads/?view=to_call&theme=dark")).toEqual([
     `${LIST}team&side=inbound&view=to_call`,
   ]);
+  // A Viewer reads the team's leads too (owner, 2 Nov 2026: All leads lists every
+  // lead a person may see).
+  directory = workspace("viewer");
+  expect(await start("/leads")).toEqual([
+    `${LIST}team&side=inbound&view=to_call`,
+  ]);
   directory = workspace("member");
   expect(await start("/leads?tab=all")).toEqual([
     `${LIST}mine&side=inbound&view=to_call`,
@@ -382,6 +388,8 @@ it("names All leads' first page exactly as the list asks for it", async () => {
     "/v1/lead-desk/leads?scope=team&side=inbound&view=to_call",
   );
   expect(earlyLeadsList("manager")).toBe(earlyLeadsList("admin"));
+  expect(earlyLeadsList("viewer")).toBe(earlyLeadsList("owner"));
+  expect(earlyLeadsList("finance")).toBe(earlyLeadsList("member"));
   expect(earlyLeadsList("member")).toBe(
     "/v1/lead-desk/leads?scope=mine&side=inbound&view=to_call",
   );

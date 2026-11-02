@@ -57,6 +57,8 @@ from ac_platform.lead_desk.contracts import (
     Badge,
     BulkDone,
     BulkLeads,
+    CallOutcomes,
+    CallOutcomesResult,
     CallPrivacy,
     CallRecord,
     CallReport,
@@ -974,6 +976,21 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.log_phone_calls(command)
+
+    @router.post("/call-outcomes", response_model=CallOutcomesResult, response_model_by_alias=True)
+    async def call_outcomes(
+        command: CallOutcomes, request: Request, response: Response
+    ) -> CallOutcomesResult:
+        """Outcomes for the seller's own dials from what their phone kept (its recordings)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            identity = request.headers.getlist("x-auto-capture-identity")
+            expected = f"{lead_desk.viewer.tenant_id}:{lead_desk.viewer.person_id}"
+            if identity and identity != [expected]:
+                raise HTTPException(
+                    409, "These calls belong to another workspace or seller.", headers=PRIVATE
+                )
+            return await lead_desk.fill_call_outcomes(command)
 
     @router.post(
         "/calls/{event_id}/private", response_model=LeadDetail, response_model_by_alias=True

@@ -134,8 +134,8 @@ function scan(phone) {
       el.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
       const r2 = el.getBoundingClientRect();
       const t2 = document.elementFromPoint(Math.min(vw - 1, Math.max(0, r2.left + r2.width / 2)), Math.min(vh - 1, Math.max(0, r2.top + Math.min(r2.height / 2, vh - r2.top - 1))));
-      window.scrollTo(sx, sy);
-      if (sc0) sc0.scrollTop = st0;
+      window.scrollTo({ left: sx, top: sy, behavior: "instant" });
+      if (sc0) sc0.scrollTo({ top: st0, behavior: "instant" });
       if (!t2 || t2 === el || el.contains(t2) || t2.contains(el)) continue;
     }
     out.covered.push(rec(el, { by: sem(top) }));
@@ -145,27 +145,48 @@ function scan(phone) {
   if (phone) {
     for (const el of interactive) {
       if (out.small.length >= 40) break;
-      const r = el.getBoundingClientRect();
+      let r = el.getBoundingClientRect();
       if (r.bottom < 0 || r.top > vh * 2) continue;
       if (r.width >= 44 && r.height >= 44) continue;
-      // judge the tap area: a ::after can make a 28 px box a 44 px target, so probe 8 px beyond the short sides
       const hit = (px, py) => {
         if (px < 0 || py < 0 || px >= vw || py >= vh) return false;
         const t = document.elementFromPoint(px, py);
         return !!t && (t === el || el.contains(t));
       };
+      // a control off the screen, or under a fixed card or bar, cannot be probed in place (elementFromPoint answers null or the card there): bring it to the middle for the test, then put the scroll back
+      let back = null;
+      const onScreen = r.top >= 0 && r.bottom <= vh && r.left >= 0 && r.right <= vw;
+      if (!onScreen || !hit(r.left + r.width / 2, r.top + r.height / 2)) {
+        const sx = window.scrollX;
+        const sy = window.scrollY;
+        const sc = scrollerOf(el);
+        const st = sc ? sc.scrollTop : 0;
+        el.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
+        back = () => {
+          window.scrollTo({ left: sx, top: sy, behavior: "instant" });
+          if (sc) sc.scrollTo({ top: st, behavior: "instant" });
+        };
+        r = el.getBoundingClientRect();
+      }
+      // judge the tap area, not the box: a ::after can make a 28 px box a 44 px target; a control reaches 44 px with (44 - size) / 2 on each side, so probe that far out, less 1 px for the edge
       const mx = r.left + r.width / 2;
       const my = r.top + r.height / 2;
-      const tallEnough = r.height >= 44 || hit(mx, r.top - 8) || hit(mx, r.bottom + 8);
-      const wideEnough = r.width >= 44 || hit(r.left - 8, my) || hit(r.right + 8, my);
-      if (tallEnough && wideEnough) continue;
-      if (getComputedStyle(el).display === "inline" && el.tagName === "A") continue;
-      const wrap = el.closest("label,a,button,[role=button],[role=tab],[role=radio]");
-      if (wrap && wrap !== el) {
-        const w = wrap.getBoundingClientRect();
-        if (w.width >= 44 && w.height >= 44) continue;
+      const reachY = Math.max(1, Math.floor((44 - r.height) / 2) - 1);
+      const reachX = Math.max(1, Math.floor((44 - r.width) / 2) - 1);
+      const tallEnough = r.height >= 44 || hit(mx, r.top - reachY) || hit(mx, r.bottom + reachY);
+      const wideEnough = r.width >= 44 || hit(r.left - reachX, my) || hit(r.right + reachX, my);
+      let small = !(tallEnough && wideEnough);
+      if (small && getComputedStyle(el).display === "inline" && el.tagName === "A") small = false;
+      if (small) {
+        const wrap = el.closest("label,a,button,[role=button],[role=tab],[role=radio]");
+        if (wrap && wrap !== el) {
+          const w = wrap.getBoundingClientRect();
+          if (w.width >= 44 && w.height >= 44) small = false;
+        }
       }
-      out.small.push(rec(el, { w: Math.round(r.width), h: Math.round(r.height) }));
+      const size = { w: Math.round(r.width), h: Math.round(r.height) };
+      if (back) back();
+      if (small) out.small.push(rec(el, size));
     }
   }
   // overlapping controls: two shown controls whose boxes cross, neither inside the other

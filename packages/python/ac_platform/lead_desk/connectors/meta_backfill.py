@@ -56,6 +56,42 @@ STEP_LEADS: Final[int] = 300  # leads read in one step (one request, or one pull
 _STOPS: Final[frozenset[str]] = frozenset({"token", "permission", "lead_access"})
 
 
+# The Page's own "Who gets these leads?" (owner, 2 Nov 2026): {"mode": "share" | "one" |
+# "none", "person": id}. Shared between the sellers unless the owner picks otherwise.
+ASSIGN: Final[str] = "assign"
+
+
+def assign_choice(config: Mapping[str, Any]) -> tuple[str, UUID | None]:
+    """Who gets the Page's new leads: ("share", None), ("one", seller) or ("none", None)."""
+    value = config.get(ASSIGN)
+    if not isinstance(value, Mapping):
+        return "share", None
+    if value.get("mode") == "none":
+        return "none", None
+    if value.get("mode") == "one":
+        try:
+            return "one", UUID(str(value.get("person")))
+        except ValueError:
+            return "share", None
+    return "share", None
+
+
+async def give(
+    desk: LeadDesk, source: LeadSource, lead: Lead, mode: str, person: UUID | None
+) -> None:
+    """A new lead from this Page to the one seller picked, or left for the owner. A seller
+    who has left the team since: shared between the sellers instead."""
+    if mode == "one" and person is not None and await desk._on_team(person):
+        name = (await desk._names([person])).get(person, "the seller picked")
+        await desk._set_owner(
+            lead, person, f"{source.label}: its new leads go to {name}.", "source"
+        )
+    elif mode == "none":
+        await desk._set_owner(lead, None, f"{source.label}: left for you to assign.", "source")
+    else:
+        await desk._allocate(lead)
+
+
 def connected_at(config: Mapping[str, Any]) -> int | None:
     value = config.get(CONNECTED)
     return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
@@ -229,6 +265,7 @@ async def file_lead(
     since = connected_at(source.config or {})
     if not older and since is not None and sent is not None and sent.timestamp() < since:
         return "older"
+    mode, person = ("share", None) if older else assign_choice(source.config or {})
     if ref is not None and sent is not None and not test:
         earlier = await earlier_lead(desk, record, ref, sent)
         if earlier is not None:
@@ -243,11 +280,13 @@ async def file_lead(
         actor=None,
         test_data=test,
         received_at=sent,
-        assign="none" if older else "rules",
+        assign="none" if older or mode != "share" else "rules",
         as_is=older,
     )
     if older and outcome == "created" and filed is not None:
         filed.pipeline = COLD
+    elif outcome == "created" and filed is not None and mode != "share":
+        await give(desk, source, filed, mode, person)
     if outcome == "created" and filed is not None and made is not None:
         made.append(filed.id)
     if outcome in {"created", "repeat"}:

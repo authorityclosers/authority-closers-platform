@@ -66,6 +66,9 @@ from ac_platform.lead_desk.contracts import (
     BreakView,
     BulkDone,
     BulkLeads,
+    CallOutcome,
+    CallOutcomes,
+    CallOutcomesResult,
     CallPrivacy,
     CallReport,
     ConversionView,
@@ -78,6 +81,7 @@ from ac_platform.lead_desk.contracts import (
     Disposition,
     Effort,
     FieldValue,
+    FilledCall,
     FollowUp,
     GroupRow,
     LeadDetail,
@@ -215,6 +219,8 @@ JUST_IN = timedelta(minutes=15)
 MANY_NEW = 40
 WhyKind = Literal["due", "new", "retry", "later", "open", "closed", "waiting"]
 SELLER_ROLES = roles_with("leads.work")
+# Who sells: new leads go by themselves to sellers, never to owners (owner, 2 Nov 2026).
+SELLER_ROLE = "member"
 QUEUE_LIMIT = 30
 UPCOMING_LIMIT = 20
 PAGE_SIZE = 50
@@ -245,6 +251,10 @@ PHONE_BOOK_LIMIT = 20000
 PHONE_LOG_DAYS = 7
 PHONE_LOG_NAMESPACE = UUID("0d0b7c52-6f1e-4c55-9d8e-5a3f2b8e1c47")
 PHONE_DIRECTIONS = frozenset({"outgoing", "incoming", "missed", "rejected", "blocked"})
+# Attempts with no outcome are filled in later from what the seller's phone kept (owner via
+# the orchestrator, 2 Nov 2026): this far back, and only on the seller's own dials.
+OUTCOME_FILL_DAYS = 30
+OUTCOME_NAMESPACE = UUID("d9dc3ee0-38f1-40f1-aeb9-c5fe65c4a025")
 # Each seller's phone setup (UX study item 7) lives under this key of the
 # workspace's Lead Desk settings, one entry per person. It is the app's own report,
 # not a manager's setting, so writing it never changes the settings revision.
@@ -716,6 +726,16 @@ def _short(name: str, limit: int = 60) -> str:
     return name if len(name) <= limit else name[: limit - 1] + "…"
 
 
+def takes_new_leads(role: str | None, rules: LeadRep | None) -> bool:
+    """Whether the lead rules give this person new leads by themselves (owner, 2 Nov 2026:
+    leads go to sellers, not owners). A seller does unless they switched "Taking new leads"
+    off; an owner, admin or manager only once they switched it on, saying they also sell.
+    Anyone may still be given a lead by hand."""
+    if rules is not None:
+        return bool(rules.available)
+    return role == SELLER_ROLE
+
+
 def _strings(values: Any) -> tuple[str, ...]:
     if not isinstance(values, list):
         return ()
@@ -830,7 +850,7 @@ class LeadDesk:
                     allocation.RepState(
                         person_id=person_id,
                         name=person_name(person),
-                        available=row.available if row else True,
+                        available=takes_new_leads(role, row),
                         max_open=row.max_open if row else cap,
                         open_leads=int(loads.get(person_id, 0)),
                         languages=_strings(row.languages) if row else (),
@@ -1782,6 +1802,12 @@ class LeadDesk:
             found[str(side)] = SideCounts(
                 new=int(new), open_leads=int(open_leads), follow_ups_today=int(today)
             )
+        # The Open Leads card opens All Leads at that stage, which lists both sides (owner,
+        # 2 Nov 2026), so each side's card counts both.
+        both = sum(counts.open_leads for counts in found.values())
+        found = {
+            side: counts.model_copy(update={"open_leads": both}) for side, counts in found.items()
+        }
         return found, new_key, open_key
 
     async def _stages_then(self, moments: Sequence[tuple[UUID, datetime]]) -> list[str | None]:
@@ -1975,16 +2001,18 @@ class LeadDesk:
         if scope != "mine" and not self.viewer.can_see_team:
             raise DeskError(403, "Your role sees your own leads only.")
         where: list[Any] = [self._seen()]
-        if side is not None:
-            # Inbound Leads or Cold Leads (migration 0146): the stage tabs count one side.
-            where.append(on_side(side))
+        # Inbound Leads or Cold Leads (migration 0146): the stage tabs count one side. All
+        # Leads lists both (owner, 2 Nov 2026); the side still counts To Call and Follow-ups.
+        side_clause: Any = on_side(side) if side is not None else None
+        if side_clause is not None and view != "all":
+            where.append(side_clause)
         # To Call holds the leads who rang and weren't reached since, first (#9 option A).
         waiting: dict[UUID, tuple[datetime, int]] = {}
         if view == "to_call" or (side is not None and offset == 0):
             waiting = await self._waiting_call_back(team=scope != "mine")
         day_end = self._day_start() + timedelta(days=1)
         view_clause: Any = None
-        if view is not None:
+        if view is not None and view != "all":
             # A work view (Dipak's mockup, 31 Oct 2026): what to call today, the follow-ups.
             view_clause = in_view(view, day_end, waiting)
             where.append(view_clause)
@@ -2074,12 +2102,21 @@ class LeadDesk:
             # The follow-up filter counts as the list applies it (robot J181, 2 Nov 2026: To
             # Call said 3 over an empty list); only inside Follow-ups is it the tab's own split.
             split = when_clause if view == "follow_ups" else None
-            rest = [item for item in where if item is not view_clause and item is not split]
+            rest = [
+                item
+                for item in where
+                if item is not view_clause and item is not split and item is not side_clause
+            ]
+            to_call = in_view("to_call", day_end, waiting)
+            follow_ups = in_view("follow_ups", day_end)
+            if side_clause is not None:
+                # To Call and Follow-ups on the side picked; All Leads on both.
+                to_call, follow_ups = and_(side_clause, to_call), and_(side_clause, follow_ups)
             found = (
                 await self.db.execute(
                     select(
-                        func.count().filter(in_view("to_call", day_end, waiting)),
-                        func.count().filter(in_view("follow_ups", day_end)),
+                        func.count().filter(to_call),
+                        func.count().filter(follow_ups),
                         func.count(),
                     ).where(*rest)
                 )
@@ -2115,7 +2152,7 @@ class LeadDesk:
             (*call_backs_first(waiting), *call_order(self.now, self._day_start()))
             if view == "to_call"
             else (func.coalesce(Lead.next_action_at, Lead.created_at), Lead.created_at, Lead.id)
-            if stage == "open" or stage in OPEN_STAGES or view is not None
+            if stage == "open" or stage in OPEN_STAGES or view in ("to_call", "follow_ups")
             else (Lead.updated_at.desc(), Lead.id)
         )
         if sort is not None:
@@ -4183,6 +4220,14 @@ class LeadDesk:
                 [rep.state for rep in team],
                 strict_language=bool(config.get("strict_language")),
             )
+            if fallback.person_id is None and not any(
+                rep.role == SELLER_ROLE or rep.state.available for rep in team
+            ):
+                # Nobody here sells yet: owners and admins take new leads only when they
+                # say they also sell (owner, 2 Nov 2026).
+                fallback = allocation.Allocation(
+                    None, "No sellers yet: it waits for you to give it out.", "none"
+                )
             # A rule matched but its people were away or full: the reason says so.
             passed = f"{decision.reason}; then " if decision is not None else ""
             decision = allocation.Allocation(
@@ -5292,12 +5337,14 @@ class LeadDesk:
         command id comes from this person, this phone, the row and its time. A
         call the app's own after-call sheet already logged is not counted twice.
         The stage and the next call stay as they are; only the seller's own
-        answer changes those.
+        answer changes those. A first read (``backfill``) reaches OUTCOME_FILL_DAYS
+        back, but its rows older than PHONE_LOG_DAYS only time the app's own dials.
         """
         _, config = await self.settings()
         country = str(config.get("default_country") or "91")
         hours = work_hours.parse(config)
-        oldest = self.now - timedelta(days=PHONE_LOG_DAYS)
+        logs_from = self.now - timedelta(days=PHONE_LOG_DAYS)
+        oldest = self.now - timedelta(days=OUTCOME_FILL_DAYS) if command.backfill else logs_from
         newest = self.now + timedelta(minutes=5)
         wanted: dict[UUID, tuple[PhoneLogCall, str]] = {}
         skipped = already = 0
@@ -5428,6 +5475,10 @@ class LeadDesk:
                 if dial is not None:
                     timing.append((key, call, lead, dial))
                 continue
+            # Older than a week: a first read's row only times a dial; it is no call of its own.
+            if start < logs_from:
+                skipped += 1
+                continue
             talked = call.duration_seconds > 0 and call.direction in {"outgoing", "incoming"}
             if call.direction == "outgoing" or talked:
                 lead.calls += 1
@@ -5483,6 +5534,116 @@ class LeadDesk:
             raise DeskError(409, "These calls are being logged already. Try again.") from None
         await self._phone_seen(command.device_id)
         return PhoneLogResult(logged=logged, already=already, skipped=skipped, calls=tuple(refs))
+
+    async def fill_call_outcomes(self, command: CallOutcomes) -> CallOutcomesResult:
+        """Fills my own Call-button dials that have no outcome from what my phone kept of each
+        call: its recording's lead number, start and length, up to OUTCOME_FILL_DAYS back
+        (owner via the orchestrator, 2 Nov 2026). Fill only: a recording with no dial of mine
+        adds nothing, and the dial itself never changes. Its seconds go beside it as the call
+        log's do (TIMED_CALL), once per dial; a recording sent again is known by its key.
+        """
+        _, config = await self.settings()
+        country = str(config.get("default_country") or "91")
+        oldest = self.now - timedelta(days=OUTCOME_FILL_DAYS)
+        newest = self.now + timedelta(minutes=5)
+        wanted: dict[UUID, tuple[CallOutcome, str]] = {}
+        unmatched = already = 0
+        for call in command.calls:
+            phone = normalise_phone(call.number, default_country=country)
+            if phone is None or not oldest <= call.started_at <= newest:
+                unmatched += 1
+                continue
+            key = uuid5(
+                OUTCOME_NAMESPACE,
+                f"{self.tenant_id}:{self.viewer.person_id}:{command.device_id}:{call.key}",
+            )
+            if key in wanted:
+                already += 1
+                continue
+            wanted[key] = (call, phone)
+        refs: list[FilledCall] = []
+        for key, lead_id, data in (
+            await self.db.execute(
+                select(LeadEvent.command_id, LeadEvent.lead_id, LeadEvent.data).where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.command_id.in_(list(wanted)),
+                )
+            )
+        ).all():
+            call, _ = wanted.pop(key)
+            already += 1
+            # Sent again (after a dropped answer): the phone still learns which dial it is.
+            dial = self._uuid(data.get(TIMED_CALL)) if isinstance(data, dict) else None
+            if dial is not None:
+                refs.append(FilledCall(key=call.key, lead_id=lead_id, event_id=dial))
+        leads: dict[str, Lead] = {}
+        phones = {phone for _, phone in wanted.values()}
+        if phones:
+            found = (
+                await self.db.scalars(select(Lead).where(self._visible(), Lead.phone.in_(phones)))
+            ).all()
+            leads = {lead.phone: lead for lead in found if lead.phone}
+        dials: dict[UUID, list[tuple[datetime, UUID, dict[str, Any]]]] = {}
+        if leads and wanted:
+            starts = [call.started_at for call, _ in wanted.values()]
+            for lead_id, at, data, event_id in (
+                await self.db.execute(
+                    select(
+                        LeadEvent.lead_id, LeadEvent.created_at, LeadEvent.data, LeadEvent.id
+                    ).where(
+                        LeadEvent.tenant_id == self.tenant_id,
+                        LeadEvent.lead_id.in_([lead.id for lead in leads.values()]),
+                        LeadEvent.actor_person_id == self.viewer.person_id,
+                        LeadEvent.kind == "call",
+                        LeadEvent.created_at >= min(starts) - DIAL_MATCH,
+                        LeadEvent.created_at
+                        <= max(starts) + timedelta(seconds=14400) + IN_APP_AFTER,
+                    )
+                )
+            ).all():
+                if isinstance(data, dict) and is_dial(data):
+                    dials.setdefault(lead_id, []).append((at, event_id, data))
+        per_dial: dict[UUID, list[tuple[UUID, CallOutcome, Lead]]] = {}
+        for key, (call, phone) in wanted.items():
+            lead = leads.get(phone)
+            dial = dial_for(call.started_at, dials.get(lead.id, ())) if lead else None
+            if lead is None or dial is None:
+                unmatched += 1
+                continue
+            per_dial.setdefault(dial, []).append((key, call, lead))
+        timed = await self._call_timings(list(per_dial))
+        filled = 0
+        for dial, matched in per_dial.items():
+            # Two recordings for one dial: neither is its outcome.
+            if len(matched) != 1:
+                unmatched += len(matched)
+                continue
+            key, call, lead = matched[0]
+            refs.append(FilledCall(key=call.key, lead_id=lead.id, event_id=dial))
+            if str(dial) in timed:
+                already += 1
+                continue
+            self._event(
+                lead,
+                "edited",
+                {
+                    "changed": ["call_timing"],
+                    TIMED_CALL: str(dial),
+                    "duration_seconds": call.duration_seconds,
+                    "device_id": str(command.device_id),
+                    "source": command.source,
+                },
+                actor=self.viewer.person_id,
+                command_id=key,
+            )
+            filled += 1
+        try:
+            await self.db.flush()
+        except IntegrityError:
+            raise DeskError(409, "These calls are being filled in already. Try again.") from None
+        return CallOutcomesResult(
+            filled=filled, already=already, unmatched=unmatched, calls=tuple(refs)
+        )
 
     async def _call_timings(self, event_ids: list[UUID]) -> dict[str, int]:
         """The phone's own seconds for Call-button dials its call log matched later, by the
@@ -6480,7 +6641,7 @@ class LeadDesk:
             role=self.viewer.role,
             can_manage=self.viewer.can_manage,
             can_see_team=self.viewer.can_see_team,
-            taking_leads=rules.available if rules else True,
+            taking_leads=takes_new_leads(self.viewer.role, rules),
             paused_until=work_hours.next_start(hours, self.now)
             if hours is not None and work_hours.paused(hours, self.now)
             else None,

@@ -1893,6 +1893,48 @@ class PhoneLog(Command):
 
     device_id: UUID
     calls: tuple[PhoneLogCall, ...] = Field(max_length=200)
+    # The phone's first read after the seller allows the call history, once per phone: rows
+    # up to 30 days back time the app's own dials; only the last 7 days log calls of their own.
+    backfill: bool = False
+
+
+class CallOutcome(Command):
+    """One call recording on the seller's phone whose number is one of their leads: when it
+    started and how long it ran. Never its audio."""
+
+    key: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:\-]+$")
+    number: str = Field(min_length=7, max_length=40)
+    started_at: AwareDatetime
+    duration_seconds: int = Field(ge=1, le=14400)
+
+
+class CallOutcomes(Command):
+    """What the seller's phone kept of their own Call-button dials, to fill the outcome of
+    attempts that have none (owner via the orchestrator, 2 Nov 2026). Recordings only: the
+    call history fills dials through PhoneLog."""
+
+    device_id: UUID
+    source: Literal["recording"]
+    calls: tuple[CallOutcome, ...] = Field(max_length=200)
+
+
+class FilledCall(Model):
+    """A recording that belongs to a dial: the phone can offer it for analysis on that call."""
+
+    key: str
+    lead_id: UUID
+    event_id: UUID
+
+
+class CallOutcomesResult(Model):
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    # Dials whose outcome came from the phone now.
+    filled: int
+    # Sent before, or the dial had its outcome already.
+    already: int
+    # No dial of this seller at that time, two at once, or too old.
+    unmatched: int
+    calls: tuple[FilledCall, ...] = ()
 
 
 class SeedCommand(Command):

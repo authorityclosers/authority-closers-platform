@@ -9,9 +9,29 @@ vi.mock("./leads-client", async (original) => ({
   previewImport: (...args: unknown[]) => previewImport(...args),
   commitImport: (...args: unknown[]) => commitImport(...args),
   readTeam: async () => ({
+    // Sellers who take new leads, and an owner who doesn't (owner, 2 Nov 2026).
     reps: [
-      { person_id: "p1", name: "Asha Example", open_leads: 0, max_open: null },
-      { person_id: "p2", name: "Ravi Sample", open_leads: 0, max_open: null },
+      {
+        person_id: "p1",
+        name: "Asha Example",
+        open_leads: 0,
+        max_open: null,
+        available: true,
+      },
+      {
+        person_id: "p2",
+        name: "Ravi Sample",
+        open_leads: 0,
+        max_open: null,
+        available: true,
+      },
+      {
+        person_id: "p0",
+        name: "Owner Example",
+        open_leads: 0,
+        max_open: null,
+        available: false,
+      },
     ],
   }),
 }));
@@ -40,7 +60,7 @@ import { ImportDialog } from "./capture-dialogs";
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 // Competitor teardown 5 (1 Nov 2026): the import in four steps, File, Columns,
-// Check and Who gets them, with the check before anything is written. A file
+// Check and Assign, with the check before anything is written. A file
 // whose columns didn't all match starts on Columns, each with three of its
 // values. Made-up people only.
 let root: Root;
@@ -117,7 +137,7 @@ const current = (dialog: HTMLElement) =>
   dialog.querySelector('[aria-label="Import steps"] [aria-current="step"]')
     ?.textContent;
 
-it("walks File, Columns, Check and Who gets them, and imports with the choices made", async () => {
+it("walks File, Columns, Check and Assign, and imports with the choices made", async () => {
   const dialog = await mount();
   expect(current(dialog)).toBe("2Columns");
   // Three of each matched column's values under it.
@@ -146,7 +166,9 @@ it("walks File, Columns, Check and Who gets them, and imports with the choices m
   expect(dialog.querySelector('[data-duplicates="fill"]')).not.toBeNull();
 
   await act(async () => button(dialog, "Change")!.click());
-  expect(current(dialog)).toBe("4Who gets them");
+  expect(current(dialog)).toBe("4Assign");
+  // Shared between the sellers only: the owner isn't one.
+  expect(dialog.textContent).not.toContain("Owner Example");
   await act(async () => button(dialog, "Back")!.click());
   expect(current(dialog)).toBe("3Check");
 
