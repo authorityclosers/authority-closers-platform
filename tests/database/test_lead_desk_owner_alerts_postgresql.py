@@ -164,7 +164,17 @@ def test_owner_alerts_list_words_and_summary(postgres_harness: Any, tmp_path: Pa
             assert await pushed(here, evening + timedelta(minutes=10)) == []  # once a day
             page = await here.client.get(f"{BASE}/owner-alerts/summary")
             assert page.status_code == 200, page.text
-            assert set(page.json()["totals"]) == {"sellers", "tried", "connected", "wins"}
+            # With the calls whose outcome is unknown, and the notes and messages beside
+            # the calls (owner and Dipak, 2 Nov 2026).
+            assert set(page.json()["totals"]) == {
+                "sellers",
+                "tried",
+                "connected",
+                "wins",
+                "unknown",
+                "notes",
+                "messages",
+            }
             test = await here.client.post(f"{BASE}/owner-alerts/summary/test", headers=WRITE)
             assert test.status_code == 200, test.text
             assert test.json()["phones"] == 1

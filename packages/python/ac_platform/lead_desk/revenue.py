@@ -326,7 +326,7 @@ async def _not_set(
 
 async def _counts(desk: LeadDesk, start: datetime, end: datetime) -> Counts:
     """Calls, connected calls, interested leads, meetings and wins: the whole workspace."""
-    from ac_platform.lead_desk.store import call_answered, call_out
+    from ac_platform.lead_desk.store import call_answered, call_out, outcome_known
 
     # Every seller's "what it takes" uses the whole workspace's rates: only totals leave here,
     # never a call, so they come straight from the call events, not the team's feed.
@@ -346,7 +346,9 @@ async def _counts(desk: LeadDesk, start: datetime, end: datetime) -> Counts:
     ).all():
         if not isinstance(data, dict) or data.get("for_call") or data.get("simulated"):
             continue
-        if call_out(data):
+        # A call whose outcome the phone never told us leaves the rates alone: it is
+        # neither connected nor not (owner and Dipak, 2 Nov 2026).
+        if call_out(data) and (call_answered(data) or outcome_known(data)):
             calls += 1
             connected += call_answered(data)
     moves = (

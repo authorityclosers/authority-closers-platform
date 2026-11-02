@@ -159,6 +159,17 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Each seller's call numbers open their calls (owner, 2 Nov 2026), with a
+   finger-sized target that keeps the line's height. */
+.figures a {
+  padding-block: 12px;
+  margin-block: -12px;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, currentColor 35%, transparent);
+  text-underline-offset: 3px;
+}
+
 .figures [data-tone="warn"] {
   color: var(--lx-danger);
 }

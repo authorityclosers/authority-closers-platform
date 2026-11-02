@@ -491,3 +491,83 @@ def test_the_desk_carries_inbound_and_cold_apart(postgres_harness: Any, tmp_path
             assert inbound["counts"]["open_leads"] == cool["counts"]["open_leads"] == 1
 
     run(exercise())
+
+
+def test_a_call_whose_outcome_the_phone_never_said_is_neither(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Owner and Dipak, 2 Nov 2026: a seller's Home said "36 tried, 1 connected, talk 1 min"
+    when the phone never said how 35 Call-button dials went. Such a dial is counted apart,
+    never as not connected; its seller's "We didn't talk" makes its outcome known; talk time
+    says what the phone's recordings measured; notes and messages count beside the calls; and
+    the day's calls read (Calls opened from a number) gives each call's outcome and where its
+    seconds came from."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            first = await here.add("Fictional Outcome One", "98760 67041")
+            second = await here.add("Fictional Outcome Two", "98760 67042")
+            now = datetime.now(UTC)
+            # Just after midnight India time the earlier events are yesterday's.
+            if (now - timedelta(minutes=25)).astimezone(IST).date() != now.astimezone(IST).date():
+                return
+            dial = {
+                "submission_id": None,
+                "simulated": False,
+                "duration_seconds": 45,
+                "sample": None,
+                "estimated": True,
+            }
+            async with here.setup.sessions() as db, db.begin():
+
+                def event(lead: str, kind: str, minutes: int, data: dict[str, Any]) -> None:
+                    db.add(
+                        LeadEvent(
+                            id=uuid4(),
+                            tenant_id=here.tenant_id,
+                            lead_id=UUID(lead),
+                            kind=kind,
+                            actor_person_id=here.seller.person_id,
+                            data=data,
+                            created_at=now - timedelta(minutes=minutes),
+                        )
+                    )
+
+                # A dial nobody said anything about, and one its seller said didn't connect.
+                event(first, "call", 20, dial)
+                event(second, "call", 10, dial)
+                event(second, "result", 9, {"connected": False})
+                # A call the phone recorded, 77 s.
+                event(
+                    first,
+                    "call",
+                    5,
+                    {"via": "dialler_recording", "duration_seconds": 77, "connected": True},
+                )
+                event(first, "note", 4, {"note": "Wants the brochure"})
+                event(second, "message", 3, {"channel": "whatsapp"})
+            numbers = (await here.client.get(f"{BASE}")).json()["numbers"]
+            assert numbers["calls"] == 3, numbers
+            assert numbers["connected"] == 1 and numbers["unknown"] == 1, numbers
+            assert numbers["not_connected"] == 1, numbers
+            assert numbers["talk_seconds"] == 77 == numbers["talk_recorded_seconds"], numbers
+            assert numbers["notes"] == 1 and numbers["messages"] == 1, numbers
+            page = (
+                await here.client.get(f"{BASE}/activity", params={"day": "today", "kind": "call"})
+            ).json()
+            assert {item["event"]["kind"] for item in page["items"]} == {"call"}
+            assert {item["side"] for item in page["items"]} == {"inbound"}
+            assert sorted(
+                (
+                    item["event"]["outcome"],
+                    item["event"]["seconds_from"],
+                    item["event"]["duration_seconds"],
+                )
+                for item in page["items"]
+            ) == [
+                ("connected", "recording", 77),
+                ("not_connected", None, None),
+                ("unknown", None, None),
+            ]
+
+    run(exercise())

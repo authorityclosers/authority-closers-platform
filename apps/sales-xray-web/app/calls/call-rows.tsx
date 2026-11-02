@@ -28,7 +28,9 @@ import { handOverLead } from "../leads/lead-handoff";
 import {
   LeadsError,
   readActivity,
+  readDayCalls,
   type ActivityItem,
+  type ActivityPage,
   type LeadEvent,
 } from "../leads/leads-client";
 import { clockTime } from "../leads/phone-call-text";
@@ -36,12 +38,21 @@ import { useAppRouter } from "../shell/app-router";
 import { Avatar } from "../ui/kit";
 import styles from "./phone-calls.module.css";
 
-/** "You called · 3:12", "They called · 1:05", "Missed call": the seller's side. */
-export function callLine(event: LeadEvent): string {
+/** "You called · 3:12", "They called · 1:05", "Missed call": the seller's
+ *  side. Where the seconds came from when the read says, and "outcome
+ *  unknown" when the phone never said how a dial went (owner and Dipak, 2 Nov
+ *  2026). `caller`: who made a call out. */
+export function callLine(event: LeadEvent, caller = "You"): string {
   const talk = event.duration_seconds ? clockTime(event.duration_seconds) : "";
+  const from =
+    event.seconds_from === "recording"
+      ? " from the phone's recording"
+      : event.seconds_from === "call_log"
+        ? " from call history"
+        : "";
   switch (event.direction) {
     case "incoming":
-      return talk ? `They called · ${talk}` : "They called";
+      return talk ? `They called · ${talk}${from}` : "They called";
     case "missed":
       return "Missed call";
     case "rejected":
@@ -50,8 +61,12 @@ export function callLine(event: LeadEvent): string {
       return "Blocked call";
     default:
       if (event.simulated) return "Sample call";
-      if (talk) return `You called · ${talk}`;
-      return event.via === "phone" ? "You called · no answer" : "You called";
+      if (event.outcome === "unknown")
+        return `${caller} called · outcome unknown`;
+      if (talk) return `${caller} called · ${talk}${from}`;
+      return event.via === "phone" || event.outcome === "not_connected"
+        ? `${caller} called · no answer`
+        : `${caller} called`;
   }
 }
 
@@ -135,6 +150,62 @@ export function rowFromActivity(item: ActivityItem): CallRow {
   };
 }
 
+/** A seller's or the team's call: who made it, by their first name. */
+export function rowFromTheirs(item: ActivityItem): CallRow {
+  const caller = item.event.actor_name
+    ? displayName(item.event.actor_name).split(" ")[0]
+    : "A seller";
+  return { ...rowFromActivity(item), line: callLine(item.event, caller) };
+}
+
+/** Calls opened from a number (owner, 2 Nov 2026): one day's calls, the
+ *  viewer's own, a seller's or the team's, one side's, with one outcome. */
+export type CallsFilter = {
+  day: "today" | "yesterday";
+  person: string | null;
+  team: boolean;
+  side: "inbound" | "cold" | null;
+  outcome: "connected" | "not_connected" | "unknown" | "known" | null;
+};
+
+const OUTCOMES = ["connected", "not_connected", "unknown", "known"] as const;
+
+/** The filter in Calls' address, or null without one (the week's calls). */
+export function callsFilter(params: URLSearchParams): CallsFilter | null {
+  const day = params.get("day");
+  if (day !== "today" && day !== "yesterday") return null;
+  const side = params.get("side");
+  const outcome = params.get("outcome");
+  return {
+    day,
+    person: params.get("person"),
+    team: params.get("team") === "1",
+    side: side === "cold" || side === "inbound" ? side : null,
+    outcome: OUTCOMES.find((value) => value === outcome) ?? null,
+  };
+}
+
+/** Whether the filter counts this call. */
+export function inFilter(item: ActivityItem, filter: CallsFilter): boolean {
+  if (filter.side && item.side && item.side !== filter.side) return false;
+  const outcome = item.event.outcome;
+  if (filter.outcome === "known") return outcome !== "unknown";
+  return filter.outcome === null || outcome === filter.outcome;
+}
+
+const OUTCOME_WORDS: Record<NonNullable<CallsFilter["outcome"]>, string> = {
+  connected: "connected",
+  not_connected: "not connected",
+  unknown: "outcome unknown",
+  known: "outcome known",
+};
+
+/** "Today's calls · outcome unknown". */
+export function filterTitle(filter: CallsFilter): string {
+  const day = filter.day === "today" ? "Today's calls" : "Yesterday's calls";
+  return filter.outcome ? `${day} · ${OUTCOME_WORDS[filter.outcome]}` : day;
+}
+
 export function rowFromSaved(call: LibrarySubmission): CallRow {
   const talk = call.durationSeconds > 0 ? clockTime(call.durationSeconds) : "";
   return {
@@ -187,13 +258,46 @@ export type WeekActivity =
   // Outside an organisation, or signed out.
   | { status: "off" };
 
-/** This week's own work (My work's read), once per mount, with a retry. */
-export function useWeekActivity(): [WeekActivity, () => void] {
+/** A day's calls, every page of them (a team's day can run past one). */
+async function dayCalls(
+  filter: CallsFilter,
+  signal: AbortSignal,
+): Promise<ActivityPage> {
+  const items: ActivityItem[] = [];
+  let before: string | null = null;
+  for (let page = 0; page < 5; page += 1) {
+    const read: ActivityPage = await readDayCalls(
+      filter.day,
+      filter,
+      before,
+      signal,
+    );
+    if (Array.isArray(read?.items)) items.push(...read.items);
+    before = read?.next_before ?? null;
+    if (!before) break;
+  }
+  return { items, next_before: before, counts: {} };
+}
+
+/** This week's own work (My work's read), once per mount, with a retry;
+ *  with a filter, that day's calls (Calls opened from a number). */
+export function useWeekActivity(
+  filter: CallsFilter | null = null,
+): [WeekActivity, () => void] {
   const [state, setState] = useState<WeekActivity>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
+  const day = filter?.day;
+  const person = filter?.person ?? null;
+  const team = filter?.team ?? false;
   useEffect(() => {
     const controller = new AbortController();
-    readActivity("week", null, controller.signal).then(
+    (day
+      ? dayCalls(
+          { day, person, team, side: null, outcome: null },
+          controller.signal,
+        )
+      : readActivity("week", null, controller.signal)
+    ).then(
       (page) =>
         setState({
           status: "ready",
@@ -212,7 +316,7 @@ export function useWeekActivity(): [WeekActivity, () => void] {
       },
     );
     return () => controller.abort();
-  }, [attempt]);
+  }, [attempt, day, person, team]);
   const retry = useCallback(() => {
     setState({ status: "loading" });
     setAttempt((value) => value + 1);

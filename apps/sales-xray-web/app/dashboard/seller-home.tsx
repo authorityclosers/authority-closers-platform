@@ -48,6 +48,7 @@ import {
   type TaskSnoozeChoice,
   type ListedTask,
 } from "../leads/leads-client";
+import { callLogStatus, inPhoneApp } from "../leads/native-phone";
 import { notify } from "../notice-center";
 import { SideSelector, type Side } from "../ui/side-selector";
 import { retryHome } from "./home-load";
@@ -863,6 +864,23 @@ export function UpcomingFollowUps({
 }
 
 /** 6. One compact row of today's numbers on this side (items 31-35). */
+/** Whether this phone app reads its call history: false in an app version
+ *  that can't yet; null in a browser, or until the phone answers. */
+function useCallHistory(): boolean | null {
+  const [readable, setReadable] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!inPhoneApp()) return;
+    let alive = true;
+    void callLogStatus().then((status) => {
+      if (alive) setReadable(status !== null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return readable;
+}
+
 export function TodayPerformance({
   side,
   own,
@@ -871,16 +889,36 @@ export function TodayPerformance({
   own: HomeSide | null;
 }) {
   const numbers = own?.numbers;
-  const calls = `/analysis/calls?day=today${side === "cold" ? "&side=cold" : ""}`;
+  const readable = useCallHistory();
+  const calls = `/analysis/calls?day=today&side=${side}`;
+  // A call whose outcome the phone never told us is neither connected nor
+  // not, and talk time says what measured it (owner and Dipak, 2 Nov 2026);
+  // every number opens the calls it counts.
+  const unknown = numbers?.unknown ?? 0;
+  const talked = numbers?.talk_seconds ?? 0;
+  const recorded = numbers?.talk_recorded_seconds;
   const figures = [
     { label: "Tried", value: numbers?.calls, href: calls },
+    unknown && numbers
+      ? {
+          label: "Outcome known",
+          value: numbers.calls - unknown,
+          href: `${calls}&outcome=known`,
+        }
+      : {
+          label: "Connected",
+          value: numbers?.connected,
+          href: `${calls}&outcome=connected`,
+        },
     {
-      label: "Connected",
-      value: numbers?.connected,
-      href: `${calls}&outcome=connected`,
-    },
-    {
-      label: "Talk time",
+      label:
+        !talked || recorded === undefined
+          ? "Talk time"
+          : recorded === talked
+            ? "Talk · recordings"
+            : recorded
+              ? "Talk time"
+              : "Talk · call history",
       value: numbers
         ? talkOrDash(
             numbers.talk_seconds,
@@ -888,7 +926,7 @@ export function TodayPerformance({
             (seconds) => breakLength(Math.round(seconds / 60)),
           )
         : null,
-      href: "/growth",
+      href: `${calls}&outcome=connected`,
     },
     {
       label: "F/U done",
@@ -914,6 +952,11 @@ export function TodayPerformance({
           </li>
         ))}
       </ul>
+      {unknown && readable === false ? (
+        <p className={styles.quiet}>
+          Call history isn&apos;t available in this app version yet
+        </p>
+      ) : null}
     </section>
   );
 }

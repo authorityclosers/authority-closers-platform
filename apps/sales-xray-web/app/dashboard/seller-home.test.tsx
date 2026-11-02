@@ -19,7 +19,7 @@ vi.mock("next/link", () => ({
 
 import type { HomeSide } from "./my-day-client";
 import { SalesHome } from "./sales-home";
-import { NextCall } from "./seller-home";
+import { NextCall, TodayPerformance } from "./seller-home";
 import { takeHandedLead } from "../leads/lead-handoff";
 
 (
@@ -565,4 +565,32 @@ it("waits for the seller's sides before drawing Today, so nothing moves", async 
     await act(async () => Promise.resolve());
   expect(host.querySelector('[data-area="side"]')).not.toBeNull();
   expect(host.querySelector('[data-area="cards"]')).not.toBeNull();
+});
+
+it("never counts a call whose outcome the phone never said, and each number opens its calls", async () => {
+  // Owner and Dipak, 2 Nov 2026: 36 calls, 35 Call-button dials the phone never
+  // matched, one recorded call of 77 s.
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  const own = {
+    numbers: {
+      ...numbers(36, 1, 77, 0),
+      unknown: 35,
+      talk_recorded_seconds: 77,
+    },
+  } as unknown as HomeSide;
+  await act(async () =>
+    root.render(<TodayPerformance side="cold" own={own} />),
+  );
+  const figures = Array.from(host.querySelectorAll("li a"), (link) => [
+    link.textContent,
+    link.getAttribute("href"),
+  ]);
+  const calls = "/analysis/calls?day=today&side=cold";
+  expect(figures[0]).toEqual(["36Tried", calls]);
+  expect(figures[1]).toEqual(["1Outcome known", `${calls}&outcome=known`]);
+  expect(figures[2]?.[0]).toContain("Talk · recordings");
+  expect(figures[2]?.[1]).toBe(`${calls}&outcome=connected`);
+  expect(host.textContent).not.toContain("Connected");
 });
