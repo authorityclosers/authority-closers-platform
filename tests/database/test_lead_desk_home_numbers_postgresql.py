@@ -57,7 +57,9 @@ def test_yesterday_the_week_and_the_team_pool(postgres_harness: Any, tmp_path: P
                         )
                     )
             desk = (await here.client.get(f"{BASE}")).json()
-            assert desk["numbers"]["calls"] == 1 and desk["numbers"]["connected"] == 1
+            # The dial today: its "We talked" alone connects nothing (3 Nov 2026).
+            assert desk["numbers"]["calls"] == 1 and desk["numbers"]["connected"] == 0
+            assert desk["numbers"]["unknown"] == 1
             assert desk["numbers_yesterday"]["calls"] == 1
             assert desk["numbers_yesterday"]["follow_ups_done"] == 1
             assert desk["numbers_week"]["calls"] == 2
@@ -169,10 +171,12 @@ def test_numbers_count_the_calls_recent_calls_lists(postgres_harness: Any, tmp_p
             desk = (await here.client.get(f"{BASE}")).json()
             week = desk["numbers_week"]
             assert week["calls"] == 3, week
-            assert week["connected"] == 2 and week["not_connected"] == 1, week
-            # Talk time is the phone's own; the app's dial is time away, an estimate.
+            # The dial's answer said they talked, and the phone never said: unknown.
+            assert week["connected"] == 1 and week["not_connected"] == 1, week
+            assert week["unknown"] == 1, week
+            # Talk time is the phone's own; the app's dial is time away, never talk.
             assert week["talk_seconds"] == 120, week
-            assert week["talk_estimated_seconds"] == 95, week
+            assert week["talk_estimated_seconds"] == 0, week
             assert week["follow_ups_done"] == 2, week
             # Another person's numbers never count these calls.
             here.as_admin()

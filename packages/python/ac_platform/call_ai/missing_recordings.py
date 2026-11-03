@@ -84,7 +84,7 @@ class Today:
 def tally(rows: Any, recorded: set[str], now: datetime) -> Today:
     """From the calls Home lists (``LeadDesk._call_rows``): tried per seller, and the
     connected ones that ended two minutes ago with no recording attached."""
-    from ac_platform.lead_desk.store import call_answered, call_out, call_seconds
+    from ac_platform.lead_desk.store import TALKED, call_answered, call_out, call_seconds
 
     tried: Counter[UUID] = Counter()
     items: list[MissingCall] = []
@@ -96,7 +96,8 @@ def tally(rows: Any, recorded: set[str], now: datetime) -> Today:
         tried[row.actor] += 1
         if (
             str(row.event_id) in recorded
-            or not call_answered(row.data)
+            # "We talked" still expects its recording, though it isn't Connected alone.
+            or not (call_answered(row.data) or row.data.get(TALKED) is True)
             or not is_missing(row.at, row.data, now)
         ):
             continue

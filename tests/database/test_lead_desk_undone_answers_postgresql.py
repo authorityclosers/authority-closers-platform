@@ -1,9 +1,9 @@
 """An undone answer counts nowhere, on PostgreSQL (hardcore phone QA ph1-40 and ph1-41, 1 Nov
 2026: Home's 7 days rose by two while Cold today said Connected 0, one of the two "We talked"
-answers undone; Growth said To Interested 1 beside Leads reached 0). A Call-button dial whose "We
-talked" was undone is a call nobody answered, and the lead it moved to Interested moved nowhere:
-on Home, each side's day, Growth, Home's outcomes and Reports' first talk. The call itself stays
-a call. An answer logged without a call is a call, reached when they talked (ph1-58).
+answers undone; Growth said To Interested 1 beside Leads reached 0). The lead a Call-button
+dial's undone "We talked" moved to Interested moved nowhere: on Growth, Home's outcomes and
+Reports' first talk. The call itself stays a call, and its "We talked" alone leaves it
+outcome-unknown, done or undone (3 Nov 2026). An answer saved without a call is no call.
 Made-up people only."""
 
 from __future__ import annotations
@@ -64,16 +64,16 @@ def test_an_undone_answer_counts_nowhere(postgres_harness: Any, tmp_path: Path) 
             assert chat.status_code == 200, chat.text
 
             desk = await read(here, "")
-            # The Cold dial and the Inbound answer logged without a call (ph1-58).
-            assert pick(desk["numbers"], "calls", "connected") == (2, 2)
-            assert pick(desk["sides"]["cold"]["numbers"], "calls", "connected") == (1, 1)
+            # The Cold dial alone is a call; its "We talked" alone connects nothing.
+            assert pick(desk["numbers"], "calls", "connected", "unknown") == (1, 0, 1)
+            assert pick(desk["sides"]["cold"]["numbers"], "calls", "connected") == (1, 0)
             effort = await read(here, "/performance/sellers?days=1")
             keys = ("attempted", "connected", "reached", "interested")
-            assert pick(effort["cold"], *keys) == (1, 1, 1, 1)
-            # Logged without a call from the app: a call, connected and reached (ph1-58).
-            assert pick(effort["inbound"], *keys) == (1, 1, 1, 1)
+            assert pick(effort["cold"], *keys) == (1, 0, 0, 1)
+            # Interested without a call from the app: no call, so not reached.
+            assert pick(effort["inbound"], *keys) == (0, 0, 0, 1)
             outcomes = (await read(here, "/reports/performance?days=1", admin=True))["current"]
-            assert pick(outcomes, "calls", "connected", "interested") == (2, 2, 2)
+            assert pick(outcomes, "calls", "connected", "interested") == (1, 0, 2)
             talked = (await read(here, "/reports/pipeline?days=30", admin=True))["first_connect"]
 
             # The seller undoes the Cold answer.
@@ -86,13 +86,13 @@ def test_an_undone_answer_counts_nowhere(postgres_harness: Any, tmp_path: Path) 
             assert undone.status_code == 200, undone.text
 
             desk = await read(here, "")
-            assert pick(desk["numbers"], "calls", "connected") == (2, 1)
+            assert pick(desk["numbers"], "calls", "connected", "unknown") == (1, 0, 1)
             assert pick(desk["sides"]["cold"]["numbers"], "calls", "connected") == (1, 0)
             effort = await read(here, "/performance/sellers?days=1")
             assert pick(effort["cold"], *keys) == (1, 0, 0, 0)
-            assert pick(effort["inbound"], *keys) == (1, 1, 1, 1)
+            assert pick(effort["inbound"], *keys) == (0, 0, 0, 1)
             outcomes = (await read(here, "/reports/performance?days=1", admin=True))["current"]
-            assert pick(outcomes, "calls", "connected", "interested") == (2, 1, 1)
+            assert pick(outcomes, "calls", "connected", "interested") == (1, 0, 1)
             after = (await read(here, "/reports/pipeline?days=30", admin=True))["first_connect"]
             assert after["passed"] == talked["passed"] - 1
 

@@ -575,14 +575,12 @@ def dial_placed(data: Mapping[str, Any], at: datetime, synced_at: datetime | Non
 
 
 def call_answered(data: Mapping[str, Any]) -> bool:
-    """Connected, one rule with the lead's own story (phone personas, 1 Nov 2026): talk seconds
-    the phone measured, the phone's log said so, a transcript (the call's recording), or the
-    seller's "We talked" right after a Call-button dial. A dial's time away is none of these."""
+    """Connected, by the phone's own evidence alone (Dipak's honest numbers, the orchestrator,
+    3 Nov 2026): talk seconds the phone measured, the phone's log said so, or a transcript (the
+    call's recording). The seller's "We talked" alone is not (a back-out from the dialler
+    answered "We talked" read Connected), and a dial's time away is none of these."""
     return (
-        call_seconds(data) > 0
-        or data.get("connected") is True
-        or bool(data.get("submission_id"))
-        or data.get(TALKED) is True
+        call_seconds(data) > 0 or data.get("connected") is True or bool(data.get("submission_id"))
     )
 
 
@@ -590,13 +588,14 @@ def outcome_known(data: Mapping[str, Any]) -> bool:
     """Whether we know how a call went (owner and Dipak, 2 Nov 2026: 35 Call-button dials
     counted as "not connected" when the phone never said). A call the phone logged or
     recorded, or the seller logged, always says; a Call-button dial only once its phone's
-    call log matched it, its recording came in or its seller answered whether they
-    talked. An unknown outcome is neither connected nor not connected."""
+    call log matched it, its recording came in or its seller answered that they didn't
+    talk. "We talked" alone leaves it unknown until the phone times it (3 Nov 2026). An
+    unknown outcome is neither connected nor not connected."""
     if not is_dial(data):
         return True
     return (
         PHONE_SECONDS in data
-        or TALKED in data
+        or data.get(TALKED) is False
         or bool(data.get("submission_id"))
         or bool(data.get("recording"))
     )
@@ -680,9 +679,6 @@ TALKED = "talked"
 # Read beside a dial its phone timed from a recording (never saved): where the phone's
 # seconds came from (the capture session's reconcile, 3 Nov 2026).
 TIMED_BY = "timed_by"
-# Read as a call, never saved as one: an after-call answer with no call of its own
-# ("Called from another phone? Log a call"; phone QA ph1-58, 1 Nov 2026).
-LOGGED_CALL = "logged"
 # The after-call answer that belongs to a dial comes within this of it.
 DIAL_ANSWER = timedelta(minutes=30)
 # How long the seller who saved a call's answer may undo it (undo_result).
@@ -1507,9 +1503,9 @@ class LeadDesk:
         past day counts the same way; nothing is rewritten.
 
         Attempted: every call out: placed in the app (it has no direction), logged by
-        the phone or recorded; an after-call answer saved with no call of its own (Log a
-        call) too (_logged_calls). Connected: those answered (talk time above 0, or the
-        answer said they talked). Not
+        the phone or recorded; an after-call answer saved with no call of its own is none
+        (3 Nov 2026). Connected: those answered by the phone's own evidence (call_answered).
+        Unknown: a dial the phone never said about. Not
         connected: the rest. Talk time: the connected calls' seconds. Follow-ups done:
         calls out to a lead that was past New then. A call the seller made private
         (a personal call) stays out, as it does from the lead's calls. A phone or
@@ -1586,87 +1582,9 @@ class LeadDesk:
             for row in beside
             if dial_placed(row.data, row.at, synced.get(row.actor) if row.actor else None)
         ]
-        # An answer saved with no call of its own is a call too (ph1-58).
-        logged = await self._logged_calls(start, end, placed, person=person, team=team)
-        if not logged:
-            return placed
-        return sorted([*placed, *logged], key=lambda row: row.at, reverse=True)
-
-    async def _logged_calls(
-        self,
-        start: datetime,
-        end: datetime,
-        calls: Sequence[CallRow],
-        *,
-        person: UUID | None = None,
-        team: bool = False,
-    ) -> list[CallRow]:
-        """After-call answers saved with no call of their own ("Called from another phone? Log
-        a call"), read as calls out: connected when the answer says they talked (phone QA
-        ph1-58, 1 Nov 2026: two logged "We talked" counted nowhere, on Home, Growth or the
-        day's summary). An answer from just before a call to half an hour after it, by the
-        same person on the same lead, is that call's; an undone answer is none (ph1-40)."""
-        from ac_platform.lead_desk.activity_summary import activity_window
-
-        joined = and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id)
-        answers = (
-            await self.db.execute(
-                select(
-                    LeadEvent.id,
-                    LeadEvent.actor_person_id,
-                    LeadEvent.lead_id,
-                    LeadEvent.created_at,
-                    LeadEvent.data,
-                    Lead.pipeline,
-                )
-                .join(Lead, joined)
-                .where(
-                    *activity_window(self, start, end, person=person, team=team),
-                    LeadEvent.kind == "result",
-                    not_undone(),
-                )
-                .order_by(LeadEvent.created_at.desc())
-                .limit(CALL_ROWS)
-            )
-        ).all()
-        if not answers:
-            return []
-        made: dict[tuple[UUID | None, UUID], list[datetime]] = {}
-        for row in calls:
-            made.setdefault((row.actor, row.lead_id), []).append(row.at)
-        # A call just before the window still owns its answer.
-        for actor, lead_id, at in (
-            await self.db.execute(
-                select(LeadEvent.actor_person_id, LeadEvent.lead_id, LeadEvent.created_at).where(
-                    LeadEvent.tenant_id == self.tenant_id,
-                    LeadEvent.kind == "call",
-                    LeadEvent.created_at >= start - DIAL_ANSWER,
-                    LeadEvent.created_at < start,
-                    LeadEvent.lead_id.in_(list({answer.lead_id for answer in answers})),
-                )
-            )
-        ).tuples():
-            made.setdefault((actor, lead_id), []).append(at)
-        return [
-            CallRow(
-                event_id,
-                actor,
-                lead_id,
-                at,
-                {
-                    "via": LOGGED_CALL,
-                    "direction": "outgoing",
-                    "connected": isinstance(data, dict) and data.get("connected") is True,
-                    "duration_seconds": 0,
-                },
-                lead_side(pipeline),
-            )
-            for event_id, actor, lead_id, at, data, pipeline in answers
-            if not any(
-                call - DIAL_MATCH <= at <= call + DIAL_ANSWER
-                for call in made.get((actor, lead_id), ())
-            )
-        ]
+        # An answer saved with no call of its own is no call (the orchestrator, 3 Nov 2026:
+        # Attempted counts call events only, so it equals what Calls lists).
+        return placed
 
     async def _phones_synced(self) -> dict[UUID, datetime]:
         """When each seller's phone last sent its call history (_phone_seen), read only."""
@@ -2474,14 +2392,6 @@ class LeadDesk:
                 today_counts["call"] = today_counts.get("call", 0) - 1
             if at >= week_start:
                 week_counts["call"] = week_counts.get("call", 0) - 1
-        # An answer saved with no call of its own is a call too, as on Home (ph1-58).
-        for row in placed:
-            if row.data.get("via") == LOGGED_CALL:
-                counts["call"] = counts.get("call", 0) + 1
-                if row.at >= start:
-                    today_counts["call"] = today_counts.get("call", 0) + 1
-                if row.at >= week_start:
-                    week_counts["call"] = week_counts.get("call", 0) + 1
         today_counts["connected"] = sum(
             1 for row in placed if row.at >= start and call_answered(row.data)
         )
