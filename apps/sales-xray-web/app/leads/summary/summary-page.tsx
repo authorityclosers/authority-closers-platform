@@ -99,6 +99,11 @@ export function SummaryView() {
       </div>
     );
   const { summary } = read;
+  // Calls whose outcome the phone never told us are neither connected nor
+  // not; each seller's numbers open their calls (owner and Dipak, 2 Nov 2026).
+  const unknown = summary.totals.unknown ?? 0;
+  const calls = (person: string, outcome = "") =>
+    `/analysis/calls?day=today&person=${encodeURIComponent(person)}${outcome}`;
   return (
     <div className={styles.page}>
       <div className={styles.totals} aria-label="Today, the whole team">
@@ -107,8 +112,14 @@ export function SummaryView() {
           <strong>{COUNT.format(summary.totals.tried)}</strong>
         </div>
         <div>
-          <span>Connected</span>
-          <strong>{COUNT.format(summary.totals.connected)}</strong>
+          <span>{unknown ? "Outcome known" : "Connected"}</span>
+          <strong>
+            {COUNT.format(
+              unknown
+                ? summary.totals.tried - unknown
+                : summary.totals.connected,
+            )}
+          </strong>
         </div>
         <div>
           <span>Wins</span>
@@ -121,11 +132,27 @@ export function SummaryView() {
             <li key={seller.person_id}>
               <strong>{displayName(seller.name)}</strong>
               <span className={styles.figures}>
-                <span>{plural(seller.tried, "tried", "tried")}</span>
-                <span>
+                <Link href={calls(seller.person_id)}>
+                  {plural(seller.tried, "tried", "tried")}
+                </Link>
+                {seller.unknown ? (
+                  <Link href={calls(seller.person_id, "&outcome=known")}>
+                    outcome known for{" "}
+                    {COUNT.format(seller.tried - seller.unknown)}
+                  </Link>
+                ) : null}
+                <Link href={calls(seller.person_id, "&outcome=connected")}>
                   {plural(seller.connected, "connected", "connected")}
-                </span>
-                <span>{talk(seller.talk_seconds)} talk</span>
+                </Link>
+                <Link href={calls(seller.person_id, "&outcome=connected")}>
+                  {talk(seller.talk_seconds)} talk
+                </Link>
+                {seller.notes ? (
+                  <span>{plural(seller.notes, "note", "notes")}</span>
+                ) : null}
+                {seller.messages ? (
+                  <span>{plural(seller.messages, "message", "messages")}</span>
+                ) : null}
                 <span>
                   {plural(seller.follow_ups_done, "follow-up", "follow-ups")}
                 </span>

@@ -56,11 +56,24 @@ export type SummarySeller = {
   follow_ups_done: number;
   wins: number;
   no_recording: number;
+  /** Calls whose outcome the phone never told us (owner and Dipak, 2 Nov 2026). */
+  unknown?: number;
+  talk_recorded_seconds?: number;
+  notes?: number;
+  messages?: number;
 };
 export type DaySummary = {
   day: string;
   sellers: SummarySeller[];
-  totals: { sellers: number; tried: number; connected: number; wins: number };
+  totals: {
+    sellers: number;
+    tried: number;
+    connected: number;
+    wins: number;
+    unknown?: number;
+    notes?: number;
+    messages?: number;
+  };
 };
 
 export type TestSent = { phones: number; sent: number; ready: boolean };

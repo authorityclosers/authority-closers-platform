@@ -1,19 +1,22 @@
 "use client";
 
 /**
- * A seller's Home (Dipak's Home + Leads handoff, 31 Oct 2026, pages 4-5 and
- * 12, items 01-35): the work to do, not the history. Recent calls live in
- * Reports and on each lead. Each block below stands alone, in the handoff's
- * order:
- *  1. Inbound Leads | Cold Leads, only for someone with both; on Cold, a line
- *     when fresh inbound enquiries wait.
- *  2. Today: New leads (Inbound) or Unworked (Cold), Open leads, Follow-ups
- *     today (the side's own) and Tasks today (shared, never a call). Each
- *     card opens the exact Leads list it counts.
- *  3. Next to call: one customer, and Call now or Start cold calling.
+ * A seller's Home, as Dipak's picture (owner order, 2 Nov 2026,
+ * docs/handoffs/dipak-home-20261102): the work to do. Each block below stands
+ * alone, in the picture's order:
+ *  1. Inbound Leads | Cold Leads, only for someone with both, with one short
+ *     line under it; on Cold, one row when fresh inbound leads wait.
+ *  2. Today: New leads (Inbound) or Unworked leads (Cold), Open leads,
+ *     Follow-ups today (the side's own) and Tasks today (shared, never a
+ *     call), each with one caption. Each card opens the exact Leads list it
+ *     counts.
+ *  3. Next to call: one customer, and Call now or Start Cold Calling.
  *  4. Today's tasks: three at most, + Add, See all.
- *  5. Upcoming follow-ups: two at most, See all.
- *  6. Today's performance: one row (Tried, Connected, Talk time, F/U done).
+ *  5. Upcoming follow-ups: two at most, each with its call button, See all.
+ *  6. Recent calls: the last three, each with its outcome and time, never the
+ *     capture line (Calls has it, with its fix).
+ *  7. Today's performance: two by two (Attempted, Connected, Talk time,
+ *     Follow-ups done), each opening the calls or follow-ups it counts.
  * The desk carries both sides, so the selector switches with no second read.
  */
 
@@ -24,13 +27,20 @@ import {
   useEffect,
   useRef,
   useState,
-  type CSSProperties,
   type ReactNode,
 } from "react";
 
 import { displayName } from "../display-name";
 import { AddTaskSheet } from "../leads/add-task-sheet";
-import { useGo } from "../calls/call-rows";
+import {
+  CallRows,
+  outcomeLine,
+  rowFromActivity,
+  useGo,
+  useWeekActivity,
+  weekCalls,
+} from "../calls/call-rows";
+import { CallRowsSkeleton } from "../calls/phone-calls";
 import { FinishRow } from "../leads/finish-row";
 import {
   handOverAnswer,
@@ -48,19 +58,14 @@ import {
   type TaskSnoozeChoice,
   type ListedTask,
 } from "../leads/leads-client";
+import { callLogStatus, inPhoneApp } from "../leads/native-phone";
 import { notify } from "../notice-center";
 import { SideSelector, type Side } from "../ui/side-selector";
 import { retryHome } from "./home-load";
 import { LaterSheet, SwipeRow, type Later } from "./home-swipe";
 import { breakLength } from "./home-today";
-import {
-  Count,
-  MetricPager,
-  MoreFigures,
-  minutes,
-  share,
-} from "./metric-pager";
-import type { HomeBreak, HomeDesk, HomeSide } from "./my-day-client";
+import { Count } from "./metric-pager";
+import type { HomeDesk, HomeSide } from "./my-day-client";
 import styles from "./seller-home.module.css";
 import { talkOrDash } from "./talk-time";
 
@@ -251,13 +256,18 @@ export function SideBlock({
   const waiting = side === "cold" ? (inbound?.counts.new ?? 0) : 0;
   return (
     <>
-      <SideSelector value={side} onChange={onSide} />
+      <SideSelector value={side} onChange={onSide} tone="calm" />
+      <p className={styles.sideLine}>
+        {side === "cold"
+          ? "Your assigned cold prospecting database"
+          : "Your assigned inbound enquiries"}
+      </p>
       {waiting > 0 && own ? (
         <Link
           className={styles.alert}
           href={leadsHref("inbound", { view: "to_call", step: "new" })}
         >
-          {`${waiting} fresh inbound ${waiting === 1 ? "enquiry needs" : "enquiries need"} attention`}
+          {`${waiting} fresh inbound ${waiting === 1 ? "lead needs" : "leads need"} attention`}
           <ChevronRight size={16} aria-hidden="true" />
         </Link>
       ) : null}
@@ -270,19 +280,17 @@ export function TodayCards({
   side,
   own,
   tasks,
-  extras,
 }: {
   side: Side;
   own: HomeSide | null;
   tasks: number | null;
-  extras?: ReactNode;
 }) {
   const cold = side === "cold";
   const counts = own?.counts;
   const cards = [
     {
       key: "new",
-      label: cold ? "Unworked" : "New leads",
+      label: cold ? "Unworked leads" : "New leads",
       note: cold ? "Never attempted" : "First call pending",
       value: counts?.new,
       href: leadsHref(side, { view: "to_call", step: own?.new_key ?? "new" }),
@@ -291,8 +299,8 @@ export function TodayCards({
       key: "open",
       // The Open Leads stage, in words of its own: the open-lead limit counts
       // every open Inbound lead (ph1-33, 1 Nov 2026: 0 here beside 908 there).
-      label: "In discussion",
-      note: "Open Leads stage",
+      label: "Open leads",
+      note: "Needs further discussion",
       value: counts?.open_leads,
       href: leadsHref(side, {
         view: "all",
@@ -302,14 +310,14 @@ export function TodayCards({
     {
       key: "follow_ups",
       label: "Follow-ups today",
-      note: "Scheduled contacts",
+      note: "Scheduled for today",
       value: counts?.follow_ups_today,
       href: leadsHref(side, { view: "follow_ups", when: "today" }),
     },
     {
       key: "tasks",
       label: "Tasks today",
-      note: "Shared work list",
+      note: "All work types",
       value: tasks,
       href: "/leads?tab=tasks",
     },
@@ -318,84 +326,38 @@ export function TodayCards({
     <section className={styles.block} aria-labelledby="today-title">
       <Head id="today-title" title="Today">
         <span className={styles.sideWord}>
-          {cold ? "Cold work" : "Inbound work"}
+          {cold ? "Cold lead activity" : "Inbound lead activity"}
         </span>
-        {extras}
       </Head>
-      <MetricPager
-        label="Your numbers"
-        pages={[
-          {
-            key: "today",
-            label: "Your work",
-            content: (
-              <ul className={styles.cards}>
-                {cards
-                  // A card whose stage the organisation doesn't have is left
-                  // out, never a raw "open_leads" (phone personas, 31 Oct 2026).
-                  .filter(
-                    (card) =>
-                      !(own && card.key === "new" && own.new_key === null) &&
-                      !(own && card.key === "open" && own.open_key === null),
-                  )
-                  .map((card) => (
-                    <li key={card.key}>
-                      <Link
-                        className={styles.card}
-                        href={card.href}
-                        data-card={card.key}
-                        aria-description={card.note}
-                      >
-                        <span className={styles.cardLabel}>{card.label}</span>
-                        <strong aria-busy={card.value == null || undefined}>
-                          {card.value == null ? (
-                            " "
-                          ) : (
-                            <Count value={String(card.value)} />
-                          )}
-                        </strong>
-                      </Link>
-                    </li>
-                  ))}
-              </ul>
-            ),
-          },
-          {
-            key: "more",
-            label: "Your calls",
-            content: (
-              <MoreFigures
-                figures={[
-                  {
-                    label: "Connection rate",
-                    value: own
-                      ? share(own.numbers.connected, own.numbers.calls)
-                      : null,
-                  },
-                  {
-                    label: "Talk time",
-                    value: own
-                      ? talkOrDash(
-                          own.numbers.talk_seconds,
-                          own.numbers.talk_estimated_seconds,
-                          minutes,
-                        )
-                      : null,
-                  },
-                  {
-                    label: "Called today",
-                    value: own ? String(own.to_call_today.called) : null,
-                  },
-                  {
-                    label: "Follow-ups done",
-                    value: own ? String(own.numbers.follow_ups_done) : null,
-                  },
-                ]}
-              />
-            ),
-          },
-        ]}
-      />
+      <ul className={styles.cards}>
+        {cards
+          // A card whose stage the organisation doesn't have is left
+          // out, never a raw "open_leads" (phone personas, 31 Oct 2026).
+          .filter(
+            (card) =>
+              !(own && card.key === "new" && own.new_key === null) &&
+              !(own && card.key === "open" && own.open_key === null),
+          )
+          .map((card) => (
+            <li key={card.key}>
+              <Link
+                className={styles.card}
+                href={card.href}
+                data-card={card.key}
+              >
+                <span className={styles.cardLabel}>{card.label}</span>
+                <strong aria-busy={card.value == null || undefined}>
+                  {card.value == null ? (
+                    " "
+                  ) : (
+                    <Count value={String(card.value)} />
+                  )}
+                </strong>
+                <span className={styles.cardNote}>{card.note}</span>
+              </Link>
+            </li>
+          ))}
+      </ul>
     </section>
   );
 }
@@ -458,7 +420,7 @@ export function NextCall({ side, own }: { side: Side; own: HomeSide | null }) {
               {missed
                 ? `Call ${displayName(lead.name).split(" ")[0]} back`
                 : cold
-                  ? "Start cold calling"
+                  ? "Start Cold Calling"
                   : `Call ${displayName(lead.name).split(" ")[0]} now`}
             </Link>
           </>
@@ -470,97 +432,6 @@ export function NextCall({ side, own }: { side: Side; own: HomeSide | null }) {
           </p>
         )}
       </div>
-      {own && !cold ? (
-        <Countdown
-          left={own.to_call_today.left}
-          called={own.to_call_today.called}
-        />
-      ) : null}
-    </section>
-  );
-}
-
-const RING = 2 * Math.PI * 26;
-
-/** Today's countdown (Dipak, item 12): the leads still to call today, the
- *  ring filling as calls are made. */
-function Countdown({ left, called }: { left: number; called: number }) {
-  const whole = left + called;
-  const done = whole ? called / whole : 0;
-  return (
-    <div
-      className={styles.countdown}
-      role="img"
-      data-countdown=""
-      aria-label={`${left} left to call today, ${called} called`}
-    >
-      <svg viewBox="0 0 64 64" aria-hidden="true">
-        <circle className={styles.ringTrack} cx="32" cy="32" r="26" />
-        <circle
-          className={styles.ringDone}
-          cx="32"
-          cy="32"
-          r="26"
-          style={
-            {
-              "--ring": RING,
-              strokeDasharray: RING,
-              strokeDashoffset: RING * (1 - done),
-            } as CSSProperties
-          }
-        />
-      </svg>
-      <div className={styles.ringText} aria-hidden="true">
-        <strong>{left}</strong>
-        <span>left today</span>
-      </div>
-    </div>
-  );
-}
-
-const CLOCK_SHORT = new Intl.DateTimeFormat("en-IN", {
-  hour: "numeric",
-  minute: "2-digit",
-  timeZone: "Asia/Kolkata",
-});
-
-/** My three longest breaks today (Dipak, item 36): red when nobody set them. */
-export function LongestBreaks({
-  breaks,
-  calls = 1,
-}: {
-  breaks: readonly HomeBreak[] | null | undefined;
-  /** Today's calls: no break before the first one. */
-  calls?: number;
-}) {
-  return (
-    <section className={styles.block} aria-labelledby="breaks-title">
-      <Head id="breaks-title" title="Your longest breaks">
-        <Link className={styles.seeAll} href="/growth">
-          See all
-          <ChevronRight size={16} aria-hidden="true" />
-        </Link>
-      </Head>
-      {!calls ? (
-        <p className={styles.quiet}>No calls yet today.</p>
-      ) : breaks?.length ? (
-        <ul className={styles.breaks}>
-          {breaks.slice(0, 3).map((gap) => (
-            <li
-              key={gap.start}
-              data-red={!gap.planned || undefined}
-              title={gap.planned ? "Inside a set break" : "Not a set break"}
-            >
-              <span>
-                {`${CLOCK_SHORT.format(new Date(gap.start))} – ${CLOCK_SHORT.format(new Date(gap.end))}`}
-              </span>
-              <strong>{breakLength(gap.minutes)}</strong>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className={styles.quiet}>No breaks yet today.</p>
-      )}
     </section>
   );
 }
@@ -573,7 +444,6 @@ export function TodayTasks({
   onRetry,
   onAdded,
   title = "Today's tasks",
-  overdue = null,
   side = "inbound",
   onMoved,
 }: {
@@ -582,8 +452,6 @@ export function TodayTasks({
   side?: Side;
   /** A task moved to another time: read the list again. */
   onMoved?: () => void;
-  /** Tasks past their time, one tap from Tasks' Overdue. */
-  overdue?: number | null;
   failed: boolean;
   onDone: (task: ListedTask) => void;
   onRetry: () => void;
@@ -616,14 +484,6 @@ export function TodayTasks({
   return (
     <section className={styles.block} aria-labelledby="tasks-title">
       <Head id="tasks-title" title={title}>
-        {overdue ? (
-          <Link
-            className={styles.overdue}
-            href="/leads?tab=tasks&tasks=overdue"
-          >
-            {`${overdue} overdue`}
-          </Link>
-        ) : null}
         <button
           type="button"
           className={styles.addTask}
@@ -862,7 +722,65 @@ export function UpcomingFollowUps({
   );
 }
 
-/** 6. One compact row of today's numbers on this side (items 31-35). */
+/** 6. The last three calls, each with its outcome and time (Dipak's
+ *  picture): Calls has the rest. */
+export function RecentCalls() {
+  const [week, retry] = useWeekActivity();
+  const [now] = useState(() => new Date());
+  if (week.status === "off") return null;
+  const rows =
+    week.status === "ready"
+      ? weekCalls(week.items)
+          .slice(0, 3)
+          .map((item) => ({
+            ...rowFromActivity(item),
+            line: outcomeLine(item.event),
+            // Outcome and time only, never the capture line: Calls has it
+            // with its fix (production report 146).
+            talked: false,
+          }))
+      : [];
+  return (
+    <section className={styles.block} aria-labelledby="recent-title">
+      <Head id="recent-title" title="Recent calls">
+        <SeeAll href="/analysis/calls" />
+      </Head>
+      {week.status === "loading" ? (
+        <CallRowsSkeleton label="Recent calls" />
+      ) : week.status === "error" ? (
+        <p className={styles.quiet} role="alert">
+          Calls didn&apos;t load.{" "}
+          <button type="button" className={styles.retry} onClick={retry}>
+            Try again
+          </button>
+        </p>
+      ) : rows.length ? (
+        <CallRows rows={rows} now={now} label="Recent calls" days={false} />
+      ) : (
+        <p className={styles.quiet}>No calls yet this week.</p>
+      )}
+    </section>
+  );
+}
+
+/** 7. Today's numbers on this side, two by two (Dipak's picture). */
+/** Whether this phone app reads its call history: false in an app version
+ *  that can't yet; null in a browser, or until the phone answers. */
+function useCallHistory(): boolean | null {
+  const [readable, setReadable] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!inPhoneApp()) return;
+    let alive = true;
+    void callLogStatus().then((status) => {
+      if (alive) setReadable(status !== null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return readable;
+}
+
 export function TodayPerformance({
   side,
   own,
@@ -871,16 +789,36 @@ export function TodayPerformance({
   own: HomeSide | null;
 }) {
   const numbers = own?.numbers;
-  const calls = `/analysis/calls?day=today${side === "cold" ? "&side=cold" : ""}`;
+  const readable = useCallHistory();
+  const calls = `/analysis/calls?day=today&side=${side}`;
+  // A call whose outcome the phone never told us is neither connected nor
+  // not, and talk time says what measured it (owner and Dipak, 2 Nov 2026);
+  // every number opens the calls it counts.
+  const unknown = numbers?.unknown ?? 0;
+  const talked = numbers?.talk_seconds ?? 0;
+  const recorded = numbers?.talk_recorded_seconds;
   const figures = [
-    { label: "Tried", value: numbers?.calls, href: calls },
+    { label: "Attempted", value: numbers?.calls, href: calls },
+    unknown && numbers
+      ? {
+          label: "Outcome known",
+          value: numbers.calls - unknown,
+          href: `${calls}&outcome=known`,
+        }
+      : {
+          label: "Connected",
+          value: numbers?.connected,
+          href: `${calls}&outcome=connected`,
+        },
     {
-      label: "Connected",
-      value: numbers?.connected,
-      href: `${calls}&outcome=connected`,
-    },
-    {
-      label: "Talk time",
+      label:
+        !talked || recorded === undefined
+          ? "Talk time"
+          : recorded === talked
+            ? "Talk · recordings"
+            : recorded
+              ? "Talk time"
+              : "Talk · call history",
       value: numbers
         ? talkOrDash(
             numbers.talk_seconds,
@@ -888,10 +826,10 @@ export function TodayPerformance({
             (seconds) => breakLength(Math.round(seconds / 60)),
           )
         : null,
-      href: "/growth",
+      href: `${calls}&outcome=connected`,
     },
     {
-      label: "F/U done",
+      label: "Follow-ups done",
       value: numbers?.follow_ups_done,
       href: leadsHref(side, { view: "follow_ups", when: "today" }),
     },
@@ -904,16 +842,26 @@ export function TodayPerformance({
           <ChevronRight size={16} aria-hidden="true" />
         </Link>
       </Head>
-      <ul className={styles.figures}>
-        {figures.map((figure) => (
-          <li key={figure.label}>
-            <Link href={figure.href}>
-              <strong>{figure.value ?? " "}</strong>
-              <span>{figure.label}</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <div className={styles.figures}>
+        <p className={styles.figuresNote}>
+          {side === "cold" ? "Cold calls only" : "Inbound calls only"} · Today
+        </p>
+        <ul>
+          {figures.map((figure) => (
+            <li key={figure.label}>
+              <Link href={figure.href}>
+                <span>{figure.label}</span>
+                <strong>{figure.value ?? " "}</strong>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {unknown && readable === false ? (
+        <p className={styles.quiet}>
+          Call history isn&apos;t available in this app version yet
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -923,20 +871,17 @@ export function SellerBlocks({
   desk,
   side,
   onSide,
-  headerExtras,
   access: given,
 }: {
   desk: HomeDesk;
   side: Side;
   onSide: (side: Side) => void;
-  /** Taking new leads, and for owners the way back to the team's Home. */
-  headerExtras?: ReactNode;
   /** Which sides this seller works, when the page read them beside the desk. */
   access?: SidesAccess | null;
 }) {
   const fetched = useSidesAccess(given === undefined);
   const access = given === undefined ? fetched : given;
-  const { tasks, overdue, failed, reload, done } = useTaskList();
+  const { tasks, failed, reload, done } = useTaskList();
   // Only the type this seller works when they don't have both.
   const shown: Side =
     access && !access.inbound && access.cold
@@ -977,7 +922,6 @@ export function SellerBlocks({
           tasks={
             tasks ? tasks.filter((task) => task.status !== "done").length : null
           }
-          extras={headerExtras}
         />
       </div>
       <div data-area="next">
@@ -986,7 +930,6 @@ export function SellerBlocks({
       <div data-area="tasks">
         <TodayTasks
           tasks={tasks}
-          overdue={overdue}
           failed={failed}
           onDone={done}
           onRetry={reload}
@@ -998,11 +941,11 @@ export function SellerBlocks({
       <div data-area="follow">
         <UpcomingFollowUps side={shown} own={own} />
       </div>
+      <div data-area="recent">
+        <RecentCalls />
+      </div>
       <div data-area="perf">
         <TodayPerformance side={shown} own={own} />
-      </div>
-      <div data-area="breaks">
-        <LongestBreaks breaks={desk.breaks} calls={desk.numbers.calls} />
       </div>
     </div>
   );
@@ -1011,13 +954,12 @@ export function SellerBlocks({
 /** The owner's own work on the Team Home: three of today's tasks and the next
  *  two follow-ups on the side shown (Dipak: owners have their tasks too). */
 export function MyTasks({ desk, side }: { desk: HomeDesk; side: Side }) {
-  const { tasks, overdue, failed, reload, done } = useTaskList();
+  const { tasks, failed, reload, done } = useTaskList();
   return (
     <>
       <TodayTasks
         title="My tasks"
         tasks={tasks}
-        overdue={overdue}
         failed={failed}
         onDone={done}
         onRetry={reload}

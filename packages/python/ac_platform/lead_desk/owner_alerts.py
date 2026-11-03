@@ -433,8 +433,13 @@ def _alert_words(kind: Kind, rows: Sequence[OwnerAlertItem], minutes: int) -> tu
 
 
 def summary_words(totals: Mapping[str, int], *, test: bool = False) -> tuple[str, str]:
+    # Calls whose outcome the phone never told us are neither connected nor not (owner
+    # and Dipak, 2 Nov 2026): the title says for how many the outcome is known.
+    tried, unknown = totals.get("tried", 0), totals.get("unknown", 0)
+    known = f" · outcome known for {tried - unknown}" if unknown else ""
     title = (
-        f"Today: {totals.get('tried', 0)} tried · {totals.get('connected', 0)} connected · "
+        f"Today: {_plural(tried, 'call', 'calls')}{known} · "
+        f"{totals.get('connected', 0)} connected · "
         f"{_plural(totals.get('wins', 0), 'win', 'wins')}"
     )
     sellers = totals.get("sellers", 0)
@@ -635,6 +640,12 @@ class SummarySeller(Model):
     follow_ups_done: int
     wins: int
     no_recording: int
+    # Calls out whose outcome the phone never told us (a Call-button dial its call log
+    # never matched): neither connected nor not (owner and Dipak, 2 Nov 2026).
+    unknown: int = 0
+    talk_recorded_seconds: int = 0
+    notes: int = 0
+    messages: int = 0
 
 
 class DaySummary(Model):
@@ -679,7 +690,11 @@ async def day_summary(
                 name=seller.name,
                 tried=numbers.calls,
                 connected=numbers.connected,
+                unknown=numbers.unknown,
                 talk_seconds=numbers.talk_seconds,
+                talk_recorded_seconds=numbers.talk_recorded_seconds,
+                notes=numbers.notes,
+                messages=numbers.messages,
                 follow_ups_done=numbers.follow_ups_done,
                 wins=seller.inbound.won + seller.cold.won,
                 no_recording=seller.missing_recordings,
@@ -693,6 +708,9 @@ async def day_summary(
             "sellers": len(sellers),
             "tried": sum(row.tried for row in sellers),
             "connected": sum(row.connected for row in sellers),
+            "unknown": sum(row.unknown for row in sellers),
+            "notes": sum(row.notes for row in sellers),
+            "messages": sum(row.messages for row in sellers),
             "wins": sum(row.wins for row in sellers),
         },
     )

@@ -177,6 +177,10 @@ function pages(
   stages: StageKeys | undefined,
 ): { leads: More[]; calls: More[]; speed: More[] } {
   const cold = side === "cold";
+  // Calls whose outcome the phone never told us are neither connected nor
+  // not; each number opens the calls it counts (owner and Dipak, 2 Nov 2026).
+  const unknown = day?.unknown ?? 0;
+  const calls = `/analysis/calls?day=today&team=1&side=${side}`;
   // A card whose stage the organisation doesn't have is left out, never "0".
   const has = (key: string | null | undefined) => !stages || !!key;
   return {
@@ -234,22 +238,34 @@ function pages(
         key: "tried",
         label: "Tried",
         value: count(day?.attempted),
+        href: calls,
         help: "Calls made today",
       },
-      {
-        key: "connected",
-        label: "Connected",
-        value: count(day?.connected),
-        note:
-          day && day.attempted
-            ? share(day.connected, day.attempted)
-            : undefined,
-        help: "Calls answered today, and their share of the calls made",
-      },
+      unknown && day
+        ? {
+            key: "connected",
+            label: "Outcome known",
+            value: String(day.attempted - unknown),
+            note: `${day.connected} connected`,
+            href: `${calls}&outcome=known`,
+            help: "Calls whose outcome the phone told us today, and how many connected",
+          }
+        : {
+            key: "connected",
+            label: "Connected",
+            value: count(day?.connected),
+            note:
+              day && day.attempted
+                ? share(day.connected, day.attempted)
+                : undefined,
+            href: `${calls}&outcome=connected`,
+            help: "Calls answered today, and their share of the calls made",
+          },
       {
         key: "not_connected",
         label: "Not connected",
-        value: day ? String(day.attempted - day.connected) : null,
+        value: day ? String(day.attempted - day.connected - unknown) : null,
+        href: `${calls}&outcome=not_connected`,
         help: "Calls nobody answered today",
       },
       {
@@ -258,6 +274,7 @@ function pages(
         value: day
           ? talkOrDash(day.talk_seconds, day.talk_estimated_seconds, minutes)
           : null,
+        href: `${calls}&outcome=connected`,
         help: "Time spent on answered calls today",
       },
     ],
@@ -455,6 +472,8 @@ function FloorHero({ effort, side }: { effort: Effort | null; side: Side }) {
   const now = useMinute();
   const day = effort?.[side] ?? null;
   const done = day && day.eligible ? day.leads_attempted / day.eligible : 0;
+  // Of the calls whose outcome the phone told us (owner and Dipak, 2 Nov 2026).
+  const known = day ? day.attempted - (day.unknown ?? 0) : 0;
   const sellers = effort?.sellers ?? [];
   const live = sellers.filter((seller) => pulse(seller, now) === "live").length;
   return (
@@ -493,8 +512,10 @@ function FloorHero({ effort, side }: { effort: Effort | null; side: Side }) {
         <p className={styles.heroLine}>
           <strong>{day ? <Count value={String(day.connected)} /> : "–"}</strong>{" "}
           connected
-          {day && day.attempted ? (
-            <span>{` · ${share(day.connected, day.attempted)}`}</span>
+          {day && known < day.attempted ? (
+            <span>{` · outcome known for ${known}`}</span>
+          ) : day && day.attempted ? (
+            <span>{` · ${share(day.connected, known)}`}</span>
           ) : null}
         </p>
         <p className={styles.heroNote}>

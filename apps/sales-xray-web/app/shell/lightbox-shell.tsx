@@ -143,6 +143,7 @@ import type { Command } from "../ui/command-bar";
 import { useRegisteredCommands } from "../ui/command-registry";
 import { handOverLead } from "../leads/lead-handoff";
 import { leavingOverlay } from "../ui/back-close";
+import { leaveTo } from "./leave-to";
 import { haptic, tick } from "../ui/haptics";
 import { DueSoonWatch } from "../leads/due-soon";
 import { LeadsTabIcon, useLeadsBadgeWords } from "../leads/leads-badge";
@@ -1048,13 +1049,8 @@ function LightboxShellFrame({
       : recentCallsForContext(getShellState(), recentContextKey);
   const newAnalysisHref = newCallHref(homeHref);
 
-  const go = useCallback(
-    (href: string) => {
-      if (router) router.push(href);
-      else window.location.assign(href);
-    },
-    [router],
-  );
+  // The command bar's results leave from inside its sheet (leave-to.ts).
+  const go = useCallback((href: string) => leaveTo(href, router), [router]);
   const openLeadForm = useCallback(() => {
     void loadCaptureDialogs();
     setLeadForm((form) => ({ open: true, round: form.round + 1 }));

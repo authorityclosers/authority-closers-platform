@@ -152,7 +152,7 @@ async def _placed(desk: LeadDesk, events: list[LeadEvent]) -> list[LeadEvent]:
         # As _call_rows reads them: the phone's own seconds, or "We talked", never saved.
         if str(event.id) in timed:
             return {**event.data, PHONE_SECONDS: timed[str(event.id)]}
-        return {**event.data, TALKED: True} if event.id in talked else event.data
+        return {**event.data, TALKED: talked[event.id]} if event.id in talked else event.data
 
     unplaced = {
         event.id for event in looked if not dial_placed(beside(event), at(event), seen(event))

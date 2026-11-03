@@ -73,11 +73,7 @@ import {
 } from "./desk-cache";
 import { DeskView, toCallNow, whyLine, type RowActions } from "./desk-view";
 import { PullMark, usePullToRefresh } from "../shell/pull-refresh";
-import {
-  MAIN_PIPELINE,
-  readJourney,
-  type JourneyView,
-} from "./journey/journey-client";
+import { readJourney, type JourneyView } from "./journey/journey-client";
 import {
   LEAD_ADDED_EVENT,
   takeHandedLead,
@@ -149,6 +145,7 @@ import {
   pickableStages,
   rememberView,
   sideStage,
+  stagesPipeline,
   useWide,
 } from "./work-views";
 import {
@@ -1054,7 +1051,7 @@ export function LeadsRoute({
   ]);
 
   // The tabs carry the stages of the pipeline shown; across several, the six kinds.
-  const journeyFor = several(pipes) ? pipeline : MAIN_PIPELINE;
+  const journeyFor = stagesPipeline(pipeline);
   const journeyKey = `${contextKey}:${journeyFor}`;
   // A link may name a stage this organisation doesn't have (Home's Open Leads in
   // a list without one): the stage that means the same, else all stages with a

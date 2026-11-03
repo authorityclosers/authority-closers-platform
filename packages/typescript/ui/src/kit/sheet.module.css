@@ -32,7 +32,10 @@
   touch-action: none;
 }
 
-/* Phones: a glass sheet from the bottom edge. */
+/* Phones: a glass sheet from the bottom edge. Its height is measured from its
+   own layer (100%), not the screen: a layer may end above the tab bar (the lead
+   sheet), and a panel as tall as the screen then ran under the status bar, its
+   header and close button cut off (the owner's Redmi, 3 Nov 2026). */
 .panel {
   position: absolute;
   left: 0;
@@ -41,7 +44,7 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  max-height: calc(100dvh - max(env(safe-area-inset-top, 0px), 12px) - 28px);
+  max-height: calc(100% - max(env(safe-area-inset-top, 0px), 12px) - 28px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   border: 1px solid var(--sx-glass-edge);
   border-bottom: 0;
@@ -242,7 +245,7 @@
     right: 8px;
     bottom: calc(8px + env(safe-area-inset-bottom, 0px));
     max-height: calc(
-      100dvh - max(env(safe-area-inset-top, 0px), 12px) - 36px -
+      100% - max(env(safe-area-inset-top, 0px), 12px) - 36px -
         env(safe-area-inset-bottom, 0px)
     );
     padding-bottom: 0;

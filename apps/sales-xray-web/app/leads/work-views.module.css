@@ -381,9 +381,16 @@
   }
 }
 
-/* Follow-ups' pills are 44 px to tap on a touch screen (QA robot, 31 Oct 2026). */
+/* Follow-ups' pills and Clear search are 44 px to tap on a touch screen (QA robot,
+   31 Oct and 2 Nov 2026: Clear search was 44 x 42 at 360). It grows into the field's
+   1 px border, so the field keeps its height. */
 @media (pointer: coarse) {
   .subTabs .tab {
     min-height: 44px;
+  }
+
+  .searchClear {
+    height: 44px;
+    margin-block: -1px;
   }
 }

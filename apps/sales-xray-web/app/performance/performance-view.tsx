@@ -69,8 +69,9 @@ const row = (
 export function measures(inbound: SideEffort, cold: SideEffort): Measure[] {
   return [
     row("Calls attempted", inbound, cold, (side) => String(side.attempted)),
+    // Of the calls whose outcome the phone told us (owner and Dipak, 2 Nov 2026).
     row("Connection rate", inbound, cold, (side) =>
-      percent(side.connected, side.attempted),
+      percent(side.connected, side.attempted - (side.unknown ?? 0)),
     ),
     row("Talk time", inbound, cold, (side) =>
       talkOrDash(side.talk_seconds, side.talk_estimated_seconds, talk),
@@ -145,13 +146,15 @@ function MeasureTable({ rows, label }: { rows: Measure[]; label: string }) {
 export function sellerLine(seller: SellerEffort): string {
   const attempted = seller.inbound.attempted + seller.cold.attempted;
   const connected = seller.inbound.connected + seller.cold.connected;
+  const unknown = (seller.inbound.unknown ?? 0) + (seller.cold.unknown ?? 0);
   const seconds = seller.inbound.talk_seconds + seller.cold.talk_seconds;
   const estimated =
     (seller.inbound.talk_estimated_seconds ?? 0) +
     (seller.cold.talk_estimated_seconds ?? 0);
   return [
     `${attempted} ${attempted === 1 ? "call" : "calls"}`,
-    `${percent(connected, attempted)} connected`,
+    ...(unknown ? [`outcome known for ${attempted - unknown}`] : []),
+    `${percent(connected, attempted - unknown)} connected`,
     `${talkOrDash(seconds, estimated, talk)} talk`,
   ].join(" · ");
 }

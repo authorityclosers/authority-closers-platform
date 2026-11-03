@@ -381,3 +381,11 @@ textarea.input {
   font: var(--sx-text-headline);
   letter-spacing: -0.01em;
 }
+
+/* The Follow-up sheet's choices are 44 px to tap on a touch screen (test robot,
+   2 Nov 2026: Call back to Pick a time measured 40 px). */
+@media (pointer: coarse) {
+  .kind {
+    min-height: 44px;
+  }
+}

@@ -18,6 +18,7 @@ import {
   lastView,
   listTitle,
   sideStage,
+  stagesPipeline,
   pickableStages,
   rememberView,
   tabCount,
@@ -276,6 +277,11 @@ it("says what each list holds and what an empty one means", () => {
   expect(sideStage({ side: "cold" }, "Unworked")).toBe("Cold · Unworked");
   expect(sideStage({ side: "inbound" }, "New Lead")).toBe("New Lead");
   expect(sideStage({}, "New Lead")).toBe("New Lead");
+  // Several pipelines and none picked: the main pipeline's stages, as the server
+  // counts them (Dipak, 3 Nov 2026: only "All stages" showed).
+  expect(stagesPipeline(null)).toBe("main");
+  expect(stagesPipeline(undefined)).toBe("main");
+  expect(stagesPipeline("partner_outreach")).toBe("partner_outreach");
   expect(emptyWords("to_call").title).toBe("Nobody to call right now");
   expect(emptyWords("all").title).toBe("No leads yet");
 });
