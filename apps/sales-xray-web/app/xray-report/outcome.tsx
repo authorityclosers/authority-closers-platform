@@ -187,6 +187,20 @@ function formatDay(iso: string) {
     : iso;
 }
 
+/**
+ * The call's next date: the analysis' own, else its first next step's, as
+ * said ("Saturday 11 AM"). Nothing fills the analysis' own date yet, so the
+ * card said "No date was agreed on the call" over calls that agreed one (3 Nov
+ * 2026 regression, R6).
+ */
+export function callNextDate(
+  outcome: Pick<XrayView["outcome"], "date" | "nextSteps">,
+): string | null {
+  return (
+    outcome.date ?? outcome.nextSteps.find((step) => step.date)?.date ?? null
+  );
+}
+
 /** 3. Final Call Outcome (images 2, 4, 1 and 11). */
 export function FinalOutcome({
   view,
@@ -219,7 +233,7 @@ export function FinalOutcome({
   const date =
     record?.follow_up_on && kind === "follow_up"
       ? formatDay(record.follow_up_on)
-      : outcome.date;
+      : callNextDate(outcome);
   const detail =
     record?.lost_reason && kind === "lost"
       ? { text: record.lost_reason, sources: [] }
@@ -314,17 +328,15 @@ export function FinalOutcome({
               {scenario?.dateLabel ?? "Next Date"}
             </span>
             <span className={styles.outcomeBig}>{date ?? "No date yet"}</span>
+            {/* Without a date the card says only "No date yet": an unread
+                date is not proof that none was agreed (R6). */}
             {scenario && date ? (
               <span
                 className={`${styles.pill} ${styles.solid} ${scenario.dateTone}`}
               >
                 {scenario.datePill}
               </span>
-            ) : (
-              <span className={styles.outcomeNote}>
-                No date was agreed on the call.
-              </span>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
