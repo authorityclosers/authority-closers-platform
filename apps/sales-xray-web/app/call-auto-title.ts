@@ -23,6 +23,15 @@ const NOT_NAMES = new Set(
     "founder director manager team you your them him"
   ).split(" "),
 );
+// "... a demo for Saturday": a day or month is never the prospect (3 Nov 2026
+// regression, R5: "Call with Saturday", "Thursday · Training duration").
+const TIME_WORDS = new Set(
+  (
+    "monday tuesday wednesday thursday friday saturday sunday today " +
+    "tomorrow tonight morning afternoon evening next january february " +
+    "march april may june july august september october november december"
+  ).split(" "),
+);
 const TOPIC_AFTER =
   /\b(?:regarding|about|covering|concerning|detailing|into)\s+([^.,;:()]+)/i;
 const TOPIC_STOP =
@@ -77,18 +86,21 @@ function company(words: string[]): string | null {
 
 /** "Ira Ransurikar" from "... conversation with Ira Ransurikar." */
 function person(summary: string, companyName: string | null): string | null {
-  const match =
-    /\b(?:with|to|for)\s+((?:(?:Mr|Mrs|Ms|Dr)\.?\s+)?[A-Z][\p{L}-]+(?:\s+[A-Z][\p{L}-]+)?)/u.exec(
-      summary,
-    );
-  if (!match) return null;
-  const name = match[1];
-  if (companyName && companyName.startsWith(name)) return null;
-  const first = name.split(/\s+/)[0].toLowerCase();
-  if (NOT_NAMES.has(first) || first === "you") return null;
-  const lastWord = name.split(/\s+/).at(-1)!.toLowerCase();
-  if (COMPANY_ENDS.has(lastWord)) return null;
-  return name;
+  // A day or time is skipped, so "... a demo for Friday with Vikram Hegde" is
+  // Vikram Hegde's call, not Friday's.
+  for (const match of summary.matchAll(
+    /\b(?:with|to|for)\s+((?:(?:Mr|Mrs|Ms|Dr)\.?\s+)?[A-Z][\p{L}-]+(?:\s+[A-Z][\p{L}-]+)?)/gu,
+  )) {
+    const name = match[1];
+    const first = name.split(/\s+/)[0].toLowerCase();
+    if (TIME_WORDS.has(first)) continue;
+    if (NOT_NAMES.has(first)) return null;
+    if (companyName && companyName.startsWith(name)) return null;
+    const lastWord = name.split(/\s+/).at(-1)!.toLowerCase();
+    if (COMPANY_ENDS.has(lastWord)) return null;
+    return name;
+  }
+  return null;
 }
 
 /** "Brindle Cart" from "... with Daryl Pell, sales lead at Brindle Cart." */
