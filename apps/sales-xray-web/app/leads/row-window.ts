@@ -1,9 +1,9 @@
 /**
  * Which rows of a long list are drawn (native-feel plan, item 4, 3 Nov 2026):
  * the rows in the scroller's view and six either side, each placed at its top.
- * Rows have a few fixed heights, one per kind (two lines; three for a lead
- * that needs someone now), read from drawn rows, so they hold at 200% text
- * and in Devanagari. A 400-row fling draws about twenty rows, not 400.
+ * Each row's height is read from it once drawn (a row not drawn yet takes its
+ * kind's), so rows hold at 200% text, in Devanagari and when a line wraps.
+ * A 400-row fling draws about twenty rows, not 400.
  */
 
 import type { CSSProperties } from "react";
@@ -63,6 +63,21 @@ export function rowWindow({
     start: Math.max(0, rowAt(tops, top) - overscan),
     end: Math.min(count, rowAt(tops, bottom) + 1 + overscan),
   };
+}
+
+/**
+ * How far to scroll so the row at the view's top stays where it is when rows
+ * change height: by how far that row's top moved. `y` is the view's top from
+ * the list's top; none while the list's top is in view.
+ */
+export function keepInView(
+  before: readonly number[],
+  after: readonly number[],
+  y: number,
+): number {
+  if (y <= 0 || before.length !== after.length || before.length < 2) return 0;
+  const at = rowAt(before, y);
+  return at < before.length - 1 ? after[at] - before[at] : 0;
 }
 
 /** A drawn row's place in its list (a move, so a row placed again never

@@ -4693,7 +4693,10 @@ a.repName {
   .callButton:active {
     transform: scale(0.98);
   }
-  .leadLine {
+  /* Not a row the list draws as it scrolls near (data-row-kind): it is placed
+     by a move, which this rise would replace, sliding it in from the list's
+     top; and a native list doesn't animate rows coming into view. */
+  .leadLine:not([data-row-kind]) {
     animation: lead-arrive 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 }

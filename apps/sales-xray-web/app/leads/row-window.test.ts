@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { OVERSCAN, placed, rowTops, rowWindow } from "./row-window";
+import { OVERSCAN, keepInView, placed, rowTops, rowWindow } from "./row-window";
 
 // Native-feel plan, item 4 (3 Nov 2026): a long Leads list draws the rows in
 // view and six either side, each at its top.
@@ -67,6 +67,20 @@ it("holds at font scale 2.0: rows read at twice the height draw fewer rows, at t
     start: 94,
     end: 112,
   });
+});
+
+it("keeps the row at the view's top still when rows above it change height", () => {
+  // Rows read at 72 px; scrolled to 30 px into the fifth row (y = 318).
+  const before = rowTops([72, 72, 72, 72, 72, 72]);
+  // The second row is drawn and reads 99 px (a line wraps): 27 px more.
+  const taller = rowTops([72, 99, 72, 72, 72, 72]);
+  expect(keepInView(before, taller, 318)).toBe(27);
+  // A row below the view's top changing moves nothing in view.
+  const below = rowTops([72, 72, 72, 72, 72, 99]);
+  expect(keepInView(before, below, 318)).toBe(0);
+  // At the list's top, or with the list's top still in view, no scroll.
+  expect(keepInView(before, taller, 0)).toBe(0);
+  expect(keepInView(before, taller, -40)).toBe(0);
 });
 
 it("places a drawn row by a move, and leaves a row outside a list alone", () => {

@@ -65,6 +65,7 @@ import { QuickAddBar, type PasteRows } from "./quick-add";
 import {
   FIRST_VIEW,
   ROW_ESTIMATE,
+  keepInView,
   rowTops,
   rowWindow,
   scrollParent,
@@ -79,10 +80,21 @@ const subscribeHydration = () => () => {};
  * them (native-feel plan, item 4, 3 Nov 2026: a 400-row fling drew 400 rows,
  * 57% slow frames on dev at the Note 8 Pro's size). The rest is room, so the
  * page's height and what follows the list never move. A row's height is its
- * kind's, read from a drawn row of that kind and again whenever it changes
- * (a resize, the phone's font scale, the type). Scrolling draws other rows
- * only when they come near; the page around the list isn't drawn again.
+ * own, read from it once drawn and again whenever it changes (a resize, the
+ * phone's font scale, a line that wraps); a row not drawn yet takes the first
+ * drawn height of its kind. Scrolling draws other rows only when they come
+ * near; the page around the list isn't drawn again.
  */
+type RowSizes = Readonly<{
+  /** The width and text size the heights were read at. */
+  fit: string;
+  /** Each drawn row's height, by its kind and lead. */
+  rows: Readonly<Record<string, number>>;
+  /** Each kind's first drawn height, for rows not drawn yet. */
+  kinds: Readonly<Record<string, number>>;
+}>;
+const NO_SIZES: RowSizes = { fit: "", rows: {}, kinds: {} };
+
 function NearRows({
   list,
   rows,
@@ -95,10 +107,18 @@ function NearRows({
   /** One row, at its top in the list, its place and its kind. */
   row: (row: LeadRow, at: number, index: number, kind: string) => ReactNode;
 }) {
-  const [sizes, setSizes] = useState<Readonly<Record<string, number>>>({});
+  const [sizes, setSizes] = useState<RowSizes>(NO_SIZES);
   const tops = useMemo(
-    () => rowTops(kinds.map((kind) => sizes[kind] ?? ROW_ESTIMATE)),
-    [kinds, sizes],
+    () =>
+      rowTops(
+        rows.map(
+          (item, index) =>
+            sizes.rows[`${kinds[index]}:${item.lead_id}`] ??
+            sizes.kinds[kinds[index]] ??
+            ROW_ESTIMATE,
+        ),
+      ),
+    [rows, kinds, sizes],
   );
   const [view, setView] = useState({ top: 0, height: FIRST_VIEW });
   const { start, end } = rowWindow({
@@ -108,9 +128,10 @@ function NearRows({
   });
 
   // Where the list sits in its scroller, kept on scroll and resize, once a
-  // frame; a new view only when it draws other rows.
+  // frame; a new view only when it draws other rows. Kept as the frame is
+  // drawn, so a height read straight after a draw sees the new tops.
   const shown = useRef({ tops, view });
-  useEffect(() => {
+  useLayoutEffect(() => {
     shown.current = { tops, view };
   });
   useEffect(() => {
@@ -155,51 +176,84 @@ function NearRows({
     };
   }, [list, tops]);
 
-  // Each kind's height from one drawn row of it, watched for changes. Not the
-  // first drawn row, which has no line above it. Read before the frame paints.
+  // Every drawn row is watched, read before the frame paints. The first drawn
+  // row has no line above it unless it is the list's first, so it waits until
+  // a row is drawn above it. When rows above the view change height, the
+  // scroll moves with them, so what's in view holds still.
   const watched = useRef<{
     watch: ResizeObserver;
-    items: Map<string, HTMLElement>;
+    drawn: Map<Element, { key: string; kind: string }>;
   } | null>(null);
   useLayoutEffect(() => {
     const box = list.current;
     if (!box || typeof ResizeObserver === "undefined") return;
     if (!watched.current) {
-      const items = new Map<string, HTMLElement>();
-      const watch = new ResizeObserver(() => {
-        const heights = [...items].map(
-          ([kind, item]) => [kind, item.offsetHeight] as const,
-        );
+      const drawn = new Map<Element, { key: string; kind: string }>();
+      const watch = new ResizeObserver((entries) => {
+        const read: { key: string; kind: string; height: number }[] = [];
+        for (const { target } of entries) {
+          const at = drawn.get(target);
+          const height = (target as HTMLElement).offsetHeight;
+          if (at && height > 0) read.push({ ...at, height });
+        }
+        if (!read.length) return;
+        const fit = `${window.innerWidth}:${getComputedStyle(document.documentElement).fontSize}`;
+        const scroller = scrollParent(box);
+        const page = scroller === document.scrollingElement;
+        const edge = page ? 0 : scroller.getBoundingClientRect().top;
+        const y = edge - box.getBoundingClientRect().top;
+        const before = shown.current.tops;
         flushSync(() =>
           setSizes((now) => {
-            let next = now;
-            for (const [kind, height] of heights)
-              if (
-                height > 0 &&
-                Math.abs(height - (now[kind] ?? ROW_ESTIMATE)) >= 0.5
-              )
-                next = { ...next, [kind]: height };
-            return next;
+            const fresh = now.fit !== fit;
+            const own = fresh ? {} : { ...now.rows };
+            const first = fresh ? {} : { ...now.kinds };
+            let changed = fresh;
+            for (const { key, kind, height } of read) {
+              if (Math.abs((own[key] ?? -1) - height) < 0.5) continue;
+              own[key] = height;
+              first[kind] ??= height;
+              changed = true;
+            }
+            return changed ? { fit, rows: own, kinds: first } : now;
           }),
         );
+        const shift = keepInView(before, shown.current.tops, y);
+        if (!shift) return;
+        if (page) window.scrollBy(0, shift);
+        else scroller.scrollTop += shift;
       });
-      watched.current = { watch, items };
+      watched.current = { watch, drawn };
     }
-    const { watch, items } = watched.current;
-    const first = box.firstElementChild;
-    const drawn = [...box.children].filter(
-      (item): item is HTMLElement => item instanceof HTMLElement,
-    );
-    for (const item of [...drawn.filter((at) => at !== first), ...drawn]) {
-      const kind = item.dataset.rowKind;
-      const held = kind ? items.get(kind) : undefined;
-      if (!kind || held?.isConnected) continue;
-      if (held) watch.unobserve(held);
-      items.set(kind, item);
+    const { watch, drawn } = watched.current;
+    for (const [item] of drawn)
+      if (!item.isConnected) {
+        watch.unobserve(item);
+        drawn.delete(item);
+      }
+    [...box.children].forEach((item, offset) => {
+      const index = start + offset;
+      if (index >= rows.length) return;
+      if (offset === 0 && index > 0) {
+        watch.unobserve(item);
+        drawn.delete(item);
+        return;
+      }
+      const kind = kinds[index];
+      const key = `${kind}:${rows[index].lead_id}`;
+      if (drawn.get(item)?.key === key) return;
+      drawn.set(item, { key, kind });
       watch.observe(item);
-    }
+    });
   });
-  useEffect(() => () => watched.current?.watch.disconnect(), []);
+  // Unmounted, or hidden and shown again: a fresh watch on the next draw.
+  useEffect(
+    () => () => {
+      watched.current?.watch.disconnect();
+      watched.current = null;
+    },
+    [],
+  );
 
   return (
     <ul
@@ -591,8 +645,9 @@ export function ListView({
       ),
     );
   }, [order, lastTries]);
-  // Only the rows near the view are drawn (NearRows): each row's kind sets its
-  // height, two lines or three for a lead that needs someone now.
+  // Only the rows near the view are drawn (NearRows): a row's kind (two lines,
+  // or three for a lead that needs someone now) gives its height until it is
+  // drawn and read.
   const kinds = useMemo(
     () =>
       rows.map((row) =>
