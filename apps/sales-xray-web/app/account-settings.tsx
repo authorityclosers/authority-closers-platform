@@ -925,7 +925,8 @@ function ProfileSummary({ profile }: { profile: AccountProfileRecord }) {
   );
 }
 
-function ProfileForm({
+/** Name and phone, also inside Settings › Profile's one card (profile-details.tsx). */
+export function ProfileForm({
   profile,
   onCancel,
   onNeedsRefresh,

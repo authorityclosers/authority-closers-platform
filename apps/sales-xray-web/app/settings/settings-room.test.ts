@@ -16,8 +16,8 @@ it("lets a settings row's words break inside its card", () => {
 // (b7b700e0), because its loading card was two rows tall.
 it("holds the profile's room while it loads, on phones and computers", () => {
   const file = css("profile-details.module.css");
-  expect(file).toMatch(/\.loading \{\s*min-height: 45em;/);
+  expect(file).toMatch(/\.loading \{\s*min-height: 55em;/);
   expect(file).toMatch(
-    /@media \(min-width: 761px\) \{\s*\.loading \{\s*min-height: 24\.5em;/,
+    /@media \(min-width: 761px\) \{\s*\.loading \{\s*min-height: 32\.5em;/,
   );
 });
