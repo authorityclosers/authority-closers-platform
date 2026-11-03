@@ -32,7 +32,11 @@ export const FIGURES: { key: Figure; label: string; title: string }[] = [
   { key: "tried", label: "Tried", title: "Calls tried" },
   { key: "connected", label: "Connected", title: "Calls that connected" },
   { key: "talk", label: "Talk time", title: "Time on connected calls" },
-  { key: "follow_ups", label: "F/U done", title: "Calls to leads past New" },
+  {
+    key: "follow_ups",
+    label: "Follow-ups done",
+    title: "Calls to leads past New",
+  },
   { key: "won", label: "Wins ₹", title: "What their Won leads were worth" },
   {
     key: "gap",

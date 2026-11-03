@@ -6,7 +6,9 @@
  * is always clear which group you are working in. One component for Leads and
  * Home. The chosen side is filled: Inbound with the brand accent, Cold with
  * slate blue. It keeps no state: Leads keeps the side in its address
- * (?side=cold) and opens on Inbound; Home keeps its own.
+ * (?side=cold) and opens on Inbound; Home keeps its own. Home's is calm
+ * (Dipak, 3 Nov 2026: one accent colour): the chosen side raised in a
+ * neutral surface, its words saying which.
  */
 
 import type { KeyboardEvent } from "react";
@@ -25,12 +27,15 @@ export function SideSelector({
   onChange,
   notes,
   label = "Lead type",
+  tone = "side",
 }: {
   value: Side;
   onChange: (side: Side) => void;
   /** A short line under it for the chosen side ("Fresh enquiries"); optional. */
   notes?: Partial<Record<Side, string>>;
   label?: string;
+  /** side: the chosen side in its colour; calm: in a neutral surface. */
+  tone?: "side" | "calm";
 }) {
   // A radio group: the arrow keys move between the two, as in any radio group.
   const onKey = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -48,7 +53,12 @@ export function SideSelector({
   const note = notes?.[value];
   return (
     <div className={styles.wrap}>
-      <div role="radiogroup" aria-label={label} className={styles.selector}>
+      <div
+        role="radiogroup"
+        aria-label={label}
+        className={styles.selector}
+        data-tone={tone}
+      >
         {SIDES.map((side) => {
           const chosen = side.key === value;
           return (

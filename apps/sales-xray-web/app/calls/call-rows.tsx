@@ -70,6 +70,30 @@ export function callLine(event: LeadEvent, caller = "You"): string {
   }
 }
 
+/** Home's line for a call: its outcome in a word or two, with its length
+ *  when it connected (Dipak's picture, 2 Nov 2026: "Connected · 11:20 AM";
+ *  the time is the row's own). Calls says where the seconds came from. */
+export function outcomeLine(event: LeadEvent): string {
+  const talk = event.duration_seconds ? clockTime(event.duration_seconds) : "";
+  switch (event.direction) {
+    case "incoming":
+      return talk ? `They called · ${talk}` : "They called";
+    case "missed":
+      return "Missed call";
+    case "rejected":
+      return "You cut their call";
+    case "blocked":
+      return "Blocked call";
+  }
+  if (event.simulated) return "Sample call";
+  if (event.outcome === "unknown") return "Outcome unknown";
+  if (talk) return `Connected · ${talk}`;
+  if (event.outcome === "connected") return "Connected";
+  return event.outcome === "not_connected" || event.via === "phone"
+    ? "No answer"
+    : "Called";
+}
+
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
 /** "Today", "Yesterday", or "Monday 26 Oct". */
