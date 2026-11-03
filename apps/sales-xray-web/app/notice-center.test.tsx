@@ -475,6 +475,83 @@ it("keeps a line in the dock until it is used or closed, so the page never jumps
     vi.useRealTimers();
   }
 });
+
+it("keeps the dock's room while a sheet holds its lines, so the page never jumps", async () => {
+  // QA robot 95abddab and 77641e07, 3 Nov 2026: "… is your lead now" left the
+  // page's dock for the lead sheet, and the page rose 52 px, then dropped back
+  // as the sheet closed.
+  vi.useFakeTimers();
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+  const measure = vi
+    .spyOn(Element.prototype, "getBoundingClientRect")
+    .mockImplementation(function (this: Element) {
+      const height = this.parentElement?.hasAttribute("data-notice-dock")
+        ? 42
+        : 0;
+      return rect({ left: 0, top: 0, right: 360, bottom: height });
+    });
+  const matches = Element.prototype.matches;
+  const modal = vi
+    .spyOn(Element.prototype, "matches")
+    .mockImplementation(function (this: Element, selector: string) {
+      if (selector === ":modal")
+        return (
+          this.hasAttribute("data-fixture-sheet") && this.hasAttribute("open")
+        );
+      return matches.call(this, selector);
+    });
+  Object.defineProperty(document, "elementsFromPoint", {
+    configurable: true,
+    value: () => [],
+  });
+  const page = document.createElement("div");
+  document.body.append(page);
+  const pageRoot = createRoot(page);
+  const sheet = document.createElement("dialog");
+  sheet.setAttribute("data-fixture-sheet", "");
+  document.body.append(sheet);
+  try {
+    await act(async () => pageRoot.render(<NoticeDock />));
+    await act(async () =>
+      notify({
+        id: "fictional",
+        tone: "lead",
+        title: "Fictional Asha is your lead now",
+      }),
+    );
+    const dock = page.querySelector<HTMLElement>("[data-notice-dock]")!;
+    expect(dock.textContent).toContain("Fictional Asha is your lead now");
+    expect(dock.hasAttribute("data-held")).toBe(false);
+    // A sheet opens: the line goes with it, and the dock keeps its room.
+    await act(async () => sheet.setAttribute("open", ""));
+    await frames();
+    expect(dock.textContent).toBe("");
+    expect(dock.hasAttribute("data-held")).toBe(true);
+    expect(dock.style.getPropertyValue("--sx-dock-held")).toBe("42px");
+    // It closes: the line is back in its room, and nothing is held.
+    await act(async () => sheet.removeAttribute("open"));
+    await frames();
+    expect(dock.textContent).toContain("Fictional Asha is your lead now");
+    expect(dock.hasAttribute("data-held")).toBe(false);
+    expect(dock.style.getPropertyValue("--sx-dock-held")).toBe("");
+  } finally {
+    await act(async () => pageRoot.unmount());
+    sheet.remove();
+    page.remove();
+    measure.mockRestore();
+    modal.mockRestore();
+    delete (document as { elementsFromPoint?: unknown }).elementsFromPoint;
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  }
+});
 it("keeps a short-lived card's Undo in its folded pill", async () => {
   // Phone personas ph2-36 (1 Nov 2026): the after-call card folded, its Undo
   // vanished, and a second tap opened the lead underneath.

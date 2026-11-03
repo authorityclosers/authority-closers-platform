@@ -313,6 +313,13 @@
   display: none;
 }
 
+/* A sheet holds its lines: the dock keeps their room, so the page under the
+   sheet never rises and drops back (QA robot 95abddab, 3 Nov 2026). */
+.dock[data-held] {
+  display: block;
+  min-height: var(--sx-dock-held, 0px);
+}
+
 /* Never wider than the page: a long name ends in "…", the action and the X
    stay in sight. */
 .docked {

@@ -911,6 +911,36 @@ export function NoticeCenter() {
   // lifted the others, a layout shift); older ones wait under "+N more".
   const shownList = [...(expanded ? corner : corner.slice(-SHOWN))].reverse();
   const dockList = [...docked.slice(-SHOWN)].reverse();
+  // While a sheet holds the dock's lines (above), the dock keeps their room on
+  // the page under it, so the page doesn't rise as a lead's sheet opens and
+  // drop as it closes (QA robot 95abddab and 77641e07, 3 Nov 2026: 52 px each
+  // way). Measured while the lines are in the dock.
+  const dockRoom = useRef(0);
+  const dockLines = docking ? dockList.length + (dockWork ? 1 : 0) : -1;
+  useLayoutEffect(() => {
+    if (!docking) return;
+    const lines = docking.firstElementChild;
+    if (!lines) {
+      dockRoom.current = 0;
+      return;
+    }
+    const style = getComputedStyle(lines);
+    dockRoom.current =
+      lines.getBoundingClientRect().height +
+      (parseFloat(style.marginTop) || 0) +
+      (parseFloat(style.marginBottom) || 0);
+  }, [docking, dockLines]);
+  useLayoutEffect(() => {
+    if (!pageDock) return;
+    const hold = sheet !== null && dockRoom.current > 0;
+    pageDock.toggleAttribute("data-held", hold);
+    if (hold)
+      pageDock.style.setProperty(
+        "--sx-dock-held",
+        `${Math.round(dockRoom.current)}px`,
+      );
+    else pageDock.style.removeProperty("--sx-dock-held");
+  }, [sheet, pageDock]);
 
   return (
     <>
