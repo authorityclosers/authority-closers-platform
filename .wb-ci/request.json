@@ -1,0 +1,21 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "7aa4e3a67a61d2e824f232fa7a25d44c1df6f7d8",
+  "full": false,
+  "checks": [
+    "py"
+  ],
+  "changed_files": [
+    "apps/sales-xray-web/app/capture-guard/capture-guard.test.tsx",
+    "apps/sales-xray-web/app/leads/auto-capture-state.tsx",
+    "apps/sales-xray-web/app/telemetry-auto.tsx",
+    "apps/sales-xray-web/app/telemetry.ts",
+    "packages/python/ac_platform/telemetry/sales_xray.py",
+    "tests/unit/telemetry/test_sales_xray_telemetry.py"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
