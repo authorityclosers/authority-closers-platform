@@ -256,6 +256,19 @@ type Choice = {
 
 /** What a seller picks after a call that connected: the business's own stages
  *  (Lead stages), else the desk's four. */
+/** Pressed at the touch itself, before React paints (production 161, 3 Nov
+ *  2026): the button shows it took the tap, and the CSS reads data-pressed. */
+const pressMark = {
+  onPointerDown: (event: { currentTarget: HTMLElement }) =>
+    event.currentTarget.setAttribute("data-pressed", ""),
+  onPointerUp: (event: { currentTarget: HTMLElement }) =>
+    event.currentTarget.removeAttribute("data-pressed"),
+  onPointerCancel: (event: { currentTarget: HTMLElement }) =>
+    event.currentTarget.removeAttribute("data-pressed"),
+  onPointerLeave: (event: { currentTarget: HTMLElement }) =>
+    event.currentTarget.removeAttribute("data-pressed"),
+};
+
 export function stageChoices(detail: {
   stage_choices?: LeadDetail["stage_choices"];
 }): Choice[] {
@@ -558,6 +571,9 @@ export function CallOutcome({
       },
     );
   const [saving, setSaving] = useState(false);
+  // Set at the tap itself: a second tap before the next paint never saves twice
+  // (production 161, 3 Nov 2026: taps landing twice on Save & Close).
+  const busy = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   // "How did it go?" in the weekly friction report: started when the seller
@@ -778,7 +794,8 @@ export function CallOutcome({
     };
   }, [arrived, kept]);
   const submit = async (after: (next: LeadDetail) => void = onSaved) => {
-    if (!valid || saving) return;
+    if (!valid || saving || busy.current) return;
+    busy.current = true;
     setSaving(true);
     setError(null);
     let current: LeadDetail | null = null;
@@ -827,6 +844,7 @@ export function CallOutcome({
           : "Not saved. Try again.",
       );
     } finally {
+      busy.current = false;
       setSaving(false);
     }
   };
@@ -1191,6 +1209,7 @@ export function CallOutcome({
             data-incomplete={!valid || undefined}
             onClick={() => trySave()}
             disabled={saving}
+            {...pressMark}
           >
             {saving ? "Saving…" : submitLabel}
           </button>
@@ -2749,6 +2768,8 @@ export function NoteBox({
     keepDraft(`note:${leadId}`, text);
   };
   const [saving, setSaving] = useState(false);
+  // A second tap before the next paint never adds the note twice (production 161).
+  const busy = useRef(false);
   // Counts the notes saved here, so each "Saved" plays afresh.
   const [saved, setSaved] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -2765,7 +2786,8 @@ export function NoteBox({
   }, [note]);
 
   const save = async () => {
-    if (!filled || saving) return;
+    if (!filled || saving || busy.current) return;
+    busy.current = true;
     haptic("tap");
     setSaving(true);
     setError(null);
@@ -2780,6 +2802,7 @@ export function NoteBox({
         reason instanceof LeadsError ? reason.message : "Not saved. Try again.",
       );
     } finally {
+      busy.current = false;
       setSaving(false);
     }
   };
@@ -2835,6 +2858,7 @@ export function NoteBox({
           aria-busy={saving || undefined}
           disabled={saving || !filled}
           onClick={() => void save()}
+          {...pressMark}
         >
           <ArrowUp size={18} strokeWidth={2.25} aria-hidden="true" />
         </button>
