@@ -1067,7 +1067,7 @@
     bottom: calc(8px + env(safe-area-inset-bottom, 0px));
     left: max(12px, env(safe-area-inset-left, 0px));
     display: grid;
-    height: calc(var(--lx-bottom-nav-h) - 8px);
+    min-height: 70px;
     box-sizing: border-box;
     grid-auto-columns: minmax(0, 1fr);
     grid-auto-flow: column;
@@ -1794,9 +1794,17 @@
 }
 
 /* The page's name wraps instead of being cut, so it reads at any text size
-   (the test robot, 1 Nov 2026: at 200 % text "Leads" lost its bottom). */
+   (the test robot, 1 Nov 2026: at 200 % text "Leads" lost its bottom), and
+   only between words: it gets smaller instead when a word would not fit
+   beside the icons (2 Nov 2026: "Lea / ds / setu / p" at large text). */
+.mobileWorkspace > span,
+.mobilePlace {
+  container-type: inline-size;
+  flex: 1 1 0;
+}
+
 .mobileWorkspace b {
-  overflow-wrap: break-word;
+  overflow-wrap: normal;
   color: var(--lx-ink);
   font-size: 15px;
   font-weight: 700;
@@ -1894,9 +1902,9 @@
     box-shadow: 0 0.5px 0 var(--sx-hairline);
   }
 
-  /* A large title, as iOS screens open with. */
+  /* A large title, as iOS screens open with, as large as its room allows. */
   .mobileWorkspace b {
-    font-size: 24px;
+    font-size: clamp(15px, 21cqi, 24px);
     font-weight: 800;
     letter-spacing: -0.025em;
     line-height: 1.1;
@@ -1910,7 +1918,9 @@
     right: max(14px, env(safe-area-inset-right, 0px));
     bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     left: max(14px, env(safe-area-inset-left, 0px));
-    height: calc(var(--lx-bottom-nav-h) - 16px);
+    /* At least 62 px; taller when a tab's name takes two lines, and the
+       shell then publishes the room it needs (--lx-bottom-nav-h). */
+    min-height: 62px;
     gap: 0;
     padding: 6px;
     border: 0.5px solid var(--sx-glass-edge);
@@ -2082,7 +2092,7 @@
   }
 
   .shell[data-scrolled] .mobileWorkspace b {
-    font-size: 17px;
+    font-size: clamp(14px, 15cqi, 17px);
   }
 
   .bottomLink:not(.bottomNew) svg {
@@ -2569,8 +2579,14 @@
     0 0 0 2px var(--sx-accent),
     0 0 0 5px var(--sx-accent-soft);
 }
-.bottomAsk > span:last-child {
-  white-space: nowrap;
+/* A tab's name wraps between its words at large text, never into its
+   neighbour (the test robot, 2 Nov 2026: "Ask DipakReports"). */
+.bottomLink > span:last-child {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: normal;
+  line-height: 1.15;
+  text-align: center;
 }
 
 /* The workspace line gives way to the header's icons (31 Oct 2026: Chats
