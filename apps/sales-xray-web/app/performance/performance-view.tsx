@@ -13,7 +13,7 @@
 import { useEffect, useState } from "react";
 
 import { BreakRow, breakLength } from "../dashboard/home-today";
-import { Segmented } from "../ui/kit";
+import { Segmented, SkeletonRow } from "../ui/kit";
 import { SectionBoundary } from "../ui/section-boundary";
 import {
   readEffort,
@@ -96,6 +96,15 @@ export function measures(inbound: SideEffort, cold: SideEffort): Measure[] {
     },
   ];
 }
+
+/** A seller's card leads with these; the other work numbers fold under them. */
+const HEADLINE = new Set([
+  "Calls attempted",
+  "Connection rate",
+  "Talk time",
+  "Meetings booked",
+  "Won",
+]);
 
 /** What was missed, Inbound and Cold apart. */
 export function missed(inbound: SideEffort, cold: SideEffort): Measure[] {
@@ -194,6 +203,7 @@ function SellerCard({
 }) {
   const red = flags(seller);
   const name = own ? "Your" : `${seller.name}'s`;
+  const work = measures(seller.inbound, seller.cold);
   return (
     <details className={styles.seller} open={open}>
       <summary>
@@ -207,12 +217,22 @@ function SellerCard({
           </ul>
         ) : null}
       </summary>
+      {/* The day's headline numbers; the rest one tap away. Overdue tasks and
+          calls without a recording are the chips above, said once (simplify
+          pass, owner approved 2 Nov 2026). */}
       <section className={styles.part}>
         <h3>Work done</h3>
         <MeasureTable
-          rows={measures(seller.inbound, seller.cold)}
+          rows={work.filter((item) => HEADLINE.has(item.label))}
           label={`${name} work, Inbound and Cold`}
         />
+        <details className={styles.more}>
+          <summary>More numbers</summary>
+          <MeasureTable
+            rows={work.filter((item) => !HEADLINE.has(item.label))}
+            label={`${name} other numbers, Inbound and Cold`}
+          />
+        </details>
       </section>
       <section className={styles.part}>
         <h3>Missed</h3>
@@ -220,22 +240,6 @@ function SellerCard({
           rows={missed(seller.inbound, seller.cold)}
           label={`${name} missed work, Inbound and Cold`}
         />
-        <p
-          className={styles.line}
-          data-red={seller.tasks_late ? "" : undefined}
-        >
-          {seller.tasks_late
-            ? `${count(seller.tasks_late, "task", "tasks")} overdue`
-            : "No tasks overdue"}
-        </p>
-        <p
-          className={styles.line}
-          data-red={seller.missing_recordings ? "" : undefined}
-        >
-          {seller.missing_recordings
-            ? `${count(seller.missing_recordings, "call", "calls")} without a recording today`
-            : "Every connected call today has its recording"}
-        </p>
       </section>
       <section className={styles.part}>
         <h3>Breaks</h3>
@@ -268,6 +272,38 @@ type State =
   | { status: "loading" }
   | { status: "error" }
   | { status: "ready"; effort: Effort };
+
+/**
+ * The view's shape while its numbers load: a card about a screen tall where
+ * the numbers will be (and the period switch's room, before the page has
+ * it), so nothing moves when they arrive (robot 2ac64000, 3 Nov 2026).
+ */
+export function PerformanceLoading({
+  withPeriod = false,
+}: {
+  withPeriod?: boolean;
+}) {
+  const card = (
+    <section
+      className={styles.card}
+      data-loading=""
+      role="status"
+      aria-label="Counting the calls…"
+    >
+      {Array.from({ length: 6 }, (_, index) => (
+        <SkeletonRow key={index} />
+      ))}
+    </section>
+  );
+  return withPeriod ? (
+    <div className={styles.page}>
+      <div className={styles.periodRoom} aria-hidden="true" />
+      {card}
+    </div>
+  ) : (
+    card
+  );
+}
 
 export function PerformanceView() {
   const [period, setPeriod] = useState<Period>("1");
@@ -306,9 +342,7 @@ export function PerformanceView() {
         items={PERIODS.map(({ key, label }) => ({ key, label }))}
       />
       {state.status === "loading" ? (
-        <p className={styles.quiet} role="status">
-          Counting the calls…
-        </p>
+        <PerformanceLoading />
       ) : state.status === "error" || !effort ? (
         <p className={styles.quiet} role="alert">
           Performance didn&apos;t load. Come back in a moment.

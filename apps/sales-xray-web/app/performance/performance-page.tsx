@@ -5,15 +5,19 @@
 
 import { AcquisitionShell } from "../acquisition-shell";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
-import { PageHeader, SkeletonRow } from "../ui/kit";
+import { PageHeader } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
 import styles from "./performance.module.css";
-import { PerformanceView } from "./performance-view";
+import { PerformanceLoading, PerformanceView } from "./performance-view";
 
+/** The page's own shape while it opens: the heading, then the view's own
+ *  loading card, so nothing moves when the page arrives (robot 2ac64000). */
 export function PerformanceSkeleton({
   title = "Performance",
+  section,
 }: {
   title?: string;
+  section?: string;
 }) {
   return (
     <AcquisitionShell
@@ -23,9 +27,8 @@ export function PerformanceSkeleton({
       pageName={title}
     >
       <PageHeader title={title} titleInBar />
-      {Array.from({ length: 6 }, (_, index) => (
-        <SkeletonRow key={index} />
-      ))}
+      {section ? <h2 className={styles.section}>{section}</h2> : null}
+      <PerformanceLoading withPeriod />
     </AcquisitionShell>
   );
 }

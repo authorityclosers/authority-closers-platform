@@ -237,6 +237,21 @@ it("shows a seller only their own, and reads 7 days on request", async () => {
   const own = host.querySelector("details");
   expect(own?.open).toBe(true);
   expect(own?.querySelector("summary strong")?.textContent).toBe("You");
+  // Five headline numbers, the rest one tap away, and no line repeating a
+  // chip (simplify pass, owner approved 2 Nov 2026).
+  expect(
+    own?.querySelectorAll(
+      'table[aria-label="Your work, Inbound and Cold"] tbody tr',
+    ),
+  ).toHaveLength(5);
+  expect(
+    Array.from(
+      own?.querySelectorAll("summary") ?? [],
+      (item) => item.textContent,
+    ),
+  ).toContain("More numbers");
+  expect(own?.textContent).not.toContain("No tasks overdue");
+  expect(own?.textContent).not.toContain("today has its recording");
   const week = Array.from(host.querySelectorAll("button")).find(
     (button) => button.textContent === "7 days",
   );
