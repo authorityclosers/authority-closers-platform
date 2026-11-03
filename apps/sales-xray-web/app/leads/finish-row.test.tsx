@@ -66,3 +66,21 @@ it("pins the newest unanswered call until it is finished or put away", async () 
   );
   expect(host.textContent).toBe("");
 });
+
+// Phone QA, 3 Nov 2026: the dialler opened and closed with Back, no call, and
+// the line said "called just now". A dial the phone hasn't shown says so.
+it("says dialled, not called, when the phone saw no call", async () => {
+  await act(async () =>
+    root.render(
+      <FinishRow
+        calls={[
+          { ...calls[0], called_at: "2026-11-01T09:59:40Z", phone_saw: false },
+        ]}
+        onFinish={vi.fn()}
+        now={NOW}
+      />,
+    ),
+  );
+  expect(host.textContent).toContain("dialled just now · Did you call?");
+  expect(host.textContent).not.toContain("called");
+});

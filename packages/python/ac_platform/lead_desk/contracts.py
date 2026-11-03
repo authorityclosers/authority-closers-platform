@@ -67,6 +67,9 @@ class Unanswered(Model):
     name: str
     called_at: datetime
     event_id: UUID
+    # False: a Call-button dial the phone's call log hasn't shown, which may never have been
+    # placed; the line says "dialled", not "called" (phone QA, 3 Nov 2026).
+    phone_saw: bool = True
 
 
 class TeamPool(Model):

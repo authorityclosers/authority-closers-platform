@@ -155,6 +155,8 @@ export type Unanswered = {
   name: string;
   called_at: string;
   event_id: string;
+  /** False: a dial the phone's call log hasn't shown, maybe never placed. */
+  phone_saw?: boolean;
 };
 
 export type LeadEvent = {

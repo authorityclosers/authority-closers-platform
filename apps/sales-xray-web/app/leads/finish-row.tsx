@@ -72,7 +72,11 @@ export function FinishRow({
       >
         <strong>Finish: {displayName(call.name)}</strong>
         <span>
-          {`called ${ago(call.called_at, now)} · How did it go?`}
+          {/* A dial the phone never showed may not have been placed (phone
+              QA, 3 Nov 2026: a back-out from the dialler read "called"). */}
+          {call.phone_saw === false
+            ? `dialled ${ago(call.called_at, now)} · Did you call?`
+            : `called ${ago(call.called_at, now)} · How did it go?`}
           {more > 0 ? ` · ${more} more` : ""}
         </span>
       </button>

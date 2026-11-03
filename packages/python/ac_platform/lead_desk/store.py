@@ -1490,6 +1490,9 @@ class LeadDesk:
                 name=names[row.lead_id],
                 called_at=row.at,
                 event_id=row.event_id,
+                # A dial the phone's call log hasn't matched (a back-out from the dialler
+                # looks the same until the log is read): never "called" (3 Nov 2026).
+                phone_saw=not is_dial(row.data) or PHONE_SECONDS in row.data,
             )
             for row in waiting
             if row.lead_id in names

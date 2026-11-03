@@ -1822,6 +1822,9 @@ def test_a_call_waits_for_its_answer_on_the_desk(postgres_harness: Any, tmp_path
                 [waiting] = (await client.get(BASE)).json()["unanswered"]
                 assert waiting["lead_id"] == lead_id
                 assert waiting["name"] == "Fictional Finish"
+                # A dial the phone's call log hasn't shown: "dialled", never "called"
+                # (phone QA, 3 Nov 2026: a back-out from the dialler read "called just now").
+                assert waiting["phone_saw"] is False
                 answered = await client.post(
                     f"{BASE}/leads/{lead_id}/dispose",
                     json={
@@ -1834,6 +1837,41 @@ def test_a_call_waits_for_its_answer_on_the_desk(postgres_harness: Any, tmp_path
                 )
                 assert answered.status_code == 200, answered.text
                 assert (await client.get(BASE)).json()["unanswered"] == []
+
+                # A call the phone itself logged: the phone saw it.
+                other = await client.post(
+                    f"{BASE}/leads",
+                    json={
+                        "command_id": str(uuid4()),
+                        "name": "Fictional Finish Two",
+                        "phone": "9800000032",
+                        "assign": "me",
+                    },
+                    headers=WRITE,
+                )
+                assert other.status_code == 201, other.text
+                logged = await client.post(
+                    f"{BASE}/phone-log",
+                    json={
+                        "device_id": str(uuid4()),
+                        "calls": [
+                            {
+                                "log_id": "3101",
+                                "number": "9800000032",
+                                "started_at": (
+                                    datetime.now(UTC) - timedelta(minutes=2)
+                                ).isoformat(),
+                                "duration_seconds": 30,
+                                "direction": "outgoing",
+                            }
+                        ],
+                    },
+                    headers=WRITE,
+                )
+                assert logged.status_code == 200, logged.text
+                [seen] = (await client.get(BASE)).json()["unanswered"]
+                assert seen["lead_id"] == other.json()["lead"]["lead_id"]
+                assert seen["phone_saw"] is True
         finally:
             await setup.engine.dispose()
 
