@@ -906,11 +906,12 @@
   color: var(--sx-bad);
 }
 
+/* --sx-text-kpi is a whole font (weight, size, line): as a font-size it was dropped and
+   the outcome figures showed at body size (Analytics shots, 3 Nov 2026). A standalone
+   figure keeps proportional digits. */
 .kpiValue {
   color: var(--sx-ink);
-  font-size: var(--sx-text-kpi);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+  font: var(--sx-text-kpi);
 }
 
 .kpiLabel {

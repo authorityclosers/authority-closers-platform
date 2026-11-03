@@ -470,7 +470,15 @@ export function FilterSheet({
           label="Date"
           words={MADE_WORDS}
           value={more.created}
-          onChange={(created) => setMore({ created })}
+          onChange={(created) =>
+            // Old leads are in no To Call or Follow-ups list: they open in All Leads,
+            // so the tabs never read "To Call 0" over them (orchestrator, 3 Nov 2026).
+            setMore(
+              created === "history"
+                ? { created, view: "all", when: null }
+                : { created },
+            )
+          }
         />
         <Choices
           label="Follow-up"
