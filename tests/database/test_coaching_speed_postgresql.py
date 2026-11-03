@@ -20,9 +20,10 @@ from tests.database.test_conversation_submission_http_postgresql import ORIGIN, 
 from tests.database.test_prospect_store_postgresql import direct_call
 
 CALLS = 20
-# The read itself, then each report's access checks, recording, draft, run and withholding.
-READ_QUERIES = 20
-QUERIES_PER_REPORT = 35
+# The read itself with one access query for them all (orchestrator's go, 3 Nov 2026),
+# then each report's draft, run, chain check and withholding.
+READ_QUERIES = 40
+QUERIES_PER_REPORT = 15
 
 
 @pytest.fixture
