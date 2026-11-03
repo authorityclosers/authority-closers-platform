@@ -475,6 +475,13 @@ export function LeadSearch({
   );
 }
 
+/** The list Call Next goes through: the tab's own, but All Leads lists both
+ *  sides, so there it is the side's To Call, its count and its leads (phone
+ *  QA, 3 Nov 2026: Inbound's All Leads said "Call Next Lead · 913", Cold's). */
+export function callNextView(view: WorkView): Exclude<WorkView, "all"> {
+  return view === "all" ? "to_call" : view;
+}
+
 /** Call Next Lead (Inbound) or Start Cold Calling: the list's first lead. */
 export function CallNext({
   side,

@@ -132,6 +132,7 @@ import { can as roleCan } from "../organisation/roles";
 import { listScope, OPENING_STAGE, OPENING_WORK } from "./opening";
 import {
   CallNext,
+  callNextView,
   FollowUpTabs,
   LeadSearch,
   StagePicker,
@@ -155,6 +156,7 @@ import {
   readPaused,
   roundDone,
   startFrom,
+  triedLately,
   NO_ROUND,
   type PausedRound,
   type RoundBook,
@@ -1775,11 +1777,19 @@ export function LeadsRoute({
           talk_seconds: desk.numbers.talk_seconds,
         }
       : null;
-  /** Start a round, from the top or where a paused one stopped. */
-  const startRound = (paused: PausedRound | null) => {
+  /** Start a round, from the top or where a paused one stopped; `from`: a
+   *  list read for it, not the one on screen. */
+  const startRound = (
+    paused: PausedRound | null,
+    from?: { order: readonly string[]; tried: readonly string[] },
+  ) => {
     setChoosing(null);
     // Continue opens the lead it paused on first (call-round startFrom).
-    const start = startFrom({ paused, order: order.current, tried });
+    const start = startFrom({
+      paused,
+      order: from?.order ?? order.current,
+      tried: from?.tried ?? tried,
+    });
     if (desk) keepPaused(desk.me.person_id, null);
     if (!start.next) return;
     setBook({
@@ -1793,6 +1803,36 @@ export function LeadsRoute({
     setQueue(start.served);
     open(start.next);
   };
+  // All Leads lists both sides, so its Call Next calls the side's To Call
+  // (phone QA, 3 Nov 2026: Inbound's said 913 and would have dialled Cold
+  // leads): the list turns to To Call, and the round starts at its first lead.
+  const callToCall = async () => {
+    pickWork({ view: "to_call", when: null });
+    const paused = desk ? readPaused(desk.me.person_id, side) : null;
+    if (paused) {
+      setChoosing(paused);
+      return;
+    }
+    try {
+      const page = await readLeads({
+        scope,
+        owner: scope === "team" ? (sellerOwner ?? undefined) : undefined,
+        search: query,
+        pipeline,
+        more: { ...more, side, view: "to_call", when: null, step: stepShown },
+      });
+      startRound(null, {
+        order: page.leads.map((row) => row.lead_id),
+        tried: triedLately(page.leads),
+      });
+    } catch {
+      // To Call says it didn't load, with Try again; Call Next stays.
+    }
+  };
+  const callCount =
+    viewCounts?.key === viewCountsKey
+      ? (viewCounts.value[callNextView(workView)] ?? null)
+      : null;
   // A wide screen shows the lead beside the list (owner, 31 Oct 2026: the
   // computer's full width, a list and a detail pane); elsewhere a sheet.
   const paneShown =
@@ -2020,13 +2060,15 @@ export function LeadsRoute({
                       {/* Call Next Lead or Start Cold Calling: the list's first lead. */}
                       <CallNext
                         side={side}
-                        disabled={!topLead}
-                        count={
-                          viewCounts?.key === viewCountsKey
-                            ? (viewCounts.value[workView] ?? null)
-                            : null
+                        disabled={
+                          workView === "all" ? callCount === 0 : !topLead
                         }
+                        count={callCount}
                         onStart={() => {
+                          if (workView === "all") {
+                            void callToCall();
+                            return;
+                          }
                           if (!topLead) return;
                           const paused = desk
                             ? readPaused(desk.me.person_id, side)
