@@ -803,23 +803,24 @@
   }
 }
 
-/* Plan & billing inside Settings */
+/* Plan & billing inside Settings: one card, its parts bands under a hairline,
+   never boxes in a box (owner, production report 124, 3 Nov 2026). */
 .billingBlock {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 8px 0 16px;
+  padding: 0 0 8px;
 }
 
 .billingCard {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px;
-  border: 1px solid var(--lx-line);
-  border-radius: var(--lx-radius-md, 14px);
-  background: var(--lx-paper-2);
+  padding: 16px 0;
   min-width: 0;
+}
+
+.billingCard + .billingCard {
+  border-top: 1px solid var(--lx-line);
 }
 
 .billingCardHead {
