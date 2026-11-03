@@ -12,8 +12,8 @@
   min-width: 0;
   color: var(--lx-ink);
   font-family: var(--lx-font-ui);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 
 .page h1,
@@ -40,8 +40,8 @@
   border-radius: var(--lx-radius-sm);
   background: var(--lx-teal);
   color: var(--lx-on-teal);
-  font-size: 14px;
-  font-weight: 700;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   letter-spacing: 0.02em;
 }
 
@@ -72,7 +72,7 @@
 
 .headerCopy p b {
   color: var(--lx-ink-3);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 /* ---------- Tabs ---------- */
@@ -103,7 +103,7 @@
   color: var(--lx-muted);
   cursor: pointer;
   font: inherit;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .tab:hover {
@@ -137,9 +137,9 @@
   border-radius: var(--lx-radius-pill);
   background: var(--lx-sunken);
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   font-variant-numeric: tabular-nums;
-  line-height: 18px;
+  line-height: var(--sx-leading-16);
   text-align: center;
 }
 
@@ -182,8 +182,8 @@
   align-items: baseline;
   gap: 8px;
   color: var(--lx-ink);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .count {
@@ -218,7 +218,7 @@
 
 .textLink {
   color: var(--lx-teal);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -234,7 +234,7 @@
 .footnote {
   padding: 10px 14px;
   border-top: 1px solid var(--lx-line-soft);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 .surface > .footnote:first-child {
@@ -267,8 +267,8 @@
 
 .kpi dt {
   color: var(--lx-muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .kpi dd {
@@ -284,17 +284,17 @@
 }
 
 .kpi dd b {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
-  line-height: 1.2;
+  line-height: var(--sx-leading-28);
 }
 
 .kpiContext {
   overflow: hidden;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -354,8 +354,8 @@
   border-bottom: 1px solid var(--lx-line);
   background: var(--lx-paper-2);
   color: var(--lx-muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .callRow {
@@ -398,7 +398,7 @@
 }
 
 .callName b {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .callName b[data-unnamed] {
@@ -410,7 +410,7 @@
   display: none;
   overflow: hidden;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -440,9 +440,9 @@
   border-radius: 50%;
   background: var(--lx-sunken);
   color: var(--lx-ink-3);
-  font-size: 10px;
+  font-size: var(--sx-text-2xs);
   font-style: normal;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.02em;
 }
 
@@ -467,7 +467,7 @@
   align-items: center;
   gap: 7px;
   color: var(--lx-ink-3);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   white-space: nowrap;
 }
 
@@ -508,8 +508,8 @@
   color: var(--lx-ink-3);
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .more:hover {
@@ -548,7 +548,7 @@
   margin: 0 0 4px;
   color: var(--lx-muted);
   font-size: var(--sx-text-sm);
-  line-height: 1.5;
+  line-height: var(--sx-leading-20);
 }
 
 .empty {
@@ -561,8 +561,8 @@
 }
 
 .empty b {
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .empty p {
@@ -587,7 +587,7 @@
 .quietLine {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 .receiptQuiet {
@@ -619,8 +619,8 @@
   border-bottom: 1px solid var(--lx-line);
   background: var(--lx-paper-2);
   color: var(--lx-muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .receiptRow {
@@ -671,7 +671,7 @@
   min-width: 0;
   gap: 4px;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 .peopleSearchField input {
@@ -685,7 +685,7 @@
   background: var(--lx-surface);
   color: var(--lx-ink);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .peopleSearchField input::placeholder {
@@ -700,7 +700,7 @@
 .peopleCount {
   grid-column: 1 / -1;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -753,12 +753,12 @@
   min-width: 0;
   align-items: center;
   gap: 6px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .personName small {
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 /* A name takes two lines rather than being cut ("Neha Kulka…" at 1440). */
@@ -815,12 +815,12 @@
 }
 
 .personFigures b {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .personFigures small {
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 .tag {
@@ -829,9 +829,9 @@
   border-radius: var(--lx-radius-xs);
   background: var(--lx-sunken);
   color: var(--lx-muted);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 18px;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
 }
 
 .tag[data-tone="info"] {
@@ -893,7 +893,7 @@
   background: none;
   color: var(--lx-ink);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
   outline: none;
 }
 
@@ -902,20 +902,20 @@
 }
 
 .at {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .fieldError {
   flex-basis: 100%;
   color: var(--lx-danger);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 /* Why Invite is closed (no free seat): a plain note, not an error. */
 .fieldNote {
   flex-basis: 100%;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 /* The role pickers' popovers open past the edge of the members list. */
@@ -1052,7 +1052,7 @@
 
 .role[data-role="owner"] {
   color: var(--lx-ink);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .role[data-role="owner"] svg {
@@ -1119,8 +1119,8 @@
   border-radius: var(--lx-radius-sm);
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
   transition:
@@ -1206,13 +1206,13 @@
 }
 
 .settingIntro h2 {
-  font-size: 14px;
-  font-weight: 650;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
 }
 
 .settingIntro p {
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 .settingBody {
@@ -1241,8 +1241,8 @@
 
 .form label span {
   color: var(--lx-ink-3);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .form input {
@@ -1256,7 +1256,7 @@
   background: var(--lx-surface);
   color: var(--lx-ink);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .form input:focus-visible {
@@ -1308,7 +1308,7 @@
 
 .hint {
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 .hint[data-tone="error"] {
@@ -1335,8 +1335,8 @@
   border-radius: var(--lx-radius-md);
   background: var(--lx-teal);
   color: var(--lx-on-teal);
-  font-size: 20px;
-  font-weight: 700;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   letter-spacing: 0.02em;
 }
 
@@ -1389,8 +1389,8 @@
   border: 1px solid var(--lx-line);
   border-radius: var(--lx-radius-pill);
   background: var(--lx-paper-2);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .chip:not(:has(button)) {
@@ -1478,12 +1478,12 @@
 }
 
 .toggle b {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .toggle small {
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 /* ---------- Page states ---------- */
@@ -1502,8 +1502,8 @@
 }
 
 .state h2 {
-  font-size: 14px;
-  font-weight: 650;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
 }
 
 .state p {
@@ -1705,14 +1705,14 @@
 .patternColumn h3 {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .patternQuiet {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 /* A bar list: the tint behind each row is its share; the number is exact. */
@@ -1733,7 +1733,7 @@
   min-height: 30px;
   padding: 0 8px;
   border-radius: var(--lx-radius-xs);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .barList li > i {
@@ -1758,12 +1758,12 @@
   flex: none;
   color: var(--lx-ink);
   font-variant-numeric: tabular-nums;
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .barList li > b small {
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   font-weight: 500;
 }
 
@@ -1780,8 +1780,8 @@
   color: var(--lx-ink-3);
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .moreToggle:hover {
@@ -1824,8 +1824,8 @@
   display: -webkit-box;
   overflow: hidden;
   color: var(--lx-ink);
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -1836,20 +1836,20 @@
   gap: 6px;
   min-width: 0;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   white-space: nowrap;
 }
 
 .fixCount {
   flex: none;
   color: var(--lx-teal);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .fixMeta .avatar {
   width: 18px;
   height: 18px;
-  font-size: 8.5px;
+  font-size: var(--sx-text-2xs);
 }
 
 .fixCall {
@@ -1866,7 +1866,7 @@
   color: var(--lx-teal);
   cursor: pointer;
   font: inherit;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .patternBoneTitle {
@@ -1961,7 +1961,7 @@
   }
 
   .kpi dd b {
-    font-size: 20px;
+    font-size: var(--sx-text-md);
   }
 
   .spark {
@@ -2184,7 +2184,7 @@
   .memberRow .avatar {
     width: 32px;
     height: 32px;
-    font-size: 11px;
+    font-size: var(--sx-text-2xs);
   }
 
   .memberRow > .roleCell {
@@ -2199,8 +2199,8 @@
     border-radius: 999px;
     background-color: var(--sx-fill-soft);
     color: var(--sx-ink-2);
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--sx-text-xs);
+    font-weight: 500;
   }
 
   .memberRow .role {
@@ -2226,7 +2226,7 @@
   }
 
   .addRow .field input {
-    font-size: 16px;
+    font-size: var(--sx-text-md);
   }
 }
 

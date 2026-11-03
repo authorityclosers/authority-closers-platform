@@ -58,8 +58,8 @@
   width: 30px;
   transform: translateY(-50%);
   color: var(--lx-ink);
-  font-size: 8.5px;
-  font-weight: 800;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
   line-height: 1;
   text-align: center;
   letter-spacing: -0.02em;
@@ -72,13 +72,13 @@
 
 .text strong {
   color: var(--lx-ink);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .text small {
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   font-weight: 500;
 }
 
@@ -147,12 +147,12 @@
   align-items: baseline;
   gap: 4px;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   font-weight: 500;
   white-space: nowrap;
 }
 .text strong {
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   font-variant-numeric: tabular-nums;
 }
 .more {
@@ -214,5 +214,5 @@
   display: block;
   left: 2px;
   width: 28px;
-  font-size: 7.5px;
+  font-size: var(--sx-text-2xs);
 }

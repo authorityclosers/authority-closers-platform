@@ -25,8 +25,8 @@
 
 .brand {
   color: var(--lx-ink, #1c2a39);
-  font-size: 14px;
-  font-weight: 750;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -42,14 +42,14 @@
 .eyebrow {
   margin: 0 0 8px;
   color: var(--lx-teal, #08776e);
-  font-size: 12px;
-  font-weight: 750;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .content h1 {
   margin: 0;
   color: var(--lx-ink, #1c2a39);
-  font: 800 clamp(26px, 5vw, 38px) / 1.16
+  font: 500 clamp(26px, 5vw, 38px) / 1.16
     var(--lx-font-display, var(--lx-font-ui, sans-serif));
   letter-spacing: -0.025em;
   text-wrap: balance;
@@ -58,13 +58,13 @@
 .updated {
   margin: 12px 0 28px;
   color: var(--lx-muted, #637386);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .intro {
   margin: 0;
   color: var(--lx-ink-2, #35465a);
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
 }
 
 .sections {
@@ -80,14 +80,15 @@
 .section h2 {
   margin: 0;
   color: var(--lx-ink, #1c2a39);
-  font: 700 17px / 1.35 var(--lx-font-display, var(--lx-font-ui, sans-serif));
+  font: 500 var(--sx-text-md) / var(--sx-leading-24)
+    var(--lx-font-display, var(--lx-font-ui, sans-serif));
   text-wrap: balance;
 }
 
 .section p {
   margin: 0;
   color: var(--lx-ink-2, #35465a);
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
 }
 
 .section ul {
@@ -96,7 +97,7 @@
   margin: 2px 0 0;
   padding-left: 20px;
   color: var(--lx-ink-2, #35465a);
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
 }
 
 .details {
@@ -112,20 +113,20 @@
 
 .details dt {
   color: var(--lx-muted, #637386);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .details dd {
   margin: 0;
   color: var(--lx-ink-2, #35465a);
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
 }
 
 .details a,
 .section a {
   color: var(--lx-teal, #08776e);
-  font-weight: 650;
+  font-weight: 500;
   text-underline-offset: 3px;
 }
 
@@ -147,8 +148,8 @@
 
 .footerLinks a {
   color: var(--lx-muted, #637386);
-  font-size: 12px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   text-decoration: none;
   text-underline-offset: 3px;
 }

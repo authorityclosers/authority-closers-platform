@@ -1,8 +1,9 @@
 /**
- * Touch screens: every control answers a 44 px tap, whatever size it is drawn
+ * Touch screens: every control answers a 48 px tap (Android's touch target;
+ * native-feel spec, 3 Nov 2026), whatever size it is drawn
  * (owner, 3 Nov 2026: fix it once in the kit, not screen by screen; the QA
  * robot's tap-target rows). A control drawn smaller gets data-reach, and
- * tokens/screen.css gives it an invisible layer out to 44 px, so nothing moves
+ * tokens/screen.css gives it an invisible layer out to 48 px, so nothing moves
  * or shows. Left as they are: links in running text, controls placed
  * absolutely, fixed or sticky, controls that draw their own ::after, and
  * controls with a ::before or parts placed against something outside them
@@ -11,14 +12,14 @@
 
 const CONTROLS =
   'a[href], button, [role="button"], [role="tab"], [role="radio"], [role="switch"], [role="checkbox"], [role="menuitem"]';
-const TARGET = 44;
+const TARGET = 48;
 
 const drawn = (value: string) =>
   !!value && value !== "none" && value !== "normal";
 const placed = (position: string) =>
   position === "absolute" || position === "fixed";
 
-/** True when a control is drawn under 44 px and can take the reach with nothing moving. */
+/** True when a control is drawn under 48 px and can take the reach with nothing moving. */
 export function needsReach(control: Element): boolean {
   const box = control.getBoundingClientRect();
   if (box.width < 3 || box.height < 3) return false;

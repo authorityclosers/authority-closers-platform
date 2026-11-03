@@ -13,8 +13,8 @@
   justify-self: start;
   min-height: 32px;
   color: color-mix(in oklab, var(--sx-accent) 80%, var(--lx-ink));
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -26,8 +26,8 @@
 
 .alertNote {
   color: var(--sx-muted);
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 
 .summaryActions {
@@ -45,8 +45,8 @@
   background: var(--sx-surface);
   color: var(--sx-ink);
   font: inherit;
-  font-size: 14px;
-  font-weight: 650;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   cursor: pointer;
 }
 

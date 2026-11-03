@@ -62,8 +62,8 @@
 
 .header {
   color: var(--lx-muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .header button,
@@ -124,28 +124,28 @@
 
 .visualNote {
   color: var(--lx-ink-3);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: var(--sx-text-2xs);
+  line-height: var(--sx-leading-16);
 }
 
 .content h2 {
   margin: 16px 0 8px;
-  font-size: 21px;
-  line-height: 1.2;
+  font-size: var(--sx-text-xl);
+  line-height: var(--sx-leading-28);
   letter-spacing: -0.4px;
 }
 
 .content p {
   margin: 0;
   color: var(--lx-ink-3);
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 
 .content .waiting {
   margin-top: 10px;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 .footer {
@@ -169,7 +169,7 @@
   padding: 8px 12px;
   border: 0;
   border-radius: 12px;
-  font: 600 12px/1.4 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   cursor: pointer;
   text-decoration: none;
 }
@@ -213,7 +213,7 @@
   border-radius: 8px;
   background: var(--lx-teal);
   color: var(--lx-on-teal);
-  font: 600 11px/1.4 var(--lx-font-ui);
+  font: 500 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 @keyframes arrive {
@@ -280,7 +280,7 @@
     padding: 10px 12px;
   }
   .content h2 {
-    font-size: 19px;
+    font-size: var(--sx-text-md);
   }
 }
 

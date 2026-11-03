@@ -21,7 +21,7 @@
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -43,7 +43,7 @@
   background: var(--sx-sunken);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  line-height: 20px;
+  line-height: var(--sx-leading-16);
   text-align: center;
   font-variant-numeric: tabular-nums;
 }

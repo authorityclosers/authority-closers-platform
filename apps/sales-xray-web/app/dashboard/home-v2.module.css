@@ -9,7 +9,7 @@
   gap: 2px;
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
   text-decoration: none;
   touch-action: manipulation;
 }
@@ -24,7 +24,7 @@
   overflow: hidden;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 700;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -40,7 +40,7 @@
 .words small {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 /* ---------- Pick up where you left off ---------- */
@@ -300,7 +300,7 @@
 .ring > span {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 750;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 

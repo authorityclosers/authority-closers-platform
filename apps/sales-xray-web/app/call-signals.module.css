@@ -7,7 +7,7 @@
 .lead {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .grid {
@@ -39,7 +39,7 @@
   flex: 1;
   margin: 0;
   color: var(--lx-ink);
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
 }
 
 .icon {
@@ -59,21 +59,21 @@
   border-radius: 99px;
   background: var(--lx-sunken);
   color: var(--lx-ink-3);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   text-align: center;
 }
 
 .note {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 
 .empty {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 12.5px;
+  font-size: var(--sx-text-xs);
 }
 
 .list {
@@ -113,7 +113,7 @@
   border-radius: 99px;
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
-  font: 600 11.5px/1.4 var(--lx-font-ui, inherit);
+  font: 500 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition: transform 140ms var(--lx-ease-pop, ease);
@@ -128,8 +128,8 @@
   gap: 3px;
   min-width: 0;
   color: var(--lx-ink);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 
 .words q,
@@ -149,9 +149,9 @@ q.words {
   border-radius: 99px;
   background: var(--lx-sunken);
   color: var(--lx-ink-3);
-  font-size: 11px;
+  font-size: var(--sx-text-2xs);
   font-style: normal;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .warn {
@@ -163,7 +163,7 @@ q.words {
 .cut,
 .reply {
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 .reply b {
@@ -206,14 +206,14 @@ q.words {
 
 .stats dt {
   color: var(--lx-muted);
-  font-size: 11.5px;
+  font-size: var(--sx-text-2xs);
 }
 
 .stats dd {
   margin: 2px 0 0;
   color: var(--lx-ink);
-  font-size: 16px;
-  font-weight: 700;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -223,8 +223,7 @@ q.words {
   background: transparent;
   color: var(--lx-teal);
   font: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -240,13 +239,13 @@ q.words {
 
 .ask b {
   color: var(--lx-ink);
-  font-size: 15px;
+  font-size: var(--sx-text-md);
 }
 
 .ask p {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .choices {
@@ -266,7 +265,7 @@ q.words {
   border-radius: 12px;
   background: var(--lx-surface);
   color: var(--lx-ink);
-  font: 600 13px/1.3 var(--lx-font-ui, inherit);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
   text-align: left;
   cursor: pointer;
   transition:
@@ -290,7 +289,7 @@ q.words {
   grid-column: 2;
   overflow: hidden;
   color: var(--lx-muted);
-  font-size: 11.5px;
+  font-size: var(--sx-text-2xs);
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;

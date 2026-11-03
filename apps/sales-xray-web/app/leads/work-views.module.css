@@ -219,7 +219,7 @@
   color: var(--sx-muted);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -251,7 +251,7 @@
 }
 
 .tab[aria-selected="true"] .tabCount {
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .subTabs .tab {
@@ -312,7 +312,7 @@
   color: var(--lx-on-teal);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;

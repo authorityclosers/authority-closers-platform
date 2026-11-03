@@ -14,7 +14,7 @@
   color: var(--sx-ink);
   font-family: var(--lx-font-ui);
   font-size: var(--sx-text-sm);
-  line-height: 1.5;
+  line-height: var(--sx-leading-20);
   overflow-wrap: anywhere;
 }
 
@@ -30,7 +30,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .langs {
@@ -49,7 +49,7 @@
   background: transparent;
   color: var(--sx-ink-2);
   font: inherit;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -61,8 +61,8 @@
 
 .hero h1 {
   margin: 0 0 6px;
-  font-size: 26px;
-  line-height: 1.2;
+  font-size: var(--sx-text-2xl);
+  line-height: var(--sx-leading-36);
 }
 
 .name {
@@ -100,7 +100,7 @@
   border-radius: 50%;
   background: var(--sx-accent-soft);
   color: var(--sx-accent);
-  font-weight: 750;
+  font-weight: 500;
 }
 
 .step[data-done] .number {
@@ -119,7 +119,7 @@
 .stuck h2 {
   margin: 0;
   font-size: var(--sx-text-md);
-  line-height: 1.3;
+  line-height: var(--sx-leading-24);
 }
 
 .stepBody p,
@@ -145,7 +145,7 @@
   border-radius: var(--sx-radius-pill);
   background: var(--sx-accent);
   color: var(--sx-accent-ink);
-  font-weight: 700;
+  font-weight: 500;
   text-align: center;
   text-decoration: none;
 }
@@ -166,7 +166,7 @@
   background: transparent;
   color: var(--sx-ink-2);
   font: inherit;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -211,7 +211,7 @@
   min-height: 48px;
   padding: 8px 16px;
   border-radius: inherit;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -228,7 +228,7 @@
 .still a,
 .footer a {
   color: var(--sx-accent);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 /* A 44 px tap for a one-word link. */

@@ -6,18 +6,18 @@
 }
 .head h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--sx-text-md);
 }
 .head p {
   margin: 4px 0 8px;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .measurements {
   margin-top: 16px;
   border-top: 1px solid var(--lx-line-soft);
   padding-top: 8px;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .measurements summary {
   min-height: 32px;
@@ -37,11 +37,11 @@
 }
 .row dt {
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .row dd {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .number {
   display: flex;

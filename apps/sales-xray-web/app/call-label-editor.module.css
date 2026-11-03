@@ -6,8 +6,8 @@
 
 .label {
   color: var(--lx-ink-3);
-  font-size: 12.5px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .row {
@@ -28,7 +28,7 @@
   background: var(--lx-surface);
   color: var(--lx-ink);
   font: inherit;
-  font-size: 15px;
+  font-size: var(--sx-text-md);
 }
 
 .input[aria-invalid="true"] {
@@ -51,8 +51,8 @@
   border: 1px solid transparent;
   border-radius: var(--lx-radius-sm);
   font: inherit;
-  font-size: 13.5px;
-  font-weight: 700;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -77,13 +77,13 @@
 .help {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 12.5px;
+  font-size: var(--sx-text-xs);
 }
 
 .problem {
   margin: 0;
   color: var(--lx-danger);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .link {
@@ -96,8 +96,8 @@
   background: none;
   color: var(--lx-strength-ink);
   font: inherit;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -151,7 +151,7 @@
   border-radius: 12px;
   background: var(--lx-surface);
   box-shadow: 0 0 0 4px var(--lx-teal-soft);
-  font: 800 clamp(20px, 1.9vw, 26px) / 1.1 var(--lx-font-display);
+  font: 500 clamp(20px, 1.9vw, 26px) / 1.1 var(--lx-font-display);
   letter-spacing: -0.02em;
   outline: none;
 }
@@ -165,7 +165,7 @@
   min-height: 38px;
   padding: 0 16px;
   border-radius: var(--lx-radius-pill);
-  font-size: 13.5px;
+  font-size: var(--sx-text-sm);
 }
 .primary {
   background: var(--lx-gradient-primary);
@@ -190,14 +190,14 @@
 .help {
   grid-column: 1;
   color: var(--lx-muted-2);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .editor > .link {
   grid-column: 2;
   justify-self: end;
   color: var(--lx-muted);
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 .editor > .link:hover:not(:disabled) {
   color: var(--lx-danger);

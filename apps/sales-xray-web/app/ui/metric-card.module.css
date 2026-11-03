@@ -119,9 +119,9 @@
 }
 
 .value {
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 1.2;
+  font-size: var(--sx-text-2xl);
+  font-weight: 500;
+  line-height: var(--sx-leading-36);
   letter-spacing: -0.025em;
   color: var(--theme-text, var(--lx-ink));
   font-variant-numeric: tabular-nums;
@@ -131,14 +131,14 @@
 }
 
 .unit {
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
   font-weight: 500;
   color: var(--theme-text-muted, var(--lx-muted));
   letter-spacing: 0;
 }
 
 .label {
-  font-size: 13.5px;
+  font-size: var(--sx-text-sm);
   font-weight: 500;
   color: var(--theme-text-muted, var(--lx-muted));
   margin-top: 4px;
@@ -159,14 +159,14 @@
 }
 
 .context {
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   color: var(--theme-text-muted, var(--lx-muted));
-  line-height: 1.4;
+  line-height: var(--sx-leading-16);
   overflow-wrap: anywhere;
 }
 
 .source {
-  font-size: 11px;
+  font-size: var(--sx-text-2xs);
   color: var(--theme-text-muted, var(--lx-muted));
   opacity: 0.85;
 }
@@ -198,8 +198,8 @@
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   padding: 1px 5px;
   border-radius: 5px;

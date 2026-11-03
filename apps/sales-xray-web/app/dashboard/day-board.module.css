@@ -40,16 +40,16 @@
 }
 
 .tile strong {
-  font-size: 24px;
-  font-weight: 750;
-  line-height: 1.1;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
+  line-height: var(--sx-leading-28);
   font-variant-numeric: tabular-nums;
 }
 
 .tile span {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .tile[data-tone="bad"] strong {
@@ -98,7 +98,7 @@
 .stageLabel {
   overflow: hidden;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

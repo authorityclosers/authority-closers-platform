@@ -26,14 +26,14 @@
 .subtitle {
   color: var(--lx-muted);
   margin: 0 0 16px;
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
 }
 .entry {
   padding: 12px 0;
   border-bottom: 1px solid var(--lx-line-soft);
 }
 .entry h3 {
-  font-size: 15px;
+  font-size: var(--sx-text-md);
   margin: 0 0 5px;
   display: flex;
   align-items: baseline;
@@ -42,23 +42,23 @@
 }
 .entry p,
 .skill p {
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
   margin: 0;
 }
 .entry small,
 .skill small {
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   font-weight: 500;
 }
 .entry[data-gap] p {
   color: var(--lx-muted);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .sources {
   margin-top: 8px;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .sources summary {
   color: var(--lx-teal);
@@ -76,7 +76,7 @@
 }
 .evidence figcaption {
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   margin-bottom: 5px;
 }
 .evidence button {
@@ -91,7 +91,7 @@
 }
 .evidence blockquote {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
 }
 .metrics {
   display: flex;
@@ -101,18 +101,18 @@
   padding: 12px 0;
 }
 .metrics dt {
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   color: var(--lx-muted);
 }
 .metrics dd {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   margin: 3px 0;
 }
 .metrics small,
 .measurements p {
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .timeline {
   display: flex;
@@ -131,11 +131,11 @@
 }
 .timeline strong {
   display: block;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .timeline span {
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .skill {
   border-bottom: 1px solid var(--lx-line-soft);
@@ -147,8 +147,8 @@
   justify-content: space-between;
   gap: 12px;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   min-height: 40px;
 }
 .skill summary small {
@@ -162,7 +162,7 @@
   display: inline-block;
   color: var(--lx-teal);
   margin-top: 20px;
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
 }
 .previewControls {
   display: flex;

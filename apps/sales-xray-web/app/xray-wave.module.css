@@ -130,18 +130,18 @@
   gap: 8px 14px;
   margin: 0;
   color: var(--lx-muted);
-  font-size: 12.5px;
+  font-size: var(--sx-text-xs);
 }
 .legendLead {
   color: var(--lx-muted-2);
-  font-weight: 600;
+  font-weight: 500;
 }
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   color: var(--lx-ink-3);
-  font-weight: 600;
+  font-weight: 500;
 }
 .chip i {
   width: 8px;

@@ -19,9 +19,9 @@
   border-radius: 999px;
   background: var(--lx-teal);
   color: var(--lx-on-teal);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 15px;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
   text-align: center;
 }
 

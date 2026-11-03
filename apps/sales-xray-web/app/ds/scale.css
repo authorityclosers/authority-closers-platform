@@ -5,20 +5,20 @@
  * Category hues and shadows use Sales X-Ray's tokens (no raw colours in app CSS).
  */
 :where([data-pulse-scope], .pulse-scope) {
-  /* Type: one scale on Sales X-Ray's UI face. */
+  /* Type: the kit's one scale (owner, 3 Nov 2026), on Sales X-Ray's UI face. */
   --ds-font: var(--lx-font-ui);
-  --ds-text-xs: 11.5px;
-  --ds-text-sm: 12.5px;
-  --ds-text-md: 13.5px;
-  --ds-text-lg: 15px;
-  --ds-text-xl: 18px;
-  --ds-text-2xl: 22px;
-  --ds-text-3xl: 26px;
-  --ds-text-display: 34px;
-  --ds-weight-regular: 450;
-  --ds-weight-medium: 550;
-  --ds-weight-strong: 650;
-  --ds-weight-heavy: 700;
+  --ds-text-xs: var(--sx-text-2xs);
+  --ds-text-sm: var(--sx-text-xs);
+  --ds-text-md: var(--sx-text-sm);
+  --ds-text-lg: var(--sx-text-md);
+  --ds-text-xl: var(--sx-text-md);
+  --ds-text-2xl: var(--sx-text-xl);
+  --ds-text-3xl: var(--sx-text-2xl);
+  --ds-text-display: var(--sx-text-3xl);
+  --ds-weight-regular: 400;
+  --ds-weight-medium: 500;
+  --ds-weight-strong: 500;
+  --ds-weight-heavy: 500;
   --ds-tracking-tight: -0.02em;
 
   /* Space: a 4 px grid. */

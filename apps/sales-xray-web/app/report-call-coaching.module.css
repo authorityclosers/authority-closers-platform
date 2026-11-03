@@ -7,7 +7,7 @@
   gap: 16px;
   min-width: 0;
   color: var(--lx-ink);
-  font: 400 14px/1.6 var(--lx-font-ui);
+  font: 400 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
   overflow-wrap: anywhere;
 }
 .coaching > p {
@@ -20,7 +20,7 @@
 .context {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .coaching > button {
   justify-self: start;

@@ -48,7 +48,7 @@
   min-width: 0;
   align-items: center;
   gap: 10px;
-  font-weight: 750;
+  font-weight: 500;
 }
 
 .iconButton,
@@ -74,8 +74,8 @@
   padding: 0 12px;
   margin-right: -8px;
   color: var(--sx-muted);
-  font-size: 14px;
-  font-weight: 650;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
 }
 
 .iconButton:hover,
@@ -90,8 +90,8 @@
 
 .progressText {
   color: var(--sx-muted);
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .track {
@@ -126,18 +126,18 @@
 .eyebrow {
   margin: 0 0 6px;
   color: var(--sx-accent);
-  font-size: 13px;
-  font-weight: 750;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   overflow-wrap: anywhere;
 }
 
 .body h1 {
   margin: 0;
   color: var(--sx-ink);
-  font-size: clamp(25px, 6.4vw, 32px);
-  font-weight: 760;
+  font-size: var(--sx-text-2xl);
+  font-weight: 500;
   letter-spacing: -0.02em;
-  line-height: 1.15;
+  line-height: var(--sx-leading-36);
   text-wrap: balance;
 }
 
@@ -148,8 +148,8 @@
 .lead {
   margin: 8px 0 20px;
   color: var(--sx-muted);
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
 }
 
 .centre {
@@ -256,16 +256,16 @@
 
 .choiceText strong,
 .kindText strong {
-  font-size: 15.5px;
-  font-weight: 700;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   overflow-wrap: anywhere;
 }
 
 .choiceText small,
 .kindText small {
   color: var(--sx-muted);
-  font-size: 13.5px;
-  line-height: 1.4;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 .radio {
@@ -305,8 +305,8 @@
 .label {
   margin-bottom: 6px;
   color: var(--sx-ink);
-  font-size: 14px;
-  font-weight: 700;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
 }
 
 .input {
@@ -318,7 +318,7 @@
   background: var(--sx-surface);
   color: var(--sx-ink);
   font: inherit;
-  font-size: 16px;
+  font-size: var(--sx-text-md);
   resize: vertical;
 }
 
@@ -333,8 +333,8 @@
 .hint,
 .fieldError {
   margin: 8px 0 0;
-  font-size: 13.5px;
-  line-height: 1.45;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 .hint {
@@ -363,8 +363,8 @@
   border-radius: var(--sx-radius-pill);
   background: var(--sx-accent-soft);
   color: var(--sx-ink);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   overflow-wrap: anywhere;
 }
 
@@ -391,8 +391,8 @@
   align-items: start;
   gap: 10px;
   color: var(--sx-muted);
-  font-size: 14.5px;
-  line-height: 1.45;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 .summary li:first-child,
@@ -439,8 +439,8 @@
   border: 1px solid transparent;
   border-radius: var(--sx-radius-pill);
   font: inherit;
-  font-size: 16px;
-  font-weight: 750;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   text-decoration: none;
   cursor: pointer;
   transition:
@@ -458,8 +458,8 @@
   border-color: var(--sx-line);
   background: transparent;
   color: var(--sx-ink);
-  font-size: 15px;
-  font-weight: 700;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
 }
 
 .primary:active:not(:disabled),

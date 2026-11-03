@@ -1639,7 +1639,7 @@ it("keeps phone rows readable and the module on tokens only", () => {
     /@container calls-page \(max-width: 760px\) \{[\s\S]*?-webkit-line-clamp: 2;/,
   );
   expect(css).toMatch(
-    /@container calls-page \(max-width: 760px\) \{[\s\S]*?\.search input \{\s*font-size: 16px;/,
+    /@container calls-page \(max-width: 760px\) \{[\s\S]*?\.search input \{\s*font-size: var\(--sx-text-md\);/,
   );
   // No raw colours: every colour is a lightbox token.
   expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);

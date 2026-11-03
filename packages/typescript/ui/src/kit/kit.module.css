@@ -116,6 +116,15 @@
   box-shadow: 0 1px 2px color-mix(in oklab, var(--lx-film) 5%, transparent);
 }
 
+/* No card inside a sheet (native-feel spec, 3 Nov 2026): there a panel is a
+   flat group on the sheet itself. */
+[data-sheet-body] .panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 /* A panel is one grid column that grows to its widest child: every part may
    shrink to the panel, so a long subtitle truncates instead of widening it. */
 .panel > * {
@@ -165,7 +174,7 @@
   gap: 2px;
   color: var(--sx-accent);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -196,7 +205,7 @@
   background: var(--sx-sunken);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -225,7 +234,7 @@
   align-items: center;
   gap: 1px;
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -344,7 +353,7 @@ a.tile:active {
   align-items: center;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .tileMain {
@@ -409,7 +418,7 @@ a.tile:active {
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .emptyText {
@@ -532,7 +541,7 @@ a.tile:active {
   border-radius: var(--sx-radius-sm) var(--sx-radius-sm) 0 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
   transition:
     color var(--sx-dur-fast) var(--sx-ease-out),
@@ -626,7 +635,7 @@ a.tile:active {
   color: var(--sx-muted);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   transition:
     color var(--sx-dur-fast) var(--sx-ease-out),
@@ -665,7 +674,7 @@ a.tile:active {
   background: color-mix(in oklch, var(--sx-accent) 14%, var(--sx-sunken));
   color: var(--sx-ink-2);
   font-size: max(12px, calc(var(--size, 24px) * 0.4));
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .avatar[data-shape="square"] {
@@ -690,10 +699,10 @@ a.tile:active {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-height: var(--sx-row-h);
   box-sizing: border-box;
-  padding: 8px 14px;
+  padding: 10px 16px;
 }
 
 .row + .row {
@@ -730,7 +739,7 @@ a.tile:active {
   overflow: hidden;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -827,13 +836,13 @@ a.rowTitle:focus-visible::after {
   background: var(--sx-sunken);
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
 }
 
 .table tbody th {
   color: var(--sx-ink);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .table tbody tr:hover {
@@ -860,7 +869,7 @@ a.rowTitle:focus-visible::after {
 .card > strong {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .card + .card {
@@ -896,14 +905,14 @@ a.rowTitle:focus-visible::after {
   gap: 6px;
   min-height: var(--sx-control-h);
   box-sizing: border-box;
-  padding: 0 12px;
+  padding: 0 16px;
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-sm);
   background: var(--sx-surface);
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
@@ -996,7 +1005,7 @@ a.rowTitle:focus-visible::after {
 .fieldLabel {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .field :is(input, select, textarea),
@@ -1113,7 +1122,7 @@ a.rowTitle:focus-visible::after {
 @media (max-width: 899.98px) {
   .field :is(input, select, textarea),
   .inlineInput {
-    font-size: 16px;
+    font-size: var(--sx-text-md);
   }
 }
 
@@ -1233,7 +1242,7 @@ a.rowTitle:focus-visible::after {
   margin: -8px 0 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
 }
 
 .dialogActions {
@@ -1356,7 +1365,7 @@ a.rowTitle:focus-visible::after {
 
 .actionWords strong {
   font-size: var(--sx-text-md);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .actionWords small {
@@ -1390,7 +1399,7 @@ a.rowTitle:focus-visible::after {
   border-color: transparent;
   border-radius: 999px;
   background: var(--sx-fill);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .button:hover:not(:disabled) {
@@ -1419,7 +1428,7 @@ a.rowTitle:focus-visible::after {
 
 .badge {
   padding: 0 9px;
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .badge:not([data-tone]),
@@ -1481,7 +1490,7 @@ a.rowTitle:focus-visible::after {
     var(--lx-avatar-bottom)
   );
   color: white;
-  font-weight: 650;
+  font-weight: 500;
 }
 
 /* Separators start where the text does, as in iOS lists. */

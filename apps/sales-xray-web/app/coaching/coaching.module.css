@@ -15,7 +15,7 @@
   color: var(--sx-ink);
   font-family: var(--lx-font-ui);
   font-size: var(--sx-text-sm);
-  line-height: 1.5;
+  line-height: var(--sx-leading-20);
   overflow-wrap: anywhere;
 }
 
@@ -119,7 +119,7 @@
   min-height: 20px;
   padding: 14px 16px 2px;
   color: var(--sx-muted);
-  font: 600 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .listHead > span {
@@ -142,7 +142,7 @@
   display: block;
   margin-bottom: 2px;
   color: var(--sx-muted);
-  font: 600 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .cardLabelMuted {
@@ -169,7 +169,7 @@
   border-radius: var(--lx-radius-pill);
   background: var(--sx-sunken);
   color: var(--sx-ink-2);
-  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
 }
 
 .chip[data-tone="accent"],
@@ -209,7 +209,7 @@
 .diagnosis dt {
   padding-top: 2px;
   color: var(--sx-muted);
-  font: 600 var(--sx-text-xs) / 1.5 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .diagnosis dd {
@@ -244,7 +244,7 @@
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-sm);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .route li[data-now] {
@@ -255,7 +255,7 @@
 .route li > span {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 @container (max-width: 560px) {
@@ -298,7 +298,7 @@
   display: block;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .eyebrow {
@@ -308,7 +308,7 @@
   gap: 8px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .note {
@@ -328,7 +328,7 @@
   max-width: 72ch;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-md);
-  line-height: 1.55;
+  line-height: var(--sx-leading-24);
 }
 
 .nextCall {
@@ -347,7 +347,7 @@
   gap: 1px;
   min-width: 0;
   color: var(--sx-ink);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .nextCall p > span:first-child {
@@ -370,7 +370,7 @@
   min-height: var(--sx-control-h);
   color: var(--sx-accent);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -428,7 +428,7 @@
 .quote {
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  line-height: 1.55;
+  line-height: var(--sx-leading-24);
 }
 
 .quote::before {
@@ -480,7 +480,7 @@
   color: var(--sx-accent);
   font: inherit;
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   cursor: pointer;
@@ -524,7 +524,7 @@
   border-radius: 999px;
   background: var(--sx-surface);
   color: var(--sx-accent);
-  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
   cursor: pointer;
 }
 
@@ -575,7 +575,7 @@
   justify-content: space-between;
   gap: 4px 12px;
   color: var(--sx-muted);
-  font: 600 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .basisHead a {
@@ -700,7 +700,7 @@
 .repCallTitle {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .callsSection {
@@ -757,7 +757,7 @@
 .lessonTitle {
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .steps {
@@ -781,7 +781,7 @@
   background: var(--sx-sunken);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   counter-increment: step;
 }
 
@@ -821,7 +821,7 @@
 /* Spec 3.6: a quoted strength from this call, to build the mission on. */
 .strengthTitle {
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .wording {
@@ -849,7 +849,7 @@
   min-height: max(var(--sx-row-h), var(--sx-control-h));
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   list-style: none;
   cursor: pointer;
 }
@@ -947,8 +947,8 @@
 .clipTitle :is(h3, h4) {
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 600;
-  line-height: 1.35;
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
 }
 
 .bar {
@@ -1084,8 +1084,8 @@
 
 .terms dt {
   color: var(--sx-muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .terms dd {
@@ -1098,15 +1098,15 @@
   border: 1px dashed color-mix(in oklab, var(--sx-accent) 60%, transparent);
   border-radius: 999px;
   color: var(--sx-accent);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .cue > span {
   margin-inline-end: 6px;
   color: var(--sx-muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .quoteToggle {
@@ -1238,7 +1238,7 @@
   gap: 6px;
   min-width: 0;
   color: var(--sx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 .stepper li::before {
@@ -1254,7 +1254,7 @@
 
 .stepper li[aria-current] {
   color: var(--sx-ink);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .stepper li > span {
@@ -1306,7 +1306,7 @@
 
 .reflectionQuestion {
   color: var(--sx-ink);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .answers {
@@ -1323,7 +1323,7 @@
   border-radius: 999px;
   background: var(--sx-surface);
   color: var(--sx-ink-2);
-  font: 500 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   cursor: pointer;
 }
 

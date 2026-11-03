@@ -9,6 +9,7 @@
  */
 
 import { fromPhone, rememberCapture } from "../capture-source";
+import { followFontScale } from "../in-app";
 import { hapticsOn } from "../ui/haptics";
 
 /**
@@ -299,6 +300,7 @@ export async function phoneStatus(): Promise<NativeStatus | null> {
   if (!inPhoneApp()) return null;
   try {
     const raw = await ask<Record<string, unknown>>("status", {}, 5_000);
+    followFontScale(raw.fontScale);
     return {
       platform: text(raw.platform),
       version: text(raw.version),

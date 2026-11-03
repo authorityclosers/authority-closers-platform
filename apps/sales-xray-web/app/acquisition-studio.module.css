@@ -15,11 +15,11 @@
   border-radius: 8px;
   background: Canvas;
   color: CanvasText;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .reviewNotice a {
   color: LinkText;
-  font-weight: 650;
+  font-weight: 500;
 }
 .reviewNotice > div:first-child {
   min-width: 0;
@@ -66,17 +66,17 @@
   margin: 0 0 8px;
   color: #0e213d;
   font-family: inherit;
-  font-size: clamp(30px, 3.3vw, 46px);
-  font-weight: 800;
+  font-size: var(--sx-text-3xl);
+  font-weight: 500;
   letter-spacing: -0.045em;
-  line-height: 1.12;
+  line-height: var(--sx-leading-36);
 }
 .app[data-stage="upload"] :global(.studio-intro) > p:last-child {
   max-width: 76ch;
   margin: 0;
   color: #60738f;
-  font-size: clamp(14px, 1.3vw, 17px);
-  line-height: 1.5;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 .app[data-stage="upload"] .layout {
   order: 1;
@@ -136,9 +136,9 @@
 .app[data-stage="upload"] .dropTitle {
   margin: 0;
   color: #10243d;
-  font-size: clamp(16px, 1.7vw, 21px);
-  font-weight: 750;
-  line-height: 1.35;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
 }
 /* Choose a file is a button now, so the keyboard reaches it: it reads as the
    link-like words it was. */
@@ -154,8 +154,8 @@
   padding: 5px 12px;
   color: #007d79;
   cursor: pointer;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
 }
 .app[data-stage="upload"] .dropSelect:hover {
   text-decoration: underline;
@@ -168,7 +168,7 @@
   gap: 6px 16px;
   margin-top: 8px;
   color: #60738f;
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .app[data-stage="upload"] .formatFacts span {
   display: inline-flex;
@@ -183,7 +183,7 @@
   padding: 0;
   border: 0;
   color: #60738f;
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .app[data-stage="upload"][data-selected="true"] .previewHint,
 .app[data-stage="upload"][data-selected="true"] .allowance {
@@ -193,7 +193,7 @@
   margin: 0;
 }
 .app[data-stage="upload"][data-selected="true"] :global(.studio-intro) h1 {
-  font-size: clamp(24px, 3vw, 38px);
+  font-size: var(--sx-text-xl);
 }
 .app[data-stage="upload"][data-selected="true"] .layout {
   display: grid;
@@ -218,8 +218,8 @@
   gap: 12px;
   margin: 0 0 14px;
   color: #10243d;
-  font-size: 16px;
-  font-weight: 750;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
 }
 .selectionHeading > span,
 .verifyHeading > span {
@@ -232,7 +232,7 @@
   border-radius: 50%;
   background: #f0f4ff;
   color: #3157d5;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .app[data-stage="upload"] :global(.studio-file) {
   display: flex;
@@ -264,16 +264,16 @@
   margin: 0;
   color: #10243d;
   font-family: inherit;
-  font-weight: 700;
-  font-size: 15px;
-  line-height: 1.35;
+  font-weight: 500;
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .app[data-stage="upload"] :global(.studio-file) p {
   margin: 4px 0 0;
   color: #60738f;
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .app[data-stage="upload"] :global(.studio-file) > :global(.secondary-button) {
   min-height: 44px;
@@ -283,7 +283,7 @@
   border: 0;
   background: #eef2ff;
   color: #007d79;
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .app[data-stage="upload"] .previewDetails {
   margin: 0 0 14px;
@@ -293,7 +293,7 @@
   min-height: 30px;
   align-items: center;
   color: #60738f;
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   cursor: pointer;
 }
 .app[data-stage="upload"] .previewDetails audio {
@@ -318,7 +318,7 @@
 .app[data-stage="upload"] .privacyDetails summary {
   min-height: 26px;
   color: #60738f;
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .app[data-stage="upload"] .privacyDetails[open] {
   max-height: 120px;
@@ -336,7 +336,7 @@
   border: 0;
   background: transparent;
   color: #60738f;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .app[data-stage="upload"] .consentLabel input {
   width: 20px;
@@ -361,8 +361,8 @@
   border-radius: 12px;
   background: #007d79;
   color: #fff;
-  font-size: 16px;
-  font-weight: 750;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
 }
 @media (max-width: 1100px) {
   .app[data-stage="upload"][data-selected="true"] .layout {
@@ -377,10 +377,10 @@
     gap: 20px;
   }
   .app[data-stage="upload"] :global(.studio-intro) h1 {
-    font-size: 29px;
+    font-size: var(--sx-text-2xl);
   }
   .app[data-stage="upload"] :global(.studio-intro) > p:last-child {
-    font-size: 14px;
+    font-size: var(--sx-text-sm);
   }
   .app[data-stage="upload"] .dropZone {
     min-height: 260px;
@@ -388,7 +388,7 @@
   }
   .app[data-stage="upload"] .formatFacts {
     gap: 8px;
-    font-size: 11px;
+    font-size: var(--sx-text-2xs);
   }
   .app[data-stage="upload"][data-selected="true"] .upload {
     padding: 16px;
@@ -403,7 +403,7 @@
     flex-basis: 36px;
   }
   .app[data-stage="upload"] :global(.studio-file) h2 {
-    font-size: 13px;
+    font-size: var(--sx-text-xs);
   }
 }
 @media (max-height: 700px) {
@@ -412,7 +412,7 @@
     padding-top: 12px;
   }
   .app[data-stage="upload"] :global(.studio-intro) h1 {
-    font-size: 28px;
+    font-size: var(--sx-text-2xl);
   }
   .app[data-stage="upload"] .dropZone {
     min-height: 210px;
@@ -439,13 +439,13 @@
   margin-bottom: 30px;
 }
 .app[data-variant="standalone"] :global(.studio-steps span) {
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .app[data-variant="standalone"] :global(.studio-intro) {
   margin-bottom: 24px;
 }
 .app[data-variant="standalone"] :global(.studio-intro h1) {
-  font-size: clamp(34px, 4vw, 50px);
+  font-size: var(--sx-text-3xl);
 }
 .layout {
   display: grid;
@@ -484,7 +484,7 @@
   background: #edf2ff;
   color: var(--action);
   font:
-    700 11px/1 ui-monospace,
+    500 var(--sx-text-2xs) / 1 ui-monospace,
     monospace;
 }
 .stepHeader > span:last-child {
@@ -492,11 +492,11 @@
   gap: 3px;
 }
 .stepHeader strong {
-  font-size: 15px;
+  font-size: var(--sx-text-md);
 }
 .stepHeader small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .freeBadge {
   display: inline-flex;
@@ -504,8 +504,8 @@
   gap: 7px;
   margin: 0 0 10px;
   color: var(--mint);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 .freeBadge span {
   display: inline-grid;
@@ -523,14 +523,14 @@
   border-radius: 8px;
   background: color-mix(in srgb, var(--canvas) 55%, var(--surface));
   color: var(--muted);
-  font-size: 11px;
-  line-height: 1.55;
+  font-size: var(--sx-text-2xs);
+  line-height: var(--sx-leading-16);
 }
 .privacyDetails summary {
   color: var(--ink);
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 .privacyDetails p,
 .privacyDetails ul {
@@ -554,17 +554,16 @@
   padding-top: 20px;
   border-top: 1px solid var(--border);
   color: var(--mint);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .moreMinutes {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
   padding: 0 4px;
-  color: var(--lx-ink);
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  color: var(--sx-accent);
+  font-weight: 500;
+  text-decoration: none;
 }
 .disabled {
   pointer-events: none;
@@ -605,17 +604,17 @@
   margin: 0 0 10px;
   color: #10243d;
   font-family: inherit;
-  font-size: clamp(22px, 2.5vw, 32px);
-  font-weight: 800;
-  line-height: 1.2;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
+  line-height: var(--sx-leading-28);
   letter-spacing: -0.035em;
 }
 .progressCopy > p:last-child {
   max-width: 50ch;
   margin: 0;
   color: #60738f;
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 @keyframes badge-pop {
   0% {
@@ -649,11 +648,11 @@
   flex: 1;
 }
 .claim h2 {
-  font-size: 18px;
+  font-size: var(--sx-text-md);
   margin: 0 0 6px;
 }
 .claim p {
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   color: var(--muted);
   margin: 0;
 }
@@ -663,20 +662,20 @@
   border-top: 1px solid var(--border);
 }
 .callActions p {
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .callActions button {
   margin-right: 10px;
 }
 .privacyActions {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--sx-text-2xs);
 }
 .privacyActions summary {
   display: inline-block;
   cursor: pointer;
   color: var(--muted);
-  font-weight: 650;
+  font-weight: 500;
 }
 .privacyActions > div {
   max-width: 52ch;
@@ -692,14 +691,14 @@
 }
 .privacyActions a {
   color: var(--action);
-  font-weight: 650;
+  font-weight: 500;
 }
 .consentLabel {
   line-height: 1.5;
 }
 .consentLabel a {
   color: var(--action);
-  font-weight: 700;
+  font-weight: 500;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -710,14 +709,14 @@
 }
 .reportLanguage label {
   color: var(--ink);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 .reportLanguage p {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 .uploadActions {
   display: grid;
@@ -741,7 +740,7 @@
 }
 .app :global(.studio-consent) h3 {
   margin-bottom: 6px;
-  font-size: 17px;
+  font-size: var(--sx-text-md);
 }
 .app :global(.studio-consent) .privacyDetails {
   background: var(--surface);
@@ -825,7 +824,7 @@
 .app[data-stage="processing"] :global(.studio-file) h2 {
   margin: 0;
   color: #173148;
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
   font-family: inherit;
 }
 .app[data-stage="processing"] :global(.studio-file) p,
@@ -924,13 +923,13 @@
 }
 .app[data-stage="report"] .withReport .upload :global(.studio-file) h2 {
   margin-bottom: 0;
-  font-size: 16px;
-  line-height: 1.3;
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
 }
 .app[data-stage="report"] .withReport .upload :global(.studio-file) p,
 .app[data-stage="report"] .withReport .upload > :global(.small-text) {
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 .app[data-stage="report"] .withReport .upload audio {
   grid-row: 1;
@@ -999,10 +998,10 @@
   margin: 0;
   color: #10243d;
   font-family: inherit;
-  font-size: 22px;
-  font-weight: 720;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
   letter-spacing: -0.02em;
-  line-height: 1.2;
+  line-height: var(--sx-leading-28);
 }
 
 /* Base title size for any owner of the report header (studio and review fixture). */
@@ -1010,19 +1009,19 @@
   margin: 0;
   color: #10243d;
   font-family: inherit;
-  font-size: 22px;
-  font-weight: 720;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
   letter-spacing: -0.02em;
-  line-height: 1.2;
+  line-height: var(--sx-leading-28);
 }
 .app[data-stage="report"] .reportHeader h1 {
   margin: 0;
   color: #10243d;
   font-family: inherit;
-  font-size: 22px;
-  font-weight: 720;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
   letter-spacing: -0.02em;
-  line-height: 1.2;
+  line-height: var(--sx-leading-28);
 }
 .reportHeading .reportMetadata {
   display: flex;
@@ -1031,9 +1030,9 @@
   gap: 4px 14px;
   margin: 4px 0 0;
   color: #60738f;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.4;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
 }
 .reportMetadata > span {
   display: inline-flex;
@@ -1082,8 +1081,8 @@
   background: transparent;
   color: #203a5c;
   font: inherit;
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
 }
@@ -1112,11 +1111,11 @@
   }
   .reportHeading .reportMetadata {
     margin-top: 6px;
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--sx-text-xs);
+    line-height: var(--sx-leading-16);
   }
   .app[data-stage="report"] .reportHeader h1 {
-    font-size: 24px;
+    font-size: var(--sx-text-xl);
   }
 }
 /* Report-ready state uses the fixed CallAudioDock; keep the upload entry
@@ -1160,9 +1159,9 @@
   background: #fff;
   color: #405778;
   font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.25;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
   text-align: center;
   text-decoration: none;
   cursor: pointer;
@@ -1204,8 +1203,8 @@
 
 .reportDeleteConfirm p {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 
 .reportDeleteConfirm > div {
@@ -1247,8 +1246,8 @@
 .error.error:global(.notice) p {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 .errorHead {
   display: flex;
@@ -1262,8 +1261,8 @@
 .error.error:global(.notice) .errorTitle {
   flex: 1;
   color: var(--lx-ink);
-  font-size: 14px;
-  font-weight: 700;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
 }
 .errorClose {
   display: grid;
@@ -1295,8 +1294,8 @@
   background: var(--lx-sunken);
   color: var(--lx-muted);
   font: inherit;
-  font-size: 12px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
@@ -1320,7 +1319,7 @@
   min-height: 32px;
   padding: 0 12px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 @keyframes errorEnter {
   from {
@@ -1405,8 +1404,8 @@
     background: #edf8f5;
     color: #08776e;
     font: inherit;
-    font-size: 14px;
-    font-weight: 650;
+    font-size: var(--sx-text-sm);
+    font-weight: 500;
     cursor: pointer;
   }
   .app[data-stage="report"] .playbackToggle:focus-visible {
@@ -1422,7 +1421,7 @@
     margin-bottom: 22px;
   }
   .app[data-variant="standalone"] :global(.studio-steps span) {
-    font-size: 11px;
+    font-size: var(--sx-text-2xs);
   }
   .recoveryError {
     gap: 8px;
@@ -1447,8 +1446,8 @@
     padding: 20px;
   }
   .app[data-stage="processing"] .progressCopy > p:last-child {
-    font-size: 16px;
-    line-height: 1.45;
+    font-size: var(--sx-text-md);
+    line-height: var(--sx-leading-24);
   }
   .app[data-stage="uploading"] .withBusy .upload {
     padding: 12px;
@@ -1668,10 +1667,10 @@
 .uploadCardTitle h2 {
   margin: 0;
   color: #14233c;
-  font-size: 18px;
-  font-weight: 750;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   letter-spacing: -0.015em;
-  line-height: 1.3;
+  line-height: var(--sx-leading-24);
 }
 .uploadCardTitle svg {
   flex: 0 0 24px;
@@ -1689,9 +1688,9 @@
   border-radius: 999px;
   background: #f7f9fc;
   color: #2c4467;
-  font-size: 12.5px;
-  font-weight: 650;
-  line-height: 1.3;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
 }
 .allowanceBadge svg {
   flex: 0 0 19px;
@@ -1703,11 +1702,11 @@
   background: linear-gradient(145deg, #f4fcfd, #fbffff);
 }
 .app[data-stage="upload"][data-selected="false"] .dropTitle {
-  font-size: clamp(19px, 1.65vw, 23px);
+  font-size: var(--sx-text-xl);
 }
 .app[data-stage="upload"][data-selected="false"] .formatFacts {
   gap: 8px 20px;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .app[data-stage="upload"][data-selected="false"]
   .dropZone
@@ -1762,8 +1761,8 @@
   margin: 0 0 8px;
 }
 .app[data-stage="processing"] :global(.studio-consent) p {
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 @media (max-width: 760px) {
   .app[data-stage="processing"] :global(.studio-main),
@@ -1782,12 +1781,12 @@
   }
   .progressCopy h3 {
     margin-bottom: 8px;
-    font-size: 24px;
+    font-size: var(--sx-text-xl);
   }
   .app[data-stage="processing"] .progressCopy > p:last-child,
   .app[data-stage="uploading"] .progressCopy > p:last-child {
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: var(--sx-text-xs);
+    line-height: var(--sx-leading-16);
   }
 }
 @media (max-height: 720px) and (min-width: 621px) {
@@ -1857,7 +1856,7 @@
     margin-top: 6px;
   }
   .progressCopy h3 {
-    font-size: 21px;
+    font-size: var(--sx-text-xl);
   }
   .processingPanel[data-paused="true"] {
     grid-template-columns: 1fr !important;
@@ -1930,22 +1929,22 @@
     margin-bottom: 7px;
   }
   .app[data-stage="upload"][data-selected="false"] .dropTitle {
-    font-size: 17px;
+    font-size: var(--sx-text-md);
   }
   .app[data-stage="upload"][data-selected="false"] .dropSelect {
     min-height: 34px;
-    font-size: 14px;
+    font-size: var(--sx-text-sm);
   }
   .app[data-stage="upload"][data-selected="false"] .formatFacts {
     gap: 4px 9px;
-    font-size: 10px;
+    font-size: var(--sx-text-2xs);
   }
   .app[data-stage="upload"] .uploadCardTitle h2 {
-    font-size: 21px;
+    font-size: var(--sx-text-xl);
   }
   .app[data-stage="upload"] .allowanceBadge {
     padding: 6px;
-    font-size: 10px;
+    font-size: var(--sx-text-2xs);
   }
   .app[data-stage="upload"][data-selected="true"] :global(.studio-main) {
     padding-top: 0;
@@ -1985,13 +1984,13 @@
     min-height: 29px;
     margin: 0;
     padding: 2px 0;
-    font-size: 11px;
+    font-size: var(--sx-text-2xs);
   }
   .app[data-stage="upload"][data-selected="true"]
     .uploadActions
     :global(.studio-wide) {
     min-height: 36px;
-    font-size: 13px;
+    font-size: var(--sx-text-xs);
   }
 }
 @media (max-width: 760px) {
@@ -2041,15 +2040,15 @@
     margin-bottom: 6px;
   }
   .app[data-stage="upload"][data-selected="false"] .dropTitle {
-    font-size: 18px;
+    font-size: var(--sx-text-md);
   }
   .app[data-stage="upload"][data-selected="false"] .dropSelect {
     min-height: 32px;
-    font-size: 14px;
+    font-size: var(--sx-text-sm);
   }
   .app[data-stage="upload"][data-selected="false"] .formatFacts {
     gap: 4px 10px;
-    font-size: 10px;
+    font-size: var(--sx-text-2xs);
   }
 }
 
@@ -2198,13 +2197,13 @@
     min-height: 35px;
     margin: 0;
     padding: 3px 0;
-    font-size: 12px;
+    font-size: var(--sx-text-xs);
   }
   .app[data-stage="upload"][data-selected="true"]
     .uploadActions
     :global(.studio-wide) {
     min-height: 42px;
-    font-size: 14px;
+    font-size: var(--sx-text-sm);
   }
 }
 
@@ -2226,13 +2225,13 @@
     .consentLabel {
     min-height: 29px;
     padding: 2px 0;
-    font-size: 11px;
+    font-size: var(--sx-text-2xs);
   }
   .app[data-stage="upload"][data-selected="true"]
     .uploadActions
     :global(.studio-wide) {
     min-height: 36px;
-    font-size: 13px;
+    font-size: var(--sx-text-xs);
   }
 }
 
@@ -2406,7 +2405,7 @@
   gap: 10px;
   margin: 0 0 2px;
   color: var(--lx-ink);
-  font: 700 15px/1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
   letter-spacing: -0.01em;
 }
 .app.app[data-stage="upload"][data-selected="true"]
@@ -2441,14 +2440,14 @@
 .app.app[data-stage="upload"][data-selected="true"] .reportLanguage label {
   margin: 0;
   color: var(--lx-ink);
-  font: 600 13.5px/1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
 }
 .app.app[data-stage="upload"][data-selected="true"] .reportLanguage p {
   grid-column: 1 / -1;
   margin: 0;
   color: var(--lx-muted);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 .app.app[data-stage="upload"][data-selected="true"] .privacyDetails,
 .app.app[data-stage="upload"][data-selected="true"] .privacyDetails[open] {
@@ -2463,7 +2462,7 @@
   justify-content: space-between;
   padding: 0 14px;
   color: var(--lx-ink);
-  font: 600 13.5px/1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
   list-style: none;
   cursor: pointer;
 }
@@ -2491,8 +2490,8 @@
 .app.app[data-stage="upload"][data-selected="true"] .privacyDetails > p {
   margin: 0 14px 10px;
   color: var(--lx-muted);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 .app.app[data-stage="upload"][data-selected="true"]
   .privacyDetails[open]
@@ -2509,8 +2508,8 @@
   margin: 2px 0 0;
   padding: 2px;
   color: var(--lx-ink-3);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
   text-align: left;
 }
 .app.app[data-stage="upload"][data-selected="true"] .consentLabel input {
@@ -2522,7 +2521,7 @@
 }
 .app.app[data-stage="upload"][data-selected="true"] .consentLabel a {
   color: var(--lx-ink);
-  font-weight: 650;
+  font-weight: 500;
   text-decoration-color: var(--lx-line-strong);
   text-underline-offset: 3px;
 }
@@ -2544,7 +2543,7 @@
   background: var(--lx-teal);
   box-shadow: none;
   color: var(--lx-on-teal);
-  font: 650 14px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / 1 var(--lx-font-ui);
   transition: background-color var(--lx-dur-quick) var(--lx-ease-quick);
 }
 .app.app[data-stage="upload"][data-selected="true"]
@@ -2624,7 +2623,7 @@
 .app.app[data-stage="processing"] .callActions {
   margin-top: 14px;
   color: var(--lx-muted);
-  font-size: 12.5px;
+  font-size: var(--sx-text-xs);
 }
 .app.app[data-stage="processing"] .callActions summary {
   color: var(--lx-muted);
@@ -2667,12 +2666,12 @@
   border-radius: 8px;
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
-  font: 650 13px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
   white-space: nowrap;
 }
 .app.app[data-stage="upload"][data-selected="true"] .languagePlus {
   color: var(--lx-muted-2);
-  font-weight: 700;
+  font-weight: 500;
 }
 .app.app[data-stage="upload"][data-selected="true"] .reportLanguage {
   grid-template-columns: minmax(0, 1fr);
@@ -2755,15 +2754,15 @@
 .app.app:is([data-stage="opening"], [data-stage="recovery"]) .progressCopy h1 {
   margin: 0 0 10px;
   color: var(--lx-ink);
-  font: 700 clamp(22px, 2vw, 28px) / 1.2 var(--lx-font-display);
+  font: 500 clamp(22px, 2vw, 28px) / 1.2 var(--lx-font-display);
   letter-spacing: -0.02em;
 }
 .app.app:is([data-stage="opening"], [data-stage="recovery"]) .progressCopy > p {
   max-width: 48ch;
   margin: 0;
   color: var(--lx-muted);
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
 }
 .app.app:is([data-stage="opening"], [data-stage="recovery"]) .errorActions {
   display: flex;
@@ -2787,7 +2786,7 @@
   background: var(--lx-surface);
   box-shadow: none;
   color: var(--lx-ink-3);
-  font: 600 13px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
   text-decoration: none;
 }
 @media (max-width: 720px) {
@@ -2849,15 +2848,15 @@
 .app.app[data-stage="processing"] .upload > :global(.studio-consent) h3 {
   margin: 0 0 4px;
   color: var(--lx-ink);
-  font: 800 clamp(28px, 2.7vw, 40px) / 1.08 var(--lx-font-display);
+  font: 500 clamp(28px, 2.7vw, 40px) / 1.08 var(--lx-font-display);
   letter-spacing: -0.035em;
 }
 .app.app[data-stage="processing"] .upload > :global(.studio-consent) > p {
   max-width: 52ch;
   margin: 0;
   color: var(--lx-muted);
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
 }
 .app.app[data-stage="processing"]
   .upload
@@ -2871,7 +2870,7 @@
   > :global(.studio-consent)
   > :global(.small-text) {
   color: var(--lx-muted-2);
-  font-size: 12.5px;
+  font-size: var(--sx-text-xs);
 }
 .app.app[data-stage="processing"]
   .upload
@@ -2891,7 +2890,7 @@
   summary {
   padding: 12px 14px;
   color: var(--lx-ink);
-  font: 600 13.5px/1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
   cursor: pointer;
 }
 .app.app[data-stage="processing"]
@@ -2910,7 +2909,7 @@
   background: var(--lx-gradient-primary);
   box-shadow: var(--lx-shadow-cta);
   color: var(--lx-on-teal);
-  font: 700 15px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-md) / 1 var(--lx-font-ui);
 }
 
 /* ---------- Report: frameless header, one calm menu, a clear delete dialog ---------- */
@@ -2930,7 +2929,7 @@
 .app.app[data-stage="report"] .reportHeader h1 {
   margin: 0;
   color: var(--lx-ink);
-  font: 800 clamp(26px, 2.4vw, 34px) / 1.1 var(--lx-font-display);
+  font: 500 clamp(26px, 2.4vw, 34px) / 1.1 var(--lx-font-display);
   letter-spacing: -0.03em;
 }
 .app.app[data-stage="report"] .reportHeader h1[title] {
@@ -2944,7 +2943,7 @@
   gap: 6px 14px;
   margin-top: 8px;
   color: var(--lx-muted);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .app.app[data-stage="report"] .reportActions {
   gap: 8px;
@@ -2994,7 +2993,7 @@
   border-radius: 9px;
   background: transparent;
   color: var(--lx-ink-3);
-  font: 500 13.5px/1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
   text-align: left;
 }
 .app.app[data-stage="report"] .reportMenu button svg {
@@ -3004,7 +3003,7 @@
 .app.app[data-stage="report"] .reportMenu button small {
   margin-left: auto;
   color: var(--lx-muted-2);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 /* An open ⋯ menu paints over the sticky Report/Coaching bar. The header's
@@ -3069,15 +3068,15 @@
   box-shadow: 0 0 0 8px
     color-mix(in srgb, var(--lx-danger-soft) 45%, transparent);
   color: var(--lx-danger);
-  font: 800 24px/1 var(--lx-font-display);
+  font: 500 var(--sx-text-xl) / 1 var(--lx-font-display);
 }
 .app.app[data-stage="report"] .reportDeleteConfirm p {
   max-width: 34ch;
   margin: 0;
   color: var(--lx-ink);
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.5;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
 }
 .app.app[data-stage="report"] .reportDeleteConfirm > div {
   display: grid;
@@ -3088,7 +3087,7 @@
   min-height: 44px;
   justify-content: center;
   border-radius: 12px;
-  font: 700 14px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / 1 var(--lx-font-ui);
 }
 .app.app[data-stage="report"] .reportDeleteConfirm .reportActionDanger {
   border-color: transparent;
@@ -3144,7 +3143,7 @@
   padding-bottom: 2px;
 }
 .app.app[data-stage="report"] .reportHeader h1 {
-  font-size: clamp(22px, 1.9vw, 28px);
+  font-size: var(--sx-text-xl);
 }
 .app.app[data-stage="report"] .reportMetadata {
   margin-top: 6px;
@@ -3187,7 +3186,7 @@
   padding: 9px 10px;
   border-radius: 9px;
   color: var(--lx-ink-3);
-  font: 500 13.5px/1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
   list-style: none;
   cursor: pointer;
 }
@@ -3205,8 +3204,8 @@
   max-width: 260px;
   margin: 2px 10px 8px 36px;
   color: var(--lx-muted);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
   overflow-wrap: anywhere;
 }
 .app.app[data-stage="report"] .reportAbout a {

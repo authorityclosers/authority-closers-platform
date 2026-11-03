@@ -9,9 +9,9 @@
   border: 1px solid transparent;
   border-radius: 12px;
   font: inherit;
-  font-size: 0.875rem;
-  font-weight: 600;
-  line-height: 1.4;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
   text-decoration: none;
   cursor: pointer;
   transition:
@@ -79,8 +79,8 @@
   border-radius: 14px;
   color: var(--theme-text);
   background: var(--theme-surface);
-  font-size: 0.9375rem;
-  line-height: 1.5;
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
   cursor: pointer;
   transition:
     border-color var(--theme-transition-duration, 140ms) ease,
@@ -99,8 +99,8 @@
   place-items: center;
   border: 1px solid var(--theme-border);
   border-radius: 8px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 .choiceText {
   min-width: 0;
@@ -108,7 +108,7 @@
 }
 .choiceCheck {
   width: 18px;
-  font-size: 1rem;
+  font-size: var(--sx-text-md);
   color: var(--theme-action);
 }
 .choice:hover:not(:has(input:disabled)) {

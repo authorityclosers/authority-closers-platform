@@ -88,14 +88,14 @@
   padding-left: 22px;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  line-height: 1.45;
+  line-height: var(--sx-leading-24);
 }
 
 .note {
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
 }
 
 /* Under "What your plan includes": the plans link, or the Play app's words. */
@@ -103,10 +103,10 @@
   margin: 0;
   padding: 4px 16px 14px;
   color: var(--lx-muted);
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
 }
 
 .planNote a {
   color: var(--lx-teal);
-  font-weight: 600;
+  font-weight: 500;
 }

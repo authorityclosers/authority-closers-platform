@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 
+import { phoneStatus } from "./leads/native-phone";
+
 /**
  * Inside the Sales X-Ray phone app, tells the app this page is up (live web
  * updates, owner 28 Oct 2026: web releases reach the app with no Play build).
@@ -34,7 +36,8 @@ export function signalWebReady(
 
 export function WebReady(): null {
   useEffect(() => {
-    signalWebReady();
+    // The app's status carries the phone's font size, which the page follows.
+    if (signalWebReady()) void phoneStatus();
   }, []);
   return null;
 }

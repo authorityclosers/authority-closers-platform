@@ -128,17 +128,19 @@
     "Newsreader Variable", "Newsreader", "Noto Serif Devanagari Variable",
     "Noto Serif Devanagari", Georgia, serif;
 
-  --lx-text-display-xl: 700 76px/0.98 var(--lx-font-display); /* marketing / foundations only */
-  --lx-text-display: 800 46px/1.04 var(--lx-font-display); /* page H1 desktop */
-  --lx-text-h1: 800 42px/1.04 var(--lx-font-display);
-  --lx-text-h2: 800 30px/1.1 var(--lx-font-display); /* report section titles */
-  --lx-text-verdict: 400 34px/1.28 var(--lx-font-quote); /* the verdict sentence */
-  --lx-text-quote-lg: 400 22px/1.42 var(--lx-font-quote); /* moment quotes */
-  --lx-text-quote: 400 15px/1.4 var(--lx-font-quote); /* quote chips */
-  --lx-text-body: 500 15px/1.65 var(--lx-font-ui);
-  --lx-text-ui: 600 14px/1.45 var(--lx-font-ui);
-  --lx-text-meta: 600 12.5px/1.45 var(--lx-font-ui);
-  --lx-text-eyebrow: 800 12px/1.2 var(--lx-font-ui); /* letter-spacing: .14em, uppercase */
+  /* Material 3's roles (owner, 3 Nov 2026): weights 400 and 500 only, sizes
+     in rem so the phone's font size scales them (sx-tokens.css). */
+  --lx-text-display-xl: 500 4.75rem/0.98 var(--lx-font-display); /* marketing / foundations only */
+  --lx-text-display: 500 2.875rem/1.04 var(--lx-font-display); /* page H1 desktop */
+  --lx-text-h1: 500 2rem/2.25rem var(--lx-font-display);
+  --lx-text-h2: 500 1.375rem/1.75rem var(--lx-font-display); /* report section titles */
+  --lx-text-verdict: 400 2rem/2.25rem var(--lx-font-quote); /* the verdict sentence */
+  --lx-text-quote-lg: 400 1.375rem/1.75rem var(--lx-font-quote); /* moment quotes */
+  --lx-text-quote: 400 0.875rem/1.25rem var(--lx-font-quote); /* quote chips */
+  --lx-text-body: 400 1rem/1.5rem var(--lx-font-ui);
+  --lx-text-ui: 500 0.875rem/1.25rem var(--lx-font-ui);
+  --lx-text-meta: 400 0.75rem/1rem var(--lx-font-ui);
+  --lx-text-eyebrow: 500 0.75rem/1rem var(--lx-font-ui); /* letter-spacing: .14em, uppercase */
   --lx-tracking-display: -0.035em;
   --lx-tracking-eyebrow: 0.14em;
   --lx-leading-devanagari: 1.65; /* raise line-height for :lang(hi), :lang(mr) */

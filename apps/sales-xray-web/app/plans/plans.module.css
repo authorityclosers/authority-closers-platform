@@ -43,7 +43,8 @@
 .brand h1 {
   margin: 0;
   color: var(--lx-ink);
-  font: 800 22px/1.2 var(--lx-font-display, var(--lx-font-ui));
+  font: 500 var(--sx-text-xl) / var(--sx-leading-28)
+    var(--lx-font-display, var(--lx-font-ui));
   letter-spacing: -0.015em;
 }
 
@@ -64,7 +65,7 @@
   border-radius: 999px;
   background: var(--lx-sunken);
   color: var(--lx-muted);
-  font: 600 12.5px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
 }
 
 .steps li i {
@@ -75,7 +76,7 @@
   border-radius: 50%;
   background: var(--lx-surface);
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   font-style: normal;
 }
 
@@ -110,7 +111,8 @@
 .panel h2 {
   margin: 0;
   color: var(--lx-ink);
-  font: 800 22px/1.2 var(--lx-font-display, var(--lx-font-ui));
+  font: 500 var(--sx-text-xl) / var(--sx-leading-28)
+    var(--lx-font-display, var(--lx-font-ui));
   letter-spacing: -0.015em;
   text-wrap: balance;
 }
@@ -118,7 +120,7 @@
 .panel h3 {
   margin: 0;
   color: var(--lx-ink);
-  font: 700 16px/1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
 }
 
 .hint {
@@ -128,7 +130,7 @@
   gap: 4px;
   margin: 0;
   color: var(--lx-muted);
-  font: 500 12.5px/1.5 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .note {
@@ -137,7 +139,7 @@
   border-radius: var(--lx-radius-sm, 10px);
   background: var(--lx-paper-2);
   color: var(--lx-ink-3, var(--lx-ink-2));
-  font: 500 12.5px/1.5 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .warn {
@@ -156,11 +158,11 @@
   border-radius: var(--lx-radius-md, 14px);
   background: var(--lx-paper-2);
   color: var(--lx-ink-2);
-  font: 500 13px/1.4 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .trial b {
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .bar {
@@ -205,7 +207,7 @@
   border-radius: 999px;
   background: transparent;
   color: var(--lx-muted);
-  font: 600 13px/1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -228,8 +230,8 @@
   margin-left: 4px;
   color: var(--lx-teal);
   /* <small> would shrink it to 10.8 px; 12 px is the floor (B19). */
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 /* The plan card. */
@@ -275,7 +277,7 @@
   width: fit-content;
   padding: 4px 10px;
   border-radius: 999px;
-  font: 700 12px/1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
 }
@@ -304,7 +306,7 @@
   border-radius: var(--lx-radius-sm, 10px);
   background: var(--lx-surface);
   color: var(--lx-ink);
-  font: 700 14px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / 1 var(--lx-font-ui);
   cursor: pointer;
   text-align: center;
   text-decoration: none;
@@ -340,7 +342,7 @@
   padding: 10px 12px;
   border-radius: var(--lx-radius-sm, 10px);
   background: var(--lx-paper-2);
-  font: 500 12.5px/1.4 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   color: var(--lx-ink-2);
 }
 
@@ -365,7 +367,7 @@
 }
 
 .gstTotal {
-  font-weight: 700;
+  font-weight: 500;
   color: var(--lx-ink);
   border-top: 1px dashed var(--lx-line);
   padding-top: 6px;
@@ -395,20 +397,22 @@
 }
 
 .planHead h3 {
-  font: 800 18px/1.2 var(--lx-font-display, var(--lx-font-ui));
+  font: 500 var(--sx-text-md) / var(--sx-leading-24)
+    var(--lx-font-display, var(--lx-font-ui));
 }
 
 .price {
   margin: 0;
   color: var(--lx-ink);
-  font: 800 30px/1.1 var(--lx-font-display, var(--lx-font-ui));
+  font: 500 var(--sx-text-2xl) / var(--sx-leading-36)
+    var(--lx-font-display, var(--lx-font-ui));
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
 
 .price small {
   color: var(--lx-muted);
-  font: 500 13px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
   letter-spacing: 0;
 }
 
@@ -420,7 +424,7 @@
   border-radius: 999px;
   background: var(--lx-warning-soft);
   color: var(--lx-warning);
-  font: 700 12px/1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .facts {
@@ -437,7 +441,7 @@
   align-items: flex-start;
   gap: 8px;
   color: var(--lx-ink-3, var(--lx-ink-2));
-  font: 500 13px/1.45 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .facts li::before {
@@ -457,7 +461,7 @@
   gap: 10px 14px;
   padding-top: 12px;
   border-top: 1px solid var(--lx-teal-edge, var(--lx-line));
-  font: 600 13px/1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .stepper {
@@ -492,7 +496,7 @@
 .stepper output {
   min-width: 40px;
   text-align: center;
-  font-weight: 700;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -506,7 +510,7 @@
   border: 1px solid var(--lx-line);
   border-radius: var(--lx-radius-md, 14px);
   color: var(--lx-ink-2);
-  font: 500 13px/1.45 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .enterprise > span {
@@ -534,7 +538,7 @@
   display: flex;
   justify-content: space-between;
   gap: 14px;
-  font: 500 13.5px/1.4 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
 }
 
 .rows dt {
@@ -544,7 +548,7 @@
 .rows dd {
   margin: 0;
   color: var(--lx-ink);
-  font-weight: 600;
+  font-weight: 500;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -556,7 +560,8 @@
 }
 
 .total dd {
-  font: 800 24px/1.1 var(--lx-font-display, var(--lx-font-ui));
+  font: 500 var(--sx-text-xl) / var(--sx-leading-28)
+    var(--lx-font-display, var(--lx-font-ui));
 }
 
 /* Buttons. */
@@ -573,7 +578,7 @@
   padding: 8px 16px;
   border: 1px solid transparent;
   border-radius: var(--lx-radius-sm, 10px);
-  font: 700 13.5px/1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
   text-decoration: none;
   cursor: pointer;
   transition:
@@ -592,7 +597,7 @@
     var(--lx-teal-2, var(--lx-teal))
   );
   color: var(--lx-on-teal);
-  font-size: 15px;
+  font-size: var(--sx-text-md);
   font-variant-numeric: tabular-nums;
 }
 
@@ -632,7 +637,7 @@
   border-color: var(--lx-line);
   background: var(--lx-surface);
   color: var(--lx-ink-2);
-  font-size: 12.5px;
+  font-size: var(--sx-text-xs);
 }
 
 .pay:active:not(:disabled),
@@ -668,7 +673,7 @@
 .confirm p {
   margin: 0;
   color: var(--lx-ink-2);
-  font: 500 13px/1.5 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 /* Offline (UPI / bank) payment block. */
@@ -697,13 +702,13 @@
 
 .payRow small {
   color: var(--lx-muted);
-  font: 500 12px/1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .payRow b {
   overflow-wrap: anywhere;
   color: var(--lx-ink);
-  font: 700 14px/1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
   font-variant-numeric: tabular-nums;
 }
 
@@ -791,13 +796,13 @@
 
 .ring b {
   color: var(--lx-ink);
-  font: 800 26px/1 var(--lx-font-display, var(--lx-font-ui));
+  font: 500 var(--sx-text-2xl) / 1 var(--lx-font-display, var(--lx-font-ui));
   font-variant-numeric: tabular-nums;
 }
 
 .ring span {
   color: var(--lx-muted);
-  font: 500 12px/1.4 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .ok {
@@ -808,7 +813,7 @@
   border-radius: 999px;
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
-  font: 700 12px/1.4 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .ok[data-status="past_due"],
@@ -868,7 +873,7 @@
 .resultLead {
   margin: 0;
   color: var(--lx-muted);
-  font: 500 14px/1.45 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
   font-variant-numeric: tabular-nums;
 }
 
@@ -927,7 +932,7 @@
   border: 1px solid var(--lx-line);
   border-radius: var(--lx-radius-md, 14px);
   color: var(--lx-ink-2);
-  font: 500 13px/1.5 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .refundNote p {
@@ -959,7 +964,7 @@
   border-radius: var(--lx-radius-pill, 999px);
   background: var(--lx-warning-soft);
   color: var(--lx-warning);
-  font: 700 12px/1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 /* Rules under the frame. */
@@ -970,7 +975,7 @@
   margin: 0;
   padding-left: 18px;
   color: var(--lx-muted);
-  font: 500 12.5px/1.5 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 /* The Enterprise sheet. */
@@ -1039,7 +1044,7 @@
 .field {
   display: grid;
   gap: 4px;
-  font: 600 12.5px/1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   color: var(--lx-ink-2);
 }
 
@@ -1050,7 +1055,7 @@
   border-radius: var(--lx-radius-sm, 10px);
   background: var(--lx-surface);
   color: var(--lx-ink);
-  font: 500 14px/1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
 }
 
 .field input:focus-visible {
@@ -1075,11 +1080,11 @@
   }
 
   .panel h2 {
-    font-size: 20px;
+    font-size: var(--sx-text-md);
   }
 
   .price {
-    font-size: 26px;
+    font-size: var(--sx-text-2xl);
   }
 
   .activeGrid {
@@ -1130,7 +1135,7 @@
 }
 
 .segLabel {
-  font: 600 12px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
   color: var(--lx-muted);
 }
 
@@ -1163,13 +1168,14 @@
 .cardTitle {
   margin: 0;
   color: var(--lx-ink);
-  font: 800 20px/1.2 var(--lx-font-display, var(--lx-font-ui));
+  font: 500 var(--sx-text-md) / var(--sx-leading-24)
+    var(--lx-font-display, var(--lx-font-ui));
 }
 
 .tagline {
   margin: 4px 0 0;
   color: var(--lx-muted);
-  font: 500 12.5px/1.4 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .priceBlock {
@@ -1182,7 +1188,7 @@
 
 .priceSub {
   color: var(--lx-muted);
-  font: 500 12px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
 }
 
 .seatsArea {
@@ -1202,12 +1208,12 @@
 }
 
 .seatsLabel {
-  font: 600 13px/1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   color: var(--lx-ink-2);
 }
 
 .liveTotalLine {
-  font: 600 12.5px/1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   color: var(--lx-teal);
 }
 
@@ -1225,7 +1231,7 @@
   align-items: flex-start;
   gap: 8px;
   color: var(--lx-ink-2);
-  font: 500 13px/1.4 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   /* Even lines, so "/ mo" never sits on a line of its own. */
   text-wrap: balance;
 }
@@ -1234,7 +1240,7 @@
    the plan name and the "Most popular" pill (QA, 23 Oct 2026). */
 @media (min-width: 769px) and (max-width: 1100px) {
   .cardTitle {
-    font-size: 18px;
+    font-size: var(--sx-text-md);
   }
 
   .planCard .planBadge {
@@ -1272,7 +1278,7 @@
 .topUpsTitle h3 {
   margin: 0;
   color: var(--lx-ink);
-  font: 700 17px/1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
 }
 
 .topUpIcon {
@@ -1320,25 +1326,25 @@
 .topUpHead h4 {
   margin: 0;
   color: var(--lx-ink);
-  font: 700 15px/1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
 }
 
 .topUpTagline {
   margin: 2px 0 0;
   color: var(--lx-muted);
-  font: 500 12px/1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .topUpPriceBadge {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  font: 800 16px/1.1 var(--lx-font-ui);
+  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
   color: var(--lx-ink);
 }
 
 .topUpPriceBadge small {
-  font: 500 12px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
   color: var(--lx-muted);
 }
 
@@ -1353,7 +1359,7 @@
 }
 
 .topUpMinutes {
-  font: 700 13px/1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   color: var(--lx-teal);
 }
 
@@ -1379,7 +1385,7 @@
   border-radius: var(--lx-radius-pill, 999px);
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
-  font: 600 12px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
 }
 
 .paymentMethodsBlock {
@@ -1392,7 +1398,7 @@
 }
 
 .paymentMethodsLabel {
-  font: 600 12px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
   color: var(--lx-ink-2);
 }
 
@@ -1411,13 +1417,13 @@
   border-radius: 6px;
   background: var(--lx-surface);
   color: var(--lx-ink);
-  font: 700 12px/1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .razorpayTag {
   margin: 0;
   color: var(--lx-muted);
-  font: 500 12px/1.4 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .guaranteeBox {
@@ -1433,13 +1439,13 @@
 .guaranteeText {
   margin: 0;
   color: var(--lx-ink-2);
-  font: 500 12.5px/1.4 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .legalLinks {
   margin: 4px 0 0;
   color: var(--lx-muted);
-  font: 500 12px/1.4 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .legalLinks a {
@@ -1463,13 +1469,13 @@
 }
 
 .successSummary {
-  font: 600 15px/1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
   color: var(--lx-ink);
 }
 
 .successAllowance {
   color: var(--lx-muted);
-  font: 500 13px/1.4 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1518,7 +1524,7 @@
   border-radius: var(--lx-radius-sm, 8px);
   background: var(--lx-paper-2, #f1f5f9);
   color: var(--lx-ink-2, #334155);
-  font: 600 13px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
   cursor: pointer;
   transition: background 140ms ease;
 }
@@ -1540,7 +1546,7 @@
 
 .shellBrandName {
   white-space: nowrap;
-  font: 800 15px/1 var(--lx-font-display, var(--lx-font-ui));
+  font: 500 var(--sx-text-md) / 1 var(--lx-font-display, var(--lx-font-ui));
   letter-spacing: -0.01em;
   color: var(--lx-ink, #0f172a);
 }
@@ -1554,7 +1560,7 @@
 .shellReceiptLink {
   white-space: nowrap;
   color: var(--lx-muted, #64748b);
-  font: 500 12.5px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
   text-decoration: none;
   transition: color 140ms ease;
 }
@@ -1616,13 +1622,14 @@
 .ladderHeading h2 {
   margin: 0;
   color: var(--lx-ink, #0f172a);
-  font: 800 20px/1.2 var(--lx-font-display, var(--lx-font-ui));
+  font: 500 var(--sx-text-md) / var(--sx-leading-24)
+    var(--lx-font-display, var(--lx-font-ui));
   letter-spacing: -0.015em;
 }
 
 .ladderHeading .hint {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 .billingCycleToggle {
@@ -1646,7 +1653,7 @@
   .mobilePlanTabBtn {
     flex: 1;
     padding: 8px 6px;
-    font: 700 12px/1.2 var(--lx-font-ui);
+    font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
     border: 1px solid var(--lx-line, rgba(0, 0, 0, 0.1));
     border-radius: var(--lx-radius-sm, 8px);
     background: var(--lx-surface, #ffffff);
@@ -1728,7 +1735,7 @@
   right: 12px;
   padding: 3px 8px;
   border-radius: var(--lx-radius-pill, 999px);
-  font: 700 12px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
   /* At 12 px, capitals with wide tracking ran into the plan name on a
      360 px phone; sentence case keeps the badge clear of it (B19). */
   text-transform: none;
@@ -1752,7 +1759,7 @@
   border-radius: var(--lx-radius-sm, 10px);
   background: var(--lx-teal);
   color: var(--lx-on-teal, #ffffff);
-  font: 700 13.5px/1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
   cursor: pointer;
   transition: opacity 140ms ease;
   flex-shrink: 0;
@@ -1780,7 +1787,7 @@
   border-radius: var(--lx-radius-sm, 10px);
   background: var(--lx-surface);
   color: var(--lx-ink-2);
-  font: 600 13px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
   cursor: pointer;
   white-space: nowrap;
   transition:
@@ -1807,7 +1814,7 @@
 }
 
 .ladderGuarantee {
-  font: 500 12px/1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   color: var(--lx-muted);
 }
 
@@ -1894,7 +1901,8 @@
 
 .checkoutHeadTitle h2 {
   margin: 0;
-  font: 800 18px/1.2 var(--lx-font-display, var(--lx-font-ui));
+  font: 500 var(--sx-text-md) / var(--sx-leading-24)
+    var(--lx-font-display, var(--lx-font-ui));
   color: var(--lx-ink);
 }
 
@@ -1950,7 +1958,8 @@
 }
 
 .counterValue {
-  font: 800 28px/1.1 var(--lx-font-display, var(--lx-font-ui));
+  font: 500 var(--sx-text-2xl) / var(--sx-leading-36)
+    var(--lx-font-display, var(--lx-font-ui));
   color: var(--lx-teal);
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
@@ -1958,7 +1967,7 @@
 
 .counterLabel {
   margin-top: 4px;
-  font: 600 12px/1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   color: var(--lx-ink-2);
 }
 

@@ -21,13 +21,13 @@
 }
 .sectionHead h3 {
   margin: 0;
-  font-size: 18px;
-  font-weight: 700;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
 }
 .sectionHead p {
   margin: 2px 0 0;
   color: var(--xr-muted);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .note {
@@ -36,7 +36,7 @@
   border-radius: 10px;
   background: var(--xr-card-3);
   color: var(--xr-text-2);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .hero {
@@ -90,27 +90,27 @@
   top: 34px;
   display: grid;
   justify-items: center;
-  font-size: 32px;
-  font-weight: 800;
+  font-size: var(--sx-text-3xl);
+  font-weight: 500;
   line-height: 1;
 }
 .ringScore small {
   color: var(--xr-muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 .ring figcaption {
   display: grid;
   justify-items: center;
   color: var(--xr-text-2);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 .aiRead,
 .aiTag {
   color: var(--xr-muted);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
 }
 .aiTag {
   margin-left: 4px;
@@ -126,8 +126,8 @@
 }
 .who h4 {
   margin: 0;
-  font-size: 26px;
-  font-weight: 800;
+  font-size: var(--sx-text-2xl);
+  font-weight: 500;
   overflow-wrap: anywhere;
 }
 .who p {
@@ -151,8 +151,8 @@
   border-radius: 999px;
   background: var(--tone-soft);
   color: var(--tone);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 .chip svg {
   width: 13px;
@@ -183,11 +183,11 @@
 }
 .fact dt {
   color: var(--xr-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .fact dd {
   margin: 2px 0 0;
-  font-weight: 700;
+  font-weight: 500;
 }
 .fact dl {
   margin: 0;
@@ -213,12 +213,12 @@
 }
 .tileLabel {
   color: var(--tone);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 .when {
-  font-size: 20px;
-  font-weight: 800;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
 }
 .arrow {
   position: absolute;
@@ -244,8 +244,8 @@
 }
 .yours {
   color: var(--xr-green);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
 }
 .actions {
   display: inline-flex;
@@ -260,7 +260,7 @@
   background: var(--xr-card);
   color: var(--xr-text-2);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   cursor: pointer;
 }
 .edit {
@@ -281,7 +281,7 @@
 }
 .error {
   color: var(--xr-red);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 .insights {
@@ -309,7 +309,7 @@
   align-items: center;
   margin: 0;
   color: var(--xr-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .legend svg {
   flex: none;
@@ -348,10 +348,10 @@
   }
   .ringScore {
     top: 24px;
-    font-size: 26px;
+    font-size: var(--sx-text-2xl);
   }
   .who h4 {
-    font-size: 21px;
+    font-size: var(--sx-text-xl);
   }
   /* 390 px: the grid keeps two columns; its icons go so values and actions fit. */
   .fact {
@@ -361,12 +361,12 @@
     display: none;
   }
   .ring figcaption {
-    font-size: 11px;
+    font-size: var(--sx-text-2xs);
     text-align: center;
   }
 }
 
 .fact dd .unknown {
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
   font-weight: 500;
 }

@@ -13,22 +13,37 @@ export function isAppUserAgent(userAgent: string | null | undefined): boolean {
 }
 
 /**
- * The phone's font size, inside the app (owner's OnePlus, 24 Oct 2026: text
- * grew without the icons at the default size, icons looked wrong at small).
- * The app pins the WebView's own text zoom at 100% and, from the build that
- * turns it on, passes Android's font scale as window.SXFontScale before any
- * page script. This page then draws everything (text, icons, spacing) at that
- * scale through the viewport: the page lays out on a narrower screen and is
- * drawn larger, so viewport units, fixed bars and positions stay consistent.
- * Clamped to 1.0-1.2: the WebView ignores a scale below 1 (tested on the Note
- * 8 Pro), and above 1.2 too little fits. Nothing else reads the scale.
+ * The phone's font size, inside the app (native-feel spec, 3 Nov 2026). The
+ * app pins the WebView's own text zoom at 100%, so the page applies Android's
+ * font scale itself, as the root font size: every type token is in rem, so
+ * text grows as sp does while the layout, in px, stays as dp does. The scale
+ * is window.SXFontScale where a build passes it before the page, else the one
+ * the app's status last reported (kept here, so the first paint is already at
+ * size). Clamped to 1-2: Android goes to 200%, and below 1 text would drop
+ * under Material's 11.
  */
 export const FONT_SCALE_MIN = 1;
-export const FONT_SCALE_MAX = 1.2;
+export const FONT_SCALE_MAX = 2;
 export const FONT_SCALE_ATTRIBUTE = "data-sx-font-scale";
+const FONT_SCALE_KEY = "sx.font-scale";
 
 function fontScaleScript(): string {
-  return `var s=window.SXFontScale;if(typeof s==="number"&&isFinite(s)){var z=Math.round(Math.min(${FONT_SCALE_MAX},Math.max(${FONT_SCALE_MIN},s))*100)/100;document.documentElement.setAttribute(${JSON.stringify(FONT_SCALE_ATTRIBUTE)},String(z));if(z>1){var want="initial-scale="+z+", minimum-scale="+z+", maximum-scale="+z;var apply=function(){var m=document.querySelector('meta[name="viewport"]');if(!m)return false;var c=m.getAttribute("content")||"";if(c.indexOf(want)!==-1)return true;var keep=c.split(",").map(function(p){return p.trim()}).filter(function(p){return p&&!/^(width|initial-scale|minimum-scale|maximum-scale)=/.test(p)});keep.push(want);m.setAttribute("content",keep.join(", "));return true};if(!apply())document.addEventListener("DOMContentLoaded",apply,{once:true});new MutationObserver(function(){apply()}).observe(document.head||document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:["content"]})}}`;
+  return `var s=window.SXFontScale;if(typeof s!=="number"){try{s=parseFloat(localStorage.getItem(${JSON.stringify(FONT_SCALE_KEY)})||"")}catch(e){}}if(typeof s==="number"&&isFinite(s)){var z=Math.round(Math.min(${FONT_SCALE_MAX},Math.max(${FONT_SCALE_MIN},s))*100)/100;document.documentElement.setAttribute(${JSON.stringify(FONT_SCALE_ATTRIBUTE)},String(z));document.documentElement.style.fontSize=z*100+"%"}`;
+}
+
+/** Follows the font scale the app's status reports, now and from the next start. */
+export function followFontScale(scale: unknown): void {
+  if (typeof scale !== "number" || !Number.isFinite(scale)) return;
+  const z =
+    Math.round(
+      Math.min(FONT_SCALE_MAX, Math.max(FONT_SCALE_MIN, scale)) * 100,
+    ) / 100;
+  try {
+    localStorage.setItem(FONT_SCALE_KEY, String(z));
+  } catch {}
+  const root = document.documentElement;
+  root.setAttribute(FONT_SCALE_ATTRIBUTE, String(z));
+  root.style.fontSize = `${z * 100}%`;
 }
 
 /** Runs before the first paint, so app-only layout never shifts in. */

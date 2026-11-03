@@ -71,9 +71,9 @@
 /* A compact transport label: it may truncate; the full name stays in its title. */
 .identity strong {
   overflow: hidden;
-  font-size: 14px;
-  font-weight: 650;
-  line-height: 1.35;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -81,8 +81,8 @@
 .message {
   display: block;
   color: var(--lx-ink-3);
-  font-size: 12.5px;
-  line-height: 1.4;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 
 .timeline {
@@ -167,9 +167,9 @@
 .clock {
   flex: none;
   color: var(--lx-ink-3);
-  font-size: 13.5px;
+  font-size: var(--sx-text-sm);
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -188,9 +188,9 @@
   background: transparent;
   color: var(--lx-ink-2);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -242,13 +242,13 @@
   }
 
   .identity strong {
-    font-size: 13px;
+    font-size: var(--sx-text-xs);
   }
 
   .clock {
     grid-area: clock;
     align-self: end;
-    font-size: 12.5px;
+    font-size: var(--sx-text-xs);
   }
 
   .timeline {

@@ -28,11 +28,11 @@
 .subtitle {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
 }
 
 @media (max-width: 720px) {
   .title {
-    font-size: 26px;
+    font-size: var(--sx-text-2xl);
   }
 }

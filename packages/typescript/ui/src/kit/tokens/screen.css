@@ -29,22 +29,43 @@
   --sx-bad-soft: color-mix(in oklab, var(--lx-danger) 10%, transparent);
   --sx-focus-ring: var(--lx-ring-focus);
 
-  /* ---------- Text: three body sizes, then panel, headline, title, figure
-     and large title. Computers 12.5/14/15; phones 13/15/16.5 (below). */
-  --sx-text-xs: 12.5px; /* meta, captions, table heads */
-  --sx-text-sm: 14px; /* body, rows, controls */
-  --sx-text-md: 15px; /* emphasis, names, section titles */
-  --sx-text-panel: 650 16px / 1.3 var(--lx-font-ui);
-  /* A sheet's or a phone page's own title, and a screen's large title. */
-  --sx-text-headline: 700 17px / 1.3 var(--lx-font-ui);
-  --sx-text-title: 750 22px / 1.2 var(--lx-font-ui);
-  --sx-text-kpi: 750 30px / 1.05 var(--lx-font-ui);
-  --sx-text-large: 800 32px / 1.1 var(--lx-font-ui);
-  --sx-tracking-title: -0.022em;
+  /* ---------- Text: Material 3's scale (owner, 3 Nov 2026: the app looked
+     "unrealistic, unsized, ugly"; docs/product/native-feel-spec-20261103.md).
+     The same on every width, in rem: in the phone app the root follows
+     Android's font size (in-app.ts), so text grows as sp does and the layout
+     stays in px as dp does. Weights are 400 and 500 only. */
+  --sx-text-2xs: 0.6875rem; /* 11: badges only */
+  --sx-text-xs: 0.75rem; /* 12: meta, times, tab labels */
+  --sx-text-sm: 0.875rem; /* 14: secondary lines, labels, buttons */
+  --sx-text-md: 1rem; /* 16: body, list rows, headings */
+  --sx-text-xl: 1.375rem; /* 22: page and app bar titles */
+  --sx-text-2xl: 1.75rem; /* 28: figures */
+  --sx-text-3xl: 2rem; /* 32: the one hero figure */
+  /* Five line heights, one per size step. */
+  --sx-leading-16: 1rem; /* 11 and 12 */
+  --sx-leading-20: 1.25rem; /* 14 */
+  --sx-leading-24: 1.5rem; /* 16 */
+  --sx-leading-28: 1.75rem; /* 22 */
+  --sx-leading-36: 2.25rem; /* 28 and 32 */
+  /* The roles. */
+  --sx-text-kpi: 500 1.75rem / 2.25rem var(--lx-font-ui);
+  --sx-text-title: 500 1.375rem / 1.75rem var(--lx-font-ui);
+  --sx-text-heading: 500 1rem / 1.5rem var(--lx-font-ui);
+  --sx-text-body: 400 1rem / 1.5rem var(--lx-font-ui);
+  --sx-text-secondary: 400 0.875rem / 1.25rem var(--lx-font-ui);
+  --sx-text-label: 500 0.875rem / 1.25rem var(--lx-font-ui);
+  --sx-text-meta: 400 0.75rem / 1rem var(--lx-font-ui);
+  --sx-text-badge: 500 0.6875rem / 1rem var(--lx-font-ui);
+  --sx-text-large: 400 2rem / 2.25rem var(--lx-font-ui);
+  /* Older names for the same roles. */
+  --sx-text-panel: var(--sx-text-heading);
+  --sx-text-headline: var(--sx-text-heading);
+  --sx-tracking-title: 0;
 
   /* ---------- Floors (minimums, not suggestions) ---------- */
-  --sx-control-h: 32px; /* buttons and inputs; 44 px on touch below */
-  --sx-row-h: 48px;
+  --sx-control-h: 32px; /* buttons and inputs; 40 px on touch below */
+  --sx-row-h: 56px; /* Material 3's one-line list item */
+  --sx-chip-h: 32px;
   --sx-table-head-h: 32px;
   --sx-panel-head-h: 42px;
   --sx-badge-h: 22px;
@@ -55,7 +76,7 @@
   --sx-radius-sm: var(--lx-radius-sm);
   --sx-radius-md: var(--lx-radius-md);
   --sx-radius-lg: var(--lx-radius-lg); /* cards */
-  --sx-radius-xl: 32px; /* sheets and the floating tab bar */
+  --sx-radius-xl: 28px; /* sheets and the floating tab bar (Material 3) */
   --sx-radius-pill: var(--lx-radius-pill);
   --sx-gap: 20px; /* between surfaces */
   --sx-gutter: 16px; /* phone page edge */
@@ -201,20 +222,16 @@
   --sx-glass-lens: color-mix(in oklab, white 15%, transparent);
 }
 
-/* Phones: Apple's text sizes, so names and times read outdoors at arm's
-   length; touch controls 44 px. */
+/* Phones: Material 3's 40 px buttons; the tap reach below takes each to 48. */
 @media (pointer: coarse) {
   :root {
-    --sx-control-h: 44px;
-    --sx-text-xs: 13px;
-    --sx-text-sm: 15px;
-    --sx-text-md: 16.5px;
+    --sx-control-h: 40px;
   }
 }
 
-/* The 44 px tap reach (kit/tap-reach.ts tags each control drawn smaller): an
-   invisible layer around the control out to 44 px, so a finger finds it and
-   nothing moves (owner, 3 Nov 2026). */
+/* The 48 px tap reach (kit/tap-reach.ts tags each control drawn smaller): an
+   invisible layer around the control out to 48 px, Android's touch target, so
+   a finger finds it and nothing moves (owner, 3 Nov 2026). */
 @media (pointer: coarse) {
   [data-reach][data-reach] {
     position: relative;
@@ -223,7 +240,56 @@
   [data-reach]::after {
     content: "";
     position: absolute;
-    inset: min(0px, calc(50% - 22px));
+    inset: min(0px, calc(50% - 24px));
+  }
+}
+
+/* ---------- Native feel (native-feel spec, section 3) ---------- */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Only the weights the font has: never a faked bold. */
+  font-synthesis: none;
+}
+
+/* The system face, for the owner to judge on the phone before it ships. */
+:root[data-sx-font="system"] {
+  --lx-font-ui: system-ui, Roboto, sans-serif;
+}
+
+body {
+  touch-action: manipulation;
+  overscroll-behavior-y: none;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+img,
+a {
+  -webkit-user-drag: none;
+}
+
+/* Chrome is not text to select; inputs, notes and numbers stay selectable. */
+:where(button, [role="button"], [role="tab"], summary, nav, header, label) {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+:where(b, strong) {
+  font-weight: 500;
+}
+
+/* Pressed: Material 3's 10% state layer of the control's own ink, drawn
+   inside it, so its fill and gradient stay. */
+@media (pointer: coarse) {
+  :is(a[href], button, [role="button"], [role="tab"], summary):active:not(
+      :disabled
+    ) {
+    box-shadow: inset 0 0 0 100vmax
+      color-mix(in srgb, currentColor 10%, transparent);
   }
 }
 

@@ -51,7 +51,7 @@
 .label {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .fieldHead {
@@ -87,7 +87,7 @@
 .discardAsk > span {
   margin-right: auto;
   color: var(--sx-ink);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 /* Enter or Ctrl+Enter asks "Send this report?" in the same row, with a tick
@@ -169,7 +169,7 @@
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -283,7 +283,7 @@
 .pictureWords strong {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .pictureWords small {
@@ -326,7 +326,7 @@
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  line-height: 1.45;
+  line-height: var(--sx-leading-16);
 }
 
 @keyframes report-sheen {
@@ -367,7 +367,7 @@
   color: var(--lx-teal);
   font: inherit;
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -491,7 +491,7 @@
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
 }
 
 .sentIcon {
@@ -555,7 +555,7 @@
   background: var(--sx-sunken);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .status[data-status="fixed"],
