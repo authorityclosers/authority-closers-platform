@@ -308,6 +308,8 @@ export function PerformanceLoading({
 export function PerformanceView() {
   const [period, setPeriod] = useState<Period>("1");
   const [state, setState] = useState<State>({ status: "loading" });
+  // Try again: the same period read once more.
+  const [attempt, setAttempt] = useState(0);
   const [opened, setOpened] = useState<SellerEffort | null>(null);
   const chosen = PERIODS.find((item) => item.key === period) ?? PERIODS[0];
   useEffect(() => {
@@ -322,7 +324,7 @@ export function PerformanceView() {
       },
     );
     return () => controller.abort();
-  }, [period]);
+  }, [period, attempt]);
 
   const effort = state.status === "ready" ? state.effort : null;
   const approximate = effort?.sellers.some((seller) =>
@@ -345,7 +347,17 @@ export function PerformanceView() {
         <PerformanceLoading />
       ) : state.status === "error" || !effort ? (
         <p className={styles.quiet} role="alert">
-          Performance didn&apos;t load. Come back in a moment.
+          Performance didn&apos;t load.{" "}
+          <button
+            type="button"
+            className={styles.retry}
+            onClick={() => {
+              setState({ status: "loading" });
+              setAttempt((value) => value + 1);
+            }}
+          >
+            Try again
+          </button>
         </p>
       ) : (
         <>

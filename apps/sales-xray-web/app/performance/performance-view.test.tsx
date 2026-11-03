@@ -331,3 +331,37 @@ it("rates connections over the calls whose outcome the phone told us", () => {
   );
   expect(work["Connection rate"]).toEqual(["100%", "20%"]);
 });
+
+it("says so with Try again when its read fails, never that there is nothing", async () => {
+  // The orchestrator, 3 Nov 2026 (the test robot's 192398ee): a failed load shows its
+  // error with Retry, never an empty state.
+  let fail = true;
+  asked = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async (input) => {
+      asked.push(String(input));
+      if (String(input).includes("/revenue/"))
+        return new Response("{}", { status: 404 });
+      if (fail) return new Response("{}", { status: 500 });
+      return new Response(JSON.stringify(effort(false)));
+    }),
+  );
+  await mount();
+  expect(host.querySelector('[role="alert"]')?.textContent).toBe(
+    "Performance didn't load. Try again",
+  );
+  expect(host.textContent).not.toMatch(/No calls/);
+  fail = false;
+  const again = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent === "Try again",
+  );
+  await act(async () => again?.click());
+  await act(async () => Promise.resolve());
+  await act(async () => Promise.resolve());
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  expect(host.textContent).toContain("100 calls");
+  expect(
+    asked.filter((url) => url.includes("/performance/sellers")),
+  ).toHaveLength(2);
+});

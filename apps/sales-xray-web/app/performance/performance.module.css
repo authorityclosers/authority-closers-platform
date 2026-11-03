@@ -44,6 +44,24 @@
   font-size: var(--sx-text-sm);
 }
 
+/* Try again after a failed read: a text button with a full tap target. */
+.retry {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.retry:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
 .list {
   display: grid;
   gap: 10px;
