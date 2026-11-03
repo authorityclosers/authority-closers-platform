@@ -55,10 +55,10 @@ def test_folder_holds_no_secret() -> None:
 
 
 def test_design_rules_in_page_scan_match_capture_stage() -> None:
-    """The four design rules live in lib/design.cjs and inside the page scan: same code."""
-    design = (ROOT / "lib" / "design.cjs").read_text(encoding="utf-8")
+    """The four design rules live in lib/design-rules.cjs and inside the page scan: same code."""
+    design = (ROOT / "lib" / "design-rules.cjs").read_text(encoding="utf-8")
     scan = (ROOT / "lib" / "invariants.cjs").read_text(encoding="utf-8")
-    source = design.split("const DESIGN_SCAN = ", 1)[1].split(";\n\n// ---- page helpers", 1)[0]
+    source = design.split("const DESIGN_SCAN = ", 1)[1].split(";\n\nmodule.exports", 1)[0]
     assert f"out.design = phone ? ({source})() : null;" in scan
 
 

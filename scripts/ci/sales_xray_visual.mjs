@@ -6,11 +6,21 @@ import { get as httpGet } from "node:http";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
+import {
+  EMPTY_FIELDS,
+  runPhoneChecks,
+  runTextScale,
+} from "./sales_xray_dom_checks.mjs";
 
+// The two desktop and phone sizes of the first renders, then the phone sizes the framework scores (v3.1,
+// section 5): 360 light and 393 dark, as a touch phone, with the DOM checks and the text scale 2.0 pass.
 export const viewports = [
   { width: 1440, height: 900 },
   { width: 390, height: 844 },
+  { width: 360, height: 780, scheme: "light", touch: true },
+  { width: 393, height: 851, scheme: "dark", touch: true },
 ];
+export const sizeOf = ({ width, height }) => ({ width, height });
 const shell = "/review-fixture/shell";
 const frame = (id, route, ready, group, tab) => ({
   id,
@@ -206,7 +216,8 @@ export function unavailable(item, viewport) {
     id: `${item.id}-${viewport.width}x${viewport.height}`,
     route: item.route,
     state: item.tab ?? item.id,
-    viewport,
+    viewport: sizeOf(viewport),
+    scheme: viewport.scheme ?? "light",
     screenshot: null,
     capture_status: "unavailable",
     overflow_count: null,
@@ -216,6 +227,7 @@ export function unavailable(item, viewport) {
     axe_critical_count: null,
     axe_incomplete_count: null,
     failure_stage: "not_started",
+    ...EMPTY_FIELDS,
   };
 }
 
@@ -356,6 +368,8 @@ export async function capture(
     } catch {
       /* Failed measurements remain null. Never save axe DOM excerpts. */
     }
+    // Report-only checks on the phone renders: the robot's design rules, targets, hero contrast, raw values.
+    if (viewport.touch) await runPhoneChecks(page, row);
     row.failure_stage = "screenshot";
     await page.screenshot({
       path: resolve(output, `${row.id}.png`),
@@ -364,6 +378,8 @@ export async function capture(
       timeout: 8000,
     });
     row.screenshot = `${row.id}.png`;
+    // Changes the page (every text twice its size), so it runs after the screenshot.
+    if (viewport.touch) await runTextScale(page, row);
     row.capture_status = "measured";
     row.console_error_count = consoleErrors;
     row.uncaught_exception_count = uncaught;
@@ -555,16 +571,25 @@ async function main() {
           const item = selected[Math.floor(index / viewports.length)];
           const viewport = viewports[index % viewports.length];
           const context = await browser.newContext({
-            viewport,
+            viewport: sizeOf(viewport),
             deviceScaleFactor: 1,
             locale: "en-GB",
             timezoneId: "UTC",
-            colorScheme: "light",
+            colorScheme: viewport.scheme ?? "light",
+            hasTouch: Boolean(viewport.touch),
+            isMobile: Boolean(viewport.touch),
             reducedMotion: "reduce",
             serviceWorkers: "block",
             acceptDownloads: false,
           });
           try {
+            // The app is dark by its own key, not by the browser setting.
+            if (viewport.scheme === "dark")
+              await context.addInitScript(() => {
+                try {
+                  localStorage.setItem("sales-xray:theme", "dark");
+                } catch {}
+              });
             await context.route("**/*", (route) =>
               routeFixtureRequest(route, "http://127.0.0.1:18216", routes),
             );
