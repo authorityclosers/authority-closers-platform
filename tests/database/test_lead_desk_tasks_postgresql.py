@@ -1,6 +1,6 @@
 """The task writer through the HTTP API on PostgreSQL (work-memory engine; the seller's
 acceptance list, docs/product/lead-desk/work-memory-engine.md section 10): one task per
-command, the lead's next action is its earliest open task, snoozes and history, offline
+command, the lead's next action is its earliest open call-back, snoozes and history, offline
 changes merged by their device time, a task follows its lead, each seller sees their own."""
 
 from __future__ import annotations
@@ -90,20 +90,21 @@ def test_at15_the_next_action_is_the_earliest_open_task_and_at12_a_retry_makes_n
             stored = await here.stored(lead_id)
             assert stored.next_action_at == datetime.fromisoformat(sooner_due)
 
-            # Done: the next action moves to the next task; the last one done clears it.
+            # Done: the call-back done clears the next action. The WhatsApp left open is the
+            # Tasks list's work and never the lead's next call (phone QA, 3 Nov 2026).
             await act(here, sooner, "done")
             stored = await here.stored(lead_id)
-            assert stored.next_action_at == datetime.fromisoformat(later_due)
+            assert stored.next_action_at is None
             await act(here, first.json(), "done")
             stored = await here.stored(lead_id)
             assert stored.next_action_at is None
             assert (await here.detail(lead_id))["tasks"] == []
 
-            # Undo brings it back, and the next action with it.
-            undone = await act(here, {**first.json(), "revision": 2}, "undo")
+            # Undo brings the call-back back, and the next action with it.
+            undone = await act(here, {**sooner, "revision": 2}, "undo")
             assert undone["status"] == "open"
             stored = await here.stored(lead_id)
-            assert stored.next_action_at == datetime.fromisoformat(later_due)
+            assert stored.next_action_at == datetime.fromisoformat(sooner_due)
 
             # The history has a line for each.
             actions = [
@@ -306,16 +307,89 @@ def test_a_lead_whose_next_step_is_a_whatsapp_says_so(
     postgres_harness: Any, tmp_path: Path
 ) -> None:
     """Hardcore phone QA ph2-24 (1 Nov 2026): a WhatsApp task read "Call booked" on its lead.
-    A lead whose next step is a task other than a call says that task's kind."""
+    A WhatsApp is never the lead's next call (3 Nov 2026), so a New lead with one stays a New
+    lead; a next step an older task of another kind set still says that task's kind."""
 
     async def exercise() -> None:
         async with world(postgres_harness, tmp_path) as here:
             lead_id = await here.add("Fictional Task Eight", "98760 60008")
-            await task(here, lead_id, kind="whatsapp", starts_at=later(hours=2))
-            listed = await here.client.get(f"{BASE}/leads", params={"scope": "mine"})
-            assert listed.status_code == 200, listed.text
-            row = next(item for item in listed.json()["leads"] if item["lead_id"] == lead_id)
-            assert row["why"] == "WhatsApp booked"
+            made = await task(here, lead_id, kind="whatsapp", starts_at=later(hours=2))
+
+            async def why() -> str:
+                listed = await here.client.get(f"{BASE}/leads", params={"scope": "mine"})
+                assert listed.status_code == 200, listed.text
+                row = next(item for item in listed.json()["leads"] if item["lead_id"] == lead_id)
+                return str(row["why"])
+
+            assert await why() == "New lead"
+            # A lead an older WhatsApp task gave its next step (before 3 Nov 2026).
+            async with here.setup.sessions() as db:
+                await db.execute(
+                    update(Lead)
+                    .where(Lead.id == UUID(lead_id))
+                    .values(
+                        next_action_at=datetime.fromisoformat(made["starts_at"]),
+                        next_action_note=made["title"],
+                    )
+                )
+                await db.commit()
+            assert await why() == "WhatsApp booked"
+
+    run(exercise())
+
+
+def test_a_whatsapp_task_keeps_the_lead_out_of_to_call(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Phone QA seller day on v1.36 (3 Nov 2026): a WhatsApp task due in an hour on an
+    Interested lead whose next call was tomorrow put it back in To Call, counted there and in
+    Follow-ups. Only a call-back is the lead's next call; the WhatsApp is on Tasks. Done, it
+    leaves the call alone; a next step an older WhatsApp task set is cleared with it."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            lead_id = await here.add("Fictional Task Nine", "98760 60009")
+            tomorrow = later(days=1)
+            talked = await here.dispose(
+                lead_id, connected=True, stage="interested", follow_up_at=tomorrow
+            )
+            assert talked.status_code == 200, talked.text
+            booked = (await here.stored(lead_id)).next_action_at
+            assert booked is not None
+
+            async def listed(view: str) -> tuple[list[str], dict[str, int]]:
+                found = await here.client.get(
+                    f"{BASE}/leads", params={"scope": "mine", "side": "inbound", "view": view}
+                )
+                assert found.status_code == 200, found.text
+                body = found.json()
+                return [row["lead_id"] for row in body["leads"]], body["view_counts"]
+
+            to_call, before = await listed("to_call")
+            assert lead_id not in to_call
+            assert lead_id in (await listed("follow_ups"))[0]
+            send = await task(here, lead_id, kind="whatsapp", starts_at=later(hours=1))
+            assert (await here.stored(lead_id)).next_action_at == booked
+            to_call, after = await listed("to_call")
+            assert lead_id not in to_call
+            assert after == before
+            await act(here, send, "done")
+            assert (await here.stored(lead_id)).next_action_at == booked
+
+            # Before 3 Nov a WhatsApp task set the next step: done, it clears its own.
+            older = await task(here, lead_id, kind="whatsapp", starts_at=later(hours=2))
+            async with here.setup.sessions() as db:
+                await db.execute(
+                    update(Lead)
+                    .where(Lead.id == UUID(lead_id))
+                    .values(
+                        next_action_at=datetime.fromisoformat(older["starts_at"]),
+                        next_action_note=older["title"],
+                    )
+                )
+                await db.commit()
+            await act(here, older, "done")
+            assert (await here.stored(lead_id)).next_action_at is None
 
     run(exercise())
 

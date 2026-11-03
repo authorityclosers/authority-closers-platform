@@ -8,8 +8,9 @@ one ``task`` event on the lead, so the lead's history and My work show it.
   the second time and answers the task as it is (a retry, a queued write sent again).
 - A change made on an older revision is merged, not refused: the change made later on its
   device wins, and the other is kept in the history as superseded.
-- The lead's next action is a projection: its earliest open task, so every reader and the
-  phone alerts keep working. A follow-up set the old way (no task) is left alone.
+- The lead's next action is a projection: its earliest open call-back, so every reader and
+  the phone alerts keep working; the other kinds are the Tasks list's work and keep the lead
+  out of To Call (3 Nov 2026). A follow-up set the old way (no task) is left alone.
 - A task follows its lead: reassigning the lead moves its open tasks to the new owner.
 - A task may have no lead (migration 0147; owner order, 30 Oct 2026: "optional linked
   lead"): a task of your own, on your list. It keeps no lead history, so a retried or
@@ -159,6 +160,20 @@ class _Change:
     go: bool  # False: nothing to change (a replay, or superseded)
 
 
+@dataclass(frozen=True, slots=True)
+class _Closed:
+    """A task as it was when it stopped being one the lead waits on: done, cancelled, or a
+    call-back changed into another kind."""
+
+    due: datetime
+    kind: str
+    title: str
+
+    @classmethod
+    def of(cls, task: LeadTask) -> _Closed:
+        return cls(task.starts_at, task.kind, task.title)
+
+
 class TaskBook:
     def __init__(self, desk: LeadDesk) -> None:
         self.desk = desk
@@ -292,16 +307,21 @@ class TaskBook:
             raise DeskError(422, "Pick a time in the next year.")
         return moment
 
-    async def project(self, lead: Lead, closed_due: datetime | None = None) -> None:
-        """The lead's next action is its earliest open task. When the last open task
-        closes, a next action that was that task's due is cleared; one set the old way is
-        left alone."""
+    async def project(self, lead: Lead, closed: _Closed | None = None) -> None:
+        """The lead's next call is its earliest open call-back. A WhatsApp, an email, a file
+        or a meeting is the Tasks list's work and leaves the lead's place in To Call and
+        Follow-ups alone (phone QA, 3 Nov 2026: a WhatsApp task due in an hour put an
+        Interested lead back in To Call over its call tomorrow, counted in both). When the
+        last open call-back closes, a next action that was its due is cleared; so is one an
+        older task of another kind set (its due and its title); one set the old way is left
+        alone."""
         first = await self.db.scalar(
             select(LeadTask)
             .where(
                 LeadTask.tenant_id == self.tenant_id,
                 LeadTask.lead_id == lead.id,
                 LeadTask.status == OPEN,
+                LeadTask.kind.in_(CALLING_KINDS),
             )
             .order_by(LeadTask.starts_at, LeadTask.id)
             .limit(1)
@@ -309,7 +329,11 @@ class TaskBook:
         if first is not None:
             lead.next_action_at = first.starts_at
             lead.next_action_note = first.title[:500]
-        elif closed_due is not None and lead.next_action_at == closed_due:
+        elif (
+            closed is not None
+            and lead.next_action_at == closed.due
+            and (closed.kind in CALLING_KINDS or lead.next_action_note == closed.title[:500])
+        ):
             lead.next_action_at = None
             lead.next_action_note = None
         lead.updated_at = self.now
@@ -475,24 +499,24 @@ class TaskBook:
                 change.lead, change.task, action, command.command_id, command.client_at, **extra
             )
 
-    async def _settled(self, change: _Change, closed_due: datetime | None = None) -> None:
-        """Written; the lead's next action follows its tasks (a task of your own has none)."""
+    async def _settled(self, change: _Change, closed: _Closed | None = None) -> None:
+        """Written; the lead's next call follows its call-backs (a task of your own has
+        none). ``closed``: the task just done or cancelled."""
         await self.db.flush()
         if change.lead is not None:
-            await self.project(change.lead, closed_due=closed_due)
+            await self.project(change.lead, closed=closed)
             await self.db.flush()
 
     async def done(self, task_id: UUID, command: TaskAction) -> TaskView:
         change = await self._changing(task_id, command, "done")
         task = change.task
         if change.go and task.status != "done":
-            due = task.starts_at
             task.status = "done"
             task.done_at = self.now
             task.done_by_person_id = self.desk.viewer.person_id
             self._touch(task, command.client_at)
             self._log(change, "done", command)
-            await self._settled(change, closed_due=due)
+            await self._settled(change, closed=_Closed.of(task))
         return await self._answer(change)
 
     async def undo(self, task_id: UUID, command: TaskAction) -> TaskView:
@@ -511,11 +535,10 @@ class TaskBook:
         change = await self._changing(task_id, command, "cancelled")
         task = change.task
         if change.go and task.status == OPEN:
-            due = task.starts_at
             task.status = "cancelled"
             self._touch(task, command.client_at)
             self._log(change, "cancelled", command)
-            await self._settled(change, closed_due=due)
+            await self._settled(change, closed=_Closed.of(task))
         return await self._answer(change)
 
     async def snooze(self, task_id: UUID, command: TaskSnooze) -> TaskView:
@@ -544,6 +567,7 @@ class TaskBook:
         task = change.task
         if change.go and task.status == OPEN:
             before = task.starts_at
+            was = _Closed.of(task)
             if command.starts_at is not None:
                 task.starts_at = self._when(command.starts_at)
             if command.ends_at is not None:
@@ -561,7 +585,9 @@ class TaskBook:
                 command,
                 from_due_at=before.isoformat() if before != task.starts_at else None,
             )
-            await self._settled(change)
+            # A call-back made into another kind no longer holds the lead's next call.
+            left = was.kind in CALLING_KINDS and task.kind not in CALLING_KINDS
+            await self._settled(change, closed=was if left else None)
         return await self._answer(change)
 
 
