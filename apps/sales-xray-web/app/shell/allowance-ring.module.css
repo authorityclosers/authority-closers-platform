@@ -67,7 +67,7 @@
 
 .text {
   display: grid;
-  line-height: 1.1;
+  line-height: var(--sx-leading-16);
 }
 
 .text strong {

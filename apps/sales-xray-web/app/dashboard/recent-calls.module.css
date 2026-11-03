@@ -269,7 +269,7 @@
 
   .name {
     min-width: 0;
-    line-height: 1.35;
+    line-height: var(--sx-leading-16);
   }
 }
 

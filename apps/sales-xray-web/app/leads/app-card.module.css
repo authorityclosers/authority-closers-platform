@@ -345,7 +345,7 @@
 
 .card textarea {
   min-height: 64px;
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
   field-sizing: content;
   resize: vertical;
 }

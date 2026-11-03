@@ -196,7 +196,7 @@
 .choiceText small {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs, 12px);
-  line-height: 1.4;
+  line-height: var(--sx-leading-16);
 }
 
 .actions {

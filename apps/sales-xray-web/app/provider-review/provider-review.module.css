@@ -95,7 +95,7 @@
   padding: 14px 16px;
   border-radius: 8px;
   background: #f2f6f4;
-  line-height: 1.55;
+  line-height: var(--sx-leading-20);
 }
 
 .tokenNote {
@@ -127,7 +127,7 @@
 .error,
 .reference {
   margin: 20px 0 0;
-  line-height: 1.55;
+  line-height: var(--sx-leading-20);
 }
 
 .notice {

@@ -181,7 +181,7 @@
 }
 .funnel text {
   fill: var(--sx-ink);
-  font: 12px var(--lx-font-ui);
+  font: var(--sx-text-xs) var(--lx-font-ui);
 }
 .funnel .svgCount {
   font-weight: 500;

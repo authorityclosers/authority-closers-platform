@@ -151,7 +151,7 @@
   border-radius: 12px;
   background: var(--lx-surface);
   box-shadow: 0 0 0 4px var(--lx-teal-soft);
-  font: 500 clamp(20px, 1.9vw, 26px) / 1.1 var(--lx-font-display);
+  font: 500 var(--sx-text-xl) / var(--sx-leading-28) var(--lx-font-display);
   letter-spacing: -0.02em;
   outline: none;
 }

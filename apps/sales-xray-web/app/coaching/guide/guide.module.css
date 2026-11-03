@@ -29,9 +29,9 @@
   min-width: 0;
   margin: 0;
   color: var(--sx-ink);
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.4;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
   overflow-wrap: anywhere;
 }
 
@@ -58,8 +58,8 @@
 .label {
   margin: 0;
   color: var(--sx-muted);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .list {
@@ -82,9 +82,9 @@
   border-radius: var(--sx-radius-md);
   background: var(--sx-surface);
   color: var(--sx-ink);
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.35;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
   text-decoration: none;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -127,16 +127,16 @@
 .eyebrow {
   margin: 0;
   color: var(--sx-muted);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .question {
   margin: 0;
   color: var(--sx-ink);
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.3;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
   overflow-wrap: anywhere;
 }
 
@@ -152,8 +152,8 @@
 .text > p {
   margin: 0;
   color: var(--sx-ink);
-  font-size: 16px;
-  line-height: 1.55;
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
   overflow-wrap: anywhere;
   white-space: pre-line;
 }
@@ -169,8 +169,8 @@
 
 .say figcaption {
   color: var(--sx-ink-2);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .say blockquote {
@@ -180,9 +180,9 @@
 .say blockquote > p {
   margin: 0;
   color: var(--sx-ink);
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.45;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
   overflow-wrap: anywhere;
   white-space: pre-line;
 }
@@ -200,8 +200,8 @@
   background: var(--sx-fill-soft);
   color: var(--sx-ink);
   font: inherit;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -240,13 +240,13 @@
 }
 
 .entry strong {
-  font-size: 16px;
-  font-weight: 650;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
 }
 
 .entry small {
   color: var(--sx-muted);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
   overflow-wrap: anywhere;
 }
 

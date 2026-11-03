@@ -262,7 +262,7 @@
 .detailHead h3 {
   margin: 0;
   color: var(--lx-ink);
-  font: 500 clamp(18px, 1.6vw, 22px) / 1.25 var(--lx-font-ui, inherit);
+  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui, inherit);
   letter-spacing: -0.015em;
 }
 

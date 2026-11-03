@@ -29,7 +29,7 @@
 
 .insight strong {
   color: var(--sx-accent);
-  font-size: var(--sx-text-large, 20px);
+  font-size: var(--sx-text-xl);
   font-weight: 500;
   letter-spacing: -0.01em;
 }

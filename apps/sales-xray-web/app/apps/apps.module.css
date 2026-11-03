@@ -39,7 +39,7 @@
 
 .hero h1 {
   margin: 0;
-  font: 500 clamp(26px, 6vw, 38px) / 1.15
+  font: 500 var(--sx-text-2xl) / var(--sx-leading-36)
     var(--lx-font-display, var(--lx-font-ui, sans-serif));
   letter-spacing: -0.025em;
   text-wrap: balance;

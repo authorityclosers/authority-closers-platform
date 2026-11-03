@@ -5900,7 +5900,7 @@ a.repName {
   max-width: 100%;
   font-size: min(var(--sx-text-xs), 16cqi);
   font-weight: 500;
-  line-height: 1.15;
+  line-height: var(--sx-leading-16);
   text-align: center;
   /* Whole, on two lines when the tile is narrow (robot row d65dde5c). */
   overflow-wrap: anywhere;
@@ -6198,7 +6198,7 @@ button.leadTags {
   background: transparent;
   color: var(--sx-ink);
   font: inherit;
-  line-height: 1.45;
+  line-height: var(--sx-leading-24);
   resize: none;
   overflow-y: auto;
   outline: none;

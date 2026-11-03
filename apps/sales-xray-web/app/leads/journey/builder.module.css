@@ -69,7 +69,7 @@
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
   font-weight: 500;
-  line-height: 1.25;
+  line-height: var(--sx-leading-24);
 }
 
 .head p {
