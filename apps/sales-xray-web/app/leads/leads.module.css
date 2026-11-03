@@ -7321,6 +7321,36 @@ fieldset.form {
   }
 }
 
+/* The sort pick shows its current choice in full at 360 px and at 200% text
+   (slow-frames, 3 Nov 2026: only its chevron showed). The grid above gave it
+   the count's 60 px column, and its words gave way to nothing. With a sort
+   pick the head is a row that wraps: the pick at its words' width, then the
+   sync line, then the tools at the end, on a line of their own when they
+   don't fit beside it. */
+.listHead:has(> .listSort):has(> .syncChip) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 4px;
+}
+.listHead:has(> .listSort) > .listSort {
+  max-width: 100%;
+}
+.listHead:has(> .listSort) > .syncChip {
+  margin: 0;
+}
+.listHead:has(> .listSort) > .listTools {
+  margin-inline-start: auto;
+}
+
+/* A phone has nothing for the tools when the List | Table switch is all they
+   hold (that switch is for computers): no empty capsule at the row's end. */
+@media (max-width: 767px) {
+  .listHead .listTools:not(:has(> :not(.layoutSwitch))) {
+    display: none;
+  }
+}
+
 /* Cold reads reserve the same row height as the list, including phone actions. */
 .listSkeleton:has(.listLoadingRow) {
   gap: 0;
