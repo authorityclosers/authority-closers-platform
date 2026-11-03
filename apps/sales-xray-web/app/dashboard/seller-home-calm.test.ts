@@ -56,3 +56,27 @@ it("keeps extreme data inside its tile and row, and the calm side's keyboard foc
     /\[data-tone="calm"\] \.option\[aria-checked="true"\]:focus-visible \{\s*box-shadow: var\(--sx-focus-ring\)/,
   );
 });
+
+it("keeps the next call above the fold beside an owner's revenue bar and a waiting answer", () => {
+  // v1.36 phone QA on the Redmi 13, 3 Nov 2026: the Call button 70 px under the tab bar.
+  expect(rule(".me")).toMatch(/gap: 12px/);
+  expect(rule(".head")).toMatch(/min-height: 24px/);
+  expect(rule(".callNow")).toMatch(/min-height: 48px/);
+  expect(rule(".card")).toMatch(/padding: 6px 12px/);
+  expect(css).toMatch(
+    /\.next \{\s*align-items: center;\s*gap: 10px;\s*padding: 12px;/,
+  );
+  const home = readFileSync(
+    join(process.cwd(), "app/dashboard/sales-home.module.css"),
+    "utf8",
+  );
+  expect(home).toMatch(
+    /@media \(max-width: 1023px\) \{\s*\.home:has\(> \[data-mode="mine"\]\) \{\s*gap: 12px;/,
+  );
+});
+
+it("writes the next card's label in sentence case, never in capitals", () => {
+  // ux-audit, 3 Nov 2026: Dipak's picture says "Next cold call".
+  expect(rule(".kicker")).not.toMatch(/text-transform/);
+  expect(css).not.toMatch(/uppercase/);
+});

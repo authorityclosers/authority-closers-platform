@@ -47,8 +47,10 @@ export function ReportScrollRail() {
     if (!element) return;
     const { clientHeight, scrollHeight, scrollTop } = element;
     const range = scrollHeight - clientHeight;
+    const root = document.documentElement;
     if (range <= 4) {
       setRail(null);
+      root.style.removeProperty("--sx-rail-room");
       return;
     }
     const box = element.getBoundingClientRect();
@@ -84,6 +86,12 @@ export function ReportScrollRail() {
             active: index === current,
           }))
         : [];
+    // The room the rail takes from the window's right edge, so a floating
+    // card (speaker.module.css) keeps left of its checkpoints (855ed149).
+    root.style.setProperty(
+      "--sx-rail-room",
+      `${Math.ceil(root.clientWidth - (box.right - 14)) + 8}px`,
+    );
     setRail({
       top: box.top + 12,
       left: box.right - 14,
@@ -104,10 +112,22 @@ export function ReportScrollRail() {
     const resize = new ResizeObserver(measure);
     resize.observe(element);
     if (element.firstElementChild) resize.observe(element.firstElementChild);
-    // Switching views or tabs changes which sections are visible.
-    const mutations = new MutationObserver(measure);
+    // Switching views or tabs changes which sections are visible: a tab hides
+    // its section, a view puts its own sections in place of the last (the test
+    // robot, 855ed149, 3 Nov 2026: the Report's checkpoints stayed on Prospect's
+    // Information). Once a frame, however many changes.
+    let frame = 0;
+    const soon = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        measure();
+      });
+    };
+    const mutations = new MutationObserver(soon);
     mutations.observe(element, {
       subtree: true,
+      childList: true,
       attributes: true,
       attributeFilter: ["hidden"],
     });
@@ -115,6 +135,8 @@ export function ReportScrollRail() {
     window.addEventListener("resize", measure);
     return () => {
       delete element.dataset.reportRail;
+      document.documentElement.style.removeProperty("--sx-rail-room");
+      window.cancelAnimationFrame(frame);
       resize.disconnect();
       mutations.disconnect();
       element.removeEventListener("scroll", measure);

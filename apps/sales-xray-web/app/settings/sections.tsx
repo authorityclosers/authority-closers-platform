@@ -176,8 +176,11 @@ export function SettingsSectionView({
     case "profile":
       return (
         <>
+          {/* One profile card with one status: name, email and phone are in
+              it too (owner, 3 Nov 2026: "Your profile 2 of 6" beside
+              "Profile: Complete" said two things). */}
           <ProfileDetailsPanel />
-          <AccountSettings only={["profile", "general"]} />
+          <AccountSettings only={["general"]} />
         </>
       );
     case "selling":

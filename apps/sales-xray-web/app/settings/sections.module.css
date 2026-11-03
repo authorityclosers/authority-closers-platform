@@ -36,6 +36,8 @@
   min-width: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
+  /* A long name breaks inside its card, never past it (robot ef22ba6b). */
+  overflow-wrap: anywhere;
 }
 
 .noteText strong {

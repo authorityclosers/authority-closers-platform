@@ -4,9 +4,11 @@
  * Settings → Profile, part one (owner, 25 Oct 2026: a photo, a user id and the details,
  * "so the business owner can identify who did what work"; docs/product/
  * roles-owner-profile-pulse.md, section 3). The photo is cropped square on the device;
- * the user id changes once a month. Name and phone stay in the account section below.
+ * the user id changes once a month. Name, email and phone are in the same card, with one
+ * status: "Profile complete", or "2 of 6" and Finish (owner, 3 Nov 2026).
  * ProfileCompletionCard is the nudge for Home, shown until the profile is complete.
  */
+import dynamic from "next/dynamic";
 import {
   useCallback,
   useEffect,
@@ -47,6 +49,12 @@ import {
 import { CharacterSheet } from "./character-sheet";
 import styles from "./profile-details.module.css";
 
+// The name and phone editor loads only when opened: Home shows this file's
+// completion card and never needs the account screen's code.
+const ProfileForm = dynamic(() =>
+  import("../account-settings").then((module) => module.ProfileForm),
+);
+
 type Draft = { handle: string; title: string; team: string };
 type Problems = Partial<Record<keyof Draft, string>>;
 
@@ -83,6 +91,8 @@ function Progress({ completion }: { completion: ProfileCompletion }) {
 export function ProfileDetailsPanel() {
   const formId = useId();
   const picker = useRef<HTMLInputElement>(null);
+  const form = useRef<HTMLFormElement>(null);
+  const [contact, setContact] = useState(false);
   const [profile, setProfile] = useState<AccountProfileRecord | null>(null);
   const [draft, setDraft] = useState<Draft>({
     handle: "",
@@ -114,9 +124,11 @@ export function ProfileDetailsPanel() {
   }, [apply]);
 
   if (!profile) {
+    // As tall as the profile it waits for, so the cards under it never move
+    // when it arrives (robot b7b700e0: 0.13; 0.38 at 390 on a slow network).
     return (
       <Panel title="Your profile">
-        <div aria-busy="true">
+        <div aria-busy="true" className={styles.loading}>
           <SkeletonRow />
           <SkeletonRow />
         </div>
@@ -253,10 +265,35 @@ export function ProfileDetailsPanel() {
     }
   };
 
+  const complete = !!completion && completion.done >= completion.total;
+  // Finish goes to the first thing still missing.
+  const finish = () => {
+    const first = completion?.missing[0];
+    if (first === "photo") picker.current?.click();
+    else if (first === "name" || first === "phone") setContact(true);
+    else if (first) {
+      const field = form.current?.elements.namedItem(first);
+      if (field instanceof HTMLInputElement) field.focus();
+    }
+  };
+
   return (
     <Panel
       title="Your profile"
-      sub={completion ? `${completion.done} of ${completion.total}` : undefined}
+      sub={
+        completion
+          ? complete
+            ? "Profile complete"
+            : `${completion.done} of ${completion.total}`
+          : undefined
+      }
+      tools={
+        completion && !complete ? (
+          <Button variant="secondary" onClick={finish}>
+            Finish
+          </Button>
+        ) : undefined
+      }
       foot={
         <Button
           variant="primary"
@@ -350,9 +387,45 @@ export function ProfileDetailsPanel() {
             void photoDone("Character saved");
           }}
         />
-        {completion && completion.done < completion.total ? (
-          <Progress completion={completion} />
-        ) : null}
+        {contact ? (
+          <ProfileForm
+            profile={profile}
+            onCancel={() => setContact(false)}
+            onNeedsRefresh={() => void readAccountProfile().then(apply)}
+            onSaved={(next) => {
+              apply(next);
+              setContact(false);
+              announce();
+            }}
+          />
+        ) : (
+          <div className={styles.contact}>
+            <dl>
+              <div>
+                <dt>Email</dt>
+                <dd>{profile.email}</dd>
+              </div>
+              <div>
+                <dt>Phone</dt>
+                <dd>
+                  {profile.phone_number_e164 ?? "Not added yet"}
+                  {profile.phone_number_e164 ? (
+                    <span
+                      className={styles.badge}
+                      data-tone={profile.phone_verified ? "ok" : "pending"}
+                    >
+                      {profile.phone_verified ? "Verified" : "Not verified"}
+                    </span>
+                  ) : null}
+                </dd>
+              </div>
+            </dl>
+            <Button variant="ghost" onClick={() => setContact(true)}>
+              Edit name and phone
+            </Button>
+          </div>
+        )}
+        {completion && !complete ? <Progress completion={completion} /> : null}
         {profile.phone_number_e164 && !profile.phone_verified ? (
           <p className={styles.phoneNote}>
             Your phone number isn&apos;t verified yet. Verifying it by text
@@ -361,6 +434,7 @@ export function ProfileDetailsPanel() {
           </p>
         ) : null}
         <form
+          ref={form}
           id={formId}
           className={styles.form}
           onSubmit={(event) => void save(event)}

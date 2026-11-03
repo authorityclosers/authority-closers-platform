@@ -442,9 +442,15 @@ function LightboxShellFrame({
     setAccountView("news");
     setAccountCardOpen(true);
   }, []);
-  const navigateEvent = useCallback((href: string) => {
-    if (isRelativeUpdateHref(href)) window.location.assign(href);
-  }, []);
+  // A notice's or the bell's page opens in the app, never with a reload (QA
+  // robot 18bb2450 and 95abddab, 3 Nov 2026: "… is your lead now · Open lead"
+  // left the screen blank for a second on a slow network, then it jumped).
+  const navigateEvent = useCallback(
+    (href: string) => {
+      if (isRelativeUpdateHref(href)) leaveTo(href, router);
+    },
+    [router],
+  );
   const navigationContext = useRef(updatesContextKey);
   useEffect(() => {
     navigationContext.current = updatesContextKey;

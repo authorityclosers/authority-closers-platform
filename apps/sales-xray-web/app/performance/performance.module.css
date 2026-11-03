@@ -44,6 +44,24 @@
   font-size: var(--sx-text-sm);
 }
 
+/* Try again after a failed read: a text button with a full tap target. */
+.retry {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.retry:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
 .list {
   display: grid;
   gap: 10px;
@@ -109,11 +127,36 @@
   font-weight: 700;
 }
 
+/* Inbound and Cold in sentence case, never capitals (simplify pass, 2 Nov 2026). */
 .table thead th[data-side] {
-  font-size: var(--sx-text-xs);
+  font-size: var(--sx-text-sm);
   font-weight: 750;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+}
+
+/* A seller's other work numbers open from one line (simplify pass). */
+.more > summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* While the numbers load: the period switch's room and a card about a screen
+   tall where they will be, so nothing moves when they arrive (robot 2ac64000). */
+.periodRoom {
+  min-height: 44px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+}
+
+.card[data-loading] {
+  min-height: min(70vh, 720px);
+  align-content: start;
 }
 
 .table thead th[data-side="inbound"] {

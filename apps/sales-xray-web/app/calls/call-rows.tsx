@@ -209,8 +209,12 @@ export function callsFilter(params: URLSearchParams): CallsFilter | null {
   };
 }
 
-/** Whether the filter counts this call. */
+// Not calls out (the store's NOT_OUT): every number that opens Calls counts calls out.
+const NOT_OUT = new Set(["incoming", "missed", "rejected", "blocked"]);
+
+/** Whether the filter counts this call: a call out, as the number that opened it. */
 export function inFilter(item: ActivityItem, filter: CallsFilter): boolean {
+  if (NOT_OUT.has(item.event.direction ?? "")) return false;
   if (filter.side && item.side && item.side !== filter.side) return false;
   const outcome = item.event.outcome;
   if (filter.outcome === "known") return outcome !== "unknown";

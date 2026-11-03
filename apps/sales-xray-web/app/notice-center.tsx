@@ -327,8 +327,13 @@ function NoticeCard({
   const card = useRef<HTMLDivElement>(null);
   const opened = useRef(false);
   const key = seenKey(notice);
+  const overBar = useSyncExternalStore(subscribeOverBar, isOverBar, notOverBar);
   const arrivesFolded = () =>
-    docked || notice.folded === true || notice.slim === true || wasSeen(key);
+    docked ||
+    overBar ||
+    notice.folded === true ||
+    notice.slim === true ||
+    wasSeen(key);
   // Already on screen elsewhere (a sheet that closed): as it was, no arrival.
   const [again] = useState(() => placed.has(key));
   const [folded, setFolded] = useState(
@@ -338,6 +343,16 @@ function NoticeCard({
   if (cardKey !== key) {
     setCardKey(key);
     setFolded(arrivesFolded());
+  }
+  // Over a bar (a sheet's Save, a tab bar grown with large text) a card folds
+  // to its pill at once. One opened from its pill stays open, above the bar,
+  // until it folds again.
+  const [held, setHeld] = useState(false);
+  if (folded && held) setHeld(false);
+  const [wasOver, setWasOver] = useState(overBar);
+  if (wasOver !== overBar) {
+    setWasOver(overBar);
+    if (overBar && !docked && !held) setFolded(true);
   }
   useEffect(() => {
     placed.set(key, folded);
@@ -430,6 +445,7 @@ function NoticeCard({
           aria-expanded="false"
           onClick={() => {
             opened.current = true;
+            setHeld(true);
             setFolded(false);
           }}
         >
@@ -557,6 +573,112 @@ function topModal(): HTMLDialogElement | null {
   return null;
 }
 
+// Whether the corner stack sits over a bar (NoticeCenter places it): its
+// cards fold to pills there.
+let overBar = false;
+const barListeners = new Set<() => void>();
+function setOverBar(next: boolean) {
+  if (overBar === next) return;
+  overBar = next;
+  barListeners.forEach((listener) => listener());
+}
+function subscribeOverBar(listener: () => void) {
+  barListeners.add(listener);
+  return () => {
+    barListeners.delete(listener);
+  };
+}
+const isOverBar = () => overBar;
+const notOverBar = () => false;
+
+/** The room kept between the corner stack and a bar under it. */
+const BAR_GAP = 8;
+
+/**
+ * How high the corner stack must sit, from the window's bottom, so that no bar
+ * is under it; 0 where it stands (it is measured there, unlifted). A bar is
+ * the sheet's footer or a short bar held at the bottom, fixed or sticky with a
+ * bottom: the tab bar, the lead's Save & Close row, a page's action bar.
+ * Content that scrolls is not one: the page and the sheet keep room for the
+ * stack, so it scrolls clear.
+ */
+function liftOverBars(stack: HTMLElement, scope: HTMLElement): number {
+  if (typeof document.elementsFromPoint !== "function") return 0;
+  const home = stack.getBoundingClientRect();
+  if (home.height < 1) return 0;
+  const view = window.innerHeight;
+  const seen = new Map<Element, HTMLElement | null>();
+  // The bar the topmost thing at a point belongs to, if any.
+  const barAt = (node: Element | undefined): HTMLElement | null => {
+    if (!node || !scope.contains(node)) return null;
+    const path: Element[] = [];
+    let bar: HTMLElement | null = null;
+    for (let at: Element | null = node; at && at !== scope; ) {
+      const known = seen.get(at);
+      if (known !== undefined) {
+        bar = known;
+        break;
+      }
+      path.push(at);
+      if (at instanceof HTMLElement) {
+        const style = getComputedStyle(at);
+        const held =
+          (style.position === "fixed" || style.position === "sticky") &&
+          (style.bottom || "auto") !== "auto";
+        if (
+          at.hasAttribute("data-sheet-footer") ||
+          (held && at.getBoundingClientRect().height <= view * 0.4)
+        ) {
+          bar = at;
+          break;
+        }
+      }
+      at = at.parentElement;
+    }
+    for (const at of path) seen.set(at, bar);
+    return bar;
+  };
+  let bottom = home.bottom;
+  let lift = 0;
+  // A bar above a bar (a Save row over a footer): a few rounds, never past
+  // the top tenth of the window.
+  for (
+    let round = 0;
+    round < 4 && bottom - home.height > view * 0.1;
+    round += 1
+  ) {
+    let top = Infinity;
+    for (let y = bottom - 4; y > bottom - home.height; y -= 16)
+      for (const x of [
+        home.left + 10,
+        (home.left + home.right) / 2,
+        home.right - 10,
+      ]) {
+        const hit = document
+          .elementsFromPoint(x, y)
+          .find((node) => !stack.contains(node));
+        const bar = barAt(hit);
+        if (bar) top = Math.min(top, bar.getBoundingClientRect().top);
+      }
+    if (top >= bottom) break;
+    lift = Math.ceil(view - top + BAR_GAP);
+    bottom = view - lift;
+  }
+  return lift;
+}
+
+/** The page's room for the stack (--sx-corner-h): its top to the window's bottom. */
+function keepCornerRoom(node: HTMLElement) {
+  const root = document.documentElement;
+  const box = node.getBoundingClientRect();
+  if (box.height < 1) root.style.removeProperty("--sx-corner-h");
+  else
+    root.style.setProperty(
+      "--sx-corner-h",
+      `${Math.ceil(window.innerHeight - box.top)}px`,
+    );
+}
+
 /**
  * While a sheet or dialog is open everything outside it is inert and under
  * it, so a card raised from inside it went unseen (orchestrator, 1 Nov 2026).
@@ -607,7 +729,7 @@ export function NoticeCenter() {
       if (ownHost === own) setOwnHost(null);
     };
   }, [own]);
-  // How high the stack sat over a sheet's footer, for its glide back down.
+  // How high the stack sits over a bar, for its glide down from a sheet.
   const lifted = useRef(0);
   const sheet = useTopModal();
   const pageDock = useSyncExternalStore(subscribeDock, () => dock, noDock);
@@ -634,15 +756,7 @@ export function NoticeCenter() {
     const node = stack;
     if (!node || typeof ResizeObserver === "undefined") return;
     const root = document.documentElement;
-    const publish = () => {
-      const box = node.getBoundingClientRect();
-      if (box.height < 1) root.style.removeProperty("--sx-corner-h");
-      else
-        root.style.setProperty(
-          "--sx-corner-h",
-          `${Math.ceil(window.innerHeight - box.top)}px`,
-        );
-    };
+    const publish = () => keepCornerRoom(node);
     publish();
     const observer = new ResizeObserver(publish);
     observer.observe(node);
@@ -655,33 +769,39 @@ export function NoticeCenter() {
   }, [stack]);
 
   // Inside a sheet the stack is a popover on its top layer (as the picker is),
-  // so its cards show and answer taps. It sits above the sheet's footer, so
-  // Save stays in sight, and the sheet's words keep room to scroll clear of
-  // it (kit sheet: data-sheet-footer, data-sheet-body, --sx-sheet-room).
+  // so its cards show and answer taps, and the sheet's words keep room to
+  // scroll clear of it (kit sheet: data-sheet-body, --sx-sheet-room, space
+  // after the words that leaves a held Save row at the bottom). In a sheet or
+  // on a page it sits above any bar under its corner, by the bar's measured
+  // top: the sheet's footer, the lead's Save & Close row, a tab bar grown with
+  // large text. Over a bar its cards fold to pills (orchestrator, 3 Nov 2026:
+  // "… is your lead now" covered the lead sheet's Save bar).
   useEffect(() => {
-    if (!sheet || !stack) return;
-    try {
-      if (!stack.matches(":popover-open")) stack.showPopover();
-    } catch {
-      // Without popovers it still sits inside the sheet, over its panel.
-    }
+    // A stack on its way out (its sheet closed) is left alone.
+    if (!stack?.isConnected) return;
+    const scope = sheet ?? document.body;
+    if (sheet)
+      try {
+        if (!stack.matches(":popover-open")) stack.showPopover();
+      } catch {
+        // Without popovers it still sits inside the sheet, over its panel.
+      }
     const across = (a: DOMRect, b: DOMRect) =>
       a.left < b.right && b.left < a.right;
     let body: HTMLElement | null = null;
+    let frame = 0;
     const place = () => {
-      const footer = sheet.querySelector<HTMLElement>("[data-sheet-footer]");
-      const edge = footer?.getBoundingClientRect();
-      if (
-        edge &&
-        edge.height > 0 &&
-        across(stack.getBoundingClientRect(), edge)
-      ) {
-        lifted.current = Math.ceil(window.innerHeight - edge.top + 8);
-        stack.style.setProperty("--sx-stack-lift", `${lifted.current}px`);
-      } else {
-        lifted.current = 0;
-        stack.style.removeProperty("--sx-stack-lift");
-      }
+      frame = 0;
+      // Gliding down from a sheet that closed: it is placed once it lands.
+      if (stack.hasAttribute("data-glide")) return;
+      const before = lifted.current;
+      stack.style.removeProperty("--sx-stack-lift");
+      const lift = stack.textContent ? liftOverBars(stack, scope) : 0;
+      if (lift > 0) stack.style.setProperty("--sx-stack-lift", `${lift}px`);
+      lifted.current = lift;
+      setOverBar(lift > 0);
+      if (lift !== before) keepCornerRoom(stack);
+      if (!sheet) return;
       body?.style.removeProperty("--sx-sheet-room");
       body = sheet.querySelector<HTMLElement>("[data-sheet-body]");
       if (!body) return;
@@ -693,44 +813,50 @@ export function NoticeCenter() {
           : 0;
       if (room > 0) body.style.setProperty("--sx-sheet-room", `${room}px`);
     };
-    place();
+    // Out of a sheet that closed (the after-call sheet, with its Undo card),
+    // the stack glides down from where it sat over the sheet's bar instead of
+    // jumping (phone personas ph2-36, 1 Nov 2026: about 160 px within 2 s).
+    const from = sheet ? 0 : lifted.current;
+    let glide = 0;
+    let landed = 0;
+    if (from) {
+      lifted.current = 0;
+      stack.style.setProperty("--sx-stack-lift", `${from}px`);
+      stack.setAttribute("data-glide", "");
+      glide = requestAnimationFrame(() => {
+        glide = requestAnimationFrame(() =>
+          stack.style.removeProperty("--sx-stack-lift"),
+        );
+      });
+      landed = window.setTimeout(() => {
+        stack.removeAttribute("data-glide");
+        place();
+      }, 600);
+    } else place();
+    // A bar that comes or goes (Log a call opens its Save row) or scrolls
+    // away with the words: next frame.
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(place);
+    };
+    const scrolled = { capture: true, passive: true } as const;
+    window.addEventListener("scroll", schedule, scrolled);
     const sized =
       typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
     sized?.observe(stack);
-    const changed = new MutationObserver(place);
-    changed.observe(sheet, { childList: true, subtree: true });
+    const changed = new MutationObserver(schedule);
+    changed.observe(scope, { childList: true, subtree: true });
     window.addEventListener("resize", place);
     return () => {
       sized?.disconnect();
       changed.disconnect();
       window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", schedule, scrolled);
+      cancelAnimationFrame(frame);
+      cancelAnimationFrame(glide);
+      window.clearTimeout(landed);
       body?.style.removeProperty("--sx-sheet-room");
       stack.style.removeProperty("--sx-stack-lift");
-    };
-  }, [sheet, stack]);
-
-  // Out of a sheet that closed (the after-call sheet, with its Undo card), the
-  // stack glides down from where it sat over the sheet's footer instead of
-  // jumping (phone personas ph2-36, 1 Nov 2026: about 160 px within 2 s).
-  useEffect(() => {
-    if (sheet || !stack) return;
-    const from = lifted.current;
-    lifted.current = 0;
-    if (!from) return;
-    stack.style.setProperty("--sx-stack-lift", `${from}px`);
-    stack.setAttribute("data-glide", "");
-    let frame = requestAnimationFrame(() => {
-      frame = requestAnimationFrame(() =>
-        stack.style.removeProperty("--sx-stack-lift"),
-      );
-    });
-    const done = window.setTimeout(
-      () => stack.removeAttribute("data-glide"),
-      600,
-    );
-    return () => {
-      cancelAnimationFrame(frame);
-      window.clearTimeout(done);
+      setOverBar(false);
     };
   }, [sheet, stack]);
 

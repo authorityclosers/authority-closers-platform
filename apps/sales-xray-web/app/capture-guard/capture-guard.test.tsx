@@ -7,6 +7,9 @@ import {
   AutoCaptureState,
   CallTrack,
   CaptureStateLabel,
+  folderRecorder,
+  forgetRecorder,
+  PRIVATE_LABEL,
   trackFor,
 } from "../leads/auto-capture-state";
 import type { CaptureCall } from "../leads/capture-guard-client";
@@ -16,6 +19,10 @@ import {
   autoCaptureSetup,
   autoCaptureStates,
   autoCaptureStatus,
+  openDialer,
+  pickRecordingsFolder,
+  recorderOpen,
+  setupStatus,
 } from "../leads/native-phone";
 import { AutoCapturePanel } from "../settings/auto-capture-panel";
 
@@ -25,6 +32,10 @@ vi.mock("../leads/native-phone", async (original) => ({
   autoCaptureStates: vi.fn(async () => []),
   autoCaptureStatus: vi.fn(async () => null),
   autoCaptureSetup: vi.fn(),
+  setupStatus: vi.fn(async () => null),
+  recorderOpen: vi.fn(async () => true),
+  openDialer: vi.fn(),
+  pickRecordingsFolder: vi.fn(async () => null),
 }));
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -43,6 +54,7 @@ afterEach(async () => {
   await act(async () => root?.unmount());
   host?.remove();
   vi.clearAllMocks();
+  forgetRecorder();
 });
 
 it("shows the red missing state, and its fix opens the recording check over the call", async () => {
@@ -515,4 +527,197 @@ it("says a call's recording arrived, is waiting or wasn't found", async () => {
   expect(host.querySelector("small")?.textContent).toBe(
     "Recording: arrived · Report ready",
   );
+});
+// Owner, 3 Nov 2026: on his OnePlus, Google's Phone app recorded both calls to the
+// lead "testing" and kept them, and the rows said "Waiting for recording" for two hours.
+it("says a private Phone app keeps the recording, with its one way to get it", () => {
+  const share = { switchTo: null, share: true };
+  for (const state of ["waiting", "missing"] as const)
+    expect(trackFor(null, serverCall({ state }), false, share)).toMatchObject({
+      label: PRIVATE_LABEL,
+      stuck: false,
+      fix: { label: "Share the recording to Sales X-Ray" },
+    });
+  expect(
+    trackFor(null, serverCall({ state: "waiting" }), false, share)?.recording,
+  ).toBeUndefined();
+  // Another Phone app here saves files Sales X-Ray reads: switch to it.
+  expect(
+    trackFor(null, serverCall({ state: "waiting" }), false, {
+      switchTo: "OnePlus Phone",
+      share: true,
+    })?.fix?.label,
+  ).toBe("Switch to OnePlus Phone");
+  // An app build that can't take a share says to update it.
+  expect(
+    trackFor(null, serverCall({ state: "missing" }), false, {
+      switchTo: null,
+      share: false,
+    })?.fix,
+  ).toMatchObject({ label: "Update Sales X-Ray to share recordings" });
+  // A recording that did reach the app (shared, or recorded in it) goes on as usual.
+  expect(
+    trackFor(
+      { eventId: "event", state: "uploading" },
+      serverCall({ state: "waiting" }),
+      false,
+      share,
+    )?.label,
+  ).toBe("Uploading");
+  expect(
+    trackFor(null, serverCall({ state: "report_ready" }), false, share)?.label,
+  ).toBe("Report ready");
+  // Another Phone app's recordings: nothing changes.
+  expect(trackFor(null, serverCall({ state: "waiting" }))?.recording).toBe(
+    "waiting",
+  );
+});
+it("reads the Phone app on the phone and opens its screen from the row", async () => {
+  vi.mocked(setupStatus).mockResolvedValueOnce(
+    parseSetup({
+      checks: {},
+      recorderProfile: {
+        kind: "private",
+        recording: "private",
+        folders: [],
+        shareTarget: true,
+        otherDialers: [
+          {
+            package: "com.oplus.dialer",
+            label: "OnePlus Phone",
+            savesToFolder: true,
+          },
+        ],
+      },
+    }),
+  );
+  vi.mocked(autoCaptureStates).mockResolvedValue([]);
+  vi.mocked(readCaptureGuard).mockResolvedValue({
+    generated_at: "2026-11-03",
+    rates: [],
+    calls: [serverCall({ state: "waiting" })],
+  });
+  await render(<AutoCaptureState eventId="event" />);
+  await act(async () => {});
+  expect(host.textContent).toContain(PRIVATE_LABEL);
+  expect(host.textContent).not.toContain("Recording: waiting");
+  const fix = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Switch to OnePlus Phone",
+  );
+  await act(async () => fix?.click());
+  expect(recorderOpen).toHaveBeenCalledWith("defaultDialer");
+  expect(openDialer).not.toHaveBeenCalled();
+});
+it("parses whether the app takes a shared recording", () => {
+  const base = { kind: "private", recording: "private", folders: [] };
+  expect(parseRecorder({ ...base, shareTarget: true })?.shareTarget).toBe(true);
+  expect(parseRecorder(base)?.shareTarget).toBeUndefined();
+});
+// Orchestrator, 3 Nov 2026: the owner's OnePlus has only OnePlus's own Phone app, which saves to a
+// folder, and its calls said "Waiting for recording" with no reason. 3 minutes on, say the fix.
+it("names the fix 3 minutes after a folder phone's call with no recording", () => {
+  const now = Date.parse("2026-11-03T09:00:00Z");
+  const ago = (minutes: number) =>
+    new Date(now - minutes * 60_000).toISOString();
+  const autoRecord = trackFor(
+    null,
+    serverCall({ state: "waiting", at: ago(4) }),
+    false,
+    null,
+    { pick: false },
+    now,
+  );
+  expect(autoRecord).toMatchObject({
+    label: "No recording yet",
+    stuck: false,
+    fix: { label: "Turn on Auto record in your Phone app" },
+  });
+  expect(
+    trackFor(
+      null,
+      serverCall({ state: "missing", at: ago(40) }),
+      false,
+      null,
+      { pick: true },
+      now,
+    )?.fix?.label,
+  ).toBe("Pick your recordings folder");
+  // Before 3 minutes it still waits, and a recording on the phone goes on as usual.
+  expect(
+    trackFor(
+      null,
+      serverCall({ state: "waiting", at: ago(2) }),
+      false,
+      null,
+      { pick: false },
+      now,
+    )?.recording,
+  ).toBe("waiting");
+  expect(
+    trackFor(
+      { eventId: "event", state: "waiting" },
+      serverCall({ state: "waiting", at: ago(10) }),
+      false,
+      null,
+      { pick: false },
+      now,
+    )?.label,
+  ).toBe("Waiting to upload");
+});
+it("picks the folder only when none of the known folders is on the phone", () => {
+  const setup = (states: string[], folderPicked = false) =>
+    parseSetup({
+      checks: {},
+      folderPicked,
+      recorderProfile: {
+        kind: "folder",
+        recording: "unknown",
+        folders: states.map((state, i) => ({ path: `Folder${i}`, state })),
+      },
+    });
+  expect(folderRecorder(setup(["missing", "missing"]))).toEqual({ pick: true });
+  expect(folderRecorder(setup(["missing", "empty"]))).toEqual({ pick: false });
+  expect(folderRecorder(setup(["missing"], true))).toEqual({ pick: false });
+  expect(
+    folderRecorder(
+      parseSetup({
+        checks: {},
+        recorderProfile: { kind: "private", folders: [] },
+      }),
+    ),
+  ).toBeNull();
+  expect(folderRecorder(null)).toBeNull();
+});
+it("opens the Phone app's call recording setting from a waiting row", async () => {
+  vi.mocked(setupStatus).mockResolvedValueOnce(
+    parseSetup({
+      checks: {},
+      folderPicked: true,
+      recorderProfile: {
+        kind: "folder",
+        recording: "off",
+        folders: [{ path: "Music/Recordings/Call Recordings", state: "empty" }],
+      },
+    }),
+  );
+  vi.mocked(autoCaptureStates).mockResolvedValue([]);
+  vi.mocked(readCaptureGuard).mockResolvedValue({
+    generated_at: "2026-11-03",
+    rates: [],
+    calls: [
+      serverCall({
+        state: "waiting",
+        at: new Date(Date.now() - 10 * 60_000).toISOString(),
+      }),
+    ],
+  });
+  await render(<AutoCaptureState eventId="event" />);
+  await act(async () => {});
+  expect(host.textContent).toContain("No recording yet");
+  const fix = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Turn on Auto record in your Phone app",
+  );
+  await act(async () => fix?.click());
+  expect(recorderOpen).toHaveBeenCalledWith("settings");
+  expect(pickRecordingsFolder).not.toHaveBeenCalled();
 });

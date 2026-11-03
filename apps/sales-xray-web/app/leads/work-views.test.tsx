@@ -8,6 +8,7 @@ import { inWorkView } from "./lead-moves";
 import type { LeadRow } from "./leads-client";
 import {
   CallNext,
+  callNextView,
   FollowUpTabs,
   LeadSearch,
   StagePicker,
@@ -415,4 +416,26 @@ it("finds a linked stage by its meaning, and never shows a raw key (phone person
   );
   expect(host.textContent).not.toContain("demo_done");
   expect(host.textContent).toContain("Demo done");
+});
+
+// Phone QA seller day on v1.36 (3 Nov 2026): Inbound's All Leads, which lists
+// both sides, said "Call Next Lead · 913", Cold's count. Call Next keeps to
+// the side: on All Leads it calls the side's To Call, with that count.
+it("calls the side's To Call from All Leads, and each work view's own list elsewhere", async () => {
+  expect(callNextView("all")).toBe("to_call");
+  expect(callNextView("to_call")).toBe("to_call");
+  expect(callNextView("follow_ups")).toBe("follow_ups");
+  const counts = { to_call: 4, follow_ups: 3, all: 913 };
+  await act(async () =>
+    root.render(
+      <CallNext
+        side="inbound"
+        disabled={false}
+        onStart={vi.fn()}
+        count={counts[callNextView("all")]}
+      />,
+    ),
+  );
+  expect(host.textContent).toContain("Call Next Lead · 4");
+  expect(host.textContent).not.toContain("913");
 });

@@ -237,6 +237,21 @@ it("shows a seller only their own, and reads 7 days on request", async () => {
   const own = host.querySelector("details");
   expect(own?.open).toBe(true);
   expect(own?.querySelector("summary strong")?.textContent).toBe("You");
+  // Five headline numbers, the rest one tap away, and no line repeating a
+  // chip (simplify pass, owner approved 2 Nov 2026).
+  expect(
+    own?.querySelectorAll(
+      'table[aria-label="Your work, Inbound and Cold"] tbody tr',
+    ),
+  ).toHaveLength(5);
+  expect(
+    Array.from(
+      own?.querySelectorAll("summary") ?? [],
+      (item) => item.textContent,
+    ),
+  ).toContain("More numbers");
+  expect(own?.textContent).not.toContain("No tasks overdue");
+  expect(own?.textContent).not.toContain("today has its recording");
   const week = Array.from(host.querySelectorAll("button")).find(
     (button) => button.textContent === "7 days",
   );
@@ -315,4 +330,38 @@ it("rates connections over the calls whose outcome the phone told us", () => {
     measures({ ...inbound, attempted: 36, connected: 1, unknown: 35 }, cold),
   );
   expect(work["Connection rate"]).toEqual(["100%", "20%"]);
+});
+
+it("says so with Try again when its read fails, never that there is nothing", async () => {
+  // The orchestrator, 3 Nov 2026 (the test robot's 192398ee): a failed load shows its
+  // error with Retry, never an empty state.
+  let fail = true;
+  asked = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async (input) => {
+      asked.push(String(input));
+      if (String(input).includes("/revenue/"))
+        return new Response("{}", { status: 404 });
+      if (fail) return new Response("{}", { status: 500 });
+      return new Response(JSON.stringify(effort(false)));
+    }),
+  );
+  await mount();
+  expect(host.querySelector('[role="alert"]')?.textContent).toBe(
+    "Performance didn't load. Try again",
+  );
+  expect(host.textContent).not.toMatch(/No calls/);
+  fail = false;
+  const again = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent === "Try again",
+  );
+  await act(async () => again?.click());
+  await act(async () => Promise.resolve());
+  await act(async () => Promise.resolve());
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  expect(host.textContent).toContain("100 calls");
+  expect(
+    asked.filter((url) => url.includes("/performance/sellers")),
+  ).toHaveLength(2);
 });

@@ -31,6 +31,7 @@ import {
   SHOWN_CALLS,
   weekCalls,
 } from "./phone-calls";
+import { inFilter } from "./call-rows";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -361,4 +362,27 @@ it("a seller's day names who made each call", async () => {
   expect(container.querySelector("a[data-sx-action]")?.textContent).toContain(
     "Meera called · outcome unknown",
   );
+});
+
+it("opened from a number, counts calls out only, as the number does", () => {
+  // The orchestrator, 3 Nov 2026: Attempted counts calls out, so the list it opens does.
+  const filter = callsFilter(new URLSearchParams("day=today"));
+  if (!filter) throw new Error("no filter");
+  expect(inFilter(item("o1", "asha fictional", call()), filter)).toBe(true);
+  for (const direction of [
+    "incoming",
+    "missed",
+    "rejected",
+    "blocked",
+  ] as const)
+    expect(
+      inFilter(item("i1", "asha fictional", call({ direction })), filter),
+    ).toBe(false);
+  // A Call-button dial has no direction: a call out.
+  expect(
+    inFilter(
+      item("d1", "asha fictional", call({ direction: null, via: null })),
+      filter,
+    ),
+  ).toBe(true);
 });

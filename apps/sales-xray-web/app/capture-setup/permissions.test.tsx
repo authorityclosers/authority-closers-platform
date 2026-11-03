@@ -8,6 +8,7 @@ import { WorkspaceAccessContext } from "../workspace-access";
 import { askConsent, PermissionsGate } from "./permissions-gate";
 import {
   PERMISSIONS_ATTRIBUTE,
+  batterySaidDone,
   checklistOpen,
   permissionItems,
   permissionsMissing,
@@ -111,7 +112,11 @@ const consentIs = (
 
 describe("permissionItems", () => {
   it("lists the rows in the owner's order; Personal keeps its five", () => {
-    const none = status({}, { folderPicked: false });
+    // A build that declares contacts (apps PR #18); without it there's no row.
+    const none = status({ contacts: false }, { folderPicked: false });
+    expect(
+      permissionItems(status({}), ORG).some((item) => item.key === "contacts"),
+    ).toBe(false);
     expect(
       permissionItems(none, { ...ORG, consent: consentIs("off") }).map(
         (item) => item.key,
@@ -235,10 +240,10 @@ describe("permissionItems", () => {
       { calls: true, notifications: true },
       { callLogSupported: false, folderPickSupported: false, store: "play" },
     );
+    // Contacts, which no released build declares yet, isn't shown (phone QA on v1.36).
     expect(states(play)).toEqual({
       callLog: "later",
       phone: "granted",
-      contacts: "update",
       notifications: "granted",
       recordings: "update",
       battery: "update",
@@ -572,6 +577,33 @@ describe("PermissionsGate", () => {
     expect(host.querySelector("dialog")).toBeNull();
     expect(document.documentElement.hasAttribute(PERMISSIONS_ATTRIBUTE)).toBe(
       false,
+    );
+  });
+
+  // Phone QA on v1.36 (3 Nov 2026): "choose Not now" over the battery alone, and
+  // Done, then Battery and Autostart again in Set up this phone.
+  it("names only the buttons on screen, and the battery's Done counts for Set up this phone", async () => {
+    const sent = fakePhone(() => ({ ...ALL, battery: false }));
+    await mount();
+    expect(host.textContent).toContain(
+      "This helps too. Check it, or tap Done once it's set.",
+    );
+    expect(host.textContent).not.toContain("choose Not now");
+    expect(batterySaidDone()).toBe(false);
+    await act(async () => button("Done: Battery").click());
+    await settle();
+    expect(batterySaidDone()).toBe(true);
+    expect(sent).toContainEqual({
+      method: "setupMark",
+      args: { what: "autostart", done: true },
+    });
+  });
+
+  it("says Not now while a row has it", async () => {
+    fakePhone(() => ({ ...ALL, battery: false, callLog: false }));
+    await mount();
+    expect(host.textContent).toContain(
+      "These help too. Allow them, or choose Not now.",
     );
   });
 });

@@ -6,6 +6,14 @@
   min-width: 0;
 }
 
+/* Me on a phone: an owner's revenue bar and Team | Me sit closer, so the next
+   call stays above the fold (v1.36 phone QA, 3 Nov 2026). */
+@media (max-width: 1023px) {
+  .home:has(> [data-mode="mine"]) {
+    gap: 12px;
+  }
+}
+
 /* Offline: one calm line above both modes; the last good numbers stay below. */
 .offline {
   display: flex;

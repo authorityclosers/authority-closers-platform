@@ -99,3 +99,78 @@
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
 }
+
+/* Email and phone, in the profile's one card (owner, 3 Nov 2026), with the
+   way to change the name and phone under them. */
+.contact {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 12px;
+}
+
+.contact dl {
+  display: grid;
+  margin: 0;
+}
+
+.contact dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  min-height: 40px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.contact dt {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.contact dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.contact > :last-child {
+  justify-self: start;
+}
+
+.badge {
+  padding: 1px 8px;
+  border-radius: var(--sx-radius-pill);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.badge[data-tone="ok"] {
+  background: var(--lx-strength-soft);
+  color: var(--lx-strength-ink);
+}
+
+.badge[data-tone="pending"] {
+  background: var(--lx-focus-soft);
+  color: var(--lx-focus-ink);
+}
+
+/* While the profile loads: about its own height (measured 3 Nov 2026 with
+   email and phone in it: 943 px at 390, 578 px at 1440, both with the card's
+   head), in em so it grows with the phone's text size. */
+.loading {
+  min-height: 55em;
+}
+
+@media (min-width: 761px) {
+  .loading {
+    min-height: 32.5em;
+  }
+}

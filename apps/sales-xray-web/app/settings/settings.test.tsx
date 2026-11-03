@@ -182,7 +182,7 @@ it("builds each section from the existing screens, with only its own parts", asy
   await render("security");
   expect(
     seen.account.map((props) => (props as { only: string[] }).only),
-  ).toEqual([["profile", "general"], ["billing"], ["security"]]);
+  ).toEqual([["general"], ["billing"], ["security"]]);
   await render("organisation");
   await render("team");
   await render("apps");

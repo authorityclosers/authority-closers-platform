@@ -446,3 +446,11 @@ describe("savedWhen", () => {
     expect(savedWhen(NOW + 1, NOW)).toBeNull();
   });
 });
+
+// Phone QA on v1.36 (3 Nov 2026): the checklist's battery Done, then Battery
+// and Autostart again with Skip for now.
+it("counts the checklist's battery Done as the phone's battery", () => {
+  const unseen = status({ battery: false });
+  expect(phoneFacts(unseen, on)?.battery).toBe(false);
+  expect(phoneFacts(unseen, on, { battery: true })?.battery).toBe(true);
+});

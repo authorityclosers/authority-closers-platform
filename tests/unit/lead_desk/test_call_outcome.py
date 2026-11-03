@@ -30,7 +30,6 @@ def test_a_dial_is_known_once_the_phone_or_the_seller_says() -> None:
         {**DIAL, PHONE_SECONDS: 0},
         {**DIAL, PHONE_SECONDS: 31},
         {**DIAL, TALKED: False},
-        {**DIAL, TALKED: True},
         {**DIAL, "submission_id": "f00d"},
     ):
         assert outcome_known(known)
@@ -39,11 +38,21 @@ def test_a_dial_is_known_once_the_phone_or_the_seller_says() -> None:
     assert not call_answered({**DIAL, TALKED: False})
 
 
+def test_we_talked_alone_is_not_connected() -> None:
+    # The orchestrator, 3 Nov 2026 (Dipak's honest numbers): a back-out from the dialler
+    # answered "We talked" read Connected. Only the phone's own evidence connects a dial.
+    said = {**DIAL, TALKED: True}
+    assert not call_answered(said)
+    assert not outcome_known(said)
+    # Its phone's call history timed it: connected, with the phone's own seconds.
+    assert call_answered({**said, PHONE_SECONDS: 75})
+    assert outcome_known({**said, PHONE_SECONDS: 75})
+
+
 def test_calls_the_phone_logged_or_recorded_always_say() -> None:
     for data in (
         {"via": "phone", "direction": "outgoing", "duration_seconds": 0, "connected": False},
         {"via": "dialler_recording", "duration_seconds": 77, "connected": True},
-        {"via": "logged", TALKED: False},
     ):
         assert outcome_known(data)
 

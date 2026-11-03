@@ -68,6 +68,8 @@ export type PhoneFacts = Readonly<{
 export function phoneFacts(
   setup: SetupStatus | null,
   capture: AutoCaptureStatus | null,
+  /** What the seller said is set where the phone can't tell (the checklist's battery Done). */
+  said: Readonly<{ battery?: boolean }> = {},
 ): PhoneFacts | null {
   if (!setup) return null;
   const recorder = setup.recorder;
@@ -84,7 +86,7 @@ export function phoneFacts(
       recorder.recording === "off" &&
       setup.checks.recorder !== true,
     privateDialler: recorder?.kind === "private",
-    battery: setup.checks.battery === true,
+    battery: setup.checks.battery === true || said.battery === true,
     autostartNeeded: setup.autostartNeeded,
     autostart: setup.checks.autostart === true,
     notifications: setup.checks.notifications === true,

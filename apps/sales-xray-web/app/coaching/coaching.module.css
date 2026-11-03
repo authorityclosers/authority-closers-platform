@@ -1050,6 +1050,16 @@
   gap: 8px;
 }
 
+/* At large text a long button ("Share with your admins") wraps inside its
+   card instead of widening it past the screen (robot e8f1aa1b, d96d9818:
+   386 px in a 328 px card at 360 with text at 200 %). */
+.actions > button,
+.actions > a {
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+}
+
 .actions button[aria-disabled="true"] {
   cursor: wait;
   opacity: 0.55;
