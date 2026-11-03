@@ -305,9 +305,13 @@ export function OrganisationHub({
       mobileFit={false}
     >
       <div className={styles.hub}>
-        {/* Leads setup keeps its tabs but not the card, so its settings start at
-            the top (owner, 31 Oct 2026). */}
-        {tab.id === "leads" ? null : <OrgHeader workspace={current} />}
+        {/* Leads setup and Connections keep their tabs but not the card, so
+            their settings start at the top (owner, 31 Oct 2026; production
+            report 123, 3 Nov 2026). The other tabs keep it with the
+            organisation's logo (owner, #25). */}
+        {tab.id === "leads" || tab.id === "connections" ? null : (
+          <OrgHeader workspace={current} />
+        )}
         <HubTabs tabs={tabs} current={tab.id} base={base} />
         <div className={styles.body}>{body}</div>
       </div>
