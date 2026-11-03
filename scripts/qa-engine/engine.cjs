@@ -665,6 +665,10 @@ function digest() {
       startLatencyProbe(() => session.cookieHeader("priya"), () => {});
       const filter = { family: args.family, page: args.page, size: args.size, role: args.role };
       for (let i = 0; i < Number(args.n || 1); i++) log(JSON.stringify(await attack.runOne({ filter, dry: !!args.dry, verbose: !!args.verbose })));
+    } else if (cmd === "capture") {
+      const design = require("./lib/design.cjs");
+      const out = await design.captureRun({ role: args.role || "seller", sizes: args.sizes ? SIZES : ["360 px", "393 px"], themes: args.themes ? args.themes.split(",") : ["light", "dark"], routes: args.routes ? args.routes.split(",") : null, alias: args.alias || null, video: !args["no-video"], gate: () => headroom(log), log });
+      log(JSON.stringify(out));
     } else if (cmd === "mixed") {
       await mixed();
     } else if (cmd === "rollup-existing") {

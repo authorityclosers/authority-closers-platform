@@ -52,3 +52,23 @@ def test_folder_holds_no_secret() -> None:
     for path in ROOT.rglob("*"):
         if path.is_file() and path.suffix in {".cjs", ".py", ".json", ".md"}:
             assert not pattern.search(path.read_text(encoding="utf-8")), path
+
+
+def test_design_rules_in_page_scan_match_capture_stage() -> None:
+    """The four design rules live in lib/design.cjs and inside the page scan: same code."""
+    design = (ROOT / "lib" / "design.cjs").read_text(encoding="utf-8")
+    scan = (ROOT / "lib" / "invariants.cjs").read_text(encoding="utf-8")
+    source = design.split("const DESIGN_SCAN = ", 1)[1].split(";\n\n// ---- page helpers", 1)[0]
+    assert f"out.design = phone ? ({source})() : null;" in scan
+
+
+def test_design_findings_are_off_unless_the_flag_file_exists() -> None:
+    scan = (ROOT / "lib" / "invariants.cjs").read_text(encoding="utf-8")
+    assert "design-filing.on" in scan
+    assert "if (s.design && designFiling())" in scan
+
+
+def test_capture_command_is_wired() -> None:
+    engine = (ROOT / "engine.cjs").read_text(encoding="utf-8")
+    assert 'cmd === "capture"' in engine
+    assert "393 px" in (ROOT / "lib" / "config.cjs").read_text(encoding="utf-8")

@@ -19,6 +19,7 @@ module.exports = {
   DEVICES: {
     "390 px": { key: "390", viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, phone: true },
     "360 px": { key: "360", viewport: { width: 360, height: 740 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, phone: true },
+    "393 px": { key: "393", viewport: { width: 393, height: 852 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, phone: true }, // the design capture stage
     "1440": { key: "1440", viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, isMobile: false, hasTouch: false, phone: false },
     "1920": { key: "1920", viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1, isMobile: false, hasTouch: false, phone: false },
   },

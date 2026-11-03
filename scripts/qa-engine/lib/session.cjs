@@ -187,6 +187,7 @@ async function openTab(opts) {
     timezoneId: "Asia/Kolkata",
     storageState: cookies.get(opts.alias),
     reducedMotion: "reduce",
+    ...(opts.videoDir ? { recordVideo: { dir: opts.videoDir, size: dev.viewport } } : {}), // the design capture stage records a scroll
   });
   await context.addInitScript(INIT);
   // the app ignores the browser's dark setting; its own theme key is what makes it dark (found 1 Nov 2026: every "dark" run before was light)
