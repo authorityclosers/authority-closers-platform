@@ -420,7 +420,8 @@ function scan(phone) {
 const EVT_ROUTE_IGNORE = /^$/;
 
 // the four design rules are read on every phone scan but filed only while state/design-filing.on exists: first read in a capture, filed after a replay (orchestrator, 3 Nov 2026)
-const designFiling = () => { try { return require("fs").existsSync(require("path").join(require("./config.cjs").STATE, "design-filing.on")); } catch (e) { return false; } };
+// state/design-filing.on lists the rules to file, one name per line; a rule not listed is read but not filed (boxed and dead-row stay reading-only until the owner grid has run).
+const designFiling = () => { try { return new Set(require("fs").readFileSync(require("path").join(require("./config.cjs").STATE, "design-filing.on"), "utf8").split(/\s+/).filter(Boolean)); } catch (e) { return new Set(); } };
 
 // opts: { route, phone, shift, events, firstSight: bool }
 function findingsFrom(s, { route, phone, shift = 0, events = [] }) {
@@ -435,11 +436,12 @@ function findingsFrom(s, { route, phone, shift = 0, events = [] }) {
   for (const o of s.overlaps) f("layout:overlap", `${o.s} + ${o.o}`, "MINOR", "Two controls overlap", `${o.s} overlaps ${o.o}`, o.p);
   for (const c of s.clipped) f("layout:text-clipped", c.s, "MINOR", "Text is cut off", `${c.s}: the text is ${c.sw}px wide in a ${c.cw}px box that hides the rest`, c.p);
   for (const t of s.small) f("layout:tap-target-44", t.s, "POLISH", "Tap target under 44 px", `${t.s} is ${t.w}x${t.h}px`, t.p);
-  if (s.design && designFiling()) {
-    for (const x of s.design.edgeMask) f("layout:edge-mask", x.s, "MINOR", "A row that scrolls sideways fades out or is masked at its edges", x.d);
-    for (const x of s.design.boxed) f("layout:boxed", x.s, "MINOR", "On a phone the page content is boxed in instead of running full width", x.d);
-    for (const x of s.design.deadRow) f("layout:dead-row", x.s, "MINOR", "A control sits alone on its row while the row above has room for it", x.d);
-    for (const x of s.design.labelHeading) f("layout:label-heading", x.s, "MINOR", "A one-word heading that does nothing sits above controls", x.d);
+  if (s.design) {
+    const filed = designFiling();
+    if (filed.has("edge-mask")) for (const x of s.design.edgeMask) f("layout:edge-mask", x.s, "MINOR", "A row that scrolls sideways fades out or is masked at its edges", x.d);
+    if (filed.has("boxed")) for (const x of s.design.boxed) f("layout:boxed", x.s, "MINOR", "On a phone the page content is boxed in instead of running full width", x.d);
+    if (filed.has("dead-row")) for (const x of s.design.deadRow) f("layout:dead-row", x.s, "MINOR", "A control sits alone on its row while the row above has room for it", x.d);
+    if (filed.has("label-heading")) for (const x of s.design.labelHeading) f("layout:label-heading", x.s, "MINOR", "A one-word heading that does nothing sits above controls", x.d);
   }
   for (const n of s.selects) f("ui:native-select", n.s, "MINOR", "A native select is still used", `${n.s}: the owner's rule is the shared picker everywhere`, n.p);
   for (const e of s.emptyLists) f("state:no-empty", e.s, "MINOR", "An empty list says nothing", `${e.s} has no rows and no words about it`, e.p);

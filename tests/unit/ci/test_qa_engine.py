@@ -62,10 +62,12 @@ def test_design_rules_in_page_scan_match_capture_stage() -> None:
     assert f"out.design = phone ? ({source})() : null;" in scan
 
 
-def test_design_findings_are_off_unless_the_flag_file_exists() -> None:
+def test_design_findings_are_filed_only_for_the_rules_the_flag_file_names() -> None:
     scan = (ROOT / "lib" / "invariants.cjs").read_text(encoding="utf-8")
     assert "design-filing.on" in scan
-    assert "if (s.design && designFiling())" in scan
+    assert "new Set(" in scan.split("const designFiling", 1)[1].split("\n", 1)[0]
+    for rule in ("edge-mask", "boxed", "dead-row", "label-heading"):
+        assert f'filed.has("{rule}")' in scan
 
 
 def test_capture_command_is_wired() -> None:
