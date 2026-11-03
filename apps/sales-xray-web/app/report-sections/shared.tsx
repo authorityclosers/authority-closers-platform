@@ -2,8 +2,9 @@
 
 import { LockKeyhole } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { factsFromCallData, readCallDataFacts } from "../prospect-facts";
 import { COMMON, GUEST, recordedOutcome } from "../report-copy";
 import type { DocumentReportData } from "../report-document-data";
 import type {
@@ -44,10 +45,36 @@ function useRecorded() {
   return useMemo(() => (value ? recordedOutcome(value) : null), [value]);
 }
 
+/** The follow-up the call's own facts booked ("Sat 7 Nov · 3:00 pm"), or null. */
+function useFollowUp(
+  callId: string | null,
+  transcript: Transcript | undefined,
+) {
+  const [found, setFound] = useState<{ callId: string; when: string } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!callId) return;
+    const controller = new AbortController();
+    readCallDataFacts(callId, controller.signal)
+      .then((payload) => {
+        const when = factsFromCallData(payload, transcript).followUp?.when;
+        if (!controller.signal.aborted)
+          setFound(when ? { callId, when } : null);
+      })
+      .catch(() => {
+        // No facts: the analysis' own outcome stands.
+      });
+    return () => controller.abort();
+  }, [callId, transcript]);
+  return found && found.callId === callId ? found.when : null;
+}
+
 /** One model per report and speaker roles, shared by all six pillars. */
 export function useStory(data: DocumentReportData, callId: string | null) {
   const people = useReportPeople(callId, data.transcript ?? EMPTY_TRANSCRIPT);
   const recorded = useRecorded();
+  const followUp = useFollowUp(callId, data.transcript);
   const seller = people.roles?.seller ?? null;
   const prospect = people.roles?.prospect ?? null;
   const model = useMemo(() => {
@@ -56,12 +83,13 @@ export function useStory(data: DocumentReportData, callId: string | null) {
       return reportStoryModel(data.report, data.transcript, {
         roles: { seller, prospect },
         recorded,
+        followUp,
       });
     } catch {
       // A malformed older report shows a quiet note, never a broken page.
       return "unavailable" as const;
     }
-  }, [data.report, data.transcript, seller, prospect, recorded]);
+  }, [data.report, data.transcript, seller, prospect, recorded, followUp]);
   return { model, people };
 }
 
