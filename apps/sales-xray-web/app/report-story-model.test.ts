@@ -230,6 +230,25 @@ describe("honest gaps", () => {
     expect(callOutcome(story).status).toBeNull();
   });
 
+  it("shows a follow-up the call's facts booked as set, never Deferred (3 Nov 2026 regression, R1)", () => {
+    const booked = "Sat 7 Nov · 3:00 pm";
+    expect(callOutcome(withOutcome("future_date"), null, booked).status).toBe(
+      "Follow-up Set",
+    );
+    expect(callOutcome(withOutcome("unclear"), null, booked).status).toBe(
+      "Follow-up Set",
+    );
+    // Facts over a label only: no sale, a sale and a person's word stand.
+    expect(callOutcome(withOutcome("no_sale"), null, booked).status).toBeNull();
+    expect(callOutcome(withOutcome("closed"), null, booked).status).toBeNull();
+    expect(
+      callOutcome(withOutcome("future_date"), { status: "Lost" }, booked),
+    ).toMatchObject({ status: "Lost", origin: "person" });
+    expect(callOutcome(withOutcome("future_date"), null, null).status).toBe(
+      "Deferred",
+    );
+  });
+
   it("lets a person's recorded outcome win", () => {
     expect(
       callOutcome(withOutcome("closed"), { status: "Won", note: "Signed" }),

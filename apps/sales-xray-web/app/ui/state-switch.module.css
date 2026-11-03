@@ -7,6 +7,13 @@
   gap: 10px;
 }
 
+/* Straight inside a kit card (data-panel) the switch takes the card head's
+   14 px, so its icon and toggle never touch the card's edges (production
+   reports 148 and 116, 3 Nov 2026). */
+:global([data-panel]) > .place {
+  padding-inline: 14px;
+}
+
 .row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

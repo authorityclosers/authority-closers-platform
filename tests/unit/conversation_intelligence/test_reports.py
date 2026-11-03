@@ -483,9 +483,11 @@ def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantic
     # AUT-1676 allows empty stock notes only in explicitly synthetic canonical v4 reads.
     # AUT-1801 rejects exact official outcome prefixes only in new v8 prose;
     # AUT-1783 adds the independent source-bound Report content candidate.
+    # 3 Nov 2026 report regression adds only dormant coaching-v9 generation (v5's request
+    # plus defined outcome kinds and names to spell); validator semantics are unchanged.
     source = Path(reports_module.__file__).read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
-        "f53ec0eaaa83073f52032a658eb6dda7a6995386e5e48897b85981ce2acd58ea"
+        "f7a5a0cc10e3beaccbd2149a68c12d81b5ee0203c70c0e7121003504355b07c8"
     )
 
 

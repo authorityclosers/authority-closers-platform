@@ -116,7 +116,8 @@ def load_qualitative_pack_for_revision(revision: str) -> QualitativePack:
 
     if revision == "coaching-v4":
         return load_qualitative_pack()
-    if revision == "coaching-v5":
+    # coaching-v9 is coaching-v5's prompt with defined outcome kinds: the same pack.
+    if revision in {"coaching-v5", "coaching-v9"}:
         pack = QualitativePack.model_validate_json(_PACK_V5_PATH.read_bytes())
         if pack.id != QUALITATIVE_PACK_V5_ID:
             raise ValueError("qualitative_pack_id_mismatch")

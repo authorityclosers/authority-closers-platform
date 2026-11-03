@@ -9,10 +9,11 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Final, Literal
 
 from pydantic import Field
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, select
 
 from ac_platform.lead_desk.contracts import SCHEMA, Model
 from ac_platform.lead_desk.errors import DeskError
+from ac_platform.lead_desk.history import inbound_only
 from ac_platform.lead_desk.models import Lead
 from ac_platform.lead_desk.vocabulary import NEEDS_FOLLOW_UP
 from ac_platform.lead_desk.work_views import in_view
@@ -26,10 +27,11 @@ COLD: Final = "cold"
 
 
 def on_side(side: Side) -> Any:
-    """SQL for the leads on one side; an empty side reads Inbound."""
+    """SQL for the leads on one side; an empty side reads Inbound. An old lead kept as
+    history is on neither (history.py)."""
     if side == "cold":
         return Lead.pipeline == COLD
-    return or_(Lead.pipeline.is_(None), Lead.pipeline != COLD)
+    return inbound_only()
 
 
 def is_cold(lead: Lead) -> bool:

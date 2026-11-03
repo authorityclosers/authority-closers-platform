@@ -12,6 +12,7 @@ from sqlalchemy import Date, String, and_, cast, func, or_, select
 from ac_platform.identity.models import Person
 from ac_platform.lead_desk.contracts import Model
 from ac_platform.lead_desk.errors import DeskError
+from ac_platform.lead_desk.history import worked
 from ac_platform.lead_desk.journey import transitions
 from ac_platform.lead_desk.models import Lead, LeadEvent
 from ac_platform.tenancy.models import Membership
@@ -104,6 +105,8 @@ def activity_window(
             ),
         ),
         desk._seen(),
+        # Bringing in old leads as history is nobody's activity (2 Nov 2026).
+        worked(),
         or_(
             LeadEvent.actor_person_id == desk.viewer.person_id,
             cast(LeadEvent.id, String).not_in(

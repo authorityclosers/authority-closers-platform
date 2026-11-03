@@ -22,6 +22,7 @@ import {
 } from "react";
 
 import { Picker, type PickerOption } from "../ui/picker";
+import { can as roleCan } from "../organisation/roles";
 import { MAIN_PIPELINE, type StageView } from "./journey/journey-client";
 import { stageName, stageTone, type Side } from "./journey/stage-look";
 import {
@@ -342,6 +343,16 @@ export function FollowUpTabs({
  *  several pipelines and none picked, "All stages" was the only row). */
 export function stagesPipeline(picked: string | null | undefined): string {
   return picked || MAIN_PIPELINE;
+}
+
+/** The pipelines a person may pick from: none for a seller, who always sees
+ *  every pipeline on the main stages (orchestrator, 3 Nov 2026, bug 129); all
+ *  of them for whoever manages leads, inside Filter. */
+export function pipelinesFor<T>(
+  role: string | null | undefined,
+  pipes: T | null,
+): T | null {
+  return roleCan(role, "leads.manage") ? pipes : null;
 }
 
 /** The stages a person may pick: sellers see the ones shown to sellers. */

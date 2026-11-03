@@ -418,6 +418,39 @@ describe("a save the phone kept, sent later", () => {
         .size,
     ).toBe(1);
   });
+
+  // Production 161 (3 Nov 2026): taps landing twice on Save & Close. A second tap
+  // before the next paint saves nothing more.
+  it("saves once when Save is tapped twice in a row", async () => {
+    setWriteIdentity("seller-1");
+    const after = { ...lead("interested") } as LeadDetail;
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response(JSON.stringify(after)),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await act(async () =>
+      root.render(
+        <CallOutcome
+          detail={lead("new")}
+          submitLabel="Save"
+          attention={false}
+          beforeSave={async () => lead("new")}
+          onSaved={() => undefined}
+        />,
+      ),
+    );
+    await act(async () => tile("We talked").click());
+    await act(async () => tile("Interested").click());
+    await act(async () => {
+      const save = tile("Save");
+      save.click();
+      save.click();
+    });
+    const sends = fetchMock.mock.calls.filter((call) =>
+      String(call[0]).endsWith("/dispose"),
+    );
+    expect(sends).toHaveLength(1);
+  });
 });
 
 // ph2-16 (phone personas, 1 Nov 2026): plain answers over the organisation's

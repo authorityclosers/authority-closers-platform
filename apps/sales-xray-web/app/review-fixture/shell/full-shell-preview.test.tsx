@@ -11,6 +11,7 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/",
 }));
 
+import { CALL_DATA_FACTS_API } from "../../prospect-facts";
 import Page from "./page";
 import { FullShellPreview } from "./full-shell-preview";
 
@@ -104,9 +105,17 @@ it("mounts the actual shell, report header, sections and dock with fictional dat
   const requested = fetchMock.mock.calls
     .map(([url]) => String(url))
     .filter((url) => !/^\/(?:brands|emotes)\//.test(url));
-  // Only the rail and mobile profile menus' read-only profile GETs.
+  // Only the rail and mobile profile menus' read-only profile GETs, and the
+  // sections' read of the call's own facts (a booked follow-up, R1).
   expect(requested.length).toBeGreaterThan(0);
-  expect(new Set(requested)).toEqual(new Set(["/v1/me/sales-xray-profile"]));
+  expect(requested).toContain("/v1/me/sales-xray-profile");
+  expect(
+    requested.filter(
+      (url) =>
+        url !== "/v1/me/sales-xray-profile" &&
+        !url.startsWith(`${CALL_DATA_FACTS_API}?call_id=`),
+    ),
+  ).toEqual([]);
   expect(
     fetchMock.mock.calls.every(
       ([, init]) => !init || !init.method || init.method === "GET",

@@ -182,7 +182,7 @@ it("builds each section from the existing screens, with only its own parts", asy
   await render("security");
   expect(
     seen.account.map((props) => (props as { only: string[] }).only),
-  ).toEqual([["profile", "general"], ["usage", "billing"], ["security"]]);
+  ).toEqual([["profile", "general"], ["billing"], ["security"]]);
   await render("organisation");
   await render("team");
   await render("apps");
@@ -360,8 +360,9 @@ it("keeps Plan & usage for an organisation's owner and in a personal workspace",
     await act(async () =>
       root.render(inWorkspace(<SettingsSectionView id="plan" />, kind, role)),
     );
+    // Plan & billing alone: no second analysis time or top-up (production 124).
     expect(seen.account).toContainEqual(
-      expect.objectContaining({ only: ["usage", "billing"] }),
+      expect.objectContaining({ only: ["billing"] }),
     );
   }
 });

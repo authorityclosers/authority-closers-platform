@@ -52,7 +52,7 @@ from uuid import UUID
 
 import httpx
 from fastapi import FastAPI
-from sqlalchemy import and_, delete, exists, func, or_, select, text
+from sqlalchemy import and_, delete, exists, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.lead_desk import (
@@ -67,6 +67,7 @@ from ac_platform.lead_desk import (
 )
 from ac_platform.lead_desk.connectors import google_ads_api, google_files
 from ac_platform.lead_desk.contracts import PushConfig
+from ac_platform.lead_desk.history import inbound_only
 from ac_platform.lead_desk.meetings import REMIND_BEFORE
 from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadDevice, LeadMeeting
 from ac_platform.lead_desk.store import LeadDesk, Viewer
@@ -274,8 +275,9 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
                 Lead.assigned_at > since,
                 Lead.assigned_at <= now,
                 # Cold leads come in lists: a new one is never an alert (phone personas,
-                # 1 Nov 2026, ph1-16: 900 imported fired "New lead" on two phones).
-                func.coalesce(Lead.pipeline, "live") != "cold",
+                # 1 Nov 2026, ph1-16: 900 imported fired "New lead" on two phones). Nor is
+                # an old lead brought in as history.
+                inbound_only(),
                 or_(
                     Lead.alerted_assigned_at.is_(None),
                     Lead.alerted_assigned_at < Lead.assigned_at,

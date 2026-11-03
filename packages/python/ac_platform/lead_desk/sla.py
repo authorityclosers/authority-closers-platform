@@ -34,6 +34,7 @@ from ac_platform.conversation_intelligence.synthetic_import_models import (
     ConversationSandboxOrganisation,
 )
 from ac_platform.lead_desk import hours as work_hours
+from ac_platform.lead_desk.history import worked
 from ac_platform.lead_desk.models import (
     Lead,
     LeadDeskSettings,
@@ -157,10 +158,14 @@ async def find_breaches(db: AsyncSession, *, now: datetime) -> list[Breached]:
 def counted(tenant_id: UUID) -> Any:
     """The leads alerts and their lists count: real ones, or all of a sandbox
     organisation's, whose leads are all test data, as its reports count them (ph1-39, 1 Nov
-    2026: a first-call alert switched on in the sandbox never came)."""
-    return or_(
-        Lead.test_data.is_(False),
-        exists().where(ConversationSandboxOrganisation.tenant_id == tenant_id),
+    2026: a first-call alert switched on in the sandbox never came). Never an old lead
+    brought in as history: it is nobody's work today (2 Nov 2026)."""
+    return and_(
+        or_(
+            Lead.test_data.is_(False),
+            exists().where(ConversationSandboxOrganisation.tenant_id == tenant_id),
+        ),
+        worked(),
     )
 
 

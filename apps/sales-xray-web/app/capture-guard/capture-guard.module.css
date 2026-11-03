@@ -28,6 +28,12 @@
   padding-block: 10px;
   overflow-wrap: anywhere;
 }
+/* Straight inside a kit card (Settings, Calls) the check takes the card
+   head's 14 px at each side (production reports 148 and 116, 3 Nov 2026). */
+:global([data-panel]) > .health {
+  padding-inline: 14px;
+}
+
 .check {
   display: flex;
   align-items: center;
@@ -43,10 +49,35 @@
 .check small {
   display: block;
 }
+/* One look for every action in the check (production report 132, 3 Nov
+   2026): the upload link reads as the buttons do, never a raw blue link. */
 .check a {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
+  padding: 0 12px;
+  color: var(--sx-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+/* The phone's last recording, or where to check without a phone. */
+.checkNote {
+  margin: 0;
+  padding-block: 10px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+.again {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--sx-ink);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  vertical-align: middle;
+  cursor: pointer;
 }
 
 .content {

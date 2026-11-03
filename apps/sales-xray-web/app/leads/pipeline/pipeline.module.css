@@ -1068,9 +1068,139 @@
   font-weight: 700;
 }
 
+/* Analytics (owner, 2 Nov 2026): a measure per row, its value beside its name and
+   its details under a thin bar; campaigns grouped Live, Paused, Ended. */
+.panelSub {
+  margin: -6px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.group {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.groupHead {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.measures {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.measures li {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  --bar: var(--sx-accent);
+}
+
+.measures li[data-quiet] {
+  --bar: color-mix(in oklab, var(--sx-accent) 45%, var(--sx-fill-soft));
+}
+
+.measures .barTrack {
+  grid-column: 1 / -1;
+  height: 8px;
+}
+
+.measureName {
+  min-width: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.measureValue {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.measureMeta {
+  grid-column: 1 / -1;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.fold {
+  min-width: 0;
+}
+
+.fold > summary {
+  display: grid;
+  min-height: 44px;
+  align-content: center;
+  gap: 2px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.fold > summary:focus-visible,
+.more:focus-visible {
+  border-radius: var(--sx-radius-sm);
+  box-shadow: var(--sx-focus-ring);
+  outline: none;
+}
+
+.fold[open] > summary {
+  margin-bottom: 8px;
+}
+
+.foldHint {
+  color: var(--sx-accent);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.seeMore > summary {
+  color: var(--sx-accent);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+}
+
+.moreGrid {
+  display: grid;
+  min-width: 0;
+  gap: var(--sx-gap);
+}
+
+.more {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-self: start;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  text-decoration: none;
+}
+
 @media (min-width: 900px) {
   .kpis {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .dashboard {
@@ -1079,8 +1209,13 @@
 
   .dashHead,
   .kpis,
-  .dashboard > .hint {
+  .dashboard > .hint,
+  .seeMore {
     grid-column: 1 / -1;
+  }
+
+  .moreGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .rowName {

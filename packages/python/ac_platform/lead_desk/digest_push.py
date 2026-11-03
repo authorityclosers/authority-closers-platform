@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ac_platform.lead_desk import digests, notify_prefs
 from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk.contracts import AlertText
+from ac_platform.lead_desk.history import worked
 from ac_platform.lead_desk.models import Lead, LeadDevice, LeadDigest
 from ac_platform.lead_desk.vocabulary import OPEN_STAGES
 from ac_platform.tenancy.models import Membership
@@ -60,6 +61,8 @@ async def counts(desk: LeadDesk) -> dict[str, int]:
         Lead.tenant_id == desk.tenant_id,
         Lead.owner_person_id == desk.viewer.person_id,
         Lead.stage.in_(OPEN_STAGES),
+        # An old lead kept as history is no one's work today (2 Nov 2026).
+        worked(),
     )
     day_end = desk._day_start() + timedelta(days=1)
     row = (

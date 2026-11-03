@@ -359,7 +359,8 @@ class Desk(Model):
 LeadSort = Literal["next_action", "last_contact", "name", "created"]
 LeadDue = Literal["late", "today", "week", "none"]
 LeadSince = Literal["today", "week", "month", "never"]
-LeadMade = Literal["today", "week", "month"]
+# "history": old leads brought in as history, which no other filter lists (2 Nov 2026).
+LeadMade = Literal["today", "week", "month", "history"]
 WorkDay = Literal["today", "yesterday", "week", "recent"]
 
 
@@ -653,6 +654,35 @@ class GroupRow(Model):
     connect_rate: float | None
     junk_rate: float | None
     first_response_minutes: int | None
+    # Leads that reached Interested or later (owner Analytics, 2 Nov 2026).
+    interested: int = 0
+    # A seller's own calls in the period: all, the ones that connected, their talk time.
+    calls: int = 0
+    connected_calls: int = 0
+    talk_seconds: int = 0
+
+
+class CampaignRow(GroupRow):
+    """One campaign's numbers: a Meta campaign, a website campaign, a file or a form."""
+
+    source: str
+    status: Literal["live", "paused", "ended"]
+    # Every lead in it is an old lead brought in as history.
+    history: bool
+    last_lead_at: datetime | None
+
+
+class CampaignStatusCommand(Model):
+    key: str = Field(min_length=1, max_length=140)
+    status: Literal["live", "paused", "ended"]
+    expected_revision: int = Field(ge=0)
+
+
+class CampaignStatusSaved(Model):
+    key: str
+    status: Literal["live", "paused", "ended"]
+    # The Lead Desk settings' new revision, for the next change.
+    revision: int
 
 
 class PipelineReport(Model):
@@ -682,6 +712,14 @@ class PipelineReport(Model):
     sources: tuple[GroupRow, ...]
     # Sellers see their own leads' numbers; owners and admins the team's.
     mine: bool
+    # Old leads brought in as history counted here: only All time (days 0) counts them.
+    history_leads: int = 0
+    campaigns: tuple[CampaignRow, ...] = ()
+    # The most common places leads typed, and how many typed cities name no known place.
+    cities: tuple[ReasonCount, ...] = ()
+    cities_unplaced: int = 0
+    # The Lead Desk settings' revision, for setting a campaign's status.
+    revision: int = 0
 
 
 class StageChoice(Model):
@@ -1270,6 +1308,9 @@ class ImportPreview(Model):
     # them, and the Check step says so before anything is written (competitor teardown 5).
     # They aren't in ``importable``.
     bad_numbers: int = 0
+    # For old leads kept as history: the enquiry date ("received") and campaign columns a
+    # header names (owner, 2 Nov 2026), added to ``mapping`` when the file is Old leads.
+    history_mapping: dict[str, str] = Field(default_factory=dict)
 
 
 class ImportSkip(Model):
@@ -1304,7 +1345,11 @@ class ImportResult(Model):
     warnings: tuple[str, ...] = ()
     # Bulk upload (section 5): who got how many of the new leads, and their side.
     given: tuple[ImportGiven, ...] = ()
-    side: Literal["live", "cold"] = "live"
+    side: Literal["live", "cold", "history"] = "live"
+    # Old leads kept as history: how many came with no enquiry date the import could read
+    # (they keep the day they were brought in), and how their dates were read.
+    undated: int = 0
+    dates_read_as: Literal["dmy", "mdy", "ymd"] | None = None
     # Undo import (competitor teardown 22): this import, and until when an owner or admin
     # may undo it; None for anyone else.
     import_id: UUID | None = None
@@ -1313,6 +1358,27 @@ class ImportResult(Model):
     # lead and changed none, with why: the result's "Download skipped rows" (teardown 5).
     updated: int = 0
     skipped_rows: tuple[ImportSkip, ...] = ()
+
+
+class StageWord(Model):
+    """One stage word in a file of old leads, how many rows say it, and the stage it reads
+    as (a stage key; None: the owner picks one before the import)."""
+
+    word: str
+    rows: int
+    stage: str | None
+
+
+class HistoryCheck(Model):
+    """What a file of old leads would bring in, before anything is written: its stage words
+    and their stages, how its dates read, and how many rows have none the import can read."""
+
+    stages: tuple[StageWord, ...]
+    # Every stage word has a stage: the import can go ahead.
+    ready: bool
+    dates_read_as: Literal["dmy", "mdy", "ymd"] | None
+    undated: int
+    campaigns: tuple[ReasonCount, ...]
 
 
 class ImportKept(Model):
@@ -1734,7 +1800,13 @@ class ImportCommand(Command):
     assign: Literal["rules", "me", "people", "none"] = "rules"
     shares: tuple[ImportShare, ...] = Field(default=(), max_length=50)
     # Inbound ("live") or Cold ("cold") for the new leads; a number already a lead keeps its own.
-    side: Literal["live", "cold"] = "live"
+    # "history": old leads already worked, kept out of every work list (owner, 2 Nov 2026):
+    # their row's Enquiry date, Campaign, Stage and Salesperson say where they stand, nobody
+    # is given them, and the owner says which stage each of the file's stage words means.
+    side: Literal["live", "cold", "history"] = "live"
+    # The file's stage words and the stage key each one means (history imports): a word
+    # left out is read as before (match_stage), and history refuses a word neither places.
+    stages: dict[str, str] = Field(default_factory=dict, max_length=200)
     # The stage new leads start in (a stage key); none: the first stage.
     step: str | None = Field(default=None, max_length=40)
     # A pipeline picked by hand; None: the one that takes file imports.
