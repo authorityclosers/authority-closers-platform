@@ -24,9 +24,9 @@
   max-width: 34ch;
   margin: 4px 0 0;
   color: var(--sx-ink);
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.4;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
 }
 
 /* Which lead: a few letters of its name (ph1-35, 1 Nov 2026). */
@@ -58,7 +58,7 @@
   color: var(--sx-ink);
   font: inherit;
   /* 16 px: a phone never zooms into the field. */
-  font-size: 16px;
+  font-size: var(--sx-text-md);
   outline: none;
 }
 
@@ -98,13 +98,13 @@
 
 .results strong {
   overflow-wrap: anywhere;
-  font-size: 15px;
-  font-weight: 650;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
 }
 
 .results small {
   color: var(--sx-muted);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .results button:active {
@@ -123,8 +123,8 @@
   max-width: 40ch;
   margin: 0;
   color: var(--sx-muted);
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 /* The answer: the last call's Report and the notes, each with its source. */
@@ -146,8 +146,8 @@
   background: var(--sx-fill-soft);
   color: var(--sx-ink);
   font: inherit;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -163,8 +163,8 @@
 .part h3 {
   margin: 0;
   color: var(--sx-muted);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .part dl {
@@ -175,14 +175,14 @@
 
 .part dt {
   color: var(--sx-muted);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .part dd {
   margin: 0;
   color: var(--sx-ink);
-  font-size: 15px;
-  line-height: 1.45;
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
 }
 
 .part ul {
@@ -196,15 +196,15 @@
 .part li p {
   margin: 0;
   color: var(--sx-ink);
-  font-size: 15px;
-  line-height: 1.45;
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
   overflow-wrap: anywhere;
   white-space: pre-line;
 }
 
 .part li small {
   color: var(--sx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 .source {
@@ -214,16 +214,16 @@
   align-items: center;
   gap: 6px;
   color: var(--sx-accent);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   text-decoration: none;
 }
 
 .follow {
   margin: 0;
   color: var(--sx-ink);
-  font-size: 15px;
-  font-weight: 600;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
 }
 
 /* Dipak's coaching on the seller's own calls: one tap, under the answer. */
@@ -237,7 +237,7 @@
   border-radius: var(--sx-radius-md);
   background: var(--sx-fill-soft);
   color: var(--sx-ink);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
 }

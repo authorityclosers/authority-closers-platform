@@ -25,21 +25,21 @@
 
 .brand {
   color: var(--lx-ink);
-  font-size: 14px;
-  font-weight: 750;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   text-decoration: none;
 }
 
 .eyebrow {
   margin: 0 0 6px;
   color: var(--lx-teal);
-  font-size: 12px;
-  font-weight: 750;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .hero h1 {
   margin: 0;
-  font: 800 clamp(26px, 6vw, 38px) / 1.15
+  font: 500 var(--sx-text-2xl) / var(--sx-leading-36)
     var(--lx-font-display, var(--lx-font-ui, sans-serif));
   letter-spacing: -0.025em;
   text-wrap: balance;
@@ -48,7 +48,7 @@
 .lead {
   margin: 8px 0 0;
   color: var(--lx-ink-2);
-  font-size: 16px;
+  font-size: var(--sx-text-md);
 }
 
 .android,
@@ -75,13 +75,13 @@
 }
 
 .androidHead strong {
-  font-size: 18px;
+  font-size: var(--sx-text-md);
 }
 
 .androidHead small,
 .soon small {
   color: var(--lx-ink-3);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .icon {
@@ -120,15 +120,15 @@
   background: var(--lx-gradient-primary);
   color: var(--lx-on-teal);
   box-shadow: var(--lx-shadow-cta, none);
-  font-size: 17px;
-  font-weight: 750;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   text-decoration: none;
 }
 
 /* Google Play's button: one line at 390 px (a label, no download arrow). */
 .play {
   padding: 0 16px;
-  font-size: 16px;
+  font-size: var(--sx-text-md);
   text-align: center;
   text-wrap: balance;
 }
@@ -146,7 +146,7 @@
   gap: 6px;
   margin: 0;
   color: var(--lx-ink-3);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 /* A QR code is for scanning from another screen: phones and tablets skip it. */
@@ -164,12 +164,12 @@
 .check {
   margin-top: 14px;
   color: var(--lx-ink-2);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .check summary {
   cursor: pointer;
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .check > p {
@@ -182,7 +182,7 @@
 
 .check code {
   overflow-wrap: anywhere;
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 .copy {
@@ -218,12 +218,12 @@
   display: grid;
   gap: 2px;
   color: var(--lx-ink-2);
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
 }
 
 .steps strong {
   color: var(--lx-ink);
-  font-size: 15px;
+  font-size: var(--sx-text-md);
 }
 
 /* The file, behind its question, once Google Play leads (24 Oct 2026). */
@@ -234,20 +234,20 @@
 .fallback > summary {
   padding: 12px 0;
   color: var(--lx-ink-2);
-  font-size: 14px;
-  font-weight: 650;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   cursor: pointer;
 }
 
 .small {
   margin: 16px 0 0;
   color: var(--lx-ink-3);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .soon h2 {
   margin: 0 0 12px;
-  font-size: 17px;
+  font-size: var(--sx-text-md);
 }
 
 .soon ul {
@@ -264,8 +264,8 @@
   border-radius: 999px;
   background: var(--lx-paper-2);
   color: var(--lx-ink-3);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .windowsHelp {
@@ -285,7 +285,7 @@
   display: flex;
   justify-content: center;
   gap: 18px;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .footer a {
@@ -319,19 +319,19 @@
 
 .pTitle {
   fill: var(--lx-ink);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .pText {
   fill: var(--lx-ink-2);
-  font-size: 11px;
+  font-size: var(--sx-text-2xs);
 }
 
 .pHint {
   fill: var(--lx-teal);
-  font-size: 10px;
-  font-weight: 650;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
 }
 
 .pOn {
@@ -348,8 +348,8 @@
 
 .pButtonText {
   fill: var(--lx-on-teal);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
 }
 
 .pTap {
@@ -365,18 +365,18 @@
 
 .pSmartTitle {
   fill: var(--lx-on-teal);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .pSmartText {
   fill: var(--lx-on-teal);
-  font-size: 10px;
+  font-size: var(--sx-text-2xs);
 }
 
 .pSmartLink {
   fill: var(--lx-on-teal);
-  font-size: 11px;
+  font-size: var(--sx-text-2xs);
   text-decoration: underline;
 }
 

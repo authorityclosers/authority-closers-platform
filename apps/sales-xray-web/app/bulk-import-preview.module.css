@@ -3,14 +3,14 @@
   gap: 12px;
   min-width: 0;
   padding: 12px;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
   font-family: var(--lx-font-ui);
   overflow-wrap: anywhere;
 }
 .hint {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   overflow-wrap: anywhere;
 }
 .consent {
@@ -18,7 +18,7 @@
   align-items: center;
   gap: 8px;
   min-height: 44px;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .consent input {
   min-width: 20px;
@@ -39,7 +39,7 @@
   border-radius: 8px;
   color: var(--lx-ink);
   background: var(--lx-surface);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   overflow-wrap: anywhere;
 }
 .body :is(button, input[type="file"], select) {

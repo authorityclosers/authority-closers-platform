@@ -5,9 +5,9 @@
   background: linear-gradient(145deg, #f2f7ff, #f8fffd 65%, #fff);
   color: #10243d;
   font-family: var(--report-font);
-  font-size: 16px;
+  font-size: var(--sx-text-md);
   font-weight: 400;
-  line-height: 1.6;
+  line-height: var(--sx-leading-24);
 }
 .frame {
   box-sizing: border-box;
@@ -29,24 +29,24 @@
 .eyebrow {
   margin: 0 0 5px;
   color: #087b79;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 .heading h1 {
   margin: 0;
-  font-size: clamp(32px, 3vw, 38px);
-  font-weight: 720;
-  line-height: 1.13;
+  font-size: var(--sx-text-3xl);
+  font-weight: 500;
+  line-height: var(--sx-leading-36);
   letter-spacing: -0.025em;
 }
 .heading p:not(.eyebrow) {
   max-width: 78ch;
   margin: 6px 0 0;
   color: #48617b;
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
 }
 .badge {
   flex: 0 0 auto;
@@ -55,8 +55,8 @@
   border-radius: 999px;
   background: #e8faf6;
   color: #006f67;
-  font-size: 12px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 .disclaimer {
   margin-bottom: 10px;
@@ -65,8 +65,8 @@
   border-radius: 8px;
   background: #f5f3ff;
   color: #544b87;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 .source {
   margin-top: 20px;
@@ -81,8 +81,8 @@
   display: block;
 }
 .source strong {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
 }
 .source p {
   margin: 7px 0;
@@ -91,7 +91,7 @@
 }
 .source small {
   color: #527080;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 @media (max-width: 620px) {
   .page {

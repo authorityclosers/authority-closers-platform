@@ -13,7 +13,7 @@
   margin: auto;
 }
 .preview h1 {
-  font-size: 20px;
+  font-size: var(--sx-text-md);
   margin-top: 0;
 }
 .edit {
@@ -28,7 +28,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   margin-bottom: 10px;
 }
 .edit input,
@@ -76,7 +76,7 @@
   color: var(--lx-ink);
   background: var(--lx-surface);
   box-shadow: var(--lx-shadow-md);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .cornerError > span {
   min-width: 0;
@@ -95,7 +95,7 @@
 }
 .section h2 {
   margin: 0 0 4px;
-  font-size: 17px;
+  font-size: var(--sx-text-md);
 }
 .section > summary {
   cursor: pointer;
@@ -103,14 +103,14 @@
   gap: 10px;
   justify-content: space-between;
   align-items: center;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   min-height: 32px;
 }
 .section > summary small {
   max-width: 50%;
   text-align: right;
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   color: var(--lx-muted);
   font-weight: 400;
 }
@@ -130,11 +130,11 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   color: var(--lx-muted);
 }
 .fact dt small {
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   color: var(--lx-teal);
 }
 .fact[data-fact-label="Unknown"] dt small {
@@ -142,15 +142,15 @@
 }
 .fact dd {
   margin: 4px 0 0;
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 .fact[data-fact-label="Unknown"] dd {
   color: var(--lx-muted);
 }
 .note,
 .lock {
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   color: var(--lx-muted);
   margin: 6px 0;
 }
@@ -160,7 +160,7 @@
   gap: 4px;
 }
 .evidence {
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   margin-top: 8px;
 }
 .evidence summary,
@@ -171,7 +171,7 @@
 }
 .evidence summary {
   min-height: 32px;
-  line-height: 24px;
+  line-height: var(--sx-leading-24);
 }
 .evidence a {
   display: inline-flex;
@@ -188,7 +188,7 @@
   margin-top: 12px;
   border-top: 1px solid var(--lx-line-soft);
   padding-top: 12px;
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
 }
 .inference small {
   color: var(--lx-muted);
@@ -212,10 +212,10 @@
 .linkSection {
   padding: 8px 0;
   border-bottom: 1px solid var(--lx-line-soft);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .linkSection h2 {
-  font-size: 15px;
+  font-size: var(--sx-text-md);
   margin: 0 0 8px;
 }
 .linkSection input {
@@ -239,7 +239,7 @@
   min-height: 32px;
   margin-top: 8px;
   color: var(--lx-teal);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .factSkeleton {
   min-height: 88px;
@@ -281,7 +281,7 @@
     min-height: 44px;
   }
   .evidence summary {
-    line-height: 36px;
+    line-height: var(--sx-leading-36);
   }
   .factSkeleton {
     min-height: 100px;
@@ -304,7 +304,7 @@
   border: 1px dashed var(--lx-hypothesis-edge);
   border-radius: var(--lx-radius-md);
   color: var(--lx-ink-3);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .detected button {
   min-height: 32px;
@@ -313,13 +313,13 @@
   border-radius: var(--lx-radius-sm);
   background: var(--lx-teal);
   color: var(--lx-on-teal);
-  font: 600 13px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
   cursor: pointer;
 }
 .briefBasis {
   margin: 0 0 12px;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .briefSection {
   display: grid;
@@ -341,12 +341,12 @@
 }
 .briefHead h2 {
   margin: 0;
-  font: 600 15px/1.35 var(--lx-font-ui);
+  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
 }
 .briefHead p {
   margin: 1px 0 0;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .briefNumber {
   display: inline-grid;
@@ -357,7 +357,7 @@
   border-radius: 50%;
   background: color-mix(in oklab, var(--lx-teal) 12%, var(--lx-surface));
   color: var(--lx-teal);
-  font: 700 12px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
 }
 .briefFacts {
   display: grid;
@@ -379,16 +379,16 @@
   align-items: center;
   gap: 6px;
   color: var(--lx-muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 .briefFact dd {
   display: grid;
   gap: 3px;
   margin: 0;
   color: var(--lx-ink);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 .factChip {
   display: inline-flex;
@@ -398,8 +398,8 @@
   border-radius: var(--lx-radius-pill);
   background: var(--lx-sunken);
   color: var(--lx-muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 .factChip[data-fact="Observed"] {
   background: color-mix(in oklab, var(--lx-teal) 10%, var(--lx-surface));
@@ -420,14 +420,14 @@
 .briefSource {
   justify-self: start;
   color: var(--lx-teal);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   text-decoration: none;
 }
 .briefNote {
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .briefList {
   display: grid;
@@ -441,10 +441,10 @@
   align-items: center;
   gap: 6px 10px;
   color: var(--lx-muted);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .briefAdd {
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .briefSkeleton {
   display: block;
@@ -469,8 +469,8 @@
   align-items: center;
   min-height: 44px;
   color: var(--lx-ink);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   cursor: pointer;
 }
 .briefHistory {
@@ -478,7 +478,7 @@
   gap: 6px;
   margin: 0 0 14px;
   padding-left: 18px;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .briefHistory a {
   color: var(--lx-teal);
@@ -495,7 +495,7 @@
 }
 .previewSecond {
   margin: 32px 0 8px;
-  font-size: 15px;
+  font-size: var(--sx-text-md);
 }
 .srOnly {
   position: absolute;

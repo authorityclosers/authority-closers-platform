@@ -65,7 +65,7 @@
 .segmented[data-density="compact"] .label,
 .compact .label {
   min-height: var(--lx-control-compact-h, 32px);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 .input:checked + .label {
@@ -74,7 +74,7 @@
   box-shadow:
     0 1px 3px color-mix(in oklab, var(--lx-film) 14%, transparent),
     0 0 0 0.5px var(--sx-hairline);
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .input:focus-visible + .label {

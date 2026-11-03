@@ -108,12 +108,17 @@ it("keeps the count, layout and Select together while preserving layout and sele
       (button) => button.getAttribute("aria-label") === "Table",
     )!,
   );
-  await vi.waitFor(async () => {
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    });
-    expect(host.querySelector("table")).not.toBeNull();
-  });
+  // The table loads its own code on first use: on a busy box that takes over
+  // a second, and a failed wait left the next tests in the table.
+  await vi.waitFor(
+    async () => {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      expect(host.querySelector("table")).not.toBeNull();
+    },
+    { timeout: 5000 },
+  );
   expect(localStorage.getItem("sx:leads-layout:sample-workspace")).toBe(
     "table",
   );

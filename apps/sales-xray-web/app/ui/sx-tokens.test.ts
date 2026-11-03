@@ -29,25 +29,45 @@ it("aliases only Lightbox tokens that exist", () => {
     expect(lightbox, name).toMatch(new RegExp(`${name}:`));
 });
 
-it("allows three text sizes plus title and figure styles", () => {
-  const sizes = [...tokens.matchAll(/--sx-text-[\w-]+:\s*([^;]+);/g)].map(
-    ([, value]) => value.match(/(\d+(?:\.\d+)?)px/)?.[1],
-  );
-  // Liquid Glass (owner, 22 Oct): 12.5/14/15 on computers, then panel,
-  // headline, title, figure and large title; Apple's 13/15/16.5 on phones.
-  expect(sizes).toEqual([
-    "12.5",
-    "14",
-    "15",
-    "16",
-    "17",
-    "22",
-    "30",
-    "32",
-    "13",
-    "15",
-    "16.5",
+// Native-feel spec, 3 Nov 2026 (owner: "unrealistic, unsized, ugly"):
+// Material 3's sizes in rem, so the phone's font size scales text as sp does.
+const px = (pattern: RegExp) =>
+  [...tokens.matchAll(pattern)].map(([, step, rem]) => [
+    step,
+    Number(rem) * 16,
   ]);
+
+it("allows one text scale on every width, in rem", () => {
+  expect(px(/--sx-text-([\w-]+):\s*([\d.]+)rem;/g)).toEqual([
+    ["2xs", 11],
+    ["xs", 12],
+    ["sm", 14],
+    ["md", 16],
+    ["xl", 22],
+    ["2xl", 28],
+    ["3xl", 32],
+  ]);
+  // Line heights are ratios of their step, so a line grows with its text
+  // however it is enlarged (robot rows at 130 and 200 %, 3 Nov 2026).
+  const leading = [
+    ...tokens.matchAll(/--sx-leading-(\d+):\s*calc\((\d+) \/ (\d+)\);/g),
+  ].map(([, name, line, size]) => [Number(name), Number(line), Number(size)]);
+  expect(leading.map(([name]) => name)).toEqual([16, 20, 24, 28, 36]);
+  for (const [name, line, size] of leading) {
+    expect(line).toBe(name);
+    expect([11, 12, 14, 16, 22, 28, 32]).toContain(size);
+  }
+  const code = tokens.replace(/\/\*[\s\S]*?\*\//g, "");
+  expect(code).not.toMatch(/--sx-(text|leading)-[\w-]+:[^;]*\dpx/);
+  expect(code).not.toMatch(/--sx-leading-[\w-]+:[^;]*rem/);
+});
+
+it("gives the roles weights of 400 and 500 only", () => {
+  const weights = [...tokens.matchAll(/--sx-text-[\w-]+:\s*(\d{3})\s/g)].map(
+    ([, weight]) => Number(weight),
+  );
+  expect(weights.length).toBe(9);
+  expect(new Set(weights)).toEqual(new Set([400, 500]));
 });
 
 it("gives low-memory phones a lighter glass", () => {

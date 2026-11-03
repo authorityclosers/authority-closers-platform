@@ -91,8 +91,8 @@ a.trigger {
   overflow: hidden;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 650;
-  line-height: 1.2;
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;

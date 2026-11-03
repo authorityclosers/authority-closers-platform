@@ -30,13 +30,13 @@
 }
 
 .text strong {
-  font-size: 15px;
+  font-size: var(--sx-text-md);
 }
 
 .text small {
   color: var(--sx-muted);
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 
 .chips {
@@ -54,8 +54,8 @@
   background: var(--sx-surface);
   color: var(--sx-ink);
   font: inherit;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -126,7 +126,7 @@
 
 .foot small {
   color: var(--sx-muted);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .test {
@@ -137,8 +137,8 @@
   background: var(--sx-surface);
   color: var(--sx-ink);
   font: inherit;
-  font-size: 14px;
-  font-weight: 650;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   cursor: pointer;
 }
 

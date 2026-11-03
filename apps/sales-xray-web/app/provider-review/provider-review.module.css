@@ -8,16 +8,16 @@
 .eyebrow {
   margin: 0 0 8px;
   color: #46605b;
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .page h1 {
   margin: 0;
   font-family: var(--font-newsreader, Georgia, serif);
-  font-size: clamp(2.15rem, 5vw, 3.2rem);
+  font-size: var(--sx-text-3xl);
   font-weight: 500;
-  line-height: 1.05;
+  line-height: var(--sx-leading-36);
 }
 
 .intro {
@@ -35,7 +35,7 @@
   background: #174e46;
   color: #fff;
   font: inherit;
-  font-weight: 700;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -56,7 +56,7 @@
 
 .details h2 {
   margin: 0 0 18px;
-  font-size: 1.05rem;
+  font-size: var(--sx-text-md);
 }
 
 .details dl {
@@ -73,19 +73,19 @@
 
 .details dt {
   color: #596763;
-  font-size: 0.9rem;
+  font-size: var(--sx-text-sm);
 }
 
 .details dd {
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .digest {
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 0.83rem;
+  font-size: var(--sx-text-sm);
   font-weight: 500;
 }
 
@@ -95,12 +95,12 @@
   padding: 14px 16px;
   border-radius: 8px;
   background: #f2f6f4;
-  line-height: 1.55;
+  line-height: var(--sx-leading-20);
 }
 
 .tokenNote {
   color: #4a5755;
-  font-size: 0.9rem;
+  font-size: var(--sx-text-sm);
 }
 
 .confirm {
@@ -127,7 +127,7 @@
 .error,
 .reference {
   margin: 20px 0 0;
-  line-height: 1.55;
+  line-height: var(--sx-leading-20);
 }
 
 .notice {
@@ -146,7 +146,7 @@
 .reference {
   color: #596763;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 0.86rem;
+  font-size: var(--sx-text-sm);
   overflow-wrap: anywhere;
 }
 

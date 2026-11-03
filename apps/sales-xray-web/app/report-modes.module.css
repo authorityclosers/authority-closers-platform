@@ -13,7 +13,7 @@
   --doc-callout-fill: var(--lx-paper-2);
   --doc-border: var(--lx-line);
   --report-text-scale: 1;
-  --report-base-font-size: 17px;
+  --report-base-font-size: var(--sx-text-md);
   --report-font-size: calc(
     var(--report-base-font-size) * var(--report-text-scale)
   );
@@ -22,7 +22,7 @@
   /* Every report section shares the accepted Lightbox UI face. */
   font-family: var(--lx-font-ui);
   font-size: var(--report-font-size);
-  line-height: 1.6;
+  line-height: var(--sx-leading-24);
 }
 
 .workspace[data-text-size="100"] {
@@ -50,7 +50,7 @@
 
 @media (max-width: 760px) {
   .workspace {
-    --report-base-font-size: 16px;
+    --report-base-font-size: var(--sx-text-md);
   }
 }
 
@@ -87,8 +87,8 @@
   background: var(--lx-surface);
   color: var(--report-muted);
   font: inherit;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   line-height: var(--lx-leading-devanagari, 1.3);
   cursor: pointer;
 }
@@ -135,9 +135,9 @@
   background: var(--lx-surface);
   color: var(--report-muted);
   font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.2;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
   cursor: pointer;
   transition:
     color 150ms ease,
@@ -196,9 +196,9 @@
   border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--report-muted);
-  font-size: 14px;
-  font-weight: 680;
-  line-height: 1.3;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
   white-space: nowrap;
   text-decoration: none;
   transition:
@@ -269,9 +269,9 @@
   background: transparent;
   color: var(--report-muted);
   font: inherit;
-  font-size: 14px;
-  font-weight: 680;
-  line-height: 1.3;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -333,8 +333,8 @@
   background: transparent;
   color: var(--report-active-ink);
   font: inherit;
-  font-size: 13.5px;
-  font-weight: 700;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   line-height: var(--lx-leading-devanagari, 1.3);
   cursor: pointer;
 }
@@ -406,20 +406,20 @@
 
 .chapterNumber {
   font-family: var(--lx-font-ui);
-  font-size: 24px;
-  font-weight: 800;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
   color: var(--doc-heading);
-  line-height: 1.2;
+  line-height: var(--sx-leading-28);
 }
 
 .chapterTitle {
   margin: 0;
   color: var(--doc-heading);
   font-family: var(--lx-font-ui);
-  font-size: 24px;
-  font-weight: 800;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
   letter-spacing: -0.015em;
-  line-height: 1.2;
+  line-height: var(--sx-leading-28);
   overflow-wrap: anywhere;
   scroll-margin-block-start: var(--report-scroll-target-offset, 64px);
 }
@@ -448,10 +448,10 @@
   margin: 0 0 14px;
   color: var(--lx-ink);
   font-family: var(--lx-font-ui);
-  font-size: 20px;
-  font-weight: 700;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   letter-spacing: -0.015em;
-  line-height: 1.3;
+  line-height: var(--sx-leading-24);
   overflow-wrap: anywhere;
   scroll-margin-block-start: var(--report-scroll-target-offset, 64px);
 }
@@ -541,7 +541,7 @@
     min-height: 44px;
     gap: 7px;
     padding: 8px 10px;
-    font-size: 13px;
+    font-size: var(--sx-text-xs);
   }
 
   .sectionIcon {
@@ -561,7 +561,7 @@
 
   .section > h2 {
     margin-bottom: 14px;
-    font-size: 21px;
+    font-size: var(--sx-text-xl);
     scroll-margin-block-start: var(--report-scroll-target-offset, 68px);
   }
 }
@@ -683,7 +683,7 @@
   border-radius: 10px;
   background: transparent;
   color: var(--lx-muted);
-  font: 600 13px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
   letter-spacing: -0.005em;
   transition:
     color var(--lx-dur-quick) var(--lx-ease-quick),
@@ -822,7 +822,7 @@
   border-radius: 10px;
   background: transparent;
   color: var(--lx-muted);
-  font: 700 12px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
 }
 
 .navRow[data-placement="toolbar"] .textSizeGroup > button:hover {
@@ -871,7 +871,7 @@
   border-radius: 8px;
   background: var(--doc-heading);
   color: var(--lx-surface);
-  font: 700 13.5px var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) var(--lx-font-ui);
   cursor: pointer;
 }
 
@@ -886,7 +886,7 @@
 }
 
 .documentActionsNote {
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   color: var(--lx-muted);
 }
 
@@ -923,7 +923,7 @@
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px;
-  font-size: 11px;
+  font-size: var(--sx-text-2xs);
   color: var(--lx-muted);
   padding-bottom: 5mm;
   margin-bottom: 6mm;
@@ -931,29 +931,29 @@
 }
 
 .docKicker {
-  font-size: 11.5px;
-  font-weight: 800;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
   color: var(--doc-accent);
   margin-bottom: 4px;
 }
 
 .docSubtitle {
-  font-size: 13.5px;
+  font-size: var(--sx-text-sm);
   color: var(--lx-muted);
   margin-bottom: 8px;
 }
 
 .docTitle {
-  font-size: 24px;
-  font-weight: 800;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
   color: var(--doc-heading);
-  line-height: 1.25;
+  line-height: var(--sx-leading-28);
   margin: 0 0 8px;
 }
 
 .docMetaLine {
   font-style: italic;
-  font-size: 12.5px;
+  font-size: var(--sx-text-xs);
   color: var(--lx-muted);
   margin-bottom: 16px;
 }
@@ -966,14 +966,14 @@
 }
 
 .docBasisLabel {
-  font-size: 11px;
-  font-weight: 800;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
   color: var(--doc-heading);
 }
 
 .docBasisText {
   margin: 3px 0;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
   color: var(--lx-ink-3);
 }
 
@@ -993,8 +993,8 @@
 .docSectionNumber,
 .docSectionTitle {
   margin: 0;
-  font-size: 18px;
-  font-weight: 800;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   color: var(--doc-heading);
 }
 
@@ -1169,7 +1169,7 @@
   min-height: 32px;
   cursor: pointer;
   color: var(--lx-teal);
-  font: 600 14px/1.5 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
 }
 .workspace:is([data-view="story"], [data-view="coaching"]) .sections {
   gap: 16px;
@@ -1248,12 +1248,12 @@
   border-radius: 50%;
   background: color-mix(in oklab, var(--lx-teal) 12%, var(--lx-surface));
   color: var(--lx-teal);
-  font: 700 13px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
 }
 .pillarTitle {
   margin: 0;
   color: var(--lx-ink);
-  font: 650 20px/1.25 var(--lx-font-ui);
+  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
 }
 .pillarTitle:focus {
   outline: none;
@@ -1261,7 +1261,7 @@
 .pillarSubtitle {
   margin: 2px 0 0;
   color: var(--lx-muted);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .workspace[data-view="story"] .toolbar > button {
   min-width: 0;
@@ -1284,7 +1284,7 @@
   height: auto;
   overflow: visible;
   clip-path: none;
-  font: 600 13px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
 }
 .navRow[data-placement="toolbar"] .toolbar[data-labelled] > button {
   display: inline-flex;
@@ -1346,7 +1346,7 @@
   border-radius: 8px;
   background: none;
   color: var(--lx-ink);
-  font: 500 13px/1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   text-align: left;
   cursor: pointer;
 }
@@ -1497,8 +1497,8 @@
     padding: 6px 2px 5px;
     border-bottom: 2px solid transparent;
     border-radius: 10px;
-    font-size: 11.5px;
-    line-height: 1.1;
+    font-size: var(--sx-text-2xs);
+    line-height: var(--sx-leading-16);
     text-align: center;
   }
   .workspace[data-view="story"]

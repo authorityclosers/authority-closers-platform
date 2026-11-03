@@ -102,7 +102,7 @@
   color: var(--sx-muted);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -138,7 +138,7 @@
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -221,7 +221,7 @@
 .rowTop strong {
   overflow: hidden;
   font-size: var(--sx-text-md);
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -234,12 +234,12 @@
 }
 
 .row[data-unread] .rowTop strong {
-  font-weight: 750;
+  font-weight: 500;
 }
 
 .row[data-unread] .rowTop time {
   color: var(--sx-accent);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .rowText {
@@ -261,7 +261,7 @@
 
 .row[data-unread] .rowText {
   color: var(--sx-ink);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .unreadDot {
@@ -302,7 +302,7 @@
   border-radius: 999px;
   background: var(--sx-sunken);
   color: var(--sx-ink-2);
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -429,7 +429,7 @@
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
 }
 
 .linkButton {
@@ -441,7 +441,7 @@
   color: var(--sx-accent);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -498,7 +498,7 @@
 .threadTitle strong {
   overflow: hidden;
   font-size: var(--sx-text-md);
-  font-weight: 650;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -525,7 +525,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
   cursor: pointer;
 }
@@ -572,7 +572,7 @@
   box-shadow: var(--lx-shadow-1);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .bubbleRow {
@@ -628,7 +628,7 @@
   background: color-mix(in oklab, var(--sx-ink) 7%, transparent);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .attachment {
@@ -640,13 +640,13 @@
   background: color-mix(in oklab, var(--sx-ink) 6%, transparent);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .bubbleText {
   margin: 0;
   font-size: var(--sx-text-md);
-  line-height: 1.42;
+  line-height: var(--sx-leading-24);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
@@ -682,7 +682,7 @@
   margin: 3px 4px 0;
   color: var(--sx-bad);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   text-align: right;
   /* Owners also see the words Meta sends, which can carry a long link. */
   overflow-wrap: anywhere;
@@ -742,7 +742,7 @@
   background: var(--sx-sunken);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
-  line-height: 1.4;
+  line-height: var(--sx-leading-20);
 }
 
 .windowLine[data-tone="warn"] {
@@ -775,7 +775,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-md);
-  line-height: 1.4;
+  line-height: var(--sx-leading-24);
   field-sizing: content;
   resize: none;
 }
@@ -1060,7 +1060,7 @@
 
 .callAction strong {
   font-size: var(--sx-text-md);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .callAction small {
@@ -1088,7 +1088,7 @@
 .facts dt {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .facts dd {
@@ -1101,7 +1101,7 @@
 
 .facts a {
   color: var(--sx-accent);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -1127,7 +1127,7 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .panelNotes ol {
@@ -1149,7 +1149,7 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
   white-space: pre-wrap;
 }
 
@@ -1195,7 +1195,7 @@
   color: var(--sx-accent-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -1203,7 +1203,7 @@
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
 }
 
 .panelLink {
@@ -1214,7 +1214,7 @@
   min-height: var(--sx-control-h);
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -1301,7 +1301,7 @@
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
 }
 
 .templateBox {
@@ -1318,7 +1318,7 @@
 .templatePreview span {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .templateParts input,
@@ -1362,7 +1362,7 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  line-height: 1.42;
+  line-height: var(--sx-leading-20);
   white-space: pre-wrap;
 }
 
@@ -1380,7 +1380,7 @@
   color: var(--sx-accent-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -1427,7 +1427,7 @@
   color: var(--lx-missed-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -1439,7 +1439,7 @@
 .aiNote {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  line-height: 1.4;
+  line-height: var(--sx-leading-16);
 }
 
 .aiNote[data-tone="warn"] {
@@ -1535,7 +1535,7 @@
 .ownerButton small {
   color: var(--sx-accent);
   font-size: var(--sx-text-xs);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .ownerPicker {
@@ -1718,7 +1718,7 @@
 .fileChip strong {
   overflow: hidden;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1748,7 +1748,7 @@
   background: var(--sx-bad-soft);
   color: var(--sx-bad);
   font: inherit;
-  font-weight: 650;
+  font-weight: 500;
   vertical-align: middle;
   cursor: pointer;
 }
@@ -1817,7 +1817,7 @@
   align-items: center;
   gap: 4px;
   color: var(--sx-ink-2);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .unreadCount {
@@ -1830,9 +1830,9 @@
   background: var(--sx-accent);
   color: var(--sx-accent-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 700;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
-  line-height: 20px;
+  line-height: var(--sx-leading-16);
   text-align: center;
 }
 

@@ -35,6 +35,7 @@ import {
   type Allowance,
 } from "./acquisition-client";
 import { DeleteAccountRow } from "./account-delete";
+import { BuildLine } from "./settings/build-line";
 import { openBugReport } from "./bug-report/open";
 import { useSalesXraySignOut } from "./account-navigation";
 import type { BillingViewProps } from "./billing/billing-view";
@@ -591,6 +592,7 @@ export function AccountSettings({
               Email support
             </a>
           </Row>
+          <BuildLine />
         </Pane>
       </div>
       {selectedTopUp ? (

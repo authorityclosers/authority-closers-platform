@@ -125,7 +125,7 @@ button:hover > .symbol .bar {
 .by {
   margin-top: 2px;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   font-weight: 500;
   letter-spacing: normal;
   white-space: nowrap;

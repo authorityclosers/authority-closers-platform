@@ -13,7 +13,7 @@
 }
 .card h1 {
   margin: 0 0 20px;
-  font-size: 26px;
+  font-size: var(--sx-text-2xl);
 }
 .card p {
   color: var(--sx-muted);

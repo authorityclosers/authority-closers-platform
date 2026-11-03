@@ -15,7 +15,7 @@
   align-items: center;
   gap: 10px;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   font-weight: 500;
 }
 
@@ -35,7 +35,7 @@
   min-height: 28px;
   flex: none;
   padding-block: 0;
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 .facts {
@@ -44,8 +44,8 @@
   padding-left: 18px;
   gap: 8px;
   color: var(--lx-ink-2);
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 .facts b {

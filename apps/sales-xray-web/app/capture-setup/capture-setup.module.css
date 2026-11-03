@@ -27,21 +27,21 @@
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
 }
 
 .issue {
   margin: 0;
   color: var(--sx-bad);
   font-size: var(--sx-text-sm);
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
 }
 
 .fine {
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  line-height: 1.45;
+  line-height: var(--sx-leading-16);
 }
 
 .form {
@@ -57,7 +57,7 @@
 
 .form label span {
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .form input {
@@ -90,7 +90,7 @@
   margin: 0;
   padding-left: 20px;
   font-size: var(--sx-text-sm);
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
 }
 
 /* The owner's approved words, as sealed, in their own box. */
@@ -104,7 +104,7 @@
   border-radius: var(--sx-radius-md);
   background: var(--sx-sunken);
   font-size: var(--sx-text-sm);
-  line-height: 1.5;
+  line-height: var(--sx-leading-20);
 }
 
 .words p {
@@ -114,7 +114,7 @@
 .words small {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  line-height: 1.45;
+  line-height: var(--sx-leading-16);
 }
 
 .choice {
@@ -125,7 +125,7 @@
 }
 
 .choice span {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .checks {
@@ -167,7 +167,7 @@
   margin-top: 2px;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  line-height: 1.4;
+  line-height: var(--sx-leading-20);
 }
 
 /* Report a problem: small, under each step's buttons. */
@@ -176,11 +176,10 @@
   padding: 0 12px;
   border: 0;
   background: transparent;
-  color: var(--sx-muted);
+  color: var(--sx-accent);
   font: inherit;
   font-size: var(--sx-text-sm);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -196,7 +195,7 @@
 .link {
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .skip {
@@ -231,7 +230,7 @@
 .team strong {
   display: block;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .team small {
@@ -247,7 +246,7 @@
   background: var(--sx-fill-soft);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .badge[data-state="set_up"] {
@@ -327,20 +326,20 @@
 
 .grantText strong {
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .grantText small {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  line-height: 1.4;
+  line-height: var(--sx-leading-16);
 }
 
 .granted {
   flex: none;
   color: var(--sx-good);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 /* The words someone already agreed to: one tap away. */
@@ -350,7 +349,7 @@
   min-height: 44px;
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -392,7 +391,7 @@
   background: none;
   color: var(--sx-accent);
   font: inherit;
-  font-weight: 600;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
 }
@@ -467,7 +466,7 @@
 
 .missingLine button[data-fix] {
   color: var(--sx-accent);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .missingLine button:focus-visible,

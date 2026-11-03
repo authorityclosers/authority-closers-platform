@@ -72,7 +72,7 @@
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
   scroll-snap-align: start;
@@ -192,8 +192,8 @@
   -webkit-line-clamp: 2;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 700;
-  line-height: 20px;
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
   overflow-wrap: break-word;
 }
 
@@ -213,8 +213,8 @@
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  line-height: 20px;
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
   text-align: center;
 }
 
@@ -223,8 +223,8 @@
   padding: 0 8px;
   border-radius: var(--sx-radius-pill);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
-  line-height: 20px;
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
   white-space: nowrap;
 }
 
@@ -312,8 +312,8 @@
   overflow: hidden;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 700;
-  line-height: 20px;
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -329,7 +329,7 @@
   overflow: hidden;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  line-height: 18px;
+  line-height: var(--sx-leading-20);
   white-space: nowrap;
 }
 
@@ -345,7 +345,7 @@
 
 .cardTime[data-old] {
   color: color-mix(in srgb, var(--sx-warn) 55%, var(--sx-ink));
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .cardFoot {
@@ -361,12 +361,12 @@
 .next {
   height: 24px;
   padding: 0 10px;
-  line-height: 24px;
+  line-height: var(--sx-leading-16);
   border-radius: var(--sx-radius-pill);
   background: var(--sx-fill-soft);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -525,7 +525,7 @@
     color: var(--sx-ink);
     font: inherit;
     font-size: var(--sx-text-sm);
-    font-weight: 600;
+    font-weight: 500;
     cursor: pointer;
   }
 
@@ -638,7 +638,7 @@
   margin: 0 0 6px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .targets {
@@ -675,7 +675,7 @@
 }
 
 .targetLabel {
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .targetHint {
@@ -696,7 +696,7 @@
   padding: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .optional {
@@ -719,7 +719,7 @@
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -746,7 +746,7 @@
   background: var(--sx-surface);
   color: var(--sx-ink);
   font: inherit;
-  font-size: 16px;
+  font-size: var(--sx-text-md);
 }
 
 .hint {
@@ -817,7 +817,7 @@
 
 .path [data-now] {
   color: var(--sx-ink);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .pathAge {
@@ -840,7 +840,7 @@
   background: var(--sx-fill-soft);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1005,7 +1005,7 @@
 .barValue {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -1021,7 +1021,7 @@
   min-width: 4ch;
   color: var(--sx-ink);
   font-size: var(--sx-text-title);
-  font-weight: 700;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1055,18 +1055,18 @@
 
 .tableRows [data-tone="bad"] {
   color: var(--sx-bad);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .tableRows [data-tone="warn"] {
   color: var(--sx-ink);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .rowName {
   flex: 1 0 100%;
   color: var(--sx-ink);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 /* Analytics (owner, 2 Nov 2026): a measure per row, its value beside its name and
@@ -1090,7 +1090,7 @@
   gap: 12px;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 700;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1123,14 +1123,14 @@
   min-width: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
   overflow-wrap: anywhere;
 }
 
 .measureValue {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -1173,13 +1173,13 @@
 .foldHint {
   color: var(--sx-accent);
   font-size: var(--sx-text-xs);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .seeMore > summary {
   color: var(--sx-accent);
   font-size: var(--sx-text-md);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .moreGrid {
@@ -1195,7 +1195,7 @@
   justify-self: start;
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
   text-decoration: none;
 }
 

@@ -75,7 +75,7 @@
   overflow: hidden;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 700;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

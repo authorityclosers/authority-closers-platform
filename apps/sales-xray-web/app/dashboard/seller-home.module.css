@@ -21,7 +21,7 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 750;
+  font-weight: 500;
 }
 
 .headEnd {
@@ -34,7 +34,7 @@
 .sideWord {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .seeAll,
@@ -50,7 +50,7 @@
   color: var(--sx-accent);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
   text-decoration: none;
   cursor: pointer;
 }
@@ -90,7 +90,7 @@
   background: var(--sx-surface);
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -143,16 +143,18 @@
 .cardLabel {
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  font-weight: 650;
-  line-height: 1.2;
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .card strong {
+  /* Dipak's target, 2 Nov 2026: a 24 px number, the type scale's one named
+     exception (orchestrator, 3 Nov 2026). */
   font-size: 24px;
-  font-weight: 750;
+  font-weight: 500;
   line-height: 1;
   /* An extreme number wraps inside its tile, never over the next. */
   overflow-wrap: anywhere;
@@ -164,8 +166,8 @@
 .cardNote {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 550;
-  line-height: 1.2;
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -194,18 +196,18 @@
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 750;
+  font-weight: 500;
 }
 
 .kicker span {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .nextName {
   justify-self: start;
   color: var(--sx-ink);
-  font-size: var(--sx-text-lg, 20px);
-  font-weight: 800;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -225,7 +227,7 @@
   background: var(--sx-accent);
   color: var(--lx-on-teal);
   font-size: var(--sx-text-md);
-  font-weight: 700;
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -363,7 +365,7 @@
 .rowText strong {
   overflow: hidden;
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -412,7 +414,7 @@
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .figures a {
@@ -425,15 +427,15 @@
 }
 
 .figures strong {
-  font-size: 20px;
-  font-weight: 800;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
 .figures span {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .quiet {
@@ -493,7 +495,7 @@
   color: var(--sx-accent);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
   transition: transform var(--sx-dur-fast) var(--sx-ease-out);
@@ -535,8 +537,8 @@
   border-radius: var(--sx-radius-pill);
   background: var(--sx-fill);
   color: var(--sx-muted);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -610,7 +612,7 @@
   inset: 0;
   display: flex;
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .swipeBack > span {
@@ -640,7 +642,7 @@
 /* Late first, in red. */
 .taskMeta [data-late-time] {
   color: var(--sx-bad);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 /* An empty block: one line, and the next thing to do. */
@@ -654,7 +656,7 @@
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .nextAction {
@@ -663,7 +665,7 @@
   gap: 2px;
   min-height: 44px;
   color: var(--sx-accent);
-  font-weight: 700;
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -682,7 +684,7 @@
   background: var(--sx-fill);
   color: var(--sx-ink);
   font: inherit;
-  font-weight: 650;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
 }

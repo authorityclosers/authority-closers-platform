@@ -10,17 +10,17 @@
 .section h2 {
   margin: 0;
   color: var(--lx-ink);
-  font-size: clamp(20px, 2.6vw, 27px);
+  font-size: var(--sx-text-xl);
   letter-spacing: -0.035em;
-  line-height: 1.2;
+  line-height: var(--sx-leading-28);
 }
 
 .note {
   max-width: 680px;
   margin: 8px 0 0;
   color: var(--lx-ink-3);
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 .grid {
@@ -66,9 +66,9 @@
   align-items: center;
   gap: 8px;
   color: var(--lx-ink);
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.45;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
   cursor: pointer;
 }
 
@@ -76,7 +76,7 @@
   margin-left: auto;
   color: var(--lx-ink-3);
   content: "+";
-  font-size: 19px;
+  font-size: var(--sx-text-md);
   line-height: 1;
 }
 
@@ -91,17 +91,17 @@
   border-radius: 999px;
   background: var(--lx-paper-2);
   color: var(--lx-ink-3);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.25;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
 }
 
 .factor p {
   max-width: 630px;
   margin: 14px 0 0;
   color: var(--lx-ink-2);
-  font-size: 14px;
-  line-height: 1.7;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
   overflow-wrap: anywhere;
 }
 

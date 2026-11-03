@@ -87,7 +87,7 @@
   border-radius: 50%;
   background: var(--sx-accent-soft);
   color: var(--sx-accent);
-  font: 700 13px / 1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
   font-variant-numeric: tabular-nums;
 }
 
@@ -107,7 +107,7 @@
 .pillarSub {
   margin: 0;
   color: var(--sx-muted);
-  font: 400 var(--sx-text-sm) / 1.45 var(--lx-font-ui);
+  font: 400 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
 }
 
 .pillarAside {
@@ -128,7 +128,7 @@
   border-radius: var(--sx-radius-md);
   background: var(--sx-surface);
   color: var(--sx-ink-2);
-  font: 400 var(--sx-text-md) / 1.55 var(--lx-font-ui);
+  font: 400 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
 }
 
 .card[data-emphasis] {
@@ -155,7 +155,7 @@
   min-height: 20px;
   margin: 0;
   color: var(--sx-muted);
-  font: 600 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .cardIcon {
@@ -189,7 +189,7 @@
   border-radius: var(--lx-radius-pill);
   background: var(--sx-accent-soft);
   color: var(--sx-accent);
-  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   vertical-align: middle;
@@ -232,7 +232,7 @@
 
 .time {
   color: var(--sx-muted);
-  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -265,18 +265,18 @@
   padding: 0;
   border: 0;
   color: var(--sx-ink);
-  font: 400 var(--sx-text-md) / 1.55 var(--lx-font-ui);
+  font: 400 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
   overflow-wrap: anywhere;
 }
 
 .quote[data-size="lg"] .quoteText {
-  font-size: 15px;
+  font-size: var(--sx-text-md);
 }
 
 .quoteMark {
   margin-right: 1px;
   color: var(--sx-accent);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .quoteBy {
@@ -285,12 +285,12 @@
   align-items: center;
   gap: 6px;
   color: var(--sx-muted);
-  font: 400 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+  font: 400 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .quoteName {
   color: var(--sx-ink-2);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .quoteRole {
@@ -317,19 +317,19 @@
   border-radius: var(--lx-radius-pill);
   background: color-mix(in oklab, var(--tone) 12%, transparent);
   color: var(--tone);
-  font: 650 var(--sx-text-md) / 1 var(--lx-font-ui);
+  font: 500 var(--sx-text-md) / 1 var(--lx-font-ui);
   white-space: nowrap;
 }
 
 .outcome[data-size="lg"] .outcomeStatus {
   height: 32px;
   padding: 0 14px 0 11px;
-  font-size: 15px;
+  font-size: var(--sx-text-md);
 }
 
 .outcomeOrigin {
   color: var(--sx-muted);
-  font: 400 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+  font: 400 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 /* ---------- Measured figures ---------- */
@@ -382,13 +382,13 @@
 
 .metricLabel {
   color: var(--sx-ink-2);
-  font: 500 var(--sx-text-sm) / 1.35 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
 }
 
 .metricNote {
   margin: 0;
   color: var(--sx-muted);
-  font: 400 var(--sx-text-xs) / 1.35 var(--lx-font-ui);
+  font: 400 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .metricVisual {
@@ -414,7 +414,7 @@
   justify-content: space-between;
   gap: 2px 8px;
   color: var(--sx-muted);
-  font: 400 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+  font: 400 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .splitLabels > span {
@@ -430,7 +430,7 @@
 
 .splitLabels b {
   color: var(--sx-ink);
-  font-weight: 650;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -489,7 +489,7 @@
 .dialCentre {
   position: absolute;
   color: var(--sx-ink);
-  font: 650 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
   font-variant-numeric: tabular-nums;
 }
 
@@ -500,7 +500,7 @@
   align-items: center;
   gap: 5px;
   color: var(--tone);
-  font: 600 var(--sx-text-xs) / 1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   white-space: nowrap;
 }
 
@@ -515,7 +515,7 @@
   align-items: center;
   gap: 6px;
   color: var(--sx-ink-2);
-  font: 600 var(--sx-text-sm) / 1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
   white-space: nowrap;
 }
 
@@ -541,7 +541,7 @@
   gap: 4px 16px;
   margin: 0;
   color: var(--sx-muted);
-  font: 400 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+  font: 400 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .legend > span {
@@ -789,7 +789,7 @@ button.pin:focus-visible {
 /* Whole words only; a word longer than its block is hyphenated, never cut. */
 .stageText strong {
   color: var(--sx-ink);
-  font: 600 var(--sx-text-sm) / 1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
   overflow-wrap: normal;
   word-break: normal;
   hyphens: auto;
@@ -797,7 +797,7 @@ button.pin:focus-visible {
 
 .stageText > span {
   color: var(--sx-muted);
-  font: 400 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+  font: 400 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   font-variant-numeric: tabular-nums;
 }
 
@@ -940,7 +940,7 @@ button.pin:focus-visible {
 
 .stepLabel {
   color: var(--sx-muted);
-  font: 600 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .steps > li[data-turn] .stepLabel {
@@ -949,7 +949,7 @@ button.pin:focus-visible {
 
 .stepText {
   color: var(--sx-ink-2);
-  font: 400 var(--sx-text-sm) / 1.5 var(--lx-font-ui);
+  font: 400 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
 }
 
 .stepText > p {
@@ -1007,12 +1007,12 @@ button.pin:focus-visible {
 
 .qualityWord {
   color: var(--sx-ink);
-  font: 650 var(--sx-text-sm) / 1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
 }
 
 .qualityMeaning {
   color: var(--sx-muted);
-  font: 400 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+  font: 400 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .strip {
@@ -1038,7 +1038,7 @@ button.pin:focus-visible {
 
 .strip dt {
   color: var(--sx-muted);
-  font: 400 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+  font: 400 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .strip dd {
@@ -1047,7 +1047,7 @@ button.pin:focus-visible {
   gap: 6px;
   margin: 0;
   color: var(--sx-ink);
-  font: 600 var(--sx-text-sm) / 1.4 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
   overflow-wrap: anywhere;
 }
 
@@ -1108,7 +1108,7 @@ button.pin:focus-visible {
 
 .findingText {
   color: var(--sx-ink-2);
-  font: 400 var(--sx-text-md) / 1.55 var(--lx-font-ui);
+  font: 400 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
 }
 
 .findingText > p {
@@ -1127,7 +1127,7 @@ button.pin:focus-visible {
   padding-top: 8px;
   border-top: 1px solid var(--sx-line);
   color: var(--sx-ink-2);
-  font: 400 var(--sx-text-sm) / 1.5 var(--lx-font-ui);
+  font: 400 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
 }
 
 .why p {
@@ -1136,7 +1136,7 @@ button.pin:focus-visible {
 
 .whyLabel {
   color: var(--sx-muted);
-  font: 600 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .momentHead {
@@ -1168,7 +1168,7 @@ button.pin:focus-visible {
   min-height: 44px;
   padding: 4px 16px;
   color: var(--sx-ink);
-  font: 500 var(--sx-text-md) / 1.35 var(--lx-font-ui);
+  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
   list-style: none;
   cursor: pointer;
 }
@@ -1204,7 +1204,7 @@ button.pin:focus-visible {
   gap: 8px;
   padding: 0 16px 14px;
   color: var(--sx-ink-2);
-  font: 400 var(--sx-text-sm) / 1.55 var(--lx-font-ui);
+  font: 400 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
 }
 
 .skillBody p {
@@ -1243,13 +1243,13 @@ button.pin:focus-visible {
   gap: 6px;
   min-height: 22px;
   color: var(--sx-muted);
-  font: 500 var(--sx-text-sm) / 1.4 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
 }
 
 .facts dd {
   margin: 0;
   color: var(--sx-ink);
-  font: 400 var(--sx-text-md) / 1.55 var(--lx-font-ui);
+  font: 400 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
 }
 
 @media (max-width: 600px) {

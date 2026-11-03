@@ -19,7 +19,8 @@ it("tells the phone app the page is up, once it has started", () => {
   document.body.append(host);
   const root = createRoot(host);
   act(() => root.render(<WebReady />));
-  expect(postMessage).toHaveBeenCalledTimes(1);
+  // First the signal; then the app's status, for its font size.
+  expect(postMessage).toHaveBeenCalled();
   const message = JSON.parse(postMessage.mock.calls[0][0] as string) as {
     method: string;
     id: string;

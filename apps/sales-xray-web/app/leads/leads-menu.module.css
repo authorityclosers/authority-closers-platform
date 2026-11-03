@@ -8,7 +8,7 @@
   margin: 0 0 8px 12px;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .groups ul > li > button {
@@ -42,7 +42,7 @@
 
 .groups small {
   font-size: var(--sx-text-sm);
-  line-height: 1.35;
+  line-height: var(--sx-leading-20);
 }
 
 @media (prefers-reduced-motion: reduce) {

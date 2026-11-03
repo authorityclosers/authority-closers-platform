@@ -3,7 +3,7 @@
     flex-wrap: nowrap;
     gap: 12px;
     padding: 4px 12px;
-    font-size: 11px;
+    font-size: var(--sx-text-2xs);
   }
 
   .navigation > div:first-child {
@@ -14,12 +14,12 @@
 
   .navigation > div:first-child small {
     display: inline;
-    font-size: 10px;
+    font-size: var(--sx-text-2xs);
   }
 
   .navigation > div:last-child {
     gap: 8px;
-    font-size: 10px;
+    font-size: var(--sx-text-2xs);
     white-space: nowrap;
   }
 }
@@ -45,7 +45,7 @@
   border-color: #14958e;
   background: #e7f8f5;
   color: #08776e;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .modeSwitch a {
@@ -113,8 +113,8 @@
   border-radius: 999px;
   background: #f0fbf8;
   color: #075f5b;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
   transform: translateX(-50%);
   white-space: nowrap;
 }

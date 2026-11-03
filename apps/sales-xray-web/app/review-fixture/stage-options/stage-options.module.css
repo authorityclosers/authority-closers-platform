@@ -50,7 +50,7 @@
   background: var(--lx-teal-soft);
   color: var(--lx-strength-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .path {
@@ -68,7 +68,7 @@
   background: var(--sx-fill-soft);
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .path li[data-kind="new"] {

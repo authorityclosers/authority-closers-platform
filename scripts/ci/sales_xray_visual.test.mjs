@@ -18,6 +18,11 @@ import {
   viewports,
   waitForFixtureServer,
 } from "./sales_xray_visual.mjs";
+import {
+  EMPTY_FIELDS,
+  runPhoneChecks,
+  runTextScale,
+} from "./sales_xray_dom_checks.mjs";
 
 test("retries a fixture fetch the dev server dropped, and nothing else", async () => {
   const route = (failures) => {
@@ -263,5 +268,65 @@ test("browser measures actual overflow, console, uncaught and critical axe viola
     await browser?.close();
     await new Promise((done) => server.close(done));
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("the framework's phone renders are in the set: 360 light and 393 dark, as a touch phone", () => {
+  const phones = viewports.filter((viewport) => viewport.touch);
+  assert.deepEqual(
+    phones.map(({ width, height, scheme }) => [width, height, scheme]),
+    [
+      [360, 780, "light"],
+      [393, 851, "dark"],
+    ],
+  );
+  const row = unavailable(frames[0], phones[0]);
+  assert.equal(row.id, "shell-360x780");
+  assert.deepEqual(row.viewport, { width: 360, height: 780 });
+  for (const key of Object.keys(EMPTY_FIELDS)) assert.equal(row[key], null);
+});
+
+test("the phone checks find each fault, and say nothing they cannot measure", async () => {
+  const browser = await chromium.launch();
+  try {
+    const context = await browser.newContext({
+      viewport: { width: 360, height: 780 },
+      hasTouch: true,
+      isMobile: true,
+    });
+    const page = await context.newPage();
+    await page.setContent(`<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      body{margin:0;font:16px sans-serif;background:#fff;color:#111}
+      #fade{overflow-x:auto;height:60px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}
+      #fade div{width:900px;height:40px;background:#ddd}
+      .stack{display:flex;flex-direction:column;gap:8px;padding:8px 16px}
+      .seg{display:flex;gap:4px}
+      .seg button{width:70px;height:36px}
+      #lone{width:96px;height:36px}
+      h2.big{font-size:26px;margin:8px 16px}
+      #tiny{width:30px;height:30px;margin:8px 16px}
+      #hero{font-size:40px;color:#aaa;margin:8px 16px}
+      #clip{width:120px;height:24px;overflow:hidden;margin:0 16px}
+    </style></head><body><main>
+      <div id="fade"><div></div></div>
+      <div class="stack"><div class="seg"><button>Team</button><button>Me</button></div><div><button id="lone">Controls</button></div></div>
+      <h2 class="big">Today</h2><button style="margin:0 16px;height:48px;width:120px">Go</button>
+      <button id="tiny" aria-label="Close"></button>
+      <p id="hero">1,284</p><p id="clip">A long line of fictional text</p>
+    </main></body></html>`);
+    const row = { ...EMPTY_FIELDS };
+    await runPhoneChecks(page, row);
+    assert.ok(row.design_edge_mask_count >= 1);
+    assert.ok(row.design_dead_row_count >= 1);
+    assert.ok(row.design_label_heading_count >= 1);
+    assert.ok(row.target_under_48_count >= 1);
+    assert.equal(row.hero_contrast_fail_count, 1);
+    // no type tokens on this page: the raw-value check is not judged, never guessed
+    assert.equal(row.raw_value_count, null);
+    assert.ok(!JSON.stringify(row.dom_findings).includes("fictional"));
+    await runTextScale(page, row);
+    assert.ok(row.text_scale2_clipped_count >= 1);
+  } finally {
+    await browser.close();
   }
 });

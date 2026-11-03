@@ -57,7 +57,7 @@
   margin: 0;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
-  line-height: 1.5;
+  line-height: var(--sx-leading-20);
 }
 
 /* The two documents, as tap-sized buttons that open in a new tab. */
@@ -81,7 +81,7 @@
   background: var(--sx-surface);
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -112,7 +112,7 @@
   background: var(--sx-sunken);
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
   cursor: pointer;
 }
 

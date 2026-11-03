@@ -40,7 +40,7 @@
   gap: 2px;
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
   text-decoration: none;
   touch-action: manipulation;
 }
@@ -55,7 +55,7 @@
   background: none;
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -77,7 +77,7 @@
   padding: 10px 16px 4px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .row {
@@ -111,7 +111,7 @@
   overflow: hidden;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 700;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -154,7 +154,7 @@
   background: var(--sx-accent-soft);
   color: var(--sx-accent);
   font-size: var(--sx-text-xs);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .skeleton {

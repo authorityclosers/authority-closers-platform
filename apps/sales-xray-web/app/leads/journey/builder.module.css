@@ -61,15 +61,15 @@
 .head small {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .head h2 {
   scroll-margin-top: 96px;
   color: var(--sx-ink);
-  font-size: var(--sx-text-lg, 20px);
-  font-weight: 700;
-  line-height: 1.25;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
 }
 
 .head p {
@@ -145,7 +145,7 @@
 .kindText strong {
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .kindText small {
@@ -160,7 +160,7 @@
   background: var(--sx-fill-strong, var(--sx-fill-soft));
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 700;
+  font-weight: 500;
   vertical-align: 1px;
 }
 
@@ -196,7 +196,7 @@
   margin-top: 8px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .stage {
@@ -275,7 +275,7 @@ button.stageButton:focus-visible {
 .stageText strong {
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .stageText small {
@@ -307,7 +307,7 @@ button.stageButton:focus-visible {
   min-width: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 650;
+  font-weight: 500;
   overflow-wrap: anywhere;
 }
 

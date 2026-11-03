@@ -19,8 +19,8 @@
 .title {
   margin: 0;
   color: var(--lx-ink);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .summary {
@@ -77,7 +77,7 @@
   padding: 0;
   list-style: none;
   color: var(--lx-ink-3);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -122,7 +122,7 @@
   min-width: 0;
   margin: 0;
   color: var(--lx-muted);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
   overflow-wrap: anywhere;
 }
 
@@ -146,8 +146,8 @@
   color: var(--lx-ink);
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -166,8 +166,8 @@
   padding: 10px 14px;
   border-bottom: 1px solid var(--lx-line-soft);
   color: var(--lx-muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .holders {
@@ -198,14 +198,14 @@
   min-width: 0;
   overflow: hidden;
   color: var(--lx-ink);
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .holder small {
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -215,9 +215,9 @@
   border-radius: var(--lx-radius-xs);
   background: var(--lx-sunken);
   color: var(--lx-ink-3);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 18px;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
 }
 
 .skeletonLine {

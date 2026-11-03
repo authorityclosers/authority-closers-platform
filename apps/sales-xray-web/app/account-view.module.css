@@ -22,8 +22,8 @@
 .header p {
   margin: 6px 0 0;
   color: var(--lx-muted);
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
 }
 
 /* Settings frame: section list on the left, one pane of rows on the right. */
@@ -83,8 +83,8 @@
   border-radius: 50%;
   background: var(--lx-teal-soft);
   color: var(--lx-strength-ink);
-  font-size: 14px;
-  font-weight: 800;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
 }
 
 .navWho {
@@ -101,8 +101,8 @@
   border-radius: 50%;
   background: var(--lx-teal-soft);
   color: var(--lx-strength-ink);
-  font-size: 24px;
-  font-weight: 800;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
 }
 
 .navWho h1,
@@ -110,18 +110,18 @@
   margin: 0;
   color: var(--lx-ink);
   font-family: var(--lx-font-display);
-  font-size: 16px;
-  font-weight: 800;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   letter-spacing: -0.01em;
-  line-height: 1.2;
+  line-height: var(--sx-leading-24);
 }
 
 .navWho p {
   margin: 2px 0 0;
   overflow: hidden;
   color: var(--lx-muted);
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -190,8 +190,8 @@
   background: transparent;
   color: var(--lx-ink-3);
   font: inherit;
-  font-size: 14px;
-  font-weight: 650;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
   transition:
@@ -350,8 +350,8 @@
 .paneHead h2 {
   margin: 0;
   color: var(--lx-ink);
-  font-size: 18px;
-  font-weight: 750;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   letter-spacing: -0.01em;
 }
 
@@ -377,14 +377,14 @@
 
 .rowLabel {
   color: var(--lx-ink);
-  font-size: 14px;
-  font-weight: 650;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
 }
 
 .rowHint {
   color: var(--lx-muted);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 
 .rowControl {
@@ -412,7 +412,7 @@
   min-width: 0;
   margin: 0;
   color: var(--lx-ink-3);
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
   text-align: right;
   overflow-wrap: anywhere;
 }
@@ -445,15 +445,15 @@
 .panel h2 {
   margin: 0;
   color: var(--lx-ink);
-  font-size: 17px;
-  font-weight: 750;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
 }
 
 .badge {
   padding: 1px 8px;
   border-radius: var(--lx-radius-pill);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .badge[data-tone="ok"] {
@@ -477,8 +477,8 @@
   display: grid;
   gap: 6px;
   color: var(--lx-ink-3);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .form input {
@@ -490,7 +490,7 @@
   background: var(--lx-surface);
   color: var(--lx-ink);
   font: inherit;
-  font-size: 14.5px;
+  font-size: var(--sx-text-sm);
   font-weight: 500;
 }
 
@@ -521,8 +521,8 @@
   border: 1px solid transparent;
   border-radius: var(--lx-radius-pill);
   font: inherit;
-  font-size: 13.5px;
-  font-weight: 700;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
@@ -590,8 +590,8 @@
 .muted {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 13.5px;
-  line-height: 1.5;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 .pane .muted[role="status"] {
@@ -609,7 +609,7 @@
 .errorText {
   margin: 0;
   color: var(--lx-danger);
-  font-size: 13.5px;
+  font-size: var(--sx-text-sm);
 }
 
 .allowance {
@@ -623,8 +623,8 @@
   margin: 0;
   color: var(--lx-ink);
   font-family: var(--lx-font-display);
-  font-size: 24px;
-  font-weight: 800;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
   letter-spacing: -0.02em;
 }
 
@@ -711,7 +711,7 @@
     padding: 0 12px;
     border-radius: 12px;
     background: var(--lx-paper-2, var(--lx-sunken));
-    font-size: 15px;
+    font-size: var(--sx-text-md);
   }
 
   .tab[aria-selected="true"] {
@@ -834,7 +834,7 @@
 .billingCardHead h3 {
   margin: 0;
   color: var(--lx-ink);
-  font: 700 16px/1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
 }
 
 .topUpsMiniGrid {
@@ -859,13 +859,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font: 700 13px/1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   color: var(--lx-ink);
 }
 
 .topUpMiniPrice {
   color: var(--lx-teal);
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .invoiceTableWrap {
@@ -878,7 +878,7 @@
 .invoiceTable {
   width: 100%;
   border-collapse: collapse;
-  font: 500 12.5px/1.4 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   text-align: left;
 }
 
@@ -890,7 +890,7 @@
 
 .invoiceTable th {
   color: var(--lx-muted);
-  font-weight: 600;
+  font-weight: 500;
   background: var(--lx-paper-2);
 }
 
@@ -990,7 +990,7 @@
   .invoiceTable td::before {
     content: attr(data-label);
     color: var(--lx-muted);
-    font-weight: 600;
+    font-weight: 500;
     text-align: left;
   }
 }

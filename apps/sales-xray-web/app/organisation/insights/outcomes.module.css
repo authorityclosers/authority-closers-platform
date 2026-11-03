@@ -13,15 +13,15 @@
 .story h2,
 .card h2 {
   margin: 0;
-  font-size: 22px;
-  line-height: 1.25;
+  font-size: var(--sx-text-xl);
+  line-height: var(--sx-leading-28);
   letter-spacing: var(--sx-tracking-title);
 }
 .story .eyebrow {
   margin: 0 0 8px;
   color: var(--sx-ink);
-  font-size: 12px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 .storyNumbers {
   display: flex;
@@ -31,25 +31,25 @@
 }
 .storyNumbers > strong {
   font-family: var(--lx-font-display);
-  font-size: clamp(36px, 7vw, 52px);
+  font-size: var(--sx-text-3xl);
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 .storyNumbers small {
   display: block;
   margin-top: 6px;
-  font: 500 12px var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) var(--lx-font-ui);
 }
 .storyNumbers p {
   color: var(--sx-ink-2);
-  font-size: 13px;
-  line-height: 1.7;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 .caption,
 .coverage {
   color: var(--sx-muted);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 .grid {
   display: grid;
@@ -62,7 +62,7 @@
   gap: 14px;
 }
 .card h2 {
-  font-size: 19px;
+  font-size: var(--sx-text-md);
 }
 .ringBody {
   display: flex;
@@ -104,17 +104,17 @@
   justify-content: center;
 }
 .ring b {
-  font-size: 30px;
+  font-size: var(--sx-text-2xl);
   letter-spacing: -1px;
 }
 .ring small {
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   color: var(--sx-muted);
 }
 .key {
   flex: 1;
   margin: 0;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .key div {
   padding: 10px 0;
@@ -123,7 +123,7 @@
 }
 .key dd {
   margin: 0;
-  font-weight: 700;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 .key dt {
@@ -153,7 +153,7 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .outcomeLabel b {
   white-space: nowrap;
@@ -181,10 +181,10 @@
 }
 .funnel text {
   fill: var(--sx-ink);
-  font: 12px var(--lx-font-ui);
+  font: var(--sx-text-xs) var(--lx-font-ui);
 }
 .funnel .svgCount {
-  font-weight: 750;
+  font-weight: 500;
 }
 .ribbon,
 .otherRibbon {
@@ -221,7 +221,7 @@
     padding: 16px;
   }
   .story h2 {
-    font-size: 21px;
+    font-size: var(--sx-text-xl);
   }
   .storyNumbers {
     gap: 16px;
@@ -239,7 +239,7 @@
   margin: 10px 0;
 }
 .storyNumbers > strong {
-  font-size: 28px;
+  font-size: var(--sx-text-2xl);
   white-space: nowrap;
 }
 .storyNumbers small {
@@ -247,8 +247,8 @@
   margin-left: 6px;
 }
 .storyNumbers p {
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 .key {
   display: grid;
@@ -333,8 +333,8 @@
   gap: 12px;
   margin: 0 0 2px;
   color: var(--sx-muted);
-  font-size: 12px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 .endingHead b {
   font-variant-numeric: tabular-nums;
@@ -354,7 +354,7 @@
   background: none;
   color: var(--sx-ink);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
   text-align: left;
   cursor: pointer;
   touch-action: manipulation;
@@ -370,12 +370,12 @@
   white-space: nowrap;
 }
 .endings button > b {
-  font-size: 15px;
+  font-size: var(--sx-text-md);
   font-variant-numeric: tabular-nums;
 }
 .endings button > small {
   color: var(--sx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -404,7 +404,7 @@
   border: 0;
   background: none;
   color: color-mix(in oklab, var(--sx-accent) 80%, var(--lx-ink));
-  font: 600 12px var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) var(--lx-font-ui);
   cursor: pointer;
 }
 .evidence:focus-visible {

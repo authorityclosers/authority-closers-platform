@@ -48,7 +48,7 @@
   color: var(--sx-muted);
   font: inherit;
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 /* Touch screens have no Escape key: the sheet closes by swipe or Back. */
@@ -72,7 +72,7 @@
   padding: 12px 10px 4px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .option {
@@ -147,7 +147,7 @@
 .label {
   overflow: hidden;
   font-size: var(--sx-text-md);
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

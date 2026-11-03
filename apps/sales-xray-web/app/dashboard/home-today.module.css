@@ -80,7 +80,7 @@
   gap: 6px;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 /* Needs you: the number goes red and a small dot sits by the name. */
@@ -96,8 +96,8 @@
 .value {
   color: var(--sx-ink);
   font: var(--sx-text-kpi);
-  font-size: 32px;
-  font-weight: 750;
+  font-size: var(--sx-text-3xl);
+  font-weight: 500;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
@@ -151,7 +151,7 @@
   min-height: 44px;
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -180,7 +180,7 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 750;
+  font-weight: 500;
 }
 
 .workHead > :last-child:not(h2) {
@@ -211,14 +211,14 @@
 .figures dt {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .figures dd {
   margin: 0;
   color: var(--sx-ink);
-  font-size: 22px;
-  font-weight: 750;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -259,14 +259,14 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 750;
+  font-weight: 500;
 }
 
 .countdownHead span,
 .countdownFigure span {
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .countdownFigure {
@@ -278,9 +278,9 @@
 
 .countdownFigure strong {
   color: var(--sx-ink);
-  font-size: 34px;
-  font-weight: 800;
-  line-height: 1.1;
+  font-size: var(--sx-text-3xl);
+  font-weight: 500;
+  line-height: var(--sx-leading-36);
   font-variant-numeric: tabular-nums;
 }
 
@@ -313,7 +313,7 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 750;
+  font-weight: 500;
 }
 
 .breakList {
@@ -351,7 +351,7 @@
 
 .breakRow strong {
   flex: none;
-  font-weight: 750;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -381,7 +381,7 @@
   min-height: 44px;
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
   text-decoration: none;
 }
 

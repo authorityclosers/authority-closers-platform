@@ -12,7 +12,8 @@
   min-height: 44px;
   display: inline-flex;
   align-items: center;
-  text-decoration: underline;
+  color: var(--sx-accent);
+  text-decoration: none;
 }
 .rows {
   list-style: none;
@@ -57,7 +58,7 @@
   min-height: 44px;
   padding: 0 12px;
   color: var(--sx-ink);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
 }
 /* The phone's last recording, or where to check without a phone. */
@@ -72,10 +73,10 @@
   padding: 0 4px;
   border: 0;
   background: none;
-  color: var(--sx-ink);
+  color: var(--sx-accent);
   font: inherit;
-  font-weight: 600;
-  text-decoration: underline;
+  font-weight: 500;
+  text-decoration: none;
   vertical-align: middle;
   cursor: pointer;
 }
@@ -134,7 +135,8 @@
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  text-decoration: underline;
+  color: var(--sx-accent);
+  text-decoration: none;
 }
 .steps {
   display: inline-flex;
@@ -167,14 +169,14 @@
   padding: 0;
   border: 0;
   background: none;
-  color: inherit;
+  color: var(--sx-accent);
   font: inherit;
-  text-decoration: underline;
+  text-decoration: none;
   cursor: pointer;
 }
 .note {
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
 }

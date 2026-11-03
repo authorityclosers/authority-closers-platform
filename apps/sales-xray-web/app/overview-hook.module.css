@@ -38,8 +38,8 @@
   border-radius: 99px;
   background: var(--lx-sunken);
   color: var(--lx-ink-3);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .outcome[data-tone="good"] {
@@ -66,8 +66,8 @@
   border-radius: 99px;
   background: var(--lx-surface);
   color: var(--lx-ink);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .with {
@@ -79,10 +79,10 @@
   max-width: 980px;
   margin: 0;
   color: var(--lx-ink);
-  font-size: clamp(20px, 1.8vw, 26px);
-  font-weight: 700;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
   letter-spacing: -0.015em;
-  line-height: 1.28;
+  line-height: var(--sx-leading-28);
 }
 
 .headline span {
@@ -100,8 +100,8 @@
   max-width: 980px;
   margin: 0;
   color: var(--lx-ink-3);
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 /* ---------- How the call went ---------- */
@@ -124,7 +124,7 @@
 
 .flowHead b {
   color: var(--lx-ink);
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
 }
 
 .delta {
@@ -135,12 +135,12 @@
   border-radius: 99px;
   background: var(--lx-sunken);
   color: var(--lx-ink-3);
-  font-size: 12.5px;
+  font-size: var(--sx-text-xs);
 }
 
 .delta strong {
   color: var(--lx-ink);
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
   font-variant-numeric: tabular-nums;
 }
 
@@ -230,8 +230,8 @@
   border-radius: 99px;
   background: var(--lx-warning);
   color: var(--lx-on-teal);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
   white-space: nowrap;
   transform: translateX(-50%);
   box-shadow: var(--lx-shadow-1);
@@ -269,8 +269,8 @@
   background: var(--lx-surface);
   box-shadow: var(--lx-shadow-2);
   color: var(--lx-ink);
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
   pointer-events: none;
   transform: translate(-50%, -110%);
   white-space: nowrap;
@@ -283,7 +283,7 @@
   left: 0;
   height: 14px;
   color: var(--lx-muted);
-  font-size: 10.5px;
+  font-size: var(--sx-text-2xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -331,14 +331,14 @@
 
 .phases small {
   color: var(--lx-ink-3);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
 }
 
 .phases li > span {
   color: var(--lx-ink);
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 
 .phases .play {
@@ -368,13 +368,13 @@
 .section h3 {
   margin: 0;
   color: var(--lx-ink);
-  font-size: 16px;
+  font-size: var(--sx-text-md);
   letter-spacing: -0.01em;
 }
 
 .section header small {
   color: var(--lx-muted);
-  font-size: 12.5px;
+  font-size: var(--sx-text-xs);
 }
 
 .more {
@@ -386,7 +386,7 @@
   border-radius: 8px;
   background: transparent;
   color: var(--lx-teal);
-  font: 600 12.5px/1 var(--lx-font-ui, inherit);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui, inherit);
   cursor: pointer;
 }
 
@@ -403,7 +403,7 @@
   border-radius: 99px;
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
-  font: 650 11.5px/1.6 var(--lx-font-ui, inherit);
+  font: 500 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition:
@@ -512,13 +512,13 @@
   align-items: center;
   gap: 5px;
   color: var(--tone);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .tag em {
   color: var(--lx-muted);
-  font-size: 11.5px;
+  font-size: var(--sx-text-2xs);
   font-style: normal;
   font-weight: 500;
 }
@@ -530,8 +530,8 @@
 
 .clipTitle {
   color: var(--lx-ink);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 .who {
@@ -539,8 +539,8 @@
   align-items: flex-start;
   gap: 7px;
   color: var(--lx-ink-3);
-  font-size: 12.5px;
-  line-height: 1.45;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 
 .who q {
@@ -555,7 +555,7 @@
   align-items: center;
   gap: 8px;
   color: var(--lx-muted);
-  font-size: 11.5px;
+  font-size: var(--sx-text-2xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -605,8 +605,8 @@
   border-radius: 99px;
   background: color-mix(in srgb, var(--lx-objection) 12%, var(--lx-surface));
   color: var(--lx-objection);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .msg {
@@ -639,16 +639,16 @@
 
 .bubble small {
   color: var(--lx-muted);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
 }
 
 .bubble q {
   display: -webkit-box;
   overflow: hidden;
   color: var(--lx-ink);
-  font-size: 13.5px;
-  line-height: 1.5;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
 }
@@ -675,8 +675,8 @@
   align-items: center;
   gap: 6px;
   color: var(--lx-teal);
-  font-size: 12.5px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .copy {
@@ -689,7 +689,7 @@
   border-radius: 99px;
   background: var(--lx-surface);
   color: var(--lx-ink-3);
-  font: 600 11.5px/1 var(--lx-font-ui, inherit);
+  font: 500 var(--sx-text-2xs) / 1 var(--lx-font-ui, inherit);
   cursor: pointer;
 }
 
@@ -700,15 +700,15 @@
 
 .better q {
   color: var(--lx-ink);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.55;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
 }
 
 .why {
   color: var(--lx-ink-3);
-  font-size: 12.5px;
-  line-height: 1.5;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 
 /* ---------- Signals and next-call focus ---------- */
@@ -734,7 +734,7 @@
   border-radius: 12px;
   background: var(--lx-surface);
   color: var(--lx-ink-3);
-  font: 500 12.5px/1.35 var(--lx-font-ui, inherit);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
   text-align: left;
   cursor: pointer;
   transition:
@@ -750,8 +750,8 @@
 
 .chips b {
   color: var(--lx-ink);
-  font-size: 20px;
-  font-weight: 750;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -762,7 +762,7 @@
 .askRoles {
   align-items: center;
   color: var(--lx-teal);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .focus {
@@ -793,14 +793,14 @@
 }
 
 .focus b {
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 .focus small {
   opacity: 0.88;
-  font-size: 12.5px;
-  line-height: 1.45;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 
 /* ---------- Explore ---------- */
@@ -846,12 +846,12 @@
 }
 
 .door b {
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .door small {
   color: var(--lx-muted);
-  font-size: 11.5px;
+  font-size: var(--sx-text-2xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -996,13 +996,13 @@
 
 .phaseHead small {
   color: var(--lx-muted);
-  font-size: 10.5px;
-  font-weight: 700;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
 }
 
 .phaseHead b {
   color: var(--lx-ink);
-  font-size: 15px;
+  font-size: var(--sx-text-md);
   letter-spacing: -0.01em;
 }
 
@@ -1029,7 +1029,7 @@
   border-radius: 10px;
   background: var(--feel);
   color: var(--lx-on-teal);
-  font: 600 12.5px/1.2 var(--lx-font-ui, inherit);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
   text-align: left;
   cursor: pointer;
   box-shadow: 0 4px 12px color-mix(in srgb, var(--feel) 28%, transparent);
@@ -1121,7 +1121,7 @@
   align-items: center;
   gap: 4px;
   color: var(--feel);
-  font: 700 17px/1.15 var(--lx-font-ui, inherit);
+  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui, inherit);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
@@ -1134,7 +1134,7 @@
 .phases .stat small {
   overflow: hidden;
   color: var(--lx-muted);
-  font-size: 11.5px;
+  font-size: var(--sx-text-2xs);
   font-weight: 500;
   letter-spacing: normal;
   text-overflow: ellipsis;
@@ -1145,8 +1145,8 @@
 .phaseText {
   margin: 0;
   color: var(--lx-ink-2, var(--lx-ink));
-  font-size: 13.5px;
-  line-height: 1.6;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 /* The possible effect spans all three cards, under them. */
@@ -1160,8 +1160,8 @@
   border-radius: 12px;
   background: color-mix(in srgb, var(--feel) 7%, var(--lx-surface));
   color: var(--lx-ink-2, var(--lx-ink));
-  font-size: 13.5px;
-  line-height: 1.55;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 .effectRow svg {
@@ -1172,7 +1172,7 @@
 
 .effectRow b {
   color: var(--lx-ink);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 /* Emotes stand for what the report or the measurement says, not a feeling. */
@@ -1221,7 +1221,7 @@
 .verdictText {
   margin: 0;
   color: var(--lx-ink);
-  font: 550 16px/1.65 var(--lx-font-ui, inherit);
+  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui, inherit);
 }
 
 .verdictPair {
@@ -1238,8 +1238,8 @@
   border-radius: 12px;
   background: color-mix(in srgb, var(--tone) 9%, var(--lx-surface));
   color: var(--lx-ink-2, var(--lx-ink));
-  font-size: 13.5px;
-  line-height: 1.55;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 .verdictPair > span[data-tone="fix"] {
@@ -1251,20 +1251,20 @@
   align-items: center;
   gap: 6px;
   color: color-mix(in srgb, var(--tone) 80%, var(--lx-ink));
-  font: 700 12px/1.3 var(--lx-font-ui, inherit);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
 }
 
 .inShort summary {
   color: var(--lx-teal);
-  font: 650 12.5px/1.4 var(--lx-font-ui, inherit);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
   cursor: pointer;
 }
 
 .inShort p {
   margin: 8px 0 0;
   color: var(--lx-ink-2, var(--lx-ink));
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 /* Press feedback and touch-safe hover. */

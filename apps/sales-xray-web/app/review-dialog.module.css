@@ -83,26 +83,26 @@
   display: block;
   margin: 0 0 5px;
   color: var(--accent);
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.3;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
 }
 
 .heading h2 {
   margin: 0;
   color: #10263a;
-  font-size: clamp(21px, 3vw, 29px);
-  font-weight: 800;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
   letter-spacing: -0.025em;
-  line-height: 1.15;
+  line-height: var(--sx-leading-28);
   overflow-wrap: anywhere;
 }
 
 .heading p {
   margin: 7px 0 0;
   color: #536978;
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 .close {
@@ -116,7 +116,7 @@
   background: #fff;
   color: #172b3a;
   font: inherit;
-  font-size: 28px;
+  font-size: var(--sx-text-2xl);
   line-height: 1;
   cursor: pointer;
 }
@@ -177,8 +177,8 @@
   border: 1px solid #d5e1e2;
   border-radius: 11px;
   font: inherit;
-  font-size: 14px;
-  font-weight: 780;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -235,10 +235,10 @@
     height: 22px;
   }
   .heading p {
-    font-size: 12px;
+    font-size: var(--sx-text-xs);
   }
   .heading h2 {
-    font-size: 21px;
+    font-size: var(--sx-text-xl);
   }
 
   .body {

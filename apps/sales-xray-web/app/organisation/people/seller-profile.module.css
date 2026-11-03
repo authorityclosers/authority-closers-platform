@@ -110,7 +110,7 @@
   margin: 0;
   color: var(--lx-warning);
   font-size: var(--ds-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .overChange {
@@ -118,10 +118,9 @@
   padding: 0 4px;
   border: 0;
   background: none;
-  color: inherit;
+  color: var(--sx-accent);
   font: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -152,7 +151,7 @@
   border-color: var(--sx-accent);
 }
 .insights strong {
-  font-size: 22px;
+  font-size: var(--sx-text-xl);
   font-variant-numeric: tabular-nums;
 }
 .insights span {
@@ -171,7 +170,7 @@
 }
 .workload strong {
   color: var(--sx-ink);
-  font-size: 22px;
+  font-size: var(--sx-text-xl);
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }

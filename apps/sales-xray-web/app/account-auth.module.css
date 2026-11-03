@@ -139,8 +139,8 @@
 .storyCopy h2 {
   margin: 0 0 14px;
   font-family: var(--lx-font-display);
-  font-weight: 800;
-  font-size: clamp(38px, min(4.9vw, 8vh), 76px);
+  font-weight: 500;
+  font-size: var(--sx-text-3xl);
   line-height: 1;
   letter-spacing: -0.035em;
   color: var(--lx-film-text);
@@ -164,8 +164,8 @@
   max-width: 440px;
   margin: 0;
   color: var(--lx-film-text-2);
-  font-size: clamp(14px, 1.2vw, 17px);
-  line-height: 1.5;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
   animation: rise var(--lx-dur-develop) var(--lx-ease-move) 200ms both;
 }
 
@@ -299,8 +299,8 @@
   background: color-mix(in srgb, var(--lx-film-2) 82%, transparent);
   backdrop-filter: blur(8px);
   color: var(--lx-film-text);
-  font-size: 12px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   line-height: 1;
   white-space: nowrap;
   transform: translate(-50%, 6px) scale(0.92);
@@ -349,8 +349,8 @@
   border-radius: var(--lx-radius-pill);
   background: color-mix(in srgb, var(--lx-film-text) 4%, transparent);
   color: var(--lx-film-text-2);
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   transition:
     border-color var(--lx-dur-move) var(--lx-ease-quick),
     color var(--lx-dur-move) var(--lx-ease-quick);
@@ -368,7 +368,7 @@
   gap: 8px;
   margin: clamp(14px, 2.4vh, 22px) 0 0;
   color: var(--lx-film-text-3);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 .shared svg {
   flex: none;
@@ -404,8 +404,8 @@
   border-radius: var(--lx-radius-pill);
   background: var(--lx-surface);
   color: var(--lx-ink-3);
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   text-decoration: none;
   transition:
     color var(--lx-dur-quick) var(--lx-ease-quick),
@@ -467,9 +467,9 @@
 .card h1 {
   margin: 0 0 8px;
   font-family: var(--lx-font-display);
-  font-weight: 800;
-  font-size: clamp(28px, 2.5vw, 34px);
-  line-height: 1.08;
+  font-weight: 500;
+  font-size: var(--sx-text-2xl);
+  line-height: var(--sx-leading-36);
   letter-spacing: -0.03em;
   color: var(--lx-ink);
   text-wrap: balance;
@@ -477,8 +477,8 @@
 .lead {
   margin: 0 0 22px;
   color: var(--lx-muted);
-  font-size: 14.5px;
-  line-height: 1.5;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 .lead strong {
   color: var(--lx-ink);
@@ -498,8 +498,8 @@
   border-radius: var(--lx-radius-md);
   background: var(--lx-surface);
   color: var(--lx-ink-3);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
   cursor: pointer;
   transition:
     border-color var(--lx-dur-move) var(--lx-ease-quick),
@@ -561,7 +561,7 @@
 }
 .consent a {
   color: var(--lx-ink);
-  font-weight: 650;
+  font-weight: 500;
   text-decoration: underline;
   text-decoration-color: var(--lx-line-strong);
   text-underline-offset: 3px;
@@ -580,13 +580,13 @@
 .consentNudge {
   margin: -6px 0 12px;
   color: var(--lx-danger);
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 .consentHint {
   margin: 8px 0 0;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   text-align: center;
 }
 .form {
@@ -594,8 +594,8 @@
   gap: 10px;
 }
 .form > label {
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   color: var(--lx-ink-3);
 }
 .inputWrap {
@@ -626,7 +626,7 @@
   border: 0;
   background: transparent;
   color: var(--lx-ink);
-  font-size: 15px;
+  font-size: var(--sx-text-md);
   outline: none;
 }
 .inputWrap input::placeholder {
@@ -662,8 +662,8 @@
   min-height: 50px;
   overflow: hidden;
   border-radius: var(--lx-radius-md);
-  font-size: 14.5px;
-  font-weight: 700;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   transition:
     transform var(--lx-dur-quick) var(--lx-ease-quick),
     box-shadow var(--lx-dur-move) var(--lx-ease-quick),
@@ -749,8 +749,8 @@
   gap: 14px;
   margin: 16px 0;
   color: var(--lx-muted-2);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 .divider::before,
 .divider::after {
@@ -772,8 +772,8 @@
   border-radius: var(--lx-radius-pill);
   background: transparent;
   color: var(--lx-ink-3);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   transition: background var(--lx-dur-quick) var(--lx-ease-quick);
 }
 .password:hover:not(:disabled) {
@@ -793,8 +793,8 @@
   border-radius: 999px;
   background: var(--lx-teal-tint);
   color: var(--lx-ink-2);
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
   text-align: center;
 }
 .footnoteIcon {
@@ -805,7 +805,7 @@
 }
 .footnote strong {
   color: var(--lx-ink);
-  font-weight: 600;
+  font-weight: 500;
 }
 /* Problems show as a small card in the corner, never inside the form, so
    nothing on the card moves when one appears (owner rule, 29 Sep). */
@@ -826,8 +826,8 @@
   background: var(--lx-surface);
   box-shadow: var(--lx-shadow-2);
   color: var(--lx-ink);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
   overflow-wrap: anywhere;
   animation: errorIn var(--lx-dur-move) var(--lx-ease-move);
 }
@@ -851,7 +851,7 @@
   border-radius: 8px;
   background: transparent;
   color: var(--lx-muted);
-  font-size: 18px;
+  font-size: var(--sx-text-md);
   line-height: 1;
   cursor: pointer;
 }
@@ -876,7 +876,7 @@
   border-radius: var(--lx-radius-md);
   background: var(--lx-paper-2);
   color: var(--lx-ink-3);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 .noticeActions {
   display: flex;
@@ -896,8 +896,8 @@
   border-radius: var(--lx-radius-sm);
   background: var(--lx-teal);
   color: var(--lx-on-teal);
-  font-size: 12.5px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 .noticePrimary:hover:not(:disabled) {
   background: var(--lx-teal-hover);
@@ -912,8 +912,8 @@
   border: 0;
   background: none;
   color: var(--lx-ink-3);
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   text-underline-offset: 4px;
 }
 .textButton {
@@ -934,8 +934,8 @@
   padding-top: 14px;
   border-top: 1px solid var(--lx-line);
   color: var(--lx-muted);
-  font-size: 12.5px;
-  line-height: 1.4;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 .passwordLinks p {
   margin: 0;
@@ -943,7 +943,7 @@
 .passwordLinks a {
   width: fit-content;
   color: var(--lx-teal);
-  font-weight: 700;
+  font-weight: 500;
   text-decoration: none;
 }
 .passwordLinks a:hover {
@@ -960,7 +960,7 @@
   border: 1px solid var(--lx-line);
   border-radius: var(--lx-radius-md);
   background: var(--lx-paper-2);
-  font-size: 12.5px;
+  font-size: var(--sx-text-xs);
 }
 .popupActions p {
   width: 100%;
@@ -973,9 +973,8 @@
   border: 0;
   background: transparent;
   color: var(--lx-teal);
-  font-weight: 650;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  font-weight: 500;
+  text-decoration: none;
 }
 .auth[data-review-preview="true"] button:disabled {
   opacity: 1;
@@ -989,7 +988,7 @@
   background: var(--lx-surface);
   color: var(--lx-ink);
   font:
-    600 26px/1 ui-monospace,
+    500 var(--sx-text-2xl) / 1 ui-monospace,
     monospace !important;
   text-align: center;
   letter-spacing: 0.42em;
@@ -1007,8 +1006,8 @@
   min-height: 20px;
   margin: 0 0 4px;
   color: var(--lx-muted);
-  font-size: 12.5px;
-  line-height: 1.5;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 .confirmed {
   display: flex;
@@ -1016,7 +1015,7 @@
   gap: 12px;
   min-height: 120px;
   color: var(--lx-teal);
-  font-weight: 700;
+  font-weight: 500;
 }
 .confirmedMark {
   display: grid;
@@ -1046,17 +1045,17 @@
 .file strong {
   display: block;
   color: var(--lx-ink);
-  font-size: 13.5px;
-  line-height: 1.4;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
   overflow-wrap: anywhere;
 }
 .fileStatus {
   display: block;
   margin-top: 4px;
   color: var(--lx-teal);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.45;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
 }
 .fileIcon,
 .fileWave {
@@ -1245,7 +1244,7 @@
     padding-top: 0;
   }
   .storyCopy h2 {
-    font-size: clamp(28px, 7.4vw, 40px);
+    font-size: var(--sx-text-2xl);
     margin-bottom: 0;
   }
   .storyCopy p,
@@ -1260,7 +1259,7 @@
     margin: 14px 0 0;
   }
   .tag {
-    font-size: 12px;
+    font-size: var(--sx-text-xs);
     padding: 5px 9px 5px 8px;
   }
   .tag[data-row="1"] {
@@ -1309,8 +1308,8 @@
     margin-top: 12px;
   }
   .storyCopy h2 {
-    font-size: 22px;
-    line-height: 1.2;
+    font-size: var(--sx-text-xl);
+    line-height: var(--sx-leading-28);
   }
   .xray {
     display: none;

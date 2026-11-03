@@ -1,0 +1,12 @@
+/* One quiet line at the foot of Help & support: the build, for phone proof and
+   bug reports. */
+.line {
+  margin: 4px 0 0;
+  padding: 10px 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+  user-select: text;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}

@@ -26,7 +26,7 @@
 
 .callHead h1 {
   margin: 0;
-  font: 650 24px / 1.2 var(--lx-font-ui);
+  font: 500 var(--sx-text-xl) / var(--sx-leading-28) var(--lx-font-ui);
   letter-spacing: -0.02em;
 }
 
@@ -44,8 +44,8 @@
 
 .lead {
   color: var(--sx-ink);
-  font-size: 16px;
-  line-height: 1.55;
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
 }
 
 .leadMore {
@@ -65,7 +65,7 @@
 
 .nextStep {
   color: var(--sx-ink);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .note {
@@ -100,7 +100,7 @@
 .columnHead {
   margin: 0;
   color: var(--sx-ink-2);
-  font: 600 var(--sx-text-md) / 1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
 }
 
 .skills {
@@ -120,7 +120,7 @@
 .plays > span {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .dealHead {
@@ -151,7 +151,7 @@
   height: var(--sx-control-h);
   padding: 0 14px;
   border-radius: var(--sx-radius-sm);
-  font: 600 var(--sx-text-sm) / 1 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / 1 var(--lx-font-ui);
   text-decoration: none;
 }
 

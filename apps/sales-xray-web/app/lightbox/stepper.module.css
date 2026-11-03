@@ -8,8 +8,8 @@
   list-style: none;
   color: var(--lx-muted);
   font: var(--lx-text-ui);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .step {
@@ -34,7 +34,7 @@
   place-items: center;
   border: 1.5px solid var(--lx-line-strong);
   border-radius: 50%;
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 .step[data-step-state="current"] {

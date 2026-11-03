@@ -55,7 +55,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-md);
-  font-weight: 600;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
 }
@@ -111,7 +111,7 @@
   color: var(--sx-muted);
   font: inherit;
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
   touch-action: manipulation;
@@ -134,7 +134,7 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   text-align: center;
 }
 
@@ -160,7 +160,7 @@
   background: var(--sx-surface);
   color: var(--sx-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .leadRow {
@@ -180,7 +180,7 @@
   background: var(--sx-fill-soft);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .leadLines {
@@ -194,7 +194,7 @@
   overflow: hidden;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -334,7 +334,7 @@
   flex: 1;
   min-width: 0;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 @media (min-width: 900px) {
@@ -382,9 +382,9 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-md);
-  font-weight: 600;
+  font-weight: 500;
   text-align: left;
-  line-height: 44px;
+  line-height: var(--sx-leading-24);
   cursor: text;
 }
 
@@ -421,8 +421,8 @@
   background: var(--sx-surface);
   color: var(--sx-ink);
   font: inherit;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
 }
 
 /* ---------- add stage and recommended ---------- */
@@ -436,7 +436,7 @@
 .addLabel {
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .chips {
@@ -459,7 +459,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -485,7 +485,7 @@
   color: var(--sx-accent);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -507,7 +507,7 @@
   gap: 6px;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .field {
@@ -521,7 +521,7 @@
   background: var(--sx-surface);
   color: var(--sx-ink);
   font: inherit;
-  font-size: 16px;
+  font-size: var(--sx-text-md);
 }
 
 /* "Counts as": a compact two-column list of small chips (owner, 31 Oct 2026). */
@@ -546,7 +546,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
@@ -610,7 +610,7 @@
   color: var(--sx-muted);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -631,7 +631,7 @@
   color: var(--sx-bad);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -656,7 +656,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-md);
-  font-weight: 600;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
 }
@@ -714,7 +714,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-md);
-  font-weight: 600;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
 }
@@ -735,7 +735,7 @@
   color: var(--sx-accent);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -763,7 +763,7 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-title);
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.2;
 }
 
@@ -822,7 +822,7 @@
 .name {
   align-items: center;
   padding-block: 10px;
-  line-height: 1.3;
+  line-height: var(--sx-leading-24);
 }
 
 .name span {

@@ -32,20 +32,20 @@
 
 .panelTitle {
   margin: 0;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   letter-spacing: -0.005em;
-  line-height: 1.3;
+  line-height: var(--sx-leading-24);
   color: var(--theme-text, var(--lx-ink));
   overflow-wrap: anywhere;
 }
 
 .panelSubtitle {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
   font-weight: 400;
   color: var(--theme-text-muted, var(--lx-muted));
-  line-height: 1.4;
+  line-height: var(--sx-leading-16);
   overflow-wrap: anywhere;
 }
 
@@ -71,7 +71,7 @@
   border-radius: var(--theme-radius-control, 8px);
   background: transparent;
   color: var(--theme-text-muted, var(--lx-muted));
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
   font-weight: 500;
   text-decoration: none;
   transition:
@@ -97,8 +97,8 @@
   border-radius: 99px;
   background: var(--theme-surface-subtle, var(--lx-sunken));
   color: var(--theme-text-muted, var(--lx-muted));
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
 }
 
 .actionIcon {
@@ -118,7 +118,7 @@
   gap: 6px 12px;
   padding: 10px 18px;
   border-top: 1px solid var(--theme-border, var(--lx-line));
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   color: var(--theme-text-muted, var(--lx-muted));
 }
 
@@ -164,16 +164,16 @@
 
 .emptyTitle {
   margin: 0;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   color: var(--theme-text, var(--lx-ink));
 }
 
 .emptyDescription {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
   color: var(--theme-text-muted, var(--lx-muted));
-  line-height: 1.45;
+  line-height: var(--sx-leading-16);
 }
 
 .emptyAction {
