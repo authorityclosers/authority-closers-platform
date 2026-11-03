@@ -368,6 +368,29 @@ const NOT_NAMES = new Set(
     "mr.",
     "mrs",
     "ms",
+    // Greetings and yeses are never names: "Hello नमस्ते" named a prospect
+    // "नमस्ते" (3 Nov 2026 regression, R3).
+    "हाँ",
+    "हा",
+    "हो",
+    "मी",
+    "हे",
+    "नमस्ते",
+    "नमस्कार",
+    "हेलो",
+    "हैलो",
+    "hello",
+    "hi",
+    "hey",
+    "namaste",
+    "namaskar",
+    "पिछले",
+    "कल",
+    "आज",
+    "घर",
+    "अभी",
+    "यहाँ",
+    "यहां",
   ].map((word) => word.toLocaleLowerCase()),
 );
 const NAME = "([\\p{L}\\p{M}][\\p{L}\\p{M}'’-]*)(?![\\p{L}\\p{M}])";
@@ -375,17 +398,37 @@ const NAME = "([\\p{L}\\p{M}][\\p{L}\\p{M}'’-]*)(?![\\p{L}\\p{M}])";
 const START = "(?<![\\p{L}\\p{M}])";
 const SEGMENT_START = "^[\\s\\p{P}]*";
 const NAME_SUFFIX =
-  "(?:here|speaking|this side|बोल रहा(?:\\s+(?:हूं|हूँ))?|बोल रही(?:\\s+(?:हूं|हूँ))?|bol raha|bol rahi)";
+  "(?:here|speaking|this side|बोल रहा(?:\\s+(?:हूं|हूँ))?|बोल रही(?:\\s+(?:हूं|हूँ))?|bol raha|bol rahi|बोलत(?:ोय|ेय|िये|ीये))";
+// Yeses before a name: "हां जी, मनोज बोल रहा हूं".
+const YESES = "(?:हां|हाँ|हा|हो|जी|yes|haan|han)";
+// A surname may follow the first name ("मैं अमित वर्मा बोल रहा हूं"), never a
+// function word: "मैं team से बोल रहा हूं" is no one's name.
+const SURNAME =
+  "(?:\\s+(?!(?:से|मधून|हूँ|हूं|है|हो|आहे)(?![\\p{L}\\p{M}]))[\\p{L}\\p{M}][\\p{L}\\p{M}'’-]*)?";
 const SELF_INTRODUCTIONS = [
   new RegExp(`${START}(?:मेरा नाम|my name is|myself|this is)\\s+${NAME}`, "iu"),
   new RegExp(`${START}(?:i am|i'm)\\s+${NAME}`, "iu"),
   new RegExp(
-    `${START}(?:मैं|main)\\s+${NAME}\\s+(?:बोल रहा|बोल रही|bol raha|bol rahi)`,
+    `${START}(?:मैं|main)\\s+${NAME}${SURNAME}\\s+(?:बोल रहा|बोल रही|bol raha|bol rahi)`,
     "iu",
   ),
-  new RegExp(`${SEGMENT_START}${NAME}\\s+${NAME_SUFFIX}(?=\\s|$|[,.!?])`, "iu"),
+  new RegExp(
+    `${SEGMENT_START}(?:${YESES}[\\s\\p{P}]+)*${NAME}\\s+${NAME_SUFFIX}(?=\\s|$|[,.!?])`,
+    "iu",
+  ),
   new RegExp(
     `${START}(?:hi|hello|hey)\\s+${NAME}\\s+${NAME_SUFFIX}(?=\\s|$|[,.!?])`,
+    "iu",
+  ),
+  // Marathi: "मी पल्लवी जोशी बोलते".
+  new RegExp(
+    `${START}मी\\s+${NAME}${SURNAME}\\s+बोलत(?:ोय|ेय|े|ो|िये|ीये)(?![\\p{L}\\p{M}])`,
+    "iu",
+  ),
+  // A name, then where from: "मैं प्रिया मेहता Setu Fieldware से।",
+  // "मी ऋतुजा काले, सह्याद्री सेल्स क्राफ्ट मधून बोलतिये".
+  new RegExp(
+    `${START}(?:मैं|मी|main)\\s+${NAME}${SURNAME}\\s*,?\\s+(?:[^\\s.!?।,]+\\s+){0,3}[^\\s.!?।,]+\\s+(?:से|मधून)(?=\\s*(?:$|[.!?।,]|बोल))`,
     "iu",
   ),
 ];
