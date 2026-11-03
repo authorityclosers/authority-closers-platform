@@ -414,17 +414,25 @@ export function AcquisitionStudio({
       uploadSnapshot.phase === "interrupted")
       ? uploadStore.fileFor(uploadSnapshot.intentId)
       : null;
-  const file = pending
-    ? (pending.selection?.file ?? retainedUploadFile)
-    : (localFile ?? retainedUploadFile);
-  // The chosen file's wave, measured in this browser (shared with its card),
-  // carries the call's shape into sending and the steps.
-  const fileWave = useFileWave(file);
+  const [submission, setSubmission] = useState<Submission | null>(null);
   // Which call the chosen file became, so its wave stays with that call only.
   const [fileSentAs, setFileSentAs] = useState<{
     file: File;
     callId: string;
   } | null>(null);
+  // A sent file leaves New analysis's files (3 Nov 2026 regression, U2: an
+  // analysed file stayed "Selected", one tap from a second upload), so the
+  // call shown here keeps the file it was sent from.
+  const sentFile =
+    submission && fileSentAs?.callId === submission.id ? fileSentAs.file : null;
+  const file =
+    sentFile ??
+    (pending
+      ? (pending.selection?.file ?? retainedUploadFile)
+      : (localFile ?? retainedUploadFile));
+  // The chosen file's wave, measured in this browser (shared with its card),
+  // carries the call's shape into sending and the steps.
+  const fileWave = useFileWave(file);
   // The advertised trial cap is a guest's figure; a signed-in account shows
   // "checking…" until its own balance arrives (the minutes pill shows it too).
   const advertisedTrial =
@@ -471,7 +479,6 @@ export function AcquisitionStudio({
   }, [resumeIntentId, resumePolicySha]);
   const [token, setToken] = useState("");
   const [checkKey, setCheckKey] = useState(0);
-  const [submission, setSubmission] = useState<Submission | null>(null);
   const [earlierReportSubmissionId, setEarlierReportSubmissionId] = useState<
     string | null
   >(null);
@@ -1857,6 +1864,9 @@ export function AcquisitionStudio({
         setPlanRequiresAction(false);
         setError("");
       }
+      // The recording is this call's now, so New analysis never offers it
+      // again: here, or after leaving and coming back (U2).
+      pending?.removeFile(selected);
       return outcome;
     };
     const start = async (

@@ -1,4 +1,4 @@
-import { act, Fragment } from "react";
+import { act, Fragment, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const { navigateToAccount, replaceToLogin } = vi.hoisted(() => ({
@@ -28,6 +28,7 @@ import {
   UploadSessionStore,
 } from "./hooks/upload-session";
 import { UploadIndicator } from "./shell/upload-indicator";
+import { PendingAnalysisProvider } from "./pending-analysis";
 import {
   WorkspaceAccessContext,
   WorkspaceAccessProvider,
@@ -1876,6 +1877,46 @@ it("keeps the next staged file ready after starting another call", async () => {
   expect(container.textContent).toContain(
     "Follow-up.m4a selected for analysis",
   );
+});
+
+it("never offers an analysed file again after leaving New analysis and coming back (3 Nov 2026 regression, U2)", async () => {
+  window.history.replaceState(null, "", "/analysis/new");
+  const withStores = (children: ReactNode) => (
+    <UploadSessionProvider>
+      <PendingAnalysisProvider>
+        <UploadIndicator />
+        {children}
+      </PendingAnalysisProvider>
+    </UploadSessionProvider>
+  );
+  const studio = await Page({ searchParams: Promise.resolve({}) });
+  await act(async () => root.render(withStores(studio)));
+  await flush();
+  await select();
+  expect(container.textContent).toContain("Sales call.wav");
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+  await settleAll();
+  expect(
+    calls.filter(
+      ({ path, init }) => path.endsWith("/source") && init.method === "PUT",
+    ),
+  ).toHaveLength(1);
+
+  // Home, then + → Add a call: a fresh studio over the same root stores.
+  await act(async () => root.render(withStores(<p>Home</p>)));
+  window.history.replaceState(null, "", "/analysis/new");
+  const again = await Page({ searchParams: Promise.resolve({}) });
+  await act(async () => root.render(withStores(again)));
+  await settleAll();
+  expect(container.textContent).not.toContain("file added");
+  expect(container.textContent).not.toContain(
+    "Sales call.wav selected for analysis",
+  );
+  expect(
+    container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled,
+  ).toBe(false);
 });
 
 it("captures new-call intent before delayed bootstrap reads can mistake an in-flight upload for saved work", async () => {
