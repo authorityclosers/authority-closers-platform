@@ -317,6 +317,9 @@ export function BugReportSheet({
   const [include, setInclude] = useState(true);
   const [sensitive, setSensitive] = useState(false);
   const [sending, setSending] = useState(false);
+  // Set before anything is drawn: a second tap on Send while the first is
+  // still on its way sends nothing more (production report 161, 3 Nov 2026).
+  const inFlight = useRef(false);
   const [sendFailed, setSendFailed] = useState(false);
   const [pictureNote, setPictureNote] = useState<string | null>(null);
   const [route, setRoute] = useState("/");
@@ -511,7 +514,8 @@ export function BugReportSheet({
 
   const send = async () => {
     const text = words.trim();
-    if (!text || sending) return;
+    if (!text || sending || inFlight.current) return;
+    inFlight.current = true;
     setSending(true);
     setSendFailed(false);
     const id = command.current;
@@ -580,6 +584,7 @@ export function BugReportSheet({
         });
       }
     } finally {
+      inFlight.current = false;
       setSending(false);
     }
   };

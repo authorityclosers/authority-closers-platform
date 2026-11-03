@@ -285,6 +285,9 @@ export function AdvancedReporter({
   const askSendId = useId();
   const wordsArea = useRef<HTMLTextAreaElement>(null);
   const [sending, setSending] = useState(false);
+  // Set before anything is drawn: a second tap on Send while the first is
+  // still on its way sends nothing more (production report 161, 3 Nov 2026).
+  const inFlight = useRef(false);
   const [outcome, setOutcome] = useState<"sent" | "queued" | null>(null);
   // Why a saved report waits: an update, no answer, or no connection (ph1-44).
   const [savedWhy, setSavedWhy] = useState("");
@@ -550,7 +553,8 @@ export function AdvancedReporter({
 
   const send = async () => {
     const text = words.trim();
-    if (!text || sending || !seed) return;
+    if (!text || sending || !seed || inFlight.current) return;
+    inFlight.current = true;
     setSending(true);
     const id = command;
     let request: Record<string, unknown> | null = null;
@@ -702,6 +706,7 @@ export function AdvancedReporter({
         });
       }
     } finally {
+      inFlight.current = false;
       setSending(false);
     }
   };
