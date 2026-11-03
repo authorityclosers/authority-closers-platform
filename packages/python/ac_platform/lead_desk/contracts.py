@@ -94,6 +94,14 @@ class Numbers(Model):
     not_connected: int = 0
     # Call-button dials' time away from the app: an estimate, never talk time.
     talk_estimated_seconds: int = 0
+    # Calls out whose outcome the phone never told us (a Call-button dial its call log
+    # never matched): neither connected nor not (owner and Dipak, 2 Nov 2026).
+    unknown: int = 0
+    # Of the talk time, the seconds the phone's own recordings measured.
+    talk_recorded_seconds: int = 0
+    # The rest of the work: notes written and messages sent on leads.
+    notes: int = 0
+    messages: int = 0
 
 
 class Counts(Model):
@@ -204,6 +212,9 @@ class SideEffort(Model):
     talk_seconds: int = 0
     # Call-button dials' time away from the app: an estimate, never talk time.
     talk_estimated_seconds: int = 0
+    # Calls out whose outcome the phone never told us (a Call-button dial its call log
+    # never matched): neither connected nor not (owner and Dipak, 2 Nov 2026).
+    unknown: int = 0
     # Different leads called, and different leads spoken to.
     leads_attempted: int = 0
     reached: int = 0
@@ -361,6 +372,8 @@ class ActivityItem(Model):
     lead_name: str
     stage_label: str | None
     event: LeadEventView
+    # The lead's side, inbound or cold: Calls filters one side's calls by it.
+    side: str | None = None
 
 
 class ActivityPage(Model):
@@ -471,6 +484,12 @@ class LeadEventView(Model):
     event_id: UUID | None = None
     can_hide: bool = False
     private: bool = False
+    # A call on My work and Calls, as Home counts it (owner and Dipak, 2 Nov 2026):
+    # connected, not_connected, or unknown when the phone never said how a Call-button
+    # dial went; and where its seconds came from: call_log (the phone's call history)
+    # or recording (the phone's recording of it).
+    outcome: str | None = None
+    seconds_from: str | None = None
     # A stage move (Lead OS): from where, how (move, close, reopen, reclassify), who or
     # what made it (seller, ai_suggestion, rule, import, merge, capture), and the Lost or
     # Junk reason. A call that moved the lead carries these too.
@@ -1168,6 +1187,9 @@ class Outcomes(Model):
 
     calls: int
     connected: int
+    # Calls out whose outcome the phone never told us (a Call-button dial its call log
+    # never matched): neither connected nor not (owner and Dipak, 2 Nov 2026).
+    unknown: int = 0
     # Different leads called at least once in the period.
     leads_called: int
     # Different leads moved to an interested or a won stage in the period.
@@ -1186,6 +1208,9 @@ class SellerOutcome(Model):
     interested: int
     won: int
     open_leads: int
+    # Calls out whose outcome the phone never told us (a Call-button dial its call log
+    # never matched): neither connected nor not (owner and Dipak, 2 Nov 2026).
+    unknown: int = 0
     # Inbound open leads whose follow-up time has passed, now (the Late list).
     late: int
 
@@ -1196,6 +1221,9 @@ class DayOutcome(Model):
     day: date
     calls: int
     connected: int
+    # Calls out whose outcome the phone never told us (a Call-button dial its call log
+    # never matched): neither connected nor not (owner and Dipak, 2 Nov 2026).
+    unknown: int = 0
     # Different leads moved to an interested or a won stage that day.
     interested: int
     won: int

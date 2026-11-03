@@ -25,6 +25,7 @@ import { takeHandedLead } from "../leads/lead-handoff";
 import type { ActivityItem, LeadEvent } from "../leads/leads-client";
 import {
   callLine,
+  callsFilter,
   dayLabel,
   PhoneCalls,
   SHOWN_CALLS,
@@ -243,4 +244,121 @@ it("stays out of the way outside an organisation", async () => {
   answer = { status: 403, body: { detail: "Not in an organisation." } };
   await act(async () => root.render(<PhoneCalls />));
   expect(container.textContent).toBe("");
+});
+
+// Owner and Dipak, 2 Nov 2026: a dial whose outcome the phone never told us
+// says so, and each call says where its seconds came from.
+const unknownDial = (extra: Partial<LeadEvent> = {}) =>
+  call({ via: null, duration_seconds: null, outcome: "unknown", ...extra });
+
+it("says where each call's seconds came from, and when its outcome is unknown", () => {
+  expect(callLine(call({ seconds_from: "call_log" }))).toBe(
+    "You called · 3:14 from call history",
+  );
+  expect(
+    callLine(call({ duration_seconds: 77, seconds_from: "recording" })),
+  ).toBe("You called · 1:17 from the phone's recording");
+  expect(callLine(unknownDial())).toBe("You called · outcome unknown");
+  expect(callLine(unknownDial({ outcome: "not_connected" }))).toBe(
+    "You called · no answer",
+  );
+  expect(callLine(unknownDial(), "Asha")).toBe("Asha called · outcome unknown");
+});
+
+it("reads a day's filter from the address, and nothing without a day", () => {
+  expect(
+    callsFilter(new URLSearchParams("day=today&side=cold&outcome=unknown")),
+  ).toEqual({
+    day: "today",
+    person: null,
+    team: false,
+    side: "cold",
+    outcome: "unknown",
+  });
+  expect(callsFilter(new URLSearchParams("q=asha"))).toBeNull();
+  expect(
+    callsFilter(new URLSearchParams("day=today&team=1&outcome=odd")),
+  ).toMatchObject({ team: true, outcome: null });
+});
+
+it("opened from a number, lists that day's calls with that outcome, all of them", async () => {
+  const asked: string[] = [];
+  answer.body = {
+    items: [
+      item("u1", "asha fictional", unknownDial()),
+      item(
+        "c1",
+        "ravi sample",
+        call({ seconds_from: "call_log", outcome: "connected" }),
+      ),
+      ...Array.from({ length: SHOWN_CALLS + 1 }, (_, index) =>
+        item(`u${index + 2}`, "meera fictional", unknownDial()),
+      ),
+    ],
+    next_before: null,
+    counts: {},
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      asked.push(String(url));
+      return new Response(JSON.stringify(answer.body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }),
+  );
+  await act(async () =>
+    root.render(
+      <PhoneCalls
+        filter={{
+          day: "today",
+          person: null,
+          team: false,
+          side: null,
+          outcome: "unknown",
+        }}
+      />,
+    ),
+  );
+  const rows = [
+    ...container.querySelectorAll<HTMLAnchorElement>("a[data-sx-action]"),
+  ];
+  expect(rows).toHaveLength(SHOWN_CALLS + 2);
+  expect(rows[0].textContent).toContain("You called · outcome unknown");
+  expect(container.textContent).not.toContain("Ravi");
+  expect(container.querySelector("h2")?.textContent).toBe(
+    "Today's calls · outcome unknown",
+  );
+  expect(
+    container.querySelector('a[href="/analysis/calls"]')?.textContent,
+  ).toContain("All calls");
+  expect(container.textContent).not.toContain("See all in My work");
+  expect(
+    asked.some((url) => url.includes("day=today") && url.includes("kind=call")),
+  ).toBe(true);
+});
+
+it("a seller's day names who made each call", async () => {
+  answer.body = {
+    items: [item("u1", "asha fictional", unknownDial())],
+    next_before: null,
+    counts: {},
+  };
+  await act(async () =>
+    root.render(
+      <PhoneCalls
+        filter={{
+          day: "today",
+          person: "00000000-0000-4000-8000-000000000777",
+          team: false,
+          side: null,
+          outcome: null,
+        }}
+      />,
+    ),
+  );
+  expect(container.querySelector("a[data-sx-action]")?.textContent).toContain(
+    "Meera called · outcome unknown",
+  );
 });

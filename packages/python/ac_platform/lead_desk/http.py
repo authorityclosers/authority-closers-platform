@@ -371,12 +371,16 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         before: AwareDatetime | None = None,
         person: UUID | None = None,
         team: bool = False,
+        kind: Literal["call"] | None = None,
     ) -> ActivityPage:
         """My work: what a seller did, newest first, today, yesterday or this week; with
-        team=1, the whole team's day for those who see the team (Home's Team today)."""
-        no_query(request, frozenset({"day", "before", "person", "team"}))
+        team=1, the whole team's day for those who see the team (Home's Team today);
+        with kind=call, the calls alone (Calls opened from a number)."""
+        no_query(request, frozenset({"day", "before", "person", "team", "kind"}))
         async with desk_for(request, response) as lead_desk:
-            return await lead_desk.activity(day=day, before=before, person=person, team=team)
+            return await lead_desk.activity(
+                day=day, before=before, person=person, team=team, calls=kind == "call"
+            )
 
     @router.get("/activity/summary", response_model=ActivitySummary, response_model_by_alias=True)
     async def activity_summary(

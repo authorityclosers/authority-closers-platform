@@ -308,3 +308,11 @@ it("sorts the sellers by a column, exports them, and reads the month", async () 
     "/v1/lead-desk/performance/sellers?days=30&month=true",
   );
 });
+
+it("rates connections over the calls whose outcome the phone told us", () => {
+  // Owner and Dipak, 2 Nov 2026: 35 of 36 dials the phone never matched.
+  const work = table(
+    measures({ ...inbound, attempted: 36, connected: 1, unknown: 35 }, cold),
+  );
+  expect(work["Connection rate"]).toEqual(["100%", "20%"]);
+});

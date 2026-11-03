@@ -47,7 +47,6 @@ import {
 import { ActionList, ActionRow } from "../ui/kit";
 import { ModeSwitch } from "./mode-switch";
 import { OutcomeTiles, TILE_SETS } from "./outcome-tiles";
-import { TakingSwitch } from "../leads/taking-switch";
 import type { HomeDesk } from "./my-day-client";
 import { TodaySkeleton } from "./sales-home-skeleton";
 import styles from "./sales-home.module.css";
@@ -225,25 +224,10 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
       </section>
     );
   const desk: HomeDesk = state.desk;
+  // Home keeps no Taking new leads pill (Dipak's picture, 2 Nov 2026): it is
+  // in Settings and on Leads.
   return (
-    <SellerBlocks
-      desk={desk}
-      side={side}
-      onSide={setSide}
-      access={access}
-      headerExtras={
-        <>
-          {/* Taking new leads, as a small pill (Dipak, 28 Oct 2026). */}
-          <TakingSwitch
-            key={`taking-${desk.me.taking_leads !== false}`}
-            initial={desk.me.taking_leads !== false}
-            place="chip"
-            words="full"
-            pausedUntil={desk.me.paused_until ?? null}
-          />
-        </>
-      }
-    />
+    <SellerBlocks desk={desk} side={side} onSide={setSide} access={access} />
   );
 }
 

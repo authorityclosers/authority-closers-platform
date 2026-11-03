@@ -31,6 +31,7 @@ import { teamCoachingFor, useTeamCoachingHere } from "./team-coaching-access";
 import { CoachingSkeleton } from "./coaching-skeleton";
 import { CoachingStory } from "./my-coaching";
 import { requestedSkill, type RequestedSkill } from "./focus-request";
+import { GuideEntry } from "./guide/guide-entry";
 import styles from "./coaching.module.css";
 
 export { CoachingSkeleton, CoachingStory };
@@ -282,6 +283,8 @@ export function CoachingPage({
             ]}
           />
         ) : null}
+        {/* Dipak's answers: draws nothing until his content is loaded. */}
+        {!callId && !sharedPersonId && !team ? <GuideEntry /> : null}
         {ready ? (
           <AccountCoaching
             key={JSON.stringify([scope, callId, team, sharedPersonId, seed])}

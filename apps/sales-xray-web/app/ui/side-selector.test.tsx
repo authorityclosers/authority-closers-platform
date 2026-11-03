@@ -76,3 +76,17 @@ it("picks the other side by tap or arrow key, and says which with a line", async
   expect(picked).toHaveBeenLastCalledWith("inbound");
   expect(document.activeElement).toBe(radios()[0]);
 });
+
+it("keeps Home's side calm, and the side colours elsewhere", async () => {
+  // Dipak, 3 Nov 2026: one accent colour on Home.
+  await mount(<SideSelector value="cold" onChange={() => {}} tone="calm" />);
+  expect(
+    host.querySelector('[role="radiogroup"]')?.getAttribute("data-tone"),
+  ).toBe("calm");
+  await act(async () =>
+    root.render(<SideSelector value="cold" onChange={() => {}} />),
+  );
+  expect(
+    host.querySelector('[role="radiogroup"]')?.getAttribute("data-tone"),
+  ).toBe("side");
+});

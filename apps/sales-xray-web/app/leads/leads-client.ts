@@ -112,6 +112,13 @@ export type Desk = {
     talk_seconds: number;
     /** Call-button dials' time away from the app: an estimate, never talk time. */
     talk_estimated_seconds?: number;
+    /** Calls out whose outcome the phone never told us: neither connected
+     *  nor not (owner and Dipak, 2 Nov 2026). */
+    unknown?: number;
+    /** Of the talk time, the seconds the phone's recordings measured. */
+    talk_recorded_seconds?: number;
+    notes?: number;
+    messages?: number;
     follow_ups_done: number;
     new_assigned: number;
   };
@@ -190,6 +197,10 @@ export type LeadEvent = {
   simulated: boolean | null;
   recording?: boolean | null;
   duration_seconds: number | null;
+  /** A call on My work and Calls, as Home counts it (owner and Dipak, 2 Nov
+   *  2026): its outcome, and where its seconds came from. */
+  outcome?: "connected" | "not_connected" | "unknown" | null;
+  seconds_from?: "call_log" | "recording" | null;
   changed?: string[] | null;
   channel?: string | null;
   template_label?: string | null;
@@ -868,6 +879,8 @@ export type ActivityItem = {
   lead_name: string;
   stage_label: string | null;
   event: LeadEvent;
+  /** The lead's side: Calls filters one side's calls by it. */
+  side?: "inbound" | "cold" | null;
 };
 export type ActivityPage = {
   items: ActivityItem[];
@@ -897,6 +910,21 @@ export function readActivity(
   signal?: AbortSignal,
 ) {
   const params = new URLSearchParams({ day });
+  if (before) params.set("before", before);
+  return request<ActivityPage>(`/activity?${params}`, { signal });
+}
+
+/** One day's calls alone, as Home counts them (Calls opened from a number,
+ *  owner, 2 Nov 2026): the viewer's own, a seller's, or the team's. */
+export function readDayCalls(
+  day: WorkDay,
+  who: { person: string | null; team: boolean },
+  before: string | null = null,
+  signal?: AbortSignal,
+) {
+  const params = new URLSearchParams({ day, kind: "call" });
+  if (who.person) params.set("person", who.person);
+  else if (who.team) params.set("team", "1");
   if (before) params.set("before", before);
   return request<ActivityPage>(`/activity?${params}`, { signal });
 }

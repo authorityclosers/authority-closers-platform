@@ -53,6 +53,14 @@
   background: var(--lx-closing);
 }
 
+/* Home's calm tone (Dipak, 3 Nov 2026: one accent colour): the chosen side
+   is raised in a neutral surface. */
+.selector[data-tone="calm"] .option[aria-checked="true"] {
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  box-shadow: 0 0 0 1px var(--sx-line);
+}
+
 .note {
   margin: 0;
   padding: 0 4px;

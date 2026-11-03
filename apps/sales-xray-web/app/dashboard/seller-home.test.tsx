@@ -19,7 +19,7 @@ vi.mock("next/link", () => ({
 
 import type { HomeSide } from "./my-day-client";
 import { SalesHome } from "./sales-home";
-import { NextCall } from "./seller-home";
+import { NextCall, TodayPerformance } from "./seller-home";
 import { takeHandedLead } from "../leads/lead-handoff";
 
 (
@@ -212,6 +212,22 @@ function answer(sides: {
           ],
           counts: { today: 4, overdue: 1 },
         });
+      // This week's calls, newest first, for Recent calls.
+      if (path.startsWith("/v1/lead-desk/activity"))
+        return Response.json({
+          items: [
+            recentCall("c1", "Rohan Fictional", { outcome: "unknown" }),
+            recentCall("c2", "Aakash Sample", {
+              duration_seconds: 77,
+              outcome: "connected",
+              seconds_from: "recording",
+            }),
+            recentCall("c3", "Sanjay Example", { outcome: "not_connected" }),
+            recentCall("c4", "Fourth Fictional", { outcome: "unknown" }),
+          ],
+          next_before: null,
+          counts: {},
+        });
       if (path.endsWith("/done") || path.endsWith("/undo")) {
         if (doneFails) return new Response("{}", { status: 503 });
         return Response.json({
@@ -222,6 +238,31 @@ function answer(sides: {
       return new Response("{}", { status: 404 });
     }),
   );
+}
+
+function recentCall(
+  id: string,
+  lead: string,
+  extra: Record<string, unknown> = {},
+) {
+  return {
+    event_id: id,
+    lead_id: `lead-${id}`,
+    lead_name: lead,
+    stage_label: null,
+    side: "inbound",
+    event: {
+      kind: "call",
+      at: new Date().toISOString(),
+      actor_name: null,
+      direction: null,
+      via: null,
+      duration_seconds: null,
+      submission_id: null,
+      simulated: false,
+      ...extra,
+    },
+  };
 }
 
 async function mount() {
@@ -262,11 +303,8 @@ it("is Dipak's Home: the work in six blocks, each opening its exact place", asyn
   expect(card("new")?.getAttribute("href")).toBe(
     "/leads?view=to_call&step=new",
   );
-  // No line under the number (owner, 31 Oct 2026); what it counts is its description.
-  expect(card("new")?.textContent).toBe("New leads8");
-  expect(card("new")?.getAttribute("aria-description")).toBe(
-    "First call pending",
-  );
+  // One caption under the number (Dipak's picture, 2 Nov 2026).
+  expect(card("new")?.textContent).toBe("New leads8First call pending");
   expect(card("open")?.getAttribute("href")).toBe(
     "/leads?view=all&step=open_leads",
   );
@@ -283,9 +321,8 @@ it("is Dipak's Home: the work in six blocks, each opening its exact place", asyn
   );
   expect(name?.textContent).toBe("Amit Sample");
   expect(host.textContent).toContain("Meta Ads · Assigned 4 min ago");
-  expect(
-    host.querySelector("[data-countdown]")?.getAttribute("aria-label"),
-  ).toContain("18 left to call today");
+  // One big button, no countdown beside it.
+  expect(host.querySelector("[data-countdown]")).toBeNull();
   const call = Array.from(host.querySelectorAll("a")).find(
     (link) => link.textContent === "Call Amit now",
   );
@@ -315,9 +352,27 @@ it("is Dipak's Home: the work in six blocks, each opening its exact place", asyn
       performance?.querySelectorAll("li") ?? [],
       (item) => item.textContent,
     ),
-  ).toEqual(["12Tried", "7Connected", "34 minTalk time", "3F/U done"]);
-  // No recent calls on Home: history is in Reports and on each lead.
-  expect(host.textContent).not.toContain("Recent calls");
+  ).toEqual([
+    "Attempted12",
+    "Connected7",
+    "Talk time34 min",
+    "Follow-ups done3",
+  ]);
+  expect(performance?.textContent).toContain("Inbound calls only · Today");
+  // The last three calls, each with its outcome and time; Calls has the rest.
+  const recent = host.querySelector('[aria-labelledby="recent-title"]');
+  const rows = recent?.querySelectorAll("a[data-sx-action]") ?? [];
+  expect(rows).toHaveLength(3);
+  // Outcome and time only, never the capture line (production report 146).
+  expect(recent?.textContent).not.toContain("Waiting");
+  expect(rows[0]?.textContent).toContain("Outcome unknown");
+  expect(rows[1]?.textContent).toContain("Connected · 1:17");
+  expect(
+    recent?.querySelector('a[href="/analysis/calls"]')?.textContent,
+  ).toContain("See all");
+  // Not in the picture: the longest breaks and the Taking new leads pill.
+  expect(host.textContent).not.toContain("Your longest breaks");
+  expect(host.textContent).not.toContain("Taking new leads");
 });
 
 it("switches to Cold at once, with no second read", async () => {
@@ -327,7 +382,7 @@ it("switches to Cold at once, with no second read", async () => {
   await act(async () => radios()[1].click());
   expect(calls.length).toBe(reads);
   expect(window.location.search).toBe("?side=cold");
-  expect(card("new")?.textContent).toBe("Unworked180");
+  expect(card("new")?.textContent).toBe("Unworked leads180Never attempted");
   expect(card("new")?.getAttribute("href")).toBe(
     "/leads?view=to_call&step=new&side=cold",
   );
@@ -337,12 +392,12 @@ it("switches to Cold at once, with no second read", async () => {
   expect(host.textContent).toContain("Next cold call");
   expect(host.querySelector("[data-countdown]")).toBeNull();
   const start = Array.from(host.querySelectorAll("a")).find(
-    (link) => link.textContent === "Start cold calling",
+    (link) => link.textContent === "Start Cold Calling",
   );
   expect(start?.getAttribute("href")).toBe("/leads?view=to_call&side=cold");
   // Fresh enquiries waiting on Inbound, one tap to them.
   const alert = Array.from(host.querySelectorAll("a")).find((link) =>
-    link.textContent?.startsWith("8 fresh inbound enquiries need attention"),
+    link.textContent?.startsWith("8 fresh inbound leads need attention"),
   );
   expect(alert?.getAttribute("href")).toBe("/leads?view=to_call&step=new");
 });
@@ -450,7 +505,7 @@ it("says the next lead rang and wasn't reached, and calls them back", async () =
       "Meta Ads · Missed call 30 min ago · 2 calls · call back",
     );
     expect(host.textContent).toContain("Call Meera back");
-    expect(host.textContent).not.toContain("Start cold calling");
+    expect(host.textContent).not.toContain("Start Cold Calling");
   }
 });
 
@@ -482,7 +537,7 @@ it("starts a cold round at the card, and dials only a call-back or an Inbound le
     );
     takeHandedLead();
     const link = [...host.querySelectorAll("a")].find((anchor) =>
-      /Start cold calling|Call \S+ (now|back)/.test(anchor.textContent ?? ""),
+      /Start Cold Calling|Call \S+ (now|back)/.test(anchor.textContent ?? ""),
     );
     await act(async () => link?.click());
     return takeHandedLead();
@@ -565,4 +620,32 @@ it("waits for the seller's sides before drawing Today, so nothing moves", async 
     await act(async () => Promise.resolve());
   expect(host.querySelector('[data-area="side"]')).not.toBeNull();
   expect(host.querySelector('[data-area="cards"]')).not.toBeNull();
+});
+
+it("never counts a call whose outcome the phone never said, and each number opens its calls", async () => {
+  // Owner and Dipak, 2 Nov 2026: 36 calls, 35 Call-button dials the phone never
+  // matched, one recorded call of 77 s.
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  const own = {
+    numbers: {
+      ...numbers(36, 1, 77, 0),
+      unknown: 35,
+      talk_recorded_seconds: 77,
+    },
+  } as unknown as HomeSide;
+  await act(async () =>
+    root.render(<TodayPerformance side="cold" own={own} />),
+  );
+  const figures = Array.from(host.querySelectorAll("li a"), (link) => [
+    link.textContent,
+    link.getAttribute("href"),
+  ]);
+  const calls = "/analysis/calls?day=today&side=cold";
+  expect(figures[0]).toEqual(["Attempted36", calls]);
+  expect(figures[1]).toEqual(["Outcome known1", `${calls}&outcome=known`]);
+  expect(figures[2]?.[0]).toContain("Talk · recordings");
+  expect(figures[2]?.[1]).toBe(`${calls}&outcome=connected`);
+  expect(host.textContent).not.toContain("Connected");
 });

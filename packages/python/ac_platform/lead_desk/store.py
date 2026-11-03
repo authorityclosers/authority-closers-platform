@@ -576,6 +576,35 @@ def call_answered(data: Mapping[str, Any]) -> bool:
     )
 
 
+def outcome_known(data: Mapping[str, Any]) -> bool:
+    """Whether we know how a call went (owner and Dipak, 2 Nov 2026: 35 Call-button dials
+    counted as "not connected" when the phone never said). A call the phone logged or
+    recorded, or the seller logged, always says; a Call-button dial only once its phone's
+    call log matched it, its recording came in or its seller answered whether they
+    talked. An unknown outcome is neither connected nor not connected."""
+    if not is_dial(data):
+        return True
+    return (
+        PHONE_SECONDS in data
+        or TALKED in data
+        or bool(data.get("submission_id"))
+        or bool(data.get("recording"))
+    )
+
+
+def seconds_from(data: Mapping[str, Any]) -> str | None:
+    """Where a call's talk seconds came from (owner, 2 Nov 2026): "call_log", the phone's
+    call history (a call it logged, or the dial it matched), or "recording", the phone's
+    recording of it; None without seconds, or for a sample call."""
+    if call_seconds(data) <= 0 or data.get("simulated") is True:
+        return None
+    if is_dial(data) and PHONE_SECONDS in data:
+        return "recording" if data.get(TIMED_BY) == "recording" else "call_log"
+    if data.get("via") == "phone":
+        return "call_log"
+    return "recording"
+
+
 def dial_start(at: datetime, data: Mapping[str, Any]) -> datetime:
     """When a Call-button dial began: its row is written on the way back, its seconds later."""
     return at - timedelta(seconds=max(0, int(data.get("duration_seconds") or 0)))
@@ -636,6 +665,9 @@ PHONE_SECONDS = "phone_seconds"
 DIAL_MATCH = timedelta(minutes=2)
 # Read beside a dial's data, never saved into it: its seller answered "We talked" after it.
 TALKED = "talked"
+# Read beside a dial its phone timed from a recording (never saved): where the phone's
+# seconds came from (the capture session's reconcile, 3 Nov 2026).
+TIMED_BY = "timed_by"
 # Read as a call, never saved as one: an after-call answer with no call of its own
 # ("Called from another phone? Log a call"; phone QA ph1-58, 1 Nov 2026).
 LOGGED_CALL = "logged"
@@ -1474,16 +1506,22 @@ class LeadDesk:
             for event_id, actor, lead_id, at, data, pipeline in found
             if str(event_id) not in hidden
         ]
-        timed = await self._call_timings([row.event_id for row in rows if is_dial(row.data)])
+        recorded: set[str] = set()
+        timed = await self._call_timings(
+            [row.event_id for row in rows if is_dial(row.data)], recorded=recorded
+        )
         talked = await self._dials_talked(
             [row for row in rows if is_dial(row.data) and str(row.event_id) not in timed]
         )
 
         def read_beside(row: CallRow) -> CallRow:
             if str(row.event_id) in timed:
-                return row._replace(data={**row.data, PHONE_SECONDS: timed[str(row.event_id)]})
+                by = {TIMED_BY: "recording"} if str(row.event_id) in recorded else {}
+                return row._replace(
+                    data={**row.data, PHONE_SECONDS: timed[str(row.event_id)], **by}
+                )
             if row.event_id in talked:
-                return row._replace(data={**row.data, TALKED: True})
+                return row._replace(data={**row.data, TALKED: talked[row.event_id]})
             return row
 
         beside = [read_beside(row) for row in rows]
@@ -1588,12 +1626,13 @@ class LeadDesk:
                     found[UUID(person)] = datetime.fromisoformat(at)
         return found
 
-    async def _dials_talked(self, dials: list[CallRow]) -> set[UUID]:
-        """Call-button dials whose seller answered "We talked" right after (DIAL_ANSWER): the
-        same lead and person. Their answer says the call connected; an answer its seller
-        undid says nothing (hardcore phone QA ph1-40, 1 Nov 2026)."""
+    async def _dials_talked(self, dials: list[CallRow]) -> dict[UUID, bool]:
+        """Call-button dials whose seller answered right after (DIAL_ANSWER): the same lead
+        and person. "We talked" says the call connected, any other answer that it didn't,
+        so its outcome is known (owner and Dipak, 2 Nov 2026); an answer its seller undid
+        says nothing (hardcore phone QA ph1-40, 1 Nov 2026)."""
         if not dials:
-            return set()
+            return {}
         answers = (
             await self.db.execute(
                 select(
@@ -1611,18 +1650,18 @@ class LeadDesk:
                 )
             )
         ).all()
-        return {
-            row.event_id
-            for row in dials
-            if any(
-                lead == row.lead_id
-                and actor == row.actor
-                and row.at - DIAL_MATCH <= at <= row.at + DIAL_ANSWER
-                and isinstance(data, dict)
-                and data.get("connected") is True
-                for lead, actor, at, data in answers
-            )
-        }
+        said: dict[UUID, bool] = {}
+        for row in dials:
+            for lead, actor, at, data in answers:
+                if (
+                    lead == row.lead_id
+                    and actor == row.actor
+                    and row.at - DIAL_MATCH <= at <= row.at + DIAL_ANSWER
+                    and isinstance(data, dict)
+                    and isinstance(data.get("connected"), bool)
+                ):
+                    said[row.event_id] = said.get(row.event_id, False) or data["connected"]
+        return said
 
     async def _to_call_today(
         self, mine: Any, day_end: datetime, today: Sequence[CallRow]
@@ -1697,6 +1736,21 @@ class LeadDesk:
                 .limit(CALL_ROWS)
             )
         ).all()
+        # Notes and messages: the rest of the work a manager sees beside the calls (owner,
+        # 2 Nov 2026: 29 notes and 11 messages behind "36 tried").
+        worked = (
+            await self.db.execute(
+                select(LeadEvent.kind, LeadEvent.created_at, Lead.pipeline)
+                .join(Lead, Lead.id == LeadEvent.lead_id)
+                .where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.actor_person_id == me,
+                    LeadEvent.kind.in_(("note", "message")),
+                    LeadEvent.created_at >= earliest,
+                )
+                .limit(CALL_ROWS)
+            )
+        ).all()
         found: dict[tuple[str, str | None], Numbers] = {}
         for name, (start, end) in windows.items():
             for side in (None, *SIDES):
@@ -1706,12 +1760,30 @@ class LeadDesk:
                     if start <= row.at < end and (side is None or row.side == side)
                 ]
                 connected = [row for row in rows if call_answered(row.data)]
+                # A dial whose phone never said how it went is neither connected nor
+                # not (owner and Dipak, 2 Nov 2026): counted apart.
+                unknown = sum(
+                    1 for row in rows if not call_answered(row.data) and not outcome_known(row.data)
+                )
+                done = [
+                    kind
+                    for kind, at, pipeline in worked
+                    if start <= at < end and (side is None or lead_side(pipeline) == side)
+                ]
                 found[(name, side)] = Numbers(
                     calls=len(rows),
                     connected=len(connected),
-                    not_connected=len(rows) - len(connected),
+                    not_connected=len(rows) - len(connected) - unknown,
+                    unknown=unknown,
                     talk_seconds=sum(call_seconds(row.data) for row in connected),
+                    talk_recorded_seconds=sum(
+                        call_seconds(row.data)
+                        for row in connected
+                        if seconds_from(row.data) == "recording"
+                    ),
                     talk_estimated_seconds=sum(away_seconds(row.data) for row in connected),
+                    notes=done.count("note"),
+                    messages=done.count("message"),
                     follow_ups_done=sum(
                         1
                         for row in rows
@@ -2254,6 +2326,7 @@ class LeadDesk:
         person: UUID | None = None,
         team: bool = False,
         limit: int = WORK_PAGE,
+        calls: bool = False,
     ) -> ActivityPage:
         """What a seller did, newest first: calls, outcomes, notes, stage moves, meetings
         and messages, on the leads the viewer can see. A seller sees their own work; an
@@ -2261,7 +2334,10 @@ class LeadDesk:
 
         ``team``: the whole team's day for those who see the team (Home's Team today,
         owner, 27 Oct 2026): everyone's work, the leads given out and the leads that came
-        in, on the team's leads; private calls stay their sellers' own."""
+        in, on the team's leads; private calls stay their sellers' own.
+
+        ``calls``: the calls alone (Calls opened from a number on Home or Team, owner,
+        2 Nov 2026), each read as Home counts it."""
         from ac_platform.lead_desk.activity_summary import activity_window
 
         who = person or self.viewer.person_id
@@ -2333,6 +2409,17 @@ class LeadDesk:
         week_counts["connected"] = sum(
             1 for row in placed if row.at >= week_start and call_answered(row.data)
         )
+        # Neither connected nor not: the phone never said (owner and Dipak, 2 Nov 2026).
+        today_counts["unknown"] = sum(
+            1
+            for row in placed
+            if row.at >= start and not call_answered(row.data) and not outcome_known(row.data)
+        )
+        week_counts["unknown"] = sum(
+            1
+            for row in placed
+            if row.at >= week_start and not call_answered(row.data) and not outcome_known(row.data)
+        )
         latest = (
             await self.db.execute(
                 select(
@@ -2343,7 +2430,9 @@ class LeadDesk:
                 .where(*window)
             )
         ).one()
-        page = [*window]
+        page = [*window, LeadEvent.kind == "call"] if calls else [*window]
+        # Each call as Home counts it: beside its phone's call log and its seller's answer.
+        counted = {row.event_id: row.data for row in placed}
         if before is not None:
             page.append(LeadEvent.created_at < before)
         rows = (
@@ -2423,12 +2512,14 @@ class LeadDesk:
                     lead_id=lead.id,
                     lead_name=lead.name,
                     stage_label=labels[key].label(lead.stage, lead.step),
+                    side=lead_side(lead.pipeline),
                     event=self._event_view(
                         event,
                         names,
                         photos=photos,
                         hidden=hidden,
                         recording=joined_recordings.get(str(event.id)),
+                        counted=counted.get(event.id),
                     ),
                 )
             )
@@ -2707,6 +2798,7 @@ class LeadDesk:
         lead_owner: UUID | None = None,
         photos: Mapping[UUID, str | None] | None = None,
         answers_undone: frozenset[str] = frozenset(),
+        counted: Mapping[str, Any] | None = None,
     ) -> LeadEventView:
         phone_call = event.kind == "call" and event.data.get("via") in {
             "phone",
@@ -2729,6 +2821,16 @@ class LeadDesk:
         reason = data.get("reason") if isinstance(data.get("reason"), str) else None
         follow = data.get("follow_up_at")
         moved = data.get("v") == 2
+        # A call as Home counted it (``counted``, My work and Calls): its outcome, its talk
+        # seconds, never a dial's time away, and where they came from (owner and Dipak,
+        # 2 Nov 2026). A recording joined to it says it connected.
+        call: Mapping[str, Any] | None = None
+        if event.kind == "call" and counted is not None:
+            call = (
+                {**counted, "submission_id": recording.data.get("submission_id")}
+                if recording is not None and recording.data.get("submission_id")
+                else counted
+            )
         meeting = event.kind == "meeting"
 
         def text(key: str) -> str | None:
@@ -2760,7 +2862,7 @@ class LeadDesk:
             # A call is connected when the one rule finds it (call_answered: talk seconds,
             # the phone's log, a recording), as Home counts it; otherwise what was saved.
             connected=True
-            if event.kind == "call" and call_answered(data)
+            if event.kind == "call" and call_answered(call if call is not None else data)
             else data.get("connected")
             if isinstance(data.get("connected"), bool)
             else None,
@@ -2776,9 +2878,19 @@ class LeadDesk:
             else None,
             simulated=data.get("simulated") if isinstance(data.get("simulated"), bool) else None,
             recording=True if recording is not None or data.get("recording") is True else None,
-            duration_seconds=int(data["duration_seconds"])
+            duration_seconds=(call_seconds(call) or None)
+            if call is not None
+            else int(data["duration_seconds"])
             if isinstance(data.get("duration_seconds"), (int, float))
             else None,
+            outcome=None
+            if call is None
+            else "connected"
+            if call_answered(call)
+            else "not_connected"
+            if outcome_known(call)
+            else "unknown",
+            seconds_from=seconds_from(call) if call is not None else None,
             channel=CHANNEL_LABELS.get(data["channel"])
             if isinstance(data.get("channel"), str)
             else None,
@@ -5234,8 +5346,11 @@ class LeadDesk:
                 .with_for_update()
             )
         ).all()
-        if len(found) != 1 or start < found[0].created_at:
+        if len(found) != 1:
             raise DeskError(409, "This number must match exactly one of your leads.")
+        # Its own words: the phone tells the seller this one (simulation lab, 2 Nov 2026).
+        if start < found[0].created_at:
+            raise DeskError(409, "This call was made before this lead was added.")
         lead = found[0]
         private = await self._private_calls(lead_id=lead.id)
         seen = await self._command_seen(command.command_id)
@@ -5645,9 +5760,12 @@ class LeadDesk:
             filled=filled, already=already, unmatched=unmatched, calls=tuple(refs)
         )
 
-    async def _call_timings(self, event_ids: list[UUID]) -> dict[str, int]:
+    async def _call_timings(
+        self, event_ids: list[UUID], *, recorded: set[str] | None = None
+    ) -> dict[str, int]:
         """The phone's own seconds for Call-button dials its call log matched later, by the
-        dial's id: the first marker beside each dial (``TIMED_CALL``)."""
+        dial's id: the first marker beside each dial (``TIMED_CALL``). ``recorded`` gathers
+        the dials whose first marker came from the phone's recording (source "recording")."""
         ids = sorted({str(event_id) for event_id in event_ids})
         found: dict[str, int] = {}
         for at in range(0, len(ids), 1000):
@@ -5662,8 +5780,10 @@ class LeadDesk:
             )
             for data in markers.all():
                 seconds = data.get("duration_seconds") if isinstance(data, dict) else None
-                if isinstance(seconds, int):
-                    found.setdefault(str(data[TIMED_CALL]), max(0, seconds))
+                if isinstance(seconds, int) and str(data[TIMED_CALL]) not in found:
+                    found[str(data[TIMED_CALL])] = max(0, seconds)
+                    if recorded is not None and data.get("source") == "recording":
+                        recorded.add(str(data[TIMED_CALL]))
         return found
 
     async def _private_calls(
@@ -5905,6 +6025,7 @@ class LeadDesk:
                 {
                     "attempted": 0,
                     "connected": 0,
+                    "unknown": 0,
                     "talk": 0,
                     "away": 0,
                     "tried": set(),
@@ -5954,6 +6075,9 @@ class LeadDesk:
             into = bucket(row.actor, sides.get(row.lead_id, "inbound"))
             into["attempted"] += 1
             into["tried"].add(row.lead_id)
+            # Neither connected nor not: the phone never said (owner and Dipak, 2 Nov 2026).
+            if not call_answered(row.data) and not outcome_known(row.data):
+                into["unknown"] += 1
             if call_answered(row.data):
                 into["connected"] += 1
                 into["talk"] += call_seconds(row.data)
@@ -5997,6 +6121,7 @@ class LeadDesk:
             return SideEffort(
                 attempted=sum(part["attempted"] for part in parts),
                 connected=sum(part["connected"] for part in parts),
+                unknown=sum(part["unknown"] for part in parts),
                 talk_seconds=sum(part["talk"] for part in parts),
                 talk_estimated_seconds=sum(part["away"] for part in parts),
                 leads_attempted=len(tried),
@@ -6431,7 +6556,14 @@ class LeadDesk:
         ]
 
         def blank() -> dict[str, Any]:
-            return {"calls": 0, "connected": 0, "called": set(), "interested": set(), "won": set()}
+            return {
+                "calls": 0,
+                "connected": 0,
+                "unknown": 0,
+                "called": set(),
+                "interested": set(),
+                "won": set(),
+            }
 
         current, previous = blank(), blank()
         per: dict[UUID, dict[str, Any]] = {}
@@ -6450,6 +6582,9 @@ class LeadDesk:
                 tally["calls"] += 1
                 tally["called"].add(row.lead_id)
                 tally["connected"] += 1 if call_answered(row.data) else 0
+                tally["unknown"] += (
+                    1 if not call_answered(row.data) and not outcome_known(row.data) else 0
+                )
         for _, actor, lead_id, _kind, data, at in rows:
             if not isinstance(data, dict):
                 continue
@@ -6498,6 +6633,7 @@ class LeadDesk:
             return Outcomes(
                 calls=tally["calls"],
                 connected=tally["connected"],
+                unknown=tally["unknown"],
                 leads_called=len(tally["called"]),
                 interested=len(tally["interested"]),
                 won=len(tally["won"]),
@@ -6529,6 +6665,7 @@ class LeadDesk:
                     name=rep.state.name,
                     calls=tally["calls"],
                     connected=tally["connected"],
+                    unknown=tally["unknown"],
                     interested=len(tally["interested"]),
                     won=len(tally["won"]),
                     open_leads=rep.state.open_leads,
@@ -6566,6 +6703,7 @@ class LeadDesk:
                     day=day,
                     calls=tally["calls"],
                     connected=tally["connected"],
+                    unknown=tally["unknown"],
                     interested=len(tally["interested"]),
                     won=len(tally["won"]),
                     new_leads=arrivals_by_day.get(day, 0),

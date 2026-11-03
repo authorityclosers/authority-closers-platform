@@ -22,7 +22,7 @@ import {
 } from "react";
 
 import { Picker, type PickerOption } from "../ui/picker";
-import type { StageView } from "./journey/journey-client";
+import { MAIN_PIPELINE, type StageView } from "./journey/journey-client";
 import { stageName, stageTone, type Side } from "./journey/stage-look";
 import {
   moreParams,
@@ -335,6 +335,13 @@ export function FollowUpTabs({
       small
     />
   );
+}
+
+/** Whose stages the stage pick lists: the pipeline picked, else the main one,
+ *  which the list counts and filters "All pipelines" by (Dipak, 3 Nov 2026: with
+ *  several pipelines and none picked, "All stages" was the only row). */
+export function stagesPipeline(picked: string | null | undefined): string {
+  return picked || MAIN_PIPELINE;
 }
 
 /** The stages a person may pick: sellers see the ones shown to sellers. */

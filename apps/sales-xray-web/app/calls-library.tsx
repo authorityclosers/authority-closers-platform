@@ -89,7 +89,7 @@ import { useRowsInView } from "./rows-in-view";
 import { csvRows } from "./csv-export";
 import { Panel } from "./ui/kit";
 import { RecentCallsList, RecentCallsSkeleton } from "./dashboard/recent-calls";
-import { PhoneCalls } from "./calls/phone-calls";
+import { callsFilter, PhoneCalls } from "./calls/phone-calls";
 import { RecordingLine } from "./capture-setup/recording-check";
 
 const libraryError =
@@ -1649,7 +1649,11 @@ function CallsLibraryContent({
       access?.authenticated === true &&
       currentWorkspace?.kind === "organisation" ? (
         <SectionBoundary name="Your calls" resetKey={identityKey}>
-          <PhoneCalls key={identityKey} onSettled={settlePhone} />
+          <PhoneCalls
+            key={identityKey}
+            onSettled={settlePhone}
+            filter={callsFilter(searchParams)}
+          />
         </SectionBoundary>
       ) : null}
       {/* One page heading; New analysis lives in the shell, not here too. */}

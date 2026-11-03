@@ -1,0 +1,283 @@
+/* Dipak's answers (guided coaching v1, 3 Nov 2026): tokens only. */
+
+.root {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+}
+
+.guide {
+  display: grid;
+  width: 100%;
+  max-width: 680px;
+  min-width: 0;
+  gap: 20px;
+}
+
+.guide:focus {
+  outline: none;
+}
+
+.welcome {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.welcome > p {
+  min-width: 0;
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+/* Dipak's face, from the same picture as Ask Dipak's sheet. */
+.face {
+  display: block;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--sx-radius-pill);
+  background: url("/media/dipak-learning-hero-v1.webp") -289px -15px / 423px
+    auto no-repeat;
+  box-shadow:
+    0 0 0 3px var(--sx-surface),
+    0 0 0 5px var(--sx-accent);
+}
+
+.section {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.label {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list a {
+  display: flex;
+  min-height: 56px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-decoration: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.list a > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.list a > svg {
+  flex: none;
+  color: var(--sx-muted);
+}
+
+.list a:active {
+  transform: scale(var(--sx-press-scale));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .list a:hover {
+    border-color: var(--sx-line-strong);
+  }
+}
+
+.list a:focus-visible,
+.restart:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* The answer. */
+.answer {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.question {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.question:focus {
+  outline: none;
+}
+
+.text {
+  display: grid;
+  gap: 10px;
+}
+
+.text > p {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: 16px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.say {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-accent-soft);
+}
+
+.say figcaption {
+  color: var(--sx-ink-2);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.say blockquote {
+  margin: 0;
+}
+
+.say blockquote > p {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+/* Back to the first questions: a compact chip, never a dead end. */
+.restart {
+  display: inline-flex;
+  min-height: 44px;
+  justify-self: start;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px 0 10px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The Coaching page's way in: one row, only once real content is loaded. */
+.entry {
+  display: flex;
+  min-height: 72px;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  text-decoration: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.entry .face {
+  width: 48px;
+  height: 48px;
+  background-position: -248px -13px;
+  background-size: 363px auto;
+}
+
+.entry > span:nth-child(2) {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+
+.entry strong {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.entry small {
+  color: var(--sx-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.entry > svg {
+  flex: none;
+  color: var(--sx-muted);
+}
+
+.entry:active {
+  transform: scale(var(--sx-press-scale));
+}
+
+.entry:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .entry:hover {
+    border-color: var(--sx-line-strong);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .list a,
+  .entry {
+    transition: none;
+  }
+
+  .list a:active,
+  .entry:active {
+    transform: none;
+  }
+}
