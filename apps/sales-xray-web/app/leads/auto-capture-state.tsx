@@ -5,10 +5,12 @@ import {
   autoCaptureStates,
   onPhoneSignal,
   openDialer,
+  pickRecordingsFolder,
   recorderOpen,
   setupStatus,
   type AutoCaptureItem,
   type RecorderProfile,
+  type SetupStatus,
 } from "./native-phone";
 import { readCaptureGuard, type CaptureCall } from "./capture-guard-client";
 import { PLAY_LISTING } from "../app-compatibility-provider";
@@ -172,6 +174,42 @@ function privateTrack(recorder: PrivateRecorder): Track {
   };
 }
 /**
+ * A phone whose Phone app saves recordings to a folder (or one Sales X-Ray doesn't know): 3 minutes
+ * on with no file, the row names the fix instead of waiting (orchestrator, 3 Nov 2026: the owner's
+ * OnePlus said "Waiting for recording", with no reason, for two hours).
+ */
+export type FolderRecorder = Readonly<{
+  /** None of the known folders is on this phone and none is picked: pick it (the picker opens there). */
+  pick: boolean;
+}>;
+export const NO_FILE_AFTER_MS = 3 * 60_000;
+export function folderRecorder(
+  status: SetupStatus | null,
+): FolderRecorder | null {
+  if (!status?.recorder || status.recorder.kind === "private") return null;
+  return {
+    pick:
+      !status.folderPicked &&
+      status.recorder.folders.every((folder) => folder.state === "missing"),
+  };
+}
+function folderTrack(folder: FolderRecorder): Track {
+  return {
+    done: 0,
+    label: "No recording yet",
+    stuck: false,
+    fix: folder.pick
+      ? {
+          label: "Pick your recordings folder",
+          run: () => void pickRecordingsFolder(),
+        }
+      : {
+          label: "Turn on Auto record in your Phone app",
+          run: () => void recorderOpen("settings"),
+        },
+  };
+}
+/**
  * The phone's queue (app builds with autoCaptureHealth add a hold reason) and the capture guard's
  * receipts. A hold says why a call waits, so it leads; then server receipts, which outrank a stale
  * native queue; missing stays visible after the deadline. A recording that can't come from a
@@ -182,6 +220,8 @@ export function trackFor(
   server: CaptureCall | null,
   unavailable = false,
   recorder: PrivateRecorder | null = null,
+  folder: FolderRecorder | null = null,
+  now = Date.now(),
 ): Track | null {
   const arrived = "arrived" as const;
   if (server?.state === "report_ready")
@@ -241,6 +281,13 @@ export function trackFor(
     (server?.state === "missing" || server?.state === "waiting")
   )
     return privateTrack(recorder);
+  if (
+    folder &&
+    !native &&
+    (server?.state === "missing" || server?.state === "waiting") &&
+    now - Date.parse(server.at) >= NO_FILE_AFTER_MS
+  )
+    return folderTrack(folder);
   // No recording 30 minutes on: a call that ended without one, said calmly with its way to
   // add it, never "Stuck" in red (persona QA, 31 Oct 2026: it shouted two days later).
   if (server?.state === "missing")
@@ -353,14 +400,22 @@ type Evidence = {
   server: CaptureCall | null;
   unavailable: boolean;
   recorder: PrivateRecorder | null;
+  folder: FolderRecorder | null;
+};
+type PhoneRecorder = {
+  recorder: PrivateRecorder | null;
+  folder: FolderRecorder | null;
 };
 // The Phone app this phone records with, read once and again at each return to the app (the
 // seller may have switched it), not every 30 s: the phone counts its recordings to answer.
-let recorderRead: Promise<PrivateRecorder | null> | null = null;
-function readRecorder(): Promise<PrivateRecorder | null> {
+let recorderRead: Promise<PhoneRecorder> | null = null;
+function readRecorder(): Promise<PhoneRecorder> {
   recorderRead ??= setupStatus()
-    .then((status) => privateRecorder(status?.recorder ?? null))
-    .catch(() => null);
+    .then((status) => ({
+      recorder: privateRecorder(status?.recorder ?? null),
+      folder: folderRecorder(status),
+    }))
+    .catch(() => ({ recorder: null, folder: null }));
   return recorderRead;
 }
 /** Read the Phone app again next time (a return to the app; tests). */
@@ -376,7 +431,7 @@ let stopSignal: (() => void) | null = null;
 async function readAll(): Promise<void> {
   const ids = [...watchers.keys()];
   if (!ids.length) return;
-  const [items, recent, recorder] = await Promise.all([
+  const [items, recent, phone] = await Promise.all([
     autoCaptureStates(),
     readCaptureGuard(),
     readRecorder(),
@@ -395,7 +450,7 @@ async function readAll(): Promise<void> {
       native: items.find((item) => item.eventId === id) ?? null,
       server: calls.find((call) => call.event_id === id) ?? null,
       unavailable: recent === null,
-      recorder,
+      ...phone,
     };
     watchers.get(id)?.forEach((tell) => tell(evidence));
   }
@@ -464,6 +519,7 @@ export function AutoCaptureState({
           evidence.server,
           evidence.unavailable,
           evidence.recorder,
+          evidence.folder,
         ),
       }),
     );
