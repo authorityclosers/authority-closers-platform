@@ -65,6 +65,15 @@
   list-style: none;
 }
 
+/* Where the row holds both, the steps keep its end whether the minutes line has
+   come yet or not, so they never jump across when it arrives (the test robot,
+   8c687b6a, 3 Nov 2026). */
+@media (min-width: 720px) {
+  .trail {
+    margin-left: auto;
+  }
+}
+
 .trail li {
   display: inline-flex;
   align-items: center;

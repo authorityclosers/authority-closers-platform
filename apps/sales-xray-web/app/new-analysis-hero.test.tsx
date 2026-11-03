@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -100,4 +102,15 @@ it("offers more minutes beside an exhausted balance only when asked", async () =
     ),
   );
   expect(host.querySelector('a[href="/plans"]')).toBeNull();
+});
+
+it("keeps the steps at the row's end, whether the minutes line has come or not", () => {
+  // The test robot, 8c687b6a, 3 Nov 2026: at 1440 they jumped across when it came.
+  const css = readFileSync(
+    join(process.cwd(), "app/new-analysis-hero.module.css"),
+    "utf8",
+  );
+  expect(css).toMatch(
+    /@media \(min-width: 720px\) \{\s*\.trail \{\s*margin-left: auto;/,
+  );
 });
