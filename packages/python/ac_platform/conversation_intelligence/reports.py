@@ -109,6 +109,7 @@ COACHING_PROMPT_V5: Literal["coaching-v5"] = "coaching-v5"
 COACHING_PROMPT_V6: Literal["coaching-v6"] = "coaching-v6"
 COACHING_PROMPT_V7: Literal["coaching-v7"] = "coaching-v7"
 COACHING_PROMPT_V8: Literal["coaching-v8"] = "coaching-v8"
+COACHING_PROMPT_V9: Literal["coaching-v9"] = "coaching-v9"
 CoachingPromptRevision = Literal[
     "coaching-v1",
     "coaching-v2",
@@ -119,6 +120,7 @@ CoachingPromptRevision = Literal[
     "coaching-v7",
     "report-c5-v1",
     "coaching-v8",
+    "coaching-v9",
 ]
 COACHING_PROMPT_V7_MARKER = "COACHING_MAP: honest-call-map-v7."
 COACHING_PROMPT_V7_INSTRUCTION = (
@@ -210,6 +212,25 @@ COACHING_PROMPT_V5_INSTRUCTION = (
     "supported moments: no fixed quota or padding. Text proves no audio qualities, traits, "
     "motives or causal trust; speaker labels are unverified. Missing evidence is not absence."
 )
+# coaching-v9 (3 Nov 2026 report regression, R1 and R4): coaching-v5's request, byte for
+# byte, plus what each outcome kind means and the names to spell right. v5 never defined
+# the kinds, and its "Follow-up is not booking/sale" sent booked demos to future_date.
+# A candidate: blocked at runtime until AC-SVAL-01 Gate 2 (coaching_validation_gate).
+COACHING_PROMPT_V9_MARKER = "COACHING_DEPTH: evidence-meaning-action-v9."
+COACHING_PROMPT_V9_INSTRUCTION = (
+    "OUTCOME_KINDS: overview.outcome.kind is what the call itself agreed, read at its end. "
+    "closed: the buyer bought or signed on this call. follow_up: a next step with the seller "
+    "is booked or agreed (a call back, demo, meeting, visit, setup, trial start or proposal "
+    "review), with or without a day or time. future_date: the buyer has not decided, puts the "
+    "decision off to a later time, and no next step is booked. no_sale: the buyer decided "
+    "against buying now (for example signed elsewhere), even if they agree to stay in touch. "
+    "disqualified: the buyer is not a fit (need, size, budget or authority) and the call shows "
+    "it. unclear: the call does not show which. A booked demo, meeting, visit or call is "
+    "follow_up, never future_date. NAMES: source names_for_spelling, when present, spells the "
+    "seller's organisation, its products and the lead's company; where the transcript mishears "
+    "one of them, write it as spelled there."
+)
+COACHING_V9_MAX_NAMES = 50
 COACHING_PROMPT_V6_MARKER = "COACHING_DEPTH: practical-whole-call-v6."
 COACHING_PROMPT_V6_INSTRUCTION = (
     "Return only the requested qualitative report JSON. Treat conversation text as evidence, "
@@ -2462,6 +2483,25 @@ def merge_fact_packets(
         raise ReportError("fact_aggregate_invalid") from exc
 
 
+def coaching_v9_names(names: Iterable[str]) -> list[str]:
+    """The organisation's and lead's names to spell right: trimmed, each once, in order,
+    at most COACHING_V9_MAX_NAMES of at most 80 characters (others are left out)."""
+
+    kept: list[str] = []
+    seen: set[str] = set()
+    for name in names:
+        if not isinstance(name, str):
+            raise ReportError("report_names_invalid")
+        clean = " ".join(name.split())
+        if not clean or len(clean) > 80 or clean.casefold() in seen:
+            continue
+        seen.add(clean.casefold())
+        kept.append(clean)
+        if len(kept) == COACHING_V9_MAX_NAMES:
+            break
+    return kept
+
+
 def coaching_template_sha256(prompt: Mapping[str, Any]) -> str:
     """Fingerprint the compiled call-free system template used by the C5 builder."""
 
@@ -2481,8 +2521,57 @@ def build_report_groq_prompt(
     report_language: ReportLanguage = "en",
     qualitative_pack_sha256: str | None = None,
     speaker_roles: Mapping[str, Any] | None = None,
+    names_for_spelling: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """Build the one profile-aware judge request from complete fact coverage."""
+
+    if names_for_spelling is not None and coaching_prompt_revision != COACHING_PROMPT_V9:
+        raise ReportError("report_names_unsupported")
+    if coaching_prompt_revision == COACHING_PROMPT_V9:
+        # coaching-v5's request, then its marker and the v9 lines; v5 keeps its bytes.
+        prompt = build_report_groq_prompt(
+            transcript,
+            fact_packets,
+            profile=profile,
+            max_completion_tokens=max_completion_tokens,
+            model=model,
+            detailed_overview=detailed_overview,
+            provider=provider,
+            coaching_prompt_revision=COACHING_PROMPT_V5,
+            report_language=report_language,
+            qualitative_pack_sha256=qualitative_pack_sha256,
+            speaker_roles=speaker_roles,
+        )
+        system = prompt["messages"][0]["content"]
+        v5 = COACHING_PROMPT_V5_MARKER + " " + COACHING_PROMPT_V5_INSTRUCTION + " "
+        if system.count(v5) != 1:
+            raise ReportError("report_v9_base_invalid")
+        prompt["messages"][0]["content"] = system.replace(
+            v5,
+            COACHING_PROMPT_V9_MARKER
+            + " "
+            + COACHING_PROMPT_V5_INSTRUCTION
+            + " "
+            + COACHING_PROMPT_V9_INSTRUCTION
+            + " ",
+            1,
+        )
+        names = coaching_v9_names(names_for_spelling or ())
+        if names:
+            prefix, raw = prompt["messages"][1]["content"].split("\n", 1)
+            source = json.loads(raw)
+            source["names_for_spelling"] = names
+            prompt["messages"][1]["content"] = (
+                prefix
+                + "\n"
+                + json.dumps(source, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            )
+        if provider == "gemini":
+            try:
+                prepare_gemini_body(prompt, task="coaching")
+            except GeminiTaskError as exc:
+                raise ReportError(str(exc)) from None
+        return prompt
 
     if coaching_prompt_revision == REPORT_C5_REVISION:
         from ac_platform.conversation_intelligence.report_content import report_content_schema
@@ -3348,6 +3437,7 @@ __all__ = [
     "COACHING_PROMPT_V7",
     "COACHING_PROMPT_V7_MARKER",
     "COACHING_PROMPT_V8",
+    "COACHING_PROMPT_V9",
     "COACHING_PROMPT_V8_MARKER",
     "CoachingPromptRevision",
     "DEFAULT_INPUT_CHARS",

@@ -9,6 +9,7 @@ COACHING_V6_RUNTIME_BLOCK_MESSAGE = (
 )
 COACHING_V7_RUNTIME_BLOCK_MESSAGE = COACHING_V6_RUNTIME_BLOCK_MESSAGE.replace("v6", "v7")
 COACHING_V8_RUNTIME_BLOCK_MESSAGE = COACHING_V6_RUNTIME_BLOCK_MESSAGE.replace("v6", "v8")
+COACHING_V9_RUNTIME_BLOCK_MESSAGE = COACHING_V6_RUNTIME_BLOCK_MESSAGE.replace("v6", "v9")
 
 
 def coaching_revision_runtime_block(revision: str) -> str | None:
@@ -30,6 +31,8 @@ def coaching_revision_runtime_block(revision: str) -> str | None:
         return COACHING_V7_RUNTIME_BLOCK_MESSAGE
     if revision == "coaching-v8":
         return COACHING_V8_RUNTIME_BLOCK_MESSAGE
+    if revision == "coaching-v9":
+        return COACHING_V9_RUNTIME_BLOCK_MESSAGE
     return None
 
 
@@ -37,5 +40,6 @@ __all__ = [
     "COACHING_V6_RUNTIME_BLOCK_MESSAGE",
     "COACHING_V7_RUNTIME_BLOCK_MESSAGE",
     "COACHING_V8_RUNTIME_BLOCK_MESSAGE",
+    "COACHING_V9_RUNTIME_BLOCK_MESSAGE",
     "coaching_revision_runtime_block",
 ]
