@@ -252,12 +252,14 @@ function makeCtx(tab, cell, alias) {
 
 // The page as it looks once it has filled in: text and loading marks unchanged over two reads a second apart (at most 9 s).
 // A page that paints its header first reads 50 characters at 0.7 s and 600 at 2 s: a baseline taken early makes every later difference look like the fault's doing.
+// loading words some pages show without a loading mark ("Counting the calls...", "Syncing...")
+const LOADING_WORDS = /\b(Counting|Loading|Syncing|Checking|Fetching)\b[^.\n]{0,40}(\u2026|\.\.\.)/i;
 async function settledFacts(tab) {
   let prev = await facts(tab);
   for (let i = 0; i < 9; i++) {
     await sleep(1000);
     const cur = await facts(tab);
-    const steady = cur.textLength >= 25 && cur.loading === 0 && Math.abs(cur.textLength - prev.textLength) <= 2;
+    const steady = cur.textLength >= 25 && cur.loading === 0 && !LOADING_WORDS.test(cur.text || "") && Math.abs(cur.textLength - prev.textLength) <= 2;
     prev = cur;
     if (steady) break;
   }
@@ -290,6 +292,7 @@ async function famFault(ctx, route) {
   const base = await settledFacts(tab);
   calls.stop();
   if (base.textLength < 25 || base.overlay) return ctx.note("the page itself is blank or crashed without a fault: no trials");
+  if (LOADING_WORDS.test(base.text || "")) return ctx.note(`the page was still on its loading words after settling ("${(base.text || "").slice(-40)}"): no trials`);
   const endpoints = [...calls.seen.keys()].slice(0, 8);
   ctx.note(`calls on load: ${endpoints.join(", ") || "none"}`);
   if (!endpoints.length) return;
