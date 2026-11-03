@@ -431,6 +431,10 @@ export function AcquisitionStudio({
     (pending
       ? (pending.selection?.file ?? retainedUploadFile)
       : (localFile ?? retainedUploadFile));
+  // A shown call's file is only the one it was sent from here: a file waiting
+  // in New analysis never names another call (U4: a report's player showed
+  // the last uploaded file's name).
+  const callFile = submission ? sentFile : file;
   // The chosen file's wave, measured in this browser (shared with its card),
   // carries the call's shape into sending and the steps.
   const fileWave = useFileWave(file);
@@ -726,10 +730,10 @@ export function AcquisitionStudio({
     : Boolean(file);
   const displayFileName = localObservation
     ? localObservation.file_name
-    : (file?.name ?? null);
+    : (callFile?.name ?? null);
   const displayFileBytes = localObservation
     ? localObservation.file_size_bytes
-    : (file?.size ?? null);
+    : (callFile?.size ?? null);
   const displayReportLanguage = localObservation
     ? localObservation.report_language
     : reportLanguage;
@@ -4030,7 +4034,7 @@ export function AcquisitionStudio({
                     callRecord: result.callRecord,
                     title: callTitle(
                       result.label,
-                      file?.name ?? "Sales X-Ray call report",
+                      sentFile?.name ?? "Sales X-Ray call report",
                     ),
                     callType: result.callRecord?.call_type ?? undefined,
                     callLength: formatClock(result.transcript.duration_ms),
@@ -4182,7 +4186,7 @@ export function AcquisitionStudio({
                   callId={submission?.id ?? null}
                   callTitle={callTitle(
                     result.label,
-                    file?.name ?? "Sales X-Ray call report",
+                    sentFile?.name ?? "Sales X-Ray call report",
                   )}
                   onSeek={playFrom}
                   audioAvailable={Boolean(audio.current)}
@@ -4192,7 +4196,10 @@ export function AcquisitionStudio({
                 audioRef={audio}
                 src={source}
                 durationMs={result.transcript.duration_ms}
-                title={file?.name ?? "Your saved sales call"}
+                title={
+                  sentFile?.name ??
+                  callTitle(result.label, "Your saved sales call")
+                }
                 embedded={embedded}
                 onPlay={() => setMoment(null)}
                 onTimeUpdate={() => {

@@ -1952,6 +1952,19 @@ it.each(["/analysis/new", "/analysis/new/"])(
   },
 );
 
+it("names a saved call's player by that call, never by a file waiting in New analysis (3 Nov 2026 regression, U4)", async () => {
+  await mount();
+  await select();
+  existing = true;
+  accepted = true;
+  await navigateToCall(submissionId);
+  const title = container.querySelector(
+    '[aria-label="Call audio player"] strong',
+  );
+  expect(title?.textContent).toBeTruthy();
+  expect(title?.textContent).not.toBe("Sales call.wav");
+});
+
 it("captures new-call intent before delayed bootstrap reads can mistake an in-flight upload for saved work", async () => {
   existing = true;
   progressOverride = { malformed: true };
