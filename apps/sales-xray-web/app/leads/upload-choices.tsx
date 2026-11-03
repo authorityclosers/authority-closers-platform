@@ -83,12 +83,18 @@ export function UploadChoicesFields({
             items={[
               { key: "cold", label: "Cold Leads" },
               { key: "live", label: "Inbound Leads" },
+              // Old leads kept as history (owner, 2 Nov 2026): owners and admins only.
+              ...(canManage
+                ? [{ key: "history" as const, label: "Old leads" }]
+                : []),
             ]}
           />
           <small className={styles.help}>
             {value.side === "cold"
               ? "For bulk cold databases."
-              : "Only for records that came from real enquiries."}
+              : value.side === "history"
+                ? "Leads you worked before. They keep their date, stage and salesperson, stay out of everyone's lists, and count in Analytics."
+                : "Only for records that came from real enquiries."}
           </small>
         </div>
       )}

@@ -12,6 +12,7 @@ import {
 } from "../../leads/sources-view";
 import { BrandTile } from "../../ui/brand-tile";
 import { Skeleton } from "../../ui/kit";
+import { CampaignStatuses } from "./campaigns";
 import { MetaAccounts, testOnly, topLine } from "./meta-accounts";
 import { metaRequest, refreshForms, type MetaCatalogue } from "./meta-client";
 import { MicrophoneAccess } from "./microphone";
@@ -227,6 +228,8 @@ export function OrganisationSources() {
         onAnother={another}
       />
       <div className={styles.more}>
+        {/* Each campaign Live, Paused or Ended (owner, 2-3 Nov 2026): folded too. */}
+        <CampaignStatuses />
         <details
           className={styles.details}
           onToggle={(event) => setShowOther(event.currentTarget.open)}

@@ -7,7 +7,8 @@
 import type { ImportPreview, RepView } from "./leads-client";
 import type { StageView } from "./journey/journey-client";
 
-export type Side = "cold" | "live";
+/** "history": old leads already worked, kept out of every work list (owner, 2 Nov 2026). */
+export type Side = "cold" | "live" | "history";
 /** Who gets the new leads (owner, 2 Nov 2026: "Who gets these leads?"): shared between
  *  the sellers, one seller, or left for the owner to assign; a seller's go on their own
  *  desk ("me"). "rules" is the lead rules, kept for older callers. */

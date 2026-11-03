@@ -43,6 +43,7 @@ from ac_platform.lead_desk.contracts import (
     UpcomingItem,
 )
 from ac_platform.lead_desk.errors import DeskError
+from ac_platform.lead_desk.history import worked
 from ac_platform.lead_desk.journey.engine import not_undone
 from ac_platform.lead_desk.models import (
     Lead,
@@ -294,6 +295,7 @@ async def my_day_for(desk: LeadDesk, person: UUID | None = None) -> MyDayView:
         Lead.tenant_id == desk.tenant_id,
         Lead.owner_person_id == who,
         Lead.stage.in_(OPEN_STAGES),
+        worked(),
     )
     tasks = (
         await desk.db.execute(
@@ -522,7 +524,8 @@ async def distribute_leads(desk: LeadDesk, command: DistributeLeads) -> Distribu
     query = select(Lead).where(Lead.tenant_id == desk.tenant_id)
     if command.unassigned:
         query = (
-            query.where(Lead.owner_person_id.is_(None), Lead.stage.in_(OPEN_STAGES))
+            # Old leads kept as history are never handed out (2 Nov 2026).
+            query.where(Lead.owner_person_id.is_(None), Lead.stage.in_(OPEN_STAGES), worked())
             .order_by(Lead.created_at, Lead.id)
             .limit(spread.LIMIT + 1)
         )

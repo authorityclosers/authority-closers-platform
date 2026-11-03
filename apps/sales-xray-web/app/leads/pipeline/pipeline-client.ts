@@ -286,7 +286,8 @@ export function meetingNotHeld(
 
 /* ---------- the pipeline's numbers ---------- */
 
-export type ReportPeriod = 7 | 30 | 90;
+/** 0 is All time: the one period that counts old leads kept as history. */
+export type ReportPeriod = 0 | 7 | 30 | 90;
 
 export type Conversion = {
   key: string;
@@ -311,6 +312,23 @@ export type GroupRow = {
   connect_rate: number | null;
   junk_rate: number | null;
   first_response_minutes: number | null;
+  /** Leads that reached Interested or later (owner Analytics, 2 Nov 2026). */
+  interested?: number;
+  /** A seller's own calls in the period, the connected ones, and their talk time. */
+  calls?: number;
+  connected_calls?: number;
+  talk_seconds?: number;
+};
+
+export type CampaignStatus = "live" | "paused" | "ended";
+
+/** One campaign: a Meta campaign, a website campaign, a file or a form. */
+export type CampaignRow = GroupRow & {
+  source: string;
+  status: CampaignStatus;
+  /** Every lead in it is an old lead brought in as history. */
+  history: boolean;
+  last_lead_at: string | null;
 };
 
 export type PipelineReport = {
@@ -340,7 +358,27 @@ export type PipelineReport = {
   sellers: GroupRow[];
   sources: GroupRow[];
   mine: boolean;
+  /** Old leads kept as history counted here: only All time counts them. */
+  history_leads?: number;
+  campaigns?: CampaignRow[];
+  /** The most common places leads typed, and how many typed cities name none. */
+  cities?: { label: string; count: number }[];
+  cities_unplaced?: number;
+  /** The Lead Desk settings' revision, for setting a campaign's status. */
+  revision?: number;
 };
+
+/** An owner or admin marks a campaign Live, Paused or Ended. */
+export function setCampaignStatus(
+  key: string,
+  status: CampaignStatus,
+  expectedRevision: number,
+) {
+  return deskRequest<{ key: string; status: CampaignStatus; revision: number }>(
+    "/campaigns/status",
+    deskJson("POST", { key, status, expected_revision: expectedRevision }),
+  );
+}
 
 /** Each lead counted once; conversions from history, Junk left out. */
 export function readPipelineReport(

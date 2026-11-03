@@ -219,7 +219,8 @@ const MANAGE_TITLE: Record<Manage, string> = {
   team: "Team",
   sources: "Lead sources",
   stages: "Lead stages",
-  numbers: "Pipeline numbers",
+  // The owner's one page of numbers (owner Analytics, 2 Nov 2026).
+  numbers: "Analytics",
 };
 
 // The desk reads itself again when the app comes back, and every minute.
@@ -294,7 +295,7 @@ function viewHref(
 
 const DUE = new Set(["late", "today", "week", "none"]);
 const SINCE = new Set(["today", "week", "month", "never"]);
-const MADE = new Set(["today", "week", "month"]);
+const MADE = new Set(["today", "week", "month", "history"]);
 const SORTS = new Set(["next_action", "last_contact", "name", "created"]);
 const SIDE_KEYS = new Set(["inbound", "cold"]);
 const VIEW_KEYS = new Set(["to_call", "follow_ups", "all"]);
@@ -1683,7 +1684,7 @@ export function LeadsRoute({
       : []),
     {
       key: "numbers",
-      label: "Pipeline numbers",
+      label: "Analytics",
       note: can ? "See progress and results" : "See your progress and results",
       onPick: () => {
         setSettingsOpen(false);

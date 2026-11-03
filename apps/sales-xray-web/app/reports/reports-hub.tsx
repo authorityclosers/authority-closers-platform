@@ -12,7 +12,6 @@ import {
   AudioLines,
   BarChart3,
   ChevronRight,
-  Filter,
   GraduationCap,
   LineChart,
   Sparkles,
@@ -139,19 +138,6 @@ function pipelineLine(pipeline: Loaded<PipelineReport>) {
     .join(" · ");
 }
 
-function lostLine(pipeline: Loaded<PipelineReport>) {
-  if (pipeline === undefined) return undefined;
-  const top = pipeline?.lost_now[0];
-  if (!pipeline || (!top && !pipeline.junk_now))
-    return "Why leads are lost, once some are";
-  return [
-    top ? `Top reason: ${top.label} (${top.count})` : null,
-    pipeline.junk_now ? `${pipeline.junk_now} junk` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-
 function salesLine(performance: Loaded<Performance>) {
   if (performance === undefined) return undefined;
   if (!performance) return "Won, interested and connected, by period";
@@ -210,22 +196,15 @@ function cards(data: ReportsData): Card[] {
       line: "Your selling skills, from your analysed calls",
       href: "/coaching",
     },
+    // One card for the owner's numbers (owner Analytics, 2 Nov 2026): Pipeline numbers
+    // and Lost and junk opened the same page.
     {
       key: "pipeline",
       kind: "leads",
-      icon: Filter,
-      tone: "blue",
-      title: "Pipeline numbers",
-      line: pipelineLine(data.pipeline),
-      href: "/leads?tab=numbers",
-    },
-    {
-      key: "lost",
-      kind: "leads",
       icon: LineChart,
-      tone: "slate",
-      title: "Lost and junk",
-      line: lostLine(data.pipeline),
+      tone: "blue",
+      title: "Analytics",
+      line: pipelineLine(data.pipeline),
       href: "/leads?tab=numbers",
     },
     {

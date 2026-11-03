@@ -174,3 +174,62 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* Old leads kept as history (owner, 2 Nov 2026): each stage word in the file with the
+   stage it becomes, one row each; the picker sits beside the word, under it on a phone. */
+.oldLeads {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.oldTitle {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.words {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  container-type: inline-size;
+}
+
+.words li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 12px;
+}
+
+@container (max-width: 360px) {
+  .words li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.word {
+  display: grid;
+  min-width: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.word small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.oldNote {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}

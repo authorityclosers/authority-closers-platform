@@ -67,6 +67,8 @@ export const MADE_WORDS: Record<ListMade, string> = {
   today: "Came in today",
   week: "Came in this week",
   month: "Came in this month",
+  // Old leads brought in as history: in no other list (owner, 2 Nov 2026).
+  history: "Old leads",
 };
 export const SORT_WORDS: Record<ListSort, string> = {
   next_action: "Next follow-up",

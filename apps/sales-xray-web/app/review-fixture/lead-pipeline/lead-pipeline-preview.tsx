@@ -106,7 +106,7 @@ export function LeadPipelinePreview() {
   if (view === "numbers")
     return (
       <main style={{ display: "grid", gap: 16, padding: 16 }}>
-        <h1 style={{ margin: 0 }}>Pipeline numbers</h1>
+        <h1 style={{ margin: 0 }}>Analytics</h1>
         <PipelineDashboard pipeline="main" />
       </main>
     );

@@ -69,8 +69,7 @@ it("puts every kind of report in one place, by category", async () => {
   expect(titles()).toEqual([
     "Call reports",
     "Coaching",
-    "Pipeline numbers",
-    "Lost and junk",
+    "Analytics",
     "How sales are going",
     "First response",
     "Team insights",
