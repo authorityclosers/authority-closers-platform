@@ -134,8 +134,8 @@ it("does not claim private recordings are accessible and fixes open the native c
     />,
   );
   expect(host.textContent).toContain("keeps recordings private");
-  expect(host.textContent).toContain("has not reported");
-  expect(host.textContent).toContain("Standing consent needed");
+  expect(host.textContent).toContain("has not seen a recording yet");
+  expect(host.textContent).toContain("Analyse my calls is off");
   await act(async () => {
     (host.querySelector("button") as HTMLButtonElement).click();
   });
@@ -176,6 +176,27 @@ it("counts the last recording's age from when the phone answered", async () => {
     />,
   );
   expect(host.textContent).toContain("saved 5 minutes ago");
+  // All fine: no rows to fix, only the last recording (production 132).
+  for (const fix of ["Phone settings", "Choose folder", "Upload settings"])
+    expect(host.textContent).not.toContain(fix);
+});
+
+it("without a phone answering, says once where to check", async () => {
+  await render(
+    <CaptureHealthView
+      setup={null}
+      status={null}
+      consentOn
+      onRecorder={() => {}}
+      onFolder={() => {}}
+      onRefresh={() => {}}
+    />,
+  );
+  expect(host.textContent).toContain("Open Sales X-Ray on your phone");
+  expect(host.textContent).not.toContain("Phone settings");
+  expect(host.textContent).not.toContain("Choose folder");
+  // Uploads are a setting here too, so their row stays, saying where it goes.
+  expect(host.querySelector("a")?.textContent).toBe("Apps & devices");
 });
 it("shows daily counts with no seller ranking", async () => {
   await render(

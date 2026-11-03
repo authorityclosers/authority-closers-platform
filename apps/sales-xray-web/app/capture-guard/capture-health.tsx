@@ -195,74 +195,87 @@ export function CaptureHealthView({
         onFolder={onFolder}
         onBattery={onBattery}
       />
-      <div className={styles.check}>
-        <span>
-          <strong>Is the phone saving recordings?</strong>
-          <small>
-            {privateFiles
-              ? "This Phone app keeps recordings private. Sales Xray cannot read them."
-              : recording === "on"
-                ? "Call recording is on. Make a test call to check the saved file."
+      {/* Only what still needs doing, each with one action that says where it
+          goes (owner, production report 132, 3 Nov 2026). With no phone
+          answering, one line says where to look instead of four unknowns. */}
+      {setup ? null : (
+        <p className={styles.checkNote}>
+          Open Sales X-Ray on your phone to check its call recording.
+        </p>
+      )}
+      {setup && (privateFiles || recording !== "on") ? (
+        <div className={styles.check}>
+          <span>
+            <strong>Call recording</strong>
+            <small>
+              {privateFiles
+                ? "This Phone app keeps recordings private. Sales X-Ray cannot read them."
                 : recording === "off"
                   ? "Call recording is off."
-                  : "Not confirmed by this phone. Check its recorder settings."}
-          </small>
-        </span>
-        <Button variant="ghost" onClick={onRecorder}>
-          Fix recorder
-        </Button>
-      </div>
-      <div className={styles.check}>
-        <span>
-          <strong>Is the recordings folder granted?</strong>
-          <small>
-            {setup
-              ? setup.folderPicked
-                ? "A recordings folder is selected."
-                : "No recordings folder selected."
-              : "Open Sales Xray on your phone to check."}
-          </small>
-        </span>
-        <Button variant="ghost" onClick={onFolder}>
-          Fix folder
-        </Button>
-      </div>
-      <div className={styles.check}>
-        <span>
-          <strong>When was a recording last seen?</strong>
-          <small>
-            {ago === null
-              ? "This app has not reported when it last saw a recording."
-              : ago < 1
-                ? "Last readable recording saved less than a minute ago."
-                : ago < 60
-                  ? `Last readable recording saved ${ago} minutes ago.`
-                  : `Last readable recording saved ${Math.floor(ago / 60)} hours ago.`}
-          </small>
-        </span>
-        <Button variant="ghost" onClick={onRefresh}>
-          Check again
-        </Button>
-      </div>
-      <div className={styles.check}>
-        <span>
-          <strong>Are auto-upload and consent on?</strong>
-          <small>
-            {status?.on ? "Auto-upload on" : "Auto-upload off or unavailable"} ·{" "}
-            {consentOn ? "Standing consent given" : "Standing consent needed"}
-            {status?.pending
-              ? ` · ${status.pending === 1 ? "1 call" : `${status.pending} calls`} on the way`
-              : ""}
-          </small>
-        </span>
-        <Link
-          href={
-            status?.supported ? "#automatic-call-uploads" : "/settings/devices"
-          }
-        >
-          Fix uploads
-        </Link>
-      </div>
+                  : "Not confirmed by this phone yet."}
+            </small>
+          </span>
+          <Button variant="ghost" onClick={onRecorder}>
+            Phone settings
+          </Button>
+        </div>
+      ) : null}
+      {setup && !setup.folderPicked ? (
+        <div className={styles.check}>
+          <span>
+            <strong>Recordings folder</strong>
+            <small>No folder chosen yet.</small>
+          </span>
+          <Button variant="ghost" onClick={onFolder}>
+            Choose folder
+          </Button>
+        </div>
+      ) : null}
+      {!status?.on || !consentOn ? (
+        <div className={styles.check}>
+          <span>
+            <strong>Automatic uploads</strong>
+            <small>
+              {[
+                status?.on
+                  ? null
+                  : status?.supported
+                    ? "Off on this phone"
+                    : "They run in the Sales X-Ray app on your phone",
+                consentOn ? null : "Analyse my calls is off",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </small>
+          </span>
+          <Link
+            href={
+              status?.supported
+                ? "#automatic-call-uploads"
+                : "/settings/devices"
+            }
+          >
+            {status?.supported ? "Upload settings" : "Apps & devices"}
+          </Link>
+        </div>
+      ) : null}
+      {setup ? (
+        <p className={styles.checkNote}>
+          {ago === null
+            ? "This phone has not seen a recording yet."
+            : ago < 1
+              ? "Last recording saved less than a minute ago."
+              : ago < 60
+                ? `Last recording saved ${ago} minutes ago.`
+                : `Last recording saved ${Math.floor(ago / 60)} hours ago.`}
+          {status?.pending
+            ? ` ${status.pending === 1 ? "1 call" : `${status.pending} calls`} on the way.`
+            : ""}{" "}
+          <button type="button" className={styles.again} onClick={onRefresh}>
+            Check again
+          </button>
+        </p>
+      ) : null}
       {privateFiles ? (
         <p>
           Company calling can record calls without reading this phone&apos;s

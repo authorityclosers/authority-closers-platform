@@ -129,6 +129,18 @@ button.noteAction {
   font-size: var(--sx-text-sm);
 }
 
+/* Usage analytics' notice opens from one line (production 148 and 132). */
+details.hint > summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--sx-accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 /* Phone & alerts → Phone setup (phone-panel.tsx): how far it is, the way to
    finish, and each line with its Fix. */
 .setupHead {
