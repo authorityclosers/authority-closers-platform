@@ -90,7 +90,7 @@ export function phoneFacts(
     notifications: setup.checks.notifications === true,
     notificationsBlocked: setup.blocked.notifications,
     uploadsOn: capture?.on === true,
-    wifiOnly: capture?.wifiOnly !== false,
+    wifiOnly: capture?.wifiOnly === true,
     newestMs: recorder?.newestMs ?? null,
     newestDurationMs: recorder?.newestDurationMs ?? null,
     testCall: setup.checks.testCall === true,

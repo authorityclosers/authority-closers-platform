@@ -296,6 +296,13 @@
   min-height: 40px;
 }
 
+/* Allow, with Not now under it, on the rows that can wait (owner, 3 Nov 2026). */
+.grantActions {
+  display: grid;
+  flex: none;
+  gap: 4px;
+}
+
 .grantIcon {
   display: grid;
   flex: none;

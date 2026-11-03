@@ -129,6 +129,7 @@ import { afterCall } from "./after-call";
 import {
   afterCallStart,
   AUTO_ANALYSIS_SETTINGS_HREF,
+  markNudged,
   notNow,
 } from "./auto-start";
 import { readAutoAnalysis } from "../settings/auto-analysis-client";
@@ -2388,7 +2389,11 @@ function RecordingUpload({
         askedFor.current = found.name;
         const choice = afterCallStart(view);
         if (choice === "start") void startRef.current();
-        else if (choice === "ask") setAsking(true);
+        else if (choice === "ask") {
+          // The day's one gentle ask (auto-start.ts nudgeDue).
+          markNudged();
+          setAsking(true);
+        }
       },
       // Not read: today's tap.
       () => undefined,

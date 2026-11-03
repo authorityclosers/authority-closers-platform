@@ -263,36 +263,65 @@ const STARTS: Record<string, CaptureStep> = {
   update: "phone",
 };
 
+// An organisation's workspace (owner, 3 Nov 2026): the four it needs, then three with Not now.
 const PERMISSIONS: PermissionItem[] = [
   {
     key: "callLog",
     label: "Call log",
     why: "Logs your calls with leads on the lead. Other numbers stay on your phone.",
-    state: "granted",
+    state: "needed",
+    required: false,
+    canWait: true,
   },
   {
     key: "phone",
     label: "Phone",
     why: "Knows when a call starts and ends, so it is timed and its recording found.",
     state: "needed",
+    required: true,
+    canWait: false,
   },
   {
     key: "contacts",
     label: "Contacts",
     why: "Shows the right name on calls and leads by matching callers to your saved contacts. Read for nothing else.",
     state: "update",
+    required: true,
+    canWait: false,
   },
   {
     key: "notifications",
     label: "Notifications",
     why: "New leads, calls that are due, and Undo before a call uploads.",
     state: "blocked",
+    required: true,
+    canWait: false,
   },
   {
     key: "recordings",
     label: "Recordings folder",
     why: "Finds each call's recording in your Phone app's folder.",
+    state: "granted",
+    required: true,
+    canWait: false,
+  },
+  {
+    key: "battery",
+    label: "Battery",
+    why: "Lets calls upload when the app is closed. Choose No restrictions, then allow Autostart for Sales X-Ray.",
     state: "needed",
+    required: false,
+    canWait: true,
+  },
+  {
+    key: "autoAnalysis",
+    label: "Analyse my calls automatically",
+    // Fictional words in the fixture; the real ones come sealed from the server.
+    why: "When I record a sales call with Sales X-Ray in Fictional Homes, the customer knows the call is recorded.",
+    state: "needed",
+    required: false,
+    canWait: true,
+    version: "fixture-v1",
   },
 ];
 
@@ -318,6 +347,7 @@ export function CaptureSetupPreview() {
               tried={new Set<PermissionKey>(["phone"])}
               onAllow={() => undefined}
               onSettings={() => undefined}
+              onLater={() => undefined}
             />
           </div>
         </div>
