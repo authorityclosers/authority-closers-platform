@@ -31,6 +31,7 @@ import { NoticeCenter } from "./notice-center";
 import { ReleaseHoldBanner } from "./release-hold-banner";
 import { TelemetryAuto } from "./telemetry-auto";
 import { ClarityGate } from "./clarity";
+import { TapReach } from "./ui/tap-reach";
 import { PressFeedback } from "./press-feedback";
 import { WebReady } from "./web-ready";
 import { PrePaintScript } from "./pre-paint-script";
@@ -125,6 +126,7 @@ export default async function Layout({
               <TelemetryAuto />
               {/* Microsoft Clarity: only for a signed-in person it is on for, in production. */}
               <ClarityGate />
+              <TapReach />
               <FeatureGate feature="press_feedback">
                 <PressFeedback />
               </FeatureGate>

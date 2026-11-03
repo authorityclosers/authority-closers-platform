@@ -212,6 +212,21 @@
   }
 }
 
+/* The 44 px tap reach (kit/tap-reach.ts tags each control drawn smaller): an
+   invisible layer around the control out to 44 px, so a finger finds it and
+   nothing moves (owner, 3 Nov 2026). */
+@media (pointer: coarse) {
+  [data-reach][data-reach] {
+    position: relative;
+  }
+
+  [data-reach]::after {
+    content: "";
+    position: absolute;
+    inset: min(0px, calc(50% - 22px));
+  }
+}
+
 /* Low-memory phones (data-sx-glass="lite", ui/look.ts): a big blur under
    the bars drops frames while scrolling, so a light blur and a thicker tint. */
 :root[data-sx-glass="lite"],
