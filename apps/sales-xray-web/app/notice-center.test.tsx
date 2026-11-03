@@ -542,3 +542,361 @@ it("puts a page's own card in the corner stack, beside the cards notify() raises
     root = createRoot(host);
   }
 });
+
+// ----- bars under the corner (orchestrator, 3 Nov 2026, for v1.37) -----------------------
+
+type Box = { left: number; top: number; right: number; bottom: number };
+const rect = (box: Box) =>
+  ({
+    ...box,
+    x: box.left,
+    y: box.top,
+    width: box.right - box.left,
+    height: box.bottom - box.top,
+    toJSON: () => box,
+  }) as unknown as DOMRect;
+const view = () => window.innerHeight;
+const cornerStack = () =>
+  document.querySelector<HTMLElement>("[data-corner-own]")?.parentElement ??
+  null;
+const liftOf = () =>
+  cornerStack()?.style.getPropertyValue("--sx-stack-lift") ?? "";
+const frames = () => act(async () => vi.advanceTimersByTime(40));
+
+/**
+ * A phone's window in fictional numbers: the corner stack at its own place
+ * sits 86 px up and 12 px from the sides, 64 px tall with a card open and
+ * 40 px as a pill; every other box is the test's. A hit test finds what is
+ * drawn at a point, the stack first, and the sheet under test is the modal.
+ */
+function phone(boxes: Map<Element, Box>) {
+  const measure = vi
+    .spyOn(Element.prototype, "getBoundingClientRect")
+    .mockImplementation(function (this: Element) {
+      const stack = cornerStack();
+      if (this !== stack || !stack) return rect(boxes.get(this) ?? ZERO);
+      const lift =
+        parseFloat(stack.style.getPropertyValue("--sx-stack-lift")) || 0;
+      const bottom = view() - Math.max(86, lift);
+      const height = stack.querySelector('[role="status"], [role="alert"]')
+        ? 64
+        : stack.textContent
+          ? 40
+          : 0;
+      return rect({ left: 12, top: bottom - height, right: 372, bottom });
+    });
+  const depth = (node: Element) => {
+    let count = 0;
+    for (let at: Element | null = node; at; at = at.parentElement) count += 1;
+    return count;
+  };
+  const drawn = (node: Element, x: number, y: number) => {
+    const box = node.getBoundingClientRect();
+    return (
+      box.height > 0 &&
+      x >= box.left &&
+      x < box.right &&
+      y >= box.top &&
+      y < box.bottom
+    );
+  };
+  Object.defineProperty(document, "elementsFromPoint", {
+    configurable: true,
+    value: (x: number, y: number) => {
+      const stack = cornerStack();
+      const under = [...boxes.keys()]
+        .filter((node) => node.isConnected && drawn(node, x, y))
+        .sort((a, b) => depth(b) - depth(a));
+      return stack && drawn(stack, x, y) ? [stack, ...under] : under;
+    },
+  });
+  const matches = Element.prototype.matches;
+  const modal = vi
+    .spyOn(Element.prototype, "matches")
+    .mockImplementation(function (this: Element, selector: string) {
+      if (selector === ":modal")
+        return (
+          this.hasAttribute("data-fixture-sheet") && this.hasAttribute("open")
+        );
+      return matches.call(this, selector);
+    });
+  return () => {
+    measure.mockRestore();
+    modal.mockRestore();
+    delete (document as { elementsFromPoint?: unknown }).elementsFromPoint;
+    document.documentElement.style.removeProperty("--sx-corner-h");
+  };
+}
+const ZERO: Box = { left: 0, top: 0, right: 0, bottom: 0 };
+
+/**
+ * The lead sheet on a phone, in fictional sizes: a kit sheet whose panel ends
+ * 86 px up, above the tab bar, with its body (data-sheet-body).
+ */
+function leadSheet(boxes: Map<Element, Box>) {
+  const sheet = document.createElement("dialog");
+  sheet.setAttribute("data-fixture-sheet", "");
+  const panel = document.createElement("div");
+  const body = document.createElement("div");
+  body.setAttribute("data-sheet-body", "");
+  panel.append(body);
+  sheet.append(panel);
+  document.body.append(sheet);
+  boxes.set(body, { left: 0, top: 60, right: 384, bottom: view() - 86 });
+  return { sheet, panel, body };
+}
+
+/**
+ * The after-call question's Save & Close, in a row held at the body's bottom
+ * (leads.module.css, .outcome .saveRow): 72 px tall, its top 158 px up.
+ */
+function saveBar(boxes: Map<Element, Box>, body: HTMLElement) {
+  const row = document.createElement("div");
+  row.style.position = "sticky";
+  row.style.bottom = "0";
+  const save = document.createElement("button");
+  save.type = "button";
+  save.textContent = "Save & Close";
+  row.append(save);
+  body.append(row);
+  boxes.set(row, {
+    left: 0,
+    top: view() - 158,
+    right: 384,
+    bottom: view() - 86,
+  });
+  boxes.set(save, {
+    left: 16,
+    top: view() - 148,
+    right: 368,
+    bottom: view() - 96,
+  });
+}
+
+it("lifts a card above the lead sheet's Save & Close bar and folds it to its pill", async () => {
+  // Orchestrator, 3 Nov 2026: "… is your lead now" covered the lead sheet's
+  // Save bar. A corner card never covers a control (owner's rule).
+  vi.useFakeTimers();
+  const boxes = new Map<Element, Box>();
+  const restore = phone(boxes);
+  const { sheet, body } = leadSheet(boxes);
+  saveBar(boxes, body);
+  try {
+    await act(async () =>
+      notify({
+        id: "fictional",
+        tone: "lead",
+        title: "Fictional Asha is your lead now",
+      }),
+    );
+    await act(async () => sheet.setAttribute("open", ""));
+    await frames();
+    expect(cornerStack()?.parentElement).toBe(sheet);
+    // 8 px above the bar's measured top, 158 px up.
+    expect(liftOf()).toBe("166px");
+    expect(
+      sheet.querySelector('button[aria-expanded="false"]')?.textContent,
+    ).toBe("Fictional Asha is your lead now");
+    expect(sheet.querySelector('[role="status"]')).toBeNull();
+    // A tap opens the pill, and the card stays open above Save & Close.
+    await act(async () =>
+      sheet
+        .querySelector<HTMLButtonElement>('button[aria-expanded="false"]')!
+        .click(),
+    );
+    await frames();
+    expect(sheet.querySelector('[role="status"]')).not.toBeNull();
+    expect(liftOf()).toBe("166px");
+    // Scrolled on, the row moves up with the end of its question: the stack
+    // goes back to its place.
+    const row = sheet.querySelector("[data-sheet-body] > div")!;
+    boxes.set(row, {
+      left: 0,
+      top: view() - 330,
+      right: 384,
+      bottom: view() - 258,
+    });
+    boxes.set(row.firstElementChild!, {
+      left: 16,
+      top: view() - 320,
+      right: 368,
+      bottom: view() - 268,
+    });
+    await act(async () => body.dispatchEvent(new Event("scroll")));
+    await frames();
+    expect(liftOf()).toBe("");
+  } finally {
+    await act(async () => sheet.remove());
+    await frames();
+    restore();
+    vi.useRealTimers();
+  }
+});
+
+it("keeps a card above the lead's Call bar, then above Save & Close once Log a call opens", async () => {
+  vi.useFakeTimers();
+  const boxes = new Map<Element, Box>();
+  const restore = phone(boxes);
+  const { sheet, panel, body } = leadSheet(boxes);
+  // The lead's Call bar, in the kit sheet's footer (data-sheet-footer).
+  const footer = document.createElement("footer");
+  footer.setAttribute("data-sheet-footer", "");
+  const call = document.createElement("button");
+  call.type = "button";
+  call.textContent = "Call Asha";
+  footer.append(call);
+  panel.append(footer);
+  boxes.set(body, { left: 0, top: 60, right: 384, bottom: view() - 154 });
+  boxes.set(footer, {
+    left: 0,
+    top: view() - 154,
+    right: 384,
+    bottom: view() - 86,
+  });
+  boxes.set(call, {
+    left: 16,
+    top: view() - 142,
+    right: 368,
+    bottom: view() - 98,
+  });
+  try {
+    await act(async () =>
+      notify({
+        id: "fictional",
+        tone: "error",
+        title: "Fictional sync paused",
+        message: "Fictional steps to fix it.",
+      }),
+    );
+    await act(async () => sheet.setAttribute("open", ""));
+    await frames();
+    expect(liftOf()).toBe("162px");
+    expect(
+      sheet.querySelector('button[aria-expanded="false"]')?.textContent,
+    ).toBe("Fictional sync paused");
+    // Log a call: the question opens, the footer goes and Save & Close is
+    // held at the body's bottom instead.
+    await act(async () => {
+      footer.remove();
+      boxes.set(body, { left: 0, top: 60, right: 384, bottom: view() - 86 });
+      saveBar(boxes, body);
+    });
+    await frames();
+    expect(liftOf()).toBe("166px");
+    expect(sheet.textContent).not.toContain("Fictional steps to fix it.");
+  } finally {
+    await act(async () => sheet.remove());
+    await frames();
+    restore();
+    vi.useRealTimers();
+  }
+});
+
+it("stays at its place over the tab bar, and rises by the bar's measured top when large text makes it taller", async () => {
+  vi.useFakeTimers();
+  const boxes = new Map<Element, Box>();
+  const restore = phone(boxes);
+  // The phone's tab bar: fixed 8 px up, 70 px tall at the usual text size.
+  const tabs = document.createElement("nav");
+  tabs.style.position = "fixed";
+  tabs.style.bottom = "8px";
+  const leads = document.createElement("a");
+  leads.href = "/leads";
+  leads.textContent = "Leads";
+  tabs.append(leads);
+  document.body.append(tabs);
+  const tall = (height: number) => {
+    boxes.set(tabs, {
+      left: 12,
+      top: view() - 8 - height,
+      right: 372,
+      bottom: view() - 8,
+    });
+    boxes.set(leads, {
+      left: 12,
+      top: view() - 8 - height,
+      right: 132,
+      bottom: view() - 8,
+    });
+  };
+  tall(70);
+  try {
+    await act(async () =>
+      notify({
+        id: "fictional",
+        tone: "error",
+        title: "Fictional sync paused",
+        message: "Fictional steps to fix it.",
+      }),
+    );
+    await frames();
+    expect(liftOf()).toBe("");
+    expect(host.textContent).toContain("Fictional steps to fix it.");
+    tall(104);
+    await act(async () => window.dispatchEvent(new Event("resize")));
+    // 8 px above the bar's measured top, 112 px up.
+    expect(liftOf()).toBe("120px");
+    expect(
+      host.querySelector('button[aria-expanded="false"]')?.textContent,
+    ).toBe("Fictional sync paused");
+  } finally {
+    restore();
+    tabs.remove();
+    vi.useRealTimers();
+  }
+});
+
+it("on a page, folds a card that would cover a bar to its pill; opened by a tap it rises above the bar", async () => {
+  // Dev, 1440 px, 3 Nov 2026: the lead beside the list ends above the corner,
+  // so its Call bar is under a card but not under the pill.
+  vi.useFakeTimers();
+  const boxes = new Map<Element, Box>();
+  const restore = phone(boxes);
+  const dock = document.createElement("div");
+  dock.style.position = "sticky";
+  dock.style.bottom = "0";
+  const call = document.createElement("button");
+  call.type = "button";
+  call.textContent = "Call Asha";
+  dock.append(call);
+  document.body.append(dock);
+  boxes.set(dock, {
+    left: 12,
+    top: view() - 180,
+    right: 372,
+    bottom: view() - 128,
+  });
+  boxes.set(call, {
+    left: 24,
+    top: view() - 172,
+    right: 360,
+    bottom: view() - 136,
+  });
+  try {
+    await act(async () =>
+      notify({
+        id: "fictional",
+        tone: "error",
+        title: "Fictional sync paused",
+        message: "Fictional steps to fix it.",
+      }),
+    );
+    await frames();
+    await frames();
+    expect(liftOf()).toBe("");
+    const pill = host.querySelector<HTMLButtonElement>(
+      'button[aria-expanded="false"]',
+    );
+    expect(pill?.textContent).toBe("Fictional sync paused");
+    await act(async () => pill!.click());
+    await frames();
+    await frames();
+    expect(host.textContent).toContain("Fictional steps to fix it.");
+    // 8 px above the bar's measured top, 180 px up.
+    expect(liftOf()).toBe("188px");
+  } finally {
+    restore();
+    dock.remove();
+    vi.useRealTimers();
+  }
+});
