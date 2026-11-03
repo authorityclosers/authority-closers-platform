@@ -992,6 +992,46 @@ it("stays at its place over the tab bar, and rises by the bar's measured top whe
   }
 });
 
+it("never takes the first-call guide for a bar: the guide rises above the stack, the stack stays", async () => {
+  // Seller Home, robot 8c687b6a (3 Nov 2026): on New analysis at 1440 the
+  // stack lifted over the guide, the guide over the stack, and back again.
+  vi.useFakeTimers();
+  const boxes = new Map<Element, Box>();
+  const restore = phone(boxes);
+  const guide = document.createElement("div");
+  guide.setAttribute("data-guide-card", "");
+  guide.style.position = "fixed";
+  guide.style.bottom = "24px";
+  const next = document.createElement("button");
+  next.type = "button";
+  next.textContent = "Next";
+  guide.append(next);
+  document.body.append(guide);
+  for (const node of [guide, next])
+    boxes.set(node, {
+      left: 12,
+      top: view() - 304,
+      right: 372,
+      bottom: view() - 24,
+    });
+  try {
+    await act(async () =>
+      notify({
+        id: "fictional",
+        tone: "error",
+        title: "Fictional minutes used up",
+        message: "Fictional steps to fix it.",
+      }),
+    );
+    await frames();
+    expect(liftOf()).toBe("");
+  } finally {
+    restore();
+    guide.remove();
+    vi.useRealTimers();
+  }
+});
+
 it("on a page, folds a card that would cover a bar to its pill; opened by a tap it rises above the bar", async () => {
   // Dev, 1440 px, 3 Nov 2026: the lead beside the list ends above the corner,
   // so its Call bar is under a card but not under the pill.

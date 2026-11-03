@@ -666,6 +666,10 @@ function liftOverBars(stack: HTMLElement, scope: HTMLElement): number {
         break;
       }
       path.push(at);
+      // The first-call guide rises above the stack by design, never under
+      // it, so it is no bar (Seller Home, robot 8c687b6a, 3 Nov 2026: at
+      // 1440 the two lifted over each other in turn, 0.108 of a 0.13 shift).
+      if (at.hasAttribute("data-guide-card")) break;
       if (at instanceof HTMLElement) {
         const style = getComputedStyle(at);
         const held =
