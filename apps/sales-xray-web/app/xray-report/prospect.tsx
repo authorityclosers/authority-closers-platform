@@ -401,11 +401,13 @@ function ProspectView({
             ) : null}
           </div>
           {show.facts ? (
-            <dl className={styles.facts}>
+            // Each fact holds its icon and its own term and value (the test
+            // robot, d9a63168 and a70fedba, 3 Nov 2026: the icon sat in the list).
+            <div className={styles.facts}>
               {grid.map(([label, icon, fact]) => (
                 <div key={label} className={styles.fact}>
                   <span className={`${xr.disc} ${xr.blue}`}>{icon}</span>
-                  <div>
+                  <dl>
                     <dt>{label}</dt>
                     <dd>
                       <FactValue
@@ -415,10 +417,10 @@ function ProspectView({
                         save={save}
                       />
                     </dd>
-                  </div>
+                  </dl>
                 </div>
               ))}
-            </dl>
+            </div>
           ) : null}
         </div>
         <div className={styles.tiles}>
