@@ -201,6 +201,8 @@ export function SpeakerServerProfiles({
   const [retry, setRetry] = useState(0);
   // "Not now" on the detected-speakers card, for this call in this visit.
   const [laterFor, setLaterFor] = useState<string | null>(null);
+  // Phones show the card as one line until Check opens it, for this call.
+  const [openFor, setOpenFor] = useState<string | null>(null);
   // The card's Change mode: the roles and names being edited.
   const [changing, setChanging] = useState<Record<
     string,
@@ -397,13 +399,16 @@ export function SpeakerServerProfiles({
       {/* A floating corner card (owner, 17 Oct): it arrives after the report
           and never pushes it down. 18 Oct: "pretty shit UI" with raw
           speaker_0 ids; it now shows each voice's name, role and first line,
-          asks one question, and offers Confirm or Change. */}
+          asks one question, and offers Confirm or Change. On a phone it is
+          one line until Check opens it (simplify pass, owner approved 2 Nov
+          2026: the open card covered a third of the report). */}
       {showCard && (
         <div
           className={styles.detected}
           role="region"
           aria-label="Detected speakers"
           data-changing={changing ? "" : undefined}
+          data-open={changing || openFor === callId ? "" : undefined}
         >
           <div className={styles.detectedHead}>
             <span className={styles.detectedIcon} aria-hidden="true">
@@ -414,6 +419,13 @@ export function SpeakerServerProfiles({
                 ? "Who is who on this call?"
                 : "Did we get the speakers right?"}
             </p>
+            <button
+              type="button"
+              className={styles.detectedCheck}
+              onClick={() => setOpenFor(callId)}
+            >
+              Check
+            </button>
             <button
               type="button"
               className={styles.detectedClose}

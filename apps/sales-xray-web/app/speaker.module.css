@@ -623,6 +623,46 @@
   }
 }
 
+/* Phones: one line, the question with Check and Not now, until Check opens
+   the card (simplify pass, owner approved 2 Nov 2026). */
+.detectedCheck {
+  display: none;
+}
+
+@media (max-width: 899.98px) {
+  .detected:not([data-open]) {
+    gap: 0;
+    padding-block: 6px;
+  }
+
+  .detected:not([data-open]) .detectedIcon,
+  .detected:not([data-open]) .detectedList,
+  .detected:not([data-open]) .detectedActions {
+    display: none;
+  }
+
+  .detected:not([data-open]) .detectedHead {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .detected:not([data-open]) .detectedCheck {
+    display: block;
+    min-height: 44px;
+    padding: 0 16px;
+    border: 1px solid var(--lx-line-strong);
+    border-radius: 9px;
+    background: var(--lx-surface);
+    color: var(--lx-ink);
+    font: 650 13px/1 var(--lx-font-ui);
+    cursor: pointer;
+  }
+
+  .detectedCheck:focus-visible {
+    outline: 2px solid transparent;
+    box-shadow: var(--lx-ring-focus);
+  }
+}
+
 @keyframes detected-in {
   from {
     opacity: 0;
