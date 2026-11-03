@@ -1144,10 +1144,12 @@ function AppsSection({
   const connected = data.connections.filter((item) => item.revokedAt === null);
   const apps = data.apps.filter((app) => app.revokedAt === null);
   return (
+    // Not "Connected apps": that is the tab above it, for lead sources
+    // (simplify pass, owner report 123, 3 Nov 2026).
     <DevCard
       icon={<AppWindow />}
       tone="slate"
-      title="Connected apps"
+      title="Apps with access"
       info={
         <p>
           Apps you approved to reach your organisation, such as Pulse or
@@ -1157,7 +1159,7 @@ function AppsSection({
       }
     >
       {connected.length ? (
-        <ul className={styles.rows} aria-label="Connected apps">
+        <ul className={styles.rows} aria-label="Apps with access">
           {connected.map((item) => (
             <ListRow
               key={item.id}
