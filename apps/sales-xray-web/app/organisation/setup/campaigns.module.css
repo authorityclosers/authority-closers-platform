@@ -1,0 +1,72 @@
+/* Leads setup → Sources → Campaigns (owner, 2-3 Nov 2026): each campaign with its Live,
+   Paused or Ended chip; ended ones folded. Tokens only. */
+.campaigns {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  padding: 0 16px 16px;
+}
+
+.rows {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  container-type: inline-size;
+}
+
+.rows li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 11rem);
+  align-items: center;
+  gap: 6px 12px;
+}
+
+@container (max-width: 360px) {
+  .rows li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.name {
+  display: grid;
+  min-width: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.name small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.ended {
+  min-width: 0;
+}
+
+.ended > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ended > summary:focus-visible {
+  border-radius: var(--sx-radius-sm);
+  box-shadow: var(--sx-focus-ring);
+  outline: none;
+}
+
+.note {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}

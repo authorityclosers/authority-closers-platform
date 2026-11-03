@@ -19,6 +19,7 @@ import {
   listTitle,
   sideStage,
   stagesPipeline,
+  pipelinesFor,
   pickableStages,
   rememberView,
   tabCount,
@@ -282,6 +283,13 @@ it("says what each list holds and what an empty one means", () => {
   expect(stagesPipeline(null)).toBe("main");
   expect(stagesPipeline(undefined)).toBe("main");
   expect(stagesPipeline("partner_outreach")).toBe("partner_outreach");
+  // Sellers never see pipelines; whoever manages leads picks one (bug 129).
+  const pipes = { pipelines: [{ key: "main" }, { key: "partner_outreach" }] };
+  expect(pipelinesFor("member", pipes)).toBeNull();
+  expect(pipelinesFor("viewer", pipes)).toBeNull();
+  expect(pipelinesFor(undefined, pipes)).toBeNull();
+  for (const role of ["owner", "admin", "manager"])
+    expect(pipelinesFor(role, pipes)).toBe(pipes);
   expect(emptyWords("to_call").title).toBe("Nobody to call right now");
   expect(emptyWords("all").title).toBe("No leads yet");
 });

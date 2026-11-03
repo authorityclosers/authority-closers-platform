@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import re
 import secrets
+from collections import Counter
 from collections.abc import Iterable, Mapping
 from datetime import datetime
 from typing import Any, Final
@@ -24,7 +25,7 @@ from ac_platform.conversation_intelligence.synthetic_import_models import (
     ConversationSyntheticRecord,
 )
 from ac_platform.identity.models import Person
-from ac_platform.lead_desk import imports
+from ac_platform.lead_desk import enquiry_dates, imports
 from ac_platform.lead_desk.capture import (
     CRM_EXPORTS,
     FIELDS,
@@ -41,17 +42,22 @@ from ac_platform.lead_desk.capture import (
 )
 from ac_platform.lead_desk.capture import key as header_key
 from ac_platform.lead_desk.contracts import (
+    HistoryCheck,
     ImportCommand,
     ImportGiven,
     ImportPreview,
     ImportResult,
     ImportSkip,
     NewSource,
+    ReasonCount,
     SeedCommand,
     Sources,
     SourceView,
+    StageWord,
 )
+from ac_platform.lead_desk.history import HISTORY
 from ac_platform.lead_desk.journey import model as journeys
+from ac_platform.lead_desk.journey import pipelines
 from ac_platform.lead_desk.models import Lead, LeadRep, LeadSource
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, content_ref
 from ac_platform.tenancy.models import Membership
@@ -120,6 +126,27 @@ OWNER_HEADERS: Final[tuple[str, ...]] = (
     "person_owner",
     "account_owner",
     "assigned_user",
+)
+# An old lead's enquiry day and campaign (history imports, owner, 2 Nov 2026).
+RECEIVED_HEADERS: Final[tuple[str, ...]] = (
+    "enquiry_date",
+    "inquiry_date",
+    "enquired_on",
+    "enquiry_on",
+    "lead_date",
+    "date_of_enquiry",
+    "received_at",
+    "received_on",
+    "created_date",
+    "created_on",
+    "created_time",
+    "date",
+)
+CAMPAIGN_HEADERS: Final[tuple[str, ...]] = (
+    "campaign",
+    "campaign_name",
+    "utm_campaign",
+    "ad_campaign",
 )
 # What other CRMs call their statuses, by the kind of stage each means here (universal
 # intake): a file's "Attempted to Contact" lands in Not Connected, "Closed Won" in Won.
@@ -235,8 +262,14 @@ STATUS_KINDS: Final[dict[str, str]] = {
             "fake",
             "invalid",
             "invalid_number",
+            "invalid_no",
             "wrong_number",
             "disqualified",
+            # A second enquiry from someone already there (owner, 3 Nov 2026: "Invalid Number
+            # and Duplicate become Junk").
+            "duplicate",
+            "duplicate_enquiry",
+            "duplicate_lead",
         ),
         "junk",
     ),
@@ -256,6 +289,20 @@ def unreadable_number(found: Extracted) -> bool:
     """The row's phone cell has words but no number we can read, and it has no email: no
     way to reach the person, so the import skips it and says why."""
     return found.phone is None and bool(found.phone_raw) and not found.email
+
+
+def suggest_history(headers: Iterable[str], taken: Mapping[str, str]) -> dict[str, str]:
+    """For old leads kept as history: the enquiry date and campaign columns, when a header
+    says which they are and no other field took it."""
+    by_key = {header_key(header): header for header in headers}
+    found: dict[str, str] = {}
+    for name, aliases in (("received", RECEIVED_HEADERS), ("campaign", CAMPAIGN_HEADERS)):
+        for alias in aliases:
+            header = by_key.get(alias)
+            if header is not None and header not in (*taken.values(), *found.values()):
+                found[name] = header
+                break
+    return found
 
 
 def suggest_columns(headers: Iterable[str], taken: Mapping[str, str]) -> dict[str, str]:
@@ -385,6 +432,7 @@ class Intake:
                 if (item.name or item.phone or item.email) and not unreadable_number(item)
             ),
             bad_numbers=sum(1 for item in found if unreadable_number(item)),
+            history_mapping=suggest_history(sheet.headers, mapping),
         )
 
     async def commit(self, command: ImportCommand) -> ImportResult:
@@ -393,8 +441,28 @@ class Intake:
         }
         if "name" not in mapping and "phone" not in mapping:
             raise DeskError(422, "Choose which column has the name or the phone number.")
+        # Old leads kept as history (owner, 2 Nov 2026): owners and admins only; every stage
+        # word in the file has a stage before anything is written, and nobody is given them.
+        history = command.side == HISTORY
+        placed: dict[str, journeys.Stage | None] = {}
+        order: enquiry_dates.Order | None = None
+        dates_header = (command.mapping.get("received") or None) if history else None
+        campaign_header = (command.mapping.get("campaign") or None) if history else None
+        if history:
+            self.desk._require_manager()
+            _, placed, _ = await self._old_leads(command)
+            unplaced = [word for word, stage in placed.items() if stage is None]
+            if unplaced:
+                raise DeskError(
+                    422,
+                    f"Pick a stage for {len(unplaced)} name{'' if len(unplaced) == 1 else 's'}"
+                    f" ({', '.join(unplaced[:3])}).",
+                )
+            if dates_header:
+                order = enquiry_dates.order_of(row.get(dates_header) for row in command.rows)
+        undated = 0
         # Only owners and admins give leads to others; anyone else's go on their own desk.
-        assign = command.assign if self.desk.viewer.can_manage else "me"
+        assign = "none" if history else command.assign if self.desk.viewer.can_manage else "me"
         # Only they change leads already here, which may be anyone's (competitor teardown 5).
         if command.duplicates != "skip" and not self.desk.viewer.can_manage:
             raise DeskError(403, "Only owners and admins change leads that are already here.")
@@ -411,7 +479,7 @@ class Intake:
             queue = [[share.person_id, share.count] for share in command.shares if share.count]
         handed: dict[UUID, int] = {}
         chosen = f"Chosen by {await self.desk._name(self.desk.viewer.person_id)}"
-        start = await self._start(command)
+        start = None if history else await self._start(command)
         # A row may name its lead's stage, its list (Source), and (owners and admins) its owner.
         stage_header = command.mapping.get("stage") or None
         source_header = command.mapping.get("source") or None
@@ -463,6 +531,14 @@ class Intake:
                 missing_owners.setdefault(named[:80])
             # Picked salespeople get theirs after the lead is made: it is made unassigned.
             way: Any = "person" if person else "none" if assign in ("people", "none") else assign
+            # An old lead's own enquiry day, and its campaign as the row names it.
+            when = (
+                enquiry_dates.read(row.get(dates_header), order, now=self.desk.now)
+                if dates_header
+                else None
+            )
+            campaign = clean(row.get(campaign_header)) if campaign_header else None
+            listed = campaign or listed
             try:
                 lead, outcome = await self.desk.ingest(
                     record,
@@ -476,8 +552,10 @@ class Intake:
                     test_data=self.desk.sandbox,
                     reps=reps,
                     pipeline=command.pipeline,
+                    received_at=when,
                     batch=(command.command_id, command.file_name[:120]),
                     as_is=True,
+                    side=HISTORY if history else None,
                 )
                 why = "No name, phone or email"
             except CaptureError as error:
@@ -504,6 +582,8 @@ class Intake:
                 continue
             if person is not None:
                 owned += 1
+            if history and when is None:
+                undated += 1
             # Inbound or Cold (0146), set on new leads only.
             lead.pipeline = command.side
             if person is None and queue:
@@ -522,7 +602,11 @@ class Intake:
             if pipeline not in journeys_read:
                 journeys_read[pipeline] = await journeys.read(self.db, self.tenant_id, pipeline)
             journey = journeys_read[pipeline]
-            stage = match_stage(journey, wanted) if wanted else journey.stage_for(start or "")
+            if history:
+                # The stage the owner said each of the file's words means (checked above).
+                stage = placed.get(wanted) if wanted else None
+            else:
+                stage = match_stage(journey, wanted) if wanted else journey.stage_for(start or "")
             if stage is None:
                 if wanted:
                     missing_stages.setdefault(wanted[:80])
@@ -540,6 +624,8 @@ class Intake:
                     command_id=uuid5(command.command_id, f"import-stage:{index}"),
                     source="import",
                     via="api",
+                    # An old lead's stage is where it already stood: nobody's move today.
+                    actor=None if history else "viewer",
                 )
         await self.db.flush()
         given = {
@@ -551,8 +637,10 @@ class Intake:
             update={
                 # The limit counts Inbound only: a Cold list never says over it (ph1-17).
                 "warnings": tuple(await self.desk.over_limit(given))
-                if given and command.side != "cold"
+                if given and command.side == "live"
                 else (),
+                "undated": undated,
+                "dates_read_as": order,
                 "staged": staged,
                 "owned": owned,
                 "unmatched_stages": tuple(missing_stages)[:UNMATCHED_SHOWN],
@@ -632,6 +720,60 @@ class Intake:
                 422, "New leads start in the first stage, an in-talks stage or an interested one."
             )
         return None if stage.kind == "new" else stage.key
+
+    async def _old_leads(
+        self, command: ImportCommand
+    ) -> tuple[journeys.Journey, dict[str, journeys.Stage | None], Counter[str]]:
+        """A file of old leads: the pipeline they go to, each of the file's stage words with
+        the stage it means (the owner's pick, else match_stage; None: not placed yet), and
+        how many rows say each word."""
+        key = (
+            (await self.desk._pipeline(command.pipeline)).key
+            if command.pipeline is not None
+            else pipelines.route(await self.desk._pipeline_list(), "csv")
+        )
+        journey = await journeys.read(self.db, self.tenant_id, key)
+        header = command.mapping.get("stage") or None
+        words: Counter[str] = Counter()
+        if header:
+            words.update(word for row in command.rows if (word := clean(row.get(header))))
+        live = {stage.key: stage for stage in journey.stages if not stage.archived}
+        placed: dict[str, journeys.Stage | None] = {}
+        for word in words:
+            picked = command.stages.get(word)
+            placed[word] = live.get(picked) if picked else match_stage(journey, word)
+        return journey, placed, words
+
+    async def history_check(self, command: ImportCommand) -> HistoryCheck:
+        """What a file of old leads would bring in, before anything is written (the import's
+        Check step): its stage words and their stages, how its dates read, its campaigns."""
+        self.desk._require_manager()
+        _, placed, words = await self._old_leads(command)
+        dates = command.mapping.get("received") or None
+        cells = [row.get(dates) for row in command.rows] if dates else []
+        order = enquiry_dates.order_of(cells)
+        undated = (
+            sum(1 for cell in cells if enquiry_dates.read(cell, order, now=self.desk.now) is None)
+            if dates
+            else len(command.rows)
+        )
+        header = command.mapping.get("campaign") or command.mapping.get("source") or None
+        named: Counter[str] = Counter()
+        if header:
+            named.update(name for row in command.rows if (name := clean(row.get(header))))
+        return HistoryCheck(
+            stages=tuple(
+                StageWord(word=word, rows=count, stage=stage.key if stage else None)
+                for word, count in words.most_common()
+                for stage in (placed[word],)
+            ),
+            ready=all(placed.values()),
+            dates_read_as=order,
+            undated=undated,
+            campaigns=tuple(
+                ReasonCount(label=name[:120], count=count) for name, count in named.most_common(10)
+            ),
+        )
 
     # ----- sources ---------------------------------------------------------------
 

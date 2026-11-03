@@ -62,6 +62,8 @@ from ac_platform.lead_desk.contracts import (
     CallPrivacy,
     CallRecord,
     CallReport,
+    CampaignStatusCommand,
+    CampaignStatusSaved,
     DealAmountCommand,
     DeleteLead,
     DeleteLeads,
@@ -76,6 +78,7 @@ from ac_platform.lead_desk.contracts import (
     DuplicateQueue,
     Effort,
     FollowUp,
+    HistoryCheck,
     ImportCommand,
     ImportPreview,
     ImportResult,
@@ -1168,6 +1171,16 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         async with desk_for(request, response, write=True) as lead_desk:
             return await Intake(lead_desk, app_url=app_url()).commit(command)
 
+    @router.post("/imports/history-check", response_model=HistoryCheck)
+    async def history_check(
+        command: ImportCommand, request: Request, response: Response
+    ) -> HistoryCheck:
+        """A file of old leads before it is brought in: its stage words and the stage each
+        reads as, how its dates read, its campaigns. Writes nothing (owner, 2 Nov 2026)."""
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await Intake(lead_desk, app_url=app_url()).history_check(command)
+
     @router.get("/imports", response_model=Imports, response_model_by_alias=True)
     async def recent_imports(request: Request, response: Response) -> Imports:
         """Import history: the last 48 hours' imports, for owners and admins."""
@@ -1211,6 +1224,16 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await Intake(lead_desk, app_url=app_url()).set_active(source_id, command.active)
+
+    @router.post("/campaigns/status", response_model=CampaignStatusSaved)
+    async def campaign_status(
+        command: CampaignStatusCommand, request: Request, response: Response
+    ) -> CampaignStatusSaved:
+        """An owner or admin marks a campaign Live, Paused or Ended (owner, 2 Nov 2026)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            revision = await lead_desk.set_campaign_status(command)
+            return CampaignStatusSaved(key=command.key, status=command.status, revision=revision)
 
     @router.post("/sources/{source_id}/sync", response_model=ImportResult)
     async def sync(source_id: UUID, request: Request, response: Response) -> ImportResult:

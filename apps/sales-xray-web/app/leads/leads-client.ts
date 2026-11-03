@@ -394,6 +394,18 @@ export type ImportPreview = {
   importable?: number;
   /** Rows whose number can't be read and that have no email: skipped (teardown 5). */
   bad_numbers?: number;
+  /** Old leads kept as history: the enquiry date ("received") and campaign columns. */
+  history_mapping?: Record<string, string>;
+};
+
+/** A file of old leads before it is brought in (history imports, 2 Nov 2026). */
+export type HistoryCheck = {
+  /** Each stage word in the file, how many rows say it, and its stage key (null: pick one). */
+  stages: { word: string; rows: number; stage: string | null }[];
+  ready: boolean;
+  dates_read_as: "dmy" | "mdy" | "ymd" | null;
+  undated: number;
+  campaigns: { label: string; count: number }[];
 };
 
 /** A row an import didn't use, by its index in the preview's rows, and why. */
@@ -418,7 +430,10 @@ export type ImportResult = {
   warnings?: string[];
   /** Bulk upload: who got how many of the new leads, and their side. */
   given?: { person_id: string; name: string; leads: number }[];
-  side?: "live" | "cold";
+  side?: "live" | "cold" | "history";
+  /** Old leads: how many had no enquiry date the import could read. */
+  undated?: number;
+  dates_read_as?: "dmy" | "mdy" | "ymd" | null;
   /** Undo import (competitor teardown 22): owners and admins, until this time. */
   import_id?: string | null;
   undo_until?: string | null;
@@ -448,10 +463,12 @@ export type ImportView = {
 /** Bulk upload's choices (stages-views-sources.md section 5): Inbound ("live") or Cold,
  *  the salespeople picked and how many each, and the stage new leads start in. */
 export type ImportOptions = {
-  side?: "live" | "cold";
+  side?: "live" | "cold" | "history";
   shares?: { person_id: string; count: number }[];
   step?: string;
   duplicates?: Duplicates;
+  /** Old leads: the stage key each of the file's stage words means. */
+  stages?: Record<string, string>;
 };
 
 export type SourceView = {
@@ -775,7 +792,8 @@ export function readNext(
 export type ListSort = "next_action" | "last_contact" | "name" | "created";
 export type ListDue = "late" | "today" | "week" | "none";
 export type ListSince = "today" | "week" | "month" | "never";
-export type ListMade = "today" | "week" | "month";
+/** "history": old leads brought in as history, which no other list shows (2 Nov 2026). */
+export type ListMade = "today" | "week" | "month" | "history";
 /** Inbound Leads or Cold Leads (Dipak's Home + Leads handoff, 31 Oct 2026). */
 export type LeadSide = "inbound" | "cold";
 /** A work view, not a stage: To Call, Follow-ups or All Leads. */
@@ -1665,6 +1683,29 @@ export function commitImport(
       ...options,
     }),
   );
+}
+
+/** A file of old leads before it is brought in: its stage words and their stages, how its
+ *  dates read and its campaigns. Writes nothing. */
+export function checkHistory(
+  preview: ImportPreview,
+  mapping: Record<string, string>,
+  stages: Record<string, string>,
+  pipeline: string | null = null,
+  signal?: AbortSignal,
+) {
+  return request<HistoryCheck>("/imports/history-check", {
+    ...json("POST", {
+      command_id: commandId(),
+      file_name: preview.file_name,
+      mapping,
+      rows: preview.rows,
+      side: "history",
+      stages,
+      ...(pipeline ? { pipeline } : {}),
+    }),
+    signal,
+  });
 }
 
 /** Import history: the last 48 hours' imports (empty for anyone but owners and admins). */

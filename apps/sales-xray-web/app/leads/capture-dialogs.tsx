@@ -31,6 +31,7 @@ import { several, usePipelines } from "./use-pipelines";
 import { ImportHistory, UndoImportButton } from "./import-undo";
 import { ImportCheck, resultLines, SkippedDownload } from "./import-check";
 import checkStyles from "./import-check.module.css";
+import { OldLeadsCheck, useOldLeads, waitReason } from "./old-leads";
 import {
   addLead,
   matchLead,
@@ -798,7 +799,12 @@ const COLUMN_LABELS: Record<string, string> = {
   stage: "Stage",
   owner: "Owner",
   source: "Source",
+  // Old leads kept as history (owner, 2 Nov 2026).
+  received: "Enquiry date",
+  campaign: "Campaign",
 };
+/** An old lead's columns: its own day, stage, campaign and salesperson. */
+const HISTORY_COLUMNS = ["received", "stage", "campaign", "source", "owner"];
 
 /** The import's steps (competitor teardown 5, 1 Nov 2026). */
 type ImportStep = "file" | "columns" | "check" | "who";
@@ -892,10 +898,16 @@ export function ImportDialog({
   // skipped unless an owner or admin picks Fill blanks or Replace.
   const [step, setStep] = useState<ImportStep>("file");
   const [duplicates, setDuplicates] = useState<Duplicates>("skip");
+  // Old leads (owner, 2 Nov 2026): the file says each lead's day, stage, campaign and
+  // salesperson, so there is no Assign step; Check says what each stage word becomes.
+  const history = choices.side === "history";
   const landed = (next: ImportPreview) => {
+    const start = history
+      ? { ...next.mapping, ...next.history_mapping }
+      : next.mapping;
     setPreview(next);
-    setMapping(next.mapping);
-    setStep(columnsMatched(next, next.mapping) ? "check" : "columns");
+    setMapping(start);
+    setStep(columnsMatched(next, start) ? "check" : "columns");
   };
 
   // A Sheet picked in Google's Picker (Lead OS, 27 Oct 2026): owners and
@@ -1009,19 +1021,30 @@ export function ImportDialog({
   }, [open, pasted]);
 
   const fresh = preview ? freshRows(preview) : 0;
+  // Old leads go to nobody: who gets them never holds Import back.
+  const assigning = !history && sharing(choices.assign);
   const overGiven =
-    sharing(choices.assign) &&
+    assigning &&
     team !== null &&
     Object.values(countsFor(choices, team, fresh)).reduce(
       (sum, count) => sum + count,
       0,
     ) > fresh;
   // An even split needs the team: Import waits for it.
-  const teamPending = canManage && sharing(choices.assign) && team === null;
+  const teamPending = canManage && assigning && team === null;
   // "One seller" waits for the seller to be picked.
-  const nobodyPicked = choices.assign === "one" && !choices.one;
+  const nobodyPicked = !history && choices.assign === "one" && !choices.one;
   const noColumn = !mapping.name && !mapping.phone;
-  const limits = canManage ? overLimitLines(choices, team, fresh) : [];
+  const limits =
+    canManage && !history ? overLimitLines(choices, team, fresh) : [];
+  const old = useOldLeads({
+    on: open && history && step === "check" && !result,
+    preview,
+    mapping,
+    pipeline,
+  });
+  // Import waits, with one plain reason, until every stage word has a stage.
+  const oldWait = history ? waitReason(old) : null;
 
   const run = async () => {
     if (!preview) return;
@@ -1036,17 +1059,23 @@ export function ImportDialog({
         await commitImport(
           preview,
           mapping,
-          serverAssign(choices.assign),
+          history ? "none" : serverAssign(choices.assign),
           command.current,
           pipeline || null,
-          {
-            side: choices.side,
-            ...(sharing(choices.assign) && team
-              ? { shares: sharesFor(choices, team, fresh) }
-              : {}),
-            ...(choices.step ? { step: choices.step } : {}),
-            ...(duplicates !== "skip" ? { duplicates } : {}),
-          },
+          history
+            ? {
+                side: "history",
+                stages: old.chosen,
+                ...(duplicates !== "skip" ? { duplicates } : {}),
+              }
+            : {
+                side: choices.side,
+                ...(sharing(choices.assign) && team
+                  ? { shares: sharesFor(choices, team, fresh) }
+                  : {}),
+                ...(choices.step ? { step: choices.step } : {}),
+                ...(duplicates !== "skip" ? { duplicates } : {}),
+              },
         ),
       );
       onDone();
@@ -1109,7 +1138,8 @@ export function ImportDialog({
           <Button
             variant="primary"
             onClick={() => {
-              if (result.side && onLanded)
+              // Old leads land in no list: the page stays where it was.
+              if (result.side && result.side !== "history" && onLanded)
                 onLanded(result.side === "cold" ? "cold" : "inbound");
               onClose();
             }}
@@ -1136,13 +1166,18 @@ export function ImportDialog({
                 variant="primary"
                 onClick={run}
                 disabled={
-                  busy || overGiven || teamPending || nobodyPicked || noColumn
+                  busy ||
+                  overGiven ||
+                  teamPending ||
+                  nobodyPicked ||
+                  noColumn ||
+                  (step === "check" && oldWait !== null)
                 }
               >
                 {busy
                   ? "Importing…"
                   : fresh
-                    ? `Import ${fresh} lead${fresh === 1 ? "" : "s"}`
+                    ? `Import ${fresh} ${history ? "old " : ""}lead${fresh === 1 ? "" : "s"}`
                     : "Import"}
               </Button>
             )}
@@ -1153,15 +1188,17 @@ export function ImportDialog({
       <div className={styles.form}>
         {result ? null : (
           <ol className={checkStyles.steps} aria-label="Import steps">
-            {IMPORT_STEPS.map((item, index) => (
-              <li
-                key={item.key}
-                aria-current={item.key === step ? "step" : undefined}
-              >
-                <span aria-hidden="true">{index + 1}</span>
-                {item.label}
-              </li>
-            ))}
+            {IMPORT_STEPS.filter((item) => !history || item.key !== "who").map(
+              (item, index) => (
+                <li
+                  key={item.key}
+                  aria-current={item.key === step ? "step" : undefined}
+                >
+                  <span aria-hidden="true">{index + 1}</span>
+                  {item.label}
+                </li>
+              ),
+            )}
           </ol>
         )}
         {result ? (
@@ -1173,14 +1210,18 @@ export function ImportDialog({
                 <dd>{line.count}</dd>
               </div>
             ))}
-            <div>
-              <dt>Given an owner</dt>
-              <dd>{result.assigned}</dd>
-            </div>
-            <div>
-              <dt>Waiting for an owner</dt>
-              <dd>{result.waiting}</dd>
-            </div>
+            {result.side === "history" ? null : (
+              <>
+                <div>
+                  <dt>Given an owner</dt>
+                  <dd>{result.assigned}</dd>
+                </div>
+                <div>
+                  <dt>Waiting for an owner</dt>
+                  <dd>{result.waiting}</dd>
+                </div>
+              </>
+            )}
             {result.staged ? (
               <div>
                 <dt>Given their stage</dt>
@@ -1201,7 +1242,15 @@ export function ImportDialog({
             ))}
           </dl>
         ) : null}
-        {result?.side ? (
+        {result?.side === "history" ? (
+          <p className={styles.hint}>
+            The old leads are in Leads, under Filter → Date → Old leads, and in
+            Analytics under All time.
+            {result.undated
+              ? ` ${result.undated} had no enquiry date we could read: ${result.undated === 1 ? "it shows" : "they show"} today.`
+              : ""}
+          </p>
+        ) : result?.side ? (
           <p className={styles.hint}>
             The new leads are in{" "}
             {result.side === "cold" ? "Cold Leads" : "Inbound Leads"}.
@@ -1232,7 +1281,9 @@ export function ImportDialog({
         {result?.unmatched_owners?.length ? (
           <p className={styles.hint}>
             Nobody on your team called {result.unmatched_owners.join(", ")}:
-            those leads went by the lead rules.
+            {result.side === "history"
+              ? " those old leads have no salesperson."
+              : " those leads went by the lead rules."}
           </p>
         ) : null}
         {/* The rows it didn't use, with why, to fix and import again. */}
@@ -1340,16 +1391,29 @@ export function ImportDialog({
             {/* Each column with up to three of its values (HubSpot's three
                 rows under each column; teardown 5). */}
             <div className={styles.formGrid}>
-              {[
-                ...MAPPABLE,
-                "stage",
-                "source",
-                ...(canManage ? ["owner"] : []),
-              ].map((field) => (
+              {(history
+                ? [...MAPPABLE, ...HISTORY_COLUMNS]
+                : [
+                    ...MAPPABLE,
+                    "stage",
+                    "source",
+                    ...(canManage ? ["owner"] : []),
+                  ]
+              ).map((field) => (
                 <div key={field} className={checkStyles.column}>
-                  <Field label={COLUMN_LABELS[field]}>
+                  <Field
+                    label={
+                      history && field === "owner"
+                        ? "Salesperson"
+                        : COLUMN_LABELS[field]
+                    }
+                  >
                     <Picker
-                      title={COLUMN_LABELS[field] ?? field}
+                      title={
+                        history && field === "owner"
+                          ? "Salesperson"
+                          : (COLUMN_LABELS[field] ?? field)
+                      }
                       mode="inline"
                       value={mapping[field] || null}
                       all={{ label: "Not in this file" }}
@@ -1376,7 +1440,13 @@ export function ImportDialog({
                 </div>
               ))}
             </div>
-            {mapping.stage || (canManage && mapping.owner) ? (
+            {history ? (
+              <p className={styles.hint}>
+                The next step shows what each stage name becomes. Salespeople
+                are matched to your team; one that doesn&apos;t match leaves the
+                lead with nobody.
+              </p>
+            ) : mapping.stage || (canManage && mapping.owner) ? (
               <p className={styles.hint}>
                 Stages are matched by name to the pipeline&apos;s stages, and
                 owners to your team. One that doesn&apos;t match stays New, or
@@ -1412,7 +1482,13 @@ export function ImportDialog({
             <ul className={styles.hint} aria-label="The first rows, as leads">
               {preview.rows.slice(0, 3).map((row, index) => (
                 <li key={index}>
-                  {[mapping.name, mapping.phone, mapping.source]
+                  {[
+                    mapping.name,
+                    mapping.phone,
+                    history ? mapping.received : null,
+                    history ? mapping.stage : null,
+                    mapping.campaign ?? mapping.source,
+                  ]
                     .map((column) => (column ? row[column]?.trim() : ""))
                     .filter(Boolean)
                     .join(" · ") || "No name or phone in this row"}
@@ -1426,19 +1502,31 @@ export function ImportDialog({
               duplicates={duplicates}
               onDuplicates={setDuplicates}
             />
-            {/* Who gets them, in a line; Change opens the last step. */}
-            <p className={styles.hint} data-import-who="">
-              {canManage
-                ? `About ${fresh} new ${fresh === 1 ? "lead" : "leads"}: ${sharesLine(choices, team, fresh)}`
-                : "They go on your desk."}{" "}
-              <button
-                type="button"
-                className={styles.linkButton}
-                onClick={() => setStep("who")}
-              >
-                Change
-              </button>
-            </p>
+            {history ? (
+              <>
+                {/* Old leads: each stage word and what it becomes (no Assign step). */}
+                <OldLeadsCheck state={old} />
+                {oldWait && old.check ? (
+                  <p className={styles.hint} role="status" data-import-wait="">
+                    {oldWait}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              /* Who gets them, in a line; Change opens the last step. */
+              <p className={styles.hint} data-import-who="">
+                {canManage
+                  ? `About ${fresh} new ${fresh === 1 ? "lead" : "leads"}: ${sharesLine(choices, team, fresh)}`
+                  : "They go on your desk."}{" "}
+                <button
+                  type="button"
+                  className={styles.linkButton}
+                  onClick={() => setStep("who")}
+                >
+                  Change
+                </button>
+              </p>
+            )}
             {limitBox}
           </>
         ) : (

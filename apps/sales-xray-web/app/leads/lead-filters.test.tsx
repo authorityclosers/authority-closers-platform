@@ -7,6 +7,7 @@ import { resetBackCloseForTests } from "../ui/back-close";
 import {
   ActiveFilters,
   FilterSheet,
+  SortPick,
   filterNames,
   filtersOn,
   type LeadFilters,
@@ -323,4 +324,39 @@ it("sorts oldest first: the newest-first order, reversed", async () => {
     q: "",
     more: { sort: "created", order: "asc" },
   });
+});
+
+// Bugs 126 and 127 (orchestrator, 3 Nov 2026): the list's sort, one tap away in
+// its head where the "N leads" line was: the list's own order first.
+it("sorts from the list's head: its own order, then the Filter's choices", async () => {
+  const onChange = vi.fn();
+  await act(async () =>
+    root.render(
+      <SortPick
+        more={{}}
+        defaultLabel="Newest"
+        same="created"
+        onChange={onChange}
+      />,
+    ),
+  );
+  // A sort mark inside the same button, so it reads as sort at phone width.
+  expect(
+    document.querySelector('button[aria-haspopup="listbox"] svg'),
+  ).toBeTruthy();
+  await openChoices("Sort:");
+  // The list's own order once: "Newest", never "Newest" and "Newest first".
+  expect(
+    [...document.querySelectorAll('[role="option"]')].map((item) =>
+      item.textContent?.trim(),
+    ),
+  ).toEqual([
+    "Newest",
+    "Next follow-up",
+    "Last contact",
+    "Name",
+    "Oldest first",
+  ]);
+  await act(async () => option("Oldest first").click());
+  expect(onChange).toHaveBeenLastCalledWith({ sort: "created", order: "asc" });
 });

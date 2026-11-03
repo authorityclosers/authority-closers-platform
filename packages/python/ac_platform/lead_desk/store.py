@@ -31,6 +31,7 @@ from ac_platform.identity.models import Person
 from ac_platform.lead_desk import (
     allocation,
     bell,
+    campaigns,
     choices,
     deletion,
     duplicate_queue,
@@ -71,6 +72,8 @@ from ac_platform.lead_desk.contracts import (
     CallOutcomesResult,
     CallPrivacy,
     CallReport,
+    CampaignRow,
+    CampaignStatusCommand,
     ConversionView,
     Counts,
     DayCalls,
@@ -150,6 +153,7 @@ from ac_platform.lead_desk.contracts import (
 
 # Re-exported: many modules import DeskError from here.
 from ac_platform.lead_desk.errors import DeskError as DeskError
+from ac_platform.lead_desk.history import HISTORY, NOT_INBOUND, inbound_only, worked
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.journey import pipelines, signals, transitions
 from ac_platform.lead_desk.journey.engine import not_undone
@@ -240,6 +244,12 @@ WORK_KINDS = (
 # The team's day (Home's Team today, 27 Oct 2026) adds the leads given out and the leads
 # that came in.
 TEAM_KINDS = (*WORK_KINDS, "assigned", "reassigned", "captured")
+# A person's line on an old lead kept as history that makes it work again (owner, 3 Nov 2026:
+# "a call, a stage change or a follow-up"; also a meeting, a message, a task, or giving it to
+# someone). A note alone does not.
+REVIVING_KINDS = frozenset(
+    {"call", "result", "stage", "meeting", "message", "scheduled", "task", "assigned", "reassigned"}
+)
 WORK_PAGE = 100
 # Days back from today's start for "this week" and "this month".
 BACK_DAYS: dict[str, int] = {"today": 0, "week": 6, "month": 29}
@@ -640,8 +650,10 @@ def deal_amount(text: str | None) -> int | None:
 
 
 def lead_side(pipeline: str | None) -> str:
-    """Inbound or Cold (migration 0146): only "cold" is Cold; empty is Inbound."""
-    return "cold" if pipeline == "cold" else "inbound"
+    """Inbound or Cold (migration 0146): only "cold" is Cold; empty is Inbound. An old lead
+    kept as history counts with Cold: never late, never a "your lead now" line, and an ad
+    or website enquiry from its number brings it back to Inbound (_repeat)."""
+    return "cold" if pipeline in NOT_INBOUND else "inbound"
 
 
 def break_view(gap: call_breaks.Gap) -> BreakView:
@@ -855,7 +867,7 @@ class LeadDesk:
                         Lead.tenant_id == self.tenant_id,
                         Lead.owner_person_id.is_not(None),
                         Lead.stage.in_(OPEN_STAGES),
-                        func.coalesce(Lead.pipeline, "live") != "cold",
+                        inbound_only(),
                     )
                     .group_by(Lead.owner_person_id)
                 )
@@ -907,6 +919,17 @@ class LeadDesk:
         command_id: UUID | None = None,
         at: datetime | None = None,
     ) -> LeadEvent:
+        if (
+            lead.pipeline == HISTORY
+            and actor is not None
+            and kind in REVIVING_KINDS
+            and data.get("source") != "import"
+            and lead.created_at != self.now
+        ):
+            # Someone works an old lead kept as history: it is work again, on Cold (owner,
+            # 3 Nov 2026), so its follow-up shows in their lists. Its import is not work.
+            lead.pipeline = "cold"
+            data = {**data, "from_history": True}
         event = LeadEvent(
             id=uuid4(),
             tenant_id=self.tenant_id,
@@ -966,6 +989,32 @@ class LeadDesk:
             seen.add(survivor.id)
             lead = survivor
         return lead
+
+    async def _ever_reached(self, lead_id: UUID) -> bool:
+        """Whether a lead was ever reached (bug 134): an answered call by the phone's own
+        evidence (call_answered, or a dial its phone timed), or a logged "We talked"."""
+        rows = (
+            await self.db.execute(
+                select(LeadEvent.kind, LeadEvent.data).where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.lead_id == lead_id,
+                    LeadEvent.kind.in_(("call", "result", "edited")),
+                )
+            )
+        ).all()
+        for kind, data in rows:
+            found = data if isinstance(data, Mapping) else {}
+            if kind == "call" and call_answered(found):
+                return True
+            if kind == "result" and found.get("connected") is True:
+                return True
+            if (
+                kind == "edited"
+                and found.get(TIMED_CALL)
+                and (found.get("duration_seconds") or 0) > 0
+            ):
+                return True
+        return False
 
     async def _readable(self, lead_id: UUID) -> tuple[Lead, bool]:
         """A lead this person may open: one on their desk, or, to read only, the lead a
@@ -1186,10 +1235,12 @@ class LeadDesk:
         me = self.viewer.person_id
         day_start = self._day_start()
         day_end = day_start + timedelta(days=1)
-        in_pipeline = (
+        in_pipeline = and_(
             journeys.lead_in((await self._pipeline(pipeline)).key)
             if pipeline is not None
-            else true()
+            else true(),
+            # Old leads kept as history are nobody's work today (2 Nov 2026).
+            worked(),
         )
         mine = and_(
             Lead.tenant_id == self.tenant_id,
@@ -1685,7 +1736,7 @@ class LeadDesk:
                         and_(
                             Lead.stage == "new",
                             Lead.next_action_at.is_(None),
-                            func.coalesce(Lead.pipeline, "live") != "cold",
+                            inbound_only(),
                         ),
                     ),
                 )
@@ -2027,6 +2078,7 @@ class LeadDesk:
             Lead.tenant_id == self.tenant_id,
             Lead.owner_person_id == me,
             Lead.stage.in_(OPEN_STAGES),
+            worked(),
         )
         if pipeline is not None:
             mine = and_(mine, journeys.lead_in((await self._pipeline(pipeline)).key))
@@ -2073,11 +2125,26 @@ class LeadDesk:
         if scope != "mine" and not self.viewer.can_see_team:
             raise DeskError(403, "Your role sees your own leads only.")
         where: list[Any] = [self._seen()]
-        # Inbound Leads or Cold Leads (migration 0146): the stage tabs count one side. All
-        # Leads lists both (owner, 2 Nov 2026); the side still counts To Call and Follow-ups.
-        side_clause: Any = on_side(side) if side is not None else None
-        if side_clause is not None and view != "all":
-            where.append(side_clause)
+        side_clause: Any = None
+        if created == "history":
+            # Old leads brought in as history (2 Nov 2026): only this filter lists them,
+            # all of them; none is in To Call or Follow-ups, so the work view is set aside.
+            where.append(Lead.pipeline == HISTORY)
+            created = view = when = None
+        else:
+            if not search:
+                # Nobody's work: in no list, tab or count. A search still finds them below.
+                where.append(worked())
+            # Inbound Leads or Cold Leads (migration 0146): the stage tabs count one side. All
+            # Leads lists both (owner, 2 Nov 2026); the side still counts To Call and
+            # Follow-ups. A search also finds an old lead kept as history: "this person
+            # enquired in June".
+            if side is not None:
+                side_clause = (
+                    or_(on_side(side), Lead.pipeline == HISTORY) if search else on_side(side)
+                )
+            if side_clause is not None and view != "all":
+                where.append(side_clause)
         # To Call holds the leads who rang and weren't reached since, first (#9 option A).
         waiting: dict[UUID, tuple[datetime, int]] = {}
         if view == "to_call" or (side is not None and offset == 0):
@@ -2229,6 +2296,15 @@ class LeadDesk:
         )
         if sort is not None:
             order = self._list_order(sort, descending)
+        elif (
+            step is not None
+            and journey is not None
+            and view != "to_call"
+            and getattr(journey.by_key.get(step), "kind", None) == "new"
+        ):
+            # New and Unworked show the newest first; every other list next-due first
+            # (orchestrator, 3 Nov 2026, bug 127). To Call keeps its calling order.
+            order = self._list_order("created", True)
         leads = (
             await self.db.scalars(
                 select(Lead).where(*where).order_by(*order).offset(offset).limit(limit)
@@ -2955,6 +3031,7 @@ class LeadDesk:
         kind: str | None = None,
         batch: tuple[UUID, str] | None = None,
         as_is: bool = False,
+        side: str | None = None,
     ) -> tuple[Lead | None, Literal["created", "repeat", "known", "skipped"]]:
         """Store one record as a lead. The same record again (same source id) is "known"
         and changes nothing; another record with the same phone, or with no phone and the
@@ -2964,7 +3041,9 @@ class LeadDesk:
         created_time); a time ahead of now is taken as now. ``batch``: the file import
         (its id and file name) a new lead came in, for Undo import (imports.py). ``as_is``:
         a lead already here comes back untouched, not counted as asking again (a file
-        import's Skip, Fill blanks and Replace; intake.commit decides)."""
+        import's Skip, Fill blanks and Replace; intake.commit decides). ``side``: a new
+        lead's side from the start (0146), so its owner and the lead rules see it as it is:
+        an old lead kept as history is never routed and never a "your lead now" line."""
         _, config = await self.settings()
         found = extract(record, mapping, default_country=config["default_country"])
         if not (found.name or found.phone or found.email):
@@ -3037,6 +3116,7 @@ class LeadDesk:
             created_at=self.now,
             updated_at=self.now,
             received_at=min(received_at, self.now) if received_at is not None else None,
+            **({"pipeline": side} if side else {}),
         )
         try:
             async with self.db.begin_nested():
@@ -3069,10 +3149,14 @@ class LeadDesk:
                 "source_label": source_label or SOURCE_LABELS.get(source, source),
                 "used": found.used,
                 **({"import": str(batch[0]), "import_file": batch[1]} if batch else {}),
+                # Brought in as history: ad platforms learn nothing from it (journey/engine).
+                **({"history": True} if side == HISTORY else {}),
             },
             actor=actor,
             command_id=command_id,
         )
+        if side == HISTORY and assign not in ("person", "none"):
+            assign = "none"  # an old lead is never routed or handed to its importer
         if assign == "me" and actor is not None:
             await self._set_owner(lead, actor, f"Added by {await self._name(actor)}", "self")
         elif assign == "person" and person_id is not None:
@@ -3343,10 +3427,12 @@ class LeadDesk:
         via: str | None = None,
         outcome_reason: str | None = None,
         next_action_at: datetime | None = None,
+        actor: UUID | None | Literal["viewer"] = "viewer",
     ) -> LeadEvent:
         """Move a lead to one of its pipeline's stages without a call ("Site visit done"),
         through the stage list's moves. Imports skip the moves; a Lost or Junk lead
-        imported without a reason is "Imported"."""
+        imported without a reason is "Imported". ``actor`` None: nobody's move (an old
+        lead brought in as history is no one's win or progress today)."""
         if source == "import" and outcome_reason is None and stage.kind in ("lost", "junk"):
             outcome_reason = IMPORTED_LOST
         move = self._check(
@@ -3366,6 +3452,7 @@ class LeadDesk:
             outcome_reason=outcome_reason,
             note=note,
             next_action_at=next_action_at,
+            actor=actor,
         )
 
     async def _meeting_for(
@@ -3705,9 +3792,10 @@ class LeadDesk:
         source: str | None = None,
     ) -> PipelineReport:
         """Each lead counted once; conversions from history; Junk left out of them. A
-        seller sees their own leads' numbers."""
+        seller sees their own leads' numbers. All time (days 0) also counts old leads
+        brought in as history, by campaign (owner Analytics, 2 Nov 2026)."""
         if days not in reports.PERIODS:
-            raise DeskError(422, "Pick 7, 30 or 90 days.")
+            raise DeskError(422, "Pick 7, 30 or 90 days, or all time.")
         mine = not self.viewer.can_manage
         if mine:
             owner = self.viewer.person_id
@@ -3725,6 +3813,25 @@ class LeadDesk:
             test_data=await self._sandbox_organisation(),
         )
         names = await self._names(person for person in found.sellers if person)
+        # Each seller's own calls in the period, counted as Home and Performance count them:
+        # calls out, the ones answered, and their talk time.
+        since = reports.EPOCH if days == reports.ALL_TIME else self.now - timedelta(days=days)
+        calls: dict[UUID | None, list[int]] = {}
+        for call in await self._call_rows(
+            since,
+            self.now + timedelta(seconds=1),
+            person=self.viewer.person_id if mine else None,
+            team=not mine,
+        ):
+            if not call_out(call.data):
+                continue
+            tally = calls.setdefault(call.actor, [0, 0, 0])
+            tally[0] += 1
+            if call_answered(call.data):
+                tally[1] += 1
+                tally[2] += call_seconds(call.data)
+        revision, config = await self.settings()
+        said = campaigns.statuses(config)
 
         def conversion(item: reports.Conversion) -> ConversionView:
             return ConversionView(
@@ -3752,6 +3859,7 @@ class LeadDesk:
                 connect_rate=round(tally.connected / genuine, 3) if genuine > 0 else None,
                 junk_rate=round(tally.junk / tally.created, 3) if tally.created else None,
                 first_response_minutes=median(tally.first_minutes),
+                interested=tally.interested,
             )
 
         sellers = [
@@ -3759,10 +3867,32 @@ class LeadDesk:
                 str(person) if person else "none",
                 names.get(person, "A teammate") if person else "No owner",
                 tally,
+            ).model_copy(
+                update=dict(
+                    zip(
+                        ("calls", "connected_calls", "talk_seconds"),
+                        calls.get(person, (0, 0, 0)),
+                        strict=True,
+                    )
+                )
             )
             for person, tally in found.sellers.items()
         ]
         sources = [row(label, label, tally) for label, tally in found.sources.items()]
+        campaign_rows = [
+            CampaignRow(
+                **row(key, campaign.label, campaign.numbers).model_dump(),
+                source=campaign.source,
+                status=campaigns.status_of(
+                    said,
+                    key,
+                    history_only=campaign.numbers.history == campaign.numbers.leads,
+                ),
+                history=campaign.numbers.history == campaign.numbers.leads,
+                last_lead_at=campaign.numbers.last_at,
+            )
+            for key, campaign in found.campaigns.items()
+        ]
         return PipelineReport(
             pipeline=key,
             days=days,
@@ -3793,7 +3923,25 @@ class LeadDesk:
             sellers=tuple(sorted(sellers, key=lambda item: (-item.won, -item.active, item.label))),
             sources=tuple(sorted(sources, key=lambda item: -item.created)),
             mine=mine,
+            history_leads=found.history_leads,
+            campaigns=tuple(
+                sorted(
+                    campaign_rows,
+                    key=lambda item: (
+                        campaigns.STATUSES.index(item.status),
+                        -item.created,
+                        item.label,
+                    ),
+                )
+            ),
+            cities=tuple(ReasonCount(label=a, count=b) for a, b in found.cities),
+            cities_unplaced=found.cities_unplaced,
+            revision=revision,
         )
+
+    async def set_campaign_status(self, command: CampaignStatusCommand) -> int:
+        """An owner or admin marks a campaign Live, Paused or Ended (campaigns.py)."""
+        return await campaigns.set_status(self, command)
 
     # ----- the pipeline board ------------------------------------------------------------
 
@@ -4142,10 +4290,13 @@ class LeadDesk:
         # Someone on a Cold list who sends an enquiry (an ad's or a website's form, never a
         # file, a sheet or a row added by hand) is an Inbound lead now: the same record moves
         # sides, its stage stays (competitor teardown #23, 1 Nov 2026).
-        to_inbound = (
-            source not in NOT_ENQUIRIES
-            and lead_side(lead.pipeline) == "cold"
-            and (lead.stage not in CLOSED_STAGES or reopened)
+        # An old lead kept as history who asks again is Inbound whatever its old stage: a
+        # returning customer must show in a list (2 Nov 2026).
+        to_inbound = source not in NOT_ENQUIRIES and (
+            lead.pipeline == HISTORY
+            or (
+                lead_side(lead.pipeline) == "cold" and (lead.stage not in CLOSED_STAGES or reopened)
+            )
         )
         if to_inbound:
             lead.pipeline = "live"
@@ -4509,7 +4660,7 @@ class LeadDesk:
         else:
             if command.reason is None:
                 raise DeskError(422, "Choose why the call didn't connect.")
-            after = stage_after_not_connected(lead.stage)
+            after = stage_after_not_connected(lead.stage, reached=await self._ever_reached(lead.id))
             if after != previous_stage:
                 target = journey.resolve(after, None)
                 if target is not None:
@@ -6334,11 +6485,12 @@ class LeadDesk:
             calls[actor] = calls.get(actor, 0) + 1
             if isinstance(data, dict) and data.get("connected"):
                 connected[actor] = connected.get(actor, 0) + 1
+        # The team's work now: old leads kept as history are in Analytics, not here.
         by_stage: dict[str, int] = dict(
             (
                 await self.db.execute(
                     select(Lead.stage, func.count())
-                    .where(Lead.tenant_id == self.tenant_id)
+                    .where(Lead.tenant_id == self.tenant_id, worked())
                     .group_by(Lead.stage)
                 )
             )
@@ -6349,7 +6501,7 @@ class LeadDesk:
             (
                 await self.db.execute(
                     select(Lead.source, func.count())
-                    .where(Lead.tenant_id == self.tenant_id)
+                    .where(Lead.tenant_id == self.tenant_id, worked())
                     .group_by(Lead.source)
                 )
             )
@@ -6362,6 +6514,7 @@ class LeadDesk:
                     Lead.tenant_id == self.tenant_id,
                     Lead.owner_person_id.is_(None),
                     Lead.stage.in_(OPEN_STAGES),
+                    worked(),
                 )
             )
             or 0
@@ -6369,7 +6522,10 @@ class LeadDesk:
         waiting = int(
             await self.db.scalar(
                 select(func.count()).where(
-                    Lead.tenant_id == self.tenant_id, Lead.stage == "new", Lead.attempts == 0
+                    Lead.tenant_id == self.tenant_id,
+                    Lead.stage == "new",
+                    Lead.attempts == 0,
+                    worked(),
                 )
             )
             or 0
@@ -6606,7 +6762,7 @@ class LeadDesk:
             where = [
                 Lead.tenant_id == self.tenant_id,
                 *counted,
-                func.coalesce(Lead.pipeline, "live") != "cold",
+                inbound_only(),
                 since <= ARRIVED,
             ]
             if until is not None:
@@ -6649,7 +6805,7 @@ class LeadDesk:
                     Lead.stage.in_(OPEN_STAGES),
                     # What the Late list Home opens shows: Inbound, a follow-up time passed.
                     Lead.next_action_at < self.now,
-                    func.coalesce(Lead.pipeline, "live") != "cold",
+                    inbound_only(),
                     Lead.owner_person_id.is_not(None),
                 )
                 .group_by(Lead.owner_person_id)
@@ -7017,8 +7173,9 @@ class LeadDesk:
                     Lead.attempts == 0,
                     Lead.owner_person_id.is_not(None),
                     Lead.assigned_at < self.now - timedelta(minutes=minutes),
-                    # A Cold list given to a seller is worked over days, not minutes.
-                    Lead.pipeline.is_distinct_from("cold"),
+                    # A Cold list given to a seller is worked over days, not minutes; an old
+                    # lead kept as history is not worked at all.
+                    inbound_only(),
                     Lead.test_data.is_(False),
                 )
                 .order_by(Lead.assigned_at)

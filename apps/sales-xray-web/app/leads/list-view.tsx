@@ -37,6 +37,7 @@ import { firstPageFor, type ServerLeads } from "./leads-seed";
 import { notify } from "../notice-center";
 import { useRowKeys } from "../ui/row-keys";
 import { withoutRepeats } from "./page-merge";
+import { useBackClose } from "../ui/back-close";
 import { useListLoadWatch } from "./load-watch";
 import { triedLately } from "./call-round";
 import { Button, Skeleton } from "../ui/kit";
@@ -131,6 +132,7 @@ export function ListView({
   onPasteRows,
   more: refine = null,
   onSort,
+  sortPick = null,
   onTopLead,
   onOrder,
   stageWord,
@@ -207,6 +209,8 @@ export function ListView({
   more?: ListMore | null;
   /** A table head tapped: sort the whole list by it. */
   onSort?: (sort: ListSort, order: "asc" | "desc") => void;
+  /** The head's sort, in place of the "N leads" line (bugs 126 and 127). */
+  sortPick?: ReactNode;
 }) {
   // Table on phones and computers alike (owner, 24 Oct 2026: "we can't actually
   // access table view ... on mobile"); the choice is remembered per person.
@@ -296,6 +300,12 @@ export function ListView({
     question: string;
     leads: ReadonlyMap<string, string>;
   } | null>(null);
+  // Back clears a selection first and stays on Leads, as Back closes a sheet
+  // (orchestrator, 3 Nov 2026: on the Redmi it left Leads for the page before).
+  useBackClose(selecting, () => {
+    setPicked(null);
+    setSelecting(false);
+  });
   const [loadingAll, setLoadingAll] = useState(false);
   // Actions on the ticked leads: a fresh sheet each time.
   const [columnsSlot, setColumnsSlot] = useState<HTMLElement | null>(null);
@@ -743,11 +753,15 @@ export function ListView({
       <section ref={panel} className={styles.listPanel} aria-label={stageLabel}>
         {heading ? <h2 className={styles.listHeading}>{heading}</h2> : null}
         <div className={styles.listHead}>
-          <span className={styles.listTotal} aria-live="polite">
-            {page
-              ? `${page.total} ${stage === TEST ? "test " : ""}${page.total === 1 ? "lead" : "leads"}`
-              : null}
-          </span>
+          {sortPick && stage !== TEST ? (
+            <span className={styles.listSort}>{sortPick}</span>
+          ) : (
+            <span className={styles.listTotal} aria-live="polite">
+              {page
+                ? `${page.total} ${stage === TEST ? "test " : ""}${page.total === 1 ? "lead" : "leads"}`
+                : null}
+            </span>
+          )}
           {/* Only when it says something (owner, #73): "Updated just now"
               on every list was noise. */}
           <span

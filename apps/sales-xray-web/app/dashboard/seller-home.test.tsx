@@ -308,6 +308,8 @@ it("is Dipak's Home: the work in six blocks, each opening its exact place", asyn
   expect(card("open")?.getAttribute("href")).toBe(
     "/leads?view=all&step=open_leads",
   );
+  // A caption short enough to fit whole on one line at 360 (ux-audit).
+  expect(card("open")?.textContent).toMatch(/^Open leads\d*Needs discussion$/);
   expect(card("follow_ups")?.getAttribute("href")).toBe(
     "/leads?view=follow_ups&when=today",
   );

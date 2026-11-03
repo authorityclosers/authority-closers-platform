@@ -452,6 +452,7 @@ async def send_copies(
     are recorded so each goes once."""
     if cfg is None:
         return 0
+    from ac_platform.lead_desk.history import worked
     from ac_platform.lead_desk.models import GoogleConnection, Lead, SheetRow
     from ac_platform.lead_desk.store import LeadDesk, Viewer
     from ac_platform.lead_desk.vocabulary import SOURCE_LABELS
@@ -485,6 +486,9 @@ async def send_copies(
                                 Lead.tenant_id == connection.tenant_id,
                                 Lead.created_at >= started,
                                 Lead.test_data.is_(False),
+                                # The copy is of new leads; old ones brought in as history
+                                # stay out of the sheet (2 Nov 2026).
+                                worked(),
                                 Lead.id.not_in(done),
                             )
                             .order_by(Lead.created_at, Lead.id)

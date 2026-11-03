@@ -182,6 +182,17 @@ def test_work_views_and_the_stage_filter(postgres_harness: Any, tmp_path: Path) 
                 "Fictional new older",
             ]
             assert await names(scope="mine", side="inbound", step="no_such_stage") == []
+            # On All Leads (both sides), New shows the newest first unless a sort is picked
+            # (bug 127); To Call keeps its calling order (oldest new lead first).
+            assert await names(scope="mine", side="inbound", view="all", step=new_key) == [
+                "Fictional new newer",
+                "Fictional cold unworked",
+                "Fictional new older",
+            ]
+            assert await names(scope="mine", side="inbound", view="to_call", step=new_key) == [
+                "Fictional new older",
+                "Fictional new newer",
+            ]
 
             # The stage picker's numbers: each stage's leads before the stage pick, filed
             # as the stage filter files them, on a side's first page only.

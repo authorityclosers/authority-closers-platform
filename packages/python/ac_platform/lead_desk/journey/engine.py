@@ -36,6 +36,7 @@ from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
+from ac_platform.lead_desk.history import HISTORY
 from ac_platform.lead_desk.journey import mapping
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.journey.model import Journey
@@ -170,6 +171,8 @@ async def _collect_one(
             LeadEvent.created_at >= floor,
             LeadEvent.created_at <= now - SETTLE,
             not_undone(),
+            # Old leads brought in as history taught no ad anything (2 Nov 2026).
+            Lead.pipeline.is_distinct_from(HISTORY),
         )
         .order_by(LeadEvent.created_at, LeadEvent.id)
         .limit(COLLECT_LIMIT)
@@ -189,7 +192,11 @@ async def _collect_one(
         data = event.data if isinstance(event.data, dict) else {}
         # Ad platforms learn from the main pipeline's stages (its matches are the ones
         # saved); a lead moving between pipelines reached no stage.
-        if journeys.pipeline_of(lead) != journey.pipeline or "pipeline" in data:
+        if (
+            journeys.pipeline_of(lead) != journey.pipeline
+            or "pipeline" in data
+            or data.get("history") is True
+        ):
             continue
         key = reached(journey, event.kind, data)
         if key is None:

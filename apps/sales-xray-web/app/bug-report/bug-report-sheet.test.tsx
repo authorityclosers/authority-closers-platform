@@ -1005,3 +1005,48 @@ it("asks every time when this device can keep nothing", async () => {
   expect(asked()).toBe(true);
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
+
+// Production report 161 (3 Nov 2026): Send shows "Sending…" at once, and a
+// second tap before the first report has gone sends nothing more.
+it("two quick taps on Send send one report, showing Sending at once", async () => {
+  captureScreen.mockResolvedValue(null);
+  let answer: () => void = () => {};
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (path) => {
+    if (path !== "/v1/bug-reports")
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    await new Promise<void>((resolve) => {
+      answer = () => resolve();
+    });
+    return new Response(
+      JSON.stringify({ bug_id: "b-2", screenshot: "skipped" }),
+      {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      },
+    );
+  });
+  vi.stubGlobal("fetch", fetcher);
+  await act(async () => openBugReport());
+  await pause(450);
+  await act(async () => type("Send took two taps."));
+  const form = document.querySelector("dialog form")!;
+  await act(async () => {
+    form.dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    form.dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+  });
+  expect(button("Sending…").disabled).toBe(true);
+  await pause(200);
+  answer();
+  await pause(100);
+  const sent = fetcher.mock.calls.filter(
+    ([path]) => path === "/v1/bug-reports",
+  );
+  expect(sent).toHaveLength(1);
+});

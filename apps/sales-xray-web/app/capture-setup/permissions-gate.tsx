@@ -39,6 +39,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 import {
@@ -72,6 +73,7 @@ import { Button } from "../ui/kit";
 import { FIRST_RUN_ATTRIBUTE } from "../welcome/setup-state";
 import { useWorkspaceAccess } from "../workspace-access";
 import { recordCaptureSetup } from "./capture-setup-client";
+import { CAPTURE_SETUP_ATTRIBUTE } from "./capture-setup-rules";
 import own from "./capture-setup.module.css";
 import {
   PERMISSIONS_ATTRIBUTE,
@@ -100,6 +102,28 @@ const ICONS: Record<PermissionKey, LucideIcon> = {
 const CONSENT_ATTRIBUTE = "data-sx-consent";
 const REMINDER_ID = "permissions-later";
 const OPEN_EVENT = "sx-permissions-open";
+
+/**
+ * The first-run screens that fill the page (Terms, Home's first run, "Set up
+ * this phone"): the reminder waits for them, so it never sits over their
+ * buttons (Redmi, v1.35 staging: it covered "Report a problem").
+ */
+const FULL_PAGE = [
+  CONSENT_ATTRIBUTE,
+  FIRST_RUN_ATTRIBUTE,
+  CAPTURE_SETUP_ATTRIBUTE,
+];
+function watchFullPage(changed: () => void) {
+  const watch = new MutationObserver(changed);
+  watch.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: FULL_PAGE,
+  });
+  return () => watch.disconnect();
+}
+const fullPageOpen = () =>
+  FULL_PAGE.some((name) => document.documentElement.hasAttribute(name));
+const noFullPage = () => false;
 
 /**
  * Turn on from the Calls line (owner, 3 Nov 2026): the checklist again, at the
@@ -342,6 +366,13 @@ export function PermissionsGate() {
   const [visitLater, setVisitLater] = useState<ReadonlySet<string>>(new Set());
   // The reminder's Finish: the checklist again, with the put-off rows.
   const [reopened, setReopened] = useState(false);
+  // The reminder was tapped or closed: not again until the app opens again.
+  const reminded = useRef(false);
+  const fullPage = useSyncExternalStore(
+    watchFullPage,
+    fullPageOpen,
+    noFullPage,
+  );
   const away = useRef(false);
 
   useEffect(() => {
@@ -436,10 +467,14 @@ export function PermissionsGate() {
     return () => html.removeAttribute(PERMISSIONS_ATTRIBUTE);
   }, [deciding, open]);
 
-  // A put-off row stays as one slim line in the corner until it is done.
-  const remind = open ? "" : later.map((item) => item.label).join(" · ");
+  // A put-off row stays as one slim line until it is done, or until Finish or
+  // the X is tapped, once per app open (orchestrator, 3 Nov 2026: it left by
+  // itself after 5 s). On Leads it is the line above the rows; elsewhere the
+  // corner, which the page keeps room for.
+  const remind =
+    open || fullPage ? "" : later.map((item) => item.label).join(" · ");
   useEffect(() => {
-    if (!remind) {
+    if (!remind || reminded.current) {
       dismissNotice(REMINDER_ID);
       return;
     }
@@ -448,10 +483,22 @@ export function PermissionsGate() {
       tone: "info",
       title: "Finish setting up",
       message: remind,
-      action: { label: "Finish", icon: "none", run: () => setReopened(true) },
+      action: {
+        label: "Finish",
+        icon: "none",
+        run: () => {
+          reminded.current = true;
+          setReopened(true);
+        },
+      },
       slim: true,
       pillAction: true,
       noReport: true,
+      dock: true,
+      timeout: 0,
+      onDismiss: async () => {
+        reminded.current = true;
+      },
     });
   }, [remind]);
 

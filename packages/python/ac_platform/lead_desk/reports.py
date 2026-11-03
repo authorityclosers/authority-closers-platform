@@ -25,7 +25,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from statistics import median
 from typing import Any, Final
 from uuid import UUID
@@ -33,11 +33,14 @@ from uuid import UUID
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ac_platform.lead_desk.campaigns import campaign_key, label_sql
+from ac_platform.lead_desk.history import HISTORY
 from ac_platform.lead_desk.journey.engine import not_undone
 from ac_platform.lead_desk.journey.model import Journey, Stage, lead_in
 from ac_platform.lead_desk.journey.templates import FUNNEL_ORDER
 from ac_platform.lead_desk.journey.transitions import reasons_of, stages_changed
 from ac_platform.lead_desk.models import Lead, LeadEvent, LeadMeeting
+from ac_platform.lead_desk.places import top_cities
 from ac_platform.lead_desk.vocabulary import (
     IMPORTED_LOST,
     MERGED_DUPLICATE,
@@ -48,7 +51,13 @@ from ac_platform.lead_desk.vocabulary import (
 )
 
 MAX_LEADS: Final[int] = 20_000
-PERIODS: Final[frozenset[int]] = frozenset({7, 30, 90})
+# All time (0) is the one period that counts old leads brought in as history: their stage
+# moves are dated the day they were brought in, so a shorter period would count them as
+# won or reached that week (owner Analytics, 2 Nov 2026).
+ALL_TIME: Final[int] = 0
+PERIODS: Final[frozenset[int]] = frozenset({ALL_TIME, 7, 30, 90})
+EPOCH: Final[datetime] = datetime(1970, 1, 1, tzinfo=UTC)
+TOP_CITIES: Final[int] = 5
 # Milestones a lead reaches by talking to someone: the first real conversation.
 SPOKEN: Final[frozenset[str]] = frozenset(
     name for name, rank in FUNNEL_ORDER.items() if rank >= FUNNEL_ORDER["contacted"]
@@ -85,6 +94,12 @@ class LeadFact:
     received_at: datetime | None = None
     # On the Cold side (an imported list): never overdue, as on Home.
     cold: bool = False
+    # An old lead brought in as history: never overdue, never "no next step", and its first
+    # conversation has no time of its own (it happened before Sales X-Ray).
+    history: bool = False
+    # Its campaign's name (campaigns.label_sql) and the city as typed.
+    campaign: str | None = None
+    city: str | None = None
 
     @property
     def arrived_at(self) -> datetime:
@@ -126,6 +141,16 @@ class Group:
     won: int = 0
     meetings: int = 0
     first_minutes: list[int] = field(default_factory=list)
+    interested: int = 0
+    history: int = 0
+    last_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Campaign:
+    source: str
+    label: str
+    numbers: Group
 
 
 @dataclass(slots=True)
@@ -146,6 +171,11 @@ class Report:
     no_next: int
     sellers: dict[UUID | None, Group]
     sources: dict[str, Group]
+    # By campaign key (campaigns.campaign_key), with old leads counted only in All time.
+    campaigns: dict[str, Campaign] = field(default_factory=dict)
+    cities: list[tuple[str, int]] = field(default_factory=list)
+    cities_unplaced: int = 0
+    history_leads: int = 0
 
 
 def is_active(stage: str) -> bool:
@@ -155,14 +185,19 @@ def is_active(stage: str) -> bool:
 def overdue(fact: LeadFact, now: datetime) -> bool:
     """More than an hour late: a follow-up time, or a new lead's arrival. Inbound leads only,
     as on Home (persona QA, 31 Oct 2026: 950 untouched Cold leads read "overdue")."""
-    if not is_active(fact.stage) or fact.owner_id is None or fact.cold:
+    if not is_active(fact.stage) or fact.owner_id is None or fact.cold or fact.history:
         return False
     due = fact.next_action_at or (fact.created_at if fact.stage == "new" else None)
     return due is not None and due < now - OVERDUE_AFTER
 
 
 def no_next(fact: LeadFact) -> bool:
-    return is_active(fact.stage) and fact.stage != "new" and fact.next_action_at is None
+    return (
+        is_active(fact.stage)
+        and fact.stage != "new"
+        and fact.next_action_at is None
+        and not fact.history
+    )
 
 
 def milestone_of(journey: Journey, kind: str | None, key: str | None) -> str | None:
@@ -229,7 +264,7 @@ def compute(
     reasons: Mapping[str, str] | None = None,
 ) -> Report:
     """Every number, from the leads as they stand, their history and their meetings."""
-    since = now - timedelta(days=days)
+    since = EPOCH if days == ALL_TIME else now - timedelta(days=days)
     by_id = {fact.lead_id: fact for fact in leads}
     junk = {
         fact.lead_id
@@ -283,7 +318,8 @@ def compute(
         talked = spoke_at.get(fact.lead_id)
         if talked is not None:
             first.passed += 1
-            minutes.append(max(0, int((talked - fact.created_at).total_seconds() // 60)))
+            if not fact.history:
+                minutes.append(max(0, int((talked - fact.created_at).total_seconds() // 60)))
 
     steps: list[Conversion] = []
     for key, start, end in STEPS:
@@ -312,11 +348,19 @@ def compute(
 
     sellers: dict[UUID | None, Group] = defaultdict(Group)
     sources: dict[str, Group] = defaultdict(Group)
+    campaigns: dict[str, Campaign] = {}
     booked = Counter(lead_id for lead_id, status, _ in meetings if status == "scheduled")
     for fact in leads:
         source = fact.source_label or fact.source
-        for tally in (sellers[fact.owner_id], sources[source]):
+        named = fact.campaign or fact.source_label
+        key = campaign_key(fact.source, named)
+        if key not in campaigns:
+            campaigns[key] = Campaign(fact.source, named or fact.source, Group())
+        for tally in (sellers[fact.owner_id], sources[source], campaigns[key].numbers):
             tally.leads += 1
+            tally.history += fact.history
+            if tally.last_at is None or fact.arrived_at > tally.last_at:
+                tally.last_at = fact.arrived_at
             if is_active(fact.stage):
                 tally.active += 1
                 tally.overdue += overdue(fact, now)
@@ -328,13 +372,22 @@ def compute(
             if fact.arrived_at >= since:
                 tally.created += 1
                 tally.junk += fact.lead_id in junk
+                if fact.lead_id not in junk and "qualified" in first_at.get(fact.lead_id, {}):
+                    tally.interested += 1
                 if fact.lead_id in spoke_at and fact.lead_id not in junk:
                     tally.connected += 1
-                    tally.first_minutes.append(
-                        max(
-                            0, int((spoke_at[fact.lead_id] - fact.created_at).total_seconds() // 60)
+                    if not fact.history:
+                        tally.first_minutes.append(
+                            max(
+                                0,
+                                int(
+                                    (spoke_at[fact.lead_id] - fact.created_at).total_seconds() // 60
+                                ),
+                            )
                         )
-                    )
+    cities, unplaced = top_cities(
+        (fact.city for fact in leads if fact.arrived_at >= since), TOP_CITIES
+    )
 
     return Report(
         days=days,
@@ -353,6 +406,10 @@ def compute(
         no_next=sum(no_next(fact) for fact in leads),
         sellers=dict(sellers),
         sources=dict(sources),
+        campaigns=campaigns,
+        cities=cities,
+        cities_unplaced=unplaced,
+        history_leads=sum(fact.history for fact in leads),
     )
 
 
@@ -379,6 +436,9 @@ async def pipeline_report(
         where.append(Lead.owner_person_id == owner)
     if source is not None:
         where.append(Lead.source == source)
+    if days != ALL_TIME:
+        # Old leads kept as history count in All time only (see ALL_TIME).
+        where.append(Lead.pipeline.is_distinct_from(HISTORY))
     leads = [
         LeadFact(
             row.id,
@@ -392,6 +452,9 @@ async def pipeline_report(
             row.outcome_reason,
             row.received_at,
             row.pipeline == "cold",
+            row.pipeline == HISTORY,
+            row.campaign,
+            row.city,
         )
         for row in (
             await db.execute(
@@ -407,6 +470,8 @@ async def pipeline_report(
                     Lead.outcome_reason,
                     Lead.received_at,
                     Lead.pipeline,
+                    label_sql().label("campaign"),
+                    Lead.city,
                 )
                 .where(*where)
                 .limit(MAX_LEADS)

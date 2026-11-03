@@ -15,6 +15,7 @@ from uuid import UUID
 
 from sqlalchemy import and_, case, false, func, or_
 
+from ac_platform.lead_desk.history import inbound_only, worked
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.models import Lead
 from ac_platform.lead_desk.vocabulary import OPEN_STAGES
@@ -37,6 +38,8 @@ def in_view(view: CallView, day_end: datetime, waiting: Collection[UUID] = ()) -
         # badge counts exactly these rows, so a missed call is a row, not a number alone).
         return and_(
             Lead.stage.in_(OPEN_STAGES),
+            # An old lead kept as history is in no work view, even when a search finds it.
+            worked(),
             or_(
                 Lead.next_action_at < day_end,
                 and_(Lead.stage == "new", Lead.next_action_at.is_(None)),
@@ -46,7 +49,7 @@ def in_view(view: CallView, day_end: datetime, waiting: Collection[UUID] = ()) -
     # Planned contact: any open lead with a time, on its side (phone personas, 1 Nov 2026:
     # ph2-14, a "No answer" retry showed nowhere but All Leads; ph2-18, a Cold lead's booked
     # call-back never reached Cold > Follow-ups). A retry due today is in To Call too.
-    return and_(Lead.stage.in_(OPEN_STAGES), Lead.next_action_at.is_not(None))
+    return and_(Lead.stage.in_(OPEN_STAGES), worked(), Lead.next_action_at.is_not(None))
 
 
 def call_order(now: datetime, day_start: datetime) -> tuple[Any, ...]:
@@ -64,7 +67,7 @@ def call_order(now: datetime, day_start: datetime) -> tuple[Any, ...]:
     fresh = and_(
         Lead.stage == "new",
         Lead.next_action_at.is_(None),
-        func.coalesce(Lead.pipeline, "live") != "cold",
+        inbound_only(),
         arrived >= now - FRESH_ENQUIRY,
     )
     bucket = case(

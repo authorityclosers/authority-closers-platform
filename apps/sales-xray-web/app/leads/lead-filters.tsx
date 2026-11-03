@@ -13,7 +13,7 @@
  * answered by the server.
  */
 
-import { ChevronDown, SlidersHorizontal, X } from "lucide-react";
+import { ArrowUpDown, ChevronDown, SlidersHorizontal, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { Button } from "../ui/kit";
@@ -67,6 +67,8 @@ export const MADE_WORDS: Record<ListMade, string> = {
   today: "Came in today",
   week: "Came in this week",
   month: "Came in this month",
+  // Old leads brought in as history: in no other list (owner, 2 Nov 2026).
+  history: "Old leads",
 };
 export const SORT_WORDS: Record<ListSort, string> = {
   next_action: "Next follow-up",
@@ -80,6 +82,55 @@ const SORT_CHOICES: Record<ListSort | typeof OLDEST, string> = {
   ...SORT_WORDS,
   [OLDEST]: "Oldest first",
 };
+
+/**
+ * The list's sort in its head, one tap away, in place of the "N leads" line
+ * (orchestrator, 3 Nov 2026, bugs 126 and 127): the list's own order first,
+ * then the Filter's sort choices.
+ */
+export function SortPick({
+  more,
+  defaultLabel,
+  same = null,
+  onChange,
+}: {
+  more: ListMore;
+  /** The list's order when nothing is picked: "Newest", "Next due", "Calling order". */
+  defaultLabel: string;
+  /** The Filter choice that is the list's own order, listed once (as its own order). */
+  same?: ListSort | null;
+  onChange: (next: {
+    sort: ListSort | null;
+    order: "asc" | "desc" | null;
+  }) => void;
+}) {
+  const value = !more.sort
+    ? null
+    : more.sort === "created" && more.order === "asc"
+      ? OLDEST
+      : more.sort;
+  return (
+    <Picker
+      title="Sort"
+      label="Sort:"
+      icon={<ArrowUpDown size={16} aria-hidden="true" />}
+      value={value}
+      all={{ label: defaultLabel }}
+      options={Object.entries(SORT_CHOICES)
+        .filter(([key]) => key !== same)
+        .map(([key, label]) => ({ key, label }))}
+      onChange={(key) =>
+        onChange(
+          key === null
+            ? { sort: null, order: null }
+            : key === OLDEST
+              ? { sort: "created", order: "asc" }
+              : { sort: key as ListSort, order: null },
+        )
+      }
+    />
+  );
+}
 
 /** The sort as a filter's words. */
 function sortLabel(more: ListMore): string {

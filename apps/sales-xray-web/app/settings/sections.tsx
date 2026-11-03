@@ -148,14 +148,17 @@ function PhoneAndAlerts() {
 /**
  * Plan & usage for whoever pays. A member of an organisation reads one calm
  * line instead: no plan, no price, no top-up (roles.ts "billing.view"). It
- * waits while your role is unknown, so a price never shows first.
+ * waits while your role is unknown, so a price never shows first. Plan &
+ * billing alone: it already names the analysis time and the top-up, so the
+ * usage pane's second copy of both and its call counts (the Dashboard's) are
+ * gone (owner, production report 124, 3 Nov 2026).
  */
 function PlanSection({ billing }: { billing?: SettingsBillingProps }) {
   const canHere = useCanHere();
   const pays = canHere("billing.view");
   if (pays === null) return null;
   if (!pays) return <p className={styles.hint}>{BILLING_WITH_OWNER}</p>;
-  return <AccountSettings only={["usage", "billing"]} billing={billing} />;
+  return <AccountSettings only={["billing"]} billing={billing} />;
 }
 
 export function SettingsSectionView({

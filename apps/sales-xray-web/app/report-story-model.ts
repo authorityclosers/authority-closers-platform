@@ -359,6 +359,8 @@ export function formatDuration(ms: number) {
 export function callOutcome(
   report: SalesReport,
   recorded?: { status: OutcomeStatus; note?: string | null } | null,
+  /** The follow-up the call's own facts booked ("Sat 7 Nov · 3:00 pm"). */
+  followUp?: string | null,
 ): Outcome {
   const overview = report.overview?.outcome ?? null;
   const story = report.story?.outcome ?? null;
@@ -393,6 +395,15 @@ export function callOutcome(
               ? "No Clear Next Step"
               : null; // closed / no_sale: only a person records Won or Lost.
   }
+  // A follow-up the call's facts booked outranks the analysis' "Deferred" or
+  // "No Clear Next Step": facts over a label (3 Nov 2026 regression, R1: a
+  // booked setup or call read as Deferred).
+  if (
+    !explicit &&
+    followUp &&
+    (status === "Deferred" || status === "No Clear Next Step")
+  )
+    status = "Follow-up Set";
   // A person's outcome wins. The call's own line stays under it only when it
   // says the same thing; otherwise ("Won" over "wants to think it over") it
   // would contradict the badge, and it still reads in Prospect's position.
@@ -756,12 +767,14 @@ export function reportStoryModel(
   options: {
     roles?: { seller?: string | null; prospect?: string | null };
     recorded?: { status: OutcomeStatus; note?: string | null } | null;
+    /** The follow-up the call's own facts booked, if any. */
+    followUp?: string | null;
   } = {},
 ): StoryModel {
   const report = normalized(input);
   const overview = report.overview;
   const story = report.story;
-  const outcome = callOutcome(report, options.recorded);
+  const outcome = callOutcome(report, options.recorded, options.followUp);
 
   const strength = report.strengths.find((item) => item.evidence.length);
   const concernIndex = overview?.next_call_focus?.improvement_index ?? 0;

@@ -218,6 +218,18 @@
   color: var(--sx-bad);
 }
 
+/* A new Inbound enquiry's wait, at the end of the middle line (bug 156):
+   amber from 5 minutes, red from 15, as its own line was. */
+.leadWait[data-tone="warn"] {
+  color: var(--lx-focus-ink);
+  font-weight: 600;
+}
+
+.leadWait[data-tone="bad"] {
+  color: var(--sx-bad);
+  font-weight: 600;
+}
+
 .leadEnd {
   display: grid;
   justify-items: end;
@@ -2680,6 +2692,12 @@ a.repName {
 .saveButton:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* Pressed at the touch itself (production 161): it took the tap. */
+.saveButton[data-pressed]:not(:disabled) {
+  transform: scale(0.98);
+  background: var(--lx-teal-hover);
 }
 
 .callButton:focus-visible,
@@ -5210,6 +5228,12 @@ a.repName {
   white-space: nowrap;
 }
 
+/* The list's sort, where its count was (bugs 126 and 127). */
+.listSort {
+  flex: none;
+  min-width: 0;
+}
+
 .listTotal {
   flex: none;
   color: var(--sx-muted);
@@ -6239,7 +6263,8 @@ button.leadTags {
   transform: scale(1.04);
 }
 
-.noteSend:active:not(:disabled) {
+.noteSend:active:not(:disabled),
+.noteSend[data-pressed]:not(:disabled) {
   transform: scale(0.92);
 }
 

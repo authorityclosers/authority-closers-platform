@@ -1,9 +1,11 @@
 /* Notifications, one place (competitor teardown 26). */
 
+/* The alerts sit straight in their card: the card head's 14 px at each side
+   (production reports 148 and 116, 3 Nov 2026). */
 .list {
   display: grid;
   margin: 0;
-  padding: 0;
+  padding: 0 14px;
   list-style: none;
 }
 
@@ -119,6 +121,7 @@
   justify-items: start;
   gap: 8px;
   margin-top: 12px;
+  padding: 0 14px 14px;
 }
 
 .foot small {

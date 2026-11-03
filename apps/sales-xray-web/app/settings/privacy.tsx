@@ -206,14 +206,17 @@ export function PrivacySettings() {
             ) : null}
           </>
         )}
-        <div className={styles.hint}>
+        {/* The notice's own words, one tap away instead of a wall (owner,
+            production reports 148 and 132, 3 Nov 2026). */}
+        <details className={styles.hint}>
+          <summary>What is recorded and how long it is kept</summary>
           {value.notice.paragraphs.map((paragraph) => (
             <p key={paragraph}>{paragraph}</p>
           ))}
           <p>
             <Link href="/privacy">Read the privacy policy</Link>
           </p>
-        </div>
+        </details>
       </Panel>
       {/* Calls analysed as they arrive, with the seller's own consent. */}
       <AutoAnalysisPanel />
