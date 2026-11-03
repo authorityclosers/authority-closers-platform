@@ -159,7 +159,7 @@ it("keeps the screen to a title, one line, the preview and plain rows", async ()
   expect(host.textContent).not.toMatch(/\d+ leads?/);
 });
 
-it("saves a new name at once and offers Undo", async () => {
+it("saves a new name only on Save and offers Undo", async () => {
   await render();
   await tap("Rename Talking");
   const input = host.querySelector<HTMLInputElement>(
@@ -167,6 +167,10 @@ it("saves a new name at once and offers Undo", async () => {
   )!;
   await enter(input, "Visit booked");
   await leave(input);
+  // Nothing reaches the server before Save (production 151).
+  expect(saveStages).not.toHaveBeenCalled();
+  expect(button("Rename Visit booked")).toBeDefined();
+  await tap("Save");
   expect(saveStages).toHaveBeenCalledTimes(1);
   expect(sent()[0]).toBe(3);
   expect(sent()[2]).toBe("main");
@@ -179,13 +183,57 @@ it("saves a new name at once and offers Undo", async () => {
     .mocked(notify)
     .mock.calls.map(([notice]) => notice)
     .find((notice) => notice.action?.label === "Undo");
-  expect(saved?.title).toBe("Renamed");
+  expect(saved?.title).toBe("Stages saved");
   await act(async () => saved!.action!.run());
   await settle();
   expect(saveStages).toHaveBeenCalledTimes(2);
   // Undo saves the list as it was, on the version the first save made.
   expect(sent()[0]).toBe(4);
   expect(byKey("talk")?.label).toBe("Talking");
+});
+
+it("Discard puts every change back without saving", async () => {
+  await render();
+  expect(button("Save")).toBeUndefined();
+  await tap("Sellers see Talking");
+  await tap("More for Visit");
+  await tap("Move up");
+  await tap("Discard");
+  expect(saveStages).not.toHaveBeenCalled();
+  expect(button("Save")).toBeUndefined();
+  expect(button("Sellers see Talking")?.getAttribute("aria-pressed")).toBe(
+    "true",
+  );
+  expect(
+    [...host.querySelectorAll('[aria-label="Your lead stages"] > li')].map(
+      (row) => row.querySelector('[aria-label^="Rename"]')?.textContent,
+    ),
+  ).toEqual([
+    "EnquiryFresh list",
+    "Talking",
+    "No answer",
+    "Visit",
+    "Won",
+    "Lost",
+  ]);
+});
+
+it("moves a stage from More, never past the first, and saves the order on Save", async () => {
+  await render();
+  await tap("More for Talking");
+  expect(button("Move up")?.disabled).toBe(true);
+  await tap("Move down");
+  await tap("Move down");
+  await tap("Save");
+  expect(saveStages).toHaveBeenCalledTimes(1);
+  expect(sent()[1].map((item) => item.key)).toEqual([
+    "new",
+    "nc",
+    "visit",
+    "talk",
+    "won",
+    "lost",
+  ]);
 });
 
 it("previews either side and names the first stage on Cold from More", async () => {
@@ -209,6 +257,7 @@ it("previews either side and names the first stage on Cold from More", async () 
     .querySelector("input")!;
   await enter(cold, "Unworked");
   await leave(cold);
+  await tap("Save");
   expect(byKey("new")).toMatchObject({
     label: "Enquiry",
     coldLabel: "Unworked",
@@ -219,6 +268,7 @@ it("hides a stage from sellers, never the first one", async () => {
   await render();
   expect(button("Sellers see Enquiry")?.disabled).toBe(true);
   await tap("Sellers see Talking");
+  await tap("Save");
   expect(byKey("talk")?.visible).toBe(false);
   expect(byKey("new")?.visible).toBe(true);
 });
@@ -233,6 +283,7 @@ it("moves a stage with the keyboard and keeps the first stage first", async () =
     );
   });
   await settle();
+  await tap("Save");
   expect(sent()[1].map((item) => item.key)).toEqual([
     "new",
     "talk",
@@ -268,11 +319,13 @@ it("changes what a stage counts as and adds a ready stage before Won", async () 
   await render();
   await tap("More for Visit");
   await tap("Interested");
+  await tap("Payment pending");
+  await tap("Save");
+  expect(saveStages).toHaveBeenCalledTimes(1);
   expect(byKey("visit")).toMatchObject({
     kind: "interested",
     milestone: "qualified",
   });
-  await tap("Payment pending");
   const order = sent()[1].map((item) => item.key ?? item.label);
   expect(order.indexOf("Payment pending")).toBe(order.indexOf("won") - 1);
   expect(
