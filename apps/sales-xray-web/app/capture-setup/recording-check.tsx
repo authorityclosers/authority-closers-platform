@@ -16,17 +16,34 @@
  * The bell's reminder opens Calls at its own day, ?no-recording=2026-10-30
  * (phone personas ph1-27, 1 Nov 2026: its See why did nothing): the line then
  * names that day, as the bell does, with its calls listed.
+ *
+ * While "Analyse my calls automatically" is still to choose, the line once a
+ * day says what that costs instead (owner, 3 Nov 2026): "3 calls today could
+ * have had a coaching report · Turn on · Not now". With uploads off those are
+ * the same calls, still on the phone. Turn on opens the checklist's consent
+ * row with its sealed words (Settings on the web); Not now keeps it away a
+ * week (leads/auto-start.ts).
  */
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import {
+  AUTO_ANALYSIS_SETTINGS_HREF,
+  markNudged,
+  notNow,
+  nudgeDue,
+} from "../leads/auto-start";
+import {
   autoCaptureStatus,
   inPhoneApp,
   onPhoneSignal,
   setupStatus,
 } from "../leads/native-phone";
+import {
+  readAutoAnalysis,
+  type AutoAnalysis,
+} from "../settings/auto-analysis-client";
 import { useWorkspaceAccess } from "../workspace-access";
 import {
   readMissingRecordings,
@@ -35,6 +52,7 @@ import {
 import { openCaptureSetup } from "./capture-setup-gate";
 import { failingStep, phoneFacts } from "./capture-setup-rules";
 import own from "./capture-setup.module.css";
+import { askConsent } from "./permissions-gate";
 
 const EVERY_MS = 120_000;
 /** The bell's reminder: Calls, at that day's calls without a recording. */
@@ -77,6 +95,44 @@ const clock = (at: string) =>
 
 const talk = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+
+/** "3 calls today could have had a coaching report" (owner, 3 Nov 2026). */
+export function nudgeWords(calls: number): string {
+  return `${calls === 1 ? "1 call" : `${calls} calls`} today could have had a coaching report`;
+}
+
+/** The day's gentle ask, in the line's place: Turn on, or Not now for a week. */
+export function ConsentNudge({
+  calls,
+  onTurnOn,
+  onNotNow,
+}: {
+  calls: number;
+  onTurnOn: () => void;
+  onNotNow: () => void;
+}) {
+  return (
+    <section className={own.missingLine} aria-label="Automatic analysis">
+      <p>
+        <span>{nudgeWords(calls)}</span>
+        <span aria-hidden="true">·</span>
+        {inPhoneApp() ? (
+          <button type="button" data-fix="" onClick={onTurnOn}>
+            Turn on
+          </button>
+        ) : (
+          <Link href={AUTO_ANALYSIS_SETTINGS_HREF} onClick={onTurnOn}>
+            Turn on
+          </Link>
+        )}
+        <span aria-hidden="true">·</span>
+        <button type="button" onClick={onNotNow}>
+          Not now
+        </button>
+      </p>
+    </section>
+  );
+}
 
 /** Fix: the setup, at the step that fails on this phone; on the web, "open the app". */
 export async function fixRecording() {
@@ -149,6 +205,11 @@ export function RecordingLine() {
     access.context !== null;
   const [day] = useState(askedDay);
   const [missing, setMissing] = useState<MissingRecordings | null>(null);
+  // Read only once the line has calls to name; the ask is decided once a visit.
+  const [consent, setConsent] = useState<AutoAnalysis | null>(null);
+  const [nudge, setNudge] = useState<boolean | null>(null);
+  const counted =
+    !day && missing !== null && missing.calls > 0 && missing.tried > 0;
 
   useEffect(() => {
     if (!ready) return;
@@ -175,5 +236,35 @@ export function RecordingLine() {
     };
   }, [ready, day]);
 
+  useEffect(() => {
+    if (!counted || consent) return;
+    const controller = new AbortController();
+    readAutoAnalysis(controller.signal).then(
+      (view) => {
+        // Decided once a visit: the day's one ask, never again today.
+        const due = nudgeDue(view);
+        if (due) markNudged();
+        setConsent(view);
+        setNudge(due);
+      },
+      () => setNudge(false),
+    );
+    return () => controller.abort();
+  }, [counted, consent]);
+
+  if (missing && counted && nudge)
+    return (
+      <ConsentNudge
+        calls={missing.calls}
+        onTurnOn={() => {
+          if (inPhoneApp()) askConsent();
+          setNudge(false);
+        }}
+        onNotNow={() => {
+          notNow();
+          setNudge(false);
+        }}
+      />
+    );
   return missing ? <MissingLine missing={missing} day={day} /> : null;
 }

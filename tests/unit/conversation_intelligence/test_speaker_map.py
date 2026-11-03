@@ -294,3 +294,68 @@ def test_malformed_map_falls_back_without_authority(entries: list[dict[str, Any]
     )
     assert project_speaker_roles(result)["origin"] == "text_predicted_roles"
     assert result["diagnostics"] == ["speaker_map_source_invalid_confirmed"]
+
+
+# Fictional Hindi and Marathi openings in the shape the transcriber writes them
+# (3 Nov 2026 regression, R3). Mirrored in the web's speaker-profiles.test.ts.
+INDIAN_OPENINGS = [
+    (
+        [
+            ("s0", "Hello नमस्ते। क्या मेरी बात अभिषेक श्रीवास्तव जी से हो रही है?"),
+            ("s1", "जी नमस्ते। हाँ बोलिए।"),
+            ("s0", "अभिषेक जी, मैं प्रिया मेहता Setu Fieldware से। आपने demo मांगा था।"),
+        ],
+        {"s0": "प्रिया"},
+    ),
+    (
+        [
+            ("s0", "नमस्ते। क्या मेरी बात मनोज रस्तोगी जी से हो रही है?"),
+            ("s1", "हां जी, मनोज बोल रहा हूं। आप कौन?"),
+            ("s0", "मनोज जी, मैं अमित वर्मा बोल रहा हूं, सहयोग SoftLabs से।"),
+        ],
+        {"s0": "अमित", "s1": "मनोज"},
+    ),
+    (
+        [
+            ("s0", "नमस्कार, मी पल्लवी जोशी बोलते. दत्ता सोनवणे सर बोलताय का?"),
+            ("s1", "हा बोलतोय. बोला जरा घाई आहे."),
+        ],
+        {"s0": "पल्लवी"},
+    ),
+    (
+        [
+            (
+                "s0",
+                "नमस्कार संदीप जाधव सर बोलताय का? मी ऋतुजा काले, सह्याद्री सेल्स क्राफ्ट मधून बोलतिये.",
+            ),
+            ("s1", "हो हो ऋतुजा मॅडम बोला."),
+        ],
+        {"s0": "ऋतुजा", "s1": "संदीप"},
+    ),
+    (
+        [
+            ("s0", "नमस्ते, क्या कविता जैन जी बोल रही हैं?"),
+            ("s1", "हाँ बोल रही हूँ। कौन?"),
+            ("s0", "कविता जी, मैं विकास त्रिपाठी VyaparLink से।"),
+        ],
+        {"s0": "विकास"},
+    ),
+]
+
+
+@pytest.mark.parametrize(("lines", "expected"), INDIAN_OPENINGS)
+def test_hindi_and_marathi_introductions_name_their_speaker_never_a_greeting(
+    lines: list[tuple[str, str]], expected: dict[str, str]
+) -> None:
+    segments = [
+        {
+            "id": f"seg-{index}",
+            "speaker_id": speaker,
+            "text": text,
+            "start_ms": index * 1000,
+            "end_ms": index * 1000 + 900,
+        }
+        for index, (speaker, text) in enumerate(lines)
+    ]
+    voices = list(dict.fromkeys(row["speaker_id"] for row in segments))
+    assert _names(segments, voices)[0] == expected

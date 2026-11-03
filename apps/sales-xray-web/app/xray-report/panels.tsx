@@ -313,7 +313,8 @@ export function PartHead({
         </span>
         <div className={styles.headText}>
           <h2 id={headingId} tabIndex={-1} className={styles.headTitle}>
-            {number}. {title}
+            <span className={styles.partNumber}>{number}. </span>
+            {title}
           </h2>
           {look.style === "guided" ? (
             <p className={styles.headSub}>{summary}</p>

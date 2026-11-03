@@ -115,6 +115,7 @@ import {
 } from "./report-language";
 import {
   isNewCallRequested,
+  linksToThisNewCall,
   newCallHref,
   setNewCallRequested,
 } from "./new-call-navigation";
@@ -162,7 +163,6 @@ import {
 import { usePurchasesAllowed } from "./purchase-policy";
 import { Picker } from "./ui/picker";
 import styles from "./acquisition-studio.module.css";
-import { formatAnalysisTime } from "./analysis-time";
 import type { ScopedSavedReport } from "./report-preload";
 
 type Result = {
@@ -292,19 +292,11 @@ export function remainingAllowanceLabel(
         : scope === "member"
           ? "Call analysis isn't on for this organisation yet. Ask your owner."
           : "Call analysis isn't on for this organisation yet.";
-    if (allowance.available_seconds > 3600)
-      return `Remaining analysis time · ${formatAnalysisTime(allowance.available_seconds)}`;
-    const minutes = Math.floor(allowance.available_seconds / 60);
-    const remainder = String(allowance.available_seconds % 60).padStart(2, "0");
-    return allowance.available_seconds === 0
-      ? `Remaining analysis time · ${minutes}m ${remainder}s · exhausted`
-      : `Remaining analysis time · ${minutes}m ${remainder}s`;
   }
-  if (unknown)
-    return "Remaining analysis time · unavailable until your session is confirmed";
-  if (advertisedSeconds !== null)
-    return `Up to ${Math.floor(advertisedSeconds / 60)}m trial allowance`;
-  return "Remaining analysis time · checking…";
+  // No minutes on a user's screen (owner, 19 Oct; simplify pass, owner
+  // approved 2 Nov 2026). A balance, a visitor's trial or "checking" says
+  // nothing; used up is the out-of-minutes notice's to say, once.
+  return null;
 }
 
 export function AcquisitionStudio({
@@ -414,21 +406,40 @@ export function AcquisitionStudio({
       uploadSnapshot.phase === "interrupted")
       ? uploadStore.fileFor(uploadSnapshot.intentId)
       : null;
-  const file = pending
-    ? (pending.selection?.file ?? retainedUploadFile)
-    : (localFile ?? retainedUploadFile);
-  // The chosen file's wave, measured in this browser (shared with its card),
-  // carries the call's shape into sending and the steps.
-  const fileWave = useFileWave(file);
+  const [submission, setSubmission] = useState<Submission | null>(null);
   // Which call the chosen file became, so its wave stays with that call only.
   const [fileSentAs, setFileSentAs] = useState<{
     file: File;
     callId: string;
   } | null>(null);
+  // A sent file leaves New analysis's files (3 Nov 2026 regression, U2: an
+  // analysed file stayed "Selected", one tap from a second upload), so the
+  // call shown here keeps the file it was sent from.
+  const sentFile =
+    submission && fileSentAs?.callId === submission.id ? fileSentAs.file : null;
+  const file =
+    sentFile ??
+    (pending
+      ? (pending.selection?.file ?? retainedUploadFile)
+      : (localFile ?? retainedUploadFile));
+  // A shown call's file is only the one it was sent from here: a file waiting
+  // in New analysis never names another call (U4: a report's player showed
+  // the last uploaded file's name).
+  const callFile = submission ? sentFile : file;
+  // The chosen file's wave, measured in this browser (shared with its card),
+  // carries the call's shape into sending and the steps.
+  const fileWave = useFileWave(file);
   // The advertised trial cap is a guest's figure; a signed-in account shows
   // "checking…" until its own balance arrives (the minutes pill shows it too).
   const advertisedTrial =
     access?.authenticated === true ? null : (entry?.allowance_seconds ?? null);
+  // The one allowance line, said only when analysis cannot run (never minutes).
+  const allowanceLine = remainingAllowanceLabel(
+    allowance,
+    advertisedTrial,
+    allowanceUnknown,
+    minutesScope,
+  );
   const uploadPhaseUnresolved =
     uploadSnapshot.phase === "preparing" ||
     uploadSnapshot.phase === "uploading" ||
@@ -471,7 +482,6 @@ export function AcquisitionStudio({
   }, [resumeIntentId, resumePolicySha]);
   const [token, setToken] = useState("");
   const [checkKey, setCheckKey] = useState(0);
-  const [submission, setSubmission] = useState<Submission | null>(null);
   const [earlierReportSubmissionId, setEarlierReportSubmissionId] = useState<
     string | null
   >(null);
@@ -718,10 +728,10 @@ export function AcquisitionStudio({
     : Boolean(file);
   const displayFileName = localObservation
     ? localObservation.file_name
-    : (file?.name ?? null);
+    : (callFile?.name ?? null);
   const displayFileBytes = localObservation
     ? localObservation.file_size_bytes
-    : (file?.size ?? null);
+    : (callFile?.size ?? null);
   const displayReportLanguage = localObservation
     ? localObservation.report_language
     : reportLanguage;
@@ -1857,6 +1867,9 @@ export function AcquisitionStudio({
         setPlanRequiresAction(false);
         setError("");
       }
+      // The recording is this call's now, so New analysis never offers it
+      // again: here, or after leaving and coming back (U2).
+      pending?.removeFile(selected);
       return outcome;
     };
     const start = async (
@@ -2149,6 +2162,36 @@ export function AcquisitionStudio({
     // Re-read entry/session without racing an older saved-call lookup.
     setAttempt((n) => n + 1);
   }
+
+  // + → Add a call on this very page is a link to the page's own address,
+  // which the router ignores, so a report shown here in place stayed and the
+  // tap did nothing (3 Nov 2026 regression, U3). The page starts the new call
+  // itself then, as "Analyse another call" does.
+  const startAnotherCallFromLink = useEffectEvent((href: string) => {
+    if (
+      submission &&
+      !activeRequestedCallId &&
+      linksToThisNewCall(href, submission.id)
+    )
+      startAnotherCall();
+  });
+  useEffect(() => {
+    if (embedded) return;
+    const follow = (event: MouseEvent) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey) return;
+      if (event.shiftKey || event.altKey) return;
+      const link =
+        event.target instanceof Element
+          ? event.target.closest("a[href]")
+          : null;
+      if (!(link instanceof HTMLAnchorElement) || link.target === "_blank")
+        return;
+      startAnotherCallFromLink(link.href);
+    };
+    // Capture: seen before the link's own handler closes the sheet around it.
+    document.addEventListener("click", follow, true);
+    return () => document.removeEventListener("click", follow, true);
+  }, [embedded]);
 
   function forgetSavedCall() {
     if (inFlight.current) return;
@@ -3076,15 +3119,10 @@ export function AcquisitionStudio({
                       </svg>
                       <h2>Add a call to review</h2>
                     </div>
-                    {!allowance?.unlimited && (
+                    {allowanceLine && (
                       <span className={styles.allowanceBadge}>
                         <ShieldCheck size={19} aria-hidden="true" />
-                        {remainingAllowanceLabel(
-                          allowance,
-                          advertisedTrial,
-                          allowanceUnknown,
-                          minutesScope,
-                        )}
+                        {allowanceLine}
                       </span>
                     )}
                   </div>
@@ -3360,17 +3398,10 @@ export function AcquisitionStudio({
                   }
                   onChange={(event) => choose(event.target.files?.[0])}
                 />
-                {!deletionOnlyId && policy && !allowance?.unlimited && (
+                {!deletionOnlyId && policy && allowanceLine && (
                   <div className={styles.allowance}>
                     <ShieldCheck size={16} />
-                    <span>
-                      {remainingAllowanceLabel(
-                        allowance,
-                        advertisedTrial,
-                        allowanceUnknown,
-                        minutesScope,
-                      )}
-                    </span>
+                    <span>{allowanceLine}</span>
                     {minutesOut && purchasesAllowed ? (
                       <Link className={styles.moreMinutes} href="/plans">
                         Get more minutes
@@ -3696,14 +3727,7 @@ export function AcquisitionStudio({
                         ? `${(displayFileBytes / 1048576).toFixed(1)} MB`
                         : undefined
                     }
-                    allowanceLabel={
-                      remainingAllowanceLabel(
-                        allowance,
-                        advertisedTrial,
-                        allowanceUnknown,
-                        minutesScope,
-                      ) ?? undefined
-                    }
+                    allowanceLabel={allowanceLine ?? undefined}
                     paused={processingProjection.attention}
                     startedAt={
                       analysisStart?.id === submission.id
@@ -3832,12 +3856,7 @@ export function AcquisitionStudio({
               </section>
               {studioStage === "upload" && !embedded ? (
                 <NewAnalysisFooter
-                  allowanceLabel={remainingAllowanceLabel(
-                    allowance,
-                    advertisedTrial,
-                    allowanceUnknown,
-                    minutesScope,
-                  )}
+                  allowanceLabel={allowanceLine}
                   moreMinutesHref={
                     minutesOut && purchasesAllowed ? "/plans" : undefined
                   }
@@ -3989,7 +4008,7 @@ export function AcquisitionStudio({
                     callRecord: result.callRecord,
                     title: callTitle(
                       result.label,
-                      file?.name ?? "Sales X-Ray call report",
+                      sentFile?.name ?? "Sales X-Ray call report",
                     ),
                     callType: result.callRecord?.call_type ?? undefined,
                     callLength: formatClock(result.transcript.duration_ms),
@@ -4141,7 +4160,7 @@ export function AcquisitionStudio({
                   callId={submission?.id ?? null}
                   callTitle={callTitle(
                     result.label,
-                    file?.name ?? "Sales X-Ray call report",
+                    sentFile?.name ?? "Sales X-Ray call report",
                   )}
                   onSeek={playFrom}
                   audioAvailable={Boolean(audio.current)}
@@ -4151,7 +4170,10 @@ export function AcquisitionStudio({
                 audioRef={audio}
                 src={source}
                 durationMs={result.transcript.duration_ms}
-                title={file?.name ?? "Your saved sales call"}
+                title={
+                  sentFile?.name ??
+                  callTitle(result.label, "Your saved sales call")
+                }
                 embedded={embedded}
                 onPlay={() => setMoment(null)}
                 onTimeUpdate={() => {

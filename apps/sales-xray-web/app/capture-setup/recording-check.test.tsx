@@ -12,7 +12,8 @@ vi.mock("./capture-setup-gate", () => ({
 }));
 
 import { WorkspaceAccessContext } from "../workspace-access";
-import { missingWords, RecordingLine } from "./recording-check";
+import { NOT_NOW_KEY } from "../leads/auto-start";
+import { missingWords, nudgeWords, RecordingLine } from "./recording-check";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -54,17 +55,32 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  localStorage.clear();
   await act(async () => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
   window.history.replaceState(null, "", "/");
 });
 
-async function mount(calls: number, tried: number, items = ITEMS) {
+async function mount(
+  calls: number,
+  tried: number,
+  items = ITEMS,
+  consent: string | null = null,
+) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
       asked.push(String(input));
+      if (consent && String(input).includes("/call-ai/auto-analysis"))
+        return new Response(
+          JSON.stringify({
+            schema: "sales-xray-auto-analysis/1",
+            state: consent,
+            can_start: consent === "on",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
       return new Response(
         JSON.stringify({
           schema: "sales-xray-missing-recordings/1",
@@ -178,4 +194,43 @@ it("says the bell's day is fine once its recordings arrived", async () => {
   await mount(0, 6);
   expect(host.textContent).toBe("30 Oct: every call has its recording now");
   expect(button("Fix")).toBeUndefined();
+});
+
+// Owner, 3 Nov 2026: "Analyse my calls automatically" stays optional, easy to
+// say yes to, with what is missed in numbers, once a day, a week after Not now.
+it("once a day says what still choosing costs, in the line's place", async () => {
+  expect(nudgeWords(3)).toBe("3 calls today could have had a coaching report");
+  expect(nudgeWords(1)).toBe("1 call today could have had a coaching report");
+  await mount(3, 9, ITEMS, "ask");
+  const line = host.querySelector("section");
+  expect(line?.textContent).toBe(
+    "3 calls today could have had a coaching report·Turn on·Not now",
+  );
+  // On the web, Turn on is Settings' one-tap switch.
+  expect(host.querySelector("a")?.getAttribute("href")).toBe(
+    "/settings?section=privacy",
+  );
+  // The same day, the next visit has the usual line.
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await mount(3, 9, ITEMS, "ask");
+  expect(host.querySelector("section")?.textContent).toBe(
+    "3 calls today have no recording·Fix",
+  );
+});
+
+it("keeps away a week after Not now, and never asks someone who turned it off", async () => {
+  await mount(2, 5, ITEMS, "ask");
+  await act(async () => button("Not now")!.click());
+  expect(Number(localStorage.getItem(NOT_NOW_KEY))).toBeGreaterThan(Date.now());
+  expect(host.querySelector("section")?.textContent).toBe(
+    "2 calls today have no recording·Fix",
+  );
+  localStorage.clear();
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await mount(2, 5, ITEMS, "off");
+  expect(host.querySelector("section")?.textContent).toBe(
+    "2 calls today have no recording·Fix",
+  );
 });

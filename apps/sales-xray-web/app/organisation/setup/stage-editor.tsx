@@ -1,5 +1,7 @@
 "use client";
 import {
+  ArrowDown,
+  ArrowUp,
   Ban,
   CalendarCheck,
   ChevronDown,
@@ -104,15 +106,13 @@ type Open =
   | { kind: "recommend" }
   | null;
 type Drag = { id: string; from: number; to: number; dy: number; step: number };
-type Swipe = { id: string; x: number; y: number; dx: number; on: boolean };
-
-// How far a row slides left before letting go removes it.
-const SWIPE_REMOVES = 88;
 
 /**
  * Lead stages, as the owner and Dipak want them (31 Oct 2026): a small live preview of the
  * seller's Leads screen, then one plain row per stage (drag, colour, name, sellers see it,
- * more). Every change saves at once, with Undo in the corner.
+ * more). Changes wait until Save, with Undo in the corner after it (owner, production
+ * reports 151 and 133, 3 Nov 2026: a swipe moved and saved real stages). A finger never
+ * drags or removes: the mouse drags by the grip, a phone moves from More.
  */
 export function StageEditor({
   view,
@@ -126,9 +126,11 @@ export function StageEditor({
   onSaved: (next: JourneyView) => void;
 }) {
   const saved = useMemo(() => drafts(view), [view]);
+  // Changes not saved yet: nothing reaches the server before Save.
+  const [draft, setDraft] = useState<Draft[] | null>(null);
   // The list as the owner last left it, until the server has every change.
   const [pending, setPending] = useState<Draft[] | null>(null);
-  const list = pending ?? saved;
+  const list = draft ?? pending ?? saved;
   const order = live(list);
   const canEdit = view.canEdit;
   const [side, setSide] = useState<Side>("inbound");
@@ -143,15 +145,12 @@ export function StageEditor({
   });
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
-  const [swipe, setSwipe] = useState<Swipe | null>(null);
   const version = useRef(view.version);
   const stages = useRef(view.stages);
   const queue = useRef<Promise<void>>(Promise.resolve());
   const ticket = useRef(0);
   const rows = useRef(new Map<string, HTMLLIElement>());
   const grabbed = useRef<{ y: number; centers: number[] } | null>(null);
-  // A swipe ends in a click on whatever was under the finger: that click is ignored.
-  const swiped = useRef(false);
   useEffect(() => {
     version.current = view.version;
     stages.current = view.stages;
@@ -189,6 +188,7 @@ export function StageEditor({
       return;
     }
     const mine = ++ticket.current;
+    setDraft(null);
     setPending(next);
     queue.current = queue.current.then(async () => {
       try {
@@ -224,6 +224,20 @@ export function StageEditor({
     });
   }
 
+  /** Keeps a change on screen until Save; a list that can't be saved says why now. */
+  function edit(next: Draft[]) {
+    const issue = problem(next);
+    if (issue) {
+      notify({ id: "org-stage", tone: "error", title: issue });
+      return;
+    }
+    setDraft(next);
+  }
+
+  const save = () => {
+    if (draft) commit(draft, "Stages saved", { undo: saved });
+  };
+
   const change = (id: string, patch: Partial<Draft>) =>
     list.map((stage) => (stage.id === id ? { ...stage, ...patch } : stage));
 
@@ -234,7 +248,7 @@ export function StageEditor({
     if (!editing || !stage) return;
     const label = editing.label.trim();
     if (!label || label === stage.label) return;
-    commit(change(stage.id, { label }), "Renamed", { undo: list });
+    edit(change(stage.id, { label }));
   }
 
   function remove(stage: Draft) {
@@ -251,9 +265,11 @@ export function StageEditor({
       return;
     }
     setOpen(null);
-    commit(removed(list, stage.id), `Removed ${stage.label}`, { undo: list });
+    edit(removed(list, stage.id));
   }
 
+  // Moving a stage's leads is confirmed in its own sheet, so it saves there,
+  // with any changes waiting beside it.
   function removeTo(stage: Draft, target: Draft) {
     setOpen(null);
     if (!stage.key || !target.key) return;
@@ -267,14 +283,12 @@ export function StageEditor({
     const meaning = MEANINGS.find((item) => item.key === stage.meaning)!;
     setOpen(null);
     setCustom({ label: "", meaning: "interested" });
-    commit(
+    edit(
       addStage(list, {
         label: stage.label,
         kind: meaning.kind,
         milestone: stage.milestone ?? meaning.milestone,
       }),
-      `Added ${stage.label.trim()}`,
-      { undo: list },
     );
   }
 
@@ -326,6 +340,7 @@ export function StageEditor({
       );
       version.current = fresh.version;
       stages.current = fresh.stages;
+      setDraft(null);
       setPending(null);
       onSaved(fresh);
       setOpen(null);
@@ -342,13 +357,15 @@ export function StageEditor({
     }
   }
 
-  /* ----- drag to reorder (the grip); arrow keys do the same ----- */
+  /* ----- drag to reorder (the grip, by mouse); arrow keys and More do the same ----- */
 
   function grab(
     event: PointerEvent<HTMLButtonElement>,
     stage: Draft,
     index: number,
   ) {
+    // A finger on the grip is someone scrolling the list, never a drag.
+    if (event.pointerType !== "mouse") return;
     if (!canEdit || index === 0 || event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
@@ -386,19 +403,19 @@ export function StageEditor({
     setDrag(null);
     grabbed.current = null;
     if (!done || done.to === done.from) return;
-    commit(moveTo(list, done.id, done.to), "Order saved", { undo: list });
+    edit(moveTo(list, done.id, done.to));
   }
 
-  function nudge(
-    event: KeyboardEvent<HTMLButtonElement>,
-    stage: Draft,
-    index: number,
-  ) {
+  /** One place up or down; the list itself when the stage can't go there. */
+  const moved = (stage: Draft, by: number) =>
+    moveTo(list, stage.id, order.indexOf(stage) + by);
+
+  function nudge(event: KeyboardEvent<HTMLButtonElement>, stage: Draft) {
     const by = event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
     if (!by) return;
     event.preventDefault();
-    const next = moveTo(list, stage.id, index + by);
-    if (next !== list) commit(next, "Order saved", { undo: list });
+    const next = moved(stage, by);
+    if (next !== list) edit(next);
   }
 
   function shift(index: number): number {
@@ -408,56 +425,6 @@ export function StageEditor({
     if (drag.to < drag.from && index >= drag.to && index < drag.from)
       return drag.step;
     return 0;
-  }
-
-  /* ----- swipe left to remove (never from the screen's edge: that is Back) ----- */
-
-  function touch(event: PointerEvent<HTMLDivElement>, stage: Draft) {
-    const edge = 24;
-    if (
-      !canEdit ||
-      !stage.key ||
-      event.clientX < edge ||
-      event.clientX > window.innerWidth - edge
-    )
-      return;
-    setSwipe({
-      id: stage.id,
-      x: event.clientX,
-      y: event.clientY,
-      dx: 0,
-      on: false,
-    });
-  }
-
-  function slide(event: PointerEvent<HTMLDivElement>) {
-    if (!swipe) return;
-    const dx = event.clientX - swipe.x;
-    const dy = event.clientY - swipe.y;
-    if (!swipe.on) {
-      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
-        setSwipe(null);
-        return;
-      }
-      if (dx > -10) return;
-      event.currentTarget.setPointerCapture(event.pointerId);
-    }
-    setSwipe({
-      ...swipe,
-      on: true,
-      dx: Math.max(-SWIPE_REMOVES - 24, Math.min(0, dx)),
-    });
-  }
-
-  function release(stage: Draft) {
-    const done = swipe;
-    setSwipe(null);
-    if (!done?.on) return;
-    swiped.current = true;
-    window.setTimeout(() => {
-      swiped.current = false;
-    }, 0);
-    if (done.dx <= -SWIPE_REMOVES) remove(stage);
   }
 
   const customTaken = order.some((stage) => same(stage.label, custom.label));
@@ -477,8 +444,7 @@ export function StageEditor({
             const editable = canEdit && !!stage.key;
             const dragged = drag?.id === stage.id;
             const visible = stage.visible !== false;
-            const sliding = swipe?.id === stage.id && swipe.on ? swipe.dx : 0;
-            const moved = dragged && drag ? drag.dy : shift(index);
+            const offset = dragged && drag ? drag.dy : shift(index);
             return (
               <li
                 key={stage.id}
@@ -491,36 +457,10 @@ export function StageEditor({
                 data-hidden={!visible || undefined}
                 style={{
                   ...tone(stageTone(stage)),
-                  transform: moved ? `translateY(${moved}px)` : undefined,
+                  transform: offset ? `translateY(${offset}px)` : undefined,
                 }}
               >
-                <span
-                  className={styles.swipeBack}
-                  aria-hidden="true"
-                  data-ready={sliding <= -SWIPE_REMOVES || undefined}
-                >
-                  <Trash2 size={18} />
-                  Remove
-                </span>
-                <div
-                  className={styles.rowFront}
-                  data-sliding={sliding ? "" : undefined}
-                  style={
-                    sliding
-                      ? { transform: `translateX(${sliding}px)` }
-                      : undefined
-                  }
-                  onPointerDown={(event) => touch(event, stage)}
-                  onPointerMove={slide}
-                  onPointerUp={() => release(stage)}
-                  onPointerCancel={() => setSwipe(null)}
-                  onClickCapture={(event) => {
-                    if (swiped.current) {
-                      event.stopPropagation();
-                      event.preventDefault();
-                    }
-                  }}
-                >
+                <div className={styles.rowFront}>
                   {canEdit ? (
                     <button
                       type="button"
@@ -539,7 +479,7 @@ export function StageEditor({
                         setDrag(null);
                         grabbed.current = null;
                       }}
-                      onKeyDown={(event) => nudge(event, stage, index)}
+                      onKeyDown={(event) => nudge(event, stage)}
                     >
                       <GripVertical size={18} aria-hidden="true" />
                     </button>
@@ -590,11 +530,7 @@ export function StageEditor({
                     aria-label={`Sellers see ${stage.label}`}
                     disabled={!editable || first}
                     onClick={() =>
-                      commit(
-                        change(stage.id, { visible: !visible }),
-                        visible ? "Hidden from sellers" : "Shown to sellers",
-                        { undo: list },
-                      )
+                      edit(change(stage.id, { visible: !visible }))
                     }
                   >
                     {visible ? (
@@ -624,6 +560,21 @@ export function StageEditor({
           <p className={styles.srOnly} id="stage-move-help">
             Drag to move, or use the up and down arrow keys.
           </p>
+        ) : null}
+        {draft ? (
+          <div
+            className={styles.saveBar}
+            role="group"
+            aria-label="Unsaved changes"
+          >
+            <span>Not saved yet</span>
+            <Button variant="ghost" onClick={() => setDraft(null)}>
+              Discard
+            </Button>
+            <Button variant="primary" onClick={save}>
+              Save
+            </Button>
+          </div>
         ) : null}
 
         {canEdit && order.length < MAX_STAGES ? (
@@ -686,24 +637,18 @@ export function StageEditor({
             stage={sheetStage}
             first={order[0]?.id === sheetStage.id}
             list={list}
+            onMove={(by) => edit(moved(sheetStage, by))}
+            canMove={(by) => moved(sheetStage, by) !== list}
             onCountsAs={(meaning) =>
-              commit(
+              edit(
                 list.map((each) =>
                   each.id === sheetStage.id ? withMeaning(each, meaning) : each,
                 ),
-                "Saved",
-                { undo: list },
               )
             }
-            onColor={(color) =>
-              commit(change(sheetStage.id, { color }), "Colour saved", {
-                undo: list,
-              })
-            }
+            onColor={(color) => edit(change(sheetStage.id, { color }))}
             onColdName={(coldLabel) =>
-              commit(change(sheetStage.id, { coldLabel }), "Renamed", {
-                undo: list,
-              })
+              edit(change(sheetStage.id, { coldLabel }))
             }
             onRemove={() => remove(sheetStage)}
           />
@@ -845,11 +790,13 @@ export function StageEditor({
   );
 }
 
-/** A stage's other settings: what it counts as, its colour, the Cold name, remove. */
+/** A stage's other settings: its place, what it counts as, its colour, the Cold name, remove. */
 function MoreSheet({
   stage,
   first,
   list,
+  onMove,
+  canMove,
   onCountsAs,
   onColor,
   onColdName,
@@ -858,6 +805,8 @@ function MoreSheet({
   stage: Draft;
   first: boolean;
   list: Draft[];
+  onMove: (by: -1 | 1) => void;
+  canMove: (by: -1 | 1) => boolean;
   onCountsAs: (meaning: Meaning) => void;
   onColor: (color: Draft["color"]) => void;
   onColdName: (name: string | null) => void;
@@ -884,7 +833,33 @@ function MoreSheet({
             }}
           />
         </label>
-      ) : null}
+      ) : (
+        // A phone moves a stage here, never by a swipe (production 151).
+        <div
+          className={styles.chips}
+          role="group"
+          aria-label="Place in the list"
+        >
+          <button
+            type="button"
+            className={styles.chip}
+            disabled={!canMove(-1)}
+            onClick={() => onMove(-1)}
+          >
+            <ArrowUp size={14} aria-hidden="true" />
+            Move up
+          </button>
+          <button
+            type="button"
+            className={styles.chip}
+            disabled={!canMove(1)}
+            onClick={() => onMove(1)}
+          >
+            <ArrowDown size={14} aria-hidden="true" />
+            Move down
+          </button>
+        </div>
+      )}
 
       <span className={styles.sheetLabel}>Counts as</span>
       <div className={styles.choices}>

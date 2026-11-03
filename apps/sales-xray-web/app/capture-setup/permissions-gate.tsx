@@ -6,8 +6,15 @@
  * call log, phone, contacts, notifications and the recordings folder, each with
  * Allow, or Open settings once Android won't ask again. It covers every page
  * until all that this app build can grant are granted; items the build can't
- * ask for say so and never lock anyone out (permissions-rules.ts). There is no
- * Not now here; agreeing to call capture stays its own choice (capture setup).
+ * ask for say so and never lock anyone out (permissions-rules.ts).
+ *
+ * In an organisation's workspace (owner, 3 Nov 2026) it is read at every open
+ * and every return to the app, so a permission taken away in Android's
+ * settings brings it back. Two more rows join it there: the battery, and
+ * "Analyse my calls automatically", the one-time standing consent with its
+ * sealed words, never pre-ticked and never filled from storage. Call history,
+ * the battery and the consent offer Not now; a put-off one stays as a slim
+ * reminder until it is done. A personal workspace keeps the checklist it had.
  *
  * It waits for the Terms card and Home's first run, and call capture setup and
  * "Set up this phone" wait for it. Nothing shows in a browser or an app too
@@ -15,22 +22,37 @@
  */
 
 import {
+  BatteryCharging,
   Bell,
   CheckCircle2,
   Contact,
   FolderOpen,
   History,
   Phone,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
+import {
+  acquisition,
+  parsePolicy,
+  type UploadPolicy,
+} from "../acquisition-client";
 import { PLAY_LISTING } from "../app-compatibility-provider";
 import styles from "../leads/phone-onboarding.module.css";
 import {
   askCallAccess,
   askContacts,
   askNotifications,
+  autoCaptureSetup,
   callLogSetup,
   callLogStatus,
   inPhoneApp,
@@ -40,15 +62,26 @@ import {
   setupStatus,
   type SetupStatus,
 } from "../leads/native-phone";
+import { dismissNotice, notify } from "../notice-center";
+import {
+  chooseAutoAnalysis,
+  readAutoAnalysis,
+  type AutoAnalysis,
+} from "../settings/auto-analysis-client";
 import { Button } from "../ui/kit";
 import { FIRST_RUN_ATTRIBUTE } from "../welcome/setup-state";
 import { useWorkspaceAccess } from "../workspace-access";
+import { recordCaptureSetup } from "./capture-setup-client";
 import own from "./capture-setup.module.css";
 import {
   PERMISSIONS_ATTRIBUTE,
+  checklistOpen,
   permissionItems,
-  permissionsMissing,
+  putOffKey,
+  reminders,
+  toAnswer,
   waitsFor,
+  type ConsentFact,
   type PermissionItem,
   type PermissionKey,
 } from "./permissions-rules";
@@ -60,27 +93,45 @@ const ICONS: Record<PermissionKey, LucideIcon> = {
   contacts: Contact,
   notifications: Bell,
   recordings: FolderOpen,
+  battery: BatteryCharging,
+  autoAnalysis: ShieldCheck,
 };
 
 const CONSENT_ATTRIBUTE = "data-sx-consent";
+const REMINDER_ID = "permissions-later";
+const OPEN_EVENT = "sx-permissions-open";
+
+/**
+ * Turn on from the Calls line (owner, 3 Nov 2026): the checklist again, at the
+ * consent row with its sealed words. Only the phone app has the checklist.
+ */
+export function askConsent(): void {
+  window.dispatchEvent(new CustomEvent(OPEN_EVENT));
+}
 
 /** The checklist itself, for the gate and the review fixture. */
 export function PermissionsChecklist({
   items,
   busy,
   tried,
+  putOff = new Set(),
   onAllow,
   onSettings,
+  onLater,
 }: {
   items: readonly PermissionItem[];
   busy: PermissionKey | null;
   /** Asked once and still not granted: Android may not ask again. */
   tried: ReadonlySet<PermissionKey>;
+  /** Put off with Not now (putOffKey). */
+  putOff?: ReadonlySet<string>;
   onAllow: (key: PermissionKey) => void;
   onSettings: (key: PermissionKey) => void;
+  onLater?: (item: PermissionItem) => void;
 }) {
   const titleId = useId();
   const left = items.filter(waitsFor).length;
+  const offered = toAnswer(items, putOff).length - left;
   return (
     <div className={own.permissions} aria-labelledby={titleId} role="group">
       <h1 id={titleId} className={styles.title}>
@@ -89,7 +140,9 @@ export function PermissionsChecklist({
       <p className={styles.line}>
         {left
           ? `Sales X-Ray works once these are allowed. ${left === 1 ? "1 left." : `${left} left.`}`
-          : "All set. Sales X-Ray is ready."}
+          : offered
+            ? "These help too. Allow them, or choose Not now."
+            : "All set. Sales X-Ray is ready."}
       </p>
       <ul className={own.grants}>
         {items.map((item) => {
@@ -97,10 +150,27 @@ export function PermissionsChecklist({
           const settings =
             item.state === "blocked" ||
             (item.state === "needed" && tried.has(item.key));
+          const later =
+            onLater &&
+            item.canWait &&
+            (item.state === "needed" || item.state === "blocked");
+          // The battery: Check opens its page, and Done is the seller's word
+          // when Android can't see it (HyperOS). The consent: one tap, Turn on
+          // (owner, 3 Nov 2026).
+          const allowWord =
+            item.key === "battery"
+              ? "Check"
+              : item.key === "autoAnalysis"
+                ? "Turn on"
+                : "Allow";
+          const laterWord = item.key === "battery" ? "Done" : "Not now";
+          const saidDone =
+            item.key === "battery" && putOff.has(putOffKey(item));
+          const done = item.state === "granted" || saidDone;
           return (
-            <li key={item.key} data-state={item.state}>
+            <li key={item.key} data-state={done ? "granted" : item.state}>
               <span className={own.grantIcon}>
-                {item.state === "granted" ? (
+                {done ? (
                   <CheckCircle2 size={20} aria-hidden="true" />
                 ) : (
                   <Icon size={20} aria-hidden="true" />
@@ -117,11 +187,20 @@ export function PermissionsChecklist({
                         )
                       : item.state === "elsewhere"
                         ? "Turns on in your organisation's workspace."
-                        : named(item.why)}
+                        : item.key === "autoAnalysis"
+                          ? // The sealed consent words, exactly as the server has them.
+                            item.why
+                          : named(item.why)}
                 </small>
               </span>
-              {item.state === "granted" ? (
-                <span className={own.granted}>Allowed</span>
+              {done ? (
+                <span className={own.granted}>
+                  {item.state !== "granted"
+                    ? "Done"
+                    : item.key === "autoAnalysis" || item.key === "battery"
+                      ? "On"
+                      : "Allowed"}
+                </span>
               ) : item.state === "update" ? (
                 <a
                   className={own.link}
@@ -133,17 +212,29 @@ export function PermissionsChecklist({
                 </a>
               ) : item.state === "later" ||
                 item.state === "elsewhere" ? null : (
-                <Button
-                  variant={settings ? "ghost" : "primary"}
-                  disabled={busy !== null}
-                  aria-busy={busy === item.key || undefined}
-                  aria-label={`${settings ? "Open settings for" : "Allow"} ${item.label}`}
-                  onClick={() =>
-                    settings ? onSettings(item.key) : onAllow(item.key)
-                  }
-                >
-                  {settings ? "Open settings" : "Allow"}
-                </Button>
+                <span className={own.grantActions}>
+                  <Button
+                    variant={settings ? "ghost" : "primary"}
+                    disabled={busy !== null}
+                    aria-busy={busy === item.key || undefined}
+                    aria-label={`${settings ? "Open settings for" : allowWord} ${item.label}`}
+                    onClick={() =>
+                      settings ? onSettings(item.key) : onAllow(item.key)
+                    }
+                  >
+                    {settings ? "Open settings" : allowWord}
+                  </Button>
+                  {later ? (
+                    <Button
+                      variant="ghost"
+                      disabled={busy !== null}
+                      aria-label={`${laterWord}: ${item.label}`}
+                      onClick={() => onLater(item)}
+                    >
+                      {laterWord}
+                    </Button>
+                  ) : null}
+                </span>
               )}
             </li>
           );
@@ -173,29 +264,110 @@ async function ask(key: PermissionKey): Promise<void> {
     case "recordings":
       await pickRecordingsFolder();
       return;
+    case "battery":
+    case "autoAnalysis":
+      // Their own screens: the gate reads again when the seller comes back.
+      return;
   }
+}
+
+/** Not now, per person and workspace: a reminder, never a choice made for them. */
+function laterKey(person: string, tenant: string): string {
+  return `sales-xray:permissions-later:${person}:${tenant}`;
+}
+
+function readLater(key: string): Set<string> {
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(key) ?? "[]") as unknown;
+    return new Set(
+      Array.isArray(raw) ? raw.filter((v) => typeof v === "string") : [],
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function writeLater(key: string, value: ReadonlySet<string>) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify([...value]));
+  } catch {
+    // Private mode or storage off: Not now lasts for this visit.
+  }
+}
+
+type Consent = Readonly<{ view: AutoAnalysis; policy: UploadPolicy }>;
+
+/** The standing consent and the upload terms in force; null when either fails. */
+async function readConsent(): Promise<Consent | null> {
+  try {
+    const [view, policy] = await Promise.all([
+      readAutoAnalysis(),
+      acquisition("/upload-policy").then(parsePolicy),
+    ]);
+    return { view, policy };
+  } catch {
+    return null;
+  }
+}
+
+function consentFact(consent: Consent | null): ConsentFact {
+  const notice = consent?.view.notice;
+  if (!consent) return null;
+  if (consent.view.state === "unavailable")
+    return { state: "unavailable", words: "", version: "" };
+  if (!notice) return null;
+  return {
+    state: consent.view.state,
+    words: notice.text,
+    version: notice.version,
+  };
 }
 
 export function PermissionsGate() {
   const access = useWorkspaceAccess();
   const signedIn = access?.authenticated === true && access.status === "ready";
-  const tenant = access?.context?.tenantId;
+  const tenant = access?.context?.tenantId ?? "";
+  const person = access?.context?.personId ?? "";
   // Call logging works only in an organisation's workspace; elsewhere it never blocks.
   const organisation =
     access?.workspaces?.find((item) => item.tenant_id === tenant)?.kind ===
     "organisation";
   const [status, setStatus] = useState<SetupStatus | null>(null);
+  const [consent, setConsent] = useState<Consent | null>(null);
   const [decided, setDecided] = useState(false);
   const [busy, setBusy] = useState<PermissionKey | null>(null);
   const [tried, setTried] = useState<ReadonlySet<PermissionKey>>(new Set());
+  // Not now, kept on this device per person and workspace, and for this visit
+  // when the device can't keep it.
+  const [visitLater, setVisitLater] = useState<ReadonlySet<string>>(new Set());
+  // The reminder's Finish: the checklist again, with the put-off rows.
+  const [reopened, setReopened] = useState(false);
   const away = useRef(false);
 
+  useEffect(() => {
+    const open = () => setReopened(true);
+    window.addEventListener(OPEN_EVENT, open);
+    return () => window.removeEventListener(OPEN_EVENT, open);
+  }, []);
+
+  const storageKey =
+    organisation && person && tenant ? laterKey(person, tenant) : "";
+  const putOff = useMemo<ReadonlySet<string>>(
+    () =>
+      new Set([...(storageKey ? readLater(storageKey) : []), ...visitLater]),
+    [storageKey, visitLater],
+  );
+
   const read = useCallback(async () => {
-    const next = await setupStatus();
+    const [next, nextConsent] = await Promise.all([
+      setupStatus(),
+      organisation ? readConsent() : Promise.resolve(null),
+    ]);
     setStatus(next);
+    setConsent(nextConsent);
     setDecided(true);
     return next;
-  }, []);
+  }, [organisation]);
 
   // After the Terms card and Home's first run: one screen at a time.
   useEffect(() => {
@@ -210,9 +382,13 @@ export function PermissionsGate() {
       if (stopped || started || waiting()) return;
       started = true;
       void (async () => {
-        const next = await setupStatus();
+        const [next, nextConsent] = await Promise.all([
+          setupStatus(),
+          organisation ? readConsent() : Promise.resolve(null),
+        ]);
         if (stopped) return;
         setStatus(next);
+        setConsent(nextConsent);
         setDecided(true);
       })();
     };
@@ -226,21 +402,31 @@ export function PermissionsGate() {
       stopped = true;
       watch.disconnect();
     };
-  }, [signedIn]);
+  }, [signedIn, organisation]);
 
-  // Back from Android's settings or the folder picker: read again.
+  // Back in the app: from Android's settings or the folder picker, and, in an
+  // organisation's workspace, every return, so a permission taken away shows.
   useEffect(
     () =>
       onPhoneSignal((event) => {
-        if (event !== "resume" || !away.current) return;
+        if (event !== "resume" || !decided) return;
+        if (!away.current && !organisation) return;
         away.current = false;
         void read();
       }),
-    [read],
+    [read, decided, organisation],
   );
 
-  const items = status ? permissionItems(status, { organisation }) : [];
-  const open = Boolean(status) && permissionsMissing(items);
+  const items = status
+    ? permissionItems(status, {
+        organisation,
+        consent: organisation ? consentFact(consent) : null,
+      })
+    : [];
+  const later = reminders(items, putOff);
+  const open =
+    Boolean(status) &&
+    (checklistOpen(items, putOff) || (reopened && later.length > 0));
   const deciding = signedIn && inPhoneApp() && !decided;
 
   useEffect(() => {
@@ -249,6 +435,25 @@ export function PermissionsGate() {
     else html.removeAttribute(PERMISSIONS_ATTRIBUTE);
     return () => html.removeAttribute(PERMISSIONS_ATTRIBUTE);
   }, [deciding, open]);
+
+  // A put-off row stays as one slim line in the corner until it is done.
+  const remind = open ? "" : later.map((item) => item.label).join(" · ");
+  useEffect(() => {
+    if (!remind) {
+      dismissNotice(REMINDER_ID);
+      return;
+    }
+    notify({
+      id: REMINDER_ID,
+      tone: "info",
+      title: "Finish setting up",
+      message: remind,
+      action: { label: "Finish", icon: "none", run: () => setReopened(true) },
+      slim: true,
+      pillAction: true,
+      noReport: true,
+    });
+  }, [remind]);
 
   // A modal dialog over every page; Escape and Back don't close it.
   const frame = useRef<HTMLDialogElement>(null);
@@ -261,25 +466,50 @@ export function PermissionsGate() {
   const allow = async (key: PermissionKey) => {
     setBusy(key);
     try {
-      await ask(key);
+      if (key === "battery") {
+        away.current = true;
+        await setupOpen("battery");
+      } else if (key === "autoAnalysis") {
+        const notice = consent?.view.notice;
+        if (!notice || !consent) return;
+        // The seller's own choice, once, with the words as shown and the terms in force.
+        await chooseAutoAnalysis({
+          decision: "granted",
+          notice,
+          uploadPolicySha256: consent.policy.policy_sha256,
+        });
+        // Automatic upload follows from it; the app's own confirmation shows the words again.
+        away.current = true;
+        await autoCaptureSetup(true, false).catch(() => null);
+      } else await ask(key);
     } catch {
       // Android said no, or the phone didn't answer: Open settings next.
+    } finally {
+      setBusy(null);
     }
     const next = await read();
-    setBusy(null);
     const still = next
       ? permissionItems(next, { organisation }).find((item) => item.key === key)
       : undefined;
-    if (still && still.state !== "granted")
+    if (still && still.state !== "granted" && key !== "battery")
       setTried((value) => new Set(value).add(key));
   };
   const settings = (key: PermissionKey) => {
-    if (key === "recordings") {
+    if (key === "recordings" || key === "battery") {
       void allow(key);
       return;
     }
     away.current = true;
     void setupOpen(key === "notifications" ? "notifications" : "appSettings");
+  };
+  const putAside = (item: PermissionItem) => {
+    const next = new Set(putOff).add(putOffKey(item));
+    setVisitLater(new Set(visitLater).add(putOffKey(item)));
+    setReopened(false);
+    if (storageKey) writeLater(storageKey, next);
+    // The capture setup's own record of not now: it asks again on its own days.
+    if (item.key === "autoAnalysis")
+      void recordCaptureSetup({ outcome: "declined" }).catch(() => null);
   };
   return (
     <dialog
@@ -293,8 +523,10 @@ export function PermissionsGate() {
           items={items}
           busy={busy}
           tried={tried}
+          putOff={reopened ? new Set() : putOff}
           onAllow={(key) => void allow(key)}
           onSettings={settings}
+          onLater={organisation ? putAside : undefined}
         />
       </div>
     </dialog>

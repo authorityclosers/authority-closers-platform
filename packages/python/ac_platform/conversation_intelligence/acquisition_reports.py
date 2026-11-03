@@ -8,6 +8,7 @@ binding. Reading retained evidence cannot renew processing or dispatch a provide
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -252,6 +253,93 @@ class AcquisitionReports:
             allow_organisation_read=allow_organisation_read,
         )
         return scope, recording
+
+    async def readable_recordings(
+        self,
+        submission_ids: Sequence[UUID],
+        *,
+        actor: ActorContext,
+        shared_identity_locks: bool = False,
+        allow_organisation_read: bool = False,
+    ) -> dict[UUID, tuple[SubmissionScope, ConversationRecording]]:
+        """Many reports' recordings for one reader in a fixed number of queries (Coaching,
+        orchestrator's go, 3 Nov 2026), each report's access decided as ``recording()``
+        decides it for one, never waved through for the list.
+
+        The reader is admitted once, then one query keeps only the reports this reader
+        may read: their own; with ``allow_organisation_read``, for a current owner or
+        admin, their own organisation's account calls; never another organisation's. The
+        library's scope decides it (link, recording, permission, retention, revocation,
+        canaries). Their recordings are then locked, which serializes erasure and
+        permission revocation, and the same admission and query run again under the
+        lock: a report erased or a permission revoked meanwhile is left out.
+        """
+        from ac_platform.conversation_intelligence.acquisition_library import (
+            _account_library_query,
+        )
+        from ac_platform.conversation_intelligence.acquisition_models import (
+            ConversationAcquisitionUsage as Usage,
+        )
+        from ac_platform.conversation_intelligence.guest_models import (
+            ConversationGuestSubmission as Link,
+        )
+
+        wanted = sorted(set(submission_ids))
+        if not wanted or actor.tenant_id != self.ownership.tenant_id:
+            return {}
+
+        async def allowed() -> list[Any]:
+            await self.application.admit(actor, shared_identity_locks=shared_identity_locks)
+            now = await self.ownership.sessions._admit(mutation=False)
+            await self.ownership.sessions._owner(
+                None, actor, now, shared_identity_locks=shared_identity_locks
+            )
+            organisation = (
+                allow_organisation_read and await self.ownership.organisation_call_reader(actor)
+            )
+            query = (
+                _account_library_query(actor, now, every_owner=organisation)
+                .add_columns(Link, ConversationRecording)
+                .where(
+                    Usage.tenant_id == self.ownership.tenant_id,
+                    Usage.submission_id.in_(wanted),
+                )
+                .execution_options(populate_existing=True)
+            )
+            return list((await self.database.execute(query)).all())
+
+        first = await allowed()
+        for visitor_id in sorted(
+            {row[0].visitor_id for row in first if row[0].visitor_id is not None}
+        ):
+            await self.ownership.sessions.fence_visitor(visitor_id, shared=True)
+        locked = sorted({row[2].id for row in first})
+        if not locked:
+            return {}
+        await self.database.execute(
+            select(ConversationRecording.id)
+            .where(ConversationRecording.id.in_(locked))
+            .order_by(ConversationRecording.id)
+            .with_for_update(read=True)
+        )
+        found: dict[UUID, tuple[SubmissionScope, ConversationRecording]] = {}
+        for usage, link, recording in await allowed():
+            if recording.id not in locked:
+                continue
+            found[usage.submission_id] = (
+                SubmissionScope(
+                    link.tenant_id,
+                    link.submission_id,
+                    link.recording_id,
+                    link.person_id,
+                    link.processing_lease_id,
+                    usage.id,
+                    link.source_sha256,
+                    True,
+                ),
+                recording,
+            )
+        return found
 
     async def _draft(self, recording: ConversationRecording) -> ConversationReportDraft | None:
         result: ConversationReportDraft | None = await self.database.scalar(

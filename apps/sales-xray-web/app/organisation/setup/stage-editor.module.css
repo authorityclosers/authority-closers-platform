@@ -267,24 +267,6 @@
   transition: none;
 }
 
-.swipeBack {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  padding-right: 16px;
-  background: color-mix(in oklab, var(--sx-bad) 70%, var(--sx-surface));
-  color: var(--sx-surface);
-  font-size: var(--sx-text-sm);
-  font-weight: 600;
-}
-
-.swipeBack[data-ready] {
-  background: var(--sx-bad);
-}
-
 .rowFront {
   position: relative;
   display: flex;
@@ -293,12 +275,7 @@
   min-height: 48px;
   padding: 0 4px;
   background: var(--sx-surface);
-  touch-action: pan-y;
   transition: transform var(--sx-dur-fast) var(--sx-ease-out);
-}
-
-.rowFront[data-sliding] {
-  transition: none;
 }
 
 .grip,
@@ -322,11 +299,48 @@
   width: 32px;
   color: var(--sx-muted);
   cursor: grab;
-  touch-action: none;
 }
 
 .grip:disabled {
   visibility: hidden;
+}
+
+/* A finger never drags (production 151): phones move a stage from More. */
+@media (pointer: coarse) {
+  .grip {
+    display: none;
+  }
+}
+
+/* Changes wait here until Save, above the tab bar (as Setup's own bar). */
+.saveBar {
+  position: sticky;
+  bottom: calc(
+    var(--lx-bottom-nav-h, 78px) + env(safe-area-inset-bottom, 0px) + 8px
+  );
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 6px 6px 16px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-elevated, var(--sx-surface));
+  box-shadow: var(--sx-shadow-float, var(--sx-shadow-2));
+  box-sizing: border-box;
+}
+
+.saveBar > span {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+@media (min-width: 900px) {
+  .saveBar {
+    bottom: 16px;
+  }
 }
 
 .row[data-dragged] .grip {

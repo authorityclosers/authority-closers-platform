@@ -431,6 +431,28 @@ it("lets the detected-speakers card wait without writing anything", async () => 
   expect(puts()).toHaveLength(0);
 });
 
+it("opens the one-line phone card with Check, without writing anything", async () => {
+  data = {
+    ...initial(),
+    status: "predicted",
+    user_revision: 0,
+    speakers: initial().speakers.map((row, i) => ({
+      ...row,
+      role: i ? "prospect" : "salesperson",
+      role_source: "predicted",
+    })),
+  };
+  await render();
+  const card = () =>
+    host.querySelector<HTMLElement>('[aria-label="Detected speakers"]')!;
+  // Closed: phones show only the question, Check and Not now (CSS).
+  expect(card().hasAttribute("data-open")).toBe(false);
+  await act(async () => button("Check").click());
+  expect(card().hasAttribute("data-open")).toBe(true);
+  expect(card().textContent).toContain("Salesperson");
+  expect(puts()).toHaveLength(0);
+});
+
 it("names each detected voice with its role and first line, never a raw speaker id", async () => {
   data = {
     ...initial(),

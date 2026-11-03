@@ -1,4 +1,4 @@
-import { act, Fragment } from "react";
+import { act, Fragment, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const { navigateToAccount, replaceToLogin } = vi.hoisted(() => ({
@@ -28,6 +28,7 @@ import {
   UploadSessionStore,
 } from "./hooks/upload-session";
 import { UploadIndicator } from "./shell/upload-indicator";
+import { PendingAnalysisProvider } from "./pending-analysis";
 import {
   WorkspaceAccessContext,
   WorkspaceAccessProvider,
@@ -750,9 +751,9 @@ it("keeps a fresh standalone call focused on upload without empty dashboards or 
     container.querySelector('[aria-label="Current analysis step"]'),
   ).toBeNull();
   expect(container.textContent).not.toContain("Select a recording to begin");
-  // Before the session confirms, the advertised trial allowance is shown as such.
-  expect(container.textContent).toMatch(
-    /Remaining analysis time · \d+m \d\ds|Up to \d+m trial allowance/,
+  // No minutes on a user's screen, confirmed or not (simplify pass, 2 Nov 2026).
+  expect(container.textContent).not.toMatch(
+    /analysis time|trial allowance|\d+m \d\ds/,
   );
   expect(container.textContent).not.toMatch(/\d+%/);
   // One upload target with its real policy limits.
@@ -1273,9 +1274,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
       ?.textContent,
   ).toBe("Report ready");
   expect(container.querySelector(".studio-report-summary")).toBeNull();
-  expect(container.textContent).toContain(
-    "Remaining analysis time · 1 h 39 min",
-  );
+  expect(container.textContent).not.toContain("Remaining analysis time");
   expect(container.textContent).not.toContain("free audio minutes");
   expect(container.textContent).not.toContain(
     "AI draft · not yet reviewed by Dipak",
@@ -1370,9 +1369,7 @@ it.each([
       status === 401,
     );
     if (status === 403) expect(alert.textContent).not.toContain("Sign in");
-    expect(container.textContent).toContain(
-      "Remaining analysis time · 1 h 39 min",
-    );
+    expect(container.textContent).not.toContain("Remaining analysis time");
     expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
     expect(container.querySelector("audio")?.getAttribute("src")).toContain(
       submissionId,
@@ -1427,18 +1424,16 @@ it("refreshes one stale plan into an explicit review without retrying acceptance
   ).toHaveLength(1);
 });
 
-it("shows the advertised trial allowance for a clean visitor", async () => {
+it("shows a clean visitor no trial minutes", async () => {
   await mount();
-  expect(container.textContent).toContain("Up to 100m trial allowance");
+  expect(container.textContent).not.toContain("trial allowance");
   expect(container.textContent).not.toContain("unavailable until your session");
 });
 
 it("never shows a signed-in account the guest trial cap while its balance loads", async () => {
   await mountWithAccountAccess();
   expect(container.textContent).not.toContain("trial allowance");
-  expect(container.textContent).toContain(
-    "Remaining analysis time · checking…",
-  );
+  expect(container.textContent).not.toContain("Remaining analysis time");
 });
 
 // The box is a per-call attestation (26 Oct 2026): it never comes back
@@ -1521,9 +1516,7 @@ it("does not treat the advertised trial allowance as confirmed for a saved selec
   sessionUnauthorized = true;
   localStorage.setItem("ac.xray.submission.v1", submissionId);
   await mount();
-  expect(container.textContent).toContain(
-    "Remaining analysis time · unavailable until your session is confirmed",
-  );
+  expect(container.textContent).not.toContain("Remaining analysis time");
   expect(container.textContent).not.toContain("Up to 100m trial allowance");
 });
 
@@ -1878,6 +1871,92 @@ it("keeps the next staged file ready after starting another call", async () => {
   );
 });
 
+it("never offers an analysed file again after leaving New analysis and coming back (3 Nov 2026 regression, U2)", async () => {
+  window.history.replaceState(null, "", "/analysis/new");
+  const withStores = (children: ReactNode) => (
+    <UploadSessionProvider>
+      <PendingAnalysisProvider>
+        <UploadIndicator />
+        {children}
+      </PendingAnalysisProvider>
+    </UploadSessionProvider>
+  );
+  const studio = await Page({ searchParams: Promise.resolve({}) });
+  await act(async () => root.render(withStores(studio)));
+  await flush();
+  await select();
+  expect(container.textContent).toContain("Sales call.wav");
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+  await settleAll();
+  expect(
+    calls.filter(
+      ({ path, init }) => path.endsWith("/source") && init.method === "PUT",
+    ),
+  ).toHaveLength(1);
+
+  // Home, then + → Add a call: a fresh studio over the same root stores.
+  await act(async () => root.render(withStores(<p>Home</p>)));
+  window.history.replaceState(null, "", "/analysis/new");
+  const again = await Page({ searchParams: Promise.resolve({}) });
+  await act(async () => root.render(withStores(again)));
+  await settleAll();
+  expect(container.textContent).not.toContain("file added");
+  expect(container.textContent).not.toContain(
+    "Sales call.wav selected for analysis",
+  );
+  expect(
+    container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled,
+  ).toBe(false);
+});
+
+// The phone app's own web copy ends its paths with "/".
+it.each(["/analysis/new", "/analysis/new/"])(
+  "starts a new call when + → Add a call links to the page its report is shown on, at %s (3 Nov 2026 regression, U3)",
+  async (address) => {
+    window.history.replaceState(null, "", address);
+    await mountWithAccountAccess();
+    await select();
+    await consent();
+    await click("Complete upload check");
+    await click("Analyse my call");
+    await settleAll();
+    expect(
+      container.querySelector('[aria-label="Sales call report"]'),
+    ).not.toBeNull();
+
+    // The + sheet's Add a call: a link to this very address, which the router
+    // ignores, so the page itself must leave the report.
+    const addCall = document.createElement("a");
+    addCall.href = "/analysis/new";
+    addCall.addEventListener("click", (event) => event.preventDefault());
+    document.body.append(addCall);
+    await act(async () => addCall.click());
+    await settleAll();
+    addCall.remove();
+    expect(
+      container.querySelector('[aria-label="Sales call report"]'),
+    ).toBeNull();
+    expect(
+      container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled,
+    ).toBe(false);
+  },
+);
+
+it("names a saved call's player by that call, never by a file waiting in New analysis (3 Nov 2026 regression, U4)", async () => {
+  await mount();
+  await select();
+  existing = true;
+  accepted = true;
+  await navigateToCall(submissionId);
+  const title = container.querySelector(
+    '[aria-label="Call audio player"] strong',
+  );
+  expect(title?.textContent).toBeTruthy();
+  expect(title?.textContent).not.toBe("Sales call.wav");
+});
+
 it("captures new-call intent before delayed bootstrap reads can mistake an in-flight upload for saved work", async () => {
   existing = true;
   progressOverride = { malformed: true };
@@ -1975,20 +2054,19 @@ it("lets a guest start a new upload without clearing a stale opaque selector", a
   );
 });
 
-it.each([
-  [0, "Remaining analysis time · 0m 00s · exhausted"],
-  [45, "Remaining analysis time · 0m 45s"],
-  [600000, "Remaining analysis time · 166 h 40 min"],
-])("formats a confirmed %s-second allowance", (seconds, expected) => {
-  const confirmed = {
-    allowance_seconds: Math.max(allowance.allowance_seconds, seconds),
-    committed_seconds: Math.max(allowance.allowance_seconds - seconds, 0),
-    available_seconds: seconds,
-  };
-  expect(
-    remainingAllowanceLabel(confirmed, allowance.allowance_seconds, false),
-  ).toBe(expected);
-});
+it.each([[0], [45], [600000]])(
+  "never shows a confirmed %s-second allowance as minutes",
+  (seconds) => {
+    const confirmed = {
+      allowance_seconds: Math.max(allowance.allowance_seconds, seconds),
+      committed_seconds: Math.max(allowance.allowance_seconds - seconds, 0),
+      available_seconds: seconds,
+    };
+    expect(
+      remainingAllowanceLabel(confirmed, allowance.allowance_seconds, false),
+    ).toBeNull();
+  },
+);
 
 it("sends a signed-in seller with no minutes left to Plans, never a guest", () => {
   const empty = {
@@ -3061,14 +3139,11 @@ it("lets a reloaded held call request one quote, then requires explicit approval
   ).toHaveLength(0);
 });
 
-it("keeps a reloaded held call and its allowance when a new quote is denied", async () => {
+it("keeps a reloaded held call, with no minutes shown, when a new quote is denied", async () => {
   reloadHeldCall();
   quoteFailure = { status: 409, body: { detail: "private-provider-context" } };
   await mount();
-  const allowanceBefore = [...container.querySelectorAll("span")].find(
-    (element) => element.textContent?.includes("Remaining analysis time"),
-  )?.textContent;
-  expect(allowanceBefore).toBe("Remaining analysis time · 1 h 40 min");
+  expect(container.textContent).not.toContain("Remaining analysis time");
   await click("Review and continue analysis");
   const alert = container.querySelector('[role="alert"]');
   expect(alert).not.toBeNull();
@@ -3077,7 +3152,7 @@ it("keeps a reloaded held call and its allowance when a new quote is denied", as
   expect(container.querySelector("audio")?.getAttribute("src")).toContain(
     `/submissions/${submissionId}/source`,
   );
-  expect(container.textContent).toContain(allowanceBefore);
+  expect(container.textContent).not.toContain("Remaining analysis time");
   expect(calls.filter(({ path }) => path.endsWith("/plan/quote"))).toHaveLength(
     1,
   );
@@ -3906,7 +3981,7 @@ it("says call analysis isn't on yet where no minutes were ever given, never 'exh
   expect(remainingAllowanceLabel(none, null, false, "payer")).toBe(
     "Call analysis isn't on for this organisation yet.",
   );
-  // Minutes given and all used still read as used.
+  // Minutes given and all used: the out-of-minutes notice says so, not this line.
   expect(
     remainingAllowanceLabel(
       { allowance_seconds: 600, committed_seconds: 600, available_seconds: 0 },
@@ -3914,5 +3989,5 @@ it("says call analysis isn't on yet where no minutes were ever given, never 'exh
       false,
       "member",
     ),
-  ).toBe("Remaining analysis time · 0m 00s · exhausted");
+  ).toBeNull();
 });

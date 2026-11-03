@@ -116,20 +116,24 @@
 }
 
 /* Soft glass, as the team's cards. */
+/* At Dipak's height (ux-audit, 3 Nov 2026): the next call stays in the first screen. */
 .card {
   display: grid;
   align-content: start;
-  gap: 4px;
-  min-height: 96px;
+  gap: 0;
   box-sizing: border-box;
-  padding: 14px 16px;
+  padding: 8px 12px;
   border: 1px solid var(--sx-line);
-  border-radius: 20px;
+  border-radius: 16px;
   background: var(--sx-surface);
   color: var(--sx-ink);
   text-decoration: none;
   transition: transform 180ms var(--sx-ease-out);
   -webkit-tap-highlight-color: transparent;
+}
+
+.card > * {
+  min-width: 0;
 }
 
 .card:active {
@@ -140,12 +144,18 @@
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
   font-weight: 650;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .card strong {
-  font-size: 32px;
+  font-size: 24px;
   font-weight: 750;
-  line-height: 1.1;
+  line-height: 1;
+  /* An extreme number wraps inside its tile, never over the next. */
+  overflow-wrap: anywhere;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
@@ -155,6 +165,10 @@
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
   font-weight: 550;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .card strong[aria-busy] {
@@ -339,8 +353,10 @@
   box-shadow: var(--sx-focus-ring);
 }
 
+/* One column no wider than the row: a long name ends in an ellipsis. */
 .rowText {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   flex: 1 1 auto;
   gap: 2px;
   min-width: 0;

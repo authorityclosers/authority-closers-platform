@@ -40,6 +40,15 @@ it.each([
     "Synthetic test call. Arun Alva discussed Fastener Batch for Pravah Hill Engineering Works Private Limited. The conversation ended as Won.",
     "Pravah Hill Engineering Works Private Limited",
   ],
+  // A day is never the prospect (3 Nov 2026 regression, R5: "Call with Saturday").
+  [
+    "You discovered key workflow bottlenecks and scheduled a demonstration for Friday with Vikram Hegde and his operations head.",
+    "Call with Vikram Hegde",
+  ],
+  [
+    "You booked an on-site session for Thursday regarding training duration for the front desk team.",
+    "Training duration",
+  ],
 ])("names the call from its summary: %s", (summary, title) => {
   expect(autoCallTitle(summary)).toBe(title);
 });

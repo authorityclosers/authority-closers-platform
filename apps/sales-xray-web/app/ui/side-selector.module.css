@@ -61,6 +61,11 @@
   box-shadow: 0 0 0 1px var(--sx-line);
 }
 
+/* Its raised edge never hides the keyboard focus ring (the test robot, 5d3af21c). */
+.selector[data-tone="calm"] .option[aria-checked="true"]:focus-visible {
+  box-shadow: var(--sx-focus-ring);
+}
+
 .note {
   margin: 0;
   padding: 0 4px;

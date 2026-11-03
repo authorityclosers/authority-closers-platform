@@ -40,13 +40,21 @@ _STOP_WORDS = (
     "है हूं हूँ से जी आप मैं हम हां सर मेरा मेरी sir ji madam the a an there my i i'm your "
     "calling speaking just happy glad looking sure sorry fine good great well ok okay not "
     "very really also interested busy going trying back available free here regarding about "
-    "from for with dr dr. mr mr. mrs ms"
+    "from for with dr dr. mr mr. mrs ms "
+    # Greetings and yeses are never names: "Hello नमस्ते" named a prospect
+    # "नमस्ते" (3 Nov 2026 regression, R3).
+    "हाँ हा हो मी हे नमस्ते नमस्कार हेलो हैलो hello hi hey namaste namaskar "
+    "पिछले कल आज घर अभी यहाँ यहां"
 )
 NOT_NAMES = set(_STOP_WORDS.split())
 SUFFIX = (
     r"(?:here|speaking|this side|बोल रहा(?:\s+(?:हूं|हूँ))?|"
-    r"बोल रही(?:\s+(?:हूं|हूँ))?|bol raha|bol rahi)"
+    r"बोल रही(?:\s+(?:हूं|हूँ))?|bol raha|bol rahi|बोलत(?:ोय|ेय|िये|ीये))"
 )
+# Yeses before a name: "हां जी, मनोज बोल रहा हूं".
+YESES = r"(?:हां|हाँ|हा|हो|जी|yes|haan|han)"
+# Never a surname: "मैं team से बोल रहा हूं" is no one's name.
+FUNCTION_WORDS = r"(?:से|मधून|हूँ|हूं|है|हो|आहे)"
 BOUNDARY = r"(?:(?<=[A-Za-z0-9_])(?![A-Za-z0-9_])|(?<![A-Za-z0-9_])(?=[A-Za-z0-9_]))"
 CUES = {
     "introduced_own_company": (
@@ -113,12 +121,30 @@ def _names(
     punctuation = re.escape("".join(sorted(c for c in chars if unicode.category(c)[0] == "P")))
     name = rf"([{letters}][{letters}'’\-]*)(?![{letters}])"
     start = rf"(?<![{letters}])"
+    # A surname may follow the first name: "मैं अमित वर्मा बोल रहा हूं".
+    surname = rf"(?:\s+(?!{FUNCTION_WORDS}(?![{letters}]))[{letters}][{letters}'’\-]*)?"
     patterns = [
         (rf"{start}(?:मेरा नाम|my name is|myself|this is)\s+{name}", False),
         (rf"{start}(?:i am|i'm)\s+{name}", True),
-        (rf"{start}(?:मैं|main)\s+{name}\s+(?:बोल रहा|बोल रही|bol raha|bol rahi)", False),
-        (rf"^[\s{punctuation}]*{name}\s+{SUFFIX}(?=\s|$|[,.!?])", True),
+        (
+            rf"{start}(?:मैं|main)\s+{name}{surname}\s+(?:बोल रहा|बोल रही|bol raha|bol rahi)",
+            False,
+        ),
+        (
+            rf"^[\s{punctuation}]*(?:{YESES}[\s{punctuation}]+)*{name}\s+{SUFFIX}"
+            rf"(?=\s|$|[,.!?])",
+            True,
+        ),
         (rf"{start}(?:hi|hello|hey)\s+{name}\s+{SUFFIX}(?=\s|$|[,.!?])", True),
+        # Marathi: "मी पल्लवी जोशी बोलते".
+        (rf"{start}मी\s+{name}{surname}\s+बोलत(?:ोय|ेय|े|ो|िये|ीये)(?![{letters}])", False),
+        # A name, then where from: "मैं प्रिया मेहता Setu Fieldware से।",
+        # "मी ऋतुजा काले, सह्याद्री सेल्स क्राफ्ट मधून बोलतिये".
+        (
+            rf"{start}(?:मैं|मी|main)\s+{name}{surname}\s*,?\s+(?:[^\s.!?।,]+\s+){{0,3}}"
+            rf"[^\s.!?।,]+\s+(?:से|मधून)(?=\s*(?:$|[.!?।,]|बोल))",
+            False,
+        ),
     ]
     greetings = [
         rf"{start}{name}\s+जी\s*,?\s*(?:नमस्ते|नमस्कार)",

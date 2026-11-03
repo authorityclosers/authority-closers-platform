@@ -4,10 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
 import { remainingAllowanceLabel } from "../../acquisition-studio";
-import {
-  CHECKING_ALLOWANCE,
-  NewAnalysisSkeletonContent,
-} from "./new-analysis-skeleton";
+import { NewAnalysisSkeletonContent } from "./new-analysis-skeleton";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -27,8 +24,9 @@ afterEach(async () => {
   host.remove();
 });
 
-it("says what the studio says before its reads answer", () => {
-  expect(CHECKING_ALLOWANCE).toBe(remainingAllowanceLabel(null, null, false));
+it("says what the studio says before its reads answer: no allowance line", () => {
+  // No minutes on a user's screen (simplify pass, owner approved 2 Nov 2026).
+  expect(remainingAllowanceLabel(null, null, false)).toBeNull();
 });
 
 it("draws the studio's own upload screen, busy, with the picker held", async () => {
@@ -43,7 +41,7 @@ it("draws the studio's own upload screen, busy, with the picker held", async () 
   // The real heading, drop area and footer; only the picker waits.
   expect(host.textContent).toContain("analyse your next call");
   expect(host.textContent).toContain("Drop your call recording here");
-  expect(host.textContent).toContain(CHECKING_ALLOWANCE);
+  expect(host.textContent).not.toMatch(/analysis time|minutes|checking/i);
   const choose = [...host.querySelectorAll("button")].find(
     (button) => button.textContent === "Choose a file",
   );

@@ -7,9 +7,6 @@ import { useTheme } from "../../lightbox/theme-provider";
 import { NewAnalysisFooter, NewAnalysisHero } from "../../new-analysis-hero";
 import { useWorkspaceAccess } from "../../workspace-access";
 
-/** The studio's first allowance line, before its reads answer (tested). */
-export const CHECKING_ALLOWANCE = "Remaining analysis time · checking…";
-
 const ignore = () => {};
 
 /**
@@ -49,7 +46,7 @@ export function NewAnalysisSkeletonContent() {
                 disabled
               />
             </section>
-            <NewAnalysisFooter allowanceLabel={CHECKING_ALLOWANCE} />
+            <NewAnalysisFooter allowanceLabel={null} />
           </div>
         </div>
       </div>
