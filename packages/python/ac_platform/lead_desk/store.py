@@ -5550,6 +5550,8 @@ class LeadDesk:
             await self._phone_seen(command.device_id)
             return PhoneLogResult(logged=0, already=already, skipped=skipped)
         refs: list[PhoneLogged] = []
+        # The app's own dials' rows that timed a dial: the phone stops sending them.
+        timed_logs: list[str] = []
         seen: set[UUID] = set()
         for key, event_id, lead_id, data in (
             await self.db.execute(
@@ -5560,6 +5562,8 @@ class LeadDesk:
             )
         ).all():
             seen.add(key)
+            if isinstance(data, dict) and data.get(TIMED_CALL):
+                timed_logs.append(wanted[key][0].log_id)
             # Sent again (after a dropped answer): the phone still learns which call it is.
             if isinstance(data, dict) and data.get("via") == "phone":
                 refs.append(
@@ -5612,6 +5616,7 @@ class LeadDesk:
                     in_app.setdefault(lead_id, []).append((at, event_id, data))
         # Log calls that are the app's own dials: the phone's seconds go beside the dial.
         timing: list[tuple[UUID, PhoneLogCall, Lead, UUID]] = []
+        claimed: set[UUID] = set()
         logged = 0
         for key, call, phone in fresh:
             lead = leads.get(phone)
@@ -5643,6 +5648,28 @@ class LeadDesk:
                     )
                 )
                 already += 1
+                continue
+            # The app's own dial, as the phone says (3 Nov 2026): its row times the first
+            # untimed dial made since the call began, however late the seller came back
+            # to the app to log it; it is never a call of its own.
+            if call.in_app:
+                dial = next(
+                    (
+                        event_id
+                        for at, event_id, _ in sorted(
+                            in_app.get(lead.id, ()), key=lambda found: found[0]
+                        )
+                        if at >= start - IN_APP_BEFORE and event_id not in claimed
+                    ),
+                    None,
+                )
+                if dial is None:
+                    skipped += 1
+                else:
+                    claimed.add(dial)
+                    already += 1
+                    timing.append((key, call, lead, dial))
+                    timed_logs.append(call.log_id)
                 continue
             end = start + timedelta(seconds=call.duration_seconds)
             if call.direction == "outgoing" and any(
@@ -5712,7 +5739,13 @@ class LeadDesk:
         except IntegrityError:
             raise DeskError(409, "These calls are being logged already. Try again.") from None
         await self._phone_seen(command.device_id)
-        return PhoneLogResult(logged=logged, already=already, skipped=skipped, calls=tuple(refs))
+        return PhoneLogResult(
+            logged=logged,
+            already=already,
+            skipped=skipped,
+            calls=tuple(refs),
+            timed=tuple(timed_logs),
+        )
 
     async def fill_call_outcomes(self, command: CallOutcomes) -> CallOutcomesResult:
         """Fills my own Call-button dials that have no outcome from what my phone kept of each

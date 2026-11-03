@@ -1961,6 +1961,9 @@ class PhoneLogResult(Model):
     # each call's recording to its own call (owner, 22 Oct 2026). Calls the app's
     # after-call sheet logged are not here: that sheet offers their recording.
     calls: tuple[PhoneLogged, ...] = ()
+    # The app's own dials' rows that timed a dial (sent again, they are known): the phone
+    # stops sending them.
+    timed: tuple[str, ...] = ()
 
 
 class DeviceView(Model):
@@ -1976,6 +1979,9 @@ class PhoneLogCall(Command):
     started_at: AwareDatetime
     duration_seconds: int = Field(ge=0, le=14400)
     direction: Literal["outgoing", "incoming", "missed", "rejected", "blocked"]
+    # The phone placed it from a lead in the app (3 Nov 2026): it times that Call-button
+    # dial with the phone's own seconds, never a call of its own.
+    in_app: bool = False
 
 
 class RecordingCall(Command):

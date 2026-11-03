@@ -937,6 +937,7 @@ def test_calls_the_phone_logged_by_itself_reach_their_leads(
                     "already": 0,
                     "skipped": 3,
                     "calls": None,
+                    "timed": [],
                 }
                 # Each row now on a lead names its call, so the phone can attach that
                 # call's own recording to it (owner, 22 Oct 2026).
