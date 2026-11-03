@@ -476,6 +476,75 @@ it("keeps a line in the dock until it is used or closed, so the page never jumps
   }
 });
 
+it("puts a line that arrives over a drawn page in the corner, never pushing the page down", async () => {
+  // QA robot 4b12c389, 3 Nov 2026: "QA Robot 2 is your lead now" came 4 to 8 s
+  // into Leads Analytics and dropped it 52 px. Over a loading outline (Leads
+  // raises its lines with the answer that draws the page) a line still docks,
+  // and a line waiting when the dock is drawn docks from its first frame.
+  vi.useFakeTimers();
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+  const drawn = document.createElement("section");
+  drawn.textContent = "Leads Analytics";
+  const outline = document.createElement("div");
+  outline.setAttribute("aria-busy", "true");
+  document.body.append(drawn, outline);
+  let under: Element = drawn;
+  Object.defineProperty(document, "elementFromPoint", {
+    configurable: true,
+    value: () => under,
+  });
+  const page = document.createElement("div");
+  document.body.append(page);
+  const pageRoot = createRoot(page);
+  const line = (id: string) =>
+    raiseAlert({
+      id,
+      level: "normal",
+      title: "QA Fictional is your lead now",
+      action: { label: "Open lead", href: "/leads" },
+    });
+  const dock = () => page.querySelector<HTMLElement>("[data-notice-dock]")!;
+  try {
+    await act(async () => pageRoot.render(<NoticeDock />));
+    // Over the drawn page: the corner, the page stays put.
+    await act(async () => line("fictional-late"));
+    expect(dock().textContent).toBe("");
+    expect(host.textContent).toContain("QA Fictional is your lead now");
+    // As in the dock, it stays until it is used or closed.
+    await act(async () => vi.advanceTimersByTime(60_000));
+    expect(host.textContent).toContain("QA Fictional is your lead now");
+    await act(async () => clearAlert("fictional-late"));
+    // Over a loading outline: it lands with the page, in the dock.
+    under = outline;
+    await act(async () => line("fictional-with-page"));
+    expect(dock().textContent).toContain("QA Fictional is your lead now");
+    await act(async () => clearAlert("fictional-with-page"));
+    // Waiting when the dock is drawn: the dock, even over a drawn page.
+    await act(async () => pageRoot.unmount());
+    under = drawn;
+    await act(async () => line("fictional-waiting"));
+    const next = createRoot(page);
+    await act(async () => next.render(<NoticeDock />));
+    expect(dock().textContent).toContain("QA Fictional is your lead now");
+    await act(async () => next.unmount());
+  } finally {
+    await act(async () => clearAlert("fictional-waiting"));
+    delete (document as { elementFromPoint?: unknown }).elementFromPoint;
+    drawn.remove();
+    outline.remove();
+    page.remove();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  }
+});
+
 it("keeps the dock's room while a sheet holds its lines, so the page never jumps", async () => {
   // QA robot 95abddab and 77641e07, 3 Nov 2026: "… is your lead now" left the
   // page's dock for the lead sheet, and the page rose 52 px, then dropped back

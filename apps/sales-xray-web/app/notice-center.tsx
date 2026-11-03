@@ -176,6 +176,49 @@ function subscribeDock(listener: () => void) {
 }
 const noDock = () => null;
 
+// Where each line sits on the current dock, decided once, when it first shows:
+// true, in the dock; false, in the corner, over the page.
+let placedOn: HTMLElement | null = null;
+const inDockHere = new Map<string, boolean>();
+
+/** Whether the page under the dock is drawn and in sight, so a line put in
+ *  the dock now would push it down. A loading outline is about to go, so a
+ *  line landing with the page's first draw still docks (Leads raises its lines
+ *  with the answer that draws it, side-numbers.ts). */
+function pageShownUnder(node: HTMLElement): boolean {
+  if (typeof document.elementFromPoint !== "function") return false;
+  const y = node.getBoundingClientRect().bottom + 8;
+  if (y >= window.innerHeight) return false;
+  const under = document.elementFromPoint(window.innerWidth / 2, y);
+  if (!under || node.contains(under)) return false;
+  return !under.closest('[aria-busy="true"], [data-standing-in]');
+}
+
+/**
+ * The dock takes the lines waiting when it is drawn, and later ones while the
+ * page under it isn't drawn yet. A line arriving over a drawn page, or under
+ * an open sheet, sits in the corner over it instead of pushing it down (QA
+ * robot 4b12c389, 3 Nov 2026: "… is your lead now" came 4 to 8 s into Leads
+ * Analytics and dropped it 52 px). The next page's dock takes it from its
+ * first frame. Read during render: the page as last drawn, before the line.
+ */
+function placeLines(
+  node: HTMLElement | null,
+  ids: readonly string[],
+  covered: boolean,
+) {
+  if (node !== placedOn) {
+    placedOn = node;
+    inDockHere.clear();
+    if (node) for (const id of ids) inDockHere.set(id, true);
+    return;
+  }
+  if (!node) return;
+  for (const id of ids)
+    if (!inDockHere.has(id))
+      inDockHere.set(id, !covered && !pageShownUnder(node));
+}
+
 /**
  * Where a page puts its new-lead and work notices on a phone: one line in the
  * page above its rows, never over them, their Call buttons or the tab bar
@@ -312,12 +355,15 @@ function NoticeCard({
   notice,
   leave,
   docked = false,
+  stays = false,
 }: {
   notice: Notice;
   /** How the card goes away; by default it leaves the notice list. */
   leave?: () => void;
   /** In the page's dock: one line with its action, in the page's flow. */
   docked?: boolean;
+  /** A dock's line shown in the corner or a sheet: it stays, as in the dock. */
+  stays?: boolean;
 }) {
   const reporter = useReporterAvailable();
   const report = notice.tone === "error" && !notice.noReport && reporter;
@@ -383,7 +429,7 @@ function NoticeCard({
     // A line in the page's dock stays until it is used or closed: one that
     // went by itself lifted the whole page by its height (QA robot a4e9034c,
     // 1 Nov 2026: a layout shift of 0.1 on every Leads load at 390 px).
-    if (!timeout || notice.onDismiss || docked) return;
+    if (!timeout || notice.onDismiss || docked || stays) return;
     let timer = 0;
     // Never from under the pointer or keyboard focus; it tries again shortly.
     const go = () => {
@@ -395,7 +441,7 @@ function NoticeCard({
     };
     timer = window.setTimeout(go, timeout);
     return () => window.clearTimeout(timer);
-  }, [notice, remove, docked]);
+  }, [notice, remove, docked, stays]);
   useEffect(() => {
     if (folded) return;
     const node = card.current;
@@ -747,6 +793,10 @@ export function NoticeCenter() {
       [...list, ...(workCard ? [workCard] : [])].map(seenKey),
     );
     for (const key of placed.keys()) if (!live.has(key)) placed.delete(key);
+    const ids = new Set(
+      [...list, ...(workCard ? [workCard] : [])].map((item) => item.id),
+    );
+    for (const id of inDockHere.keys()) if (!ids.has(id)) inDockHere.delete(id);
   }, [list, workCard]);
 
   // The page keeps room for the stack, so content scrolls clear of it: the
@@ -899,10 +949,23 @@ export function NoticeCenter() {
 
   const docks = (item: Notice) =>
     item.dock === true || DOCKED_TONES.has(item.tone);
-  const docked = docking ? list.filter(docks) : [];
-  const corner = docking ? list.filter((item) => !docks(item)) : list;
-  const cornerWork = docking ? null : workCard;
-  const dockWork = docking ? workCard : null;
+  placeLines(
+    pageDock,
+    [...list.filter(docks), ...(workCard ? [workCard] : [])].map(
+      (item) => item.id,
+    ),
+    sheet !== null,
+  );
+  const inDock = (item: Notice) => inDockHere.get(item.id) === true;
+  const docked = docking
+    ? list.filter((item) => docks(item) && inDock(item))
+    : [];
+  const corner = docking
+    ? list.filter((item) => !docks(item) || !inDock(item))
+    : list;
+  const workDocked = !!docking && !!workCard && inDock(workCard);
+  const cornerWork = workDocked ? null : workCard;
+  const dockWork = workDocked ? workCard : null;
   const waiting = Math.max(0, corner.length - SHOWN);
   // Once no card waits, the next pile starts folded again.
   if (expanded && waiting === 0) setExpanded(false);
@@ -964,10 +1027,15 @@ export function NoticeCenter() {
               key={cornerWork.id}
               notice={cornerWork}
               leave={workGone}
+              stays={pageDock !== null}
             />
           ) : null}
           {shownList.map((notice) => (
-            <NoticeCard key={notice.id} notice={notice} />
+            <NoticeCard
+              key={notice.id}
+              notice={notice}
+              stays={pageDock !== null && docks(notice)}
+            />
           ))}
           {waiting > 0 ? (
             <button
