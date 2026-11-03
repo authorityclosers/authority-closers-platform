@@ -331,6 +331,12 @@ export type TelemetryEvents = {
       "granted" | "denied" | "not_in_build"
     >
   >;
+  /**
+   * After each capture scan in the Android app (CaptureScanRules): why a lead
+   * call waits for its recording. Folder paths as codes, never a file name, a
+   * number or a name; the app checks each value, and the server again.
+   */
+  "sx.capture_scan": Record<string, string | number>;
   "sx.lead_suggestion": {
     action: "shown" | "accepted" | "changed" | "dismissed";
     from?: "call" | "chat" | "rule";
@@ -535,6 +541,7 @@ export const TELEMETRY_EVENT_NAMES = [
   "sx.device_state",
   "sx.network_state",
   "sx.permission_snapshot",
+  "sx.capture_scan",
   "sx.writes_waiting",
   "sx.screen_hidden",
   "sx.flow",
@@ -1070,6 +1077,7 @@ const TRAIL_QUIET = new Set<string>([
   "sx.device_profile",
   "sx.network_state",
   "sx.permission_snapshot",
+  "sx.capture_scan",
   "sx.writes_waiting",
 ]);
 
