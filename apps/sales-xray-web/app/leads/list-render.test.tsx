@@ -117,11 +117,15 @@ it("reuses loaded rows when callbacks change and sends the next tap to the lates
     originalTap = vi.fn(),
     latestTap = vi.fn();
   await render(originalOpen, originalTap);
-  expect(host.querySelectorAll("[data-lead-row]")).toHaveLength(8);
+  // Only the rows near the view are drawn (native-feel plan, item 4): a 900 px
+  // first view of 72 px rows and six more, 19 of the 50.
+  expect(host.querySelectorAll("[data-lead-row]")).toHaveLength(19);
   await reveal();
-  expect(vi.mocked(LeadLine)).toHaveBeenCalledTimes(50);
+  // Measured, the view is the window's 768 px: 17 rows, none drawn again.
+  expect(host.querySelectorAll("[data-lead-row]")).toHaveLength(17);
+  expect(vi.mocked(LeadLine)).toHaveBeenCalledTimes(19);
   await render(latestOpen, latestTap);
-  expect(vi.mocked(LeadLine)).toHaveBeenCalledTimes(50);
+  expect(vi.mocked(LeadLine)).toHaveBeenCalledTimes(19);
   const buttons = host.querySelectorAll<HTMLButtonElement>("li button");
   await act(async () => {
     buttons[0].click();
@@ -146,8 +150,21 @@ it("adding another page renders its new rows without rebuilding the first page",
   ).find((b) => b.textContent?.startsWith("Show more"))!;
   await act(async () => more.click());
   await reveal();
-  expect(host.querySelectorAll("[data-lead-row]")).toHaveLength(100);
-  expect(vi.mocked(LeadLine)).toHaveBeenCalledTimes(100);
+  // The list is as tall as its 100 rows; the first page isn't drawn again.
+  const list = host.querySelector<HTMLUListElement>('ul[aria-label="Leads"]')!;
+  expect(list.style.height).toBe(`${100 * 72}px`);
+  expect(host.querySelectorAll("[data-lead-row]")).toHaveLength(17);
+  expect(vi.mocked(LeadLine)).toHaveBeenCalledTimes(19);
+  // Scrolled to its end: the new page's last rows are drawn, 83 to 99.
+  vi.spyOn(list, "getBoundingClientRect").mockReturnValue({
+    top: -(100 * 72 - 768),
+  } as DOMRect);
+  await act(async () => window.dispatchEvent(new Event("scroll")));
+  await reveal();
+  expect(host.textContent).toContain("Open Fictional prospect 99");
+  expect(host.textContent).not.toContain("Open Fictional prospect 0");
+  expect(host.querySelectorAll("[data-lead-row]")).toHaveLength(17);
+  expect(vi.mocked(LeadLine)).toHaveBeenCalledTimes(19 + 17);
 });
 
 it("preserves the absence of quick actions, then enables them when offered", async () => {
@@ -199,7 +216,8 @@ it("hydrates the server's first rows without replacing them with a loading outli
     });
   });
   expect(errors).toEqual([]);
-  expect(host.querySelectorAll("[data-lead-row]")).toHaveLength(8);
+  // The server and the first client render draw the same first view's rows.
+  expect(host.querySelectorAll("[data-lead-row]")).toHaveLength(19);
   expect(host.textContent).toContain("Syncing");
   await act(async () =>
     root.render(
