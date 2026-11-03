@@ -6537,26 +6537,33 @@ def test_fixture_report_15oct_structure(browser: Browser, viewport: tuple[int, s
                     "data-outcome", kind, timeout=10_000
                 )
             nav = page.locator("[data-report-sections]:visible")
-            expect(nav).to_have_count(1)
-            expect(nav.get_by_role("link")).to_have_count(3)
-            assert nav.get_by_role("link").evaluate_all(
-                "els => els.map(el => el.getAttribute('aria-label'))"
-            ) == [label for _, label in sections]
+            # Phones keep one switch and no part tabs, and a part goes by its
+            # title alone (simplify pass, owner approved 2 Nov 2026).
+            phone = journey.width == 390
+            expect(nav).to_have_count(0 if phone else 1)
+            if not phone:
+                expect(nav.get_by_role("link")).to_have_count(3)
+                assert nav.get_by_role("link").evaluate_all(
+                    "els => els.map(el => el.getAttribute('aria-label'))"
+                ) == [label for _, label in sections]
             assert page.locator("[data-xray-part]").evaluate_all(
                 "els => els.map(el => el.getAttribute('data-xray-part'))"
             ) == [key for key, _ in sections]
             for index, (key, label) in enumerate(sections, start=1):
                 part = page.locator(f'[data-report-mode-section="{key}"]:visible')
-                expect(
-                    part.get_by_role("heading", name=f"{index}. {label}", exact=True)
-                ).to_be_visible()
+                name = label if phone else f"{index}. {label}"
+                expect(part.get_by_role("heading", name=name, exact=True)).to_be_visible()
                 expect(part).not_to_contain_text("This part of the report couldn’t be shown")
 
         def navigate(key: str, label: str) -> Locator:
-            page.locator("[data-report-sections]:visible").get_by_role(
-                "link", name=label, exact=True
-            ).click()
-            return page.locator(f'[data-xray-part="{key}"]')
+            part = page.locator(f'[data-xray-part="{key}"]')
+            if journey.width == 390:
+                part.evaluate("el => el.scrollIntoView({block: 'start', behavior: 'instant'})")
+            else:
+                page.locator("[data-report-sections]:visible").get_by_role(
+                    "link", name=label, exact=True
+                ).click()
+            return part
 
         open_example("follow_up")
         overview = navigate("overview", "Overview & Score")
@@ -6743,13 +6750,23 @@ def test_fixture_report_scroll_training(browser: Browser, viewport: tuple[int, s
         expect(header.get_by_role("heading", level=1)).to_have_text(
             "Siddhant Pawar · discovery call"
         )
-        analysis_nav = page.locator("[data-report-sections]:visible").get_by_role(
-            "link", name="Detailed Call Analysis", exact=True
-        )
-        journey.control_target(analysis_nav, "analysis-navigation")
-        analysis_nav.click()
         part = page.locator('[data-report-mode-section="analysis"]:visible')
-        heading = part.get_by_role("heading", name="2. Detailed Call Analysis", exact=True)
+        # Phones have one switch and no part tabs: the reader scrolls to the
+        # part, which goes by its title alone (simplify pass, 2 Nov 2026).
+        phone = journey.width == 390
+        heading = part.get_by_role(
+            "heading",
+            name="Detailed Call Analysis" if phone else "2. Detailed Call Analysis",
+            exact=True,
+        )
+        if phone:
+            heading.evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+        else:
+            analysis_nav = page.locator("[data-report-sections]:visible").get_by_role(
+                "link", name="Detailed Call Analysis", exact=True
+            )
+            journey.control_target(analysis_nav, "analysis-navigation")
+            analysis_nav.click()
         expect(heading).to_be_in_viewport()
         # Let the existing measured section jump finish before taking geometry.
         page.evaluate(

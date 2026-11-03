@@ -1623,3 +1623,36 @@
     transform: none;
   }
 }
+
+/* Phones: one switch, Report · Prospect · Coaching (simplify pass, owner
+   approved 2 Nov 2026). The Report's three parts follow each other down the
+   page and Coaching has one, so neither gets a second row of part tabs; the
+   switch scrolls away with the title, leaving the screen to the report. The
+   first part needs no name under Report (kept for screen readers). */
+@media (max-width: 760px) {
+  .workspace[data-view="story"]:has([data-xray-part])
+    .navRow:not([data-placement="toolbar"])
+    .contents,
+  .workspace[data-view="coaching"]
+    .navRow:not([data-placement="toolbar"])
+    .contents {
+    display: none;
+  }
+  .workspace[data-view="story"]:has([data-xray-part])
+    .navRow.navRow:not([data-placement="toolbar"]),
+  .workspace[data-view="coaching"]
+    .navRow.navRow:not([data-placement="toolbar"]) {
+    position: static;
+  }
+  .workspace[data-view="story"]:has([data-xray-part])
+    .section:first-child
+    > header:first-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

@@ -233,12 +233,12 @@ it("names the call's lead and links to its sheet in Leads", async () => {
   expect(host.querySelector("[data-report-lead]")!.textContent).toContain(
     "Interested",
   );
-  // And a clear button to the lead's page among the report's actions (bug 128).
-  const action = host.querySelector<HTMLAnchorElement>(
-    "[data-report-lead-action]",
-  )!;
-  expect(action.textContent).toBe("Prospect’s Information");
-  expect(action.getAttribute("href")).toBe(link.getAttribute("href"));
+  // The name is the one way to the lead's page: no second button for it
+  // (simplify pass, owner approved 2 Nov 2026).
+  expect(
+    host.querySelectorAll(`a[href="${link.getAttribute("href")}"]`),
+  ).toHaveLength(1);
+  expect(host.textContent).not.toContain("Prospect’s Information");
 });
 
 it("shows no lead line when the call has none", () => {
