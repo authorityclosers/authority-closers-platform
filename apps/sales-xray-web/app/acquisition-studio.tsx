@@ -115,6 +115,7 @@ import {
 } from "./report-language";
 import {
   isNewCallRequested,
+  linksToThisNewCall,
   newCallHref,
   setNewCallRequested,
 } from "./new-call-navigation";
@@ -2159,6 +2160,36 @@ export function AcquisitionStudio({
     // Re-read entry/session without racing an older saved-call lookup.
     setAttempt((n) => n + 1);
   }
+
+  // + → Add a call on this very page is a link to the page's own address,
+  // which the router ignores, so a report shown here in place stayed and the
+  // tap did nothing (3 Nov 2026 regression, U3). The page starts the new call
+  // itself then, as "Analyse another call" does.
+  const startAnotherCallFromLink = useEffectEvent((href: string) => {
+    if (
+      submission &&
+      !activeRequestedCallId &&
+      linksToThisNewCall(href, submission.id)
+    )
+      startAnotherCall();
+  });
+  useEffect(() => {
+    if (embedded) return;
+    const follow = (event: MouseEvent) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey) return;
+      if (event.shiftKey || event.altKey) return;
+      const link =
+        event.target instanceof Element
+          ? event.target.closest("a[href]")
+          : null;
+      if (!(link instanceof HTMLAnchorElement) || link.target === "_blank")
+        return;
+      startAnotherCallFromLink(link.href);
+    };
+    // Capture: seen before the link's own handler closes the sheet around it.
+    document.addEventListener("click", follow, true);
+    return () => document.removeEventListener("click", follow, true);
+  }, [embedded]);
 
   function forgetSavedCall() {
     if (inFlight.current) return;

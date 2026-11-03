@@ -1919,6 +1919,39 @@ it("never offers an analysed file again after leaving New analysis and coming ba
   ).toBe(false);
 });
 
+// The phone app's own web copy ends its paths with "/".
+it.each(["/analysis/new", "/analysis/new/"])(
+  "starts a new call when + → Add a call links to the page its report is shown on, at %s (3 Nov 2026 regression, U3)",
+  async (address) => {
+    window.history.replaceState(null, "", address);
+    await mountWithAccountAccess();
+    await select();
+    await consent();
+    await click("Complete upload check");
+    await click("Analyse my call");
+    await settleAll();
+    expect(
+      container.querySelector('[aria-label="Sales call report"]'),
+    ).not.toBeNull();
+
+    // The + sheet's Add a call: a link to this very address, which the router
+    // ignores, so the page itself must leave the report.
+    const addCall = document.createElement("a");
+    addCall.href = "/analysis/new";
+    addCall.addEventListener("click", (event) => event.preventDefault());
+    document.body.append(addCall);
+    await act(async () => addCall.click());
+    await settleAll();
+    addCall.remove();
+    expect(
+      container.querySelector('[aria-label="Sales call report"]'),
+    ).toBeNull();
+    expect(
+      container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled,
+    ).toBe(false);
+  },
+);
+
 it("captures new-call intent before delayed bootstrap reads can mistake an in-flight upload for saved work", async () => {
   existing = true;
   progressOverride = { malformed: true };
