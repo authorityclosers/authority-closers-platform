@@ -34,6 +34,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationReportDraft,
     ConversationRun,
 )
+from ac_platform.conversation_intelligence.report_access import ReportAccess
 from ac_platform.conversation_intelligence.submission_label_models import (
     ConversationSubmissionLabelRevision as LabelRevision,
 )
@@ -224,8 +225,15 @@ class CoachingLibrary:
                 )
             )
 
-        # Authorize and read every report first (fresh access/withholding on
-        # each), then resolve evaluator receipts for all calls in a few queries.
+        # Authorize every report in one access query (orchestrator's go, 3 Nov 2026),
+        # each decided as for one (readable_recordings), then read each with fresh
+        # withholding, then resolve evaluator receipts for all calls in a few queries.
+        allowed = await reports.readable_recordings(
+            [usage.submission_id for usage, ready, _ in rows[:HISTORY_LIMIT] if ready],
+            actor=actor,
+            shared_identity_locks=True,
+            allow_organisation_read=organisation,
+        )
         readable: list[tuple[Any, dict[str, Any]]] = []
         for usage, ready, plan_state in reversed(rows[:HISTORY_LIMIT]):
             if not ready:
@@ -234,12 +242,16 @@ class CoachingLibrary:
                 summary(usage, "pending" if plan_state == "active" else "unavailable")
                 continue
             try:
+                found = allowed.get(usage.submission_id)
+                if found is None:
+                    raise ConversationNotFound("This upload is unavailable.")
+                scope, recording = found
                 # Coaching never shows the previous call's context: leave it out.
-                envelope = await reports.report(
-                    usage.submission_id,
-                    actor=actor,
-                    shared_identity_locks=True,
-                    allow_organisation_read=organisation,
+                envelope = await reports.render_report(
+                    recording,
+                    submission_id=usage.submission_id,
+                    access=ReportAccess.ACCOUNT if scope.claimed_account else ReportAccess.GUEST,
+                    actor=actor if scope.claimed_account else None,
                     previous_context=False,
                 )
                 UUID(envelope["recording_id"]), UUID(envelope["run_id"])

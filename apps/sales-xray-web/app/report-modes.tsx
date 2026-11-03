@@ -446,8 +446,11 @@ function updateReportLayerOffsets(
     stickyBar && window.getComputedStyle(stickyBar).position === "sticky"
       ? stickyBar.getBoundingClientRect().height
       : 0;
-  // A row hosted in the shell's top bar sits outside the report scrollport.
-  const navCovers = workspace.contains(navRow);
+  // A row hosted in the shell's top bar sits outside the report scrollport,
+  // and a phone's lone switch scrolls away with the title (static).
+  const navCovers =
+    workspace.contains(navRow) &&
+    window.getComputedStyle(navRow).position !== "static";
   const measuredNavHeight = navCovers
     ? navRow.getBoundingClientRect().height || 56
     : 0;

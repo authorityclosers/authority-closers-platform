@@ -1542,6 +1542,15 @@
 .partHead .head {
   flex: 1 1 340px;
 }
+/* Phones: a part goes by its title alone, with no number, tile or line
+   about it (simplify pass, owner approved 2 Nov 2026). */
+@media (max-width: 760px) {
+  .partHead .square,
+  .partHead .headSub,
+  .partNumber {
+    display: none;
+  }
+}
 
 .origin {
   background: var(--xr-card-3);

@@ -201,11 +201,11 @@ it("disables browse, selection, removal and drop during an active action", async
   expect(callbacks.onAddFiles).not.toHaveBeenCalled();
 });
 
-it("shows the call's wave, quiet and hidden from screen readers, until a file is added", async () => {
+it("draws no wave before there is a file, then the chosen file's own", async () => {
   await renderStage();
-  const wave = host.querySelector('[data-state="idle"]');
-  expect(wave).not.toBeNull();
-  expect(wave?.closest('[aria-hidden="true"]')).not.toBeNull();
+  // A wave stands for a real recording (simplify pass, owner approved
+  // 2 Nov 2026): the empty drop area has none.
+  expect(host.querySelector('[data-state="idle"]')).toBeNull();
   await renderStage({ files: [first], selectedFile: first });
   // The drop area gives the wave to the chosen file's card, which keeps its
   // room from the start (the motif until the file is measured).

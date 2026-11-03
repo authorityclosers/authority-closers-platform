@@ -942,7 +942,8 @@ function UploadsStep({
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const facts = phone.facts;
-  const [wifiOnly, setWifiOnly] = useState(facts?.wifiOnly ?? true);
+  // Any network unless the seller picks Wi-Fi only (owner, bug 120, 3 Nov 2026).
+  const [wifiOnly, setWifiOnly] = useState(facts?.wifiOnly ?? false);
   if (!facts) return null;
 
   const turnOn = async () => {

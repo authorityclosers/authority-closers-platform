@@ -57,16 +57,6 @@
 }
 
 /* The empty drop area's wave: a strip, not the analysis screen's full height. */
-.idleWave {
-  display: block;
-  width: min(420px, 100%);
-  margin-bottom: 4px;
-}
-
-.idleWave.idleWave > * {
-  --wave-h: 52px;
-}
-
 .uploadMark {
   width: 36px;
   height: 36px;
@@ -557,10 +547,6 @@
   .cloud svg {
     width: 29px;
     height: 29px;
-  }
-
-  .idleWave.idleWave > * {
-    --wave-h: 40px;
   }
 
   .facts {

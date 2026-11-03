@@ -1,7 +1,15 @@
 import { afterEach, expect, it } from "vitest";
 
 import type { AutoAnalysis } from "../settings/auto-analysis-client";
-import { afterCallStart, NOT_NOW_KEY, NOT_NOW_MS, notNow } from "./auto-start";
+import {
+  afterCallStart,
+  ASKED_ON_KEY,
+  markNudged,
+  NOT_NOW_KEY,
+  NOT_NOW_MS,
+  notNow,
+  nudgeDue,
+} from "./auto-start";
 
 const view = (
   state: AutoAnalysis["state"],
@@ -34,4 +42,28 @@ it("asks until Not now, then waits a week on this device", () => {
   expect(afterCallStart(view("ask"), now + NOT_NOW_MS + 1)).toBe("ask");
   // A consent turned on elsewhere still starts.
   expect(afterCallStart(view("on", true), now + 1)).toBe("start");
+});
+
+// Owner, 3 Nov 2026: optional, easy to say yes to, and reminded gently.
+it("asks at most once a day, on the Calls line or after a call", () => {
+  const morning = Date.UTC(2026, 10, 3, 4); // 09:30 in India
+  expect(nudgeDue(view("ask"), morning)).toBe(true);
+  markNudged(morning);
+  expect(nudgeDue(view("ask"), morning + 3 * 60 * 60 * 1000)).toBe(false);
+  expect(afterCallStart(view("ask"), morning + 60_000)).toBe("tap");
+  // The next India day it may ask again.
+  expect(nudgeDue(view("ask"), morning + 24 * 60 * 60 * 1000)).toBe(true);
+  // Only the day is kept, never anything about consent.
+  expect(Object.keys(localStorage)).toEqual([ASKED_ON_KEY]);
+});
+
+it("never asks someone who turned it off, or in the week after Not now", () => {
+  const now = Date.UTC(2026, 10, 3, 4);
+  expect(nudgeDue(view("off"), now)).toBe(false);
+  expect(nudgeDue(view("on", true), now)).toBe(false);
+  expect(nudgeDue(view("unavailable"), now)).toBe(false);
+  expect(nudgeDue(null, now)).toBe(false);
+  notNow(now);
+  expect(nudgeDue(view("ask"), now + NOT_NOW_MS - 1)).toBe(false);
+  expect(nudgeDue(view("ask"), now + NOT_NOW_MS + 1)).toBe(true);
 });

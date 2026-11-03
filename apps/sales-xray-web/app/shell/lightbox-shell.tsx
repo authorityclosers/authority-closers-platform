@@ -547,6 +547,26 @@ function LightboxShellFrame({
   const barTitle = place === "dashboard" && !pageName ? "Home" : pageTitle;
   // The selected capsule glides to the new place, on the rail and the tabs.
   const tabBarRef = useRef<HTMLElement | null>(null);
+  // At large text a tab's name takes two lines and the bar grows: pages keep
+  // clear of its real height (the test robot, 2 Nov 2026: "Ask DipakReports").
+  useEffect(() => {
+    const bar = tabBarRef.current;
+    if (!bar || typeof ResizeObserver === "undefined") return;
+    const root = document.documentElement;
+    const publish = () => {
+      // The bar's 62 px plus the 16 px it floats above the edge is 78 px.
+      const room = Math.ceil(bar.getBoundingClientRect().height) + 16;
+      if (room > 78) root.style.setProperty("--lx-bottom-nav-h", `${room}px`);
+      else root.style.removeProperty("--lx-bottom-nav-h");
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(bar);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--lx-bottom-nav-h");
+    };
+  }, []);
   useGlide(railRef, `.${styles.areaActive} .${styles.railPill}`, litArea);
   useGlide(tabBarRef, `[aria-current="page"] .${styles.tabPill}`, phoneTab);
   // ...and, once quiet, the calls list Home and Calls open with.
