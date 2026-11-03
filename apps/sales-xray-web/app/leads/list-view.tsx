@@ -434,20 +434,24 @@ export function ListView({
       ),
     );
   }, [order, lastTries]);
-  // Paint the visible phone rows first. Building 50 gesture-enabled rows at
-  // once monopolises a mid-range phone even when the data is already cached.
+  // Paint the visible phone rows first, the rest while the phone is idle, in
+  // the room kept for them (QA robot 95abddab, 3 Nov 2026). Building 50
+  // gesture-enabled rows at once monopolises a mid-range phone even when the
+  // data is already cached.
   const [revealed, setRevealed] = useState({ question: "", count: 8 });
   const visibleCount = revealed.question === question ? revealed.count : 8;
   useEffect(() => {
     if (asTable || visibleCount >= rows.length) return;
-    const timer = window.setTimeout(
-      () =>
-        setRevealed({
-          question,
-          count: Math.min(rows.length, visibleCount + 16),
-        }),
-      80,
-    );
+    const reveal = () =>
+      setRevealed({
+        question,
+        count: Math.min(rows.length, visibleCount + 16),
+      });
+    if (typeof window.requestIdleCallback === "function") {
+      const idle = window.requestIdleCallback(reveal, { timeout: 400 });
+      return () => window.cancelIdleCallback(idle);
+    }
+    const timer = window.setTimeout(reveal, 80);
     return () => window.clearTimeout(timer);
   }, [question, rows.length, visibleCount, asTable]);
   const syncing = loaded?.key !== key;
@@ -471,6 +475,18 @@ export function ListView({
   });
   // Keys on a computer: J/K, Enter, C (asks before calling), L. Not while ticking.
   const list = useRef<HTMLUListElement>(null);
+  // The rows still to come keep their room under the list, at the shown rows'
+  // height, so nothing below it moves as they arrive (QA robot 95abddab).
+  const room = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const box = list.current;
+    const spare = room.current;
+    if (!box || !spare) return;
+    const shown = box.children.length;
+    spare.style.height = shown
+      ? `${Math.round((box.offsetHeight / shown) * Math.max(0, rows.length - shown))}px`
+      : "0px";
+  }, [rows.length, visibleCount]);
   const byId = (id: string) => rows.find((row) => row.lead_id === id);
   useRowKeys(
     list,
@@ -920,38 +936,45 @@ export function ListView({
                 }}
               />
             ) : (
-              <ul className={styles.leadList} aria-label="Leads" ref={list}>
-                {rows.slice(0, visibleCount).map((row) =>
-                  selecting ? (
-                    <SelectLine
-                      key={row.lead_id}
-                      row={row}
-                      selected={chosen.has(row.lead_id)}
-                      onToggle={tapToggle}
-                    />
-                  ) : (
-                    <CachedLeadLine
-                      key={row.lead_id}
-                      row={row}
-                      onOpen={openRow}
-                      // The owner's name only on someone else's lead.
-                      showOwner={scope !== "mine" && row.owner_person_id !== me}
-                      actions={
-                        actions
-                          ? picksHere
-                            ? ownerActions
-                            : rowActions
-                          : undefined
-                      }
-                      onPick={picksHere ? startPicking : undefined}
-                      compact={stage === OPENING_STAGE}
-                      stageWord={stageWord?.(row)}
-                      quietLate={quietLate}
-                      fresh={!!fresh?.has(row.lead_id)}
-                    />
-                  ),
-                )}
-              </ul>
+              <>
+                <ul className={styles.leadList} aria-label="Leads" ref={list}>
+                  {rows.slice(0, visibleCount).map((row) =>
+                    selecting ? (
+                      <SelectLine
+                        key={row.lead_id}
+                        row={row}
+                        selected={chosen.has(row.lead_id)}
+                        onToggle={tapToggle}
+                      />
+                    ) : (
+                      <CachedLeadLine
+                        key={row.lead_id}
+                        row={row}
+                        onOpen={openRow}
+                        // The owner's name only on someone else's lead.
+                        showOwner={
+                          scope !== "mine" && row.owner_person_id !== me
+                        }
+                        actions={
+                          actions
+                            ? picksHere
+                              ? ownerActions
+                              : rowActions
+                            : undefined
+                        }
+                        onPick={picksHere ? startPicking : undefined}
+                        compact={stage === OPENING_STAGE}
+                        stageWord={stageWord?.(row)}
+                        quietLate={quietLate}
+                        fresh={!!fresh?.has(row.lead_id)}
+                      />
+                    ),
+                  )}
+                </ul>
+                {visibleCount < rows.length ? (
+                  <div ref={room} aria-hidden="true" />
+                ) : null}
+              </>
             )}
             {page.next_offset !== null &&
             (asTable || visibleCount >= rows.length) ? (

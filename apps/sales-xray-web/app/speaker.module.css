@@ -364,7 +364,11 @@
 .detected {
   position: fixed;
   z-index: 340;
-  right: max(24px, env(safe-area-inset-right, 0px));
+  /* Left of Report a problem (40 px, 20 px from the corner) and of the
+     report's rail (report-scroll-rail.tsx publishes its room), never over
+     them (the test robot, 855ed149, 3 Nov 2026: the card covered both).
+     Phones place it above the tab bar below. */
+  right: max(72px, env(safe-area-inset-right, 0px), var(--sx-rail-room, 0px));
   bottom: max(24px, env(safe-area-inset-bottom, 0px));
   display: grid;
   gap: 12px;

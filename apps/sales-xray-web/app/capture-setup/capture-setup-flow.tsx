@@ -95,6 +95,7 @@ import {
   type PhoneFacts,
 } from "./capture-setup-rules";
 import own from "./capture-setup.module.css";
+import { batterySaidDone } from "./permissions-rules";
 import { named } from "./product-name";
 
 type Phone = { status: SetupStatus | null; facts: PhoneFacts | null };
@@ -1304,7 +1305,10 @@ export function CaptureSetupFlow({
       setupStatus(),
       autoCaptureStatus(),
     ]);
-    const next = { status, facts: phoneFacts(status, capture) };
+    const next = {
+      status,
+      facts: phoneFacts(status, capture, { battery: batterySaidDone() }),
+    };
     setPhone(next);
     return next;
   }, [inApp]);
@@ -1317,7 +1321,8 @@ export function CaptureSetupFlow({
         ? await Promise.all([setupStatus(), autoCaptureStatus()])
         : [null, null];
       if (!alive) return;
-      const facts = phoneFacts(status, capture);
+      // The checklist's battery Done counts here too (permissions-rules).
+      const facts = phoneFacts(status, capture, { battery: batterySaidDone() });
       setPhone({ status, facts });
       const planned = stepsWith(stepsFor(first, facts), startAt);
       setSteps(planned);

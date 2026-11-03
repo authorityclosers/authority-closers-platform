@@ -763,6 +763,8 @@ export type RecorderProfile = {
   newestMs?: number | null;
   /** That recording's length, for "Test recording found ✓ 0:10" (newer apps). */
   newestDurationMs?: number | null;
+  /** A recording shared from the Phone app lands in Sales X-Ray (apps PR, 3 Nov 2026). */
+  shareTarget?: boolean;
 };
 
 export function parseRecorder(raw: unknown): RecorderProfile | null {
@@ -808,6 +810,7 @@ export function parseRecorder(raw: unknown): RecorderProfile | null {
     value.newestDurationMs > 0
       ? { newestDurationMs: value.newestDurationMs }
       : {}),
+    ...(value.shareTarget === true ? { shareTarget: true } : {}),
   };
 }
 

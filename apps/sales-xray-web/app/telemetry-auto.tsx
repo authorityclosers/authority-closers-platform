@@ -606,6 +606,8 @@ const PHONE_EVENTS = new Set<string>([
   "sx.device_state",
   "sx.network_state",
   "sx.permission_snapshot",
+  // After each capture scan (apps PR #27).
+  "sx.capture_scan",
 ]);
 
 /**

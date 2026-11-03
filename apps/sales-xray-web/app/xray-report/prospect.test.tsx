@@ -116,6 +116,26 @@ it("shows the owner's layout with evidence, AI labels and Unknowns, and saves a 
   expect(text).toContain("Considering a ₹2 lakh investment.");
   // Unknown when the call does not say it.
   expect(text).toContain("Not said in this call");
+  // Each term and value sits in a list of terms (the test robot, d9a63168 and
+  // a70fedba, 3 Nov 2026: the facts' icon sat inside the list).
+  const terms = [...host.querySelectorAll("dt, dd")];
+  expect(terms.length).toBeGreaterThan(0);
+  for (const term of terms) {
+    const parent = term.parentElement!;
+    expect(
+      parent.tagName === "DL" ||
+        (parent.tagName === "DIV" && parent.parentElement?.tagName === "DL"),
+    ).toBe(true);
+  }
+  for (const list of host.querySelectorAll("dl"))
+    for (const child of list.children)
+      expect(
+        ["DT", "DD"].includes(child.tagName) ||
+          (child.tagName === "DIV" &&
+            [...child.children].every((item) =>
+              ["DT", "DD"].includes(item.tagName),
+            )),
+      ).toBe(true);
   expect(text).toContain("AI’s read");
   const confirm = [...host.querySelectorAll("button")].find(
     (button) => button.textContent === "Confirm",

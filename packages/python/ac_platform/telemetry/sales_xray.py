@@ -145,6 +145,26 @@ LEAD_KINDS = frozenset({"new", "not_connected", "follow_up", "interested", "won"
 WAIT_BANDS = frozenset({"under_2m", "2_to_5m", "5_to_15m", "over_15m", "unknown"})
 MAX_WAIT_MS = 3_600_000
 YES_NO = ("yes", "no")
+# sx.capture_scan (the Android app's CaptureScanRules): a known recordings folder's state,
+# and why a call waits.
+CAPTURE_FOLDERS = 8
+CAPTURE_FOLDER_STATES = ("missing", "empty", "found", "hidden", "no_access", "unknown")
+CAPTURE_HOLDS = (
+    "profile",
+    "allowance",
+    "signed_out",
+    "consent",
+    "notices",
+    "workspace",
+    "folder",
+    "network",
+    "access",
+    "off",
+    "review",
+    "expired",
+    "other",
+)
+CAPTURE_MAX_AGE_S = 30 * 24 * 60 * 60
 PERMISSION_STATES = ("granted", "denied", "not_in_build")
 # The Android app's own permissions, by short names the intake's personal-data guard allows.
 APP_PERMISSIONS = ("calls", "rec_files", "notifications", "mic", "all_files", "folder", "call_log")
@@ -578,6 +598,44 @@ SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
         # When a permission changes: each of the app's permissions, granted or not.
         "sx.permission_snapshot": _event(
             values={permission: PERMISSION_STATES for permission in APP_PERMISSIONS}
+        ),
+        # After each capture scan in the Android app (orchestrator, 3 Nov 2026: the owner's OnePlus
+        # waited two hours for recordings): the Phone app, its kind and recording state, each known
+        # folder as a code with its state and newest file's age, the media index's call recordings,
+        # and how recent lead calls matched. Never a file name, a number or a contact name.
+        "sx.capture_scan": _event(
+            values={
+                "outcome": ("ran", "notices", "workspace", "consent", "off"),
+                "kind": ("folder", "private", "unknown"),
+                "rec": ("on", "off", "unknown", "private"),
+                **{f"f{i}_state": CAPTURE_FOLDER_STATES for i in range(1, CAPTURE_FOLDERS + 1)},
+                "picked_covers": YES_NO,
+                "hidden": YES_NO,
+                "call_log": YES_NO,
+                "hold": CAPTURE_HOLDS,
+            },
+            numbers={
+                **{f"f{i}_age_s": CAPTURE_MAX_AGE_S for i in range(1, CAPTURE_FOLDERS + 1)},
+                "newest_age_s": CAPTURE_MAX_AGE_S,
+                "picked": 20,
+                "media_calls_24h": 10_000,
+                "files_seen": 10_000,
+                "files_matched": 10_000,
+                "calls": 1_000,
+                "calls_matched": 1_000,
+                "calls_none": 1_000,
+                "calls_ambiguous": 1_000,
+                "none_age_s": CAPTURE_MAX_AGE_S,
+                "jobs_waiting": 1_000,
+                "jobs_held": 1_000,
+            },
+            tokens=(
+                *(f"f{i}" for i in range(1, CAPTURE_FOLDERS + 1)),
+                "picked_folder",
+                "media_folder",
+            ),
+            labels=("dialer",),
+            required=("outcome",),
         ),
         # A seller's changes this device holds that the server doesn't have yet
         # (sync/write-queue.ts): how many wait, how many the server refused when sent

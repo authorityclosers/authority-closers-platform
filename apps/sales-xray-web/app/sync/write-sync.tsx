@@ -14,6 +14,8 @@
 import { useEffect, useRef } from "react";
 
 import { dismissNotice, notify } from "../notice-center";
+import { useAppRouter } from "../shell/app-router";
+import { leaveTo } from "../shell/leave-to";
 import { telemetry } from "../telemetry";
 import { useWorkspaceAccess } from "../workspace-access";
 import { onWorkspaceChange } from "../workspace-change";
@@ -51,6 +53,8 @@ function refusedMessage(item: QueuedWrite): string {
 }
 
 export function WriteSync() {
+  // The App Router, or null where none is drawn (tests, static previews).
+  const router = useAppRouter();
   const access = useWorkspaceAccess();
   const context = access?.authenticated === true ? access.context : null;
   const who = context ? `${context.personId}:${context.tenantId}` : null;
@@ -200,15 +204,18 @@ export function WriteSync() {
               run: () => {
                 discardWrite(item.id);
                 dismissNotice(id);
+                // In the app, never a reload: the frame stays and Leads shows
+                // its own loading rows (QA robot 18bb2450, 3 Nov 2026: blank
+                // for over a second on a slow network).
                 if (current.current === item.identity)
-                  window.location.assign(leadHref(lead));
+                  leaveTo(leadHref(lead), router);
               },
             }
           : undefined,
         onDismiss: async () => discardWrite(item.id),
       });
     }
-  }, [check, who]);
+  }, [check, who, router]);
   // A workspace switch in place: every card of the one left goes at once.
   useEffect(
     () =>

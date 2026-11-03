@@ -25,7 +25,8 @@ def test_a_dials_time_away_is_never_talk_time() -> None:
         assert away_seconds(dial) == 60
         # Time away alone is not a connected call (one rule with the lead's story).
         assert not call_answered(dial)
-        assert call_answered({**dial, TALKED: True})
+        # Nor is "We talked" alone (3 Nov 2026): only the phone's own evidence.
+        assert not call_answered({**dial, TALKED: True})
 
 
 def test_the_phones_own_durations_are_talk_time() -> None:

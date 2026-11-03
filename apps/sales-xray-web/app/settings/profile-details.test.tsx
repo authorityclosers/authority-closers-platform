@@ -283,6 +283,34 @@ it("shows the Home card until the profile is complete", async () => {
 
 // v0.93: tapping the avatar opens the gallery picker (no camera capture), and an
 // unverified phone says what comes next.
+// Owner, 3 Nov 2026: one profile card, one status ("2 of 6" beside
+// "Profile: Complete" said two things).
+it("says how far the profile is, once, with email and phone in it", async () => {
+  serve(() => Response.json(PROFILE));
+  await act(async () => root.render(<ProfileDetailsPanel />));
+  await settle();
+  expect(host.textContent).toContain("2 of 6");
+  expect(host.textContent).not.toContain("Profile complete");
+  expect(host.textContent).toContain("seller@example.test");
+  expect(host.textContent).toContain("+919800000000Verified");
+  expect(button("Finish")).toBeTruthy();
+  expect(button("Edit name and phone")).toBeTruthy();
+});
+
+it("says Profile complete, with nothing to finish, when all six are in", async () => {
+  serve(() =>
+    Response.json({
+      ...PROFILE,
+      completion: { done: 6, total: 6, missing: [] },
+    }),
+  );
+  await act(async () => root.render(<ProfileDetailsPanel />));
+  await settle();
+  expect(host.textContent).toContain("Profile complete");
+  expect(host.textContent).not.toContain("of 6");
+  expect(button("Finish")).toBeFalsy();
+});
+
 it("opens the picker from the avatar, and explains an unverified phone", async () => {
   serve(() => Response.json({ ...PROFILE, phone_verified: false }));
   await act(async () => root.render(<ProfileDetailsPanel />));

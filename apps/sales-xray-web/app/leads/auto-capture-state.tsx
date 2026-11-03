@@ -4,9 +4,16 @@ import { useEffect, useState } from "react";
 import {
   autoCaptureStates,
   onPhoneSignal,
+  openDialer,
+  pickRecordingsFolder,
+  recorderOpen,
+  setupStatus,
   type AutoCaptureItem,
+  type RecorderProfile,
+  type SetupStatus,
 } from "./native-phone";
 import { readCaptureGuard, type CaptureCall } from "./capture-guard-client";
+import { PLAY_LISTING } from "../app-compatibility-provider";
 import { RecordingFix } from "../capture-guard/recording-fix";
 import styles from "../capture-guard/capture-guard.module.css";
 
@@ -114,8 +121,11 @@ export type Track = {
   stuck: boolean;
   /** Finished before the last step: a short call has a transcript and no report. */
   ended?: boolean;
-  /** sheet: the recording check opens over the call (Back returns to it); else a link. */
-  fix?: { label: string; href: string; sheet?: boolean };
+  /**
+   * sheet: the recording check opens over the call (Back returns to it); run:
+   * a phone screen opens; else a link.
+   */
+  fix?: { label: string; href?: string; sheet?: boolean; run?: () => void };
   /** Where the recording is (competitor teardown #7): said first on the row. */
   recording?: "arrived" | "waiting" | "not found";
 };
@@ -124,15 +134,94 @@ const setupFix = {
   href: "/settings/privacy#calls-setup",
   sheet: true,
 };
+
+/**
+ * Google's Phone app keeps call recordings inside itself (RecorderRules
+ * "private"), so on such a phone a lead call's recording never arrives by
+ * itself (owner, 3 Nov 2026: his OnePlus calls said "Waiting for recording"
+ * for two hours). The row says so, with the one way to get it.
+ */
+export type PrivateRecorder = Readonly<{
+  /** Another Phone app on this phone that saves recordings Sales X-Ray reads. */
+  switchTo: string | null;
+  /** This app build takes a recording shared to it from the Phone app. */
+  share: boolean;
+}>;
+export const PRIVATE_LABEL = "This phone's Phone app keeps recordings private";
+export function privateRecorder(
+  recorder: RecorderProfile | null,
+): PrivateRecorder | null {
+  if (recorder?.kind !== "private") return null;
+  return { switchTo: recorder.switchTo, share: recorder.shareTarget === true };
+}
+function privateTrack(recorder: PrivateRecorder): Track {
+  return {
+    done: 0,
+    label: PRIVATE_LABEL,
+    stuck: false,
+    fix: recorder.switchTo
+      ? {
+          label: `Switch to ${recorder.switchTo}`,
+          run: () => void recorderOpen("defaultDialer"),
+        }
+      : recorder.share
+        ? // The call's recording, then its Share, then Sales X-Ray.
+          { label: "Share the recording to Sales X-Ray", run: openDialer }
+        : {
+            label: "Update Sales X-Ray to share recordings",
+            href: PLAY_LISTING,
+          },
+  };
+}
+/**
+ * A phone whose Phone app saves recordings to a folder (or one Sales X-Ray doesn't know): 3 minutes
+ * on with no file, the row names the fix instead of waiting (orchestrator, 3 Nov 2026: the owner's
+ * OnePlus said "Waiting for recording", with no reason, for two hours).
+ */
+export type FolderRecorder = Readonly<{
+  /** None of the known folders is on this phone and none is picked: pick it (the picker opens there). */
+  pick: boolean;
+}>;
+export const NO_FILE_AFTER_MS = 3 * 60_000;
+export function folderRecorder(
+  status: SetupStatus | null,
+): FolderRecorder | null {
+  if (!status?.recorder || status.recorder.kind === "private") return null;
+  return {
+    pick:
+      !status.folderPicked &&
+      status.recorder.folders.every((folder) => folder.state === "missing"),
+  };
+}
+function folderTrack(folder: FolderRecorder): Track {
+  return {
+    done: 0,
+    label: "No recording yet",
+    stuck: false,
+    fix: folder.pick
+      ? {
+          label: "Pick your recordings folder",
+          run: () => void pickRecordingsFolder(),
+        }
+      : {
+          label: "Turn on Auto record in your Phone app",
+          run: () => void recorderOpen("settings"),
+        },
+  };
+}
 /**
  * The phone's queue (app builds with autoCaptureHealth add a hold reason) and the capture guard's
  * receipts. A hold says why a call waits, so it leads; then server receipts, which outrank a stale
- * native queue; missing stays visible after the deadline.
+ * native queue; missing stays visible after the deadline. A recording that can't come from a
+ * private Phone app says so instead of waiting.
  */
 export function trackFor(
   native: AutoCaptureItem | null,
   server: CaptureCall | null,
   unavailable = false,
+  recorder: PrivateRecorder | null = null,
+  folder: FolderRecorder | null = null,
+  now = Date.now(),
 ): Track | null {
   const arrived = "arrived" as const;
   if (server?.state === "report_ready")
@@ -186,6 +275,19 @@ export function trackFor(
       recording: arrived,
       fix: setupFix,
     };
+  if (
+    recorder &&
+    !native &&
+    (server?.state === "missing" || server?.state === "waiting")
+  )
+    return privateTrack(recorder);
+  if (
+    folder &&
+    !native &&
+    (server?.state === "missing" || server?.state === "waiting") &&
+    now - Date.parse(server.at) >= NO_FILE_AFTER_MS
+  )
+    return folderTrack(folder);
   // No recording 30 minutes on: a call that ended without one, said calmly with its way to
   // add it, never "Stuck" in red (persona QA, 31 Oct 2026: it shouted two days later).
   if (server?.state === "missing")
@@ -266,11 +368,30 @@ export function CallTrack({
       {links && track.fix ? (
         track.fix.sheet ? (
           <RecordingFix label={track.fix.label} />
-        ) : (
+        ) : track.fix.run ? (
+          <PhoneFix label={track.fix.label} run={track.fix.run} />
+        ) : track.fix.href ? (
           <Link href={track.fix.href}>{track.fix.label}</Link>
-        )
+        ) : null
       ) : null}
     </span>
+  );
+}
+
+/** A phone screen from a call row, which may itself be a link: the screen, not the row. */
+function PhoneFix({ label, run }: { label: string; run: () => void }) {
+  return (
+    <button
+      type="button"
+      className={styles.fix}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        run();
+      }}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -278,7 +399,29 @@ type Evidence = {
   native: AutoCaptureItem | null;
   server: CaptureCall | null;
   unavailable: boolean;
+  recorder: PrivateRecorder | null;
+  folder: FolderRecorder | null;
 };
+type PhoneRecorder = {
+  recorder: PrivateRecorder | null;
+  folder: FolderRecorder | null;
+};
+// The Phone app this phone records with, read once and again at each return to the app (the
+// seller may have switched it), not every 30 s: the phone counts its recordings to answer.
+let recorderRead: Promise<PhoneRecorder> | null = null;
+function readRecorder(): Promise<PhoneRecorder> {
+  recorderRead ??= setupStatus()
+    .then((status) => ({
+      recorder: privateRecorder(status?.recorder ?? null),
+      folder: folderRecorder(status),
+    }))
+    .catch(() => ({ recorder: null, folder: null }));
+  return recorderRead;
+}
+/** Read the Phone app again next time (a return to the app; tests). */
+export function forgetRecorder(): void {
+  recorderRead = null;
+}
 // One read for every call on screen, every 30 s and on the phone's signals, not one per row.
 const watchers = new Map<string, Set<(evidence: Evidence) => void>>();
 let reading: Promise<void> | null = null;
@@ -288,9 +431,10 @@ let stopSignal: (() => void) | null = null;
 async function readAll(): Promise<void> {
   const ids = [...watchers.keys()];
   if (!ids.length) return;
-  const [items, recent] = await Promise.all([
+  const [items, recent, phone] = await Promise.all([
     autoCaptureStates(),
     readCaptureGuard(),
+    readRecorder(),
   ]);
   // An older call than the guard's week is read on its own.
   const older = recent
@@ -306,6 +450,7 @@ async function readAll(): Promise<void> {
       native: items.find((item) => item.eventId === id) ?? null,
       server: calls.find((call) => call.event_id === id) ?? null,
       unavailable: recent === null,
+      ...phone,
     };
     watchers.get(id)?.forEach((tell) => tell(evidence));
   }
@@ -335,6 +480,7 @@ export function watchCapture(
   if (!timer) {
     timer = setInterval(look, 30_000);
     stopSignal = onPhoneSignal((signal) => {
+      if (signal === "resume") forgetRecorder();
       if (signal === "recordings" || signal === "resume") look();
     });
   }
@@ -368,7 +514,13 @@ export function AutoCaptureState({
     return watchCapture(eventId, (evidence) =>
       setShown({
         id: eventId,
-        track: trackFor(evidence.native, evidence.server, evidence.unavailable),
+        track: trackFor(
+          evidence.native,
+          evidence.server,
+          evidence.unavailable,
+          evidence.recorder,
+          evidence.folder,
+        ),
       }),
     );
   }, [eventId]);

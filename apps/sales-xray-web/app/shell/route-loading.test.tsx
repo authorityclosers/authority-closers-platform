@@ -41,6 +41,8 @@ async function html(
 
 it("loads every place with its own outline, never New analysis", () => {
   expect(routeLoadingKind("/dashboard")).toBe("dashboard");
+  // Growth's own outline and name, never another page's (robot 2ac64000).
+  expect(routeLoadingKind("/growth")).toBe("growth");
   expect(routeLoadingKind("/leads")).toBe("leads");
   expect(routeLoadingKind("/leads/")).toBe("leads");
   expect(routeLoadingKind("/chats")).toBe("chats");

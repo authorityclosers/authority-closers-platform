@@ -63,6 +63,23 @@ const CoachingLoading = dynamic(() => import("../coaching/loading"), {
 const DashboardLoading = dynamic(() => import("../dashboard/loading"), {
   loading: () => <OutlineLoading variant="dashboard" />,
 });
+// Growth opens on its own outline under its own name, never another page's
+// title (robot 2ac64000, 3 Nov 2026: "New analysis" on two lines, then
+// "Growth" on one, moved the page).
+const GrowthLoading = dynamic(
+  () =>
+    import("../performance/performance-page").then((module) => {
+      function GrowthSkeleton() {
+        return (
+          <module.PerformanceSkeleton title="Growth" section="Analytics" />
+        );
+      }
+      return GrowthSkeleton;
+    }),
+  {
+    loading: () => <OutlineLoading active="dashboard" pageName="Growth" />,
+  },
+);
 const OrganisationLoading = dynamic(() => import("../organisation/loading"), {
   loading: () => <OutlineLoading />,
 });
@@ -96,6 +113,7 @@ export type RouteLoadingKind =
   | "new"
   | "call"
   | "dashboard"
+  | "growth"
   | "leads"
   | "chats"
   | "calls"
@@ -122,6 +140,7 @@ export function routeLoadingKind(pathname: string | null): RouteLoadingKind {
   if (route === "/" || under(route, "/analysis/new")) return "new";
   if (callIdFromPath(route) !== null) return "call";
   if (under(route, "/dashboard")) return "dashboard";
+  if (under(route, "/growth")) return "growth";
   if (under(route, "/leads")) return "leads";
   if (under(route, "/chats")) return "chats";
   if (under(route, "/analysis") || under(route, "/calls")) return "calls";
@@ -156,9 +175,12 @@ function SettingsLoading() {
 /** The shared outline, in the frame with the right place lit. */
 function OutlineLoading({
   active,
+  pageName,
   variant = "list",
 }: {
-  active?: "insights" | "organisation" | "review";
+  active?: "dashboard" | "insights" | "organisation" | "review";
+  /** The page's own name in the top bar while it loads. */
+  pageName?: string;
   variant?: SkeletonVariant;
 }) {
   const access = useWorkspaceAccess();
@@ -167,6 +189,7 @@ function OutlineLoading({
       authenticated={access?.authenticated === true}
       loading={!access}
       active={active}
+      pageName={pageName}
     >
       <PageSkeleton variant={variant} />
     </AcquisitionShell>
@@ -186,6 +209,8 @@ export function RouteLoading({ pathname }: { pathname?: string }) {
       return <CallLoading />;
     case "dashboard":
       return <DashboardLoading />;
+    case "growth":
+      return <GrowthLoading />;
     case "leads":
       return <LeadsSkeleton />;
     case "chats":

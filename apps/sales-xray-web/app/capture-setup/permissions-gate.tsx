@@ -59,6 +59,7 @@ import {
   inPhoneApp,
   onPhoneSignal,
   pickRecordingsFolder,
+  setupMark,
   setupOpen,
   setupStatus,
   type SetupStatus,
@@ -81,6 +82,7 @@ import {
   permissionItems,
   putOffKey,
   reminders,
+  sayBatteryDone,
   toAnswer,
   waitsFor,
   type ConsentFact,
@@ -155,7 +157,11 @@ export function PermissionsChecklist({
 }) {
   const titleId = useId();
   const left = items.filter(waitsFor).length;
-  const offered = toAnswer(items, putOff).length - left;
+  const offering = toAnswer(items, putOff).filter((item) => !waitsFor(item));
+  const offered = offering.length;
+  // Name only the buttons on screen: the battery's is Done, the others' Not now
+  // (phone QA on v1.36, 3 Nov 2026: "choose Not now" over the battery alone).
+  const onlyBattery = offering.every((item) => item.key === "battery");
   return (
     <div className={own.permissions} aria-labelledby={titleId} role="group">
       <h1 id={titleId} className={styles.title}>
@@ -165,7 +171,9 @@ export function PermissionsChecklist({
         {left
           ? `Sales X-Ray works once these are allowed. ${left === 1 ? "1 left." : `${left} left.`}`
           : offered
-            ? "These help too. Allow them, or choose Not now."
+            ? onlyBattery
+              ? "This helps too. Check it, or tap Done once it's set."
+              : "These help too. Allow them, or choose Not now."
             : "All set. Sales X-Ray is ready."}
       </p>
       <ul className={own.grants}>
@@ -554,6 +562,11 @@ export function PermissionsGate() {
     setVisitLater(new Set(visitLater).add(putOffKey(item)));
     setReopened(false);
     if (storageKey) writeLater(storageKey, next);
+    // Done is the seller's word for battery and Autostart: Set up this phone asks for neither again.
+    if (item.key === "battery") {
+      sayBatteryDone();
+      void setupMark("autostart", true);
+    }
     // The capture setup's own record of not now: it asks again on its own days.
     if (item.key === "autoAnalysis")
       void recordCaptureSetup({ outcome: "declined" }).catch(() => null);

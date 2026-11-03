@@ -84,6 +84,48 @@ def test_every_key_is_typed_and_none_could_carry_a_person() -> None:
     assert RETENTION_POLICY_ID == "sx-product-analytics-v1"
 
 
+def test_a_capture_scan_says_why_a_call_waits_without_a_name_or_number() -> None:
+    # The Android app's sx.capture_scan (orchestrator, 3 Nov 2026); fictional values.
+    scan = SALES_XRAY_EVENTS["sx.capture_scan"]
+    check_payload_values(
+        scan,
+        {
+            "outcome": "ran",
+            "dialer": "com.oplus.dialer",
+            "kind": "folder",
+            "rec": "unknown",
+            "f1": "music_recordings_call_recordings",
+            "f1_state": "missing",
+            "f2": "recordings_call",
+            "f2_state": "found",
+            "f2_age_s": 86_400,
+            "picked": 1,
+            "picked_folder": "recordings",
+            "picked_covers": "no",
+            "media_calls_24h": 2,
+            "media_folder": "recordings_call",
+            "files_seen": 0,
+            "calls": 2,
+            "calls_none": 2,
+            "none_age_s": 7_200,
+            "call_log": "yes",
+            "jobs_held": 0,
+            "app": "android",
+        },
+    )
+    for bad in (
+        {"f1": "Music/Recordings/Call Recordings"},  # a path, not a code
+        {"media_folder": "recordings/call"},
+        {"dialer": "Com Oplus Dialer"},
+        {"rec": "recording"},
+        {"f1_age_s": 31 * 24 * 60 * 60},
+    ):
+        with pytest.raises(ValueError):
+            check_payload_values(scan, {"outcome": "ran", **bad})
+    with pytest.raises(ValueError):
+        check_payload_values(scan, {"kind": "folder"})  # no outcome
+
+
 def test_values_are_checked_by_type() -> None:
     read = SALES_XRAY_EVENTS["sx.section_read"]
     check_payload_values(

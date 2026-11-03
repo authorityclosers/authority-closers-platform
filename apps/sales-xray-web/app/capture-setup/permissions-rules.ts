@@ -11,10 +11,12 @@
  * standing consent) are offered with Not now, and a put-off one stays as a slim
  * reminder. A personal workspace keeps the checklist it had.
  *
- * An item this build of the app can't ask for never locks anyone out: contacts
- * on builds that don't declare them, and the recordings folder on builds without
- * the folder picker, say "Update Sales X-Ray"; call history in the Google Play
- * build waits for Google's approval and says so.
+ * An item this build of the app can't ask for never locks anyone out: the
+ * recordings folder on builds without the folder picker says "Update Sales
+ * X-Ray"; contacts, which no released build declares yet (apps PR #18), isn't
+ * shown until a build can ask (phone QA on v1.36, 3 Nov 2026: "Update" on the
+ * newest build); call history in the Google Play build waits for Google's
+ * approval and says so.
  */
 
 import type { AutoAnalysisState } from "../settings/auto-analysis-client";
@@ -68,6 +70,28 @@ export type ConsentFact = Readonly<{
   words: string;
   version: string;
 }> | null;
+
+/**
+ * The battery's Done in the checklist, the seller's word that battery and
+ * Autostart are set (HyperOS may not tell Android): kept on this phone, so
+ * "Set up this phone" doesn't ask for them again (phone QA on v1.36, 3 Nov
+ * 2026: Done, then Battery and Autostart with Skip for now, twice).
+ */
+const BATTERY_DONE_KEY = "sales-xray:battery-done";
+export function batterySaidDone(): boolean {
+  try {
+    return window.localStorage.getItem(BATTERY_DONE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+export function sayBatteryDone(): void {
+  try {
+    window.localStorage.setItem(BATTERY_DONE_KEY, "1");
+  } catch {
+    // Storage off: the setup asks once more.
+  }
+}
 
 /** On the page while the checklist decides or is open: the other first-run screens wait. */
 export const PERMISSIONS_ATTRIBUTE = "data-sx-permissions";
@@ -141,9 +165,7 @@ export function permissionItems(
       label: "Contacts",
       // The owner's purpose (30 Oct 2026): showing lead names on calls, nothing else.
       why: "Shows the right name on calls and leads by matching callers to your saved contacts. Read for nothing else.",
-      state: has(status, "contacts")
-        ? ask(status.checks.contacts === true, status.blocked.contacts)
-        : "update",
+      state: ask(status.checks.contacts === true, status.blocked.contacts),
     }),
     item({
       key: "notifications",
@@ -164,7 +186,7 @@ export function permissionItems(
           : "needed"
         : "update",
     }),
-  ];
+  ].filter((row) => row.key !== "contacts" || has(status, "contacts"));
   if (!organisation) return items;
   items.push(
     item({

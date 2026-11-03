@@ -43,11 +43,14 @@ const never = () => () => undefined;
 export function FinishRow({
   calls,
   onFinish,
+  held = false,
   now = new Date(),
 }: {
   calls: readonly Unanswered[] | null | undefined;
   /** Opens the lead on "How did the call go?". */
   onFinish: (leadId: string) => void;
+  /** A lead is open: unseen, its room kept, so nothing under it moves. */
+  held?: boolean;
   now?: Date;
 }) {
   const hydrated = useSyncExternalStore(
@@ -64,7 +67,12 @@ export function FinishRow({
   if (!hydrated || !call) return null;
   const more = waiting.length - 1;
   return (
-    <div className={styles.finish} role="status">
+    <div
+      className={styles.finish}
+      role="status"
+      data-held={held || undefined}
+      aria-hidden={held || undefined}
+    >
       <button
         type="button"
         className={styles.finishOpen}
@@ -72,7 +80,11 @@ export function FinishRow({
       >
         <strong>Finish: {displayName(call.name)}</strong>
         <span>
-          {`called ${ago(call.called_at, now)} · How did it go?`}
+          {/* A dial the phone never showed may not have been placed (phone
+              QA, 3 Nov 2026: a back-out from the dialler read "called"). */}
+          {call.phone_saw === false
+            ? `dialled ${ago(call.called_at, now)} · Did you call?`
+            : `called ${ago(call.called_at, now)} · How did it go?`}
           {more > 0 ? ` · ${more} more` : ""}
         </span>
       </button>

@@ -59,9 +59,10 @@ def test_inbound_and_cold_are_measured_apart(postgres_harness: Any, tmp_path: Pa
             own = mine["sellers"][0]
             assert own["person_id"] == str(here.seller.person_id)
             hot, cool = own["inbound"], own["cold"]
-            assert (hot["attempted"], hot["connected"], hot["talk_seconds"]) == (1, 1, 0)
-            assert hot["talk_estimated_seconds"] == 95
-            assert (hot["reached"], hot["interested"], hot["worked_interested"]) == (1, 1, 1)
+            # Its "We talked" alone connects nothing (3 Nov 2026): unknown, not reached.
+            assert (hot["attempted"], hot["connected"], hot["talk_seconds"]) == (1, 0, 0)
+            assert (hot["unknown"], hot["talk_estimated_seconds"]) == (1, 0)
+            assert (hot["reached"], hot["interested"], hot["worked_interested"]) == (0, 1, 1)
             assert hot["first_call_minutes"] is not None
             assert (cool["attempted"], cool["connected"], cool["leads_attempted"]) == (1, 0, 1)
             # Both Cold leads are still in the first stage, as Leads counts Unworked (a call

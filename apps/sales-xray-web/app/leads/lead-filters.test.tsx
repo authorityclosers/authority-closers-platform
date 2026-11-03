@@ -237,6 +237,30 @@ it("filters by source, date and follow-up, and sorts the whole list", async () =
   ).toBe(0);
 });
 
+it("Old leads open in All Leads, never under To Call", async () => {
+  const onApply = vi.fn();
+  await act(async () =>
+    root.render(
+      <FilterSheet
+        open
+        onClose={() => undefined}
+        filters={{ ...NONE, more: { view: "to_call", when: "today" } }}
+        defaultWho="team"
+        canPickWho
+        pipes={[]}
+        onApply={onApply}
+      />,
+    ),
+  );
+  await openChoices("Date");
+  await act(async () => option("Old leads").click());
+  await act(async () => button("Show Results").click());
+  expect(onApply).toHaveBeenCalledWith({
+    ...NONE,
+    more: { created: "history", view: "all", when: null },
+  });
+});
+
 it("the sort and the new filters show as chips that remove themselves", async () => {
   const onChange = vi.fn();
   const on: LeadFilters = {
