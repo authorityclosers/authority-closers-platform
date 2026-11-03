@@ -43,11 +43,14 @@ const never = () => () => undefined;
 export function FinishRow({
   calls,
   onFinish,
+  held = false,
   now = new Date(),
 }: {
   calls: readonly Unanswered[] | null | undefined;
   /** Opens the lead on "How did the call go?". */
   onFinish: (leadId: string) => void;
+  /** A lead is open: unseen, its room kept, so nothing under it moves. */
+  held?: boolean;
   now?: Date;
 }) {
   const hydrated = useSyncExternalStore(
@@ -64,7 +67,12 @@ export function FinishRow({
   if (!hydrated || !call) return null;
   const more = waiting.length - 1;
   return (
-    <div className={styles.finish} role="status">
+    <div
+      className={styles.finish}
+      role="status"
+      data-held={held || undefined}
+      aria-hidden={held || undefined}
+    >
       <button
         type="button"
         className={styles.finishOpen}

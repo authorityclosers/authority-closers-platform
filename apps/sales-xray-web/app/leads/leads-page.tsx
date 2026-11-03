@@ -1984,13 +1984,14 @@ export function LeadsRoute({
                   chip={
                     <>
                       <PhoneLogCard as="chip" />
-                      {/* An answer is never lost (competitor teardown 3). */}
-                      {openLead ? null : (
-                        <FinishRow
-                          calls={desk.unanswered}
-                          onFinish={(leadId) => open(leadId, "log")}
-                        />
-                      )}
+                      {/* An answer is never lost (competitor teardown 3). Held
+                          unseen while a lead is open, its room kept, so the
+                          list never jumps (QA robot 95abddab, 3 Nov 2026). */}
+                      <FinishRow
+                        calls={desk.unanswered}
+                        held={!!openLead}
+                        onFinish={(leadId) => open(leadId, "log")}
+                      />
                     </>
                   }
                   side={

@@ -487,6 +487,13 @@
   text-align: center;
 }
 
+/* The lead sheet opens at the height it will have: it never rises from the
+   loading line once the lead arrives (QA robot 77641e07 and 95abddab, 3 Nov
+   2026: a layout shift of 0.66 to 0.89 as the sheet grew to full height). */
+.leadSheetFrame .sheetLoading {
+  min-height: 100dvh;
+}
+
 .loopHead {
   display: grid;
   gap: 2px;
@@ -3391,6 +3398,12 @@ a.repName {
   border: 1px solid var(--sx-accent);
   border-radius: var(--sx-radius-md);
   background: var(--sx-accent-soft);
+}
+
+/* Held while a lead is open: unseen, its room kept, so opening or closing the
+   lead moves nothing under it (QA robot 95abddab, 3 Nov 2026). */
+.finish[data-held] {
+  visibility: hidden;
 }
 
 .finishOpen {

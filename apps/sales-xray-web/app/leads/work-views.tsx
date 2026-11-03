@@ -169,6 +169,19 @@ export function WorkHead({
   );
 }
 
+/** The element the page scrolls in: the app's own content area, or the window. */
+function scrollerOf(node: HTMLElement): Element {
+  for (let at = node.parentElement; at; at = at.parentElement) {
+    const flow = getComputedStyle(at).overflowY;
+    if (
+      (flow === "auto" || flow === "scroll") &&
+      at.scrollHeight > at.clientHeight
+    )
+      return at;
+  }
+  return document.scrollingElement ?? document.documentElement;
+}
+
 const WIDE = "(min-width: 1100px)";
 const watchWide = (change: () => void) => {
   const query = window.matchMedia?.(WIDE);
@@ -206,6 +219,23 @@ export function WorkSplit({
       frame = 0;
       const top = Math.max(0, Math.round(node.getBoundingClientRect().top));
       node.style.setProperty("--pane-top", `${top}px`);
+      // The room under the list's end (the page's own foot, and the window
+      // below its scroller): the pane leaves it free, so at the list's end it
+      // is never lifted under the pinned head (QA robot 898f3d7a, 3 Nov 2026:
+      // at 1440 Close sat under Call Next).
+      const split = node.parentElement;
+      const scroller = scrollerOf(node);
+      if (!split) return;
+      const view =
+        scroller === document.scrollingElement
+          ? { top: 0, bottom: window.innerHeight }
+          : scroller.getBoundingClientRect();
+      const end =
+        split.getBoundingClientRect().bottom - view.top + scroller.scrollTop;
+      const after =
+        Math.max(0, scroller.scrollHeight - end) +
+        Math.max(0, window.innerHeight - view.bottom);
+      node.style.setProperty("--split-after", `${Math.round(after)}px`);
     };
     const ask = () => {
       if (!frame) frame = window.requestAnimationFrame(fit);

@@ -6,6 +6,10 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   notices: [] as Array<Record<string, unknown>>,
   dismissed: [] as string[],
+  pushed: [] as string[],
+}));
+vi.mock("../shell/app-router", () => ({
+  useAppRouter: () => ({ push: (href: string) => mocks.pushed.push(href) }),
 }));
 vi.mock("../notice-center", () => ({
   notify: (notice: Record<string, unknown>) => mocks.notices.push(notice),
@@ -118,6 +122,33 @@ it("shows a change the server refused, with the words typed and the way back to 
   expect(refused.action.label).toBe("Open lead");
   // Not "saved": the change is still waiting for a look.
   expect(titles()).not.toContain("All changes saved");
+});
+
+// QA robot 18bb2450 (3 Nov 2026): Open lead reloaded the whole page, blank for
+// over a second on a slow network. It moves in the app.
+it("opens the lead in the app, never with a reload", async () => {
+  mocks.pushed.length = 0;
+  setWriteIdentity("p-asha:t-homes");
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("offline"))
+      .mockResolvedValue(answer(409)),
+  );
+  await sendWrite(DISPOSE, body("c-7"));
+  await act(async () => root.render(<WriteSync />));
+  await settle();
+  const refused = mocks.notices.find(
+    (notice) => notice.id === "writes-check-c-7",
+  ) as { action: { run: () => void } };
+  const assign = vi
+    .spyOn(window.location, "assign")
+    .mockImplementation(() => {});
+  refused.action.run();
+  expect(mocks.pushed).toEqual([`/leads?lead=${LEAD}`]);
+  expect(assign).not.toHaveBeenCalled();
+  assign.mockRestore();
 });
 
 // Persona QA, 31 Oct 2026 (production): a card for another workspace's lead in a
