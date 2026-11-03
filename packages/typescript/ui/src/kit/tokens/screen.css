@@ -41,22 +41,24 @@
   --sx-text-xl: 1.375rem; /* 22: page and app bar titles */
   --sx-text-2xl: 1.75rem; /* 28: figures */
   --sx-text-3xl: 2rem; /* 32: the one hero figure */
-  /* Five line heights, one per size step. */
-  --sx-leading-16: 1rem; /* 11 and 12 */
-  --sx-leading-20: 1.25rem; /* 14 */
-  --sx-leading-24: 1.5rem; /* 16 */
-  --sx-leading-28: 1.75rem; /* 22 */
-  --sx-leading-36: 2.25rem; /* 28 and 32 */
+  /* Five line heights, one per size step, as ratios of their step: the
+     same 16/20/24/28/36 px at the designed size, and a line grows with its
+     text whatever enlarges it (robot rows at 130 and 200 %, 3 Nov 2026). */
+  --sx-leading-16: calc(16 / 12); /* 11 and 12 */
+  --sx-leading-20: calc(20 / 14); /* 14 */
+  --sx-leading-24: calc(24 / 16); /* 16 */
+  --sx-leading-28: calc(28 / 22); /* 22 */
+  --sx-leading-36: calc(36 / 28); /* 28 and 32 */
   /* The roles. */
-  --sx-text-kpi: 500 1.75rem / 2.25rem var(--lx-font-ui);
-  --sx-text-title: 500 1.375rem / 1.75rem var(--lx-font-ui);
-  --sx-text-heading: 500 1rem / 1.5rem var(--lx-font-ui);
-  --sx-text-body: 400 1rem / 1.5rem var(--lx-font-ui);
-  --sx-text-secondary: 400 0.875rem / 1.25rem var(--lx-font-ui);
-  --sx-text-label: 500 0.875rem / 1.25rem var(--lx-font-ui);
-  --sx-text-meta: 400 0.75rem / 1rem var(--lx-font-ui);
-  --sx-text-badge: 500 0.6875rem / 1rem var(--lx-font-ui);
-  --sx-text-large: 400 2rem / 2.25rem var(--lx-font-ui);
+  --sx-text-kpi: 500 1.75rem / var(--sx-leading-36) var(--lx-font-ui);
+  --sx-text-title: 500 1.375rem / var(--sx-leading-28) var(--lx-font-ui);
+  --sx-text-heading: 500 1rem / var(--sx-leading-24) var(--lx-font-ui);
+  --sx-text-body: 400 1rem / var(--sx-leading-24) var(--lx-font-ui);
+  --sx-text-secondary: 400 0.875rem / var(--sx-leading-20) var(--lx-font-ui);
+  --sx-text-label: 500 0.875rem / var(--sx-leading-20) var(--lx-font-ui);
+  --sx-text-meta: 400 0.75rem / var(--sx-leading-16) var(--lx-font-ui);
+  --sx-text-badge: 500 0.6875rem / var(--sx-leading-16) var(--lx-font-ui);
+  --sx-text-large: 400 2rem / var(--sx-leading-36) var(--lx-font-ui);
   /* Older names for the same roles. */
   --sx-text-panel: var(--sx-text-heading);
   --sx-text-headline: var(--sx-text-heading);

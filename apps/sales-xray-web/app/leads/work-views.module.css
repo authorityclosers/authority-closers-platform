@@ -56,8 +56,11 @@
   min-width: 0;
 }
 
+/* At large text Call Next takes a line of its own, never the stage pick's
+   place (QA robot rows d8ba81ec and 3551c089, 3 Nov 2026). */
 .headStage {
   display: flex;
+  flex-wrap: wrap;
   order: 4;
   gap: 8px;
   align-items: center;
@@ -68,9 +71,15 @@
   flex: 1 1 auto;
 }
 
+/* Under the 64 px app bar. A head taller than 40% of the screen (large text)
+   rises until its bottom sits there, so a row in the middle of the screen is
+   never under it (QA robot row dfc133a2, 3 Nov 2026). */
 @media (max-width: 899.98px) {
   .head {
-    top: calc(62px + env(safe-area-inset-top, 0px));
+    top: min(
+      calc(64px + env(safe-area-inset-top, 0px)),
+      calc(40dvh - var(--work-head-h, 0px))
+    );
   }
 }
 
@@ -313,7 +322,9 @@
   font: inherit;
   font-size: var(--sx-text-sm);
   font-weight: 500;
-  white-space: nowrap;
+  /* One line while it fits; at large text it wraps inside the row. */
+  max-width: 100%;
+  text-align: center;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }

@@ -1908,7 +1908,7 @@
     font: var(--sx-text-title);
     /* The bar keeps its 64 px: from 1.3x the title stops growing. */
     font-size: min(var(--sx-text-xl), 28px);
-    line-height: min(var(--sx-leading-28), 36px);
+    line-height: var(--sx-leading-28);
   }
 
   .mobileWorkspace small {

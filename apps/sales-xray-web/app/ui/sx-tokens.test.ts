@@ -47,11 +47,19 @@ it("allows one text scale on every width, in rem", () => {
     ["2xl", 28],
     ["3xl", 32],
   ]);
-  expect(
-    px(/--sx-leading-([\w-]+):\s*([\d.]+)rem;/g).map(([, size]) => size),
-  ).toEqual([16, 20, 24, 28, 36]);
+  // Line heights are ratios of their step, so a line grows with its text
+  // however it is enlarged (robot rows at 130 and 200 %, 3 Nov 2026).
+  const leading = [
+    ...tokens.matchAll(/--sx-leading-(\d+):\s*calc\((\d+) \/ (\d+)\);/g),
+  ].map(([, name, line, size]) => [Number(name), Number(line), Number(size)]);
+  expect(leading.map(([name]) => name)).toEqual([16, 20, 24, 28, 36]);
+  for (const [name, line, size] of leading) {
+    expect(line).toBe(name);
+    expect([11, 12, 14, 16, 22, 28, 32]).toContain(size);
+  }
   const code = tokens.replace(/\/\*[\s\S]*?\*\//g, "");
   expect(code).not.toMatch(/--sx-(text|leading)-[\w-]+:[^;]*\dpx/);
+  expect(code).not.toMatch(/--sx-leading-[\w-]+:[^;]*rem/);
 });
 
 it("gives the roles weights of 400 and 500 only", () => {
