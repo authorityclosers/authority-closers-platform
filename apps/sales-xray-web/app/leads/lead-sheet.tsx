@@ -254,13 +254,19 @@ type Choice = {
   tone: string;
 };
 
-/** What a seller picks after a call that connected: the business's own stages
- *  (Lead stages), else the desk's four. */
 /** Pressed at the touch itself, before React paints (production 161, 3 Nov
- *  2026): the button shows it took the tap, and the CSS reads data-pressed. */
+ *  2026): the button shows it took the tap, and the CSS reads data-pressed.
+ *  The press leaves the focus in the field, so the phone's keyboard stays up
+ *  until the save lands: the field losing focus closed the keyboard and
+ *  brought the call bar back under the finger, and the first tap missed. */
 const pressMark = {
-  onPointerDown: (event: { currentTarget: HTMLElement }) =>
-    event.currentTarget.setAttribute("data-pressed", ""),
+  onPointerDown: (event: {
+    currentTarget: HTMLElement;
+    preventDefault: () => void;
+  }) => {
+    event.preventDefault();
+    event.currentTarget.setAttribute("data-pressed", "");
+  },
   onPointerUp: (event: { currentTarget: HTMLElement }) =>
     event.currentTarget.removeAttribute("data-pressed"),
   onPointerCancel: (event: { currentTarget: HTMLElement }) =>
@@ -269,6 +275,8 @@ const pressMark = {
     event.currentTarget.removeAttribute("data-pressed"),
 };
 
+/** What a seller picks after a call that connected: the business's own stages
+ *  (Lead stages), else the desk's four. */
 export function stageChoices(detail: {
   stage_choices?: LeadDetail["stage_choices"];
 }): Choice[] {

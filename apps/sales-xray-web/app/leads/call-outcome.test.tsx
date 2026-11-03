@@ -451,6 +451,33 @@ describe("a save the phone kept, sent later", () => {
     );
     expect(sends).toHaveLength(1);
   });
+
+  // Production 161: the press on Save leaves the focus where it was, so the
+  // phone's keyboard stays up until the save lands and the first tap hits.
+  it("leaves the focus in place when Save is pressed", async () => {
+    await act(async () =>
+      root.render(
+        <CallOutcome
+          detail={lead("new")}
+          submitLabel="Save"
+          attention={false}
+          beforeSave={async () => lead("new")}
+          onSaved={() => undefined}
+        />,
+      ),
+    );
+    await act(async () => tile("We talked").click());
+    await act(async () => tile("Interested").click());
+    const save = tile("Save");
+    let kept = true;
+    await act(async () => {
+      kept = save.dispatchEvent(
+        new MouseEvent("pointerdown", { bubbles: true, cancelable: true }),
+      );
+    });
+    expect(kept).toBe(false);
+    expect(save.hasAttribute("data-pressed")).toBe(true);
+  });
 });
 
 // ph2-16 (phone personas, 1 Nov 2026): plain answers over the organisation's

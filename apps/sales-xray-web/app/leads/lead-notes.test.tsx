@@ -70,3 +70,27 @@ it("comes alive with text, counts it, and says Saved once the note is on the lea
   expect(host.querySelector('[role="status"]')?.textContent).toBe("Saved");
   expect(send.disabled).toBe(true);
 });
+
+// Production 161 (3 Nov 2026: "we have to tap 2,3 times"): the press on Add note
+// leaves the focus in the note, so the phone's keyboard stays up and the first
+// tap lands.
+it("keeps the note's focus when Add note is pressed, so the first tap adds it", async () => {
+  await act(async () => root.render(<NoteBox leadId="l1" onSaved={vi.fn()} />));
+  const field = host.querySelector("textarea")!;
+  const send = host.querySelector<HTMLButtonElement>(
+    'button[aria-label="Add note"]',
+  )!;
+  field.focus();
+  await act(async () => type(field, "Call back at six"));
+  let kept = true;
+  await act(async () => {
+    kept = send.dispatchEvent(
+      new MouseEvent("pointerdown", { bubbles: true, cancelable: true }),
+    );
+  });
+  expect(kept).toBe(false);
+  expect(send.hasAttribute("data-pressed")).toBe(true);
+  expect(document.activeElement).toBe(field);
+  await act(async () => send.click());
+  expect(addNote).toHaveBeenCalledOnce();
+});
