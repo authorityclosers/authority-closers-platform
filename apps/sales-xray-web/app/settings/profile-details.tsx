@@ -114,9 +114,11 @@ export function ProfileDetailsPanel() {
   }, [apply]);
 
   if (!profile) {
+    // As tall as the profile it waits for, so the cards under it never move
+    // when it arrives (robot b7b700e0: 0.13; 0.38 at 390 on a slow network).
     return (
       <Panel title="Your profile">
-        <div aria-busy="true">
+        <div aria-busy="true" className={styles.loading}>
           <SkeletonRow />
           <SkeletonRow />
         </div>

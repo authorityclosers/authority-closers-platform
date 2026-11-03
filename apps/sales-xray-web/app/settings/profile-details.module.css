@@ -99,3 +99,16 @@
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
 }
+
+/* While the profile loads: about its own height (measured 3 Nov 2026: 784 px
+   at 390, 448 px at 1440, both with the card's head), in em so it grows with
+   the phone's text size. */
+.loading {
+  min-height: 45em;
+}
+
+@media (min-width: 761px) {
+  .loading {
+    min-height: 24.5em;
+  }
+}
