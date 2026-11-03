@@ -28,6 +28,12 @@
   padding-block: 10px;
   overflow-wrap: anywhere;
 }
+/* Straight inside a kit card (Settings, Calls) the check takes the card
+   head's 14 px at each side (production reports 148 and 116, 3 Nov 2026). */
+:global([data-panel]) > .health {
+  padding-inline: 14px;
+}
+
 .check {
   display: flex;
   align-items: center;

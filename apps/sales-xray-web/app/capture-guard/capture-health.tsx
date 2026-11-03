@@ -182,7 +182,12 @@ export function CaptureHealthView({
       section.current?.scrollIntoView?.({ block: "start" });
   }, []);
   return (
-    <section ref={section} id="calls-setup" aria-label="Calls setup check">
+    <section
+      ref={section}
+      id="calls-setup"
+      className={styles.health}
+      aria-label="Calls setup check"
+    >
       <h3>Calls setup check</h3>
       <CaptureAttention
         status={status}

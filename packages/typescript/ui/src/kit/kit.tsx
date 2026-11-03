@@ -117,6 +117,9 @@ export function Panel({
       className={cx(styles.panel, className)}
       style={style}
       aria-labelledby={id}
+      // A card's children bring their own padding; a part made for padded
+      // places finds the card by this and keeps clear of its edges.
+      data-panel=""
     >
       <div className={styles.panelHead}>
         <h2 id={id} className={styles.panelTitle}>
