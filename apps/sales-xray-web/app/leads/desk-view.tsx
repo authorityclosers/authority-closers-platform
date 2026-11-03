@@ -106,6 +106,19 @@ export function nextLine(row: LeadRow, now: Date = new Date()): string {
   return whyLine({ ...row, why }, now);
 }
 
+/** A compact row's last line, only when someone needs to act (orchestrator,
+ *  3 Nov 2026, bug 156: two lines a row, a third for attention): a missed call,
+ *  no owner yet, or a follow-up due or late. A new Inbound enquiry's wait and an
+ *  older enquiry's day end the middle line instead. */
+export function thirdLine(row: LeadRow, now: Date = new Date()): string {
+  const due =
+    row.why_kind === "due" ||
+    (!!row.next_action_at && Date.parse(row.next_action_at) < now.getTime());
+  return row.missed_at || row.why_kind === "waiting" || due
+    ? nextLine(row, now)
+    : "";
+}
+
 /**
  * Speed to lead (competitor teardown 4, 1 Nov 2026; Privyr's Uncontacted): a
  * new Inbound enquiry nobody has contacted yet counts its minutes, amber from
@@ -186,7 +199,7 @@ export function LeadLine({
   showOwner?: boolean;
   actions?: RowActions;
   /** Dipak's handoff (31 Oct 2026, items 74-79): the name, "Stage · Source",
-   *  the next action and one call button; WhatsApp stays on the swipe. */
+   *  the next action, Call and WhatsApp (bug 156, 3 Nov 2026). */
   compact?: boolean;
   /** The stage's name on the side shown (the first is Unworked on Cold Leads). */
   stageWord?: string;
@@ -211,7 +224,10 @@ export function LeadLine({
         : undefined,
     onHold: actions?.onHold ? () => actions.onHold?.(row) : undefined,
   });
-  const line = compact ? nextLine(row) : whyLine(row);
+  const line = compact ? thirdLine(row) : whyLine(row);
+  // A new Inbound enquiry's wait ends the middle line: "waited 12 min" (bug 156).
+  const wait = compact && !row.missed_at ? waiting(row) : null;
+  const older = compact ? olderEnquiry(row) : null;
   const sub = compact ? (
     <>
       {stageWord ?? row.stage_label}
@@ -221,6 +237,12 @@ export function LeadLine({
         {shortSource(row)}
       </span>
       {showOwner ? ` · ${row.owner_name ?? "No owner yet"}` : null}
+      {wait !== null ? (
+        <span className={styles.leadWait} data-tone={waitTone(wait)}>
+          {` · waited ${waitWords(wait)}`}
+        </span>
+      ) : null}
+      {older ? ` · ${older}` : null}
     </>
   ) : (
     [row.interest, row.company, row.city].filter(Boolean).join(" · ")
@@ -311,7 +333,7 @@ export function LeadLine({
                   row.missed_at || red
                     ? "bad"
                     : compact
-                      ? waitTone(waiting(row))
+                      ? undefined
                       : WHY_TONE[row.why_kind]
                 }
               >
@@ -361,6 +383,18 @@ export function LeadLine({
               >
                 <Phone size={16} aria-hidden="true" />
               </button>
+              {/* WhatsApp beside Call on a compact row; none without a number. */}
+              {compact && reachable ? (
+                <button
+                  type="button"
+                  className={styles.quickAct}
+                  data-channel="whatsapp"
+                  aria-label={`WhatsApp ${row.name}`}
+                  onClick={() => press(row, "whatsapp")}
+                >
+                  <ChannelMark channel="whatsapp" size={18} />
+                </button>
+              ) : null}
               {compact ? null : (
                 <>
                   <button

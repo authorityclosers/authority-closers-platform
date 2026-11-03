@@ -37,6 +37,11 @@ def test_not_connected_keeps_an_earned_stage() -> None:
     assert stage_after_not_connected("new") == "not_connected"
     assert stage_after_not_connected("interested") == "interested"
     assert stage_after_not_connected("follow_up") == "follow_up"
+    # Ever reached (bug 134): never Not connected again; still New, it goes to Open Leads.
+    assert stage_after_not_connected("new", reached=True) == "follow_up"
+    assert stage_after_not_connected("not_connected", reached=True) == "not_connected"
+    assert stage_after_not_connected("interested", reached=True) == "interested"
+    assert stage_after_not_connected("won", reached=True) == "won"
 
 
 def test_connected_stage_must_be_one_of_four() -> None:

@@ -220,13 +220,18 @@ def stage_after_connected(stage: str) -> str:
     return stage
 
 
-def stage_after_not_connected(current: str) -> str:
+def stage_after_not_connected(current: str, *, reached: bool = False) -> str:
     """A lead keeps a stage it already earned; an unreached lead becomes Not connected.
 
     A closed lead (Won, Lost or Junk) stays closed: an unanswered call never reopens
-    it, and never makes a lead Junk (the sales team's spec, 24 Oct 2026)."""
+    it, and never makes a lead Junk (the sales team's spec, 24 Oct 2026). A lead that
+    was ever reached never falls back to Not connected (Dipak's model, 3 Nov 2026: Open
+    Leads means some discussion happened, Not Connected means never reached): still New,
+    it moves to Open Leads; otherwise it keeps its stage."""
     if current in {"follow_up", "interested"} or current in CLOSED_STAGES:
         return current
+    if reached:
+        return "follow_up" if current == "new" else current
     return "not_connected"
 
 

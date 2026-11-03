@@ -143,6 +143,7 @@ import {
   lastView,
   listTitle,
   pickableStages,
+  pipelinesFor,
   rememberView,
   sideStage,
   stagesPipeline,
@@ -203,6 +204,7 @@ import {
   ActiveFilters,
   FilterChip,
   FilterSheet,
+  SortPick,
   filterNames,
   filtersOn as countFilters,
   type LeadFilters,
@@ -730,13 +732,21 @@ export function LeadsRoute({
   // (orchestrator, 23 Oct 2026: cold partner outreach apart from enquiries). The
   // choice is used before the pipelines are read, so the desk doesn't load twice.
   const pipes = usePipelines(authenticated);
+  // Sellers never see pipelines: theirs are all of them, on the main stages
+  // (orchestrator, 3 Nov 2026, bug 129). Owners, admins and managers pick one,
+  // inside Filter.
+  const roleHere = access?.workspaces?.find(
+    (item) => item.tenant_id === access.context?.tenantId,
+  )?.role;
+  const managesLeads = roleCan(roleHere, "leads.manage");
+  const pipesShown = pipelinesFor(roleHere, pipes);
   // Several pipelines: their names, for the table's Pipeline column.
   const pipelineNames = useMemo(
     () =>
-      several(pipes)
-        ? new Map(pipes.pipelines.map((item) => [item.key, item.name]))
+      several(pipesShown)
+        ? new Map(pipesShown.pipelines.map((item) => [item.key, item.name]))
         : null,
-    [pipes],
+    [pipesShown],
   );
   const [pipelineChoice, setPipelineChoice] = useState(() => ({
     at: contextKey,
@@ -745,7 +755,7 @@ export function LeadsRoute({
   if (pipelineChoice.at !== contextKey)
     setPipelineChoice({ at: contextKey, value: storedToCall(contextKey) });
   const toCallPipeline =
-    !pipelineChoice.value || pipelineChoice.at !== contextKey
+    !managesLeads || !pipelineChoice.value || pipelineChoice.at !== contextKey
       ? null
       : pipes === null ||
           (several(pipes) &&
@@ -950,12 +960,12 @@ export function LeadsRoute({
   const stageView = !manage && view !== "desk" && !board && !work && !tasks;
   // Several pipelines: a stage view shows one pipeline's leads, or all of them.
   const fromAddressPipeline =
-    several(pipes) &&
-    pipes.pipelines.some((item) => item.key === requestedPipeline)
+    several(pipesShown) &&
+    pipesShown.pipelines.some((item) => item.key === requestedPipeline)
       ? requestedPipeline
       : null;
   const pipeline: string | null =
-    (stageView || board) && several(pipes) && view !== TEST
+    (stageView || board) && several(pipesShown) && view !== TEST
       ? picked && picked.at === addressKey && picked.pipeline !== undefined
         ? picked.pipeline
         : fromAddressPipeline
@@ -994,6 +1004,15 @@ export function LeadsRoute({
   const workView: WorkView =
     more.view ??
     (requestedStage && requestedStage !== OPENING_STAGE ? "all" : "to_call");
+  // New and Unworked show the newest first, every other list next-due first,
+  // unless a sort is picked; the server orders them (bug 127). To Call keeps its
+  // calling order, Home's next lead with it. This only names the order.
+  const newestFirst =
+    !more.sort &&
+    workView !== "to_call" &&
+    !!more.step &&
+    journey?.view.stages.find((stage) => stage.key === more.step)?.kind ===
+      "new";
   const listMore: ListMore | null =
     view === TEST ? null : { ...more, side, view: workView };
   const warmMore = JSON.stringify(listMore);
@@ -1598,7 +1617,7 @@ export function LeadsRoute({
   const applyView = (spec: ViewSpec, seller: string | null = null) => {
     setSellerOwner(seller);
     const stage = stageKeys.has(spec.stage) ? spec.stage : "open";
-    const inPipeline = several(pipes) ? spec.pipeline : null;
+    const inPipeline = several(pipesShown) ? spec.pipeline : null;
     const who = sees ? spec.who : null;
     setScopeChoice(who);
     setSearch(spec.q);
@@ -2045,10 +2064,10 @@ export function LeadsRoute({
                   }
                 />
               ) : null}
-              {section === "now" && several(pipes) ? (
+              {section === "now" && several(pipesShown) ? (
                 <ViewTools>
                   <PipelinePicker
-                    pipelines={pipes.pipelines}
+                    pipelines={pipesShown.pipelines}
                     value={toCallPipeline}
                     onChange={chooseToCall}
                   />
@@ -2170,6 +2189,33 @@ export function LeadsRoute({
                     more: { ...more, sort, order },
                   })
                 }
+                sortPick={
+                  stageView ? (
+                    <SortPick
+                      more={more}
+                      defaultLabel={
+                        workView === "to_call"
+                          ? "Calling order"
+                          : newestFirst
+                            ? "Newest"
+                            : "Next due"
+                      }
+                      same={
+                        workView === "to_call"
+                          ? null
+                          : newestFirst
+                            ? "created"
+                            : "next_action"
+                      }
+                      onChange={({ sort, order }) =>
+                        applyFilters({
+                          ...shownFilters,
+                          more: { ...more, sort, order },
+                        })
+                      }
+                    />
+                  ) : null
+                }
                 filtered={filtersOn}
                 filterNames={filterNames(
                   { ...shownFilters, q: "" },
@@ -2228,7 +2274,7 @@ export function LeadsRoute({
             filters={shownFilters}
             defaultWho={defaultWho}
             canPickWho={sees}
-            pipes={several(pipes) ? pipes.pipelines : []}
+            pipes={several(pipesShown) ? pipesShown.pipelines : []}
             onApply={applyFilters}
             onClearAll={() =>
               applyView({

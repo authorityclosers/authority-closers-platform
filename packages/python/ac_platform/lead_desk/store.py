@@ -967,6 +967,32 @@ class LeadDesk:
             lead = survivor
         return lead
 
+    async def _ever_reached(self, lead_id: UUID) -> bool:
+        """Whether a lead was ever reached (bug 134): an answered call by the phone's own
+        evidence (call_answered, or a dial its phone timed), or a logged "We talked"."""
+        rows = (
+            await self.db.execute(
+                select(LeadEvent.kind, LeadEvent.data).where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.lead_id == lead_id,
+                    LeadEvent.kind.in_(("call", "result", "edited")),
+                )
+            )
+        ).all()
+        for kind, data in rows:
+            found = data if isinstance(data, Mapping) else {}
+            if kind == "call" and call_answered(found):
+                return True
+            if kind == "result" and found.get("connected") is True:
+                return True
+            if (
+                kind == "edited"
+                and found.get(TIMED_CALL)
+                and (found.get("duration_seconds") or 0) > 0
+            ):
+                return True
+        return False
+
     async def _readable(self, lead_id: UUID) -> tuple[Lead, bool]:
         """A lead this person may open: one on their desk, or, to read only, the lead a
         merge kept from a lead they worked on lately (duplicates, "worked before")."""
@@ -2229,6 +2255,15 @@ class LeadDesk:
         )
         if sort is not None:
             order = self._list_order(sort, descending)
+        elif (
+            step is not None
+            and journey is not None
+            and view != "to_call"
+            and getattr(journey.by_key.get(step), "kind", None) == "new"
+        ):
+            # New and Unworked show the newest first; every other list next-due first
+            # (orchestrator, 3 Nov 2026, bug 127). To Call keeps its calling order.
+            order = self._list_order("created", True)
         leads = (
             await self.db.scalars(
                 select(Lead).where(*where).order_by(*order).offset(offset).limit(limit)
@@ -4509,7 +4544,7 @@ class LeadDesk:
         else:
             if command.reason is None:
                 raise DeskError(422, "Choose why the call didn't connect.")
-            after = stage_after_not_connected(lead.stage)
+            after = stage_after_not_connected(lead.stage, reached=await self._ever_reached(lead.id))
             if after != previous_stage:
                 target = journey.resolve(after, None)
                 if target is not None:

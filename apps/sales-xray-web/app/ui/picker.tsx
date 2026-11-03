@@ -27,6 +27,7 @@ import {
   useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent,
+  type ReactNode,
   type Ref,
 } from "react";
 
@@ -187,6 +188,7 @@ export function Picker({
   placeholder,
   name,
   buttonRef,
+  icon = null,
 }: {
   /** The list's name: the sheet's title and the listbox's label. */
   title: string;
@@ -217,6 +219,8 @@ export function Picker({
   /** A form field's name: a hidden input carries the chosen key. */
   name?: string;
   buttonRef?: Ref<HTMLButtonElement | null>;
+  /** A small mark before the choice, inside the same button (the list's sort: ⇅). */
+  icon?: ReactNode;
 }) {
   const phone = usePhone();
   const [open, setOpen] = useState(defaultOpen);
@@ -363,6 +367,7 @@ export function Picker({
         ) : null}
         {label ? <span className={styles.label}>{label}</span> : null}
         <span className={styles.value}>
+          {icon}
           {chosen.tone ? <Dot tone={chosen.tone} /> : null}
           <span
             className={styles.valueWords}
