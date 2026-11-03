@@ -163,7 +163,6 @@ import {
 import { usePurchasesAllowed } from "./purchase-policy";
 import { Picker } from "./ui/picker";
 import styles from "./acquisition-studio.module.css";
-import { formatAnalysisTime } from "./analysis-time";
 import type { ScopedSavedReport } from "./report-preload";
 
 type Result = {
@@ -293,19 +292,11 @@ export function remainingAllowanceLabel(
         : scope === "member"
           ? "Call analysis isn't on for this organisation yet. Ask your owner."
           : "Call analysis isn't on for this organisation yet.";
-    if (allowance.available_seconds > 3600)
-      return `Remaining analysis time · ${formatAnalysisTime(allowance.available_seconds)}`;
-    const minutes = Math.floor(allowance.available_seconds / 60);
-    const remainder = String(allowance.available_seconds % 60).padStart(2, "0");
-    return allowance.available_seconds === 0
-      ? `Remaining analysis time · ${minutes}m ${remainder}s · exhausted`
-      : `Remaining analysis time · ${minutes}m ${remainder}s`;
   }
-  if (unknown)
-    return "Remaining analysis time · unavailable until your session is confirmed";
-  if (advertisedSeconds !== null)
-    return `Up to ${Math.floor(advertisedSeconds / 60)}m trial allowance`;
-  return "Remaining analysis time · checking…";
+  // No minutes on a user's screen (owner, 19 Oct; simplify pass, owner
+  // approved 2 Nov 2026). A balance, a visitor's trial or "checking" says
+  // nothing; used up is the out-of-minutes notice's to say, once.
+  return null;
 }
 
 export function AcquisitionStudio({
@@ -442,6 +433,13 @@ export function AcquisitionStudio({
   // "checking…" until its own balance arrives (the minutes pill shows it too).
   const advertisedTrial =
     access?.authenticated === true ? null : (entry?.allowance_seconds ?? null);
+  // The one allowance line, said only when analysis cannot run (never minutes).
+  const allowanceLine = remainingAllowanceLabel(
+    allowance,
+    advertisedTrial,
+    allowanceUnknown,
+    minutesScope,
+  );
   const uploadPhaseUnresolved =
     uploadSnapshot.phase === "preparing" ||
     uploadSnapshot.phase === "uploading" ||
@@ -3121,15 +3119,10 @@ export function AcquisitionStudio({
                       </svg>
                       <h2>Add a call to review</h2>
                     </div>
-                    {!allowance?.unlimited && (
+                    {allowanceLine && (
                       <span className={styles.allowanceBadge}>
                         <ShieldCheck size={19} aria-hidden="true" />
-                        {remainingAllowanceLabel(
-                          allowance,
-                          advertisedTrial,
-                          allowanceUnknown,
-                          minutesScope,
-                        )}
+                        {allowanceLine}
                       </span>
                     )}
                   </div>
@@ -3405,17 +3398,10 @@ export function AcquisitionStudio({
                   }
                   onChange={(event) => choose(event.target.files?.[0])}
                 />
-                {!deletionOnlyId && policy && !allowance?.unlimited && (
+                {!deletionOnlyId && policy && allowanceLine && (
                   <div className={styles.allowance}>
                     <ShieldCheck size={16} />
-                    <span>
-                      {remainingAllowanceLabel(
-                        allowance,
-                        advertisedTrial,
-                        allowanceUnknown,
-                        minutesScope,
-                      )}
-                    </span>
+                    <span>{allowanceLine}</span>
                     {minutesOut && purchasesAllowed ? (
                       <Link className={styles.moreMinutes} href="/plans">
                         Get more minutes
@@ -3741,14 +3727,7 @@ export function AcquisitionStudio({
                         ? `${(displayFileBytes / 1048576).toFixed(1)} MB`
                         : undefined
                     }
-                    allowanceLabel={
-                      remainingAllowanceLabel(
-                        allowance,
-                        advertisedTrial,
-                        allowanceUnknown,
-                        minutesScope,
-                      ) ?? undefined
-                    }
+                    allowanceLabel={allowanceLine ?? undefined}
                     paused={processingProjection.attention}
                     startedAt={
                       analysisStart?.id === submission.id
@@ -3877,12 +3856,7 @@ export function AcquisitionStudio({
               </section>
               {studioStage === "upload" && !embedded ? (
                 <NewAnalysisFooter
-                  allowanceLabel={remainingAllowanceLabel(
-                    allowance,
-                    advertisedTrial,
-                    allowanceUnknown,
-                    minutesScope,
-                  )}
+                  allowanceLabel={allowanceLine}
                   moreMinutesHref={
                     minutesOut && purchasesAllowed ? "/plans" : undefined
                   }

@@ -109,21 +109,13 @@ export function AcquisitionFileStage({
         }}
         onDrop={drop}
       >
+        {/* No drawn wave before there is a file: a wave stands for a real
+            recording (simplify pass, owner approved 2 Nov 2026). */}
         {hasFiles ? (
           <span className={styles.cloud} aria-hidden="true">
             <Plus size={21} />
           </span>
-        ) : (
-          // The call's wave from the first frame (owner's motif): quiet until
-          // a file is dragged over, then it listens; analysis carries it on.
-          <span className={styles.idleWave} aria-hidden="true">
-            <AnalysisWave
-              envelope={null}
-              played={0}
-              state={dragActive ? "arriving" : "idle"}
-            />
-          </span>
-        )}
+        ) : null}
         <div className={styles.dropCopy}>
           <strong>
             {dragActive ? (
