@@ -16,7 +16,7 @@
 .label {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .help,
@@ -28,7 +28,7 @@
 
 .problem {
   color: var(--sx-bad);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .chips {
@@ -50,7 +50,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 

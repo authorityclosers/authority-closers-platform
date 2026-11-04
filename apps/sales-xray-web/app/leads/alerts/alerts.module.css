@@ -97,7 +97,7 @@
   background: var(--sx-accent);
   color: var(--sx-accent-ink);
   font: inherit;
-  font-weight: 500;
+  font-weight: 650;
   text-decoration: none;
   cursor: pointer;
 }

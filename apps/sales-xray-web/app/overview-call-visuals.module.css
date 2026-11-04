@@ -28,7 +28,7 @@
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: -0.01em;
 }
 
@@ -60,7 +60,7 @@
 .summaryPill b {
   color: var(--lx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
@@ -96,7 +96,7 @@
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   overflow-wrap: anywhere;
 }
 
@@ -116,7 +116,7 @@
 .timingDetails > summary {
   cursor: pointer;
   color: var(--lx-ink);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .timingBody {
@@ -133,7 +133,7 @@
 }
 
 .talkTimes dt {
-  font-weight: 500;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 
@@ -162,7 +162,7 @@
 
 .metricBadge strong {
   color: var(--lx-ink);
-  font-weight: 500;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
@@ -186,7 +186,7 @@
 .chartMetaTitle {
   color: var(--lx-muted);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .quietTag {
@@ -196,7 +196,7 @@
   padding: 2px 8px;
   border-radius: 99px;
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 600;
   background: var(--lx-warning-soft);
   color: var(--lx-warning);
 }
@@ -241,7 +241,7 @@
 .quietMarkerText {
   fill: var(--lx-warning);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -272,7 +272,7 @@
 .monologueSpeaker {
   color: var(--lx-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .monologueTimes {
@@ -291,7 +291,7 @@
   border-radius: 99px;
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
-  font: 500 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
+  font: 650 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   white-space: nowrap;
@@ -334,14 +334,14 @@
 .verdictLabel {
   color: var(--lx-teal);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .verdictText {
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   line-height: var(--sx-leading-20);
 }
 
@@ -359,7 +359,7 @@
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 /* Phases row */
@@ -383,7 +383,7 @@
 .phaseName {
   color: var(--lx-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   text-transform: capitalize;
 }
 
@@ -403,7 +403,7 @@
 .keyVal small {
   color: var(--lx-muted);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .keyVal b {
@@ -439,7 +439,7 @@
   padding: 2px 7px;
   border-radius: 99px;
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .signalTag[data-polarity="forward"] {
@@ -492,7 +492,7 @@
 .painRaised {
   color: var(--lx-ink-3);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .painMeta {
@@ -505,7 +505,7 @@
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   line-height: var(--sx-leading-16);
 }
 
@@ -521,7 +521,7 @@
 .addressedBox small {
   color: var(--lx-muted);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .addressedBox span {
@@ -556,7 +556,7 @@
 .pitchId {
   color: var(--lx-teal);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .pitchTime {
@@ -591,13 +591,13 @@
 .moneyLabel {
   color: var(--lx-muted);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .moneyValue {
   color: var(--lx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
@@ -653,7 +653,7 @@
 .qualSubtitle {
   color: var(--lx-muted);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .tagGroup {
@@ -669,7 +669,7 @@
   color: var(--lx-warning);
   background: var(--lx-warning-soft);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   text-transform: capitalize;
 }
 
@@ -683,7 +683,7 @@
   background: var(--lx-sunken);
   color: var(--lx-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   text-transform: capitalize;
 }
 

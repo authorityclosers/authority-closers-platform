@@ -45,7 +45,7 @@
   background: var(--sx-sunken);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .accountHead strong {

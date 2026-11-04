@@ -203,17 +203,17 @@ describe("Lightbox token derivative", () => {
       ["glow", "#3debb0"],
       // Material 3's roles (owner, 3 Nov 2026, native-feel spec): weights 400
       // and 500 only, sizes in rem so the phone's font size scales them.
-      ["text-display-xl", "500 4.75rem/0.98 var(--lx-font-display)"],
-      ["text-display", "500 2.875rem/1.04 var(--lx-font-display)"],
-      ["text-h1", "500 2rem/1.125 var(--lx-font-display)"],
-      ["text-h2", "500 1.375rem/1.2727 var(--lx-font-display)"],
+      ["text-display-xl", "700 4.75rem/0.98 var(--lx-font-display)"],
+      ["text-display", "800 2.875rem/1.04 var(--lx-font-display)"],
+      ["text-h1", "800 2rem/1.125 var(--lx-font-display)"],
+      ["text-h2", "800 1.375rem/1.2727 var(--lx-font-display)"],
       ["text-verdict", "400 2rem/1.125 var(--lx-font-quote)"],
       ["text-quote-lg", "400 1.375rem/1.2727 var(--lx-font-quote)"],
       ["text-quote", "400 0.875rem/1.4286 var(--lx-font-quote)"],
-      ["text-body", "400 1rem/1.5 var(--lx-font-ui)"],
-      ["text-ui", "500 0.875rem/1.4286 var(--lx-font-ui)"],
-      ["text-meta", "400 0.75rem/1.3333 var(--lx-font-ui)"],
-      ["text-eyebrow", "500 0.75rem/1.3333 var(--lx-font-ui)"],
+      ["text-body", "500 1rem/1.5 var(--lx-font-ui)"],
+      ["text-ui", "600 0.875rem/1.4286 var(--lx-font-ui)"],
+      ["text-meta", "600 0.75rem/1.3333 var(--lx-font-ui)"],
+      ["text-eyebrow", "800 0.75rem/1.3333 var(--lx-font-ui)"],
     ]);
     const addedLight = new Set([
       "elevated",

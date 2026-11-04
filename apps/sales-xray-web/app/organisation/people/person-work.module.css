@@ -105,7 +105,7 @@
   background: var(--sx-fill-soft);
   color: var(--sx-ink);
   font: inherit;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -149,5 +149,5 @@
   background: var(--sx-accent);
   color: var(--sx-accent-ink);
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 650;
 }

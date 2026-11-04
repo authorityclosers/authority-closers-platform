@@ -121,7 +121,7 @@
   position: absolute;
   bottom: 0;
   color: var(--lx-muted);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui, inherit);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui, inherit);
   font-variant-numeric: tabular-nums;
 }
 
@@ -154,7 +154,7 @@
   border-radius: 8px;
   background: transparent;
   color: var(--lx-ink-3, var(--lx-muted));
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
+  font: 600 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
   cursor: pointer;
   transition:
     background-color 160ms ease,
@@ -228,7 +228,7 @@
   align-self: start;
   padding-top: 3px;
   color: var(--lx-ink-3, var(--lx-muted));
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
+  font: 650 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -251,7 +251,7 @@
   align-items: center;
   gap: 6px;
   color: color-mix(in srgb, var(--tone) 75%, var(--lx-ink));
-  font: 500 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
+  font: 650 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
 }
 
 .kind i {
@@ -266,13 +266,13 @@
   border-radius: 99px;
   background: var(--lx-info-soft);
   color: var(--lx-info);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .rowToggle h4 {
   margin: 0;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui, inherit);
+  font: 600 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui, inherit);
 }
 
 .summary {

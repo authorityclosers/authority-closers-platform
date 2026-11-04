@@ -142,7 +142,7 @@
   border-color: var(--sx-accent);
   background: var(--sx-accent-soft);
   color: var(--sx-accent);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 /* Google Play's wording on what is read and what leaves the phone: small,
@@ -162,7 +162,7 @@
 }
 
 .fine dt {
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .fine dd {

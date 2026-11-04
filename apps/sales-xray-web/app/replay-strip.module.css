@@ -16,7 +16,7 @@
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-24);
 }
 
@@ -118,7 +118,7 @@
 .itemTime {
   font-size: var(--sx-text-xs);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 700;
   white-space: nowrap;
 }
 

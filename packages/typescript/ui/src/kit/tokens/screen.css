@@ -50,18 +50,24 @@
   --sx-leading-28: calc(28 / 22); /* 22 */
   --sx-leading-36: calc(36 / 28); /* 28 and 32 */
   /* The roles. */
-  --sx-text-kpi: 500 1.75rem / var(--sx-leading-36) var(--lx-font-ui);
-  --sx-text-title: 500 1.375rem / var(--sx-leading-28) var(--lx-font-ui);
-  --sx-text-heading: 500 1rem / var(--sx-leading-24) var(--lx-font-ui);
-  --sx-text-body: 400 1rem / var(--sx-leading-24) var(--lx-font-ui);
-  --sx-text-secondary: 400 0.875rem / var(--sx-leading-20) var(--lx-font-ui);
-  --sx-text-label: 500 0.875rem / var(--sx-leading-20) var(--lx-font-ui);
-  --sx-text-meta: 400 0.75rem / var(--sx-leading-16) var(--lx-font-ui);
+  --sx-text-kpi: 750 1.75rem / var(--sx-leading-36) var(--lx-font-ui);
+  --sx-text-title: 750 1.375rem / var(--sx-leading-28) var(--lx-font-ui);
+  --sx-text-heading: 500 var(--sx-text-md) / var(--sx-leading-24)
+    var(--lx-font-ui);
+  --sx-text-body: 400 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
+  --sx-text-secondary: 400 var(--sx-text-sm) / var(--sx-leading-20)
+    var(--lx-font-ui);
+  --sx-text-label: 500 var(--sx-text-sm) / var(--sx-leading-20)
+    var(--lx-font-ui);
+  --sx-text-meta: 400 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   --sx-text-badge: 500 0.6875rem / var(--sx-leading-16) var(--lx-font-ui);
-  --sx-text-large: 400 2rem / var(--sx-leading-36) var(--lx-font-ui);
+  --sx-text-large: 800 2rem / var(--sx-leading-36) var(--lx-font-ui);
   /* Older names for the same roles. */
-  --sx-text-panel: var(--sx-text-heading);
-  --sx-text-headline: var(--sx-text-heading);
+  /* v1.37's weights for a panel's and a page's own titles (owner, 4 Nov 2026). */
+  --sx-text-panel: 650 var(--sx-text-md) / var(--sx-leading-24)
+    var(--lx-font-ui);
+  --sx-text-headline: 700 var(--sx-text-md) / var(--sx-leading-24)
+    var(--lx-font-ui);
   --sx-tracking-title: 0;
 
   /* ---------- Floors (minimums, not suggestions) ---------- */
@@ -194,6 +200,16 @@
     1.001,
     1
   );
+}
+
+/* Phones keep v1.37's steps (owner, 4 Nov 2026: v1.38 at least as good as v1.37):
+   13, 15 and 16.5 px, as rem so they still follow the phone's font size. */
+@media (pointer: coarse) {
+  :root {
+    --sx-text-xs: 0.8125rem; /* 13 */
+    --sx-text-sm: 0.9375rem; /* 15 */
+    --sx-text-md: 1.03125rem; /* 16.5 */
+  }
 }
 
 /* Dark: true black under dark grey cards; floating layers are a lighter

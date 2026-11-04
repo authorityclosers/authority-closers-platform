@@ -74,7 +74,7 @@
   box-shadow:
     0 1px 3px color-mix(in oklab, var(--lx-film) 14%, transparent),
     0 0 0 0.5px var(--sx-hairline);
-  font-weight: 500;
+  font-weight: 800;
 }
 
 .input:focus-visible + .label {

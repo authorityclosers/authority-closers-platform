@@ -59,7 +59,7 @@
 .error {
   color: var(--sx-bad);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 /* ---------- Desk ---------- */
@@ -106,7 +106,7 @@
 .dayNumbers dt {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .dayNumbers dd {
@@ -118,7 +118,7 @@
   margin-left: 6px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .sideNote {
@@ -133,6 +133,22 @@
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+/* A row's control that Tab reaches stops clear of the pinned head (QA robot
+   68ba6be1, 4 Nov 2026: at 200% text the head is far taller than the page's
+   52 px scroll padding, and focus landed under it). On a phone the head's
+   bottom sits at 64 px plus its height, or at 40% of the screen when taller
+   (work-views.module.css); the page's own padding adds to this. */
+@media (max-width: 899.98px) {
+  .leadList :is(a, button, input, select, textarea, [tabindex]) {
+    scroll-margin-top: min(
+      calc(
+        64px + env(safe-area-inset-top, 0px) + var(--work-head-h, 0px) + 8px
+      ),
+      calc(40dvh + 8px)
+    );
+  }
 }
 
 .leadLine + .leadLine {
@@ -176,7 +192,7 @@
   gap: 6px;
   overflow: hidden;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 650;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -201,7 +217,7 @@
   overflow: hidden;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -222,12 +238,12 @@
    amber from 5 minutes, red from 15, as its own line was. */
 .leadWait[data-tone="warn"] {
   color: var(--lx-focus-ink);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .leadWait[data-tone="bad"] {
   color: var(--sx-bad);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .leadEnd {
@@ -409,7 +425,7 @@
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -555,7 +571,7 @@
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -585,7 +601,7 @@
   width: fit-content;
   color: var(--lx-strength-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   text-decoration: none;
 }
@@ -601,7 +617,7 @@
 
 .why {
   color: var(--sx-ink-2);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .nextNote {
@@ -618,7 +634,7 @@
   justify-content: space-between;
   gap: 8px;
   color: var(--sx-ink-2);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .owner small {
@@ -654,7 +670,7 @@
 .fields dt {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .fields dd {
@@ -663,7 +679,7 @@
 
 .sourceFields summary {
   color: var(--sx-ink-2);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -704,7 +720,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -732,7 +748,7 @@
 .blockLabel {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .disposeFields {
@@ -843,7 +859,7 @@
   margin-left: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .history li.historyDay::before {
@@ -859,6 +875,7 @@
 .storyTitle {
   color: var(--sx-ink);
   font: var(--sx-text-heading);
+  font-weight: 700;
 }
 
 .story ul {
@@ -878,7 +895,7 @@
   background: var(--sx-line);
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 /* A call from the lead that nobody took (phone call log, UX study item 5). */
@@ -898,6 +915,7 @@
   font: var(--sx-text-body);
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 600;
 }
 
 .historyDetail {
@@ -913,7 +931,7 @@
   width: fit-content;
   color: var(--lx-strength-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
   text-decoration: none;
 }
 
@@ -966,7 +984,7 @@
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
@@ -1020,7 +1038,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .toggle input {
@@ -1038,7 +1056,7 @@
   border: 1.5px dashed var(--sx-line-strong);
   border-radius: var(--sx-radius-md);
   color: var(--sx-ink-2);
-  font-weight: 500;
+  font-weight: 600;
   text-align: center;
   cursor: pointer;
 }
@@ -1075,7 +1093,7 @@
 }
 
 .result dd {
-  font-weight: 500;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1105,11 +1123,11 @@
   height: var(--sx-table-head-h);
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .table tbody th {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .table [data-num] {
@@ -1130,7 +1148,7 @@
   background: transparent;
   color: inherit;
   font: inherit;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -1226,7 +1244,7 @@ a.repName {
 .bars dt {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .bars dd {
@@ -1327,7 +1345,7 @@ a.repName {
 
 .copy small {
   color: var(--lx-strength-ink);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .secretOnce {
@@ -1339,7 +1357,7 @@ a.repName {
   background: var(--lx-focus-soft);
   color: var(--lx-focus-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .sourceChoices {
@@ -1534,7 +1552,7 @@ a.repName {
 }
 
 .terms summary {
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -1558,7 +1576,7 @@ a.repName {
 
 .steps li[data-state="now"] {
   color: var(--lx-focus-ink);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .steps li[data-state="later"] {
@@ -1602,7 +1620,7 @@ a.repName {
   background: var(--lx-closing);
   color: var(--lx-on-teal);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   text-decoration: none;
 }
 
@@ -1682,7 +1700,7 @@ a.repName {
 
 .heroEyebrow {
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   opacity: 0.9;
 }
 
@@ -1712,7 +1730,7 @@ a.repName {
   color: var(--lx-strength-ink);
   font: inherit;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 750;
   cursor: pointer;
   box-shadow: var(--lx-shadow-2);
   transition: transform var(--lx-dur-quick) var(--lx-ease-quick);
@@ -1798,7 +1816,7 @@ a.repName {
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .sourceMain p {
@@ -1877,7 +1895,7 @@ a.repName {
 
 .pageName small.pageProblem {
   color: var(--sx-bad);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .metaHelp {
@@ -1889,7 +1907,7 @@ a.repName {
 .metaHelp summary {
   cursor: pointer;
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .metaHelp p,
@@ -2063,7 +2081,7 @@ a.repName {
   border: 1px solid var(--sx-line-strong);
   border-radius: var(--sx-radius-sm);
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
 }
 
@@ -2103,7 +2121,7 @@ a.repName {
 .waNew summary {
   cursor: pointer;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .slaLate {
@@ -2237,7 +2255,7 @@ a.repName {
 .capiStages legend {
   margin-bottom: 4px;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .capiDatasets label {
@@ -2284,7 +2302,7 @@ a.repName {
 .capiLog summary {
   cursor: pointer;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .capiNew > .row,
@@ -2327,7 +2345,7 @@ a.repName {
   gap: 8px;
   padding: 12px 16px;
   color: var(--sx-ink-2);
-  font-weight: 500;
+  font-weight: 650;
   list-style: none;
   cursor: pointer;
 }
@@ -2445,7 +2463,7 @@ a.repName {
 
 .callButton strong {
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 /* The number is the second line: small, whole, on one line (Liquid Glass,
@@ -2481,7 +2499,7 @@ a.repName {
   border-radius: var(--lx-radius-lg);
   background: var(--sx-surface);
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 650;
   text-decoration: none;
 }
 
@@ -2499,7 +2517,7 @@ a.repName {
   background: none;
   color: var(--lx-teal);
   font: inherit;
-  font-weight: 500;
+  font-weight: 650;
   text-decoration: none;
   cursor: pointer;
 }
@@ -2557,7 +2575,7 @@ a.repName {
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 650;
   line-height: var(--sx-leading-24);
   cursor: pointer;
   transition: background var(--lx-dur-quick) var(--lx-ease-quick);
@@ -2601,7 +2619,7 @@ a.repName {
 .stepLabel {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: 0.04em;
 }
 
@@ -2619,7 +2637,7 @@ a.repName {
   background: var(--sx-paper);
   color: var(--sx-ink);
   font: inherit;
-  font-weight: 500;
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
 }
@@ -2703,7 +2721,7 @@ a.repName {
   color: var(--lx-on-teal);
   font: inherit;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -2989,7 +3007,7 @@ a.repName {
   background: transparent;
   color: var(--sx-accent);
   font: inherit;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -3005,7 +3023,7 @@ a.repName {
   align-items: center;
   gap: 4px 6px;
   color: var(--lx-focus-ink);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .matchNote strong {
@@ -3020,7 +3038,7 @@ a.repName {
   background: var(--sx-surface);
   color: var(--sx-accent);
   font: inherit;
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -3036,7 +3054,7 @@ a.repName {
 .discardAsk > span {
   margin-right: auto;
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 /* The lead's pipeline and a move to another (22 Oct 2026). */
@@ -3060,7 +3078,7 @@ a.repName {
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 /* Reassign: the people to choose from, one tap each (owner, 18 Oct). */
@@ -3474,7 +3492,7 @@ a.repName {
   margin: -4px 0 4px;
   color: var(--lx-teal);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .recordPick[data-found] {
@@ -3566,7 +3584,7 @@ a.repName {
   background: var(--lx-gradient-primary);
   color: var(--lx-on-teal);
   box-shadow: var(--lx-shadow-cta);
-  font-weight: 500;
+  font-weight: 700;
   text-decoration: none;
 }
 
@@ -3575,7 +3593,7 @@ a.repName {
   margin-top: 10px;
   color: var(--lx-teal);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .downloadButton:focus-visible {
@@ -3743,7 +3761,7 @@ a.repName {
 }
 
 .takingLabel strong {
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -3796,7 +3814,7 @@ a.repName {
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -3815,13 +3833,13 @@ a.repName {
   padding: 10px 16px 4px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: 0.04em;
 }
 
 .sectionTitle small {
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .dueSection[data-section="overdue"] .sectionTitle {
@@ -3841,7 +3859,7 @@ a.repName {
   margin-right: 6px;
   color: var(--lx-focus-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .lateTag::before {
@@ -3898,7 +3916,7 @@ a.repName {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-weight: 500;
+  font-weight: 700;
   font-size: var(--sx-text-sm);
 }
 
@@ -4006,7 +4024,7 @@ a.repName {
 
 .actionSheetHead h2 {
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 750;
 }
 
 .actionSheetHead p {
@@ -4044,7 +4062,7 @@ a.repName {
   background: var(--sx-sunken);
   color: var(--sx-ink);
   font: inherit;
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -4066,7 +4084,7 @@ a.repName {
 
 .doneLine {
   color: var(--sx-good);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .messageBody {
@@ -4094,7 +4112,7 @@ a.repName {
   background: transparent;
   color: var(--sx-ink-2);
   font: inherit;
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -4140,7 +4158,7 @@ a.repName {
   background: var(--lx-teal);
   color: var(--lx-on-teal);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 750;
   text-decoration: none;
 }
 
@@ -4213,7 +4231,7 @@ a.repName {
   background: var(--lx-teal-tint);
   color: var(--sx-ink);
   font: inherit;
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -4348,7 +4366,7 @@ a.repName {
 .setupView dt {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .setupView dd {
@@ -4498,7 +4516,7 @@ a.repName {
   .countItem span {
     color: var(--sx-muted);
     font-size: var(--sx-text-xs);
-    font-weight: 500;
+    font-weight: 600;
   }
 
   .countItem[data-tone="bad"] {
@@ -4544,7 +4562,7 @@ a.repName {
   }
 
   .deskLink span {
-    font-weight: 500;
+    font-weight: 650;
   }
 
   .deskLink small {
@@ -4647,7 +4665,7 @@ a.repName {
 .contactIcon small {
   color: var(--sx-muted);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .contactIcon[data-channel="whatsapp"] {
@@ -4762,7 +4780,7 @@ a.repName {
   background: var(--sx-accent-soft);
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   text-decoration: none;
 }
 
@@ -4813,7 +4831,7 @@ a.repName {
   gap: 6px;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .capi {
@@ -4885,7 +4903,7 @@ a.repName {
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -4945,7 +4963,7 @@ a.repName {
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
   touch-action: manipulation;
@@ -5041,7 +5059,7 @@ a.repName {
   background: var(--sx-surface);
   color: var(--sx-ink);
   font: inherit;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -5059,7 +5077,7 @@ a.repName {
   background: var(--sx-surface);
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .ownerPicker > svg {
@@ -5129,7 +5147,7 @@ a.repName {
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
   touch-action: manipulation;
@@ -5150,7 +5168,7 @@ a.repName {
   border-color: transparent;
   background: var(--sx-ink);
   color: var(--sx-paper);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .stageCount {
@@ -5254,9 +5272,9 @@ a.repName {
   overflow: hidden;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-weight: 700;
+  /* Wraps rather than ending in "…": bold again, it must stay whole at 200% text. */
+  overflow-wrap: anywhere;
 }
 
 /* The list's sort, where its count was (bugs 126 and 127). */
@@ -5269,7 +5287,7 @@ a.repName {
   flex: none;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -5453,7 +5471,7 @@ a.repName {
   color: var(--lx-on-teal);
   font: inherit;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   box-shadow: var(--sx-shadow-float);
   cursor: pointer;
   pointer-events: auto;
@@ -5511,7 +5529,7 @@ a.repName {
   min-height: 44px;
   padding: 0 14px;
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 700;
   list-style: none;
   cursor: pointer;
 }
@@ -5547,7 +5565,7 @@ a.repName {
   margin: 0;
   color: var(--lx-focus-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   text-align: right;
 }
 
@@ -5902,7 +5920,7 @@ a.repName {
 .actionLabel {
   max-width: 100%;
   font-size: min(var(--sx-text-xs), 16cqi);
-  font-weight: 500;
+  font-weight: 650;
   line-height: var(--sx-leading-16);
   text-align: center;
   /* Whole, on two lines when the tile is narrow (robot row d65dde5c). */
@@ -6083,7 +6101,7 @@ button.leadTags {
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -6147,7 +6165,7 @@ button.leadTags {
   align-items: center;
   min-height: 44px;
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -6244,7 +6262,7 @@ button.leadTags {
   align-items: center;
   gap: 4px;
   color: var(--sx-good, var(--sx-accent));
-  font-weight: 500;
+  font-weight: 650;
   animation:
     saved-in var(--sx-dur-base) var(--sx-spring) both,
     saved-out 400ms var(--sx-ease-out) 2s forwards;
@@ -6326,7 +6344,7 @@ button.leadTags {
   border-radius: var(--sx-radius-pill);
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   transition:
     background-color var(--sx-dur-fast) var(--sx-ease-out),
@@ -6448,7 +6466,7 @@ button.leadTags {
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
 }
@@ -6486,7 +6504,7 @@ button.leadTags {
 .leadWhy {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 @media (max-width: 420px) {
@@ -6508,7 +6526,7 @@ button.leadTags {
   color: var(--lx-strength-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
@@ -6556,7 +6574,7 @@ button.leadTags {
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -6709,7 +6727,7 @@ button.leadTags {
   background: none;
   color: var(--sx-ink);
   font: inherit;
-  font-weight: 500;
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
 }
@@ -6730,7 +6748,7 @@ button.leadTags {
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -7075,7 +7093,7 @@ fieldset.form {
   border-color: var(--sx-accent);
   background: var(--sx-accent-soft);
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .pipelineStages li small {
@@ -7230,7 +7248,7 @@ fieldset.form {
   list-style: none;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
 }
 .pickerGroup > summary::-webkit-details-marker {
   display: none;
@@ -7275,7 +7293,7 @@ fieldset.form {
 .pickerRow[aria-pressed="true"] {
   border-color: var(--sx-accent);
   background: color-mix(in srgb, var(--sx-accent) 10%, var(--sx-surface));
-  font-weight: 500;
+  font-weight: 600;
 }
 .pickerRow:focus-visible,
 .pickerGroup > summary:focus-visible {
@@ -7428,7 +7446,7 @@ fieldset.form {
   padding: 0 12px;
   color: var(--sx-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .listHead .listTools .statusChip > svg {
@@ -7646,7 +7664,7 @@ fieldset.form {
   border-radius: var(--sx-radius-pill);
   background: color-mix(in oklab, var(--stage) 14%, transparent);
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .stageChip::before {
@@ -7805,7 +7823,7 @@ fieldset.form {
     background: var(--sx-surface);
     color: var(--sx-ink);
     font: inherit;
-    font-weight: 500;
+    font-weight: 650;
     cursor: pointer;
   }
 
@@ -7849,7 +7867,7 @@ fieldset.form {
   background: none;
   color: var(--sx-accent);
   font: inherit;
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -7879,7 +7897,7 @@ fieldset.form {
 .roundDone dd {
   margin: 0;
   font-size: var(--sx-text-large);
-  font-weight: 500;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
@@ -7907,7 +7925,7 @@ fieldset.form {
   background: var(--sx-surface);
   color: inherit;
   font: inherit;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -7926,7 +7944,7 @@ fieldset.form {
   background: var(--sx-surface);
   color: inherit;
   font: inherit;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 

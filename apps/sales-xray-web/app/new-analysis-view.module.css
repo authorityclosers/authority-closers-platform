@@ -21,7 +21,7 @@
 .cardTitle {
   margin: 0 0 6px;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--lx-ink);
   letter-spacing: -0.02em;
 }
@@ -71,7 +71,7 @@
 .dropPrompt {
   margin: 14px 0 12px;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--lx-ink);
 }
 
@@ -85,7 +85,7 @@
   background: var(--lx-sunken);
   color: var(--lx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all 140ms ease;
 }
@@ -121,7 +121,7 @@
   gap: 4px;
   color: var(--lx-teal);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   transition: color 140ms ease;
 }
@@ -195,7 +195,7 @@
 }
 
 .primaryText {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--lx-ink);
   line-height: 1.3;
 }

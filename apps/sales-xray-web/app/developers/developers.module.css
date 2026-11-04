@@ -32,7 +32,7 @@
 .brand {
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 750;
   text-decoration: none;
 }
 
@@ -50,7 +50,7 @@
   margin-left: auto;
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -76,7 +76,7 @@
   margin: 0 0 8px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .toc ul {
@@ -153,13 +153,13 @@
   margin: 0;
   color: var(--sx-accent);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 750;
 }
 
 .hero h1 {
   margin: 0;
   font-size: var(--sx-text-2xl);
-  font-weight: 500;
+  font-weight: 800;
   letter-spacing: -0.025em;
   line-height: var(--sx-leading-36);
   text-wrap: balance;
@@ -275,7 +275,7 @@
   padding: 0;
   background: none;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .method {
@@ -288,7 +288,7 @@
   background: var(--sx-accent-soft);
   color: var(--sx-accent);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 750;
   letter-spacing: 0.04em;
 }
 
@@ -328,7 +328,7 @@
   background: var(--sx-surface);
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .tabs {
@@ -411,7 +411,7 @@
 .table caption {
   margin-bottom: 6px;
   color: var(--sx-ink-2);
-  font-weight: 500;
+  font-weight: 650;
   text-align: left;
 }
 
@@ -426,7 +426,7 @@
 .table th {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 @media (max-width: 899px) {

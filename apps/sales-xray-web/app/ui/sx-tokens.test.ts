@@ -37,7 +37,9 @@ const px = (pattern: RegExp) =>
     Number(rem) * 16,
   ]);
 
-it("allows one text scale on every width, in rem", () => {
+// Computers keep v1.38's steps; phones keep v1.37's 13, 15 and 16.5 (owner, 4 Nov 2026: v1.38 at least
+// as good as v1.37). All in rem, so they follow the phone's font size.
+it("allows one text scale per pointer, in rem", () => {
   expect(px(/--sx-text-([\w-]+):\s*([\d.]+)rem;/g)).toEqual([
     ["2xs", 11],
     ["xs", 12],
@@ -46,6 +48,9 @@ it("allows one text scale on every width, in rem", () => {
     ["xl", 22],
     ["2xl", 28],
     ["3xl", 32],
+    ["xs", 13],
+    ["sm", 15],
+    ["md", 16.5],
   ]);
   // Line heights are ratios of their step, so a line grows with its text
   // however it is enlarged (robot rows at 130 and 200 %, 3 Nov 2026).
@@ -62,12 +67,13 @@ it("allows one text scale on every width, in rem", () => {
   expect(code).not.toMatch(/--sx-leading-[\w-]+:[^;]*rem/);
 });
 
-it("gives the roles weights of 400 and 500 only", () => {
+// v1.37's role weights are back (owner, 4 Nov 2026: v1.38 at least as good as v1.37).
+it("gives the roles v1.37's weights", () => {
   const weights = [...tokens.matchAll(/--sx-text-[\w-]+:\s*(\d{3})\s/g)].map(
     ([, weight]) => Number(weight),
   );
-  expect(weights.length).toBe(9);
-  expect(new Set(weights)).toEqual(new Set([400, 500]));
+  expect(weights.length).toBe(11);
+  expect(new Set(weights)).toEqual(new Set([400, 500, 650, 700, 750, 800]));
 });
 
 it("gives low-memory phones a lighter glass", () => {

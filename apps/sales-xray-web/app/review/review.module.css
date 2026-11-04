@@ -85,7 +85,7 @@
   color: var(--sx-accent-ink);
   font: inherit;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 650;
   text-decoration: none;
   cursor: pointer;
 }
@@ -135,7 +135,7 @@
 }
 
 .row b {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .row .bar {
@@ -151,7 +151,7 @@
   background: var(--sx-sunken);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -267,7 +267,7 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  font-weight: 500;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -307,7 +307,7 @@
   border-radius: 8px;
   background: var(--sx-accent-soft);
   color: var(--sx-accent);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .pointerHead h2 {
@@ -371,7 +371,7 @@
   font: inherit;
   font-size: var(--sx-text-xs);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -385,13 +385,13 @@
   display: block;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .more summary {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -416,7 +416,7 @@
 .ask {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .verdicts {
@@ -436,7 +436,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -492,7 +492,7 @@
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
   touch-action: manipulation;
@@ -524,14 +524,14 @@
   background: var(--sx-paper);
   color: var(--sx-ink);
   font: inherit;
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .stepper output {
   text-align: center;
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .inline {
@@ -575,7 +575,7 @@
   background: var(--sx-paper);
   color: var(--sx-ink);
   font: inherit;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -622,7 +622,7 @@
   font: inherit;
   font-size: var(--sx-text-md);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -678,7 +678,7 @@
   background: var(--sx-paper);
   text-align: center;
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .vs[data-tone="good"] {
@@ -813,7 +813,7 @@
   background: var(--sx-accent);
   color: var(--sx-accent-ink);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-16);
   text-align: center;
 }
@@ -829,7 +829,7 @@
   background: var(--sx-surface);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   text-decoration: none;
 }
 
@@ -893,7 +893,7 @@
   background: var(--sx-accent);
   color: var(--sx-accent-ink);
   font: inherit;
-  font-weight: 500;
+  font-weight: 650;
   white-space: nowrap;
   cursor: pointer;
 }

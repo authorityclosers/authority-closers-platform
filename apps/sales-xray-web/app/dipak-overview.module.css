@@ -38,7 +38,7 @@
   margin: 0;
   color: var(--lx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-16);
 }
 
@@ -46,7 +46,7 @@
   margin: 0;
   color: var(--lx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-16);
 }
 
@@ -103,7 +103,7 @@
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-2xl);
-  font-weight: 500;
+  font-weight: 800;
   letter-spacing: -0.03em;
   line-height: var(--sx-leading-36);
 }
@@ -135,7 +135,7 @@
   gap: 6px;
   color: var(--lx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   line-height: var(--sx-leading-16);
 }
 
@@ -155,7 +155,7 @@
   color: var(--lx-ink);
   font-family: var(--lx-font-ui);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: -0.01em;
   line-height: var(--sx-leading-24);
 }
@@ -195,7 +195,7 @@
 .metrics dt {
   color: var(--lx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   line-height: var(--sx-leading-16);
 }
 
@@ -204,7 +204,7 @@
   color: var(--lx-ink);
   font-size: var(--sx-text-md);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-24);
 }
 
@@ -267,7 +267,7 @@
   margin: 0;
   color: var(--row-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 800;
   line-height: var(--sx-leading-16);
 }
 
@@ -287,7 +287,7 @@
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: -0.01em;
   line-height: var(--sx-leading-24);
 }
@@ -317,7 +317,7 @@
   background: var(--lx-sunken);
   color: var(--lx-ink-3);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-16);
 }
 
@@ -341,7 +341,7 @@
   color: var(--lx-strength-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-20);
   text-align: left;
   text-decoration: underline;
@@ -378,7 +378,7 @@
   color: var(--lx-strength-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-20);
   text-align: left;
   cursor: pointer;
@@ -395,7 +395,7 @@
   color: var(--lx-muted);
   font-size: var(--sx-text-xs);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -500,7 +500,7 @@
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-24);
 }
 
@@ -549,7 +549,7 @@
   color: var(--lx-muted);
   font-size: var(--sx-text-xs);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .insightRail button[aria-current="true"] .insightNumber {
@@ -568,7 +568,7 @@
   color: var(--lx-strength-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -606,7 +606,7 @@
   margin: 0;
   color: var(--lx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-16);
 }
 
@@ -620,7 +620,7 @@
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-xl);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: -0.015em;
   line-height: var(--sx-leading-28);
 }
@@ -657,7 +657,7 @@
   color: var(--lx-muted);
   font-size: var(--sx-text-xs);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .block[data-tone="positive"] .number {
@@ -677,7 +677,7 @@
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: -0.01em;
   line-height: var(--sx-leading-24);
 }
@@ -740,7 +740,7 @@
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-24);
 }
 
@@ -766,7 +766,7 @@
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-24);
 }
 
@@ -945,13 +945,13 @@
 .clipCopy small {
   color: var(--lx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-16);
 }
 
 .clipCopy strong {
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 650;
   line-height: var(--sx-leading-24);
 }
 
@@ -987,7 +987,7 @@
 .contextPanel strong {
   color: var(--lx-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .contextPanel > small {
@@ -1008,7 +1008,7 @@
   background: var(--lx-surface);
   color: var(--lx-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
   line-height: var(--sx-leading-16);
   white-space: normal;
 }
@@ -1061,7 +1061,7 @@
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-24);
 }
 
@@ -1113,7 +1113,7 @@
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 650;
   letter-spacing: -0.01em;
   line-height: var(--sx-leading-24);
 }
@@ -1159,17 +1159,17 @@
   margin: 0;
   color: var(--lx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-16);
 }
 
 .overview :global(.studio-finding-evidence-heading) strong {
   color: inherit;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .overview :global(.studio-finding-evidence-heading) span {
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: none;
 }
@@ -1265,7 +1265,7 @@ span.evidenceWaveform {
   color: var(--lx-focus-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -1295,7 +1295,7 @@ span.evidenceWaveform {
   color: var(--lx-muted);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -1316,7 +1316,7 @@ span.evidenceWaveform {
   margin: 0 0 var(--lx-space-1);
   color: var(--lx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .overview[data-reading="true"] .improvementTabs {

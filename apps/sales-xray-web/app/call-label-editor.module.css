@@ -7,7 +7,7 @@
 .label {
   color: var(--lx-ink-3);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .row {
@@ -52,7 +52,7 @@
   border-radius: var(--lx-radius-sm);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -97,7 +97,7 @@
   color: var(--lx-strength-ink);
   font: inherit;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -151,7 +151,7 @@
   border-radius: 12px;
   background: var(--lx-surface);
   box-shadow: 0 0 0 4px var(--lx-teal-soft);
-  font: 500 var(--sx-text-xl) / var(--sx-leading-28) var(--lx-font-display);
+  font: 800 var(--sx-text-xl) / var(--sx-leading-28) var(--lx-font-display);
   letter-spacing: -0.02em;
   outline: none;
 }
@@ -197,7 +197,7 @@
   justify-self: end;
   color: var(--lx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 .editor > .link:hover:not(:disabled) {
   color: var(--lx-danger);

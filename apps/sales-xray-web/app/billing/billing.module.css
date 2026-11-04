@@ -41,7 +41,7 @@
 .brand h1 {
   margin: 0;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-xl) / var(--sx-leading-28)
+  font: 800 var(--sx-text-xl) / var(--sx-leading-28)
     var(--lx-font-display, var(--lx-font-ui));
   letter-spacing: -0.015em;
 }
@@ -81,7 +81,7 @@
 .cardHead h2 {
   margin: 0;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
+  font: 700 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
 }
 
 .statusBadge {
@@ -90,7 +90,7 @@
   gap: 5px;
   padding: 4px 10px;
   border-radius: 999px;
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 700 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
 }
@@ -108,7 +108,7 @@
 .planPrice {
   margin: 0;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-2xl) / var(--sx-leading-36)
+  font: 800 var(--sx-text-2xl) / var(--sx-leading-36)
     var(--lx-font-display, var(--lx-font-ui));
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
@@ -157,7 +157,7 @@
   border-radius: var(--lx-radius-sm, 10px);
   background: var(--lx-teal);
   color: var(--lx-on-teal);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 700 var(--sx-text-xs) / 1 var(--lx-font-ui);
   text-decoration: none;
   cursor: pointer;
   transition: opacity 140ms ease;
@@ -178,7 +178,7 @@
   border-radius: var(--lx-radius-sm, 10px);
   background: transparent;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
   text-decoration: none;
   cursor: pointer;
   transition: background-color 140ms ease;
@@ -199,7 +199,7 @@
   border-radius: var(--lx-radius-sm, 10px);
   background: var(--lx-warning-soft);
   color: var(--lx-warning);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
   cursor: pointer;
   transition: opacity 140ms ease;
 }
@@ -257,12 +257,12 @@
 }
 
 .ringText b {
-  font: 500 var(--sx-text-md) / 1 var(--lx-font-display, var(--lx-font-ui));
+  font: 800 var(--sx-text-md) / 1 var(--lx-font-display, var(--lx-font-ui));
   color: var(--lx-ink);
 }
 
 .ringText small {
-  font: 500 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 600 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui);
   color: var(--lx-muted);
 }
 
@@ -273,7 +273,7 @@
 }
 
 .ringDetails b {
-  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
+  font: 700 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
   color: var(--lx-ink);
 }
 
@@ -307,7 +307,7 @@
   text-align: left;
   border-bottom: 1px solid var(--lx-line);
   color: var(--lx-muted);
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .table td {
@@ -351,7 +351,7 @@
   align-items: center;
   gap: 8px;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
+  font: 700 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
 }
 
 .confirmTitle svg {
@@ -367,7 +367,7 @@
 
 .docLink {
   color: var(--lx-teal);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
 }
 
@@ -420,7 +420,7 @@
   .table td::before {
     content: attr(data-label);
     color: var(--lx-muted);
-    font-weight: 500;
+    font-weight: 600;
     text-align: left;
   }
 }
@@ -460,7 +460,7 @@
 .rows dd {
   margin: 0;
   color: var(--lx-ink);
-  font-weight: 500;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -471,7 +471,7 @@
   border-radius: var(--lx-radius-pill, 999px);
   background: var(--lx-strength-soft);
   color: var(--lx-strength-ink);
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 700 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .statusChip[data-tone="refund"] {

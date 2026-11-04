@@ -43,7 +43,7 @@
 .brand h1 {
   margin: 0;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-xl) / var(--sx-leading-28)
+  font: 800 var(--sx-text-xl) / var(--sx-leading-28)
     var(--lx-font-display, var(--lx-font-ui));
   letter-spacing: -0.015em;
 }
@@ -65,7 +65,7 @@
   border-radius: 999px;
   background: var(--lx-sunken);
   color: var(--lx-muted);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
 }
 
 .steps li i {
@@ -111,7 +111,7 @@
 .panel h2 {
   margin: 0;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-xl) / var(--sx-leading-28)
+  font: 800 var(--sx-text-xl) / var(--sx-leading-28)
     var(--lx-font-display, var(--lx-font-ui));
   letter-spacing: -0.015em;
   text-wrap: balance;
@@ -120,7 +120,7 @@
 .panel h3 {
   margin: 0;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
+  font: 700 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
 }
 
 .hint {
@@ -162,7 +162,7 @@
 }
 
 .trial b {
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .bar {
@@ -207,7 +207,7 @@
   border-radius: 999px;
   background: transparent;
   color: var(--lx-muted);
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -231,7 +231,7 @@
   color: var(--lx-teal);
   /* <small> would shrink it to 10.8 px; 12 px is the floor (B19). */
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 /* The plan card. */
@@ -277,7 +277,7 @@
   width: fit-content;
   padding: 4px 10px;
   border-radius: 999px;
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 700 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
 }
@@ -306,7 +306,7 @@
   border-radius: var(--lx-radius-sm, 10px);
   background: var(--lx-surface);
   color: var(--lx-ink);
-  font: 500 var(--sx-text-sm) / 1 var(--lx-font-ui);
+  font: 700 var(--sx-text-sm) / 1 var(--lx-font-ui);
   cursor: pointer;
   text-align: center;
   text-decoration: none;
@@ -367,7 +367,7 @@
 }
 
 .gstTotal {
-  font-weight: 500;
+  font-weight: 700;
   color: var(--lx-ink);
   border-top: 1px dashed var(--lx-line);
   padding-top: 6px;
@@ -397,14 +397,14 @@
 }
 
 .planHead h3 {
-  font: 500 var(--sx-text-md) / var(--sx-leading-24)
+  font: 800 var(--sx-text-md) / var(--sx-leading-24)
     var(--lx-font-display, var(--lx-font-ui));
 }
 
 .price {
   margin: 0;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-2xl) / var(--sx-leading-36)
+  font: 800 var(--sx-text-2xl) / var(--sx-leading-36)
     var(--lx-font-display, var(--lx-font-ui));
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
@@ -424,7 +424,7 @@
   border-radius: 999px;
   background: var(--lx-warning-soft);
   color: var(--lx-warning);
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 700 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .facts {
@@ -461,7 +461,7 @@
   gap: 10px 14px;
   padding-top: 12px;
   border-top: 1px solid var(--lx-teal-edge, var(--lx-line));
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .stepper {
@@ -496,7 +496,7 @@
 .stepper output {
   min-width: 40px;
   text-align: center;
-  font-weight: 500;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
@@ -548,7 +548,7 @@
 .rows dd {
   margin: 0;
   color: var(--lx-ink);
-  font-weight: 500;
+  font-weight: 600;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -560,7 +560,7 @@
 }
 
 .total dd {
-  font: 500 var(--sx-text-xl) / var(--sx-leading-28)
+  font: 800 var(--sx-text-xl) / var(--sx-leading-28)
     var(--lx-font-display, var(--lx-font-ui));
 }
 
@@ -578,7 +578,7 @@
   padding: 8px 16px;
   border: 1px solid transparent;
   border-radius: var(--lx-radius-sm, 10px);
-  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
+  font: 700 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
   text-decoration: none;
   cursor: pointer;
   transition:
@@ -708,7 +708,7 @@
 .payRow b {
   overflow-wrap: anywhere;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
+  font: 700 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
   font-variant-numeric: tabular-nums;
 }
 
@@ -796,7 +796,7 @@
 
 .ring b {
   color: var(--lx-ink);
-  font: 500 var(--sx-text-2xl) / 1 var(--lx-font-display, var(--lx-font-ui));
+  font: 800 var(--sx-text-2xl) / 1 var(--lx-font-display, var(--lx-font-ui));
   font-variant-numeric: tabular-nums;
 }
 
@@ -813,7 +813,7 @@
   border-radius: 999px;
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 700 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .ok[data-status="past_due"],
@@ -964,7 +964,7 @@
   border-radius: var(--lx-radius-pill, 999px);
   background: var(--lx-warning-soft);
   color: var(--lx-warning);
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 700 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 /* Rules under the frame. */
@@ -1044,7 +1044,7 @@
 .field {
   display: grid;
   gap: 4px;
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   color: var(--lx-ink-2);
 }
 
@@ -1135,7 +1135,7 @@
 }
 
 .segLabel {
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
   color: var(--lx-muted);
 }
 
@@ -1168,7 +1168,7 @@
 .cardTitle {
   margin: 0;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-md) / var(--sx-leading-24)
+  font: 800 var(--sx-text-md) / var(--sx-leading-24)
     var(--lx-font-display, var(--lx-font-ui));
 }
 
@@ -1208,12 +1208,12 @@
 }
 
 .seatsLabel {
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   color: var(--lx-ink-2);
 }
 
 .liveTotalLine {
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   color: var(--lx-teal);
 }
 
@@ -1278,7 +1278,7 @@
 .topUpsTitle h3 {
   margin: 0;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
+  font: 700 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
 }
 
 .topUpIcon {
@@ -1326,7 +1326,7 @@
 .topUpHead h4 {
   margin: 0;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
+  font: 700 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
 }
 
 .topUpTagline {
@@ -1339,7 +1339,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
+  font: 800 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
   color: var(--lx-ink);
 }
 
@@ -1359,7 +1359,7 @@
 }
 
 .topUpMinutes {
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 700 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   color: var(--lx-teal);
 }
 
@@ -1385,7 +1385,7 @@
   border-radius: var(--lx-radius-pill, 999px);
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
 }
 
 .paymentMethodsBlock {
@@ -1398,7 +1398,7 @@
 }
 
 .paymentMethodsLabel {
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
   color: var(--lx-ink-2);
 }
 
@@ -1417,7 +1417,7 @@
   border-radius: 6px;
   background: var(--lx-surface);
   color: var(--lx-ink);
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 700 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 
 .razorpayTag {
@@ -1469,7 +1469,7 @@
 }
 
 .successSummary {
-  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
+  font: 600 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
   color: var(--lx-ink);
 }
 
@@ -1524,7 +1524,7 @@
   border-radius: var(--lx-radius-sm, 8px);
   background: var(--lx-paper-2, #f1f5f9);
   color: var(--lx-ink-2, #334155);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
   cursor: pointer;
   transition: background 140ms ease;
 }
@@ -1546,7 +1546,7 @@
 
 .shellBrandName {
   white-space: nowrap;
-  font: 500 var(--sx-text-md) / 1 var(--lx-font-display, var(--lx-font-ui));
+  font: 800 var(--sx-text-md) / 1 var(--lx-font-display, var(--lx-font-ui));
   letter-spacing: -0.01em;
   color: var(--lx-ink, #0f172a);
 }
@@ -1622,7 +1622,7 @@
 .ladderHeading h2 {
   margin: 0;
   color: var(--lx-ink, #0f172a);
-  font: 500 var(--sx-text-md) / var(--sx-leading-24)
+  font: 800 var(--sx-text-md) / var(--sx-leading-24)
     var(--lx-font-display, var(--lx-font-ui));
   letter-spacing: -0.015em;
 }
@@ -1653,7 +1653,7 @@
   .mobilePlanTabBtn {
     flex: 1;
     padding: 8px 6px;
-    font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+    font: 700 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
     border: 1px solid var(--lx-line, rgba(0, 0, 0, 0.1));
     border-radius: var(--lx-radius-sm, 8px);
     background: var(--lx-surface, #ffffff);
@@ -1735,7 +1735,7 @@
   right: 12px;
   padding: 3px 8px;
   border-radius: var(--lx-radius-pill, 999px);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 700 var(--sx-text-xs) / 1 var(--lx-font-ui);
   /* At 12 px, capitals with wide tracking ran into the plan name on a
      360 px phone; sentence case keeps the badge clear of it (B19). */
   text-transform: none;
@@ -1759,7 +1759,7 @@
   border-radius: var(--lx-radius-sm, 10px);
   background: var(--lx-teal);
   color: var(--lx-on-teal, #ffffff);
-  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
+  font: 700 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
   cursor: pointer;
   transition: opacity 140ms ease;
   flex-shrink: 0;
@@ -1787,7 +1787,7 @@
   border-radius: var(--lx-radius-sm, 10px);
   background: var(--lx-surface);
   color: var(--lx-ink-2);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
   cursor: pointer;
   white-space: nowrap;
   transition:
@@ -1901,7 +1901,7 @@
 
 .checkoutHeadTitle h2 {
   margin: 0;
-  font: 500 var(--sx-text-md) / var(--sx-leading-24)
+  font: 800 var(--sx-text-md) / var(--sx-leading-24)
     var(--lx-font-display, var(--lx-font-ui));
   color: var(--lx-ink);
 }
@@ -1958,7 +1958,7 @@
 }
 
 .counterValue {
-  font: 500 var(--sx-text-2xl) / var(--sx-leading-36)
+  font: 800 var(--sx-text-2xl) / var(--sx-leading-36)
     var(--lx-font-display, var(--lx-font-ui));
   color: var(--lx-teal);
   letter-spacing: -0.02em;
@@ -1967,7 +1967,7 @@
 
 .counterLabel {
   margin-top: 4px;
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   color: var(--lx-ink-2);
 }
 

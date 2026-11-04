@@ -95,17 +95,17 @@
   --lx-font-quote:
     "Newsreader Variable", "Newsreader", "Noto Serif Devanagari Variable",
     "Noto Serif Devanagari", Georgia, serif;
-  --lx-text-display-xl: 500 4.75rem/0.98 var(--lx-font-display);
-  --lx-text-display: 500 2.875rem/1.04 var(--lx-font-display);
-  --lx-text-h1: 500 2rem/1.125 var(--lx-font-display);
-  --lx-text-h2: 500 1.375rem/1.2727 var(--lx-font-display);
+  --lx-text-display-xl: 700 4.75rem/0.98 var(--lx-font-display);
+  --lx-text-display: 800 2.875rem/1.04 var(--lx-font-display);
+  --lx-text-h1: 800 2rem/1.125 var(--lx-font-display);
+  --lx-text-h2: 800 1.375rem/1.2727 var(--lx-font-display);
   --lx-text-verdict: 400 2rem/1.125 var(--lx-font-quote);
   --lx-text-quote-lg: 400 1.375rem/1.2727 var(--lx-font-quote);
   --lx-text-quote: 400 0.875rem/1.4286 var(--lx-font-quote);
-  --lx-text-body: 400 1rem/1.5 var(--lx-font-ui);
-  --lx-text-ui: 500 0.875rem/1.4286 var(--lx-font-ui);
-  --lx-text-meta: 400 0.75rem/1.3333 var(--lx-font-ui);
-  --lx-text-eyebrow: 500 0.75rem/1.3333 var(--lx-font-ui);
+  --lx-text-body: 500 1rem/1.5 var(--lx-font-ui);
+  --lx-text-ui: 600 0.875rem/1.4286 var(--lx-font-ui);
+  --lx-text-meta: 600 0.75rem/1.3333 var(--lx-font-ui);
+  --lx-text-eyebrow: 800 0.75rem/1.3333 var(--lx-font-ui);
   --lx-tracking-display: -0.035em;
   --lx-tracking-eyebrow: 0.14em;
   --lx-leading-devanagari: 1.65;
@@ -262,13 +262,13 @@ html:has(> body.sales-xray-document) {
 
 .sales-xray-live-data-banner strong {
   color: #3b3216;
-  font-weight: 500;
+  font-weight: 750;
   letter-spacing: 0.02em;
 }
 
 .sales-xray-live-data-banner a {
   color: #4d421d;
-  font-weight: 500;
+  font-weight: 700;
   text-underline-offset: 3px;
 }
 
@@ -438,7 +438,7 @@ html:has(> body.sales-xray-document) {
     min-width: 0;
   }
   .studio-header strong {
-    font-weight: 500;
+    font-weight: 650;
   }
   .studio-header small {
     display: block;
@@ -471,7 +471,7 @@ html:has(> body.sales-xray-document) {
     min-height: 36px;
     color: var(--action);
     font-size: var(--sx-text-xs);
-    font-weight: 500;
+    font-weight: 650;
     text-decoration: none;
   }
   .account-nav-signout {
@@ -535,7 +535,7 @@ html:has(> body.sales-xray-document) {
     color: var(--lx-ink);
     font-family: var(--lx-font-display);
     font-size: var(--sx-text-2xl);
-    font-weight: 500;
+    font-weight: 800;
     letter-spacing: -0.03em;
     line-height: var(--sx-leading-36);
   }
@@ -543,7 +543,7 @@ html:has(> body.sales-xray-document) {
     margin: 6px 0 0;
     color: var(--lx-muted);
     font-size: var(--sx-text-sm);
-    font-weight: 500;
+    font-weight: 600;
   }
   .calls-library-new {
     display: inline-flex;
@@ -555,7 +555,7 @@ html:has(> body.sales-xray-document) {
     background: var(--lx-ink);
     color: var(--lx-surface);
     font-size: var(--sx-text-sm);
-    font-weight: 500;
+    font-weight: 700;
     text-decoration: none;
   }
   .calls-library-new:focus-visible {
@@ -595,7 +595,7 @@ html:has(> body.sales-xray-document) {
     color: var(--lx-ink-3);
     font: inherit;
     font-size: var(--sx-text-xs);
-    font-weight: 500;
+    font-weight: 650;
     cursor: pointer;
   }
   .calls-library-filters button[aria-pressed="true"] {
@@ -648,7 +648,7 @@ html:has(> body.sales-xray-document) {
     padding: 10px 60px 10px 18px;
     color: var(--lx-muted);
     font-size: var(--sx-text-2xs);
-    font-weight: 500;
+    font-weight: 750;
   }
   .calls-library-items {
     display: grid;
@@ -714,7 +714,7 @@ html:has(> body.sales-xray-document) {
   .calls-library-copy strong {
     overflow-wrap: anywhere;
     font-size: var(--sx-text-sm);
-    font-weight: 500;
+    font-weight: 700;
   }
   .calls-library-copy small {
     color: var(--lx-muted);
@@ -743,7 +743,7 @@ html:has(> body.sales-xray-document) {
   .calls-library-duration-clock {
     color: var(--lx-ink-3);
     font-size: var(--sx-text-xs);
-    font-weight: 500;
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
   }
   .calls-library-item .calls-library-state {
@@ -756,7 +756,7 @@ html:has(> body.sales-xray-document) {
     background: var(--lx-sunken);
     color: var(--lx-ink-3);
     font-size: var(--sx-text-xs);
-    font-weight: 500;
+    font-weight: 700;
   }
   .calls-library-item .calls-library-state[data-tone="ready"] {
     background: var(--lx-strength-soft);
@@ -792,7 +792,7 @@ html:has(> body.sales-xray-document) {
     gap: 5px;
     color: var(--lx-strength-ink);
     font-size: var(--sx-text-xs);
-    font-weight: 500;
+    font-weight: 700;
   }
   .calls-library-filter-empty,
   .calls-library-filter-note {
@@ -932,7 +932,7 @@ html:has(> body.sales-xray-document) {
   }
   .studio-steps [aria-current] {
     color: var(--action);
-    font-weight: 500;
+    font-weight: 650;
   }
   .studio-steps [aria-current] b {
     color: white;
@@ -953,7 +953,7 @@ html:has(> body.sales-xray-document) {
     padding: 0 0 16px;
     color: var(--text);
     font-size: var(--sx-text-sm);
-    font-weight: 500;
+    font-weight: 650;
   }
   .recording-history > summary::-webkit-details-marker {
     display: none;
@@ -1062,7 +1062,7 @@ html:has(> body.sales-xray-document) {
   }
   .recording-history-open {
     color: var(--action);
-    font-weight: 500;
+    font-weight: 650;
     white-space: nowrap;
   }
   .saved-recording-file {
@@ -1304,7 +1304,7 @@ html:has(> body.sales-xray-document) {
     background: var(--surface);
     border: 1px solid var(--border);
     font-size: var(--sx-text-2xs);
-    font-weight: 500;
+    font-weight: 700;
   }
   .studio-stage strong,
   .studio-stage small {
@@ -1362,7 +1362,7 @@ html:has(> body.sales-xray-document) {
     color: var(--text);
     cursor: pointer;
     padding: 8px 0;
-    font-weight: 500;
+    font-weight: 550;
   }
   .studio-help p {
     max-width: 810px;
@@ -1418,7 +1418,7 @@ html:has(> body.sales-xray-document) {
     color: var(--ink);
     font-size: var(--sx-text-sm);
     line-height: var(--sx-leading-20);
-    font-weight: 500;
+    font-weight: 600;
   }
   .studio-finding-evidence > .studio-finding-evidence-heading span {
     color: var(--muted);
@@ -1480,7 +1480,7 @@ html:has(> body.sales-xray-document) {
     gap: 6px;
     color: var(--action);
     font-size: var(--sx-text-2xs);
-    font-weight: 500;
+    font-weight: 700;
   }
   .studio-moment-copy {
     display: grid;
@@ -1796,21 +1796,21 @@ html:has(> body.sales-xray-document) {
   h1 {
     font-family: var(--lx-font-display);
     font-size: var(--sx-text-2xl);
-    font-weight: 500;
+    font-weight: 700;
     letter-spacing: -1.25px;
     line-height: var(--sx-leading-36);
     margin-bottom: 12px;
   }
   h2 {
     font-size: var(--sx-text-md);
-    font-weight: 500;
+    font-weight: 600;
     line-height: var(--sx-leading-24);
     letter-spacing: -0.45px;
     margin-bottom: 12px;
   }
   h3 {
     font-size: var(--sx-text-md);
-    font-weight: 500;
+    font-weight: 650;
     line-height: var(--sx-leading-24);
     margin-bottom: 12px;
   }
@@ -1826,7 +1826,7 @@ html:has(> body.sales-xray-document) {
   .eyebrow {
     font-size: var(--sx-text-2xs);
     letter-spacing: 1.8px;
-    font-weight: 500;
+    font-weight: 700;
     color: var(--muted);
     margin-bottom: 10px;
   }
@@ -1850,14 +1850,14 @@ html:has(> body.sales-xray-document) {
     gap: 11px;
     padding: 0 11px;
     font-size: var(--sx-text-xl);
-    font-weight: 500;
+    font-weight: 650;
     letter-spacing: -0.8px;
   }
   .brand small {
     display: block;
     font-size: var(--sx-text-2xs);
     letter-spacing: 1.4px;
-    font-weight: 500;
+    font-weight: 700;
     margin-top: 1px;
   }
   .brand-symbol {
@@ -1872,7 +1872,7 @@ html:has(> body.sales-xray-document) {
   .workspace-label {
     font-size: var(--sx-text-2xs);
     letter-spacing: 1.2px;
-    font-weight: 500;
+    font-weight: 700;
     color: var(--muted);
     margin: 50px 12px 15px;
   }
@@ -1899,7 +1899,7 @@ html:has(> body.sales-xray-document) {
   .nav-item.active {
     color: var(--action);
     background: var(--subtle);
-    font-weight: 500;
+    font-weight: 600;
   }
   .nav-count {
     margin-left: auto;
@@ -1969,7 +1969,7 @@ html:has(> body.sales-xray-document) {
     align-items: center;
     gap: 14px;
     font-size: var(--sx-text-xs);
-    font-weight: 500;
+    font-weight: 600;
   }
   .breadcrumb > span {
     font-weight: 400;
@@ -2029,7 +2029,7 @@ html:has(> body.sales-xray-document) {
     padding: 10px 17px;
     border-radius: 6px;
     font-size: var(--sx-text-xs);
-    font-weight: 500;
+    font-weight: 600;
     text-decoration: none;
     white-space: nowrap;
   }
@@ -2051,7 +2051,7 @@ html:has(> body.sales-xray-document) {
   .text-button {
     color: var(--action);
     font-size: var(--sx-text-xs);
-    font-weight: 500;
+    font-weight: 600;
     display: inline-flex;
     align-items: center;
     gap: 9px;
@@ -2113,7 +2113,7 @@ html:has(> body.sales-xray-document) {
     color: var(--action);
     border-radius: 4px;
     font-size: var(--sx-text-2xs);
-    font-weight: 500;
+    font-weight: 700;
     letter-spacing: 0.65px;
     padding: 4px 7px;
     display: inline-block;
@@ -2295,7 +2295,7 @@ html:has(> body.sales-xray-document) {
   .speaker {
     color: var(--action);
     font-size: var(--sx-text-2xs);
-    font-weight: 500;
+    font-weight: 650;
     text-transform: capitalize;
     display: flex;
     align-items: center;
@@ -2405,7 +2405,7 @@ html:has(> body.sales-xray-document) {
     border: 2px solid var(--canvas);
     color: var(--action);
     font-size: var(--sx-text-2xs);
-    font-weight: 500;
+    font-weight: 700;
   }
   .review-initials > span + span {
     margin-left: -5px;
@@ -2710,7 +2710,7 @@ html:has(> body.sales-xray-document) {
     height: 34px;
     border: 1px solid var(--border);
     border-radius: 50%;
-    font-weight: 500;
+    font-weight: 600;
     font-size: var(--sx-text-2xs);
   }
   .review-avatar.alternate {
@@ -2719,7 +2719,7 @@ html:has(> body.sales-xray-document) {
   }
   .field-label {
     display: block;
-    font-weight: 500;
+    font-weight: 600;
     font-size: var(--sx-text-xs);
     margin: 20px 0 10px;
   }

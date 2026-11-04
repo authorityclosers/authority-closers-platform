@@ -24,7 +24,7 @@
 .planHeader h2 {
   margin: 0;
   color: var(--lx-ink, #1c2a39);
-  font: 500 var(--sx-text-md) / var(--sx-leading-24)
+  font: 750 var(--sx-text-md) / var(--sx-leading-24)
     var(--lx-font-display, var(--lx-font-ui, sans-serif));
 }
 
@@ -45,7 +45,7 @@
   background: var(--lx-paper-2, #f4f6fa);
   color: var(--lx-ink-2, #35465a);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .prices {
@@ -69,7 +69,7 @@
   margin: 0;
   color: var(--lx-ink, #1c2a39);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 750;
 }
 
 .facts {
@@ -90,7 +90,7 @@
   margin: 0;
   color: var(--lx-ink, #1c2a39);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 750;
 }
 
 .notice {

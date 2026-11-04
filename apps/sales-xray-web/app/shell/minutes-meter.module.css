@@ -36,7 +36,7 @@
 
 .availableLabel {
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--lx-ink);
   flex: 1;
   white-space: nowrap;
@@ -69,12 +69,12 @@
 }
 
 .label {
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .value {
   color: var(--lx-ink);
-  font-weight: 500;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 

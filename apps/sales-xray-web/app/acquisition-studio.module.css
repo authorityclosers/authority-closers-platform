@@ -19,7 +19,7 @@
 }
 .reviewNotice a {
   color: LinkText;
-  font-weight: 500;
+  font-weight: 650;
 }
 .reviewNotice > div:first-child {
   min-width: 0;
@@ -67,7 +67,7 @@
   color: #0e213d;
   font-family: inherit;
   font-size: var(--sx-text-3xl);
-  font-weight: 500;
+  font-weight: 800;
   letter-spacing: -0.045em;
   line-height: var(--sx-leading-36);
 }
@@ -137,7 +137,7 @@
   margin: 0;
   color: #10243d;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 750;
   line-height: var(--sx-leading-24);
 }
 /* Choose a file is a button now, so the keyboard reaches it: it reads as the
@@ -155,7 +155,7 @@
   color: #007d79;
   cursor: pointer;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 600;
 }
 .app[data-stage="upload"] .dropSelect:hover {
   text-decoration: underline;
@@ -219,7 +219,7 @@
   margin: 0 0 14px;
   color: #10243d;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 750;
 }
 .selectionHeading > span,
 .verifyHeading > span {
@@ -264,7 +264,7 @@
   margin: 0;
   color: #10243d;
   font-family: inherit;
-  font-weight: 500;
+  font-weight: 700;
   font-size: var(--sx-text-md);
   line-height: var(--sx-leading-24);
   text-overflow: ellipsis;
@@ -362,7 +362,7 @@
   background: #007d79;
   color: #fff;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 750;
 }
 @media (max-width: 1100px) {
   .app[data-stage="upload"][data-selected="true"] .layout {
@@ -484,7 +484,7 @@
   background: #edf2ff;
   color: var(--action);
   font:
-    500 var(--sx-text-2xs) / 1 ui-monospace,
+    700 var(--sx-text-2xs) / 1 ui-monospace,
     monospace;
 }
 .stepHeader > span:last-child {
@@ -505,7 +505,7 @@
   margin: 0 0 10px;
   color: var(--mint);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 .freeBadge span {
   display: inline-grid;
@@ -530,7 +530,7 @@
   color: var(--ink);
   cursor: pointer;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 .privacyDetails p,
 .privacyDetails ul {
@@ -562,7 +562,7 @@
   min-height: 44px;
   padding: 0 4px;
   color: var(--sx-accent);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
 }
 .disabled {
@@ -605,7 +605,7 @@
   color: #10243d;
   font-family: inherit;
   font-size: var(--sx-text-xl);
-  font-weight: 500;
+  font-weight: 800;
   line-height: var(--sx-leading-28);
   letter-spacing: -0.035em;
 }
@@ -675,7 +675,7 @@
   display: inline-block;
   cursor: pointer;
   color: var(--muted);
-  font-weight: 500;
+  font-weight: 650;
 }
 .privacyActions > div {
   max-width: 52ch;
@@ -691,14 +691,14 @@
 }
 .privacyActions a {
   color: var(--action);
-  font-weight: 500;
+  font-weight: 650;
 }
 .consentLabel {
   line-height: 1.5;
 }
 .consentLabel a {
   color: var(--action);
-  font-weight: 500;
+  font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -710,7 +710,7 @@
 .reportLanguage label {
   color: var(--ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
 }
 .reportLanguage p {
   margin: 0;
@@ -999,7 +999,7 @@
   color: #10243d;
   font-family: inherit;
   font-size: var(--sx-text-xl);
-  font-weight: 500;
+  font-weight: 720;
   letter-spacing: -0.02em;
   line-height: var(--sx-leading-28);
 }
@@ -1010,7 +1010,7 @@
   color: #10243d;
   font-family: inherit;
   font-size: var(--sx-text-xl);
-  font-weight: 500;
+  font-weight: 720;
   letter-spacing: -0.02em;
   line-height: var(--sx-leading-28);
 }
@@ -1019,7 +1019,7 @@
   color: #10243d;
   font-family: inherit;
   font-size: var(--sx-text-xl);
-  font-weight: 500;
+  font-weight: 720;
   letter-spacing: -0.02em;
   line-height: var(--sx-leading-28);
 }
@@ -1031,7 +1031,7 @@
   margin: 4px 0 0;
   color: #60738f;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   line-height: var(--sx-leading-16);
 }
 .reportMetadata > span {
@@ -1082,7 +1082,7 @@
   color: #203a5c;
   font: inherit;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
   text-align: left;
   cursor: pointer;
 }
@@ -1160,7 +1160,7 @@
   color: #405778;
   font: inherit;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-16);
   text-align: center;
   text-decoration: none;
@@ -1262,7 +1262,7 @@
   flex: 1;
   color: var(--lx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
 }
 .errorClose {
   display: grid;
@@ -1295,7 +1295,7 @@
   color: var(--lx-muted);
   font: inherit;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
@@ -1405,7 +1405,7 @@
     color: #08776e;
     font: inherit;
     font-size: var(--sx-text-sm);
-    font-weight: 500;
+    font-weight: 650;
     cursor: pointer;
   }
   .app[data-stage="report"] .playbackToggle:focus-visible {
@@ -1668,7 +1668,7 @@
   margin: 0;
   color: #14233c;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 750;
   letter-spacing: -0.015em;
   line-height: var(--sx-leading-24);
 }
@@ -1689,7 +1689,7 @@
   background: #f7f9fc;
   color: #2c4467;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
   line-height: var(--sx-leading-16);
 }
 .allowanceBadge svg {
@@ -2405,7 +2405,7 @@
   gap: 10px;
   margin: 0 0 2px;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
+  font: 700 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
   letter-spacing: -0.01em;
 }
 .app.app[data-stage="upload"][data-selected="true"]
@@ -2440,7 +2440,7 @@
 .app.app[data-stage="upload"][data-selected="true"] .reportLanguage label {
   margin: 0;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
+  font: 600 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
 }
 .app.app[data-stage="upload"][data-selected="true"] .reportLanguage p {
   grid-column: 1 / -1;
@@ -2462,7 +2462,7 @@
   justify-content: space-between;
   padding: 0 14px;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
+  font: 600 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
   list-style: none;
   cursor: pointer;
 }
@@ -2521,7 +2521,7 @@
 }
 .app.app[data-stage="upload"][data-selected="true"] .consentLabel a {
   color: var(--lx-ink);
-  font-weight: 500;
+  font-weight: 650;
   text-decoration-color: var(--lx-line-strong);
   text-underline-offset: 3px;
 }
@@ -2543,7 +2543,7 @@
   background: var(--lx-teal);
   box-shadow: none;
   color: var(--lx-on-teal);
-  font: 500 var(--sx-text-sm) / 1 var(--lx-font-ui);
+  font: 650 var(--sx-text-sm) / 1 var(--lx-font-ui);
   transition: background-color var(--lx-dur-quick) var(--lx-ease-quick);
 }
 .app.app[data-stage="upload"][data-selected="true"]
@@ -2666,12 +2666,12 @@
   border-radius: 8px;
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 650 var(--sx-text-xs) / 1 var(--lx-font-ui);
   white-space: nowrap;
 }
 .app.app[data-stage="upload"][data-selected="true"] .languagePlus {
   color: var(--lx-muted-2);
-  font-weight: 500;
+  font-weight: 700;
 }
 .app.app[data-stage="upload"][data-selected="true"] .reportLanguage {
   grid-template-columns: minmax(0, 1fr);
@@ -2754,7 +2754,7 @@
 .app.app:is([data-stage="opening"], [data-stage="recovery"]) .progressCopy h1 {
   margin: 0 0 10px;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-xl) / var(--sx-leading-28) var(--lx-font-display);
+  font: 700 var(--sx-text-xl) / var(--sx-leading-28) var(--lx-font-display);
   letter-spacing: -0.02em;
 }
 .app.app:is([data-stage="opening"], [data-stage="recovery"]) .progressCopy > p {
@@ -2786,7 +2786,7 @@
   background: var(--lx-surface);
   box-shadow: none;
   color: var(--lx-ink-3);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
   text-decoration: none;
 }
 @media (max-width: 720px) {
@@ -2848,7 +2848,7 @@
 .app.app[data-stage="processing"] .upload > :global(.studio-consent) h3 {
   margin: 0 0 4px;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-2xl) / var(--sx-leading-36) var(--lx-font-display);
+  font: 800 var(--sx-text-2xl) / var(--sx-leading-36) var(--lx-font-display);
   letter-spacing: -0.035em;
 }
 .app.app[data-stage="processing"] .upload > :global(.studio-consent) > p {
@@ -2890,7 +2890,7 @@
   summary {
   padding: 12px 14px;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
+  font: 600 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
   cursor: pointer;
 }
 .app.app[data-stage="processing"]
@@ -2909,7 +2909,7 @@
   background: var(--lx-gradient-primary);
   box-shadow: var(--lx-shadow-cta);
   color: var(--lx-on-teal);
-  font: 500 var(--sx-text-md) / 1 var(--lx-font-ui);
+  font: 700 var(--sx-text-md) / 1 var(--lx-font-ui);
 }
 
 /* ---------- Report: frameless header, one calm menu, a clear delete dialog ---------- */
@@ -2929,7 +2929,7 @@
 .app.app[data-stage="report"] .reportHeader h1 {
   margin: 0;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-2xl) / var(--sx-leading-36) var(--lx-font-display);
+  font: 800 var(--sx-text-2xl) / var(--sx-leading-36) var(--lx-font-display);
   letter-spacing: -0.03em;
 }
 .app.app[data-stage="report"] .reportHeader h1[title] {
@@ -3068,14 +3068,14 @@
   box-shadow: 0 0 0 8px
     color-mix(in srgb, var(--lx-danger-soft) 45%, transparent);
   color: var(--lx-danger);
-  font: 500 var(--sx-text-xl) / 1 var(--lx-font-display);
+  font: 800 var(--sx-text-xl) / 1 var(--lx-font-display);
 }
 .app.app[data-stage="report"] .reportDeleteConfirm p {
   max-width: 34ch;
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 600;
   line-height: var(--sx-leading-24);
 }
 .app.app[data-stage="report"] .reportDeleteConfirm > div {
@@ -3087,7 +3087,7 @@
   min-height: 44px;
   justify-content: center;
   border-radius: 12px;
-  font: 500 var(--sx-text-sm) / 1 var(--lx-font-ui);
+  font: 700 var(--sx-text-sm) / 1 var(--lx-font-ui);
 }
 .app.app[data-stage="report"] .reportDeleteConfirm .reportActionDanger {
   border-color: transparent;
