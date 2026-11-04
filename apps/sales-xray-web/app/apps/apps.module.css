@@ -26,7 +26,7 @@
 .brand {
   color: var(--lx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 750;
   text-decoration: none;
 }
 
@@ -34,12 +34,12 @@
   margin: 0 0 6px;
   color: var(--lx-teal);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 750;
 }
 
 .hero h1 {
   margin: 0;
-  font: 500 var(--sx-text-2xl) / var(--sx-leading-36)
+  font: 800 var(--sx-text-2xl) / var(--sx-leading-36)
     var(--lx-font-display, var(--lx-font-ui, sans-serif));
   letter-spacing: -0.025em;
   text-wrap: balance;
@@ -121,7 +121,7 @@
   color: var(--lx-on-teal);
   box-shadow: var(--lx-shadow-cta, none);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 750;
   text-decoration: none;
 }
 
@@ -169,7 +169,7 @@
 
 .check summary {
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .check > p {
@@ -235,7 +235,7 @@
   padding: 12px 0;
   color: var(--lx-ink-2);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -265,7 +265,7 @@
   background: var(--lx-paper-2);
   color: var(--lx-ink-3);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .windowsHelp {
@@ -320,7 +320,7 @@
 .pTitle {
   fill: var(--lx-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .pText {
@@ -331,7 +331,7 @@
 .pHint {
   fill: var(--lx-teal);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .pOn {
@@ -349,7 +349,7 @@
 .pButtonText {
   fill: var(--lx-on-teal);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .pTap {
@@ -366,7 +366,7 @@
 .pSmartTitle {
   fill: var(--lx-on-teal);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .pSmartText {

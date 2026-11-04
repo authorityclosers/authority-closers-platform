@@ -41,7 +41,7 @@
 .readerTitle {
   margin: 0;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-24);
   color: var(--lx-ink);
   white-space: nowrap;
@@ -74,7 +74,7 @@
   color: var(--lx-ink-3);
   font: inherit;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
   flex-shrink: 0;
@@ -184,7 +184,7 @@
   background: var(--lx-sunken);
   color: var(--lx-ink-3);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -245,7 +245,7 @@
 .emptyStateTitle {
   margin: 0 0 8px;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--lx-ink-3);
 }
 
@@ -303,13 +303,13 @@
   background: var(--voice, var(--lx-teal));
   color: var(--lx-surface);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 700;
   flex-shrink: 0;
 }
 
 .speakerName {
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--lx-ink);
   white-space: nowrap;
 }
@@ -322,7 +322,7 @@
   background: var(--lx-sunken);
   color: var(--lx-ink-3);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .turnActions {
@@ -343,7 +343,7 @@
   color: var(--lx-ink-3);
   font: inherit;
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -391,7 +391,7 @@
   color: var(--lx-focus-ink);
   padding: 1px 2px;
   border-radius: 3px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .activeSearchHighlight {
@@ -399,7 +399,7 @@
   color: var(--lx-ink);
   padding: 1px 3px;
   border-radius: 3px;
-  font-weight: 500;
+  font-weight: 700;
   outline: 2px solid var(--lx-focus);
 }
 
@@ -453,7 +453,7 @@
   padding: 2px 7px;
   border-radius: 4px;
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .findingCallout[data-kind="good"] .findingBadge {
@@ -481,7 +481,7 @@
 }
 
 .findingTitle {
-  font-weight: 500;
+  font-weight: 700;
   color: var(--lx-ink);
 }
 

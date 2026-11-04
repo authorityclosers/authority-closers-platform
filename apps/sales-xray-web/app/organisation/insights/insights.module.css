@@ -91,7 +91,7 @@
   background: none;
   color: var(--sx-ink);
   font: inherit;
-  font-weight: 500;
+  font-weight: 600;
   text-align: left;
   text-decoration: none;
   cursor: pointer;
@@ -195,7 +195,7 @@
 .readout b {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .legend,
@@ -472,7 +472,7 @@ button.barRow:focus-visible {
   gap: 6px;
   min-width: 52px;
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 600;
   text-align: right;
   justify-content: flex-end;
 }
@@ -564,7 +564,7 @@ button.barRow:focus-visible {
   gap: 6px;
   min-width: 132px;
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .skillValue small {
@@ -599,7 +599,7 @@ button.barRow:focus-visible {
   height: 28px;
   padding: 0 4px;
   color: var(--sx-muted);
-  font-weight: 500;
+  font-weight: 600;
   text-align: center;
   white-space: nowrap;
 }
@@ -796,7 +796,7 @@ button.barRow:focus-visible {
 
 .bandValue {
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .bandTrack {
@@ -835,7 +835,7 @@ button.barRow:focus-visible {
   margin-bottom: 4px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .moverList li {
@@ -882,7 +882,7 @@ button.barRow:focus-visible {
 .callTitle {
   overflow: hidden;
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1019,7 +1019,7 @@ a.callTitle:hover {
   background: var(--sx-surface);
   color: var(--sx-ink);
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 600;
 }
 .filterDetails summary:focus-visible {
   outline: 2px solid var(--sx-accent);
@@ -1124,7 +1124,7 @@ a.callTitle:hover {
 .skillAnswer small {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
 }
 .skillAnswer b {
   font-size: var(--sx-text-md);
@@ -1153,7 +1153,7 @@ a.callTitle:hover {
   display: block;
   min-width: 0;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   text-align: right;
 }
 .skillList .split {
@@ -1287,7 +1287,7 @@ a.callTitle:hover {
   background: var(--sx-accent-soft);
   color: var(--sx-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: 0.02em;
 }
 .personMain {
@@ -1350,7 +1350,7 @@ a.callTitle:hover {
   display: grid;
   gap: 2px;
   padding-top: 6px;
-  font-weight: 500;
+  font-weight: 650;
 }
 .gapSkill small {
   color: var(--sx-muted);
@@ -1410,7 +1410,7 @@ a.callTitle:hover {
   align-items: center;
   min-height: 44px;
   color: var(--sx-accent);
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
 }
 .gridDetails > .heatBar {

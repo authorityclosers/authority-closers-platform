@@ -153,7 +153,7 @@
   -webkit-line-clamp: 2;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .text span {
@@ -180,7 +180,7 @@
 
 .row time[data-late] {
   color: var(--sx-bad);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 /* A narrow list, on a phone: the due time goes under the task's words, so
@@ -250,7 +250,7 @@
   background: var(--sx-surface);
   color: var(--sx-ink);
   font: inherit;
-  font-weight: 500;
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
 }
@@ -273,7 +273,7 @@
   margin: 0 0 6px;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .field {
@@ -284,7 +284,7 @@
 .field > span {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .error {
@@ -320,7 +320,7 @@
   border-color: var(--sx-accent);
   background: var(--sx-accent-soft);
   color: var(--sx-accent);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .input {
@@ -361,7 +361,7 @@ textarea.input {
   margin: 0;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 @media (min-width: 900px) {

@@ -22,7 +22,7 @@
 .sectionHead h3 {
   margin: 0;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
 }
 .sectionHead p {
   margin: 2px 0 0;
@@ -91,13 +91,13 @@
   display: grid;
   justify-items: center;
   font-size: var(--sx-text-3xl);
-  font-weight: 500;
+  font-weight: 800;
   line-height: 1;
 }
 .ringScore small {
   color: var(--xr-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 .ring figcaption {
   display: grid;
@@ -110,7 +110,7 @@
 .aiTag {
   color: var(--xr-muted);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 .aiTag {
   margin-left: 4px;
@@ -127,7 +127,7 @@
 .who h4 {
   margin: 0;
   font-size: var(--sx-text-2xl);
-  font-weight: 500;
+  font-weight: 800;
   overflow-wrap: anywhere;
 }
 .who p {
@@ -152,7 +152,7 @@
   background: var(--tone-soft);
   color: var(--tone);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 .chip svg {
   width: 13px;
@@ -187,7 +187,7 @@
 }
 .fact dd {
   margin: 2px 0 0;
-  font-weight: 500;
+  font-weight: 700;
 }
 .fact dl {
   margin: 0;
@@ -214,11 +214,11 @@
 .tileLabel {
   color: var(--tone);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 .when {
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 800;
 }
 .arrow {
   position: absolute;
@@ -245,7 +245,7 @@
 .yours {
   color: var(--xr-green);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 .actions {
   display: inline-flex;

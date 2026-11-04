@@ -113,7 +113,7 @@
   border-radius: 99px;
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
-  font: 500 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
+  font: 600 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition: transform 140ms var(--lx-ease-pop, ease);
@@ -151,7 +151,7 @@ q.words {
   color: var(--lx-ink-3);
   font-size: var(--sx-text-2xs);
   font-style: normal;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .warn {
@@ -213,7 +213,7 @@ q.words {
   margin: 2px 0 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
@@ -265,7 +265,7 @@ q.words {
   border-radius: 12px;
   background: var(--lx-surface);
   color: var(--lx-ink);
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
+  font: 600 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
   text-align: left;
   cursor: pointer;
   transition:

@@ -104,7 +104,7 @@
   background: var(--sx-sunken);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
   white-space: nowrap;
 }
 
@@ -194,7 +194,7 @@
   overflow: hidden;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 650;
   text-overflow: ellipsis;
 }
 
@@ -226,7 +226,7 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .groupHead p {
@@ -266,7 +266,7 @@
 .switchText strong {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .switchText small {
@@ -382,7 +382,7 @@
   border-radius: 999px;
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
@@ -468,7 +468,7 @@
   background: color-mix(in oklab, var(--sx-good) 7%, var(--sx-surface));
   box-shadow: none;
   color: var(--lx-strength-ink);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .saveActions {
@@ -496,7 +496,7 @@
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -529,7 +529,7 @@
   box-shadow: inset 0 0 0 1px var(--sx-line);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .fact[data-tone="good"] {
@@ -586,7 +586,7 @@
   background: var(--sx-sunken);
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .table tbody tr:last-child th,
@@ -596,7 +596,7 @@
 
 .table tbody th {
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .table caption {
@@ -686,7 +686,7 @@
 .fieldLabel strong {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .fieldLabel small {
@@ -734,7 +734,7 @@ fieldset.sub {
 .list strong {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .list small {
@@ -767,7 +767,7 @@ fieldset.sub {
   padding: 0 12px;
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
   list-style: none;
 }
@@ -823,7 +823,7 @@ fieldset.sub {
 .option strong {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .option small {
@@ -880,7 +880,7 @@ fieldset.sub {
 
 .rows strong {
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .rows small {

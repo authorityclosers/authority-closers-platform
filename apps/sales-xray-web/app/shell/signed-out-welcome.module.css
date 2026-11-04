@@ -57,14 +57,14 @@
   margin: 0;
   color: var(--sx-accent);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .title {
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-2xl);
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-36);
   letter-spacing: -0.02em;
   text-wrap: balance;
@@ -134,7 +134,7 @@
   background: var(--sx-accent);
   color: var(--sx-accent-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 650;
   text-decoration: none;
   box-shadow: 0 10px 24px -14px var(--sx-accent);
   transition:
@@ -170,7 +170,7 @@
 .guest {
   color: var(--sx-accent);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
 }
 

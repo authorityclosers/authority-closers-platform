@@ -40,7 +40,7 @@
   background: var(--sx-accent-soft);
   color: var(--sx-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
   white-space: nowrap;
 }
 .summary {
@@ -211,7 +211,7 @@
   border-radius: 30px;
   background: var(--sx-accent);
   color: var(--sx-accent-ink);
-  font-weight: 500;
+  font-weight: 650;
   text-decoration: none;
 }
 @media (max-width: 700px) {

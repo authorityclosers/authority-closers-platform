@@ -61,7 +61,7 @@
   gap: 8px;
   min-width: 0;
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .valueWords {
@@ -112,7 +112,7 @@
   background: transparent;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .root[data-mode="inline"] .label {
@@ -241,7 +241,7 @@
 }
 
 .option[aria-selected="true"] {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .name {

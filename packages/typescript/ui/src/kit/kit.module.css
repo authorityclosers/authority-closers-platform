@@ -174,7 +174,7 @@
   gap: 2px;
   color: var(--sx-accent);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
 }
 
@@ -205,7 +205,7 @@
   background: var(--sx-sunken);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -234,7 +234,7 @@
   align-items: center;
   gap: 1px;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -353,7 +353,7 @@ a.tile:active {
   align-items: center;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .tileMain {
@@ -418,7 +418,7 @@ a.tile:active {
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .emptyText {
@@ -541,7 +541,7 @@ a.tile:active {
   border-radius: var(--sx-radius-sm) var(--sx-radius-sm) 0 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   transition:
     color var(--sx-dur-fast) var(--sx-ease-out),
@@ -635,7 +635,7 @@ a.tile:active {
   color: var(--sx-muted);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition:
     color var(--sx-dur-fast) var(--sx-ease-out),
@@ -674,7 +674,7 @@ a.tile:active {
   background: color-mix(in oklch, var(--sx-accent) 14%, var(--sx-sunken));
   color: var(--sx-ink-2);
   font-size: max(12px, calc(var(--size, 24px) * 0.4));
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .avatar[data-shape="square"] {
@@ -739,7 +739,7 @@ a.tile:active {
   overflow: hidden;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -836,13 +836,13 @@ a.rowTitle:focus-visible::after {
   background: var(--sx-sunken);
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
 }
 
 .table tbody th {
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .table tbody tr:hover {
@@ -869,7 +869,7 @@ a.rowTitle:focus-visible::after {
 .card > strong {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .card + .card {
@@ -912,7 +912,7 @@ a.rowTitle:focus-visible::after {
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
@@ -1005,7 +1005,7 @@ a.rowTitle:focus-visible::after {
 .fieldLabel {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .field :is(input, select, textarea),
@@ -1365,7 +1365,7 @@ a.rowTitle:focus-visible::after {
 
 .actionWords strong {
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .actionWords small {
@@ -1399,7 +1399,7 @@ a.rowTitle:focus-visible::after {
   border-color: transparent;
   border-radius: 999px;
   background: var(--sx-fill);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .button:hover:not(:disabled) {
@@ -1428,7 +1428,7 @@ a.rowTitle:focus-visible::after {
 
 .badge {
   padding: 0 9px;
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .badge:not([data-tone]),
@@ -1490,7 +1490,7 @@ a.rowTitle:focus-visible::after {
     var(--lx-avatar-bottom)
   );
   color: white;
-  font-weight: 500;
+  font-weight: 650;
 }
 
 /* Separators start where the text does, as in iOS lists. */

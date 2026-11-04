@@ -51,7 +51,7 @@
   background: var(--sx-accent);
   color: var(--sx-accent-ink);
   padding: 8px 16px;
-  font-weight: 500;
+  font-weight: 650;
   text-decoration: none;
 }
 .update:focus-visible {

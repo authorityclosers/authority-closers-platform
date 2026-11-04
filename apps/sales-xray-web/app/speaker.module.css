@@ -10,7 +10,7 @@
   background: color-mix(in srgb, var(--voice) 16%, var(--lx-surface));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--voice) 30%, transparent);
   color: var(--voice);
-  font: 500 calc(var(--size, 20px) * 0.42) / 1 var(--lx-font-ui);
+  font: 750 calc(var(--size, 20px) * 0.42) / 1 var(--lx-font-ui);
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
@@ -49,7 +49,7 @@
 .mapNotice > button {
   min-height: 36px;
   color: var(--lx-teal);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 /* Phones: the report column has no side padding of its own, so the notice
@@ -123,7 +123,7 @@
   border-radius: 10px;
   background: var(--lx-surface);
   color: var(--lx-ink);
-  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
+  font: 650 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
   transition:
     border-color var(--lx-dur-quick) var(--lx-ease-quick),
     box-shadow var(--lx-dur-quick) var(--lx-ease-quick);
@@ -170,7 +170,7 @@
   border-radius: 9px;
   background: transparent;
   color: var(--lx-muted);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
   cursor: pointer;
   transition:
     background-color var(--lx-dur-quick) var(--lx-ease-quick),
@@ -207,7 +207,7 @@
 }
 .libraryHead > span {
   color: var(--lx-muted);
-  font: 500 var(--sx-text-2xs) / 1 var(--lx-font-ui);
+  font: 700 var(--sx-text-2xs) / 1 var(--lx-font-ui);
 }
 .search {
   display: inline-flex;
@@ -308,7 +308,7 @@
   padding: 0 14px;
   border: 0;
   border-radius: var(--lx-radius-pill);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 650 var(--sx-text-xs) / 1 var(--lx-font-ui);
   cursor: pointer;
   transition:
     background-color var(--lx-dur-quick) var(--lx-ease-quick),
@@ -419,7 +419,7 @@
 
 .detectedTitle {
   margin: 0;
-  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
+  font: 700 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
 }
 
 .detectedClose {
@@ -467,7 +467,7 @@
 
 .detectedWho strong {
   overflow: hidden;
-  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
+  font: 650 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -487,7 +487,7 @@
   background: color-mix(in srgb, var(--voice) 14%, var(--lx-surface));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--voice) 28%, transparent);
   color: var(--lx-ink);
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 650 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   white-space: nowrap;
 }
 
@@ -505,7 +505,7 @@
   border-radius: 8px;
   background: var(--lx-surface);
   color: var(--lx-ink);
-  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
+  font: 600 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
 }
 
 .detectedName:focus {
@@ -533,7 +533,7 @@
   border-radius: 7px;
   background: transparent;
   color: var(--lx-muted);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
   cursor: pointer;
 }
 
@@ -564,7 +564,7 @@
   flex: 1;
   min-height: 36px;
   border-radius: 9px;
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 650 var(--sx-text-xs) / 1 var(--lx-font-ui);
   cursor: pointer;
 }
 
@@ -657,7 +657,7 @@
     border-radius: 9px;
     background: var(--lx-surface);
     color: var(--lx-ink);
-    font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+    font: 650 var(--sx-text-xs) / 1 var(--lx-font-ui);
     cursor: pointer;
   }
 

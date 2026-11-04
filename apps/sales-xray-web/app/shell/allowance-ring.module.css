@@ -59,7 +59,7 @@
   transform: translateY(-50%);
   color: var(--lx-ink);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 800;
   line-height: 1;
   text-align: center;
   letter-spacing: -0.02em;
@@ -73,7 +73,7 @@
 .text strong {
   color: var(--lx-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .text small {

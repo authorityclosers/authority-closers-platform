@@ -111,7 +111,7 @@
   box-shadow: 0 4px 10px -4px
     color-mix(in srgb, var(--lx-teal) 60%, transparent);
   color: var(--lx-on-teal);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui, inherit);
+  font: 700 var(--sx-text-xs) / 1 var(--lx-font-ui, inherit);
 }
 
 .headText {
@@ -127,7 +127,7 @@
   gap: 8px;
   margin: 0;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui, inherit);
+  font: 650 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui, inherit);
   letter-spacing: -0.01em;
 }
 
@@ -146,7 +146,7 @@
   border-radius: 99px;
   background: var(--lx-sunken);
   color: var(--lx-ink-3, var(--lx-muted));
-  font: 500 var(--sx-text-2xs) / 1 var(--lx-font-ui, inherit);
+  font: 650 var(--sx-text-2xs) / 1 var(--lx-font-ui, inherit);
   font-style: normal;
   font-variant-numeric: tabular-nums;
 }
@@ -193,7 +193,7 @@
 .card h4 {
   margin: 0;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui, inherit);
+  font: 650 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui, inherit);
   letter-spacing: -0.005em;
 }
 
@@ -243,7 +243,7 @@
   border-radius: 6px;
   background: color-mix(in srgb, var(--tone) 11%, var(--lx-surface));
   color: var(--tone-ink);
-  font: 500 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
+  font: 650 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
   letter-spacing: 0.01em;
   white-space: nowrap;
 }
@@ -270,7 +270,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--lx-ink-3, var(--lx-muted));
-  font: 500 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
+  font: 600 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -284,7 +284,7 @@
   gap: 4px;
   padding: 1px 8px;
   border-radius: 99px;
-  font: 500 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
+  font: 650 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -359,14 +359,14 @@
   align-items: center;
   gap: 6px;
   color: var(--lx-teal);
-  font: 500 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
+  font: 650 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
 }
 
 .script p {
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 550;
   line-height: var(--sx-leading-20);
 }
 
@@ -399,7 +399,7 @@
 
 .note b {
   color: var(--lx-ink);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .note[data-muted] {
@@ -409,7 +409,7 @@
 
 .note[data-muted] b {
   color: var(--lx-ink-3, var(--lx-muted));
-  font-weight: 500;
+  font-weight: 600;
 }
 
 /* ---- Locked guest findings ---- */
@@ -432,7 +432,7 @@
   border-radius: 99px;
   background: var(--lx-teal);
   color: var(--lx-on-teal);
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
+  font: 650 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
   cursor: pointer;
 }
 

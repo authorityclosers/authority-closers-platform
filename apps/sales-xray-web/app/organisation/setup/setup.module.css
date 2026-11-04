@@ -57,7 +57,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   cursor: pointer;
   touch-action: manipulation;
@@ -186,7 +186,7 @@
   min-height: 44px;
   gap: 8px;
   color: var(--sx-ink-2);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 .details > div {
@@ -209,7 +209,7 @@
   border-radius: 50%;
   background: var(--sx-accent-soft);
   color: var(--sx-accent);
-  font-weight: 500;
+  font-weight: 700;
 }
 .routing > section > header > p {
   display: none;
@@ -388,7 +388,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
@@ -418,7 +418,7 @@
   background: var(--sx-fill-soft);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
 }
 .status::before {
@@ -503,7 +503,7 @@
   color: var(--sx-accent);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -553,7 +553,7 @@
 .pickCopy strong {
   overflow: hidden;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 600;
   line-height: var(--sx-leading-24);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -643,7 +643,7 @@
   min-width: 0;
   overflow: hidden;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -734,7 +734,7 @@
   background: var(--sx-accent-soft);
   color: var(--sx-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .rowChevron {
@@ -886,7 +886,7 @@
   padding: 0 8px;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
 }
 .quietRow svg {
@@ -900,7 +900,7 @@
   min-height: 44px;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 .allForms input {
@@ -931,7 +931,7 @@
   color: var(--sx-accent-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 .danger:disabled {
@@ -950,7 +950,7 @@
 }
 .olderChoice legend {
   padding: 0;
-  font-weight: 500;
+  font-weight: 600;
 }
 .olderChoice label {
   display: flex;

@@ -108,14 +108,14 @@
 .eyebrow {
   color: var(--xr-text-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   line-height: var(--sx-leading-16);
   margin: 0;
 }
 .cardTitle {
   color: var(--xr-text);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   line-height: var(--sx-leading-24);
   margin: 0;
 }
@@ -135,7 +135,7 @@
   color: var(--tone);
   display: inline-flex;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   gap: 6px;
   line-height: 1;
   padding: 6px 11px;
@@ -152,7 +152,7 @@
   color: var(--xr-muted);
   display: inline-flex;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   gap: 6px;
   padding: 3px 10px;
 }
@@ -205,7 +205,7 @@
 .headTitle {
   color: var(--xr-text);
   font-size: var(--sx-text-xl);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: -0.01em;
   line-height: var(--sx-leading-28);
   margin: 0;
@@ -256,14 +256,14 @@
 .scoreValue {
   color: var(--tone);
   font-size: var(--sx-text-3xl);
-  font-weight: 500;
+  font-weight: 800;
   letter-spacing: -0.03em;
   line-height: var(--sx-leading-36);
 }
 .scoreOf {
   color: var(--xr-text-2);
   font-size: var(--sx-text-xl);
-  font-weight: 500;
+  font-weight: 700;
 }
 .scoreBadge {
   font-size: var(--sx-text-sm);
@@ -272,7 +272,7 @@
 .scoreEmpty {
   color: var(--xr-muted);
   font-size: var(--sx-text-3xl);
-  font-weight: 500;
+  font-weight: 800;
   line-height: 1;
 }
 .rule {
@@ -357,7 +357,7 @@
   color: var(--xr-text);
   font-size: var(--sx-text-xl);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 800;
   letter-spacing: -0.01em;
   line-height: var(--sx-leading-28);
 }
@@ -393,7 +393,7 @@
 .highlightTitle {
   color: var(--tone);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   margin: 0 0 4px;
 }
 .highlight .body {
@@ -410,7 +410,7 @@
 .dealLabel {
   color: var(--xr-text);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   white-space: nowrap;
 }
 .chips {
@@ -446,7 +446,7 @@
   background: var(--xr-green-soft);
   border-color: var(--xr-green-mark);
   color: var(--xr-green);
-  font-weight: 500;
+  font-weight: 700;
 }
 .chip[aria-pressed="true"] svg {
   color: var(--xr-green-mark);
@@ -472,7 +472,7 @@
 .dealValueText strong {
   color: var(--xr-text);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
 }
 .dealValueText span {
   color: var(--xr-text-2);
@@ -504,7 +504,7 @@
   color: var(--xr-text-2);
   display: grid;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   gap: 4px;
 }
 .dealForm input {
@@ -529,7 +529,7 @@
   cursor: pointer;
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
   min-height: 36px;
   padding: 0 16px;
 }
@@ -583,7 +583,7 @@
   color: var(--xr-text);
   font-size: var(--sx-text-md);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 800;
 }
 .progressTrack {
   background: var(--xr-blue-soft);
@@ -642,13 +642,13 @@
   color: var(--tone);
   font-size: var(--sx-text-2xl);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 800;
   line-height: var(--sx-leading-36);
 }
 .countLabel {
   color: var(--tone);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
 }
 .countText {
   color: var(--xr-text-2);
@@ -679,7 +679,7 @@
 .filter[aria-pressed="true"] {
   background: var(--xr-card-3);
   border-color: var(--xr-muted);
-  font-weight: 500;
+  font-weight: 700;
 }
 .filter span {
   color: var(--xr-muted);
@@ -704,7 +704,7 @@
   border-bottom: 1px solid var(--xr-line);
   color: var(--xr-text-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   min-height: 44px;
 }
 .tableHead span:first-child {
@@ -742,7 +742,7 @@
   display: inline-flex;
   font-size: var(--sx-text-xs);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 700;
   height: 30px;
   justify-content: center;
   width: 30px;
@@ -753,7 +753,7 @@
 .name {
   color: var(--xr-text);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   line-height: var(--sx-leading-20);
 }
 .evaluates {
@@ -769,7 +769,7 @@
   color: var(--tone);
   display: inline-flex;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
   gap: 7px;
   justify-self: start;
   line-height: var(--sx-leading-16);
@@ -794,7 +794,7 @@
 .points strong {
   color: var(--tone);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 800;
 }
 .points span {
   color: var(--xr-text-2);
@@ -853,7 +853,7 @@
 .blockTitle {
   color: var(--xr-text);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   margin: 0;
 }
 .toneTitle {
@@ -928,7 +928,7 @@
   display: inline-flex;
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
   gap: 10px;
   justify-content: center;
   min-height: 44px;
@@ -979,7 +979,7 @@
 .outcomeWord {
   color: var(--tone);
   font-size: var(--sx-text-xl);
-  font-weight: 500;
+  font-weight: 800;
   letter-spacing: -0.01em;
   line-height: var(--sx-leading-28);
 }
@@ -987,7 +987,7 @@
   color: var(--xr-text);
   font-size: var(--sx-text-2xl);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 800;
   letter-spacing: -0.01em;
   line-height: var(--sx-leading-36);
 }
@@ -1086,7 +1086,7 @@
 .stepName {
   color: var(--xr-text);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   line-height: var(--sx-leading-20);
 }
 .stepState {
@@ -1143,7 +1143,7 @@
   display: inline-flex;
   flex: none;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 800;
   height: 22px;
   justify-content: center;
   width: 22px;
@@ -1183,7 +1183,7 @@
   color: var(--xr-text);
   display: inline-flex;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   height: 26px;
   justify-content: center;
   width: 26px;
@@ -1206,7 +1206,7 @@
 .owner {
   border-radius: 7px;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   min-width: 52px;
   padding: 5px 10px;
   text-align: center;
@@ -1262,7 +1262,7 @@
 .suggestedTitle {
   color: var(--xr-amber);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
 }
 .suggestedText {
   color: var(--xr-text-2);
@@ -1557,7 +1557,7 @@
   border-radius: 999px;
   color: var(--xr-text-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   margin-left: 8px;
   padding: 2px 8px;
 }
@@ -1590,7 +1590,7 @@
   background: color-mix(in srgb, var(--xr-green-mark) 16%, transparent);
   border-radius: 999px;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   padding: 2px 8px;
 }
 .editButton:disabled {
@@ -1621,7 +1621,7 @@
   font: inherit;
   font-size: var(--sx-text-md);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 700;
   min-height: 22px;
   outline: none;
   padding: 2px 6px 0;
@@ -1686,7 +1686,7 @@
 .askLabel {
   color: var(--xr-text);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
   margin-right: 4px;
 }
 .askInput {
@@ -1723,7 +1723,7 @@
   background: var(--xr-green-soft);
   border-color: var(--xr-green-mark);
   color: var(--xr-green);
-  font-weight: 500;
+  font-weight: 700;
 }
 .save:disabled {
   cursor: not-allowed;
@@ -1841,7 +1841,7 @@
   cursor: pointer;
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
 }
 .showAll:hover {
   background: var(--xr-card-2);

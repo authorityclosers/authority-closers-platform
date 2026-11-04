@@ -15,7 +15,7 @@
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .insight {
@@ -30,7 +30,7 @@
 .insight strong {
   color: var(--sx-accent);
   font-size: var(--sx-text-xl);
-  font-weight: 500;
+  font-weight: 750;
   letter-spacing: -0.01em;
 }
 
@@ -111,7 +111,7 @@
   min-height: 44px;
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
   text-decoration: none;
 }
 

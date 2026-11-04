@@ -12,7 +12,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
   transition: transform var(--sx-dur-fast) var(--sx-ease-out);
 }
@@ -45,7 +45,7 @@
   background: none;
   color: var(--sx-accent);
   font: inherit;
-  font-weight: 500;
+  font-weight: 650;
   text-decoration: none;
   cursor: pointer;
 }
@@ -134,7 +134,7 @@
   grid-area: title;
   min-width: 0;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .chip {
@@ -147,7 +147,7 @@
   background: color-mix(in oklab, var(--sx-accent) 12%, transparent);
   color: var(--sx-accent);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -191,7 +191,7 @@
   color: var(--sx-accent);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -238,7 +238,7 @@
   min-width: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 /* A switch: the thumb springs across. */
@@ -312,7 +312,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
   transition:
     background-color var(--sx-dur-fast) var(--sx-ease-out),
@@ -381,7 +381,7 @@
   color: var(--sx-accent);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -394,7 +394,7 @@
   color: var(--lx-on-teal);
   font: inherit;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -430,7 +430,7 @@
   background: var(--sx-fill);
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .people button:not(.add) {
@@ -454,7 +454,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 

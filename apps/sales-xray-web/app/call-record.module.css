@@ -15,14 +15,14 @@
   margin: 0;
   color: var(--lx-muted, #56637a);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .sectionTitle {
   margin: 0;
   color: var(--lx-ink, #0b1424);
   font-size: var(--sx-text-xl);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: -0.015em;
   line-height: var(--sx-leading-28);
 }
@@ -55,13 +55,13 @@
   margin: 0;
   color: var(--lx-ink, #0b1424);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .durationBadge {
   font-size: var(--sx-text-sm);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--lx-ink-2, #1c2940);
   background: var(--lx-sunken, #edf1f7);
   padding: 4px 10px;
@@ -81,13 +81,13 @@
 
 .metricTitle {
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--lx-muted, #56637a);
 }
 
 .metricValue {
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--lx-ink, #0b1424);
   font-variant-numeric: tabular-nums;
 }
@@ -118,7 +118,7 @@
   justify-content: center;
   color: #ffffff;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   white-space: nowrap;
   transition: width 0.3s ease;
 }
@@ -165,7 +165,7 @@
 .factsHeading {
   margin: 0;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--lx-ink, #0b1424);
   padding-bottom: var(--lx-space-2, 8px);
   border-bottom: 1px solid var(--lx-line-soft, #eaeef5);
@@ -194,7 +194,7 @@
 .statement {
   margin: 0;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--lx-ink, #0b1424);
   line-height: var(--sx-leading-20);
 }
@@ -227,7 +227,7 @@
   gap: 6px;
   padding: 4px 10px;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   border-radius: 4px;
   background: var(--lx-teal-tint, #eefaf7);
   color: var(--lx-teal, #097870);

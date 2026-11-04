@@ -35,7 +35,7 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   overflow-wrap: anywhere;
 }
 
@@ -63,7 +63,7 @@
 
 .refreshLabel {
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .filters {
@@ -85,7 +85,7 @@
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
   transition:
     background var(--sx-dur-fast) var(--sx-ease-out),
@@ -97,7 +97,7 @@
 .filter strong {
   color: var(--sx-ink);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 750;
   animation: roll var(--sx-dur-base) var(--sx-ease-out);
 }
 
@@ -156,7 +156,7 @@
   color: var(--sx-accent);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -201,7 +201,7 @@
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 /* Each group is one calm card of rows, split by hairlines, like a phone's
@@ -282,7 +282,7 @@
   overflow: hidden;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   line-height: var(--sx-leading-20);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -298,7 +298,7 @@
   background: none;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .cardTitle > [data-tone]::before {
@@ -372,7 +372,7 @@
   padding: 0 12px;
   border-radius: var(--sx-radius-pill);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .actions > button[data-variant="ghost"] {
@@ -430,7 +430,7 @@
   margin-bottom: 0;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .reviewLine svg {
@@ -450,7 +450,7 @@
   background: var(--sx-surface);
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -522,7 +522,7 @@
 
 .outcomeText strong {
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .draft {
@@ -684,7 +684,7 @@
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .connections {
@@ -717,7 +717,7 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .blockerFix {
@@ -754,7 +754,7 @@
 
 .connectionText strong {
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 /* A connection's "How to fix": a page of this app with the fix. */
@@ -763,7 +763,7 @@
   align-items: center;
   min-height: 44px;
   color: var(--sx-accent);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
 }
 
@@ -785,7 +785,7 @@
 .field > span {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .field small {
@@ -827,7 +827,7 @@
   justify-self: start;
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   text-decoration: none;
 }
 

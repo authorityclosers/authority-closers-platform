@@ -58,7 +58,7 @@
   min-height: 44px;
   padding: 0 12px;
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
 }
 /* The phone's last recording, or where to check without a phone. */
@@ -75,7 +75,7 @@
   background: none;
   color: var(--sx-accent);
   font: inherit;
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   vertical-align: middle;
   cursor: pointer;

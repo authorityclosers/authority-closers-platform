@@ -64,7 +64,7 @@
   border-radius: 99px;
   background: var(--lx-surface);
   color: var(--lx-ink);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui, inherit);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui, inherit);
   cursor: pointer;
   transition:
     border-color 140ms ease,

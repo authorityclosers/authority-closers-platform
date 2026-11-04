@@ -32,7 +32,8 @@ const ALLOWED_FILES = new Set(["app/report-document.module.css"]);
 
 const STEP = String.raw`var\(--(?:sx-text|ds-text)-[\w-]+(?:, [^()]+)?\)`;
 const LEAD = String.raw`(?:var\(--sx-leading-(?:16|20|24|28|36)\)|1)`;
-const WEIGHT = String.raw`(?:400|500|var\(--ds-weight-[\w-]+\))`;
+// 400 to 890: v1.37's weights are back, its odd ones (650, 720, 790) included (owner, 4 Nov 2026).
+const WEIGHT = String.raw`(?:[4-8]\d0|var\(--ds-weight-[\w-]+\))`;
 // The Report reader's own text-size control (A- / A+) sets these two.
 const READER = String.raw`var\(--(?:report|document)-font-size\)`;
 const SIZE = new RegExp(
@@ -98,7 +99,7 @@ it("finds the scale's breaches it is meant to stop", () => {
   for (const [prop, value] of [
     ["font-size", "13px"],
     ["font-size", "0.8125rem"],
-    ["font-weight", "600"],
+    ["font-weight", "300"],
     ["line-height", "1.45"],
     ["font", "600 13px/1.3 var(--lx-font-ui)"],
   ])

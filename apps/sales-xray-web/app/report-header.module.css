@@ -65,6 +65,6 @@ small.fileType.fileType.fileType.fileType.fileType {
 /* The call's lead (slice 7): its name opens the lead's sheet in Leads. */
 .lead {
   color: var(--sx-accent);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
 }

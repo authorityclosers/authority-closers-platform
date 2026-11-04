@@ -84,7 +84,7 @@
   margin: 0 0 5px;
   color: var(--accent);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 800;
   line-height: var(--sx-leading-16);
 }
 
@@ -92,7 +92,7 @@
   margin: 0;
   color: #10263a;
   font-size: var(--sx-text-xl);
-  font-weight: 500;
+  font-weight: 800;
   letter-spacing: -0.025em;
   line-height: var(--sx-leading-28);
   overflow-wrap: anywhere;
@@ -178,7 +178,7 @@
   border-radius: 11px;
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 780;
   cursor: pointer;
 }
 

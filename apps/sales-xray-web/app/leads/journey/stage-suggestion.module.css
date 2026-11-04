@@ -39,7 +39,7 @@
 .text small {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .text .error {

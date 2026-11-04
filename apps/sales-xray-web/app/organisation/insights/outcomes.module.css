@@ -21,7 +21,7 @@
   margin: 0 0 8px;
   color: var(--sx-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
 }
 .storyNumbers {
   display: flex;
@@ -123,7 +123,7 @@
 }
 .key dd {
   margin: 0;
-  font-weight: 500;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .key dt {
@@ -184,7 +184,7 @@
   font: var(--sx-text-xs) var(--lx-font-ui);
 }
 .funnel .svgCount {
-  font-weight: 500;
+  font-weight: 750;
 }
 .ribbon,
 .otherRibbon {
@@ -334,7 +334,7 @@
   margin: 0 0 2px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
 }
 .endingHead b {
   font-variant-numeric: tabular-nums;
@@ -404,7 +404,7 @@
   border: 0;
   background: none;
   color: color-mix(in oklab, var(--sx-accent) 80%, var(--lx-ink));
-  font: 500 var(--sx-text-xs) var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) var(--lx-font-ui);
   cursor: pointer;
 }
 .evidence:focus-visible {

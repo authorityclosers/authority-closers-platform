@@ -102,7 +102,7 @@
   color: var(--sx-muted);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -138,7 +138,7 @@
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -221,7 +221,7 @@
 .rowTop strong {
   overflow: hidden;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -234,12 +234,12 @@
 }
 
 .row[data-unread] .rowTop strong {
-  font-weight: 500;
+  font-weight: 750;
 }
 
 .row[data-unread] .rowTop time {
   color: var(--sx-accent);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .rowText {
@@ -261,7 +261,7 @@
 
 .row[data-unread] .rowText {
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .unreadDot {
@@ -302,7 +302,7 @@
   border-radius: 999px;
   background: var(--sx-sunken);
   color: var(--sx-ink-2);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -441,7 +441,7 @@
   color: var(--sx-accent);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -498,7 +498,7 @@
 .threadTitle strong {
   overflow: hidden;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -525,7 +525,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   cursor: pointer;
 }
@@ -572,7 +572,7 @@
   box-shadow: var(--lx-shadow-1);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .bubbleRow {
@@ -628,7 +628,7 @@
   background: color-mix(in oklab, var(--sx-ink) 7%, transparent);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .attachment {
@@ -640,7 +640,7 @@
   background: color-mix(in oklab, var(--sx-ink) 6%, transparent);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .bubbleText {
@@ -682,7 +682,7 @@
   margin: 3px 4px 0;
   color: var(--sx-bad);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   text-align: right;
   /* Owners also see the words Meta sends, which can carry a long link. */
   overflow-wrap: anywhere;
@@ -1060,7 +1060,7 @@
 
 .callAction strong {
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .callAction small {
@@ -1088,7 +1088,7 @@
 .facts dt {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .facts dd {
@@ -1101,7 +1101,7 @@
 
 .facts a {
   color: var(--sx-accent);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
 }
 
@@ -1127,7 +1127,7 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .panelNotes ol {
@@ -1195,7 +1195,7 @@
   color: var(--sx-accent-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -1214,7 +1214,7 @@
   min-height: var(--sx-control-h);
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   text-decoration: none;
 }
 
@@ -1318,7 +1318,7 @@
 .templatePreview span {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .templateParts input,
@@ -1380,7 +1380,7 @@
   color: var(--sx-accent-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -1427,7 +1427,7 @@
   color: var(--lx-missed-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -1535,7 +1535,7 @@
 .ownerButton small {
   color: var(--sx-accent);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .ownerPicker {
@@ -1718,7 +1718,7 @@
 .fileChip strong {
   overflow: hidden;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1748,7 +1748,7 @@
   background: var(--sx-bad-soft);
   color: var(--sx-bad);
   font: inherit;
-  font-weight: 500;
+  font-weight: 650;
   vertical-align: middle;
   cursor: pointer;
 }
@@ -1817,7 +1817,7 @@
   align-items: center;
   gap: 4px;
   color: var(--sx-ink-2);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .unreadCount {
@@ -1830,7 +1830,7 @@
   background: var(--sx-accent);
   color: var(--sx-accent-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: var(--sx-leading-16);
   text-align: center;
