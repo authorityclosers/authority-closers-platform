@@ -135,6 +135,22 @@
   list-style: none;
 }
 
+/* A row's control that Tab reaches stops clear of the pinned head (QA robot
+   68ba6be1, 4 Nov 2026: at 200% text the head is far taller than the page's
+   52 px scroll padding, and focus landed under it). On a phone the head's
+   bottom sits at 64 px plus its height, or at 40% of the screen when taller
+   (work-views.module.css); the page's own padding adds to this. */
+@media (max-width: 899.98px) {
+  .leadList :is(a, button, input, select, textarea, [tabindex]) {
+    scroll-margin-top: min(
+      calc(
+        64px + env(safe-area-inset-top, 0px) + var(--work-head-h, 0px) + 8px
+      ),
+      calc(40dvh + 8px)
+    );
+  }
+}
+
 .leadLine + .leadLine {
   border-top: 1px solid var(--sx-line);
 }
