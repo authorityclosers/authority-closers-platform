@@ -57,7 +57,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
   cursor: pointer;
   touch-action: manipulation;
@@ -90,7 +90,7 @@
   background: var(--sx-surface);
   color: var(--sx-ink);
   font: inherit;
-  font-size: 16px;
+  font-size: var(--sx-text-md);
 }
 .list {
   display: grid;
@@ -186,7 +186,7 @@
   min-height: 44px;
   gap: 8px;
   color: var(--sx-ink-2);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 .details > div {
@@ -209,7 +209,7 @@
   border-radius: 50%;
   background: var(--sx-accent-soft);
   color: var(--sx-accent);
-  font-weight: 700;
+  font-weight: 500;
 }
 .routing > section > header > p {
   display: none;
@@ -332,15 +332,15 @@
 }
 .heroCopy h2 {
   margin: 0;
-  font-size: 17px;
-  line-height: 1.3;
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
   letter-spacing: var(--sx-tracking-title);
 }
 .heroCopy p {
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  line-height: 1.4;
+  line-height: var(--sx-leading-20);
   overflow-wrap: anywhere;
 }
 .iconButton {
@@ -388,7 +388,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
@@ -418,7 +418,7 @@
   background: var(--sx-fill-soft);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
 }
 .status::before {
@@ -455,7 +455,7 @@
   background: transparent;
   color: var(--sx-ink);
   font: inherit;
-  font-size: 16px;
+  font-size: var(--sx-text-md);
   outline: none;
 }
 .searchField:focus-within {
@@ -482,8 +482,8 @@
 .groupTitle h3 {
   margin: 0;
   overflow: hidden;
-  font-size: 15px;
-  line-height: 1.3;
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -503,7 +503,7 @@
   color: var(--sx-accent);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -552,9 +552,9 @@
 }
 .pickCopy strong {
   overflow: hidden;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.35;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -589,7 +589,7 @@
   padding: 8px 16px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  line-height: 1.4;
+  line-height: var(--sx-leading-16);
   box-sizing: border-box;
 }
 .rowNote svg {
@@ -643,7 +643,7 @@
   min-width: 0;
   overflow: hidden;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -666,7 +666,7 @@
   min-height: 52px;
   padding: 0 16px;
   color: var(--sx-ink);
-  font-size: 15px;
+  font-size: var(--sx-text-md);
   font-weight: 500;
   list-style: none;
 }
@@ -733,8 +733,8 @@
   border-radius: 50%;
   background: var(--sx-accent-soft);
   color: var(--sx-ink);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 .rowChevron {
@@ -759,8 +759,8 @@
 .groupTitle h4 {
   margin: 0;
   overflow: hidden;
-  font-size: 15px;
-  line-height: 1.3;
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -886,7 +886,7 @@
   padding: 0 8px;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
 }
 .quietRow svg {
@@ -900,7 +900,7 @@
   min-height: 44px;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 .allForms input {
@@ -931,7 +931,7 @@
   color: var(--sx-accent-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 .danger:disabled {
@@ -950,7 +950,7 @@
 }
 .olderChoice legend {
   padding: 0;
-  font-weight: 600;
+  font-weight: 500;
 }
 .olderChoice label {
   display: flex;

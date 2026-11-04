@@ -12,8 +12,8 @@
   margin-inline: auto;
   color: var(--lx-ink);
   font-family: var(--lx-font-ui);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
   text-align: left;
 }
 
@@ -125,16 +125,16 @@
 
 .headCopy h2 {
   margin: 0;
-  font-size: 20px;
-  font-weight: 700;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   letter-spacing: -0.015em;
-  line-height: 1.25;
+  line-height: var(--sx-leading-24);
 }
 
 .headCopy p {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -143,24 +143,24 @@
 .panel .headCopy h3 {
   margin: 0;
   color: var(--lx-ink);
-  font-size: 20px;
-  font-weight: 700;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   letter-spacing: -0.015em;
-  line-height: 1.25;
+  line-height: var(--sx-leading-24);
 }
 
 .panel .headCopy p {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 
 .panel .headCopy p:first-child:not(:only-child) {
   margin-bottom: 2px;
   color: var(--lx-warning);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   letter-spacing: 0.02em;
 }
 
@@ -226,14 +226,14 @@
 }
 
 .stepCopy strong {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
 }
 
 .stepCopy span {
   overflow: hidden;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -244,7 +244,7 @@
 
 .stepStatus {
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -255,12 +255,12 @@
 
 .step[data-state="active"] .stepStatus {
   color: var(--lx-ink);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .step[data-state="attention"] .stepStatus {
   color: var(--lx-warning);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 /* ---------- Saved work and actions ---------- */
@@ -270,7 +270,7 @@
   align-items: flex-start;
   gap: 10px;
   color: var(--lx-ink-3);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .savedWork svg {
@@ -281,7 +281,7 @@
 
 .savedWork strong {
   color: var(--lx-ink);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .savedWork p {
@@ -339,7 +339,7 @@
   /* The on-accent ink reads on the danger fill in both themes. */
   color: var(--sx-accent-ink);
   font: inherit;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -382,15 +382,15 @@
   overflow: hidden;
   min-width: 0;
   color: var(--lx-ink-3);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .file small {
   flex: none;
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -454,7 +454,7 @@
   background: transparent;
   box-shadow: none;
   color: var(--lx-ink);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
   font-weight: 500;
 }
 
@@ -465,7 +465,7 @@
 .note {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 @media (pointer: coarse) {
@@ -542,8 +542,8 @@
   }
 
   .stepCopy strong {
-    font-size: 13px;
-    line-height: 1.25;
+    font-size: var(--sx-text-xs);
+    line-height: var(--sx-leading-16);
   }
 
   .stepStatus {

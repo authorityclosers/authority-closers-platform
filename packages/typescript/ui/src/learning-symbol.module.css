@@ -73,7 +73,7 @@
   transform: rotate(-90deg);
 }
 .orbit strong {
-  font-size: 1.125rem;
+  font-size: var(--sx-text-md);
 }
 .track,
 .arc {

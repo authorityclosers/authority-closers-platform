@@ -28,7 +28,9 @@ import {
   useState,
   useSyncExternalStore,
   type ReactNode,
+  type RefObject,
 } from "react";
+import { flushSync } from "react-dom";
 
 import { inStageList, inWorkView, useLeadMoves, withMoves } from "./lead-moves";
 import { OPENING_STAGE } from "./opening";
@@ -47,7 +49,7 @@ import {
   SelectLine,
   type Doomed,
 } from "./delete-leads";
-import { InlineEmpty, LeadLine, type RowActions } from "./desk-view";
+import { InlineEmpty, LeadLine, thirdLine, type RowActions } from "./desk-view";
 import {
   DELETE_LIMIT,
   LeadsError,
@@ -60,10 +62,219 @@ import {
   type WorkView,
 } from "./leads-client";
 import { QuickAddBar, type PasteRows } from "./quick-add";
+import {
+  FIRST_VIEW,
+  ROW_ESTIMATE,
+  keepInView,
+  rowTops,
+  rowWindow,
+  scrollParent,
+} from "./row-window";
 import styles from "./leads.module.css";
 
 const CachedLeadLine = memo(LeadLine);
 const subscribeHydration = () => () => {};
+
+/**
+ * The list's rows near the view, at their tops in a list as tall as all of
+ * them (native-feel plan, item 4, 3 Nov 2026: a 400-row fling drew 400 rows,
+ * 57% slow frames on dev at the Note 8 Pro's size). The rest is room, so the
+ * page's height and what follows the list never move. A row's height is its
+ * own, read from it once drawn and again whenever it changes (a resize, the
+ * phone's font scale, a line that wraps); a row not drawn yet takes the first
+ * drawn height of its kind. Scrolling draws other rows only when they come
+ * near; the page around the list isn't drawn again.
+ */
+type RowSizes = Readonly<{
+  /** The width and text size the heights were read at. */
+  fit: string;
+  /** Each drawn row's height, by its kind and lead. */
+  rows: Readonly<Record<string, number>>;
+  /** Each kind's first drawn height, for rows not drawn yet. */
+  kinds: Readonly<Record<string, number>>;
+}>;
+const NO_SIZES: RowSizes = { fit: "", rows: {}, kinds: {} };
+
+function NearRows({
+  list,
+  rows,
+  kinds,
+  row,
+}: {
+  list: RefObject<HTMLUListElement | null>;
+  rows: readonly LeadRow[];
+  kinds: readonly string[];
+  /** One row, at its top in the list, its place and its kind. */
+  row: (row: LeadRow, at: number, index: number, kind: string) => ReactNode;
+}) {
+  const [sizes, setSizes] = useState<RowSizes>(NO_SIZES);
+  const tops = useMemo(
+    () =>
+      rowTops(
+        rows.map(
+          (item, index) =>
+            sizes.rows[`${kinds[index]}:${item.lead_id}`] ??
+            sizes.kinds[kinds[index]] ??
+            ROW_ESTIMATE,
+        ),
+      ),
+    [rows, kinds, sizes],
+  );
+  const [view, setView] = useState({ top: 0, height: FIRST_VIEW });
+  const { start, end } = rowWindow({
+    tops,
+    scrollTop: view.top,
+    height: view.height,
+  });
+
+  // Where the list sits in its scroller, kept on scroll and resize, once a
+  // frame; a new view only when it draws other rows. Kept as the frame is
+  // drawn, so a height read straight after a draw sees the new tops.
+  const shown = useRef({ tops, view });
+  useLayoutEffect(() => {
+    shown.current = { tops, view };
+  });
+  useEffect(() => {
+    const box = list.current;
+    if (!box) return;
+    const scroller = scrollParent(box);
+    const page = scroller === document.scrollingElement;
+    let frame = 0;
+    const look = () => {
+      frame = 0;
+      const edge = page ? 0 : scroller.getBoundingClientRect().top;
+      const next = {
+        top: Math.round(edge - box.getBoundingClientRect().top),
+        height: page ? window.innerHeight : scroller.clientHeight,
+      };
+      const now = shown.current;
+      const was = rowWindow({
+        tops: now.tops,
+        scrollTop: now.view.top,
+        height: now.view.height,
+      });
+      const will = rowWindow({
+        tops: now.tops,
+        scrollTop: next.top,
+        height: next.height,
+      });
+      if (was.start === will.start && was.end === will.end) return;
+      shown.current = { tops: now.tops, view: next };
+      setView(next);
+    };
+    const ask = () => {
+      if (!frame) frame = window.requestAnimationFrame(look);
+    };
+    ask();
+    const target = page ? window : scroller;
+    target.addEventListener("scroll", ask, { passive: true });
+    window.addEventListener("resize", ask);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      target.removeEventListener("scroll", ask);
+      window.removeEventListener("resize", ask);
+    };
+  }, [list, tops]);
+
+  // Every drawn row is watched, read before the frame paints. The first drawn
+  // row has no line above it unless it is the list's first, so it waits until
+  // a row is drawn above it. When rows above the view change height, the
+  // scroll moves with them, so what's in view holds still.
+  const watched = useRef<{
+    watch: ResizeObserver;
+    drawn: Map<Element, { key: string; kind: string }>;
+  } | null>(null);
+  useLayoutEffect(() => {
+    const box = list.current;
+    if (!box || typeof ResizeObserver === "undefined") return;
+    if (!watched.current) {
+      const drawn = new Map<Element, { key: string; kind: string }>();
+      const watch = new ResizeObserver((entries) => {
+        const read: { key: string; kind: string; height: number }[] = [];
+        for (const { target } of entries) {
+          const at = drawn.get(target);
+          const height = (target as HTMLElement).offsetHeight;
+          if (at && height > 0) read.push({ ...at, height });
+        }
+        if (!read.length) return;
+        const fit = `${window.innerWidth}:${getComputedStyle(document.documentElement).fontSize}`;
+        const scroller = scrollParent(box);
+        const page = scroller === document.scrollingElement;
+        const edge = page ? 0 : scroller.getBoundingClientRect().top;
+        const y = edge - box.getBoundingClientRect().top;
+        const before = shown.current.tops;
+        flushSync(() =>
+          setSizes((now) => {
+            const fresh = now.fit !== fit;
+            const own = fresh ? {} : { ...now.rows };
+            const first = fresh ? {} : { ...now.kinds };
+            let changed = fresh;
+            for (const { key, kind, height } of read) {
+              if (Math.abs((own[key] ?? -1) - height) < 0.5) continue;
+              own[key] = height;
+              first[kind] ??= height;
+              changed = true;
+            }
+            return changed ? { fit, rows: own, kinds: first } : now;
+          }),
+        );
+        const shift = keepInView(before, shown.current.tops, y);
+        if (!shift) return;
+        if (page) window.scrollBy(0, shift);
+        else scroller.scrollTop += shift;
+      });
+      watched.current = { watch, drawn };
+    }
+    const { watch, drawn } = watched.current;
+    for (const [item] of drawn)
+      if (!item.isConnected) {
+        watch.unobserve(item);
+        drawn.delete(item);
+      }
+    [...box.children].forEach((item, offset) => {
+      const index = start + offset;
+      if (index >= rows.length) return;
+      if (offset === 0 && index > 0) {
+        watch.unobserve(item);
+        drawn.delete(item);
+        return;
+      }
+      const kind = kinds[index];
+      const key = `${kind}:${rows[index].lead_id}`;
+      if (drawn.get(item)?.key === key) return;
+      drawn.set(item, { key, kind });
+      watch.observe(item);
+    });
+  });
+  // Unmounted, or hidden and shown again: a fresh watch on the next draw.
+  useEffect(
+    () => () => {
+      watched.current?.watch.disconnect();
+      watched.current = null;
+    },
+    [],
+  );
+
+  return (
+    <ul
+      className={styles.leadList}
+      aria-label="Leads"
+      ref={list}
+      style={{ position: "relative", height: tops[rows.length] }}
+    >
+      {rows
+        .slice(start, end)
+        .map((item, offset) =>
+          row(
+            item,
+            tops[start + offset],
+            start + offset,
+            kinds[start + offset],
+          ),
+        )}
+    </ul>
+  );
+}
 
 const BulkSheet = dynamic(
   () => import("./bulk-sheet").then((module) => module.BulkSheet),
@@ -434,26 +645,22 @@ export function ListView({
       ),
     );
   }, [order, lastTries]);
-  // Paint the visible phone rows first, the rest while the phone is idle, in
-  // the room kept for them (QA robot 95abddab, 3 Nov 2026). Building 50
-  // gesture-enabled rows at once monopolises a mid-range phone even when the
-  // data is already cached.
-  const [revealed, setRevealed] = useState({ question: "", count: 8 });
-  const visibleCount = revealed.question === question ? revealed.count : 8;
-  useEffect(() => {
-    if (asTable || visibleCount >= rows.length) return;
-    const reveal = () =>
-      setRevealed({
-        question,
-        count: Math.min(rows.length, visibleCount + 16),
-      });
-    if (typeof window.requestIdleCallback === "function") {
-      const idle = window.requestIdleCallback(reveal, { timeout: 400 });
-      return () => window.cancelIdleCallback(idle);
-    }
-    const timer = window.setTimeout(reveal, 80);
-    return () => window.clearTimeout(timer);
-  }, [question, rows.length, visibleCount, asTable]);
+  // Only the rows near the view are drawn (NearRows): a row's kind (two lines,
+  // or three for a lead that needs someone now) gives its height until it is
+  // drawn and read.
+  const kinds = useMemo(
+    () =>
+      rows.map((row) =>
+        selecting
+          ? "select"
+          : stage === OPENING_STAGE
+            ? thirdLine(row)
+              ? "three"
+              : "two"
+            : "full",
+      ),
+    [rows, selecting, stage],
+  );
   const syncing = loaded?.key !== key;
   const error = failed?.key === key ? failed.message : null;
   useListLoadWatch({
@@ -475,18 +682,6 @@ export function ListView({
   });
   // Keys on a computer: J/K, Enter, C (asks before calling), L. Not while ticking.
   const list = useRef<HTMLUListElement>(null);
-  // The rows still to come keep their room under the list, at the shown rows'
-  // height, so nothing below it moves as they arrive (QA robot 95abddab).
-  const room = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const box = list.current;
-    const spare = room.current;
-    if (!box || !spare) return;
-    const shown = box.children.length;
-    spare.style.height = shown
-      ? `${Math.round((box.offsetHeight / shown) * Math.max(0, rows.length - shown))}px`
-      : "0px";
-  }, [rows.length, visibleCount]);
   const byId = (id: string) => rows.find((row) => row.lead_id === id);
   useRowKeys(
     list,
@@ -625,10 +820,7 @@ export function ListView({
   useEffect(() => {
     loadMore.current = more;
   });
-  const hasMore =
-    page?.next_offset != null &&
-    !syncing &&
-    (asTable || visibleCount >= rows.length);
+  const hasMore = page?.next_offset != null && !syncing;
   useEffect(() => {
     const target = end.current;
     if (!hasMore || !target || typeof IntersectionObserver === "undefined")
@@ -936,48 +1128,51 @@ export function ListView({
                 }}
               />
             ) : (
-              <>
-                <ul className={styles.leadList} aria-label="Leads" ref={list}>
-                  {rows.slice(0, visibleCount).map((row) =>
-                    selecting ? (
-                      <SelectLine
-                        key={row.lead_id}
-                        row={row}
-                        selected={chosen.has(row.lead_id)}
-                        onToggle={tapToggle}
-                      />
-                    ) : (
-                      <CachedLeadLine
-                        key={row.lead_id}
-                        row={row}
-                        onOpen={openRow}
-                        // The owner's name only on someone else's lead.
-                        showOwner={
-                          scope !== "mine" && row.owner_person_id !== me
-                        }
-                        actions={
-                          actions
-                            ? picksHere
-                              ? ownerActions
-                              : rowActions
-                            : undefined
-                        }
-                        onPick={picksHere ? startPicking : undefined}
-                        compact={stage === OPENING_STAGE}
-                        stageWord={stageWord?.(row)}
-                        quietLate={quietLate}
-                        fresh={!!fresh?.has(row.lead_id)}
-                      />
-                    ),
-                  )}
-                </ul>
-                {visibleCount < rows.length ? (
-                  <div ref={room} aria-hidden="true" />
-                ) : null}
-              </>
+              <NearRows
+                list={list}
+                rows={rows}
+                kinds={kinds}
+                row={(row, at, index, kind) =>
+                  selecting ? (
+                    <SelectLine
+                      key={row.lead_id}
+                      row={row}
+                      selected={chosen.has(row.lead_id)}
+                      onToggle={tapToggle}
+                      at={at}
+                      index={index}
+                      count={Math.max(rows.length, page?.total ?? 0)}
+                      kind={kind}
+                    />
+                  ) : (
+                    <CachedLeadLine
+                      key={row.lead_id}
+                      row={row}
+                      onOpen={openRow}
+                      // The owner's name only on someone else's lead.
+                      showOwner={scope !== "mine" && row.owner_person_id !== me}
+                      actions={
+                        actions
+                          ? picksHere
+                            ? ownerActions
+                            : rowActions
+                          : undefined
+                      }
+                      onPick={picksHere ? startPicking : undefined}
+                      compact={stage === OPENING_STAGE}
+                      stageWord={stageWord?.(row)}
+                      quietLate={quietLate}
+                      fresh={!!fresh?.has(row.lead_id)}
+                      at={at}
+                      index={index}
+                      count={Math.max(rows.length, page?.total ?? 0)}
+                      kind={kind}
+                    />
+                  )
+                }
+              />
             )}
-            {page.next_offset !== null &&
-            (asTable || visibleCount >= rows.length) ? (
+            {page.next_offset !== null ? (
               <div className={styles.more} ref={end}>
                 <Button onClick={more} disabled={loadingMore || syncing}>
                   {syncing

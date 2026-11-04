@@ -18,6 +18,7 @@ import {
   frames,
   routeFixtureRequest,
   selectFrames,
+  sizeOf,
   unavailable,
   viewports,
   waitForFixtureServer,
@@ -125,16 +126,25 @@ async function main() {
         const index = next++;
         const { item, scheme, viewport } = jobs[index];
         const context = await browser.newContext({
-          viewport,
+          viewport: sizeOf(viewport),
           deviceScaleFactor: 1,
           locale: "en-GB",
           timezoneId: "UTC",
           colorScheme: scheme,
+          hasTouch: Boolean(viewport.touch),
+          isMobile: Boolean(viewport.touch),
           reducedMotion: "reduce",
           serviceWorkers: "block",
           acceptDownloads: false,
         });
         try {
+          // The app is dark by its own key, not by the browser setting.
+          if (scheme === "dark")
+            await context.addInitScript(() => {
+              try {
+                localStorage.setItem("sales-xray:theme", "dark");
+              } catch {}
+            });
           await context.route("**/*", (route) =>
             routeFixtureRequest(route, origin, routes),
           );

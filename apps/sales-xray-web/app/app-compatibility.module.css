@@ -39,7 +39,7 @@
 .card p {
   margin: 0;
   font-size: var(--sx-text-md);
-  line-height: 1.6;
+  line-height: var(--sx-leading-24);
   color: var(--sx-ink-2);
 }
 .update {
@@ -51,7 +51,7 @@
   background: var(--sx-accent);
   color: var(--sx-accent-ink);
   padding: 8px 16px;
-  font-weight: 650;
+  font-weight: 500;
   text-decoration: none;
 }
 .update:focus-visible {

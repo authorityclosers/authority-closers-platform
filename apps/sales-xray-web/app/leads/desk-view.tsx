@@ -32,6 +32,7 @@ import {
 } from "./leads-client";
 import styles from "./leads.module.css";
 import { reportCallPress } from "./phone-call-steps";
+import { placed } from "./row-window";
 import { SourceMark, shortSource, sourceKind, sourceText } from "./source-mark";
 
 const WHY_TONE: Record<LeadRow["why_kind"], Tone> = {
@@ -193,11 +194,22 @@ export function LeadLine({
   quietLate = false,
   onPick,
   fresh = false,
+  at,
+  index,
+  count,
+  kind,
 }: {
   row: LeadRow;
   onOpen: (leadId: string) => void;
   showOwner?: boolean;
   actions?: RowActions;
+  /** In a long list drawn near the view only (row-window.ts): the row's top
+   *  in the list, its place, the list's length, and its kind for the list's
+   *  row heights. */
+  at?: number;
+  index?: number;
+  count?: number;
+  kind?: string;
   /** Dipak's handoff (31 Oct 2026, items 74-79): the name, "Stage · Source",
    *  the next action, Call and WhatsApp (bug 156, 3 Nov 2026). */
   compact?: boolean;
@@ -277,6 +289,10 @@ export function LeadLine({
     <li
       ref={rowRef}
       className={styles.leadLine}
+      style={placed(at)}
+      aria-setsize={count}
+      aria-posinset={index === undefined ? undefined : index + 1}
+      data-row-kind={kind}
       data-lead-row=""
       data-row-key={row.lead_id}
       data-overdue={(compact ? red : row.overdue) || undefined}

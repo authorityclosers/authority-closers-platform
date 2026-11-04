@@ -13,7 +13,7 @@
   background: var(--lx-surface);
   color: var(--lx-ink-3);
   font: var(--lx-text-ui);
-  font-weight: 800;
+  font-weight: 500;
   cursor: pointer;
   list-style: none;
 }
@@ -75,7 +75,7 @@
   min-height: 32px;
   align-items: center;
   color: var(--lx-teal);
-  font-weight: 700;
+  font-weight: 500;
   text-underline-offset: 3px;
 }
 

@@ -106,16 +106,16 @@
 
 .title {
   margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.35;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
 }
 
 .message {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 
 .actions {
@@ -137,8 +137,8 @@
   background: var(--sx-fill-soft);
   color: var(--lx-ink);
   font: inherit;
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   text-decoration: none;
   cursor: pointer;
   transition:
@@ -216,8 +216,8 @@
   backdrop-filter: var(--sx-glass-blur);
   color: var(--lx-ink);
   font: inherit;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   pointer-events: auto;
   cursor: pointer;
 }
@@ -263,8 +263,8 @@
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -311,6 +311,13 @@
 
 .dock:empty {
   display: none;
+}
+
+/* A sheet holds its lines: the dock keeps their room, so the page under the
+   sheet never rises and drops back (QA robot 95abddab, 3 Nov 2026). */
+.dock[data-held] {
+  display: block;
+  min-height: var(--sx-dock-held, 0px);
 }
 
 /* Never wider than the page: a long name ends in "…", the action and the X

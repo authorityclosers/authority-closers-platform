@@ -9,8 +9,8 @@
   align-items: center;
   gap: 10px;
   margin: 0;
-  font-size: 24px;
-  font-weight: 700;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
   letter-spacing: -0.02em;
   color: var(--lx-ink);
 }
@@ -27,7 +27,7 @@
 
 .subtitle {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--sx-text-sm);
   color: var(--lx-muted);
 }
 
@@ -39,7 +39,7 @@
   gap: 12px;
   padding: 0 4px;
   color: var(--lx-muted);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .allowance {
@@ -65,6 +65,15 @@
   list-style: none;
 }
 
+/* Where the row holds both, the steps keep its end whether the minutes line has
+   come yet or not, so they never jump across when it arrives (the test robot,
+   8c687b6a, 3 Nov 2026). */
+@media (min-width: 720px) {
+  .trail {
+    margin-left: auto;
+  }
+}
+
 .trail li {
   display: inline-flex;
   align-items: center;
@@ -85,13 +94,13 @@
   border-radius: 50%;
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
 }
 
 @media (max-width: 720px) {
   .title {
-    font-size: 20px;
+    font-size: var(--sx-text-md);
   }
 }
 
@@ -101,8 +110,7 @@
   min-height: 44px;
   margin-left: 6px;
   padding: 0 4px;
-  color: var(--lx-ink, currentColor);
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  color: var(--sx-accent);
+  font-weight: 500;
+  text-decoration: none;
 }

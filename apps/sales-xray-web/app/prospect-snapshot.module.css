@@ -67,16 +67,16 @@
 .stepLabel {
   margin: 5px 0 8px;
   color: var(--lx-muted);
-  font: 600 12px/1.4 var(--lx-font-ui, inherit);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
 }
 
 .observation {
   display: block;
   margin: 0;
   color: var(--lx-ink);
-  font-size: 14px;
-  font-weight: 550;
-  line-height: 1.55;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
 }
 
 .words {
@@ -93,8 +93,8 @@
 .meaning p {
   margin: 0;
   color: var(--lx-ink-2, var(--lx-ink));
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 .meaning b {
@@ -103,12 +103,12 @@
 
 .meaning small {
   color: var(--lx-muted);
-  font-size: 12px;
+  font-size: var(--sx-text-xs);
 }
 
 .footnote {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 12.5px;
-  line-height: 1.5;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }

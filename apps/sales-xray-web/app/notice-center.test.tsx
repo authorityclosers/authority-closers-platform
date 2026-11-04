@@ -475,6 +475,152 @@ it("keeps a line in the dock until it is used or closed, so the page never jumps
     vi.useRealTimers();
   }
 });
+
+it("puts a line that arrives over a drawn page in the corner, never pushing the page down", async () => {
+  // QA robot 4b12c389, 3 Nov 2026: "QA Robot 2 is your lead now" came 4 to 8 s
+  // into Leads Analytics and dropped it 52 px. Over a loading outline (Leads
+  // raises its lines with the answer that draws the page) a line still docks,
+  // and a line waiting when the dock is drawn docks from its first frame.
+  vi.useFakeTimers();
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+  const drawn = document.createElement("section");
+  drawn.textContent = "Leads Analytics";
+  const outline = document.createElement("div");
+  outline.setAttribute("aria-busy", "true");
+  document.body.append(drawn, outline);
+  let under: Element = drawn;
+  Object.defineProperty(document, "elementFromPoint", {
+    configurable: true,
+    value: () => under,
+  });
+  const page = document.createElement("div");
+  document.body.append(page);
+  const pageRoot = createRoot(page);
+  const line = (id: string) =>
+    raiseAlert({
+      id,
+      level: "normal",
+      title: "QA Fictional is your lead now",
+      action: { label: "Open lead", href: "/leads" },
+    });
+  const dock = () => page.querySelector<HTMLElement>("[data-notice-dock]")!;
+  try {
+    await act(async () => pageRoot.render(<NoticeDock />));
+    // Over the drawn page: the corner, the page stays put.
+    await act(async () => line("fictional-late"));
+    expect(dock().textContent).toBe("");
+    expect(host.textContent).toContain("QA Fictional is your lead now");
+    // As in the dock, it stays until it is used or closed.
+    await act(async () => vi.advanceTimersByTime(60_000));
+    expect(host.textContent).toContain("QA Fictional is your lead now");
+    await act(async () => clearAlert("fictional-late"));
+    // Over a loading outline: it lands with the page, in the dock.
+    under = outline;
+    await act(async () => line("fictional-with-page"));
+    expect(dock().textContent).toContain("QA Fictional is your lead now");
+    await act(async () => clearAlert("fictional-with-page"));
+    // Waiting when the dock is drawn: the dock, even over a drawn page.
+    await act(async () => pageRoot.unmount());
+    under = drawn;
+    await act(async () => line("fictional-waiting"));
+    const next = createRoot(page);
+    await act(async () => next.render(<NoticeDock />));
+    expect(dock().textContent).toContain("QA Fictional is your lead now");
+    await act(async () => next.unmount());
+  } finally {
+    await act(async () => clearAlert("fictional-waiting"));
+    delete (document as { elementFromPoint?: unknown }).elementFromPoint;
+    drawn.remove();
+    outline.remove();
+    page.remove();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  }
+});
+
+it("keeps the dock's room while a sheet holds its lines, so the page never jumps", async () => {
+  // QA robot 95abddab and 77641e07, 3 Nov 2026: "… is your lead now" left the
+  // page's dock for the lead sheet, and the page rose 52 px, then dropped back
+  // as the sheet closed.
+  vi.useFakeTimers();
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+  const measure = vi
+    .spyOn(Element.prototype, "getBoundingClientRect")
+    .mockImplementation(function (this: Element) {
+      const height = this.parentElement?.hasAttribute("data-notice-dock")
+        ? 42
+        : 0;
+      return rect({ left: 0, top: 0, right: 360, bottom: height });
+    });
+  const matches = Element.prototype.matches;
+  const modal = vi
+    .spyOn(Element.prototype, "matches")
+    .mockImplementation(function (this: Element, selector: string) {
+      if (selector === ":modal")
+        return (
+          this.hasAttribute("data-fixture-sheet") && this.hasAttribute("open")
+        );
+      return matches.call(this, selector);
+    });
+  Object.defineProperty(document, "elementsFromPoint", {
+    configurable: true,
+    value: () => [],
+  });
+  const page = document.createElement("div");
+  document.body.append(page);
+  const pageRoot = createRoot(page);
+  const sheet = document.createElement("dialog");
+  sheet.setAttribute("data-fixture-sheet", "");
+  document.body.append(sheet);
+  try {
+    await act(async () => pageRoot.render(<NoticeDock />));
+    await act(async () =>
+      notify({
+        id: "fictional",
+        tone: "lead",
+        title: "Fictional Asha is your lead now",
+      }),
+    );
+    const dock = page.querySelector<HTMLElement>("[data-notice-dock]")!;
+    expect(dock.textContent).toContain("Fictional Asha is your lead now");
+    expect(dock.hasAttribute("data-held")).toBe(false);
+    // A sheet opens: the line goes with it, and the dock keeps its room.
+    await act(async () => sheet.setAttribute("open", ""));
+    await frames();
+    expect(dock.textContent).toBe("");
+    expect(dock.hasAttribute("data-held")).toBe(true);
+    expect(dock.style.getPropertyValue("--sx-dock-held")).toBe("42px");
+    // It closes: the line is back in its room, and nothing is held.
+    await act(async () => sheet.removeAttribute("open"));
+    await frames();
+    expect(dock.textContent).toContain("Fictional Asha is your lead now");
+    expect(dock.hasAttribute("data-held")).toBe(false);
+    expect(dock.style.getPropertyValue("--sx-dock-held")).toBe("");
+  } finally {
+    await act(async () => pageRoot.unmount());
+    sheet.remove();
+    page.remove();
+    measure.mockRestore();
+    modal.mockRestore();
+    delete (document as { elementsFromPoint?: unknown }).elementsFromPoint;
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  }
+});
 it("keeps a short-lived card's Undo in its folded pill", async () => {
   // Phone personas ph2-36 (1 Nov 2026): the after-call card folded, its Undo
   // vanished, and a second tap opened the lead underneath.
@@ -842,6 +988,46 @@ it("stays at its place over the tab bar, and rises by the bar's measured top whe
   } finally {
     restore();
     tabs.remove();
+    vi.useRealTimers();
+  }
+});
+
+it("never takes the first-call guide for a bar: the guide rises above the stack, the stack stays", async () => {
+  // Seller Home, robot 8c687b6a (3 Nov 2026): on New analysis at 1440 the
+  // stack lifted over the guide, the guide over the stack, and back again.
+  vi.useFakeTimers();
+  const boxes = new Map<Element, Box>();
+  const restore = phone(boxes);
+  const guide = document.createElement("div");
+  guide.setAttribute("data-guide-card", "");
+  guide.style.position = "fixed";
+  guide.style.bottom = "24px";
+  const next = document.createElement("button");
+  next.type = "button";
+  next.textContent = "Next";
+  guide.append(next);
+  document.body.append(guide);
+  for (const node of [guide, next])
+    boxes.set(node, {
+      left: 12,
+      top: view() - 304,
+      right: 372,
+      bottom: view() - 24,
+    });
+  try {
+    await act(async () =>
+      notify({
+        id: "fictional",
+        tone: "error",
+        title: "Fictional minutes used up",
+        message: "Fictional steps to fix it.",
+      }),
+    );
+    await frames();
+    expect(liftOf()).toBe("");
+  } finally {
+    restore();
+    guide.remove();
     vi.useRealTimers();
   }
 });

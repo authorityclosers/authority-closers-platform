@@ -5,7 +5,7 @@
 }
 .work h2 {
   margin: 0;
-  font-size: var(--sx-text-lg);
+  font-size: var(--sx-text-md);
 }
 .presence {
   margin: 0;
@@ -51,13 +51,13 @@
   font-size: var(--sx-text-xs);
 }
 .figure strong {
-  font-size: 28px;
-  line-height: 1.1;
+  font-size: var(--sx-text-2xl);
+  line-height: var(--sx-leading-36);
   color: var(--sx-ink);
 }
 .figure small {
   color: var(--sx-muted);
-  font-size: 11px;
+  font-size: var(--sx-text-2xs);
   white-space: nowrap;
 }
 .heading {
@@ -105,7 +105,7 @@
   background: var(--sx-fill-soft);
   color: var(--sx-ink);
   font: inherit;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -149,5 +149,5 @@
   background: var(--sx-accent);
   color: var(--sx-accent-ink);
   text-decoration: none;
-  font-weight: 650;
+  font-weight: 500;
 }

@@ -47,13 +47,13 @@
 
 .words strong {
   font-size: var(--sx-text-md);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .words small {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
-  line-height: 1.35;
+  line-height: var(--sx-leading-20);
 }
 
 .words small.reason {
@@ -180,7 +180,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
   transition: transform var(--sx-dur-fast, 120ms) var(--sx-ease-out);
@@ -227,7 +227,7 @@
   position: relative;
   padding-inline-start: 18px;
   font-size: var(--sx-text-md);
-  line-height: 1.4;
+  line-height: var(--sx-leading-24);
 }
 
 .points li::before {

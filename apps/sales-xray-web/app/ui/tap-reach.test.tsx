@@ -20,9 +20,9 @@ const sized = (id: string, width: number, height: number) => {
 
 afterEach(() => document.body.replaceChildren());
 
-// The QA robot's tap-target rows (3 Nov 2026): a control drawn under 44 px gets
+// The QA robot's tap-target rows (3 Nov 2026): a control drawn under 48 px gets
 // the reach; anything that would move or draw differently is left alone.
-it("gives the 44 px reach only to small controls that can take it", () => {
+it("gives the 48 px reach only to small controls that can take it", () => {
   document.body.innerHTML = `
     <button id="small">Today</button>
     <button id="big">Call</button>
@@ -32,7 +32,7 @@ it("gives the 44 px reach only to small controls that can take it", () => {
     <a id="block" href="/open" style="display: inline-flex">Open</a>
     <button id="hidden">Later</button>`;
   sized("small", 68, 32);
-  sized("big", 120, 44);
+  sized("big", 120, 48);
   sized("placed", 28, 28);
   sized("parts", 40, 40);
   sized("inline", 60, 18);

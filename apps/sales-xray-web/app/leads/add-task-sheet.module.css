@@ -13,7 +13,7 @@
 .field > span {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .field input[type="text"],
@@ -41,7 +41,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -101,7 +101,7 @@
   border-color: transparent;
   background: var(--sx-accent-soft);
   color: var(--sx-accent);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .chip:focus-visible {
@@ -162,7 +162,7 @@
 
 .foundRow strong {
   overflow: hidden;
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -194,7 +194,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--sx-ink);
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -206,7 +206,7 @@
   background: transparent;
   color: var(--sx-accent);
   font: inherit;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -227,7 +227,7 @@
 
 .switchWords strong {
   color: var(--sx-ink);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .switchWords small {

@@ -112,7 +112,7 @@
   min-height: 44px;
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -176,7 +176,7 @@
   border-top: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .row > span {
@@ -192,11 +192,11 @@
 
 .row [data-red] {
   color: var(--sx-bad);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .name {
-  font-weight: 650;
+  font-weight: 500;
 }
 
 a.row:focus-visible {
@@ -245,7 +245,7 @@ a.row:focus-visible {
   padding: 10px 14px 10px 16px;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
   transition: transform var(--sx-dur-fast) var(--sx-ease-out);
   -webkit-tap-highlight-color: transparent;
@@ -254,8 +254,8 @@ a.row:focus-visible {
 .need strong {
   min-width: 2ch;
   color: var(--sx-bad);
-  font-size: 24px;
-  font-weight: 750;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
@@ -305,7 +305,7 @@ a.row:focus-visible {
 .splitName {
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .split dl {
@@ -328,7 +328,7 @@ a.row:focus-visible {
 .split dd {
   margin: 0;
   color: var(--sx-ink);
-  font-weight: 700;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -469,16 +469,16 @@ a.row:focus-visible {
 }
 
 .ringText strong {
-  font-size: 30px;
-  font-weight: 750;
+  font-size: var(--sx-text-2xl);
+  font-weight: 500;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 
 .ringText > span {
   color: var(--sx-muted);
-  font-size: 11px;
-  font-weight: 650;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
 }
 
 .heroBody {
@@ -491,13 +491,13 @@ a.row:focus-visible {
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .heroLine strong {
   color: var(--sx-ink);
-  font-size: 24px;
-  font-weight: 750;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -536,8 +536,8 @@ a.row:focus-visible {
     0 0 0 2px var(--sx-surface),
     0 0 0 4px var(--pulse, var(--sx-line));
   color: var(--sx-ink);
-  font-size: 11px;
-  font-weight: 750;
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
 }
 
 .avatars li[data-pulse="live"] {
@@ -555,7 +555,7 @@ a.row:focus-visible {
 .avatars > span {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 @media (min-width: 1024px) {

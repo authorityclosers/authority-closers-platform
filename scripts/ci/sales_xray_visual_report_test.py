@@ -8,7 +8,15 @@ import zipfile
 from pathlib import Path
 
 from PIL import Image
-from sales_xray_visual_report import choose_baseline, pixel_diff, report, unpack_baseline
+from sales_xray_visual_report import (
+    choose_baseline,
+    dom_findings,
+    load_png,
+    phone_checks,
+    pixel_diff,
+    report,
+    unpack_baseline,
+)
 
 SHA = "a" * 40
 NAME = "shell-390x844.png"
@@ -110,6 +118,46 @@ class VisualReportTests(unittest.TestCase):
             self.assertIsNone(result["rows"][0]["axe_critical_count"])
             self.assertTrue((output / "contact-sheet.png").is_file())
             self.assertIn("unavailable", (output / "report.md").read_text())
+
+
+class PhoneRenderTests(unittest.TestCase):
+    def test_phone_sizes_load_and_a_wrong_size_does_not(self):
+        for size in ((360, 780), (393, 851)):
+            name = f"shell-{size[0]}x{size[1]}.png"
+            self.assertEqual(load_png(image_bytes(size), name).size, size)
+        with self.assertRaises(ValueError):
+            load_png(image_bytes((390, 844)), "shell-360x780.png")
+
+    def test_phone_dom_checks_reach_the_table_and_missing_ones_say_so(self):
+        self.assertEqual(phone_checks({}), "n/a")
+        cell = phone_checks(
+            {
+                "design_edge_mask_count": 1,
+                "design_boxed_count": 0,
+                "design_dead_row_count": 0,
+                "design_label_heading_count": 2,
+                "target_under_48_count": 3,
+                "hero_contrast_fail_count": 0,
+                "raw_value_count": None,
+                "text_scale2_overflow_px": 0,
+                "text_scale2_clipped_count": 2,
+            }
+        )
+        self.assertIn("mask 1", cell)
+        self.assertIn("label 2", cell)
+        self.assertIn("raw values unavailable", cell)
+        lines = dom_findings(
+            [
+                {
+                    "id": "shell-360x780",
+                    "dom_findings": [
+                        {"rule": "target-48", "selector": "button.x", "size": "30x30"}
+                    ],
+                },
+                {"id": "shell-1440x900"},
+            ]
+        )
+        self.assertEqual(lines, ["- shell-360x780: target-48 `button.x` 30x30"])
 
 
 if __name__ == "__main__":

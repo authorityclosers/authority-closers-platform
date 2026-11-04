@@ -26,7 +26,7 @@
   background: var(--sx-surface);
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   text-align: left;
 }
 
@@ -240,7 +240,7 @@
 
 .wrap[data-fit] .name small span[data-late] {
   color: var(--lx-danger);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .table tbody tr:last-child td {
@@ -305,7 +305,7 @@
 
 .name strong {
   overflow: hidden;
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
 }
 
@@ -335,7 +335,7 @@
   background: var(--sx-fill);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   vertical-align: middle;
 }
@@ -346,7 +346,7 @@
 
 .table [data-late] {
   color: var(--lx-danger);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .srOnly {
@@ -422,7 +422,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -440,7 +440,7 @@
   overflow: hidden;
   color: var(--lx-danger);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -593,7 +593,7 @@
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 

@@ -10,6 +10,6 @@
 
 .title {
   margin: 0 0 8px;
-  font-size: 22px;
-  font-weight: 750;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
 }

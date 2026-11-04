@@ -139,7 +139,7 @@
   gap: 2px;
   color: var(--sx-accent);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -161,7 +161,7 @@
   background: var(--sx-sunken);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -197,7 +197,7 @@
   align-items: center;
   gap: 1px;
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -315,7 +315,7 @@ a.tile:hover {
   align-items: center;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .tileMain {
@@ -359,7 +359,7 @@ a.tile:hover {
   overflow: hidden;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  line-height: 1.35;
+  line-height: var(--sx-leading-16);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
@@ -389,7 +389,7 @@ a.tile:hover {
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .emptyText {
@@ -480,7 +480,7 @@ a.tile:hover {
   padding: 0 10px;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -523,7 +523,7 @@ a.tile:hover {
   color: var(--sx-muted);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -545,8 +545,8 @@ a.tile:hover {
   border-radius: 50%;
   background: color-mix(in oklch, var(--sx-accent) 14%, var(--sx-sunken));
   color: var(--sx-ink-2);
-  font-size: max(10px, calc(var(--size, 24px) * 0.4));
-  font-weight: 700;
+  font-size: max(11px, calc(var(--size, 24px) * 0.4));
+  font-weight: 500;
 }
 
 .avatar[data-shape="square"] {
@@ -624,7 +624,7 @@ a.rowTitle:focus-visible::after {
   overflow: hidden;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -686,13 +686,13 @@ a.rowTitle:hover {
   background: var(--sx-sunken);
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
 }
 
 .table tbody th {
   color: var(--sx-ink);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .table tbody tr:hover {
@@ -719,7 +719,7 @@ a.rowTitle:hover {
 .card > strong {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .card + .card {
@@ -757,7 +757,7 @@ a.rowTitle:hover {
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
@@ -818,7 +818,7 @@ a.rowTitle:hover {
 .fieldLabel {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .field :is(input, select, textarea),
@@ -915,7 +915,7 @@ a.rowTitle:hover {
 @media (max-width: 899.98px) {
   .field :is(input, select, textarea),
   .inlineInput {
-    font-size: 16px;
+    font-size: var(--sx-text-md);
   }
 }
 
@@ -971,7 +971,7 @@ a.rowTitle:hover {
 .unavailable strong {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .kbd {
@@ -986,7 +986,7 @@ a.rowTitle:hover {
   border-radius: 4px;
   background: var(--sx-surface);
   color: var(--sx-ink-2);
-  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
 }
 
 .toolbar {
@@ -1020,6 +1020,6 @@ a.rowTitle:hover {
   .toolbar > :is(select, input) {
     flex: 1 1 140px;
     min-width: 0;
-    font-size: 16px;
+    font-size: var(--sx-text-md);
   }
 }

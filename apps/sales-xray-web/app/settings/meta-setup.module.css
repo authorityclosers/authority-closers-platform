@@ -51,7 +51,7 @@
 
 .reviewText strong {
   color: var(--sx-ink);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .reviewText small {
@@ -71,7 +71,7 @@
   justify-self: start;
   min-height: 44px;
   color: var(--sx-accent);
-  font-weight: 650;
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -128,7 +128,7 @@
   background: var(--sx-surface);
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .step[data-state="now"] .mark {
@@ -154,7 +154,7 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .step[data-state="later"] .stepBody h3 {
@@ -165,7 +165,7 @@
   margin: 0;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
 }
 
 .hidden {
@@ -244,7 +244,7 @@
 .pageText strong {
   overflow: hidden;
   color: var(--sx-ink);
-  font-weight: 650;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -287,7 +287,7 @@
   padding: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .choice {
@@ -340,7 +340,7 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .facts {
@@ -365,7 +365,7 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .problem {
@@ -384,7 +384,7 @@
 
 .help summary {
   color: var(--sx-ink);
-  font-weight: 650;
+  font-weight: 500;
   cursor: pointer;
 }
 

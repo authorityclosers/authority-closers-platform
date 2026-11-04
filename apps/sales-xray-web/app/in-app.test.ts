@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 
 import {
   FONT_SCALE_ATTRIBUTE,
+  followFontScale,
   IN_APP_ATTRIBUTE,
   inAppInitScript,
   isAppUserAgent,
@@ -18,7 +19,8 @@ type AppWindow = Window & {
 afterEach(() => {
   document.documentElement.removeAttribute(IN_APP_ATTRIBUTE);
   document.documentElement.removeAttribute(FONT_SCALE_ATTRIBUTE);
-  document.head.querySelector('meta[name="viewport"]')?.remove();
+  document.documentElement.style.fontSize = "";
+  localStorage.removeItem("sx.font-scale");
   delete (window as AppWindow).SXPhone;
   delete (window as AppWindow).SXFontScale;
   delete (window as AppWindow).__sxPhone;
@@ -70,45 +72,41 @@ it("offers the phone's calls only when the app provides them", () => {
   expect(openCalls).toHaveBeenCalledOnce();
 });
 
-const DESIGNED =
-  "width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content";
-
-function viewport(): HTMLMetaElement {
-  const meta = document.createElement("meta");
-  meta.name = "viewport";
-  meta.content = DESIGNED;
-  document.head.append(meta);
-  return meta;
-}
-
-// Owner's OnePlus, 24 Oct 2026: the phone's font size scales the whole page.
-it("draws the page at the phone's font scale, up to 1.2, through the viewport", async () => {
-  const meta = viewport();
+// Native-feel spec, 3 Nov 2026: the phone's font size scales text, as sp does,
+// through the root size that every type token is in rem of; the layout stays.
+it("sets the root font size from the phone's font scale, up to 2", () => {
   (window as AppWindow).SXFontScale = 1.3;
   boot("Mozilla/5.0 (Linux; Android 14) SalesXrayApp/1.0.27");
-  expect(document.documentElement.getAttribute(FONT_SCALE_ATTRIBUTE)).toBe(
-    "1.2",
-  );
-  expect(meta.content).toBe(
-    "viewport-fit=cover, interactive-widget=resizes-content, initial-scale=1.2, minimum-scale=1.2, maximum-scale=1.2",
-  );
-  // Next.js writes the tag again: the scale comes back.
-  meta.content = DESIGNED;
-  await new Promise((done) => setTimeout(done, 0));
-  expect(meta.content).toContain("initial-scale=1.2");
+  const root = document.documentElement;
+  expect(root.getAttribute(FONT_SCALE_ATTRIBUTE)).toBe("1.3");
+  expect(root.style.fontSize).toBe("130%");
+  (window as AppWindow).SXFontScale = 2.4;
+  boot("Mozilla/5.0 (Linux; Android 14) SalesXrayApp/1.0.27");
+  expect(root.style.fontSize).toBe("200%");
 });
 
-it("keeps the designed size at a small font, and without the app's scale", () => {
-  const meta = viewport();
+it("keeps the designed size at a small font, and without a scale", () => {
   (window as AppWindow).SXFontScale = 0.85;
   boot("Mozilla/5.0 (Linux; Android 14) SalesXrayApp/1.0.27");
-  expect(document.documentElement.getAttribute(FONT_SCALE_ATTRIBUTE)).toBe("1");
-  expect(meta.content).toBe(DESIGNED);
+  const root = document.documentElement;
+  expect(root.getAttribute(FONT_SCALE_ATTRIBUTE)).toBe("1");
+  expect(root.style.fontSize).toBe("100%");
   delete (window as AppWindow).SXFontScale;
-  document.documentElement.removeAttribute(FONT_SCALE_ATTRIBUTE);
+  root.removeAttribute(FONT_SCALE_ATTRIBUTE);
+  root.style.fontSize = "";
   boot("Mozilla/5.0 (Linux; Android 14) SalesXrayApp/1.0.25");
-  expect(document.documentElement.hasAttribute(FONT_SCALE_ATTRIBUTE)).toBe(
-    false,
-  );
-  expect(meta.content).toBe(DESIGNED);
+  expect(root.hasAttribute(FONT_SCALE_ATTRIBUTE)).toBe(false);
+  expect(root.style.fontSize).toBe("");
+});
+
+it("follows the scale the app's status reports, from the first paint of the next start", () => {
+  followFontScale(1.5);
+  const root = document.documentElement;
+  expect(root.style.fontSize).toBe("150%");
+  root.removeAttribute(FONT_SCALE_ATTRIBUTE);
+  root.style.fontSize = "";
+  boot("Mozilla/5.0 (Linux; Android 14) SalesXrayApp/1.0.27");
+  expect(root.style.fontSize).toBe("150%");
+  followFontScale("large");
+  expect(root.style.fontSize).toBe("150%");
 });

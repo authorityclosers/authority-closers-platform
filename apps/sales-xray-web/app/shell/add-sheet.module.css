@@ -1,21 +1,22 @@
-/* The + sheet's two choices (owner, 22 Oct 2026): tokens only. */
+/* The + sheet's choices (owner, 22 Oct 2026): tokens only. Flat two-line
+   rows on the sheet, no cards inside it (native-feel spec, 3 Nov 2026:
+   Material 3's 72 px list item, 40 px leading icon, 16 px gap). */
 
 .choices {
   display: grid;
-  gap: 10px;
   padding-bottom: 4px;
 }
 
 .choice {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 14px;
+  gap: 16px;
   align-items: center;
-  min-height: 76px;
-  padding: 14px 16px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-lg);
-  background: var(--sx-surface);
+  min-height: 72px;
+  padding: 10px 8px;
+  border: 0;
+  border-radius: var(--sx-radius-md);
+  background: transparent;
   color: var(--sx-ink);
   font: inherit;
   text-align: left;
@@ -40,15 +41,14 @@
 
 @media (hover: hover) {
   .choice:hover {
-    border-color: var(--lx-teal-edge);
-    background: var(--lx-teal-tint);
+    background: var(--sx-fill-soft);
   }
 }
 
 .icon {
   display: grid;
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   place-items: center;
   border-radius: var(--sx-radius-md);
   background: var(--lx-teal-soft);
@@ -62,17 +62,16 @@
 
 .words {
   display: grid;
-  gap: 3px;
   min-width: 0;
 }
 
 .words strong {
-  font: var(--sx-text-panel);
+  font: var(--sx-text-body);
 }
 
 .words small {
   color: var(--sx-muted);
-  font-size: var(--sx-text-sm);
+  font: var(--sx-text-secondary);
 }
 
 .chevron {

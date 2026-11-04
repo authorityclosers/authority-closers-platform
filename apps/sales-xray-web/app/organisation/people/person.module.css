@@ -10,7 +10,7 @@
   color: var(--sx-ink);
   font-family: var(--lx-font-ui);
   font-size: var(--sx-text-sm);
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
 }
 
 /* ---------- Header ---------- */
@@ -37,8 +37,8 @@
   flex: 1;
   min-width: 0;
   margin: 0;
-  font-size: 20px;
-  line-height: 1.25;
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
   letter-spacing: -0.01em;
 }
 .tags {
@@ -106,7 +106,7 @@
   box-sizing: border-box;
   min-height: 48px;
   padding: 10px;
-  font-size: 16px;
+  font-size: var(--sx-text-md);
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-sm);
   color: var(--sx-ink);
@@ -152,7 +152,7 @@
   background: var(--sx-surface);
   color: var(--sx-ink);
   font: inherit;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -353,7 +353,7 @@
 
 .matrix thead th {
   color: var(--sx-muted);
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -379,7 +379,7 @@
 .matrix thead th:first-child {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 /* Phones keep the four newest calls. */
@@ -522,7 +522,7 @@
 
 .callName {
   overflow: hidden;
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -612,7 +612,7 @@
   background: transparent;
   color: var(--sx-accent);
   font: inherit;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -628,12 +628,12 @@
 .coaching dt {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .coaching dd {
   margin: 2px 0 0;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .focusContent,
@@ -657,7 +657,7 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .focusReason,
@@ -690,7 +690,7 @@
   border-radius: var(--sx-radius-sm);
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -781,7 +781,7 @@
   list-style: none;
   cursor: pointer;
   color: var(--sx-ink);
-  font-weight: 600;
+  font-weight: 500;
   touch-action: manipulation;
 }
 .reportToggle::-webkit-details-marker {
@@ -832,6 +832,6 @@
   background: var(--sx-fill-soft);
   color: var(--sx-ink);
   font: inherit;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }

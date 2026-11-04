@@ -112,7 +112,7 @@
 .description {
   margin: 2px 0 0;
   font-size: var(--sx-text-sm);
-  line-height: 1.4;
+  line-height: var(--sx-leading-20);
   color: var(--sx-muted);
 }
 
@@ -246,23 +246,32 @@
   border: 0.5px solid var(--sx-glass-edge);
 }
 
+/* A tall sheet stops under the phone's 64 px app bar, never over it, so the
+   place you are in stays named (owner, 3 Nov 2026: the lead sheet hid
+   "Leads"); Material 3's 28 px corners and 640 px most. */
 @media (max-width: 899.98px) {
   .panel {
-    left: 8px;
-    right: 8px;
+    left: max(8px, calc(50% - 320px));
+    right: max(8px, calc(50% - 320px));
     bottom: calc(8px + env(safe-area-inset-bottom, 0px));
     max-height: calc(
-      100% - max(env(safe-area-inset-top, 0px), 12px) - 36px -
+      100% - env(safe-area-inset-top, 0px) - 72px -
         env(safe-area-inset-bottom, 0px)
     );
     padding-bottom: 0;
-    border-radius: 34px;
+    border-radius: var(--sx-radius-xl);
   }
 }
 
+/* Material 3's handle: 32 x 4 in a 48 px reach. */
 .grabber {
-  width: 40px;
-  margin-top: 7px;
+  width: 32px;
+  height: 4px;
+  margin-top: 8px;
+}
+
+.grabber::before {
+  inset: -22px -64px;
 }
 
 .head {

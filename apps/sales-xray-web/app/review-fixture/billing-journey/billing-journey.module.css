@@ -7,7 +7,7 @@
   margin: 0 auto;
   padding: 24px 16px 48px;
   color: var(--lx-ink);
-  font: 500 14px/1.5 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
 }
 
 .head {
@@ -17,7 +17,8 @@
 
 .head h1 {
   margin: 0;
-  font: 800 26px/1.15 var(--lx-font-display, var(--lx-font-ui));
+  font: 500 var(--sx-text-2xl) / var(--sx-leading-36)
+    var(--lx-font-display, var(--lx-font-ui));
   letter-spacing: -0.015em;
 }
 
@@ -31,7 +32,7 @@
   align-items: center;
   gap: 8px;
   min-height: 44px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .recording input {
@@ -67,7 +68,7 @@
   border-radius: 50%;
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
-  font: 800 14px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / 1 var(--lx-font-ui);
   font-variant-numeric: tabular-nums;
 }
 
@@ -79,20 +80,20 @@
 
 .copy h2 {
   margin: 0;
-  font: 700 15px/1.3 var(--lx-font-ui);
+  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui);
 }
 
 .copy p {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 13px;
+  font-size: var(--sx-text-xs);
 }
 
 .copy code {
   overflow-wrap: anywhere;
   color: var(--lx-ink-2);
   font:
-    500 12px/1.4 ui-monospace,
+    500 var(--sx-text-xs) / var(--sx-leading-16) ui-monospace,
     monospace;
 }
 
@@ -103,7 +104,7 @@
   border-radius: var(--lx-radius-sm, 10px);
   background: var(--lx-teal);
   color: var(--lx-on-teal);
-  font: 700 13.5px/1 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / 1 var(--lx-font-ui);
   cursor: pointer;
 }
 
@@ -112,5 +113,5 @@
   padding: 32px 16px;
   color: var(--lx-muted);
   text-align: center;
-  font: 500 14px/1.5 var(--lx-font-ui);
+  font: 500 var(--sx-text-sm) / var(--sx-leading-20) var(--lx-font-ui);
 }

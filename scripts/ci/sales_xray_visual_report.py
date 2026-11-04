@@ -22,7 +22,7 @@ from PIL import Image, ImageChops, ImageDraw
 SCHEMA = "ac-sales-xray-visual/1"
 ARTIFACT = "sales-xray-visual-"
 SHA = re.compile(r"[0-9a-f]{40}\Z")
-PNG = re.compile(r"[a-z0-9-]+-(?:1440x900|390x844)\.png\Z")
+PNG = re.compile(r"[a-z0-9-]+-(?:1440x900|390x844|360x780|393x851)\.png\Z")
 MAX_ARCHIVE = 50_000_000
 MAX_EXPANDED = 80_000_000
 
@@ -56,11 +56,17 @@ def choose_baseline(visual_runs: list[dict], green_shas: set[str], current_id: s
     return max(candidates, key=lambda run: run["created_at"], default=None)
 
 
+# 1440 and 390 are the first renders; 360 light and 393 dark are the framework's phone renders.
+RENDER_SIZES = {(1440, 900), (390, 844), (360, 780), (393, 851)}
+
+
 def load_png(data: bytes, name: str) -> Image.Image:
     if not PNG.fullmatch(name) or len(data) > 8_000_000:
         raise ValueError("invalid screenshot")
     with Image.open(io.BytesIO(data)) as image:
-        expected = (1440, 900) if name.endswith("1440x900.png") else (390, 844)
+        sized = re.search(r"-(\d+)x(\d+)\.png$", name)
+        found = (int(sized.group(1)), int(sized.group(2))) if sized else None
+        expected = found if found in RENDER_SIZES else (390, 844)
         if image.format != "PNG" or image.size != expected:
             raise ValueError("invalid screenshot dimensions")
         return image.convert("RGB")
@@ -171,6 +177,46 @@ def pixel_diff(current: Image.Image, baseline: Image.Image, output: Path) -> dic
     }
 
 
+def phone_checks(row: dict) -> str:
+    """The phone DOM checks of one row as a table cell."""
+    keys = (
+        "design_edge_mask_count",
+        "design_boxed_count",
+        "design_dead_row_count",
+        "design_label_heading_count",
+        "target_under_48_count",
+        "hero_contrast_fail_count",
+        "raw_value_count",
+        "text_scale2_overflow_px",
+        "text_scale2_clipped_count",
+    )
+    if all(row.get(key) is None for key in keys):
+        return "n/a"
+
+    def shown(key: str) -> str:
+        value = row.get(key)
+        return "unavailable" if value is None else str(value)
+
+    return (
+        f"mask {shown('design_edge_mask_count')}, boxed {shown('design_boxed_count')}, "
+        f"dead row {shown('design_dead_row_count')}, label {shown('design_label_heading_count')}; "
+        f"targets under 48 {shown('target_under_48_count')}; hero under 7:1 "
+        f"{shown('hero_contrast_fail_count')}; raw values {shown('raw_value_count')}; "
+        f"text x2 overflow {shown('text_scale2_overflow_px')} px, "
+        f"clipped {shown('text_scale2_clipped_count')}"
+    )
+
+
+def dom_findings(rows: list[dict]) -> list[str]:
+    """One bullet per finding, 12 per row at most: the rule and the element's tag and class."""
+    lines: list[str] = []
+    for row in rows:
+        for item in (row.get("dom_findings") or [])[:12]:
+            extra = " ".join(str(item[key]) for key in ("size", "ratio", "elements") if key in item)
+            lines.append(f"- {row['id']}: {item['rule']} `{item['selector']}` {extra}".rstrip())
+    return lines
+
+
 def report(output: Path, baseline_dir: Path) -> dict:
     output.mkdir(parents=True, exist_ok=True)
     if (output / "receipt.json").is_file():
@@ -202,8 +248,8 @@ def report(output: Path, baseline_dir: Path) -> dict:
         "Missing measurements are `unavailable`. All counts and pixel diffs are report-only.",
         "",
         "| State / viewport | Capture | Overflow px / count | Console / uncaught | "
-        "Axe critical / incomplete | Pixel difference |",
-        "| --- | --- | --- | --- | --- | --- |",
+        "Axe critical / incomplete | Pixel difference | Phone DOM checks |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
     ]
 
     def value(item):
@@ -236,7 +282,17 @@ def report(output: Path, baseline_dir: Path) -> dict:
             f"{value(row['overflow_px'])} / {value(row['overflow_count'])} | "
             f"{value(row['console_error_count'])} / {value(row['uncaught_exception_count'])} | "
             f"{value(row['axe_critical_count'])} / {value(row['axe_incomplete_count'])} | "
-            f"{diff_link} |"
+            f"{diff_link} | {phone_checks(row)} |"
+        )
+    findings = dom_findings(receipt["rows"])
+    if findings:
+        lines.extend(
+            [
+                "",
+                "### Phone DOM findings (report-only; tag, role and class only, never text)",
+                "",
+                *findings,
+            ]
         )
     sheet.save(output / "contact-sheet.png")
     receipt["contact_sheet"] = "contact-sheet.png"

@@ -19,9 +19,9 @@
   backdrop-filter: var(--sx-glass-blur);
   box-shadow: var(--sx-glass-shine), var(--sx-glass-shadow);
   color: var(--lx-ink);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.35;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
   text-align: center;
   transform: translateX(-50%);
   animation: enter var(--sx-dur-sheet) var(--sx-spring) both;

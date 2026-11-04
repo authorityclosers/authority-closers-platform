@@ -91,7 +91,7 @@
 
 .line {
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -132,7 +132,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -165,7 +165,7 @@
   list-style: none;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -210,7 +210,7 @@
   color: var(--sx-muted);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: line-through;
   cursor: pointer;
 }
@@ -232,7 +232,7 @@
 .form th {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
   text-align: left;
 }
 
@@ -250,7 +250,7 @@
   background: var(--sx-surface);
   color: var(--sx-ink);
   font: inherit;
-  font-size: 16px;
+  font-size: var(--sx-text-md);
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
@@ -262,7 +262,7 @@
 .error {
   margin: 8px 0 0;
   color: var(--lx-danger);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .save {
@@ -274,7 +274,7 @@
   color: var(--lx-on-teal);
   font: inherit;
   font-size: var(--sx-text-md);
-  font-weight: 700;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -321,13 +321,13 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .rowsHead span {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .recipientRows {

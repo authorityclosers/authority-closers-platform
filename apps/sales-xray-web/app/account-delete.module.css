@@ -7,8 +7,8 @@
 .lead {
   margin: 0;
   color: var(--lx-ink);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 .list {
@@ -17,13 +17,13 @@
   margin: 0;
   padding-left: 20px;
   color: var(--lx-ink-3);
-  font-size: 13.5px;
-  line-height: 1.45;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 .summary a {
   color: var(--lx-ink);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .step {
@@ -38,8 +38,8 @@
 .stepTitle {
   margin: 0;
   color: var(--lx-ink);
-  font-size: 14px;
-  font-weight: 700;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
 }
 
 .organisations {
@@ -60,8 +60,8 @@
 
 .organisationName {
   color: var(--lx-ink);
-  font-size: 14px;
-  font-weight: 650;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   overflow-wrap: anywhere;
 }
 
@@ -76,8 +76,8 @@
   background: var(--lx-surface);
   color: var(--lx-ink);
   font: inherit;
-  font-size: 16px;
-  font-weight: 650;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   letter-spacing: 0.08em;
 }
 
@@ -97,8 +97,8 @@
   background: var(--lx-danger);
   color: var(--lx-surface);
   font: inherit;
-  font-size: 13.5px;
-  font-weight: 750;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
   transition:

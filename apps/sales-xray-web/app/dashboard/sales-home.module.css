@@ -22,7 +22,7 @@
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .block {
@@ -110,7 +110,7 @@
   align-self: end;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .outcome dd {
@@ -156,7 +156,7 @@
   background: var(--sx-accent-soft);
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
   text-decoration: none;
   touch-action: manipulation;
 }
@@ -182,7 +182,7 @@
   background: var(--sx-surface);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -291,7 +291,7 @@
 .rate {
   display: grid;
   justify-items: end;
-  font-weight: 700;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -307,7 +307,7 @@
   background: var(--lx-danger-soft);
   color: var(--lx-danger);
   font-size: var(--sx-text-xs);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 /* Open leads by stage: one bar per stage, on one scale. */
@@ -338,7 +338,7 @@
 .funnelLabel {
   overflow: hidden;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -413,7 +413,7 @@
   background: var(--lx-gradient-primary);
   color: var(--lx-on-teal);
   font-size: var(--sx-text-md);
-  font-weight: 700;
+  font-weight: 500;
   text-decoration: none;
   box-shadow: var(--sx-shadow-1);
 }
@@ -422,7 +422,7 @@
   justify-self: center;
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -463,13 +463,13 @@
 .dayStrip dt {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .dayStrip dd {
   margin: 0;
-  font-size: 20px;
-  font-weight: 700;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -513,7 +513,7 @@
   background: var(--sx-surface);
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .periodChip select {

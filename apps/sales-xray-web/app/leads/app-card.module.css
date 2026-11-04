@@ -46,7 +46,7 @@
   max-width: 70ch;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
 }
 
 .action {
@@ -104,7 +104,7 @@
   background: var(--sx-sunken);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 650;
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -194,14 +194,14 @@
   overflow: hidden;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 650;
+  font-weight: 500;
   text-overflow: ellipsis;
 }
 
 .subTitle small {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  line-height: 1.45;
+  line-height: var(--sx-leading-16);
 }
 
 .subActions {
@@ -226,14 +226,14 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .groupHead p {
   margin: 2px 0 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  line-height: 1.45;
+  line-height: var(--sx-leading-16);
 }
 
 .switchRow {
@@ -266,13 +266,13 @@
 .switchText strong {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .switchText small {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  line-height: 1.45;
+  line-height: var(--sx-leading-16);
 }
 
 .switch {
@@ -345,7 +345,7 @@
 
 .card textarea {
   min-height: 64px;
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
   field-sizing: content;
   resize: vertical;
 }
@@ -382,7 +382,7 @@
   border-radius: 999px;
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
@@ -468,7 +468,7 @@
   background: color-mix(in oklab, var(--sx-good) 7%, var(--sx-surface));
   box-shadow: none;
   color: var(--lx-strength-ink);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .saveActions {
@@ -496,7 +496,7 @@
   color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -529,7 +529,7 @@
   box-shadow: inset 0 0 0 1px var(--sx-line);
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .fact[data-tone="good"] {
@@ -551,14 +551,14 @@
   background: color-mix(in oklab, var(--sx-warn) 11%, transparent);
   color: var(--lx-focus-ink);
   font-size: var(--sx-text-sm);
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
 }
 
 .quietText {
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  line-height: 1.45;
+  line-height: var(--sx-leading-20);
 }
 
 .tableWrap {
@@ -586,7 +586,7 @@
   background: var(--sx-sunken);
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .table tbody tr:last-child th,
@@ -596,7 +596,7 @@
 
 .table tbody th {
   color: var(--sx-ink);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .table caption {
@@ -686,13 +686,13 @@
 .fieldLabel strong {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .fieldLabel small {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  line-height: 1.45;
+  line-height: var(--sx-leading-16);
 }
 
 fieldset.sub {
@@ -734,7 +734,7 @@ fieldset.sub {
 .list strong {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .list small {
@@ -747,7 +747,7 @@ fieldset.sub {
   overflow: hidden;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  line-height: 1.45;
+  line-height: var(--sx-leading-16);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -767,7 +767,7 @@ fieldset.sub {
   padding: 0 12px;
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
   cursor: pointer;
   list-style: none;
 }
@@ -823,13 +823,13 @@ fieldset.sub {
 .option strong {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .option small {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  line-height: 1.45;
+  line-height: var(--sx-leading-16);
 }
 
 .option:has(input:checked) {
@@ -880,7 +880,7 @@ fieldset.sub {
 
 .rows strong {
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .rows small {

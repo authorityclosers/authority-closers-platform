@@ -28,7 +28,7 @@
 .panel h2 {
   margin: 0;
   color: var(--lx-ink);
-  font-size: 19px;
+  font-size: var(--sx-text-md);
   letter-spacing: -0.01em;
 }
 
@@ -36,8 +36,8 @@
   max-width: 420px;
   margin: 0;
   color: var(--lx-ink-3);
-  font-size: 13.5px;
-  line-height: 1.5;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
 .switch {
@@ -50,7 +50,7 @@
   border-radius: 10px;
   background: var(--lx-teal);
   color: var(--lx-on-teal);
-  font: 600 13.5px/1 var(--lx-font-ui, inherit);
+  font: 500 var(--sx-text-sm) / 1 var(--lx-font-ui, inherit);
   cursor: pointer;
   transition:
     background-color 140ms ease,

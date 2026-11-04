@@ -25,6 +25,7 @@ import {
   type LeadsDeleted,
 } from "./leads-client";
 import styles from "./delete-leads.module.css";
+import { placed } from "./row-window";
 
 /** A lead to delete: its id, and its name for the confirm. */
 export type Doomed = { lead_id: string; name: string };
@@ -162,14 +163,29 @@ export function SelectLine({
   row,
   selected,
   onToggle,
+  at,
+  index,
+  count,
+  kind,
 }: {
   row: LeadRow;
   selected: boolean;
   onToggle: (row: LeadRow) => void;
+  /** In a long list drawn near the view only, as LeadLine's (row-window.ts). */
+  at?: number;
+  index?: number;
+  count?: number;
+  kind?: string;
 }) {
   const sub = [row.interest, row.company, row.city].filter(Boolean).join(" · ");
   return (
-    <li className={styles.line}>
+    <li
+      className={styles.line}
+      style={placed(at)}
+      aria-setsize={count}
+      aria-posinset={index === undefined ? undefined : index + 1}
+      data-row-kind={kind}
+    >
       <button
         type="button"
         role="checkbox"

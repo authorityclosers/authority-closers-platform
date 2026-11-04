@@ -7,7 +7,7 @@
   background: var(--sx-ink);
   box-shadow: var(--lx-shadow-2);
   color: var(--sx-surface);
-  font: 500 var(--sx-text-xs) / 1.4 var(--lx-font-ui);
+  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   white-space: nowrap;
   pointer-events: none;
   transform: translateY(-50%);
