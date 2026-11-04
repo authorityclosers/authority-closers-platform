@@ -67,6 +67,7 @@
 
 .words strong {
   font: var(--sx-text-body);
+  font-weight: 500;
 }
 
 .words small {

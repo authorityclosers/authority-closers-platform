@@ -10,7 +10,7 @@
   gap: 10px;
   margin: 0;
   font-size: var(--sx-text-xl);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--lx-ink);
 }
@@ -95,7 +95,7 @@
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 @media (max-width: 720px) {
@@ -111,6 +111,6 @@
   margin-left: 6px;
   padding: 0 4px;
   color: var(--sx-accent);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
 }

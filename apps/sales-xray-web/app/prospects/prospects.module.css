@@ -50,7 +50,7 @@
   margin: 0;
   font-family: var(--lx-font-display);
   font-size: var(--sx-text-xl);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--lx-ink);
 }
@@ -69,7 +69,7 @@
   color: var(--lx-teal);
   text-decoration: none;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   transition: color var(--lx-dur-quick) var(--lx-ease-quick);
 }
 
@@ -169,7 +169,7 @@
   background: var(--lx-teal-soft);
   border-color: var(--lx-teal-edge);
   color: var(--lx-teal);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 /* ---------- Table & Rows ---------- */
@@ -223,7 +223,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 500;
+  font-weight: 700;
   font-size: var(--sx-text-xs);
   color: var(--lx-ink-2);
   flex-shrink: 0;
@@ -243,7 +243,7 @@
   overflow: hidden;
   color: var(--lx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -416,7 +416,7 @@
 }
 
 .hoverCardValue {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--lx-ink-2);
   text-align: right;
   max-width: 160px;
@@ -439,7 +439,7 @@
 
 .emptyTitle {
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--lx-ink-2);
   margin-bottom: 6px;
 }
@@ -473,7 +473,7 @@
   background: var(--lx-surface);
   color: var(--lx-teal);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -502,7 +502,7 @@
   background: var(--lx-surface);
   color: var(--lx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all var(--lx-dur-quick) var(--lx-ease-quick);
 }
@@ -538,7 +538,7 @@
   align-items: center;
   justify-content: center;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--lx-ink-2);
   flex-shrink: 0;
 }
@@ -551,7 +551,7 @@
 .prospectHeaderName {
   margin: 0;
   font-size: var(--sx-text-xl);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--lx-ink);
 }
 
@@ -581,7 +581,7 @@
 
 .missingItemLabel {
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--lx-muted);
 }
 
@@ -614,7 +614,7 @@
 
 .callsSectionTitle {
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--lx-ink);
   margin: 0 0 var(--lx-space-3);
   display: flex;
@@ -640,7 +640,7 @@
 }
 
 .callItemTitle {
-  font-weight: 500;
+  font-weight: 600;
   font-size: var(--sx-text-sm);
   color: var(--lx-ink);
 }
@@ -670,7 +670,7 @@
   background: transparent;
   color: var(--lx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   transition: all var(--lx-dur-quick) var(--lx-ease-quick);
 }
@@ -710,7 +710,7 @@
 
 .snapshotBoxTitle {
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--lx-focus-ink);
   display: flex;
   align-items: center;
@@ -738,7 +738,7 @@
 .interpretationKind {
   display: inline-block;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--lx-focus-ink);
   background: var(--lx-focus-soft);
   padding: 1px 6px;

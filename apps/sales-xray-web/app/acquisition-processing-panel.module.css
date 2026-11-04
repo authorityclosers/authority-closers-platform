@@ -126,7 +126,7 @@
 .headCopy h2 {
   margin: 0;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: -0.015em;
   line-height: var(--sx-leading-24);
 }
@@ -144,7 +144,7 @@
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: -0.015em;
   line-height: var(--sx-leading-24);
 }
@@ -160,7 +160,7 @@
   margin-bottom: 2px;
   color: var(--lx-warning);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.02em;
 }
 
@@ -227,7 +227,7 @@
 
 .stepCopy strong {
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .stepCopy span {
@@ -255,12 +255,12 @@
 
 .step[data-state="active"] .stepStatus {
   color: var(--lx-ink);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .step[data-state="attention"] .stepStatus {
   color: var(--lx-warning);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 /* ---------- Saved work and actions ---------- */
@@ -281,7 +281,7 @@
 
 .savedWork strong {
   color: var(--lx-ink);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .savedWork p {
@@ -339,7 +339,7 @@
   /* The on-accent ink reads on the danger fill in both themes. */
   color: var(--sx-accent-ink);
   font: inherit;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -383,7 +383,7 @@
   min-width: 0;
   color: var(--lx-ink-3);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

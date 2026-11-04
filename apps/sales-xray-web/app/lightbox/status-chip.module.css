@@ -11,7 +11,7 @@
   background: var(--chip-bg);
   color: var(--chip-ink);
   font: var(--lx-text-meta);
-  font-weight: 500;
+  font-weight: 800;
   white-space: nowrap;
 }
 

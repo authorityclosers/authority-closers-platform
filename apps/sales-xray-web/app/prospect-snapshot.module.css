@@ -67,7 +67,7 @@
 .stepLabel {
   margin: 5px 0 8px;
   color: var(--lx-muted);
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
+  font: 600 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
 }
 
 .observation {
@@ -75,7 +75,7 @@
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 550;
   line-height: var(--sx-leading-20);
 }
 

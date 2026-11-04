@@ -71,7 +71,7 @@
   background: var(--lx-sunken);
   color: var(--lx-ink-3);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: 0.02em;
   line-height: 1;
 }
@@ -204,7 +204,7 @@
   margin: 0;
   color: var(--lx-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 .confirmActions {
   display: flex;
@@ -217,7 +217,7 @@
   border-radius: 8px;
   background: var(--lx-surface);
   color: var(--lx-ink-3);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
   cursor: pointer;
 }
 .confirmActions .danger {
@@ -300,7 +300,7 @@
 }
 .link[data-current] .name {
   color: var(--lx-teal);
-  font-weight: 500;
+  font-weight: 600;
 }
 .link[data-current]::before {
   position: absolute;

@@ -49,7 +49,7 @@
   border-radius: var(--lx-radius-pill);
   background: var(--lx-surface);
   color: var(--lx-ink-2);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
   cursor: pointer;
   transition:
     background-color var(--lx-dur-quick) var(--lx-ease-quick),
@@ -98,7 +98,7 @@
   border-radius: var(--lx-radius-pill);
   background: color-mix(in srgb, var(--voice) 14%, transparent);
   color: color-mix(in srgb, var(--voice) 75%, var(--lx-ink));
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 700 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
 }
 /* "Speaker 1 looks like you · Yes · No": one tap to confirm. */
 .ask {
@@ -117,7 +117,7 @@
   color: var(--lx-teal);
 }
 .ask b {
-  font-weight: 500;
+  font-weight: 700;
 }
 .ask button {
   min-height: 22px;
@@ -126,7 +126,7 @@
   border-radius: var(--lx-radius-pill);
   background: transparent;
   color: var(--lx-ink-3);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 650 var(--sx-text-xs) / 1 var(--lx-font-ui);
   cursor: pointer;
   transition: background-color var(--lx-dur-quick) var(--lx-ease-quick);
 }
@@ -335,7 +335,7 @@
   gap: 8px;
 }
 .peekHead b {
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 700 var(--sx-text-xs) / 1 var(--lx-font-ui);
   font-variant-numeric: tabular-nums;
 }
 .peekHead > span {
@@ -346,7 +346,7 @@
   border-radius: var(--lx-radius-pill);
   background: var(--lx-sunken);
   color: var(--lx-muted);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 650 var(--sx-text-xs) / 1 var(--lx-font-ui);
 }
 .peekHead > span[data-voice] {
   padding: 2px 8px 2px 2px;
@@ -367,7 +367,7 @@
   align-items: center;
   gap: 5px;
   color: var(--lx-muted-2);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
 }
 
 /* ---------- Moment dots on the top edge ---------- */
@@ -477,7 +477,7 @@
   background: var(--lx-surface);
   box-shadow: var(--lx-shadow-2);
   color: var(--lx-ink);
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui);
   text-align: left;
   opacity: 0;
   pointer-events: none;
@@ -502,7 +502,7 @@
   color: var(--lx-muted);
   font-style: normal;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 .tip em::before {
   content: "";
@@ -529,7 +529,7 @@
 .time {
   min-width: 36px;
   color: var(--lx-muted-2);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
   font-variant-numeric: tabular-nums;
 }
 .time:last-child {
@@ -619,14 +619,14 @@
 }
 .body b {
   color: var(--lx-ink);
-  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-display);
+  font: 800 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-display);
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .body b small {
   color: var(--lx-muted);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
   letter-spacing: 0;
 }
 .body > small {
@@ -839,7 +839,7 @@
 .miniTotal {
   min-width: 38px;
   color: var(--lx-muted-2);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 650 var(--sx-text-xs) / 1 var(--lx-font-ui);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -911,7 +911,7 @@
   border-radius: 9px;
   background: transparent;
   color: var(--lx-muted);
-  font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
   cursor: pointer;
   transition:
     background-color var(--lx-dur-quick) var(--lx-ease-quick),
@@ -944,7 +944,7 @@
 }
 .note b {
   color: var(--lx-ink-2);
-  font-weight: 500;
+  font-weight: 700;
 }
 /* Prospect's interest: their share of the talk each minute. */
 .interest {
@@ -1030,7 +1030,7 @@
   }
   .lenses button::before {
     content: attr(data-short);
-    font: 500 var(--sx-text-xs) / 1 var(--lx-font-ui);
+    font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
   }
   .legend {
     width: 100%;

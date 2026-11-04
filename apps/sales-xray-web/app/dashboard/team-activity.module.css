@@ -45,7 +45,7 @@
   padding: 8px 0 2px 16px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .hourLabel::before {
@@ -86,7 +86,7 @@
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-pill);
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 650;
   text-decoration: none;
 }
 

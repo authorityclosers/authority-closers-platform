@@ -55,7 +55,7 @@
 
 .consoleText strong {
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: -0.01em;
 }
 
@@ -93,7 +93,7 @@
   color: var(--lx-strength-on-film);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 /* The host gives way first; the path, which says what it is, always shows. */
@@ -116,7 +116,7 @@
 .path {
   flex: none;
   color: var(--lx-film-text);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .consoleCopy {
@@ -166,7 +166,7 @@
   border-radius: var(--sx-radius-sm);
   color: var(--lx-film-text);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   text-decoration: none;
 }
 
@@ -221,7 +221,7 @@
 .field > span {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .field small {
@@ -348,13 +348,13 @@
   background: var(--sx-accent-soft);
   color: var(--sx-accent);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   content: counter(step);
 }
 
 .steps strong {
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .steps code,
@@ -388,7 +388,7 @@
   background: var(--sx-surface);
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
 }
 
@@ -412,7 +412,7 @@
 .stdio summary {
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -447,7 +447,7 @@
 .stepCount {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 650;
   white-space: nowrap;
 }
 
@@ -494,7 +494,7 @@
 
 .steps > li:not([data-state="open"]) .stepTitle strong {
   color: var(--sx-ink-2);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .stepTitle:focus-visible {
@@ -538,7 +538,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
   transition:

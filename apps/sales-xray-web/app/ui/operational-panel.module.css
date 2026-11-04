@@ -33,7 +33,7 @@
 .panelTitle {
   margin: 0;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: -0.005em;
   line-height: var(--sx-leading-24);
   color: var(--theme-text, var(--lx-ink));
@@ -98,7 +98,7 @@
   background: var(--theme-surface-subtle, var(--lx-sunken));
   color: var(--theme-text-muted, var(--lx-muted));
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .actionIcon {
@@ -165,7 +165,7 @@
 .emptyTitle {
   margin: 0;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--theme-text, var(--lx-ink));
 }
 

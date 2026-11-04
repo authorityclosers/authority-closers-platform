@@ -34,7 +34,7 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 750;
 }
 
 .sub,
@@ -52,7 +52,7 @@
   background: none;
   color: var(--sx-accent);
   font: inherit;
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -83,7 +83,7 @@
 .seller summary strong {
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 750;
 }
 
 .seller summary span {
@@ -117,20 +117,20 @@
 .table thead th:first-child {
   padding-right: 8px;
   color: var(--sx-muted);
-  font-weight: 500;
+  font-weight: 600;
   text-align: left;
 }
 
 .table td {
   width: 28%;
   color: var(--sx-ink);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 /* Inbound and Cold in sentence case, never capitals (simplify pass, 2 Nov 2026). */
 .table thead th[data-side] {
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 750;
 }
 
 /* A seller's other work numbers open from one line (simplify pass). */
@@ -140,7 +140,7 @@
   min-height: 44px;
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   text-decoration: none;
   cursor: pointer;
 }
@@ -184,7 +184,7 @@
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 750;
 }
 
 .breaks {
@@ -202,7 +202,7 @@
 
 .line[data-red] {
   color: var(--sx-bad);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 /* A seller's red flags, on the card before it opens: only what isn't 0. */
@@ -221,7 +221,7 @@
   background: color-mix(in oklab, var(--sx-bad) 12%, transparent);
   color: var(--sx-bad);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 /* My Growth's section title over the view (Analytics now, Coaching later). */
@@ -258,7 +258,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -296,7 +296,7 @@
   background: none;
   color: inherit;
   font: inherit;
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -308,7 +308,7 @@
 .sellerTable td[data-red],
 .sellerCard dd[data-red] {
   color: var(--sx-bad);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .sellerCards {
@@ -355,7 +355,7 @@
 
 .sellerCard dd {
   margin: 0;
-  font-weight: 500;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 

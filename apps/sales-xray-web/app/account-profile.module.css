@@ -35,14 +35,14 @@
   margin-bottom: 10px;
   color: var(--profile-action);
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 800;
   letter-spacing: 0.13em;
 }
 
 .header h2 {
   margin: 0;
   font-size: var(--sx-text-2xl);
-  font-weight: 500;
+  font-weight: 800;
   letter-spacing: -0.045em;
   line-height: var(--sx-leading-36);
 }
@@ -87,7 +87,7 @@
 .fileText strong {
   overflow: hidden;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -119,7 +119,7 @@
   gap: 7px;
   color: var(--profile-ink);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .field input,
@@ -160,7 +160,7 @@
 
 .field .fieldError {
   color: #a33135;
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .notice {
@@ -186,7 +186,7 @@
   border-radius: 10px;
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 750;
   line-height: var(--sx-leading-20);
   text-align: center;
   cursor: pointer;
@@ -328,7 +328,7 @@
   color: var(--profile-ink);
   font: inherit;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   text-decoration: underline;
   cursor: pointer;
 }

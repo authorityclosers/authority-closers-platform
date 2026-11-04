@@ -55,7 +55,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -138,7 +138,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   cursor: pointer;
 }
 

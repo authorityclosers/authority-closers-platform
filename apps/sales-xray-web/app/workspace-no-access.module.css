@@ -50,7 +50,7 @@
   border-radius: 10px;
   background: var(--lx-teal);
   color: var(--lx-on-teal);
-  font: 500 var(--sx-text-sm) / 1 var(--lx-font-ui, inherit);
+  font: 600 var(--sx-text-sm) / 1 var(--lx-font-ui, inherit);
   cursor: pointer;
   transition:
     background-color 140ms ease,

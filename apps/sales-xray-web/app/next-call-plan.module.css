@@ -27,7 +27,7 @@
 
 .outcomeText b {
   color: var(--lx-ink);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .outcomePlay {
@@ -40,7 +40,7 @@
   border-radius: 99px;
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
-  font: 500 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
+  font: 650 var(--sx-text-2xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
@@ -78,14 +78,14 @@
   align-items: center;
   gap: 6px;
   color: var(--lx-teal);
-  font: 500 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
+  font: 650 var(--sx-text-xs) / var(--sx-leading-16) var(--lx-font-ui, inherit);
 }
 
 .moveText {
   max-width: 60ch;
   margin: 0;
   color: var(--lx-ink);
-  font: 500 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui, inherit);
+  font: 650 var(--sx-text-md) / var(--sx-leading-24) var(--lx-font-ui, inherit);
   letter-spacing: -0.01em;
 }
 
@@ -100,7 +100,7 @@
 .target b,
 .doneWhen b {
   color: var(--lx-ink);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .practice {

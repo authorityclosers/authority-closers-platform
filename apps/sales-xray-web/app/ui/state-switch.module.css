@@ -47,7 +47,7 @@
 
 .words strong {
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 650;
 }
 
 .words small {
@@ -180,7 +180,7 @@
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
   transition: transform var(--sx-dur-fast, 120ms) var(--sx-ease-out);

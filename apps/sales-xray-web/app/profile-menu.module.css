@@ -83,7 +83,7 @@
   background: var(--lx-ink);
   color: var(--lx-surface);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: -0.01em;
 }
 
@@ -111,7 +111,7 @@
   overflow: hidden;
   font: var(--lx-text-meta);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -197,7 +197,7 @@
   background: linear-gradient(135deg, var(--lx-teal), var(--lx-strength-ink));
   color: var(--lx-film-text);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: 0.01em;
 }
 
@@ -210,7 +210,7 @@
 .headerFullName {
   overflow: hidden;
   font-size: var(--sx-text-sm);
-  font-weight: 500;
+  font-weight: 650;
   line-height: var(--sx-leading-20);
   color: var(--lx-ink);
   text-overflow: ellipsis;
@@ -237,7 +237,7 @@
   padding: 4px 10px 2px;
   color: var(--lx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .actions {
@@ -312,7 +312,7 @@
   color: var(--lx-muted);
   font: inherit;
   font-size: var(--sx-text-2xs);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
 }
 

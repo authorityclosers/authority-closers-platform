@@ -130,17 +130,17 @@
 
   /* Material 3's roles (owner, 3 Nov 2026): weights 400 and 500 only, sizes
      in rem so the phone's font size scales them (sx-tokens.css). */
-  --lx-text-display-xl: 500 4.75rem/0.98 var(--lx-font-display); /* marketing / foundations only */
-  --lx-text-display: 500 2.875rem/1.04 var(--lx-font-display); /* page H1 desktop */
-  --lx-text-h1: 500 2rem/1.125 var(--lx-font-display);
-  --lx-text-h2: 500 1.375rem/1.2727 var(--lx-font-display); /* report section titles */
+  --lx-text-display-xl: 700 4.75rem/0.98 var(--lx-font-display); /* marketing / foundations only */
+  --lx-text-display: 800 2.875rem/1.04 var(--lx-font-display); /* page H1 desktop */
+  --lx-text-h1: 800 2rem/1.125 var(--lx-font-display);
+  --lx-text-h2: 800 1.375rem/1.2727 var(--lx-font-display); /* report section titles */
   --lx-text-verdict: 400 2rem/1.125 var(--lx-font-quote); /* the verdict sentence */
   --lx-text-quote-lg: 400 1.375rem/1.2727 var(--lx-font-quote); /* moment quotes */
   --lx-text-quote: 400 0.875rem/1.4286 var(--lx-font-quote); /* quote chips */
-  --lx-text-body: 400 1rem/1.5 var(--lx-font-ui);
-  --lx-text-ui: 500 0.875rem/1.4286 var(--lx-font-ui);
-  --lx-text-meta: 400 0.75rem/1.3333 var(--lx-font-ui);
-  --lx-text-eyebrow: 500 0.75rem/1.3333 var(--lx-font-ui); /* letter-spacing: .14em, uppercase */
+  --lx-text-body: 500 1rem/1.5 var(--lx-font-ui);
+  --lx-text-ui: 600 0.875rem/1.4286 var(--lx-font-ui);
+  --lx-text-meta: 600 0.75rem/1.3333 var(--lx-font-ui);
+  --lx-text-eyebrow: 800 0.75rem/1.3333 var(--lx-font-ui); /* letter-spacing: .14em, uppercase */
   --lx-tracking-display: -0.035em;
   --lx-tracking-eyebrow: 0.14em;
   --lx-leading-devanagari: 1.65; /* raise line-height for :lang(hi), :lang(mr) */
