@@ -159,6 +159,28 @@ Each environment has its own Pulse app and its own values; never copy a
 production value into staging or dev. Changing `AC_PULSE_SEAL_KEY` means every
 linked organisation must connect Pulse again.
 
+## Sales Xray partner webhooks and hand-overs (optional)
+
+Settings -> Integrations seals each organisation's webhook signing secret and
+hand-over key under one platform key per environment. Until it is set, the API
+answers `webhooks_ready: false` and the screen offers no webhook. No release
+requires it.
+
+| Secret                     | Constraint                                                                                                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AC_INTEGRATIONS_SEAL_KEY` | 32 random bytes, url-safe base64, one per environment, in the Infisical `/application` path. Compose forwards it to the API and to the `sales-xray-worker` container |
+
+Generate it without printing it, for example
+`python3 -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())" | infisical secrets set ...`
+through stdin. Changing it means every organisation's webhook and hand-over key
+must be made again, so it is never rotated casually. Never copy a production
+value into staging or dev.
+
+Sending also needs the runner, which no release turns on by itself. As root,
+once per environment: `systemctl enable --now ac-partner-events@<environment>.timer`.
+With no active endpoint the runner only runs the erasure sweep and stops, and
+never fetches a provider key.
+
 ## Sales Xray CRM lead sources (optional)
 
 The API reads these from the same Infisical `/application` path. The Meta Lead

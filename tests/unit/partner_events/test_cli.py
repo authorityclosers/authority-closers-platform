@@ -158,6 +158,59 @@ def test_apply_reexecs_inside_infisical_with_the_gemini_secret_path(
     assert "GEMINI_API_KEY" not in captured["environment"]
 
 
+def test_apply_keeps_the_seal_key_and_drops_other_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A webhook secret made in Settings -> Integrations opens only with this key."""
+    token = tmp_path / "token"
+    token.write_text("fictional-token\n")
+    service = tmp_path / "service.json"
+    service.write_text(
+        json.dumps(
+            {
+                "environment": "staging",
+                "providers": [
+                    {
+                        "provider_id": "gemini",
+                        "executable": "/opt/infisical",
+                        "project_ref": "project-fictional",
+                        "environment_ref": "staging",
+                        "secret_path_ref": "/sales-xray/gemini",
+                        "token_file_ref": str(token),
+                    }
+                ],
+            }
+        )
+    )
+    captured: dict[str, Any] = {}
+
+    def fake_exec(path: str, command: list[str], environment: dict[str, str]) -> None:
+        captured.update(environment=environment)
+
+    async def endpoint_active(*args: Any, **kwargs: Any) -> bool:
+        return True
+
+    monkeypatch.setattr("ac_platform.partner_events.cli.os.execvpe", fake_exec)
+    monkeypatch.setattr(cli, "_preflight_async", endpoint_active)
+    monkeypatch.setenv("AC_INTEGRATIONS_SEAL_KEY", "fictional-seal-key")
+    monkeypatch.setenv("AC_SOME_OTHER_SECRET", "must-not-pass")
+    assert (
+        cli.main(
+            [
+                "--service-config",
+                str(service),
+                "--database-url-file",
+                "database-url",
+                "run",
+                "--apply",
+            ]
+        )
+        == 0
+    )
+    assert captured["environment"]["AC_INTEGRATIONS_SEAL_KEY"] == "fictional-seal-key"
+    assert "AC_SOME_OTHER_SECRET" not in captured["environment"]
+
+
 class _Session:
     """Stands in for an AsyncSession: the faked pipeline never touches it."""
 

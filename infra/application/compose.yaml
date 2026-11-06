@@ -198,6 +198,8 @@ services:
       AC_PULSE_CLIENT_ID: ${AC_PULSE_CLIENT_ID:-}
       AC_PULSE_CLIENT_SECRET: ${AC_PULSE_CLIENT_SECRET:-}
       AC_PULSE_SEAL_KEY: ${AC_PULSE_SEAL_KEY:-}
+      # Settings -> Integrations: seals webhook signing secrets and hand-over keys.
+      AC_INTEGRATIONS_SEAL_KEY: ${AC_INTEGRATIONS_SEAL_KEY:-}
       AC_INTAKE_SPOOL_ROOT: /var/lib/ac-intake-spool
     volumes:
       # Leads a release's hold kept (lead_desk/spool.py); the API files them every minute.

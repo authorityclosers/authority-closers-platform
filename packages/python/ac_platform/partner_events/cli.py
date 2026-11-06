@@ -172,7 +172,10 @@ def _reexec_inside_infisical(argv: list[str], arguments: argparse.Namespace) -> 
     environment = {
         key: value
         for key, value in os.environ.items()
-        if key in {"PATH", "HOME", "LANG", "PYTHONPATH", "PYTHONUNBUFFERED"}
+        # The seal key opens secrets made in Settings -> Integrations. It lives on the
+        # service's own environment, not on the Gemini secret path fetched below.
+        if key
+        in {"PATH", "HOME", "LANG", "PYTHONPATH", "PYTHONUNBUFFERED", "AC_INTEGRATIONS_SEAL_KEY"}
     }
     environment["INFISICAL_TOKEN"] = token
     command = [

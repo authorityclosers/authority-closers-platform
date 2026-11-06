@@ -65,6 +65,8 @@ services:
       HOME: /tmp
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
+      # The partner-events runner (docker exec in this container) unseals webhook secrets.
+      AC_INTEGRATIONS_SEAL_KEY: ${AC_INTEGRATIONS_SEAL_KEY:-}
     security_opt:
       - no-new-privileges:true
     cap_drop:

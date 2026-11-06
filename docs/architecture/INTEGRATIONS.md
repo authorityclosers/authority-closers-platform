@@ -86,6 +86,12 @@ When a lead is won, Sales X-Ray calls the organisation's own app (`POST <app>/ap
 
 Platform admins can revoke a key, turn off a webhook or disconnect an app. Each action is audited in the organisation's own chain and answers with the updated row.
 
+## Turning the webhook on in an environment
+Three steps, all outside the database. Until all three are done, a new organisation cannot send anything.
+1. Put `AC_INTEGRATIONS_SEAL_KEY` in that environment's Infisical `/application` path (`infra/application/SECRETS.md`).
+2. Release a build whose Compose files forward it to the API and the `sales-xray-worker` container. The screen then offers the webhook (`webhooks_ready: true`).
+3. Enable the runner: `systemctl enable --now ac-partner-events@<environment>.timer`. Without it the test button works (the API sends that itself) but no real event is ever sent.
+
 ## Not yet
 - Chats and coaching through the API and MCP (`chats:read`, `coaching:read`), for the Pulse app's next tabs.
 - A Settings screen for the person's own connected apps (the API is there).
