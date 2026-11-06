@@ -1,6 +1,6 @@
 {
   "profile": "rooftop-solar-quote-v1",
-  "prompt_revision": "rooftop-solar-quote-prompt/1",
+  "prompt_revision": "rooftop-solar-quote-prompt/2",
   "model_id": "gemini-3.8-flash",
   "max_output_tokens": 4000,
   "looked_for": [
@@ -61,7 +61,7 @@
     "- status: \"stated\"; for a one-per-call type, \"conflicting\" when different values were said, with every other value in alternatives (each with its own value and evidence).",
     "- value: the fields for that type, listed below.",
     "- evidence: the segment id or ids where it was said. The first id must contain stated_as (or when_text) word for word.",
-    "- stated_as: copy the exact words from the transcript line, in the same script and spelling, as short as possible.",
+    "Inside value, stated_as is the exact words copied from the transcript line, in the same script and spelling, as short as possible. Every system_size, product_mention, load, add_on, battery_type, warranty, site, delivery_basis and mentioned_price value must have stated_as, and must not have text. A value of these types without stated_as is thrown away. For promise, objection and next_step, stated_as is an empty string.",
     "",
     "Fact types:",
     "- system_size (one per call): the system capacity the customer wants or was offered. value: {stated_as}.",
@@ -120,7 +120,8 @@
                 "text": { "type": "string" },
                 "action": { "type": "string" },
                 "when_text": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
-              }
+              },
+              "required": ["stated_as"]
             },
             "evidence": { "type": "array", "items": { "type": "string" } },
             "alternatives": {
@@ -134,7 +135,8 @@
                       "stated_as": { "type": "string" },
                       "kind": { "type": "string" },
                       "years": { "anyOf": [{ "type": "integer" }, { "type": "null" }] }
-                    }
+                    },
+                    "required": ["stated_as"]
                   },
                   "evidence": { "type": "array", "items": { "type": "string" } }
                 },

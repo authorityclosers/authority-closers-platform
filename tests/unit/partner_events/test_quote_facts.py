@@ -64,7 +64,7 @@ def test_profile_matches_the_v1_contract_and_its_schema() -> None:
 def test_prompt_names_roles_and_cites_segment_ids_only() -> None:
     profile = load_profile("rooftop-solar-quote-v1")
     system, user = build_prompt(profile, SEGMENTS[:2], SPEAKERS)
-    assert system.startswith("rooftop-solar-quote-prompt/1\n")
+    assert system.startswith("rooftop-solar-quote-prompt/2\n")
     assert "Amounts of money appear only in mentioned_price" in system
     assert user.splitlines() == [
         "Transcript:",
@@ -871,3 +871,16 @@ def test_profiles_resolve_through_their_configuration_files() -> None:
     assert "rooftop-solar-quote-v1" in quote_facts.PROFILES
     source = (quote_facts.PROFILE_DIR.parent / "quote_facts.py").read_text(encoding="utf-8")
     assert "rooftop-solar-quote-v1" not in source
+
+
+def test_the_prompt_asks_for_stated_as_inside_value() -> None:
+    """Gemini returned ``{"kind": "lithium", "text": ""}``, so battery, warranty, add-ons and
+    prices were dropped on every call: the prompt named stated_as beside value, not inside it."""
+    profile = load_profile("rooftop-solar-quote-v1")
+    assert "\n- stated_as:" not in profile.instructions
+    assert "Inside value, stated_as is the exact words" in profile.instructions
+    assert profile.prompt_revision == "rooftop-solar-quote-prompt/2"
+    item = profile.response_schema["properties"]["facts"]["items"]["properties"]
+    assert item["value"]["required"] == ["stated_as"]
+    alternative = item["alternatives"]["items"]["properties"]["value"]
+    assert alternative["required"] == ["stated_as"]
