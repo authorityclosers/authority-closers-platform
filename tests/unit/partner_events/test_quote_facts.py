@@ -884,3 +884,19 @@ def test_the_prompt_asks_for_stated_as_inside_value() -> None:
     assert item["value"]["required"] == ["stated_as"]
     alternative = item["alternatives"]["items"]["properties"]["value"]
     assert alternative["required"] == ["stated_as"]
+
+
+@pytest.mark.parametrize(
+    ("said", "expected"),
+    [
+        ("five-kilowatt", (5, "kW")),
+        ("5-kW", (5, "kW")),
+        ("5-kilowatt", (5, "kW")),
+        ("five kilowatt", (5, "kW")),
+        ("3-5 kW", (None, None)),  # a range stays ambiguous
+    ],
+)
+def test_a_hyphenated_size_reads_like_a_spaced_one(said: str, expected: tuple[Any, Any]) -> None:
+    from ac_platform.partner_events.amounts import system_size
+
+    assert system_size(said) == expected

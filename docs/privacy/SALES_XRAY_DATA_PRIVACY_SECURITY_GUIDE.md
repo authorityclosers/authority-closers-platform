@@ -1,5 +1,8 @@
 # Sales X-Ray: data storage, privacy and security
 
+> **DRAFT. NOT REVIEWED. Do not send this to a customer as a final guide.**
+> Updated from the code and the server on 6 Nov 2026 (release v1.39.0, commit 8656044), for the rows named under "Changed on 6 Nov 2026" at the end. Everything else is as written on 19 to 21 Oct 2026 and was not rechecked. It needs review by the owner and by counsel: see "What a person must review" at the end.
+
 **For:** Wise Life · **From:** Authority Closers (AC) · 19 Oct 2026 · **Covers:** Sales X-Ray as AC hosts it for you (production, release v0.66), read from the code and the live server configuration. These are facts about Sales X-Ray; your counsel confirms the legal reading (DPDP Act 2023).
 
 ## 1. Roles
@@ -47,9 +50,10 @@ Development, staging and production run on the same machine. Each has its own da
 
 | Provider                              | Receives                          | Why                                                                                                                                     |
 | ------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| **ElevenLabs** (Scribe v2)            | The call audio                    | Transcription. All production calls in the last 30 days used it.                                                                        |
-| **Google Gemini** (paid API)          | Transcript text only, never audio | The report, coaching, pointer review and prospect profile. From v0.66, also the call data engine's facts and segment labels.            |
-| **OpenAI** (API; OpenAI, L.L.C., USA) | Transcript text only, never audio | The coaching report (C5), for calls whose upload terms name OpenAI. Approved by the owner on 21 Oct 2026; available from release v0.71. |
+| **ElevenLabs** (Scribe v2)            | The call audio                    | Transcription.                                                                                                                          |
+| **Deepgram**                          | The call audio                    | Transcription. Named in production's upload terms and listed in production's provider settings on 6 Nov 2026.                           |
+| **Google Gemini** (paid API)          | Transcript text. **To confirm:** see below | The report, coaching, pointer review and prospect profile, the call data engine's facts and segment labels, and quote facts for a partner webhook. Production's upload terms say the providers receive "the recording or its transcript", and the code has a one-pass route in which Gemini transcribes the audio itself. Whether any production call's audio reaches Gemini was not checked: it is an owner switch held in the production database. |
+| **OpenAI** (API; OpenAI, L.L.C., USA) | Transcript text only, never audio | The coaching report (C5), for calls whose upload terms name OpenAI. **Not in production's provider settings or upload terms on 6 Nov 2026.** |
 
 - **Where they process:** these providers may process data outside India.
 - **What they keep:** each provider keeps data under its own published API terms. ElevenLabs' zero-retention mode is not switched on for our account. Under Google's paid Gemini API terms, the data is not used to train Google's models.
@@ -59,7 +63,8 @@ Development, staging and production run on the same machine. Each has its own da
   - the voice measures and waveform;
   - the database, except the backups in section 6;
   - your Lead Desk details. Phone alerts go through Google Firebase but carry only a lead id; the app then fetches the details from us over your own session.
-- **Your webhook (optional):** if you register one, each finished analysis is sent to it as a signed event. Sensitive words are left out, numbers in the summary are masked, and the summary is cut to 1,500 characters.
+- **Your webhook (optional):** if you register one, each finished analysis is sent to it as a signed event, with the name, phone and city of the lead the call was uploaded on, the salesperson's name and work email, the summary and the facts. Sensitive words are left out, numbers in the summary are masked, a spoken price arrives only as a fact marked flag-only, and the summary is cut to 1,500 characters. The transcript, recording and scores are not sent. You can also choose lead events (lead added, stage moved, won or lost), which carry the lead's name, phone, email and city.
+- **Hand-over (optional):** when a person records a lead as Won, one request goes to the app you name, with only the parts you approved. Notes, remarks, deal values, summaries, recordings, transcripts and scores are never sent; calls go only as links.
 - **Live transcription** during a call is built but switched off. It stays off until a privacy and provider review passes.
 
 ## 5. Consent
@@ -82,12 +87,12 @@ Development, staging and production run on the same machine. Each has its own da
   - the prospect profile built from it (only the link to the call ends);
   - lead details already filled in from it.
 
-  Lead Desk has no delete button yet. Ask us to delete a lead or a prospect.
+  Owners and admins can delete chosen leads in Lead Desk (`POST /v1/lead-desk/leads/delete`, audited). Ask us to delete a prospect.
 
 - **How a customer asks for deletion:**
   - Email **admin@authorityclosers.com** with "Delete my data" (a call, a lead, or a whole account).
   - Our data-deletion page commits to finishing within 2 days.
-  - There is no in-app account deletion or "download my data" yet.
+  - An account deletion route exists (`/v1/me/account-deletion`). **To confirm:** that the screen offers it, and whether "download my data" exists yet.
 - **Backups:**
 
   | Backup                                   | How often       | Where                                                  | Kept for                     |
@@ -97,7 +102,7 @@ Development, staging and production run on the same machine. Each has its own da
   | Whole-server backup, including the audio | Daily           | Encrypted copy in Cloudflare R2                        | 7 daily, 4 weekly, 6 monthly |
   - Deleted data stays in these backups until they age out, which takes up to about 6 months.
   - The hourly Google Drive copies are not encrypted. **Being fixed.**
-  - The weekly restore drills exist but failed on their last run. **Being fixed.**
+  - On 6 Nov 2026: production's database restore proof last passed on 1 Nov 2026; the weekly whole-backup restore check last failed on 1 Nov 2026; staging's restore proof last failed on 19 Oct 2026. **Not fixed.**
 
 ## 7. Encryption and security
 
@@ -108,9 +113,25 @@ Development, staging and production run on the same machine. Each has its own da
   - The firewall denies incoming traffic by default.
   - Administrator access goes through a Cloudflare Access login for one named AC admin account.
 - **At rest:**
-  - The server disk is not encrypted, so the database and audio files are protected by file permissions and the measures above. **Being fixed.**
+  - The server disk is not encrypted (checked again on 6 Nov 2026: no encrypted volume), so the database and audio files are protected by file permissions and the measures above. **Not fixed.**
   - Encrypted: the daily and 5-minute off-site backups (Restic) and Meta lead-page tokens (AES-GCM).
   - Stored only as hashes: email codes and session tokens.
 - **Secrets:**
   - Provider keys live in Infisical and are handed to each service only while it runs, so the keys themselves are never written to the server disk.
   - The server holds only Infisical access credentials, readable only by root and the service that needs them. Each AI provider has its own narrowly scoped credential.
+
+## Changed on 6 Nov 2026 (draft notes, remove before sending)
+
+- **Providers (section 4):** Deepgram added; Gemini's "never audio" replaced by a question; OpenAI marked as not in production today; "All production calls in the last 30 days used ElevenLabs" removed because it was not rechecked. Source: production's `service.json` provider list and its public upload terms (`/v1/conversation/acquisition/upload-policy`).
+- **Webhook and hand-over (section 4):** what they carry, from `partner_events/payload.py`, `partner_events/lead_events.py`, and two fictional calls run on staging.
+- **Deletion (section 6):** Lead Desk delete and the account deletion route.
+- **Backups and encryption (sections 6, 7):** read from the server's service results and disks.
+
+## What a person must review
+
+1. **Gemini and audio.** Whether a production call's audio can reach Gemini. If it can, this guide and the provider table must say so.
+2. **Retention wording.** Production's terms are `until_deleted`. Staging's are `keep_for_training` ("kept privately to improve AC's coaching AI"). Confirm the wording a customer sees and that staging's never reaches production.
+3. **Not covered at all by this draft:** Sign in with Pulse (on in production's sign-in settings on 6 Nov 2026), WhatsApp, Messenger and Instagram conversations, AI replies, Meta conversions (lead stages sent back to Meta), Facebook sign-in, the phone app's call history and recording access, and the `salesxray.in` address.
+4. **Legal reading** (DPDP Act 2023, roles, cross-border processing, consent of the other party on a call): counsel.
+5. **Open "Being fixed" items:** the Drive copies, the restore check, disk encryption. A customer will ask for dates.
+6. **Sections 1, 2, 3, 5 and the rest of 6 and 7** were not rechecked against v1.39.0.

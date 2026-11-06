@@ -1342,9 +1342,14 @@ def amount_inr(stated_as: str) -> int | None:
     return int(total)
 
 
+# "five-kilowatt", "5-kW": transcripts hyphenate a size before a noun. A range ("3-5 kW")
+# has a number after its hyphen, so it never matches and stays ambiguous.
+_HYPHEN_BEFORE_SIZE_UNIT = re.compile(r"(?<=[^\W_])-(?=(?:kw|kva|kilowatts?|kilo watts?)\b)", re.I)
+
+
 def system_size(stated_as: str) -> tuple[int | float | None, Unit | None]:
     """(quantity, unit) from the words said; (None, None) when ambiguous."""
-    quantities, ranged = _quantities(_tokens(stated_as))
+    quantities, ranged = _quantities(_tokens(_HYPHEN_BEFORE_SIZE_UNIT.sub(" ", stated_as)))
     if len(quantities) != 1 or ranged:
         return None, None
     value, unit_token = quantities[0]
