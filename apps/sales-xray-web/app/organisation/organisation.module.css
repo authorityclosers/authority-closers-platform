@@ -2235,3 +2235,55 @@
 .saveRow:not(:has(button)):has(> small:empty) {
   display: none;
 }
+
+/* Organisation → Team, narrow (owner bugs 182 and 185, 7 Nov 2026): each
+   person on one row: the photo, the name and email (each cut with an
+   ellipsis), the role, then one More (⋯) for the row's actions. Last in the
+   file, so it wins over the two-line rows above. */
+@media (max-width: 720px) {
+  .memberRow {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "person role actions";
+    align-items: center;
+    gap: 0 4px;
+    padding: 10px 4px 10px 14px;
+  }
+
+  .memberRow > .roleCell {
+    justify-self: end;
+    padding-left: 0;
+  }
+
+  .memberRow .role,
+  .memberRow .roleSelect > button {
+    white-space: nowrap;
+  }
+
+  .memberRow .rowActions:empty {
+    display: none;
+  }
+}
+
+@container (max-width: 559.98px) {
+  .memberRow {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "person role actions";
+    align-items: center;
+    gap: 0 4px;
+    padding: 10px 4px 10px 14px;
+  }
+
+  .memberRow > .roleCell {
+    justify-self: end;
+    padding-left: 0;
+  }
+
+  .memberRow .role,
+  .memberRow .roleSelect > button {
+    white-space: nowrap;
+  }
+
+  .memberRow .rowActions:empty {
+    display: none;
+  }
+}
