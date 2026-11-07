@@ -117,12 +117,10 @@ def test_each_side_lists_counts_and_numbers_its_own_leads(
             assert desk["counts"]["overdue"] == badge["overdue"]
             # It counts exactly the Inbound To Call list's rows, and the work views' tabs
             # carry each view's count (#9 option A; competitor teardown #9).
-            # All Leads counts the side picked's, the 3 Inbound leads (#166, 4 Nov 2026: it
-            # said 387 on Inbound and on Cold).
+            # All Leads counts both sides, the 3 Inbound and the 3 Cold leads (owner, 2 Nov 2026).
             listed = await page(scope="mine", side="inbound", view="to_call")
             assert listed["total"] == badge["to_call"] == listed["view_counts"]["to_call"]
-            assert listed["view_counts"] == {"to_call": 2, "follow_ups": 1, "all": 3}
-            assert (await page(scope="mine", side="cold", view="all"))["total"] == 3
+            assert listed["view_counts"] == {"to_call": 2, "follow_ups": 1, "all": 6}
             more = await page(scope="mine", side="inbound", view="to_call", offset="2")
             assert more["view_counts"] == {}
             # The follow-up filter counts as the list applies it (robot J181, 2 Nov 2026: To
@@ -132,7 +130,7 @@ def test_each_side_lists_counts_and_numbers_its_own_leads(
             assert upcoming["total"] == upcoming["view_counts"]["to_call"] == 0
             # Inside Follow-ups it is the tab's own split: every tab keeps its whole count.
             split = await page(scope="mine", side="inbound", view="follow_ups", when="today")
-            assert split["view_counts"] == {"to_call": 2, "follow_ups": 1, "all": 3}
+            assert split["view_counts"] == {"to_call": 2, "follow_ups": 1, "all": 6}
 
             # Home's "Follow-ups late" is the Late list it opens, on Inbound (phone personas,
             # 1 Nov 2026: "2 late" over a list of 0).

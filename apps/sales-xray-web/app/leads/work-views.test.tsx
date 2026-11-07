@@ -273,9 +273,9 @@ it("says what each list holds and what an empty one means", () => {
     "Overdue · Inbound",
   );
   expect(listTitle("follow_ups", "cold", null)).toBe("Cold follow-ups");
-  // All Leads is the side picked's (#166); a Cold row still says so.
-  expect(listTitle("all", "cold", null)).toBe("All Cold leads");
-  expect(listTitle("all", "inbound", null)).toBe("All Inbound leads");
+  // All Leads is both sides (owner, 2 Nov 2026); a Cold row says so.
+  expect(listTitle("all", "cold", null)).toBe("All leads");
+  expect(listTitle("all", "inbound", null)).toBe("All leads");
   expect(sideStage({ side: "cold" }, "Unworked")).toBe("Cold · Unworked");
   expect(sideStage({ side: "inbound" }, "New Lead")).toBe("New Lead");
   expect(sideStage({}, "New Lead")).toBe("New Lead");

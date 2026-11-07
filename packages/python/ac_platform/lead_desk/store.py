@@ -1846,8 +1846,12 @@ class LeadDesk:
             found[str(side)] = SideCounts(
                 new=int(new), open_leads=int(open_leads), follow_ups_today=int(today)
             )
-        # The Open Leads card opens All Leads at that stage on its side (#166), so each
-        # side's card counts its own.
+        # The Open Leads card opens All Leads at that stage, which lists both sides (owner,
+        # 2 Nov 2026), so each side's card counts both.
+        both = sum(counts.open_leads for counts in found.values())
+        found = {
+            side: counts.model_copy(update={"open_leads": both}) for side, counts in found.items()
+        }
         return found, new_key, open_key
 
     async def _stages_then(self, moments: Sequence[tuple[UUID, datetime]]) -> list[str | None]:
@@ -2052,15 +2056,15 @@ class LeadDesk:
             if not search:
                 # Nobody's work: in no list, tab or count. A search still finds them below.
                 where.append(worked())
-            # Inbound Leads or Cold Leads (migration 0146): every list, tab and count is one
-            # side's, All Leads too (Swamini, 4 Nov 2026, #166: "If I'm seeing inbound
-            # leads, all leads count should be only of Inbound"; it said 387 on both). A
-            # search also finds an old lead kept as history: "this person enquired in June".
+            # Inbound Leads or Cold Leads (migration 0146): the stage tabs count one side. All
+            # Leads lists both (owner, 2 Nov 2026); the side still counts To Call and
+            # Follow-ups. A search also finds an old lead kept as history: "this person
+            # enquired in June".
             if side is not None:
                 side_clause = (
                     or_(on_side(side), Lead.pipeline == HISTORY) if search else on_side(side)
                 )
-            if side_clause is not None:
+            if side_clause is not None and view != "all":
                 where.append(side_clause)
         # To Call holds the leads who rang and weren't reached since, first (#9 option A).
         waiting: dict[UUID, tuple[datetime, int]] = {}
@@ -2165,15 +2169,15 @@ class LeadDesk:
             ]
             to_call = in_view("to_call", day_end, waiting)
             follow_ups = in_view("follow_ups", day_end)
-            # Every view on the side picked, All Leads too (#166).
-            everyone: Any = side_clause if side_clause is not None else true()
-            to_call, follow_ups = and_(everyone, to_call), and_(everyone, follow_ups)
+            if side_clause is not None:
+                # To Call and Follow-ups on the side picked; All Leads on both.
+                to_call, follow_ups = and_(side_clause, to_call), and_(side_clause, follow_ups)
             found = (
                 await self.db.execute(
                     select(
                         func.count().filter(to_call),
                         func.count().filter(follow_ups),
-                        func.count().filter(everyone),
+                        func.count(),
                     ).where(*rest)
                 )
             ).one()
