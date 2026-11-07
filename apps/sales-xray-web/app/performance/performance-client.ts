@@ -38,6 +38,9 @@ export type SideEffort = {
   /** Calls in nobody took, and those leads nobody reached afterwards. */
   missed_calls: number;
   not_called_back: number;
+  /** Today's connected calls on this side's leads with no recording yet;
+   *  absent from an older server (bug reports #174 #175). */
+  missing_recordings?: number;
 };
 
 export type SellerEffort = {

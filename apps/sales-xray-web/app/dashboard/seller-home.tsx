@@ -929,15 +929,27 @@ export function UpcomingFollowUps({
   );
 }
 
+/** The calls on one side's leads, or all of them without a side (Swamini,
+ *  4 Nov 2026, #170: Inbound's Recent calls listed Cold calls); a lead with
+ *  no side is Inbound, as on the server. */
+export function onSide<T extends { side?: Side | null }>(
+  items: T[],
+  side: Side | null,
+): T[] {
+  return side
+    ? items.filter((item) => (item.side ?? "inbound") === side)
+    : items;
+}
+
 /** 6. The last three calls, each with its outcome and time (Dipak's
  *  picture): Calls has the rest. */
-export function RecentCalls() {
+export function RecentCalls({ side = null }: { side?: Side | null }) {
   const [week, retry] = useWeekActivity();
   const [now] = useState(() => new Date());
   if (week.status === "off") return null;
   const rows =
     week.status === "ready"
-      ? weekCalls(week.items)
+      ? onSide(weekCalls(week.items), side)
           .slice(0, 3)
           .map((item) => ({
             ...rowFromActivity(item),
@@ -991,9 +1003,13 @@ function useCallHistory(): boolean | null {
 export function TodayPerformance({
   side,
   own,
+  other = null,
 }: {
   side: Side;
   own: HomeSide | null;
+  /** The other side's numbers: when this side has no call today and that one
+   *  has, a line says so (#170: Inbound's Attempted 0 beside Cold calls). */
+  other?: HomeSide | null;
 }) {
   const numbers = own?.numbers;
   const readable = useCallHistory();
@@ -1064,6 +1080,11 @@ export function TodayPerformance({
           ))}
         </ul>
       </div>
+      {numbers && !numbers.calls && other?.numbers?.calls ? (
+        <p className={styles.quiet}>
+          {`${other.numbers.calls} tried on ${side === "cold" ? "Inbound" : "Cold"} today`}
+        </p>
+      ) : null}
       {unknown && readable === false ? (
         <p className={styles.quiet}>
           Call history isn&apos;t available in this app version yet
@@ -1158,8 +1179,14 @@ export function SellerBlocks({
           />
         ) : null,
         follow: ready ? <UpcomingFollowUps side={shown} own={own} /> : null,
-        recent: ready ? <RecentCalls /> : null,
-        perf: ready ? <TodayPerformance side={shown} own={own} /> : null,
+        recent: ready ? <RecentCalls side={shown} /> : null,
+        perf: ready ? (
+          <TodayPerformance
+            side={shown}
+            own={own}
+            other={desk?.sides?.[shown === "cold" ? "inbound" : "cold"] ?? null}
+          />
+        ) : null,
       }}
     />
   );
