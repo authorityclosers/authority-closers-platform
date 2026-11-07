@@ -16,8 +16,14 @@
   background: transparent;
   color: inherit;
   display: grid;
+  /* One column exactly the stack's width: a pill's one-line title used to
+     size the column, so on a 363 px phone it ran off the right edge (owner,
+     bug 173, 4 Nov 2026). Now it ends in "…" inside the stack. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   width: min(380px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  box-sizing: border-box;
   pointer-events: none;
 }
 
@@ -394,9 +400,20 @@
 /* Phone: full width. */
 @media (max-width: 760px) {
   .stack {
-    right: 12px;
-    left: 12px;
+    right: max(12px, env(safe-area-inset-right, 0px));
+    left: max(12px, env(safe-area-inset-left, 0px));
     width: auto;
+  }
+
+  /* Stacked, each as wide as the screen's gutters allow. */
+  .pill,
+  .card {
+    justify-self: stretch;
+    min-width: 0;
+  }
+
+  .pill .pillOpen {
+    flex: 1 1 auto;
   }
 }
 
