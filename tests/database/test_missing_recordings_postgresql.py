@@ -8,7 +8,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import Engine
+from sqlalchemy import Engine, update
 
 from ac_platform.call_ai.missing_recordings import (
     INDIA,
@@ -17,8 +17,8 @@ from ac_platform.call_ai.missing_recordings import (
     lead_names,
     missing_today,
 )
-from ac_platform.lead_desk.models import LeadEvent
-from ac_platform.lead_desk.store import PRIVATE_CALL
+from ac_platform.lead_desk.models import Lead, LeadEvent
+from ac_platform.lead_desk.store import PRIVATE_CALL, LeadDesk, Viewer
 from tests.database.conversation_harness import conversation_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_lead_os_acceptance_postgresql import ROOT, world
@@ -86,6 +86,8 @@ def test_missing_calls_are_todays_connected_unrecorded_and_not_private(
                 )
             assert everyone.total == mine.total == 1
             assert mine.by_person == {here.seller.person_id: 1}
+            # Its seller and lead, so a screen showing one side counts that side's (#174).
+            assert everyone.calls == ((here.seller.person_id, lead),)
             assert mine.latest[here.seller.person_id] == earlier
             assert someone_else.total == 0
 
@@ -121,5 +123,51 @@ def test_missing_calls_are_todays_connected_unrecorded_and_not_private(
                 )
             assert [item.event_id for item in before.items] == [yesterday]
             assert before.tried == {here.seller.person_id: 1}
+
+    run(exercise())
+
+
+def test_each_side_counts_its_own_calls_without_a_recording(postgres_harness: Any, tmp_path: Path):
+    """Owner, 4 Nov 2026 (#174 #175): Home's Inbound said 0 tried beside "11 connected
+    calls without a recording", all 11 on Cold leads. Each side now counts its own."""
+
+    async def exercise():
+        async with world(postgres_harness, tmp_path) as here:
+            warm = UUID(await here.add("Alex Inbound", "+12025550131"))
+            cold = UUID(await here.add("Casey Cold", "+12025550132"))
+            now = datetime(2026, 10, 30, 9, 0, tzinfo=UTC)
+            earlier = now - timedelta(minutes=20)
+            async with here.setup.sessions() as db, db.begin():
+                await db.execute(update(Lead).where(Lead.id == cold).values(pipeline="cold"))
+                for lead in (warm, cold, cold):
+                    db.add(
+                        LeadEvent(
+                            id=uuid4(),
+                            tenant_id=here.tenant_id,
+                            lead_id=lead,
+                            kind="call",
+                            actor_person_id=here.seller.person_id,
+                            command_id=uuid4(),
+                            data={"via": "phone", "duration_seconds": 30},
+                            created_at=earlier,
+                        )
+                    )
+            async with here.setup.sessions() as db:
+                desk = LeadDesk(
+                    db,
+                    Viewer(
+                        person_id=here.seller.person_id,
+                        tenant_id=here.tenant_id,
+                        role="owner",
+                        name="",
+                    ),
+                    now=now,
+                )
+                effort = await desk.effort(1)
+            assert effort.missing_recordings == 3
+            assert (effort.inbound.missing_recordings, effort.cold.missing_recordings) == (1, 2)
+            assert (effort.inbound.attempted, effort.cold.attempted) == (1, 2)
+            seller = next(s for s in effort.sellers if s.person_id == here.seller.person_id)
+            assert (seller.inbound.missing_recordings, seller.cold.missing_recordings) == (1, 2)
 
     run(exercise())

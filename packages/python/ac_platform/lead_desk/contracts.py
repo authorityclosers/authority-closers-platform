@@ -241,6 +241,10 @@ class SideEffort(Model):
     late: int = 0
     missed_calls: int = 0
     not_called_back: int = 0
+    # Today's connected calls on this side's leads with no recording yet: a screen that
+    # shows one side counts that side's (owner, 4 Nov 2026, #174 #175: Home's Inbound
+    # said 0 tried beside "11 connected calls without a recording", all 11 on Cold).
+    missing_recordings: int = 0
 
 
 class SellerEffort(Model):
