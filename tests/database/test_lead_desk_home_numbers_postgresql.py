@@ -482,8 +482,8 @@ def test_the_desk_carries_inbound_and_cold_apart(postgres_harness: Any, tmp_path
             # The countdown: an untouched Cold list is never "to call today".
             assert inbound["to_call_today"]["called"] == 1
             assert cool["to_call_today"] == {"left": 0, "called": 1}
-            # A Cold lead in Open Leads: both sides' Open Leads cards count it, as the All
-            # Leads list they open lists both sides (owner, 2 Nov 2026).
+            # A Cold lead in Open Leads: only Cold's Open Leads card counts it, as the All
+            # Leads list it opens is Cold's (#166, 4 Nov 2026).
             async with here.setup.sessions() as db, db.begin():
                 await db.execute(
                     update(Lead)
@@ -492,7 +492,7 @@ def test_the_desk_carries_inbound_and_cold_apart(postgres_harness: Any, tmp_path
                 )
             desk = (await here.client.get(f"{BASE}")).json()
             inbound, cool = desk["sides"]["inbound"], desk["sides"]["cold"]
-            assert inbound["counts"]["open_leads"] == cool["counts"]["open_leads"] == 1
+            assert (inbound["counts"]["open_leads"], cool["counts"]["open_leads"]) == (0, 1)
 
     run(exercise())
 

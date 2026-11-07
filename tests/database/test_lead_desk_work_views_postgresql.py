@@ -152,24 +152,22 @@ def test_work_views_and_the_stage_filter(postgres_harness: Any, tmp_path: Path) 
             ) == ["Fictional follow-up later"]
             # A side without a work view (Home's counts) is still that side only.
             assert len(await names(scope="mine", side="inbound")) == 7
-            # All Leads: every lead the seller may see on both sides, the closed one and the
-            # Cold one too (owner, 2 Nov 2026), and its tab counts the same leads; To Call and
-            # Follow-ups keep to the side picked.
+            # All Leads: every lead the seller may see on the side picked, the closed one
+            # too, never the Cold one (#166, 4 Nov 2026), and its tab counts the same leads.
             every = await here.client.get(
                 f"{BASE}/leads", params={"scope": "mine", "side": "inbound", "view": "all"}
             )
             assert every.status_code == 200, every.text
             page = every.json()
-            assert len(page["leads"]) == page["total"] == 8
-            cold = next(row for row in page["leads"] if row["name"] == "Fictional cold unworked")
-            assert cold["side"] == "cold"
-            assert page["view_counts"] == {"to_call": len(to_call), "follow_ups": 4, "all": 8}
-            assert sum(page["step_counts"].values()) == 8
+            assert len(page["leads"]) == page["total"] == 7
+            assert all(row["name"] != "Fictional cold unworked" for row in page["leads"])
+            assert page["view_counts"] == {"to_call": len(to_call), "follow_ups": 4, "all": 7}
+            assert sum(page["step_counts"].values()) == 7
             calling = await here.client.get(
                 f"{BASE}/leads", params={"scope": "mine", "side": "inbound", "view": "to_call"}
             )
             assert calling.status_code == 200, calling.text
-            assert calling.json()["view_counts"]["all"] == 8
+            assert calling.json()["view_counts"]["all"] == 7
 
             # The stage filter: the owner's first New stage takes the new leads with no step.
             journey = await here.client.get(f"{BASE}/journey")
@@ -182,11 +180,10 @@ def test_work_views_and_the_stage_filter(postgres_harness: Any, tmp_path: Path) 
                 "Fictional new older",
             ]
             assert await names(scope="mine", side="inbound", step="no_such_stage") == []
-            # On All Leads (both sides), New shows the newest first unless a sort is picked
-            # (bug 127); To Call keeps its calling order (oldest new lead first).
+            # On All Leads, New shows the newest first unless a sort is picked (bug 127);
+            # To Call keeps its calling order (oldest new lead first).
             assert await names(scope="mine", side="inbound", view="all", step=new_key) == [
                 "Fictional new newer",
-                "Fictional cold unworked",
                 "Fictional new older",
             ]
             assert await names(scope="mine", side="inbound", view="to_call", step=new_key) == [

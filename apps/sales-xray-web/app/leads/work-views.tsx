@@ -57,8 +57,9 @@ export function listTitle(
     const part = FOLLOW_UPS.find((item) => item.key === when);
     return part ? `${part.label} · ${type}` : `${type} follow-ups`;
   }
-  // Every lead on both sides (owner, 2 Nov 2026: "All leads" lists every lead).
-  return "All leads";
+  // Every lead on the side picked (Swamini, 4 Nov 2026, #166: "If I'm seeing
+  // inbound leads, all leads count should be only of Inbound").
+  return `All ${type} leads`;
 }
 
 /** A row's stage on All Leads, which lists both sides: a Cold lead says so

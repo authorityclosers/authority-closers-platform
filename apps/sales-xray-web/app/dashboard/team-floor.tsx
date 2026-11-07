@@ -85,7 +85,7 @@ function useSideCounts(side: Side, stages: StageKeys | undefined) {
             )
           : null,
         stages.openKey
-          ? // All Leads at that stage, both sides: the list the card opens.
+          ? // All Leads at that stage on this side: the list the card opens (#166).
             total(
               `scope=team&side=${side}&view=all&step=${step(stages.openKey)}`,
             )
