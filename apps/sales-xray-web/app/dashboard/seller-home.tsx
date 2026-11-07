@@ -2,16 +2,16 @@
 
 /**
  * A seller's Home, as Dipak's picture (owner order, 2 Nov 2026,
- * docs/handoffs/dipak-home-20261102): the work to do. Each block below stands
- * alone, in the picture's order:
- *  1. Inbound Leads | Cold Leads, only for someone with both, with one short
- *     line under it; on Cold, one row when fresh inbound leads wait.
- *  2. Today: New leads (Inbound) or Unworked leads (Cold), Open leads,
- *     Follow-ups today (the side's own) and Tasks today (shared, never a
- *     call), each with one caption. Each card opens the exact Leads list it
- *     counts.
- *  3. Next to call: one customer, and Call now or Start Cold Calling.
- *  4. Today's tasks: three at most, + Add, See all.
+ * docs/handoffs/dipak-home-20261102; his own design, 4 Nov 2026): the work to
+ * do. Each block below stands alone, in the picture's order:
+ *  0. Pending action: a call still waiting for its answer, only while one is.
+ *  1. Inbound Leads | Cold Leads, only for someone with both; on Cold, one row
+ *     when fresh inbound leads wait.
+ *  2. Today's overview: New leads (Inbound) or Unworked leads (Cold), Open
+ *     leads, Follow-ups (the side's own) and Tasks (shared, never a call),
+ *     each with one caption. Each tile opens the exact Leads list it counts.
+ *  3. Next action: one customer, and Call now or Start Cold Calling.
+ *  4. Today's tasks: three at most, See all.
  *  5. Upcoming follow-ups: two at most, each with its call button, See all.
  *  6. Recent calls: the last three, each with its outcome and time, never the
  *     capture line (Calls has it, with its fix).
@@ -20,18 +20,22 @@
  * The desk carries both sides, so the selector switches with no second read.
  */
 
-import { Check, ChevronRight, Phone, PhoneCall } from "lucide-react";
+import { ArrowRight, Check, ChevronRight, Phone, RotateCw } from "lucide-react";
 import Link from "next/link";
 import {
   useCallback,
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
+  type HTMLAttributes,
   type ReactNode,
 } from "react";
 
 import { displayName } from "../display-name";
+import { ActionSheet } from "../leads/action-sheet";
 import { AddTaskSheet } from "../leads/add-task-sheet";
+import { useRowGestures } from "../leads/gestures";
 import {
   CallRows,
   outcomeLine,
@@ -41,7 +45,7 @@ import {
   weekCalls,
 } from "../calls/call-rows";
 import { CallRowsSkeleton } from "../calls/phone-calls";
-import { FinishRow } from "../leads/finish-row";
+import { readGone } from "../leads/finish-row";
 import {
   handOverAnswer,
   handOverLead,
@@ -57,10 +61,14 @@ import {
   taskAction,
   type TaskSnoozeChoice,
   type ListedTask,
+  type Unanswered,
 } from "../leads/leads-client";
 import { callLogStatus, inPhoneApp } from "../leads/native-phone";
 import { notify } from "../notice-center";
+import { CallLens } from "../ui/call-lens/call-lens";
 import { SideSelector, type Side } from "../ui/side-selector";
+import { SlotLayout } from "../ui/slots/slot-layout";
+import { SELLER_HOME } from "./home-slots/plans";
 import { retryHome } from "./home-load";
 import { LaterSheet, SwipeRow, type Later } from "./home-swipe";
 import { breakLength } from "./home-today";
@@ -233,10 +241,61 @@ function SeeAll({ href }: { href: string }) {
   return (
     <Link className={styles.seeAll} href={href}>
       See all
-      <ChevronRight size={16} aria-hidden="true" />
+      <ArrowRight size={16} aria-hidden="true" />
     </Link>
   );
 }
+
+const never = () => () => undefined;
+
+/** 0. Pending action (Dipak's design, 4 Nov 2026): the newest call still
+ *  waiting for its answer, on its own card, only while one waits. A call put
+ *  away on Leads ("Didn't call") stays away here too. */
+export function PendingAction({
+  calls,
+  onFinish,
+  now = new Date(),
+}: {
+  calls: readonly Unanswered[] | null | undefined;
+  /** Opens the lead on "How did the call go?". */
+  onFinish: (leadId: string) => void;
+  now?: Date;
+}) {
+  const hydrated = useSyncExternalStore(
+    never,
+    () => true,
+    () => false,
+  );
+  if (!hydrated) return null;
+  const gone = readGone();
+  const waiting = (calls ?? []).filter((call) => !gone.includes(call.event_id));
+  const call = waiting[0];
+  if (!call) return null;
+  return (
+    <section className={styles.pending} aria-labelledby="pending-title">
+      <div className={styles.pendingHead}>
+        <h2 id="pending-title">Pending action</h2>
+        <span className={styles.chip} data-tone="warn">
+          {`${waiting.length} ${waiting.length === 1 ? "reminder" : "reminders"}`}
+        </span>
+      </div>
+      <p className={styles.pendingLine}>
+        {`${displayName(call.name)} · Last dialled ${ago(call.called_at, now)}`}
+      </p>
+      <button
+        type="button"
+        className={styles.pendingGo}
+        onClick={() => onFinish(call.lead_id)}
+      >
+        Complete call activity
+        <ChevronRight size={18} aria-hidden="true" />
+      </button>
+    </section>
+  );
+}
+
+/** Dipak's figures read as two digits: 02, 00; 12 and 229 as they are. */
+export const twoDigits = (value: number) => String(value).padStart(2, "0");
 
 /** 1. The lead type, only for someone with both (handoff items 05-07). */
 export function SideBlock({
@@ -257,11 +316,6 @@ export function SideBlock({
   return (
     <>
       <SideSelector value={side} onChange={onSide} tone="calm" />
-      <p className={styles.sideLine}>
-        {side === "cold"
-          ? "Your assigned cold prospecting database"
-          : "Your assigned inbound enquiries"}
-      </p>
       {waiting > 0 && own ? (
         <Link
           className={styles.alert}
@@ -280,10 +334,14 @@ export function TodayCards({
   side,
   own,
   tasks,
+  failed = false,
 }: {
   side: Side;
   own: HomeSide | null;
   tasks: number | null;
+  /** The leads didn't load: every card keeps its place and says "–", never
+   *  a 0 it doesn't know (honest numbers, 3 Nov 2026). */
+  failed?: boolean;
 }) {
   const cold = side === "cold";
   const counts = own?.counts;
@@ -309,26 +367,25 @@ export function TodayCards({
     },
     {
       key: "follow_ups",
-      label: "Follow-ups today",
-      note: "Scheduled for today",
+      label: "Follow-ups",
+      note: "Due today",
       value: counts?.follow_ups_today,
       href: leadsHref(side, { view: "follow_ups", when: "today" }),
     },
     {
       key: "tasks",
-      label: "Tasks today",
-      note: "All work types",
+      label: "Tasks",
+      note: "Due today",
       value: tasks,
       href: "/leads?tab=tasks",
     },
   ];
   return (
     <section className={styles.block} aria-labelledby="today-title">
-      <Head id="today-title" title="Today">
-        <span className={styles.sideWord}>
-          {cold ? "Cold lead activity" : "Inbound lead activity"}
-        </span>
-      </Head>
+      <div className={styles.overview}>
+        <h2 id="today-title">Today&apos;s overview</h2>
+        <p>{cold ? "Your cold lead activity" : "Your inbound lead activity"}</p>
+      </div>
       <ul className={styles.cards}>
         {cards
           // A card whose stage the organisation doesn't have is left
@@ -338,25 +395,44 @@ export function TodayCards({
               !(own && card.key === "new" && own.new_key === null) &&
               !(own && card.key === "open" && own.open_key === null),
           )
-          .map((card) => (
-            <li key={card.key}>
-              <Link
-                className={styles.card}
-                href={card.href}
-                data-card={card.key}
-              >
+          .map((card) => {
+            const unknown = failed && card.value == null;
+            const body = (
+              <>
                 <span className={styles.cardLabel}>{card.label}</span>
-                <strong aria-busy={card.value == null || undefined}>
-                  {card.value == null ? (
+                <strong
+                  aria-busy={(!unknown && card.value == null) || undefined}
+                  data-unknown={unknown || undefined}
+                >
+                  {unknown ? (
+                    "–"
+                  ) : card.value == null ? (
                     " "
                   ) : (
-                    <Count value={String(card.value)} />
+                    <Count value={twoDigits(card.value)} />
                   )}
                 </strong>
                 <span className={styles.cardNote}>{card.note}</span>
-              </Link>
-            </li>
-          ))}
+              </>
+            );
+            return (
+              <li key={card.key}>
+                {unknown ? (
+                  <div className={styles.card} data-card={card.key}>
+                    {body}
+                  </div>
+                ) : (
+                  <Link
+                    className={styles.card}
+                    href={card.href}
+                    data-card={card.key}
+                  >
+                    {body}
+                  </Link>
+                )}
+              </li>
+            );
+          })}
       </ul>
     </section>
   );
@@ -371,28 +447,104 @@ export function missedLine(
   return `Missed call ${ago(at, now)}${calls > 1 ? ` · ${calls} calls` : ""} · call back`;
 }
 
-/** 3. One customer to call next, with one clear action (items 13-15). */
-export function NextCall({ side, own }: { side: Side; own: HomeSide | null }) {
+/** 3. One customer to call next, with one clear action (items 13-15). Its
+ *  Call is the Call lens (L0 brief); a hold on the card offers Call, Open
+ *  lead and Later, as a hold on a Leads row does. While Home reads, and when
+ *  the read fails, the card keeps its place and its size. */
+export function NextCall({
+  side,
+  own,
+  state = "ready",
+}: {
+  side: Side;
+  own: HomeSide | null;
+  state?: "ready" | "loading" | "error";
+}) {
   const cold = side === "cold";
-  const lead = own?.next_lead ?? null;
+  const lead = state === "ready" ? (own?.next_lead ?? null) : null;
+  const [held, setHeld] = useState(false);
+  const [later, setLater] = useState(false);
+  const go = useGo();
+  const { bind } = useRowGestures({
+    onHold: lead ? () => setHeld(true) : undefined,
+  });
   // One who rang and wasn't reached comes first, and says so, as on Leads
   // (Leads 2, 1 Nov 2026: a missed call not yet returned is To Call's first row).
   const missed = lead?.missed_at
     ? missedLine(lead.missed_at, lead.missed_calls ?? 0)
     : null;
+  const name = lead ? displayName(lead.name) : "";
+  const callTo = leadsHref(side, { view: "to_call" });
+  // Start cold calling opens a round at this card and dials nothing until
+  // Call (ph2-33: backing out of the dialler left a phantom call); a
+  // call-back or an Inbound lead dials at once.
+  const call = () =>
+    lead &&
+    (cold && !missed
+      ? handOverRound(lead.lead_id)
+      : handOverLead(lead.lead_id, true));
+  const move = async (time: Later) => {
+    setLater(false);
+    if (!lead) return;
+    const at = nextCallTime(time);
+    try {
+      await setFollowUp(lead, at);
+      notify({
+        id: "home-later",
+        tone: "success",
+        title: `Moved to ${whenDay(at.toISOString())}`,
+        timeout: 3000,
+      });
+      retryHome();
+    } catch {
+      notify({
+        id: "home-later",
+        tone: "error",
+        title: "Not moved",
+        message: "Try again.",
+      });
+    }
+  };
   return (
-    <section className={styles.next} aria-labelledby="next-title">
-      <div className={styles.nextBody}>
-        <p id="next-title" className={styles.kicker}>
-          {cold ? "Next cold call" : "Next inbound call"}
-        </p>
-        {lead ? (
+    <>
+      <section
+        className={styles.next}
+        aria-labelledby="next-title"
+        aria-busy={state === "loading" || undefined}
+        {...(bind as unknown as HTMLAttributes<HTMLElement>)}
+      >
+        <div className={styles.nextHead}>
+          <h2 id="next-title">Next action</h2>
+          {lead ? (
+            <span className={styles.chip} data-tone="good">
+              Ready to call
+            </span>
+          ) : null}
+        </div>
+        {state === "loading" ? (
+          <>
+            <span className={styles.nextName} data-wait="" aria-hidden="true" />
+            <span className={styles.nextWhy} data-wait="" aria-hidden="true" />
+            <span className={styles.slot} data-wait="" aria-hidden="true" />
+          </>
+        ) : state === "error" ? (
+          <>
+            <p className={styles.nextName}>Leads didn&apos;t load</p>
+            <p className={styles.nextWhy}>
+              Your numbers show again once they do.
+            </p>
+            <button type="button" className={styles.tonal} onClick={retryHome}>
+              <RotateCw size={18} aria-hidden="true" />
+              Try again
+            </button>
+          </>
+        ) : lead ? (
           <>
             <Link
               className={styles.nextName}
               href={`/leads?lead=${lead.lead_id}`}
             >
-              {displayName(lead.name)}
+              {name}
             </Link>
             <p className={styles.nextWhy}>
               {[
@@ -404,35 +556,79 @@ export function NextCall({ side, own }: { side: Side; own: HomeSide | null }) {
                 .filter(Boolean)
                 .join(" · ")}
             </p>
-            <Link
-              className={styles.callNow}
-              href={leadsHref(side, { view: "to_call" })}
-              // Start cold calling opens a round at this card and dials nothing
-              // until Call (ph2-33: backing out of the dialler left a phantom
-              // call); a call-back or an Inbound lead dials at once.
-              onClick={() =>
-                cold && !missed
-                  ? handOverRound(lead.lead_id)
-                  : handOverLead(lead.lead_id, true)
-              }
-            >
-              <PhoneCall size={18} aria-hidden="true" />
-              {missed
-                ? `Call ${displayName(lead.name).split(" ")[0]} back`
-                : cold
-                  ? "Start Cold Calling"
-                  : `Call ${displayName(lead.name).split(" ")[0]} now`}
-            </Link>
+            <CallLens href={callTo} onClick={call}>
+              {missed ? "Call back" : cold ? "Start Cold Calling" : "Call now"}
+            </CallLens>
           </>
         ) : (
-          <p className={styles.quiet}>
-            {cold
-              ? "No cold leads to call right now."
-              : "No new leads right now."}
-          </p>
+          <>
+            <p className={styles.nextName}>
+              {cold
+                ? "No cold leads to call right now"
+                : "No new leads right now"}
+            </p>
+            <p className={styles.nextWhy}>New ones show here as they come.</p>
+            <Link className={styles.tonal} href={leadsHref(side, {})}>
+              Open Leads
+            </Link>
+          </>
         )}
-      </div>
-    </section>
+      </section>
+      {lead ? (
+        <>
+          <ActionSheet
+            open={held}
+            title={name}
+            sub="Next action"
+            onClose={() => setHeld(false)}
+          >
+            <div className={styles.laterTimes}>
+              <button
+                type="button"
+                className={styles.laterTime}
+                onClick={() => {
+                  setHeld(false);
+                  call();
+                  go(callTo);
+                }}
+              >
+                {missed
+                  ? "Call back"
+                  : cold
+                    ? "Start Cold Calling"
+                    : "Call now"}
+              </button>
+              <button
+                type="button"
+                className={styles.laterTime}
+                onClick={() => {
+                  setHeld(false);
+                  go(`/leads?lead=${lead.lead_id}`);
+                }}
+              >
+                Open lead
+              </button>
+              <button
+                type="button"
+                className={styles.laterTime}
+                onClick={() => {
+                  setHeld(false);
+                  setLater(true);
+                }}
+              >
+                Later
+              </button>
+            </div>
+          </ActionSheet>
+          <LaterSheet
+            open={later}
+            title={name}
+            onClose={() => setLater(false)}
+            onPick={(time) => void move(time)}
+          />
+        </>
+      ) : null}
+    </>
   );
 }
 
@@ -446,8 +642,12 @@ export function TodayTasks({
   title = "Today's tasks",
   side = "inbound",
   onMoved,
+  canAdd = true,
 }: {
   tasks: ListedTask[] | null;
+  /** + Add beside See all: the owner's Team Home keeps it; a seller's Home
+   *  adds from the + above (Dipak's design, 4 Nov 2026). */
+  canAdd?: boolean;
   /** The side whose next call an empty block offers. */
   side?: Side;
   /** A task moved to another time: read the list again. */
@@ -484,13 +684,15 @@ export function TodayTasks({
   return (
     <section className={styles.block} aria-labelledby="tasks-title">
       <Head id="tasks-title" title={title}>
-        <button
-          type="button"
-          className={styles.addTask}
-          onClick={() => setAdding(true)}
-        >
-          + Add
-        </button>
+        {canAdd ? (
+          <button
+            type="button"
+            className={styles.addTask}
+            onClick={() => setAdding(true)}
+          >
+            + Add
+          </button>
+        ) : null}
         <SeeAll href="/leads?tab=tasks" />
       </Head>
       {failed ? (
@@ -505,7 +707,7 @@ export function TodayTasks({
           Loading tasks…
         </p>
       ) : tasks.length ? (
-        <ul className={styles.rows}>
+        <ul className={`${styles.rows} ${styles.taskList}`}>
           {[...tasks]
             // Late first, in red: Tasks' own overdue (competitor teardown #1).
             .sort((a, b) => Number(late(b)) - Number(late(a)))
@@ -553,6 +755,11 @@ export function TodayTasks({
                     ) : null}
                   </span>
                 </span>
+                {late(task) ? (
+                  <span className={styles.chip} data-tone="warn">
+                    Overdue
+                  </span>
+                ) : null}
               </SwipeRow>
             ))}
         </ul>
@@ -872,12 +1079,17 @@ export function SellerBlocks({
   side,
   onSide,
   access: given,
+  state = "ready",
 }: {
-  desk: HomeDesk;
+  /** Null while Home reads, or when the read failed. */
+  desk: HomeDesk | null;
   side: Side;
   onSide: (side: Side) => void;
   /** Which sides this seller works, when the page read them beside the desk. */
   access?: SidesAccess | null;
+  /** Loading and error draw the top four blocks in their final places and
+   *  sizes, so nothing moves when the desk arrives (FRAMEWORK L6). */
+  state?: "ready" | "loading" | "error";
 }) {
   const fetched = useSidesAccess(given === undefined);
   const access = given === undefined ? fetched : given;
@@ -889,65 +1101,67 @@ export function SellerBlocks({
       : access && access.inbound && !access.cold
         ? "inbound"
         : side;
-  const own = desk.sides?.[shown] ?? null;
+  const own = desk?.sides?.[shown] ?? null;
   const go = useGo();
+  const ready = desk !== null && state === "ready";
   return (
-    <div className={styles.me}>
-      {/* A call still waiting for its answer comes first, as on Leads (teardown
-          3: an answer is never lost); Finish opens it at its question there. */}
-      <div data-area="finish">
-        <FinishRow
-          calls={desk.unanswered}
-          onFinish={(leadId) => {
-            handOverAnswer(leadId);
-            go("/leads");
-          }}
-        />
-      </div>
-      {access ? (
-        <div data-area="side">
+    <SlotLayout
+      plan={SELLER_HOME}
+      className={styles.me}
+      blocks={{
+        // A call still waiting for its answer comes first, as on Leads
+        // (teardown 3: an answer is never lost); Finish opens it at its
+        // question there.
+        finish: desk ? (
+          <PendingAction
+            calls={desk.unanswered}
+            onFinish={(leadId) => {
+              handOverAnswer(leadId);
+              go("/leads");
+            }}
+          />
+        ) : null,
+        side: access ? (
           <SideBlock
             side={shown}
             access={access}
             own={own}
-            inbound={desk.sides?.inbound ?? null}
+            inbound={desk?.sides?.inbound ?? null}
             onSide={onSide}
           />
-        </div>
-      ) : null}
-      <div data-area="cards">
-        <TodayCards
-          side={shown}
-          own={own}
-          tasks={
-            tasks ? tasks.filter((task) => task.status !== "done").length : null
-          }
-        />
-      </div>
-      <div data-area="next">
-        <NextCall side={shown} own={own} />
-      </div>
-      <div data-area="tasks">
-        <TodayTasks
-          tasks={tasks}
-          failed={failed}
-          onDone={done}
-          onRetry={reload}
-          onAdded={reload}
-          side={shown}
-          onMoved={reload}
-        />
-      </div>
-      <div data-area="follow">
-        <UpcomingFollowUps side={shown} own={own} />
-      </div>
-      <div data-area="recent">
-        <RecentCalls />
-      </div>
-      <div data-area="perf">
-        <TodayPerformance side={shown} own={own} />
-      </div>
-    </div>
+        ) : null,
+        cards: (
+          <TodayCards
+            side={shown}
+            own={own}
+            failed={state === "error"}
+            tasks={
+              ready && tasks
+                ? tasks.filter((task) => task.status !== "done").length
+                : null
+            }
+          />
+        ),
+        next: (
+          <NextCall side={shown} own={own} state={ready ? "ready" : state} />
+        ),
+        tasks: ready ? (
+          <TodayTasks
+            tasks={tasks}
+            failed={failed}
+            onDone={done}
+            onRetry={reload}
+            onAdded={reload}
+            side={shown}
+            onMoved={reload}
+            canAdd={false}
+          />
+        ) : null,
+        follow: ready ? <UpcomingFollowUps side={shown} own={own} /> : null,
+        recent: ready ? <RecentCalls /> : null,
+        perf: ready ? <TodayPerformance side={shown} own={own} /> : null,
+      }}
+    />
   );
 }
 

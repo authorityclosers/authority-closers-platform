@@ -10,7 +10,7 @@
  */
 
 import { ChevronRight } from "lucide-react";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 import { Sheet } from "../ui/sheet";
 import {
@@ -80,7 +80,16 @@ export function chainLine(needs: NonNullable<Revenue["needs"]>): string {
   return `≈ ${wins} → ${needs.meetings} meetings → ${needs.interested} interested → ${needs.calls} calls · ${needs.calls_per_day} a day`;
 }
 
-function Track({ share, monthGone }: { share: number; monthGone: number }) {
+function Track({
+  share,
+  monthGone,
+  days,
+}: {
+  share: number;
+  monthGone: number;
+  /** "Day 4 of 30": what the tick marks, for a screen reader. */
+  days?: string;
+}) {
   // The fill grows in after the first paint (no motion where it's turned off).
   const [shown, setShown] = useState(0);
   useEffect(() => {
@@ -94,6 +103,11 @@ function Track({ share, monthGone }: { share: number; monthGone: number }) {
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(share * 100)}
+      aria-valuetext={
+        days
+          ? `${Math.round(share * 100)}% of the target; ${days} of the month`
+          : undefined
+      }
     >
       <span
         className={styles.fill}
@@ -145,7 +159,27 @@ function SellerLine({
   );
 }
 
-export function RevenueBar({ scope }: { scope: "mine" | "team" }) {
+/** "Day 4 of 30" for the tick: the month's day, India time. */
+function dayOf(month: string): string {
+  const [year, number] = month.split("-").map(Number);
+  const length = new Date(year, number, 0).getDate();
+  return `day ${length - daysLeft(month) + 1} of ${length}`;
+}
+
+/**
+ * The month's revenue (Home studio, 4 Nov 2026): one line that says what is
+ * left, a slim neutral track with the month's tick, and the month's figures
+ * under it, with "What it takes" as its own text button. `end` sits at the
+ * line's end: an owner's Team | Me, on the same row instead of a row of its
+ * own (FRAMEWORK L5: no wasted space beside a control).
+ */
+export function RevenueBar({
+  scope,
+  end,
+}: {
+  scope: "mine" | "team";
+  end?: ReactNode;
+}) {
   const [revenue, setRevenue] = useState<Revenue | null>(null);
   const [open, setOpen] = useState(false);
   // A target saved in Team controls reaches the bar without a reload.
@@ -167,91 +201,84 @@ export function RevenueBar({ scope }: { scope: "mine" | "team" }) {
     })();
     return () => controller.abort();
   }, [scope, round]);
-  if (!revenue || revenue.target === null || revenue.target <= 0) return null;
+  if (!revenue || revenue.target === null || revenue.target <= 0)
+    return end ? <div className={styles.endOnly}>{end}</div> : null;
   const target = revenue.target;
   const share = revenue.won / target;
   const tone = toneOf(revenue.won, target, revenue.month_gone);
   const needs = revenue.won < target ? revenue.needs : null;
   const pace = paceLine(revenue);
-  // A tap shows what it takes, and for the team each seller.
+  // What it takes, and for the team each seller.
   const opens = !!needs || scope === "team";
-  const body = (
+  return (
     <>
-      <span className={styles.line}>
-        <span className={styles.amounts}>
-          <strong>{goLine(revenue)}</strong>
-        </span>
-        <span className={styles.percent}>
-          {Math.min(999, Math.round(share * 100))}%
-        </span>
-      </span>
-      <Track share={share} monthGone={revenue.month_gone} />
-      {pace ? <span className={styles.pace}>{pace}</span> : null}
-      <span className={styles.takes}>
-        <span>
-          {`${inr(revenue.won)} of ${inr(target)} · ${monthName(revenue.month)}`}
-        </span>
-        {revenue.amount_not_set ? (
-          <span className={styles.unset}>
-            {revenue.amount_not_set} won without an amount
-          </span>
-        ) : null}
-        {opens ? (
-          <span className={styles.more}>
-            What it takes
-            <ChevronRight size={14} aria-hidden="true" />
-          </span>
-        ) : null}
-      </span>
-    </>
-  );
-  if (!opens)
-    return (
       <section
         className={styles.bar}
         data-tone={tone}
         aria-label="This month's revenue"
       >
-        {body}
+        <div className={styles.line}>
+          <strong className={styles.amounts}>{goLine(revenue)}</strong>
+          {end ? <div className={styles.end}>{end}</div> : null}
+        </div>
+        <Track
+          share={share}
+          monthGone={revenue.month_gone}
+          days={dayOf(revenue.month)}
+        />
+        {pace ? <span className={styles.pace}>{pace}</span> : null}
+        <div className={styles.takes}>
+          <span>
+            {`${inr(revenue.won)} of ${inr(target)} · ${monthName(revenue.month)}`}
+          </span>
+          <span className={styles.percent}>
+            {Math.min(999, Math.round(share * 100))}%
+          </span>
+          {revenue.amount_not_set ? (
+            <span className={styles.unset}>
+              {revenue.amount_not_set} won without an amount
+            </span>
+          ) : null}
+          {opens ? (
+            <button
+              type="button"
+              className={styles.more}
+              aria-haspopup="dialog"
+              onClick={() => setOpen(true)}
+            >
+              What it takes
+              <ChevronRight size={16} aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
       </section>
-    );
-  return (
-    <>
-      <button
-        type="button"
-        className={styles.bar}
-        data-tone={tone}
-        aria-haspopup="dialog"
-        aria-label={`This month's revenue: ${goLine(revenue)}. What it takes`}
-        onClick={() => setOpen(true)}
-      >
-        {body}
-      </button>
-      <Sheet
-        open={open}
-        onClose={() => setOpen(false)}
-        title={`${monthName(revenue.month)} revenue`}
-      >
-        {needs ? (
-          <div className={styles.takesBox}>
-            <p className={styles.takesWhy}>
-              {needs.estimate ? "At typical rates" : "At your 90-day rates"}
-            </p>
-            <p className={styles.takesChain}>{chainLine(needs)}</p>
-          </div>
-        ) : null}
-        {scope === "team" ? (
-          <ul className={styles.sellers}>
-            {revenue.sellers.map((seller) => (
-              <SellerLine
-                key={seller.person_id}
-                seller={seller}
-                monthGone={revenue.month_gone}
-              />
-            ))}
-          </ul>
-        ) : null}
-      </Sheet>
+      {opens ? (
+        <Sheet
+          open={open}
+          onClose={() => setOpen(false)}
+          title={`${monthName(revenue.month)} revenue`}
+        >
+          {needs ? (
+            <div className={styles.takesBox}>
+              <p className={styles.takesWhy}>
+                {needs.estimate ? "At typical rates" : "At your 90-day rates"}
+              </p>
+              <p className={styles.takesChain}>{chainLine(needs)}</p>
+            </div>
+          ) : null}
+          {scope === "team" ? (
+            <ul className={styles.sellers}>
+              {revenue.sellers.map((seller) => (
+                <SellerLine
+                  key={seller.person_id}
+                  seller={seller}
+                  monthGone={revenue.month_gone}
+                />
+              ))}
+            </ul>
+          ) : null}
+        </Sheet>
+      ) : null}
     </>
   );
 }

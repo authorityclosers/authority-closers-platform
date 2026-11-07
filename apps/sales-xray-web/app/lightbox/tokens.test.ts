@@ -222,6 +222,9 @@ describe("Lightbox token derivative", () => {
       "strength-ink",
       "objection-ink",
       "on-teal",
+      // The Call lens's capsule and its label (L0 brief, 4 Nov 2026).
+      "call",
+      "on-call",
       "glow-ink",
       "film-lens-outline",
       "film-lens-fill",
@@ -263,6 +266,8 @@ describe("Lightbox token derivative", () => {
       "film-text-3",
       "film-wave",
       "on-teal",
+      "call",
+      "on-call",
       "strength-ink",
       "objection-ink",
       "closing-ink",

@@ -163,9 +163,14 @@ export function DashboardBody({
   const sandboxCard = sandbox?.sandbox ? (
     <SandboxCard facts={sandbox} team={team === true} />
   ) : null;
+  // On an organisation's sales Home the seller's work comes first and the
+  // sandbox's own card closes the page (Home studio, 4 Nov 2026: leading it,
+  // the card pushed the next call under the tab bar for the sandbox sellers
+  // the robot and the testers use). It still never arrives above anything.
+  const cardFirst = sandboxFirst && !sales;
   const content = (
     <>
-      {sandboxFirst ? sandboxCard : null}
+      {cardFirst ? sandboxCard : null}
       {/* One steady heading; New analysis lives in the shell, not here too.
           The workspace is named in the bar above, so the line stays put. */}
       {sales ?? (
@@ -409,7 +414,7 @@ export function DashboardBody({
           )}
         </>
       )}
-      {sandboxFirst ? null : sandboxCard}
+      {cardFirst ? null : sandboxCard}
     </>
   );
 

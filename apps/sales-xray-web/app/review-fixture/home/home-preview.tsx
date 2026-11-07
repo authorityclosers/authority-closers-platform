@@ -14,6 +14,10 @@
  * a switch above the open leads by stage. Owners also see Targets (two sellers
  * with targets, one without) and can share out leads from My day (`&none=1`).
  * `&controls=1`: Team controls open (targets, nudges and who gets them).
+ * Seller Home (Dipak's blocks, Home studio 4 Nov 2026): `&sides=inbound` or
+ * `&sides=cold` for a seller with one side (both by default), `&side=cold` to
+ * open on Cold, `&finish=1` a call still waiting for its answer, `&revenue=1`
+ * the month's revenue against a target, `&fail=desk` the leads read failing.
  */
 
 import type { CallActivity, CallSummary } from "../../dashboard/dashboard-data";
@@ -108,7 +112,67 @@ type Mode = {
   targets: boolean;
   /** `&fresh=1`: a brand-new workspace (Home v2's start). */
   fresh?: boolean;
+  /** `&finish=1`: a call still waiting for its answer. */
+  finish?: boolean;
+  /** `&fail=desk`: the leads read fails. */
+  fail?: boolean;
+  /** `&sides=`: which sides the seller works. */
+  sides?: "both" | "inbound" | "cold";
+  /** `&revenue=1`: this month's revenue against a target. */
+  revenue?: boolean;
 };
+
+/** One side of the seller's day, as the desk's `sides` carries it. */
+function homeSide(now: number, cold: boolean) {
+  const rows = queue(now);
+  const numbers = cold
+    ? {
+        calls: 24,
+        connected: 6,
+        talk_seconds: 1_980,
+        follow_ups_done: 2,
+        new_assigned: 0,
+      }
+    : {
+        calls: 18,
+        connected: 7,
+        talk_seconds: 3_120,
+        follow_ups_done: 5,
+        new_assigned: 3,
+      };
+  return {
+    counts: cold
+      ? { new: 180, open_leads: 25, follow_ups_today: 4 }
+      : { new: 6, open_leads: 2, follow_ups_today: 3 },
+    numbers,
+    numbers_week: numbers,
+    numbers_month: numbers,
+    to_call_today: cold ? { left: 40, called: 24 } : { left: 9, called: 18 },
+    next_lead: cold
+      ? { ...rows[2], why: "New lead", source_label: "October cold list" }
+      : { ...rows[1], why: "New lead", source_label: "Website form" },
+    upcoming: rows.slice(3, 5),
+    new_key: "new",
+    open_key: "open_leads",
+  };
+}
+
+/** This month's revenue: half of a ₹5 L target, a tenth of the month gone. */
+function revenue(path: string, on: boolean) {
+  return {
+    scope: path.includes("scope=team") ? "team" : "mine",
+    month: new Date().toISOString().slice(0, 7),
+    currency: "INR",
+    month_gone: 0.1,
+    target: on ? 500_000 : null,
+    target_source: on ? "organisation" : null,
+    won: on ? 250_000 : 0,
+    deals: on ? 3 : 0,
+    amount_not_set: 0,
+    needs: null,
+    sellers: [],
+  };
+}
 
 const BECAUSE: Record<string, string[]> = {
   due: ["promised a call back", "1 h overdue"],
@@ -465,6 +529,13 @@ function answers(now: number, path: string, mode: Mode): unknown {
   const empty = quiet || none || fresh;
   const team = teamAnswers(path);
   if (team !== null) return team;
+  if (path === "/v1/lead-desk/sides?scope=mine")
+    return {
+      inbound: { leads: mode.sides === "cold" ? 0 : 40 },
+      cold: { imported: mode.sides === "inbound" ? 0 : 200 },
+    };
+  if (path.startsWith("/v1/lead-desk/revenue?"))
+    return revenue(path, mode.revenue === true);
   if (path === "/v1/lead-desk/my-day") return myDay(now, mode);
   // Today's tasks: two due, one past its time (owner Home, 28 Oct 2026).
   if (path.startsWith("/v1/lead-desk/tasks?view=today"))
@@ -548,6 +619,20 @@ function answers(now: number, path: string, mode: Mode): unknown {
             overdue: 1,
           },
       queue: empty ? [] : queue(now),
+      sides: empty
+        ? null
+        : { inbound: homeSide(now, false), cold: homeSide(now, true) },
+      unanswered: mode.finish
+        ? [
+            {
+              lead_id: queue(now)[0].lead_id,
+              name: "asha fictional",
+              called_at: new Date(now - 4 * MINUTE).toISOString(),
+              event_id: "fixture-finish-1",
+              phone_saw: true,
+            },
+          ]
+        : [],
       upcoming: quiet
         ? [
             {
@@ -712,6 +797,9 @@ function install(mode: Mode) {
   window.fetch = async (input, init) => {
     const url = String(input instanceof Request ? input.url : input);
     const path = url.replace(/^https?:\/\/[^/]+/, "");
+    // `&fail=desk`: the leads read fails, as on a bad network.
+    if (mode.fail && path === "/v1/lead-desk")
+      return new Response("{}", { status: 503 });
     const body = path.startsWith("/v1/")
       ? answers(Date.now(), path, mode)
       : null;
@@ -808,6 +896,13 @@ function Preview() {
       none: params.get("none") === "1",
       targets: params.get("targets") !== "0",
       fresh,
+      finish: params.get("finish") === "1",
+      fail: params.get("fail") === "desk",
+      sides:
+        params.get("sides") === "inbound" || params.get("sides") === "cold"
+          ? (params.get("sides") as "inbound" | "cold")
+          : "both",
+      revenue: params.get("revenue") === "1",
     }),
   );
   // `&switcher=1`: the workspace list open, with long fictional names: the

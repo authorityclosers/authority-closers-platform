@@ -23,6 +23,10 @@
   --sx-accent: var(--lx-teal);
   --sx-accent-ink: var(--lx-on-teal);
   --sx-accent-soft: color-mix(in oklab, var(--lx-teal) 12%, transparent);
+  /* The Call (L0 brief; Dipak's design, 4 Nov 2026): every primary Call's
+     pill, 7:1 against its label for a phone in the sun (FRAMEWORK L4). */
+  --sx-call-fill: var(--lx-call);
+  --sx-call-ink: var(--lx-on-call);
   --sx-good: var(--lx-success);
   --sx-warn: var(--lx-warning);
   --sx-bad: var(--lx-danger);

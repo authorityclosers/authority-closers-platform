@@ -74,6 +74,8 @@
   --lx-glow: #3debb0; /* Brand Mint (B "Insight", 23 Oct 2026); ONLY on film backgrounds (contrast), never text on light */
   --lx-glow-ink: #0f8b7e; /* Lens sound waves */
   --lx-on-teal: #ffffff; /* text on teal actions */
+  --lx-call: #045d56; /* the Call lens capsule (L0 brief, 4 Nov 2026): 7.8:1 under white, for sunlight */
+  --lx-on-call: #ffffff;
   --lx-avatar-top: #a3a9b4;
   --lx-avatar-bottom: #7d838e;
 
@@ -264,6 +266,8 @@
   --lx-teal-tint: rgba(45, 212, 191, 0.08);
   --lx-teal-edge: rgba(45, 212, 191, 0.28);
   --lx-on-teal: #0b0c0e;
+  --lx-call: #2dd4bf; /* about 10:1 against its near-black label */
+  --lx-on-call: #0b0c0e;
   --lx-avatar-top: #6e727b;
   --lx-avatar-bottom: #4f535b;
   --lx-strength: #2dd4bf;
@@ -330,6 +334,8 @@
   --lx-teal-tint: #eef9f6;
   --lx-teal-edge: #b4e6da;
   --lx-on-teal: #ffffff;
+  --lx-call: #045d56;
+  --lx-on-call: #ffffff;
   --lx-avatar-top: #a3a9b4;
   --lx-avatar-bottom: #7d838e;
   --lx-strength: #097870;

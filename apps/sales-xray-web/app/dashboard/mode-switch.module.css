@@ -1,9 +1,11 @@
 /* Team | Me: a well with a thumb that springs between two halves (owner,
-   31 Oct 2026). Transforms only, so it holds 60 fps on a mid-range phone. */
+   31 Oct 2026). Transforms only, so it holds 60 fps on a mid-range phone.
+   Compact enough to sit at the end of the revenue line (Home studio, 4 Nov
+   2026). */
 .switch {
   position: relative;
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(96px, 1fr));
+  grid-template-columns: repeat(2, minmax(72px, 1fr));
   justify-self: start;
   padding: 3px;
   border-radius: var(--sx-radius-pill);
@@ -66,7 +68,7 @@
   justify-content: center;
   gap: 6px;
   min-height: 40px;
-  padding: 0 16px;
+  padding: 0 12px;
   border: 0;
   border-radius: var(--sx-radius-pill);
   background: transparent;
