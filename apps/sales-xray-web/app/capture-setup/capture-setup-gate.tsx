@@ -28,7 +28,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { requestWorkspace } from "../call-ownership";
 
 import {
-  autoCaptureStatus,
+  captureForSetup,
   inPhoneApp,
   setupStatus,
   type SetupStatus,
@@ -192,7 +192,7 @@ export function CaptureSetupGate() {
         const [setup, status, capture] = await Promise.all([
           readCaptureSetup(controller.signal),
           app ? setupStatus() : Promise.resolve(null),
-          app ? autoCaptureStatus() : Promise.resolve(null),
+          app ? captureForSetup() : Promise.resolve(null),
         ]);
         if (stopped) return;
         const facts = phoneFacts(status, capture);

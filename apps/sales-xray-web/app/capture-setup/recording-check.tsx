@@ -35,7 +35,7 @@ import {
   nudgeDue,
 } from "../leads/auto-start";
 import {
-  autoCaptureStatus,
+  captureForSetup,
   inPhoneApp,
   onPhoneSignal,
   setupStatus,
@@ -137,7 +137,7 @@ export function ConsentNudge({
 /** Fix: the setup, at the step that fails on this phone; on the web, "open the app". */
 export async function fixRecording() {
   const [status, capture] = inPhoneApp()
-    ? await Promise.all([setupStatus(), autoCaptureStatus()])
+    ? await Promise.all([setupStatus(), captureForSetup()])
     : [null, null];
   openCaptureSetup(failingStep(phoneFacts(status, capture)));
 }

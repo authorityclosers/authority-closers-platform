@@ -1174,6 +1174,12 @@ export type AutoCaptureStatus = {
   pending?: number;
   held?: Record<string, number>;
   offSinceMs?: number | null;
+  /**
+   * The call setup's reading only (captureForSetup): the app has automatic
+   * uploads but didn't answer in time, or couldn't reach the server for its
+   * phone book; on and wifiOnly are then not known.
+   */
+  unanswered?: boolean;
 };
 export async function autoCaptureStatus(): Promise<AutoCaptureStatus | null> {
   if (!inPhoneApp()) return null;
@@ -1183,10 +1189,57 @@ export async function autoCaptureStatus(): Promise<AutoCaptureStatus | null> {
     return null;
   }
 }
+
+/** How long one reading serves the call setup's next reads (Fix recording, then its sheet). */
+const SETUP_READ_MS = 20_000;
+let setupRead: {
+  at: number;
+  from: Channel;
+  read: Promise<AutoCaptureStatus | null>;
+} | null = null;
+
+/**
+ * Automatic uploads as the call setup reads them (owner's OnePlus, bug report
+ * #164, 3 Nov 2026: "Fix recording" was slow, then said "This version can't
+ * upload calls by itself. Update it from Google Play" on the app from Google
+ * Play). The app answers autoCaptureStatus only after it fetches its phone
+ * book from the server, on the same single worker as the checklist, so a slow
+ * network ran past the 5 s wait, and a timeout read as an app too old to
+ * upload. Only an app without the method ("unknown_method") is too old now; a
+ * late or failed answer is an app that has uploads, state unknown. One
+ * reading (or the one in flight) serves the next 20 s, so Fix recording and
+ * the setup it opens wait once, not twice.
+ */
+export function captureForSetup(): Promise<AutoCaptureStatus | null> {
+  const from = channel();
+  if (!from) return Promise.resolve(null);
+  const now = Date.now();
+  if (
+    setupRead &&
+    setupRead.from === from &&
+    now - setupRead.at < SETUP_READ_MS
+  )
+    return setupRead.read;
+  const read = ask<AutoCaptureStatus>("autoCaptureStatus", {}, 5_000).catch(
+    (error: unknown): AutoCaptureStatus | null =>
+      error instanceof Error && error.message === "unknown_method"
+        ? null
+        : { supported: true, on: false, wifiOnly: true, unanswered: true },
+  );
+  setupRead = { at: now, from, read };
+  return read;
+}
+
+/** Forget the setup's last reading (uploads switched, or a test). */
+export function forgetCaptureForSetup(): void {
+  setupRead = null;
+}
+
 export async function autoCaptureSetup(
   on: boolean,
   wifiOnly: boolean,
 ): Promise<AutoCaptureStatus> {
+  forgetCaptureForSetup();
   return ask<AutoCaptureStatus>("autoCaptureSetup", { on, wifiOnly }, 120_000);
 }
 /** Try again on the capture-health card: held calls whose cause is gone upload now. */

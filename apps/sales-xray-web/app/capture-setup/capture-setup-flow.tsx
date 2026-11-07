@@ -60,8 +60,9 @@ import { recorderGuide } from "../leads/phone-setup-words";
 import {
   askNotifications,
   autoCaptureSetup,
-  autoCaptureStatus,
   buzz,
+  captureForSetup,
+  forgetCaptureForSetup,
   onPhoneSignal,
   openDialer,
   pickRecordingsFolder,
@@ -1221,40 +1222,74 @@ function DoneStep({
   );
 }
 
-/** The web's last screen, or an app too old to upload calls by itself. */
+/** What the phone step says: on the web, finish on the phone; in the app,
+ *  update only when this build really can't upload (bug report #164: the
+ *  Google Play app was told to update from Google Play when the phone was
+ *  only slow to answer). */
+export function phoneStepWords(
+  inApp: boolean,
+  status: SetupStatus | null,
+): { title: string; line: string; play: string | null } {
+  if (!inApp)
+    return {
+      title: "Now finish on your phone",
+      line: "Calls are captured on the phone you call from. Open Sales X-Ray there to choose the recordings folder, let it run in the background and turn uploads on.",
+      play: "Get Sales X-Ray on Google Play",
+    };
+  if (!status)
+    return {
+      title: "Your phone didn't answer in time",
+      line: "Sales X-Ray couldn't check this phone just now. Close this and tap Fix recording again in a moment.",
+      play: null,
+    };
+  if (!status.folderPickSupported)
+    return {
+      title: "This phone can't share recordings",
+      line: "This phone's Android version is too old for Sales X-Ray to read call recordings. Calls are still logged.",
+      play: null,
+    };
+  return {
+    title: "Update Sales X-Ray",
+    line: "This version can't upload calls by itself. Update it from Google Play, then open it again.",
+    play: "Update on Google Play",
+  };
+}
+
+/** The web's last screen, an app too old to upload calls by itself, or a phone that didn't answer. */
 function PhoneStep({
   titleId,
   inApp,
+  status,
   onDone,
 }: {
   titleId: string;
   inApp: boolean;
+  status: SetupStatus | null;
   onDone: () => void;
 }) {
+  const words = phoneStepWords(inApp, status);
   return (
     <Screen
       icon={Smartphone}
-      title={inApp ? "Update Sales X-Ray" : "Now finish on your phone"}
+      title={words.title}
       titleId={titleId}
-      line={
-        inApp
-          ? "This version can't upload calls by itself. Update it from Google Play, then open it again."
-          : "Calls are captured on the phone you call from. Open Sales X-Ray there to choose the recordings folder, let it run in the background and turn uploads on."
-      }
+      line={words.line}
       actions={
         <Button variant="primary" onClick={onDone}>
           Continue
         </Button>
       }
     >
-      <a
-        className={own.link}
-        href={PLAY_LISTING}
-        target="_blank"
-        rel="noreferrer"
-      >
-        {inApp ? "Update on Google Play" : "Get Sales X-Ray on Google Play"}
-      </a>
+      {words.play ? (
+        <a
+          className={own.link}
+          href={PLAY_LISTING}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {words.play}
+        </a>
+      ) : null}
     </Screen>
   );
 }
@@ -1301,9 +1336,11 @@ export function CaptureSetupFlow({
 
   const refresh = useCallback(async (): Promise<Phone> => {
     if (!inApp) return { status: null, facts: null };
+    // Back from Android's screens: read the phone afresh.
+    forgetCaptureForSetup();
     const [status, capture] = await Promise.all([
       setupStatus(),
-      autoCaptureStatus(),
+      captureForSetup(),
     ]);
     const next = {
       status,
@@ -1318,7 +1355,7 @@ export function CaptureSetupFlow({
     let alive = true;
     void (async () => {
       const [status, capture] = inApp
-        ? await Promise.all([setupStatus(), autoCaptureStatus()])
+        ? await Promise.all([setupStatus(), captureForSetup()])
         : [null, null];
       if (!alive) return;
       // The checklist's battery Done counts here too (permissions-rules).
@@ -1476,7 +1513,14 @@ export function CaptureSetupFlow({
       );
       break;
     case "phone":
-      screen = <PhoneStep titleId={titleId} inApp={inApp} onDone={next} />;
+      screen = (
+        <PhoneStep
+          titleId={titleId}
+          inApp={inApp}
+          status={phone.status}
+          onDone={next}
+        />
+      );
       break;
   }
 

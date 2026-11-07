@@ -91,7 +91,8 @@ export function phoneFacts(
     autostart: setup.checks.autostart === true,
     notifications: setup.checks.notifications === true,
     notificationsBlocked: setup.blocked.notifications,
-    uploadsOn: capture?.on === true,
+    // A late answer (captureForSetup) doesn't say uploads are off (bug report #164).
+    uploadsOn: capture?.on === true || capture?.unanswered === true,
     wifiOnly: capture?.wifiOnly === true,
     newestMs: recorder?.newestMs ?? null,
     newestDurationMs: recorder?.newestDurationMs ?? null,
