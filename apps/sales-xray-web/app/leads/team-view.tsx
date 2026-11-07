@@ -184,10 +184,7 @@ export function WorkHoursPanel({
           : "not set"
       }
     >
-      <fieldset
-        className={`${styles.form} ${hours.form}`}
-        disabled={readOnly}
-      >
+      <fieldset className={`${styles.form} ${hours.form}`} disabled={readOnly}>
         <p className={styles.hint}>
           India time. Calls outside these hours stay on the seller&apos;s phone
           and are never logged.
