@@ -334,7 +334,10 @@
 
 /* A computer's views are tabs in a row, left aligned, as wide as their words. */
 @media (min-width: 900px) {
+  /* No size containment here: a container measures 0 wide on its own, and
+     a computer's tabs are as wide as their words. */
   .tabs {
+    container-type: normal;
     display: flex;
     gap: 4px;
     justify-self: start;
