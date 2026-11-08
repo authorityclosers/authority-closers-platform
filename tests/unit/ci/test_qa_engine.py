@@ -74,3 +74,39 @@ def test_capture_command_is_wired() -> None:
     engine = (ROOT / "engine.cjs").read_text(encoding="utf-8")
     assert 'cmd === "capture"' in engine
     assert "393 px" in (ROOT / "lib" / "config.cjs").read_text(encoding="utf-8")
+
+
+def test_owner_views_use_the_fictional_admin_and_the_real_alias_stays_guarded() -> None:
+    config = (ROOT / "lib" / "config.cjs").read_text(encoding="utf-8")
+    assert 'OWNER_ALIAS: process.env.QA_OWNER_ALIAS || "anjali"' in config
+    assert '"363 px"' in config
+    session = (ROOT / "lib" / "session.cjs").read_text(encoding="utf-8")
+    assert 'opts.alias === "owner"' in session
+    assert "NO-OWNER" in session
+
+
+def test_persona_proxy_serves_the_sellers_and_the_admin_and_has_no_owner_alias() -> None:
+    proxy = (ROOT / "persona-proxy.cjs").read_text(encoding="utf-8")
+    for name in ("priya", "rohan", "sneha", "farah", "karan", "neha", "imran", "pooja", "anjali"):
+        assert f"  {name}: [" in proxy
+    assert "  owner: [" not in proxy
+    assert "SANDBOX_LOGIN_AC_ANJALI" in proxy
+
+
+def test_units_and_helpers_keep_nothing_in_tmp_and_run_in_the_strikes_slice() -> None:
+    for path in [
+        ROOT / "persona-proxy.cjs",
+        ROOT / "engine.cjs",
+        *ROOT.glob("lib/*.cjs"),
+        *ROOT.glob("bin/*.sh"),
+        *ROOT.glob("systemd/*.service"),
+    ]:
+        text = path.read_text(encoding="utf-8")
+        assert not re.search(r"(?<!/var)/tmp/", text), path
+    for unit in ROOT.glob("systemd/*.service"):
+        text = unit.read_text(encoding="utf-8")
+        assert "Slice=ac-strikes.slice" in text
+        assert "WantedBy=multi-user.target" in text
+    mixed = (ROOT / "systemd" / "qa-engine-mixed.service").read_text(encoding="utf-8")
+    for cap in ("CPUQuota=60%", "MemoryMax=3200M", "Nice=15", "IOSchedulingClass=idle"):
+        assert cap in mixed

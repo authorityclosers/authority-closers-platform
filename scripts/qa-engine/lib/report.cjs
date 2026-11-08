@@ -141,7 +141,7 @@ async function post(alias, body) {
 const SELLERS = ["priya", "rohan", "farah", "karan", "pooja", "sneha", "imran", "neha"]; // not aditya or vikas: kept untouched
 // Who files: the walker if they are a seller with budget left, else any seller with budget left.
 function pickFiler(ctx) {
-  const order = [ctx.filer, ctx.alias, ...SELLERS].filter((a, i, all) => a && a !== "owner" && all.indexOf(a) === i);
+  const order = [ctx.filer, ctx.alias, ...SELLERS].filter((a, i, all) => a && !cfg.isOwnerAlias(a) && all.indexOf(a) === i);
   for (const alias of order) if (hourBudget(alias).n < cfg.LIMITS.reportsPerPersonaPerHour) return alias;
   return null;
 }

@@ -110,7 +110,7 @@ function pageList(role) {
 
 // ---- one run -----------------------------------------------------------------------------------------------------
 async function captureRun({ role = "seller", sizes = ["360 px", "393 px"], themes = ["light", "dark"], routes = null, alias = null, gate = null, log = console.log, video = true } = {}) {
-  const who = alias || (role === "owner" ? "owner" : "priya");
+  const who = alias || (role === "owner" ? cfg.OWNER_ALIAS : "priya");
   const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 13).replace("T", "-");
   const dir = path.join(ROOT_OUT, `${stamp}-${role}`);
   fs.mkdirSync(path.join(dir, "shots"), { recursive: true });

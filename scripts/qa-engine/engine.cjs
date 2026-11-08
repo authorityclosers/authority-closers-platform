@@ -43,7 +43,7 @@ const args = (() => {
   }
   return out;
 })();
-const SIZES = (args.sizes || "390 px,360 px,1440,1920").split(",").map((s) => s.trim());
+const SIZES = (args.sizes || "390 px,360 px,363 px,1440,1920").split(",").map((s) => s.trim());
 const log = (text) => console.log(`${new Date().toISOString().slice(11, 19)} ${text}`);
 // a browser-side promise rejection (a route answered after its page closed: "Fetch response has been disposed") must not end the whole robot
 process.on("unhandledRejection", (error) => {
@@ -150,7 +150,7 @@ async function runRow(row) {
   }
   const alias = plan && plan.as ? plan.as : await personas.aliasFor(row.persona);
   const tab = await tabFor(alias, row);
-  const filer = alias === "owner" ? "priya" : alias;
+  const filer = cfg.isOwnerAlias(alias) ? "priya" : alias;
   const phoneSize = tab.dev.phone;
   const probes = [];
   const mark = tab.mark();
@@ -345,7 +345,7 @@ async function rowsLoop({ max = Infinity, batch = 8 } = {}) {
 
 // ---- sweeps ----------------------------------------------------------------------------------------------------
 async function sweep(kind, { role = "seller", sizes = SIZES, themes = ["light", "dark"], routes = null, approve = false } = {}) {
-  const alias = role === "owner" ? "owner" : "priya";
+  const alias = role === "owner" ? cfg.OWNER_ALIAS : "priya";
   const filer = "priya";
   const persona = role === "owner" ? "P16" : "P01";
   const list = routes || ROUTES[role];
@@ -511,7 +511,7 @@ async function rejudge() {
     const owner = ["Owner controls", "Reports", "Stage editor", "Lead import"].includes(g.area);
     let tab;
     try {
-      tab = await session.openTab({ alias: owner ? "owner" : "priya", device: g.size, theme: "light", state: "normal" });
+      tab = await session.openTab({ alias: owner ? cfg.OWNER_ALIAS : "priya", device: g.size, theme: "light", state: "normal" });
       const opened = await session.go(tab, g.route, { wait: 30000 });
       if (!opened.ok) continue;
       const phone = tab.dev.phone;
@@ -560,7 +560,7 @@ async function foldExisting() {
     const owner = ["Owner controls", "Reports", "Stage editor", "Lead import"].includes(g.area);
     let tab;
     try {
-      tab = await session.openTab({ alias: owner ? "owner" : "priya", device: g.size, theme: "light", state: "normal" });
+      tab = await session.openTab({ alias: owner ? cfg.OWNER_ALIAS : "priya", device: g.size, theme: "light", state: "normal" });
       const opened = await session.go(tab, g.route, { wait: 30000 });
       if (!opened.ok) continue;
       const route = routeOf(tab.page.url());
@@ -569,7 +569,7 @@ async function foldExisting() {
       if (!s) continue;
       const roll = inv.rollup(inv.findingsFrom(s, { route, phone }), tab.dev.key).filter((f) => f.rolled);
       for (const f of roll) {
-        const ctx = { tab, alias: owner ? "owner" : "priya", filer: "priya", persona: owner ? "P16" : "P01", device: g.size, theme: "light", area: g.area };
+        const ctx = { tab, alias: owner ? cfg.OWNER_ALIAS : "priya", filer: "priya", persona: owner ? "P16" : "P01", device: g.size, theme: "light", area: g.area };
         const res = await report.file(f, ctx);
         if (!res.bugId) {
           log(`  roll-up not filed for ${f.summary}: ${res.action} ${res.reason || ""}`);
@@ -667,7 +667,7 @@ function digest() {
       for (let i = 0; i < Number(args.n || 1); i++) log(JSON.stringify(await attack.runOne({ filter, dry: !!args.dry, verbose: !!args.verbose })));
     } else if (cmd === "capture") {
       const design = require("./lib/design.cjs");
-      const out = await design.captureRun({ role: args.role || "seller", sizes: args.sizes ? SIZES : ["360 px", "393 px"], themes: args.themes ? args.themes.split(",") : ["light", "dark"], routes: args.routes ? args.routes.split(",") : null, alias: args.alias || null, video: !args["no-video"], gate: () => headroom(log), log });
+      const out = await design.captureRun({ role: args.role || "seller", sizes: args.sizes ? SIZES : ["360 px", "363 px", "393 px"], themes: args.themes ? args.themes.split(",") : ["light", "dark"], routes: args.routes ? args.routes.split(",") : null, alias: args.alias || null, video: !args["no-video"], gate: () => headroom(log), log });
       log(JSON.stringify(out));
     } else if (cmd === "mixed") {
       await mixed();

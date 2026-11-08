@@ -11,6 +11,10 @@ module.exports = {
   MATRIX_DIR,
   PLAYWRIGHT,
   PROXY: process.env.QA_PROXY || "http://localhost:3098", // persona-qa's pass-through + /__as/<alias> sign-in
+  // The person whose session shows the owner's views: a fictional Admin of the AC Sales Sandbox (8 Nov 2026). The real owner alias
+  // ("owner") stays blocked by state/NO-OWNER and is never used.
+  OWNER_ALIAS: process.env.QA_OWNER_ALIAS || "anjali",
+  isOwnerAlias: (alias) => alias === "owner" || alias === (process.env.QA_OWNER_ALIAS || "anjali"),
   OUT: process.env.QA_OUT || path.join(ROOT, "out"),
   STATE: process.env.QA_STATE || path.join(ROOT, "state"),
   BASELINES: process.env.QA_BASELINES || path.join(ROOT, "baselines"),
@@ -19,6 +23,7 @@ module.exports = {
   DEVICES: {
     "390 px": { key: "390", viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, phone: true },
     "360 px": { key: "360", viewport: { width: 360, height: 740 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, phone: true },
+    "363 px": { key: "363", viewport: { width: 363, height: 735 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, phone: true }, // the owner's OnePlus
     "393 px": { key: "393", viewport: { width: 393, height: 852 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, phone: true }, // the design capture stage
     "1440": { key: "1440", viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, isMobile: false, hasTouch: false, phone: false },
     "1920": { key: "1920", viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1, isMobile: false, hasTouch: false, phone: false },

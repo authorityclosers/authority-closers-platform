@@ -138,7 +138,7 @@ async function loadGap(tab) {
 async function walk(job) {
   const { row, alias, persona, prof, seed, area, filer } = job;
   const r = rng(seed);
-  const owner = alias === "owner";
+  const owner = cfg.isOwnerAlias(alias);
   const tokens = new Set((row.journey || "").toLowerCase().match(/[a-z]{4,}/g) || []);
   const tab = await session.openTab({ alias, device: row.device, theme: row.theme, state: row.state, keep: true });
   const page = tab.page;
@@ -397,7 +397,7 @@ async function nextRow(sizes) {
   }
   let ownerOk = false;
   try {
-    ownerOk = fs.existsSync("/tmp/pw/owner-cookie.txt");
+    ownerOk = cfg.OWNER_ALIAS !== "owner" || fs.existsSync("/var/tmp/owner-cookie.txt");
   } catch {
     ownerOk = false;
   }
@@ -409,7 +409,7 @@ async function nextRow(sizes) {
   const base = { P0: 3, P1: 2, P2: 1 };
   let boost = false;
   try {
-    boost = Date.now() - fs.statSync("/tmp/pw/owner-cookie.txt").mtimeMs < 2 * 3600 * 1000;
+    boost = Date.now() - fs.statSync("/var/tmp/owner-cookie.txt").mtimeMs < 2 * 3600 * 1000;
   } catch {
     boost = false;
   }
@@ -430,12 +430,12 @@ async function oneWalk(row, seedOverride) {
   const full = (await matrix.personaDetail())[persona.id] || {};
   const prof = profileFor({ ...persona, ...full }, row);
   const ownerArea = OWNER_AREAS.has(row.area);
-  const alias = persona.owner || ownerArea ? "owner" : persona.alias;
+  const alias = persona.owner || ownerArea ? cfg.OWNER_ALIAS : persona.alias;
   const seed = seedOverride || ++counter * 7919 + (Number(row.workflow_id.slice(1)) % 9973);
   const t0 = Date.now();
   let out;
   try {
-    out = await walk({ row, alias, persona, prof, seed, area: row.area, filer: alias === "owner" ? null : alias });
+    out = await walk({ row, alias, persona, prof, seed, area: row.area, filer: cfg.isOwnerAlias(alias) ? null : alias });
   } catch (error) {
     log(`${row.workflow_id} seed ${seed}: the walk broke (${String(error).split("\n")[0].slice(0, 140)})`);
     return { error: true };

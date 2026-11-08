@@ -1,0 +1,30 @@
+# The QA robot (engine b), mixed: scripted rows, one persona walk, then state attacks. Dev and sandbox organisations only.
+# A real unit since 8 Nov 2026 (it was a transient systemd-run unit; the reboot that emptied /tmp took it). Same caps as before:
+# 60% of one core, 2.4 to 3.2 GB, nice 15, idle IO, in ac-strikes.slice. The engine itself waits for a release cut, memory and CPU
+# pressure, a dev rebuild and a PAUSE file, and refuses the owner alias while state/NO-OWNER exists.
+[Unit]
+Description=QA robot (engine b) mixed run, dev only
+After=qa-persona-proxy.service
+Wants=qa-persona-proxy.service
+
+[Service]
+Type=simple
+Slice=ac-strikes.slice
+User=acdev
+WorkingDirectory=/home/acdev/qa-engine
+Environment=HOME=/home/acdev
+Environment=LD_LIBRARY_PATH=/home/acdev/qa-engine/chromelibs
+ExecStart=/usr/local/bin/node /home/acdev/qa-engine/engine.cjs mixed
+StandardOutput=append:/home/acdev/qa-engine/state/qa-engine-mixed.log
+StandardError=append:/home/acdev/qa-engine/state/qa-engine-mixed.log
+Restart=on-failure
+RestartSec=60
+MemoryHigh=2400M
+MemoryMax=3200M
+CPUQuota=60%
+CPUWeight=20
+Nice=15
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

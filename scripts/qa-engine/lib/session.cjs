@@ -282,7 +282,7 @@ async function go(tab, address, { wait = 25000, onLoad } = {}) {
   } catch (error) {
     return { ok: false, error: String(error).split("\n")[0].slice(0, 160) };
   }
-  if (tab.opts.alias === "owner") {
+  if (cfg.isOwnerAlias(tab.opts.alias)) {
     // the owner belongs to the real AC organisation too: only the sandbox organisations may be touched
     await settle(tab, 8000);
     const label = await tab.page.evaluate(() => (document.querySelector('[aria-label*="orkspace:"]') || {}).ariaLabel || "").catch(() => "");

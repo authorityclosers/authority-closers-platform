@@ -1,0 +1,24 @@
+# Persona sign-in proxy for the QA robot (dev only): /__as/<persona> in front of dev-live (web :3026, API :8101).
+# Rebuilt 8 Nov 2026 as a real unit after the reboot that emptied /tmp. The secrets (dev /sandbox-logins) are injected by
+# ac-infisical-run at start; a change to a persona means a restart of this unit.
+[Unit]
+Description=QA robot persona sign-in proxy (dev only, :3098)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Slice=ac-strikes.slice
+Environment=AC_INFISICAL_ENVIRONMENT=dev
+Environment=AC_INFISICAL_PATH=/sandbox-logins
+ExecStart=/usr/local/sbin/ac-infisical-run -- /usr/sbin/runuser -u acdev -- /usr/bin/env HOME=/home/acdev /usr/local/bin/node /home/acdev/qa-engine/persona-proxy.cjs
+Restart=on-failure
+RestartSec=10
+MemoryHigh=512M
+MemoryMax=1G
+CPUQuota=30%
+CPUWeight=20
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

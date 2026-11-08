@@ -30,7 +30,7 @@ const sim = require("./sim.cjs");
 const log = (text) => console.log(`${new Date().toISOString().slice(11, 19)} ${text}`);
 
 const FAMILIES = ["fault", "3g", "extremes", "zoom", "keyboard", "dark", "history", "double"];
-const SIZES = ["360 px", "390 px", "1440"];
+const SIZES = ["360 px", "363 px", "390 px", "1440"];
 const PAGES = {
   seller: [
     "/dashboard", "/leads", "/leads?view=follow_ups", "/leads?view=all", "/leads?tab=tasks", "/leads?side=cold", "/leads?view=all&lead={lead}",
@@ -42,7 +42,7 @@ const PAGES = {
   ],
 };
 const SELLERS = ["priya", "rohan", "farah", "karan", "pooja"];
-const OWNER_COOKIE = "/tmp/pw/owner-cookie.txt";
+const OWNER_COOKIE = "/var/tmp/owner-cookie.txt";
 
 // ---- state ----------------------------------------------------------------------------------------------------------
 const FILE = path.join(cfg.STATE, "attack-cells.json");
@@ -56,6 +56,8 @@ const save = () => fs.writeFileSync(FILE, JSON.stringify(state));
 let aliasTurn = Math.floor(Math.random() * 100);
 
 function ownerAvailable() {
+  // the owner views are shown by the fictional Admin (cfg.OWNER_ALIAS); only the real owner alias needs the guard and a fresh session
+  if (cfg.OWNER_ALIAS !== "owner") return true;
   if (fs.existsSync(path.join(cfg.STATE, "NO-OWNER"))) return false; // not approved for the robot right now
   try {
     return Date.now() - fs.statSync(OWNER_COOKIE).mtimeMs < 8 * 3600 * 1000;
@@ -1467,7 +1469,7 @@ async function runCell(cell, opts = {}) {
   const t0 = Date.now();
   const owner = cell.role === "owner";
   // QA_ATTACK_ALIAS pins one person for a by-hand replay (a new hire, whose first-call guide and welcome card are not dismissed); the loop rotates through SELLERS
-  const alias = owner ? "owner" : process.env.QA_ATTACK_ALIAS || SELLERS[aliasTurn++ % SELLERS.length];
+  const alias = owner ? cfg.OWNER_ALIAS : process.env.QA_ATTACK_ALIAS || SELLERS[aliasTurn++ % SELLERS.length];
   let route = cell.route;
   const tab = await session.openTab({ alias, device: cell.size, theme: cell.family === "dark" ? "dark" : "light", state: "normal", keep: true });
   const ctx = makeCtx(tab, cell, alias);
