@@ -173,6 +173,27 @@
   padding: 2px 16px 16px;
 }
 
+/* A phone scrolls one thing while a sheet is open: the sheet. The page behind
+   it holds still (owner, bug 172, 4 Nov 2026: scrolling the lead also scrolled
+   the leads list under it, and two scroll bars showed), and a touch screen
+   draws no bar of its own beside the sheet's words. */
+@media (max-width: 899.98px) {
+  :global(html):has(.sheet[open]) {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .body {
+    scrollbar-width: none;
+  }
+
+  .body::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* --sx-sheet-room: the app's corner cards (set on the body while they show),
    as space after the words so they scroll clear of the cards. Padding would
    lift a row held at the bottom (Save & Close) with it, under the cards. */

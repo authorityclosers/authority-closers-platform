@@ -184,6 +184,36 @@ const button = (name: string) =>
       item.textContent?.trim() === name,
   )!;
 const click = (name: string) => act(async () => button(name).click());
+/** A person's actions sit in their row's More sheet (owner bugs #182, #185). */
+const sheetButtons = () => [
+  ...host.querySelectorAll<HTMLButtonElement>("dialog[open] button"),
+];
+const pick = async (who: string, item: string) => {
+  await click(`More actions for ${who}`);
+  await act(async () =>
+    sheetButtons()
+      .find((each) => each.textContent?.trim() === item)!
+      .click(),
+  );
+  // The More sheet slides away before the confirmation is read.
+  await vi.waitFor(() =>
+    expect(
+      host.querySelector('dialog[open] [aria-label^="Actions for"]'),
+    ).toBeNull(),
+  );
+};
+const moreItems = async (who: string) => {
+  await click(`More actions for ${who}`);
+  const items = [
+    ...host.querySelectorAll('dialog[open] [aria-label^="Actions for"] button'),
+  ].map((each) => each.textContent?.trim());
+  await act(async () => {
+    host
+      .querySelector<HTMLDialogElement>("dialog[open]")
+      ?.dispatchEvent(new Event("cancel", { cancelable: true }));
+  });
+  return items;
+};
 /** The confirmation's action button is named for its verb (Add, Remove…). */
 const confirm = () =>
   act(async () =>
@@ -262,7 +292,7 @@ it("reads the header, zero usage, dates and invite identity from the real contra
   expect(host.textContent).toContain("Joined");
   expect(host.textContent).toContain("Last active");
   expect(host.textContent).toContain("Admin (you)");
-  expect(button("Revoke invite for new@example.com")).toBeDefined();
+  expect(button("More actions for new@example.com")).toBeDefined();
   expect(picker("Role for new@example.com")).toBeNull();
   // Usage figures live on Overview only, from one source; no zero columns here.
   expect(host.textContent).not.toContain("Minutes");
@@ -285,7 +315,7 @@ it.each([
   ],
   [
     "remove",
-    () => click("Remove Dipak"),
+    () => pick("Dipak", "Remove"),
     `/v1/organisation/members/${memberId}`,
     "DELETE",
     undefined,
@@ -293,7 +323,7 @@ it.each([
   [
     "transfer",
     async () => {
-      await click("Make Dipak the owner");
+      await pick("Dipak", "Make owner");
       await typeOrganisationName("Authority Closers");
     },
     "/v1/organisation/owner",
@@ -302,7 +332,7 @@ it.each([
   ],
   [
     "revoke",
-    () => click("Revoke invite for new@example.com"),
+    () => pick("new@example.com", "Revoke invite"),
     `/v1/organisation/invites/${inviteId}`,
     "DELETE",
     undefined,
@@ -378,14 +408,15 @@ it("refreshes ownership permissions and uses member additions after a transfer",
   await render();
   await click("Members");
   await select("Role for the new person", "admin");
-  await click("Make Dipak the owner");
+  await pick("Dipak", "Make owner");
   await typeOrganisationName("Authority Closers");
   org().role = "admin";
   await confirm();
   expect(host.querySelector("header")?.textContent).toContain(
     "Your role: Admin",
   );
-  expect(button("Make Dipak the owner")).toBeUndefined();
+  // An admin now: Dipak can be removed, never made owner from here.
+  expect(await moreItems("Dipak")).toEqual(["Remove"]);
   expect(picker("Role for Dipak")).toBeNull();
   await add();
   await confirm();
@@ -407,10 +438,11 @@ it("allows admins to add/remove members and revoke pending invites", async () =>
   ).toEqual(["Sales manager", "Seller", "Viewer", "Finance"]);
   await act(async () => picker("Role for the new person")!.click());
   expect(picker("Role for Dipak")).toBeNull();
-  expect(button("Make Dipak the owner")).toBeUndefined();
-  expect(button("Remove Admin")).toBeUndefined();
-  expect(button("Remove Dipak").disabled).toBe(false);
-  expect(button("Revoke invite for new@example.com").disabled).toBe(false);
+  expect(button("More actions for Admin")).toBeUndefined();
+  expect(button("More actions for Dipak").disabled).toBe(false);
+  expect(button("More actions for new@example.com").disabled).toBe(false);
+  // An admin removes a seller but never hands over ownership.
+  expect(await moreItems("Dipak")).toEqual(["Remove"]);
   // Every row opens that person's profile (an invitation by its id).
   expect(
     [...host.querySelectorAll('a[href^="/organisation/people/"]')].map((link) =>
@@ -437,7 +469,7 @@ it("uses the API role and shows members only their own row read-only", async () 
   expect(host.textContent).toContain(
     "Only owners and admins see everyone, add people or change roles.",
   );
-  expect(button("Remove Admin")).toBeUndefined();
+  expect(button("More actions for Admin")).toBeUndefined();
 });
 it.each([
   [403, "Only the owner can change roles."],
@@ -448,7 +480,7 @@ it.each([
   writeDetail = detail;
   await render();
   await click("Members");
-  await click("Remove Dipak");
+  await pick("Dipak", "Remove");
   await confirm();
   // Errors are corner cards, never banners inside the page.
   expect(noticeText()).toContain(detail);
@@ -460,7 +492,7 @@ it("hides Organisation after a Personal 404 on a write", async () => {
   writeDetail = "No organisation selected.";
   await render();
   await click("Members");
-  await click("Remove Dipak");
+  await pick("Dipak", "Remove");
   await confirm();
   expect(host.textContent).toContain("You are on your personal account");
   expect(
@@ -1347,7 +1379,7 @@ it("tells a signed-out visitor how to get in, instead of loading forever", async
 it("makes someone the owner only after the organisation's name is typed", async () => {
   await render();
   await click("Members");
-  await click("Make Dipak the owner");
+  await pick("Dipak", "Make owner");
   const dialog = host.querySelector('dialog[open], [role="dialog"]')!;
   expect(dialog.textContent).toContain("You become an admin.");
   expect(dialog.textContent).toContain("You both get an email.");
@@ -1403,7 +1435,7 @@ it("shows seats above People and reads them again after a removal frees one", as
     fetchMock.mock.calls.filter(([url]) => url === "/v1/organisation/seats")
       .length;
   const before = seatReads();
-  await click("Remove Dipak");
+  await pick("Dipak", "Remove");
   expect(
     host.querySelector('dialog[open], [role="dialog"]')?.textContent,
   ).toContain("Their seat becomes free for someone else");
@@ -1448,8 +1480,8 @@ it("closes Invite with the reason when no seat is free, and keeps Remove and Rev
   expect(input.getAttribute("aria-describedby")).toBe("org-add-blocked");
   expect(button("Invite").disabled).toBe(true);
   // Freeing a seat is how Invite opens again.
-  expect(button("Remove Dipak").disabled).toBe(false);
-  expect(button("Revoke invite for new@example.com").disabled).toBe(false);
+  expect(button("More actions for Dipak").disabled).toBe(false);
+  expect(button("More actions for new@example.com").disabled).toBe(false);
 });
 
 it.each([

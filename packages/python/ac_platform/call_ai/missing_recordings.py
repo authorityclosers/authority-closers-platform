@@ -35,6 +35,9 @@ class Missing:
     total: int = 0
     by_person: dict[UUID, int] = field(default_factory=dict)
     latest: dict[UUID, datetime] = field(default_factory=dict)
+    # Each counted call's seller and lead, so a screen showing one side counts that
+    # side's (owner, 4 Nov 2026, #174: 11 on Cold beside Inbound's 0 tried).
+    calls: tuple[tuple[UUID, UUID], ...] = ()
 
 
 def day_start(now: datetime) -> datetime:
@@ -160,7 +163,11 @@ async def missing_today(
     since = day_start(now)
     attachment = aliased(LeadEvent)
     query = select(
-        LeadEvent.id, LeadEvent.actor_person_id, LeadEvent.data, LeadEvent.created_at
+        LeadEvent.id,
+        LeadEvent.actor_person_id,
+        LeadEvent.lead_id,
+        LeadEvent.data,
+        LeadEvent.created_at,
     ).where(
         LeadEvent.tenant_id == tenant_id,
         LeadEvent.kind == "call",
@@ -210,7 +217,12 @@ async def missing_today(
         at = _utc(row.created_at)
         if row.actor_person_id not in latest or at > latest[row.actor_person_id]:
             latest[row.actor_person_id] = at
-    return Missing(total=len(counted), by_person=dict(by_person), latest=latest)
+    return Missing(
+        total=len(counted),
+        by_person=dict(by_person),
+        latest=latest,
+        calls=tuple((row.actor_person_id, row.lead_id) for row in counted),
+    )
 
 
 async def lead_names(database: Any, tenant_id: UUID, ids: list[UUID]) -> dict[UUID, str]:

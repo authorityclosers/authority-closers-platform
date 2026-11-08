@@ -96,9 +96,15 @@
   font-weight: 700;
 }
 
+/* A condition can run to two or three lines ("Source is Google Ads lead
+   forms, Facebook and Instagram lead ads or 1 more"): a soft-cornered block,
+   not a pill, so no word sits outside its rounded ends (owner bug 189). */
 .chip {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
   padding: 2px 8px;
-  border-radius: var(--sx-radius-pill);
+  border-radius: var(--sx-radius-sm);
   background: var(--sx-accent-soft);
   color: var(--sx-ink);
   overflow-wrap: anywhere;

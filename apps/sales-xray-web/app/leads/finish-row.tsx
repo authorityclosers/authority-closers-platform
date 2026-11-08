@@ -18,7 +18,9 @@ import styles from "./leads.module.css";
 
 const GONE = "sx-finish-put-away";
 
-function readGone(): string[] {
+/** The calls put away with "Didn't call" on this device (Home's Pending
+ *  action leaves them out too). */
+export function readGone(): string[] {
   try {
     const kept = JSON.parse(localStorage.getItem(GONE) ?? "[]") as unknown;
     return Array.isArray(kept)

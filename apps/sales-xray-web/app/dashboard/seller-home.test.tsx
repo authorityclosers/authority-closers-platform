@@ -17,6 +17,7 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+import { resetHomeReads } from "./home-load";
 import type { HomeSide } from "./my-day-client";
 import { SalesHome } from "./sales-home";
 import { NextCall, TodayPerformance } from "./seller-home";
@@ -276,6 +277,8 @@ async function mount() {
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/dashboard");
+  // Home keeps the seller's sides on the device; each test starts fresh.
+  window.localStorage.clear();
   doneFails = false;
   emptyToday = false;
   lateBrochure = false;
@@ -303,8 +306,9 @@ it("is Dipak's Home: the work in six blocks, each opening its exact place", asyn
   expect(card("new")?.getAttribute("href")).toBe(
     "/leads?view=to_call&step=new",
   );
-  // One caption under the number (Dipak's picture, 2 Nov 2026).
-  expect(card("new")?.textContent).toBe("New leads8First call pending");
+  // One caption under the number (Dipak's picture, 2 Nov 2026); the number
+  // in two digits (his design, 4 Nov 2026).
+  expect(card("new")?.textContent).toBe("New leads08First call pending");
   expect(card("open")?.getAttribute("href")).toBe(
     "/leads?view=all&step=open_leads",
   );
@@ -313,20 +317,27 @@ it("is Dipak's Home: the work in six blocks, each opening its exact place", asyn
   expect(card("follow_ups")?.getAttribute("href")).toBe(
     "/leads?view=follow_ups&when=today",
   );
-  expect(card("follow_ups")?.querySelector("strong")?.textContent).toBe("7");
-  // Tasks today: the Tasks page's Today, the non-calling work (Dipak's
-  // handoff; one truth with Tasks, persona QA, 31 Oct 2026).
-  expect(card("tasks")?.querySelector("strong")?.textContent).toBe("4");
+  expect(card("follow_ups")?.textContent).toBe("Follow-ups07Due today");
+  // Tasks: the Tasks page's Today, the non-calling work (Dipak's handoff;
+  // one truth with Tasks, persona QA, 31 Oct 2026).
+  expect(card("tasks")?.textContent).toBe("Tasks04Due today");
+  // Today's overview, and whose activity it counts.
+  expect(host.querySelector("#today-title")?.textContent).toBe(
+    "Today's overview",
+  );
+  expect(host.textContent).toContain("Your inbound lead activity");
   // Next to call: one customer, opening the lead; Call now calls them.
   const name = host.querySelector(
     'a[href="/leads?lead=00000000-0000-4000-8000-000000000001"]',
   );
   expect(name?.textContent).toBe("Amit Sample");
   expect(host.textContent).toContain("Meta Ads · Assigned 4 min ago");
-  // One big button, no countdown beside it.
+  // Next action, ready to call; one big button, no countdown beside it.
+  expect(host.querySelector("#next-title")?.textContent).toBe("Next action");
+  expect(host.textContent).toContain("Ready to call");
   expect(host.querySelector("[data-countdown]")).toBeNull();
   const call = Array.from(host.querySelectorAll("a")).find(
-    (link) => link.textContent === "Call Amit now",
+    (link) => link.textContent === "Call now",
   );
   // To Call by name: a bare /leads opens the person's last view (31 Oct).
   expect(call?.getAttribute("href")).toBe("/leads?view=to_call");
@@ -391,7 +402,7 @@ it("switches to Cold at once, with no second read", async () => {
   expect(card("follow_ups")?.getAttribute("href")).toBe(
     "/leads?view=follow_ups&when=today&side=cold",
   );
-  expect(host.textContent).toContain("Next cold call");
+  expect(host.textContent).toContain("Your cold lead activity");
   expect(host.querySelector("[data-countdown]")).toBeNull();
   const start = Array.from(host.querySelectorAll("a")).find(
     (link) => link.textContent === "Start Cold Calling",
@@ -506,7 +517,7 @@ it("says the next lead rang and wasn't reached, and calls them back", async () =
     expect(host.textContent).toContain(
       "Meta Ads · Missed call 30 min ago · 2 calls · call back",
     );
-    expect(host.textContent).toContain("Call Meera back");
+    expect(host.textContent).toContain("Call back");
     expect(host.textContent).not.toContain("Start Cold Calling");
   }
 });
@@ -539,7 +550,7 @@ it("starts a cold round at the card, and dials only a call-back or an Inbound le
     );
     takeHandedLead();
     const link = [...host.querySelectorAll("a")].find((anchor) =>
-      /Start Cold Calling|Call \S+ (now|back)/.test(anchor.textContent ?? ""),
+      /Start Cold Calling|Call (now|back)/.test(anchor.textContent ?? ""),
     );
     await act(async () => link?.click());
     return takeHandedLead();
@@ -560,8 +571,9 @@ it("starts a cold round at the card, and dials only a call-back or an Inbound le
 });
 
 // Teardown 3 (1 Nov 2026): a call still waiting for its answer is the first
-// thing on Home; Finish opens that lead on Leads at its after-call question.
-it("puts a call waiting for its answer first, and Finish opens its question", async () => {
+// thing on Home; in Dipak's design (4 Nov 2026) it is Pending action, and
+// Complete call activity opens that lead on Leads at its after-call question.
+it("puts a call waiting for its answer first, as Pending action that opens its question", async () => {
   const assign = vi
     .spyOn(window.location, "assign")
     .mockImplementation(() => {});
@@ -579,11 +591,14 @@ it("puts a call waiting for its answer first, and Finish opens its question", as
     await mount();
     const first = host.querySelector("[data-area]");
     expect(first?.getAttribute("data-area")).toBe("finish");
-    expect(first?.textContent).toContain("Finish: Meera Fictional");
-    expect(first?.textContent).toContain("called 4 min ago · How did it go?");
+    expect(first?.textContent).toContain("Pending action");
+    expect(first?.textContent).toContain("1 reminder");
+    expect(first?.textContent).toContain(
+      "Meera Fictional · Last dialled 4 min ago",
+    );
     takeHandedLead();
-    const open = [...first!.querySelectorAll("button")].find((button) =>
-      button.textContent?.startsWith("Finish:"),
+    const open = [...first!.querySelectorAll("button")].find(
+      (button) => button.textContent === "Complete call activity",
     );
     await act(async () => open?.click());
     expect(takeHandedLead()).toEqual({
@@ -650,4 +665,64 @@ it("never counts a call whose outcome the phone never said, and each number open
   expect(figures[2]?.[0]).toContain("Talk · recordings");
   expect(figures[2]?.[1]).toBe(`${calls}&outcome=connected`);
   expect(host.textContent).not.toContain("Connected");
+});
+
+// Home studio, 4 Nov 2026 (judges, round 2): a bad network never takes Dipak's
+// blocks away. The four cards keep their places and say "–", never a 0 they
+// don't know, and the next call's card offers Try again in the Call's place.
+it("keeps every block in place with a dash when the leads didn't load", async () => {
+  resetHomeReads();
+  answer({ inbound: { leads: 40 }, cold: { imported: 200 } });
+  const served = globalThis.fetch;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async (input, init) =>
+      String(input) === "/v1/lead-desk"
+        ? new Response("{}", { status: 503 })
+        : served(input, init),
+    ),
+  );
+  await mount();
+  expect(
+    Array.from(
+      host.querySelectorAll("[data-card] strong"),
+      (figure) => figure.textContent,
+    ),
+  ).toEqual(["–", "–", "–", "–"]);
+  // A dash opens nothing: there is no list behind a number it doesn't know.
+  expect(host.querySelector("a[data-card]")).toBeNull();
+  const next = host.querySelector('[aria-labelledby="next-title"]');
+  expect(next?.textContent).toContain("Leads didn't load");
+  expect(
+    Array.from(next?.querySelectorAll("button") ?? [], (button) =>
+      button.textContent?.trim(),
+    ),
+  ).toContain("Try again");
+  expect(host.querySelector("[data-call-lens]")).toBeNull();
+  resetHomeReads();
+});
+
+// Later visits draw at once from the sides this device saw last, so Today
+// and the selector arrive together, with no wait and nothing moving.
+it("draws Today at once on a later visit, from the sides this device kept", async () => {
+  window.localStorage.setItem("sx:home-sides", "11");
+  answer({ inbound: { leads: 40 }, cold: { imported: 200 } });
+  const served = globalThis.fetch;
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async (input, init) => {
+      if (String(input) === "/v1/lead-desk/sides?scope=mine") await held;
+      return served(input, init);
+    }),
+  );
+  await mount();
+  expect(host.querySelector('[data-area="side"]')).not.toBeNull();
+  expect(host.querySelector('[data-area="cards"]')).not.toBeNull();
+  // The next call is the one Call pill, its glyph beside the words.
+  expect(host.querySelector("[data-call-lens]")?.textContent).toBe("Call now");
+  await act(async () => release());
 });

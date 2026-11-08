@@ -53,15 +53,48 @@
   background: var(--lx-closing);
 }
 
-/* Home's calm tone (Dipak, 3 Nov 2026: one accent colour): the chosen side
-   is raised in a neutral surface. */
-.selector[data-tone="calm"] .option[aria-checked="true"] {
-  background: var(--sx-surface);
-  color: var(--sx-ink);
-  box-shadow: 0 0 0 1px var(--sx-line);
+/* Home's calm tone (Dipak, 3 Nov 2026: one accent colour; Home studio, 4 Nov
+   2026): a neutral well, and one elevated thumb (drawn, not an element) that slides under the chosen
+   side, which reads in ink while the other stays muted, so the choice never
+   rests on hue alone. */
+.selector[data-tone="calm"] {
+  position: relative;
+  gap: 0;
+  padding: 2px;
+  border: 0;
+  background: var(--sx-fill);
+  isolation: isolate;
 }
 
-/* Its raised edge never hides the keyboard focus ring (the test robot, 5d3af21c). */
+.selector[data-tone="calm"]::before {
+  position: absolute;
+  inset: 2px auto 2px 2px;
+  z-index: -1;
+  width: calc(50% - 2px);
+  border-radius: 999px;
+  background: var(--sx-elevated);
+  box-shadow:
+    0 1px 2px color-mix(in oklab, var(--sx-ink) 10%, transparent),
+    0 0 0 0.5px var(--sx-hairline);
+  content: "";
+  transition: transform var(--sx-dur-base) var(--sx-ease-out);
+}
+
+.selector[data-tone="calm"][data-value="cold"]::before {
+  transform: translateX(100%);
+}
+
+.selector[data-tone="calm"] .option {
+  font-weight: 500;
+  white-space: normal;
+}
+
+.selector[data-tone="calm"] .option[aria-checked="true"] {
+  background: transparent;
+  color: var(--sx-ink);
+}
+
+/* The keyboard focus ring on the chosen side (the test robot, 5d3af21c). */
 .selector[data-tone="calm"] .option[aria-checked="true"]:focus-visible {
   box-shadow: var(--sx-focus-ring);
 }
@@ -74,7 +107,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .option {
+  .option,
+  .selector::before {
     transition: none;
   }
 }

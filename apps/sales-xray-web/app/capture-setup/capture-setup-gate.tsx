@@ -9,7 +9,8 @@
  * then opens the flow over those pages while it is required (capture-setup-
  * rules.ts). Settings and Team stay open. If the check itself fails, nothing
  * opens: the app never locks a seller out on a failed read. Settings can open
- * it again any time (openCaptureSetup), never required then.
+ * it again any time (openCaptureSetup), never required then. Only in the
+ * Android app: a browser never shows it, at any width (owner, 2 Nov 2026).
  *
  * After a workspace switch (persona QA ph2-15, 1 Nov 2026) a phone that finished
  * in another workspace asks only for this one's consent, or nothing: its Team
@@ -22,12 +23,12 @@
 
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 import { requestWorkspace } from "../call-ownership";
 
 import {
-  autoCaptureStatus,
+  captureForSetup,
   inPhoneApp,
   setupStatus,
   type SetupStatus,
@@ -66,6 +67,8 @@ const CaptureSetupFlow = dynamic(
 const OPEN_EVENT = "sx-capture-setup-open";
 const CONSENT_ATTRIBUTE = "data-sx-consent";
 const READ_TIMEOUT_MS = 10_000;
+// Whether this is the phone app never changes while the page runs.
+const never = () => () => undefined;
 
 /** Opens the setup over the page (Settings, Calls), never required; at a step
     when a fix asks for one (the no-recording line, competitor teardown #13). */
@@ -144,6 +147,7 @@ export function CaptureSetupGate() {
   const [failed, setFailed] = useState<string | null>(null);
   const [asked, setAsked] = useState(0);
   const [startAt, setStartAt] = useState<CaptureStep | undefined>();
+  const phoneApp = useSyncExternalStore(never, inPhoneApp, () => false);
 
   // Where the seller came from, for "Switch back to …" (ph2-15).
   useEffect(() => {
@@ -163,7 +167,7 @@ export function CaptureSetupGate() {
   }, []);
 
   useEffect(() => {
-    if (!key) return;
+    if (!key || !phoneApp) return;
     const manual = asked > 0;
     let stopped = false;
     let started = false;
@@ -188,7 +192,7 @@ export function CaptureSetupGate() {
         const [setup, status, capture] = await Promise.all([
           readCaptureSetup(controller.signal),
           app ? setupStatus() : Promise.resolve(null),
-          app ? autoCaptureStatus() : Promise.resolve(null),
+          app ? captureForSetup() : Promise.resolve(null),
         ]);
         if (stopped) return;
         const facts = phoneFacts(status, capture);
@@ -258,10 +262,10 @@ export function CaptureSetupGate() {
       window.clearTimeout(timer);
       watch.disconnect();
     };
-  }, [key, personId, tenantId, asked]);
+  }, [key, personId, tenantId, asked, phoneApp]);
 
   const current = decision?.key === key ? decision : null;
-  const deciding = Boolean(key) && !current && failed !== key;
+  const deciding = phoneApp && Boolean(key) && !current && failed !== key;
   const open = Boolean(
     current &&
       (current.manual ||

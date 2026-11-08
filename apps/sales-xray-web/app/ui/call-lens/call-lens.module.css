@@ -1,0 +1,58 @@
+/* The Call: one full-width teal pill for every primary Call, its phone
+   glyph beside the words (Dipak's design, 4 Nov 2026). The fill is 7:1
+   against its label in light (sunlight, FRAMEWORK L4); dark keeps the bright
+   teal, about 10:1 against near-black. The press layer (::after) is drawn by
+   the capsule, so it adds no element. */
+.capsule {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-sizing: border-box;
+  min-height: 56px;
+  padding: 0 24px;
+  overflow: hidden;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-call-fill);
+  color: var(--sx-call-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
+  text-align: center;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.glyph {
+  flex: none;
+}
+
+/* The press: a 10 % state layer in 100 ms, no movement (high-frequency). */
+.capsule::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  content: "";
+  transition: opacity var(--sx-dur-instant) var(--sx-ease-out);
+  pointer-events: none;
+}
+
+.capsule:active::after {
+  opacity: 0.1;
+}
+
+@media (hover: hover) {
+  .capsule:hover::after {
+    opacity: 0.06;
+  }
+}
+
+.capsule:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}

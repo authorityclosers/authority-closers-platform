@@ -1,0 +1,25 @@
+/* Organisation → Leads setup → Work hours (owner bug 191, 7 Nov 2026): the
+   kit Panel draws no inner padding, so the form keeps its own, and the days,
+   times and checkbox lines stay inside the card at 360 px and 130 % text.
+   Doubled to outweigh the shared fieldset reset (fieldset.form). */
+fieldset.form.form {
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+  border: 0;
+}
+
+fieldset.form.form > * {
+  min-width: 0;
+}
+
+/* A checkbox line wraps beside its box, never past the card's edge. */
+.toggle {
+  align-items: flex-start;
+  overflow-wrap: anywhere;
+}
+
+.toggle input {
+  flex: none;
+  margin: 1px 0 0;
+}

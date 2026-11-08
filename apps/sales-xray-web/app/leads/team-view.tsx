@@ -56,6 +56,7 @@ import { RoutingRules } from "./routing-rules";
 import { can } from "../organisation/roles";
 import { useWorkspaceAccess } from "../workspace-access";
 import styles from "./leads.module.css";
+import hours from "./work-hours.module.css";
 
 /**
  * Whether this person may change the team's rules (leads.manage). A Viewer
@@ -183,7 +184,7 @@ export function WorkHoursPanel({
           : "not set"
       }
     >
-      <fieldset className={styles.form} disabled={readOnly}>
+      <fieldset className={`${styles.form} ${hours.form}`} disabled={readOnly}>
         <p className={styles.hint}>
           India time. Calls outside these hours stay on the seller&apos;s phone
           and are never logged.
@@ -223,7 +224,7 @@ export function WorkHoursPanel({
             />
           </Field>
         </div>
-        <label className={styles.toggle}>
+        <label className={`${styles.toggle} ${hours.toggle}`}>
           <input
             type="checkbox"
             checked={pause}
@@ -231,7 +232,7 @@ export function WorkHoursPanel({
           />
           New leads wait outside work hours, then go out when work starts
         </label>
-        <label className={styles.toggle}>
+        <label className={`${styles.toggle} ${hours.toggle}`}>
           <input
             type="checkbox"
             checked={lunch !== null}
