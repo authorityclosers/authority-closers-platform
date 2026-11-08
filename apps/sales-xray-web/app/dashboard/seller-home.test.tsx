@@ -20,7 +20,7 @@ vi.mock("next/link", () => ({
 import { resetHomeReads } from "./home-load";
 import type { HomeSide } from "./my-day-client";
 import { SalesHome } from "./sales-home";
-import { NextCall, TodayPerformance } from "./seller-home";
+import { followUpsDay, NextCall, TodayPerformance } from "./seller-home";
 import { takeHandedLead } from "../leads/lead-handoff";
 
 (
@@ -349,13 +349,24 @@ it("is Dipak's Home: the work in six blocks, each opening its exact place", asyn
   expect(tasks).toHaveLength(3);
   expect(tasks[1]).toContain("Prepare tomorrow's demo");
   expect(tasks[1]).toContain("General");
-  // Upcoming follow-ups: two at most, See all on this side.
+  // Upcoming follow-ups: two at most; See all opens every follow-up on this
+  // side, and each row's Call the list it sits in (bug report #92: these were
+  // in Due Today, not Upcoming).
   const follow = host.querySelector('[aria-labelledby="follow-ups-title"]');
   expect(follow?.querySelectorAll("li")).toHaveLength(2);
   expect(follow?.textContent).toContain("Discuss proposal");
   expect(
-    follow?.querySelector('a[href="/leads?view=follow_ups&when=upcoming"]'),
+    follow?.querySelector('a[href="/leads?view=follow_ups"]'),
   ).not.toBeNull();
+  expect(
+    Array.from(
+      follow?.querySelectorAll('a[aria-label^="Call "]') ?? [],
+      (link) => link.getAttribute("href"),
+    ),
+  ).toEqual([
+    "/leads?view=follow_ups&when=today",
+    "/leads?view=follow_ups&when=today",
+  ]);
   // Today's performance: one row, this side only.
   const performance = host.querySelector(
     '[aria-labelledby="performance-title"]',
@@ -725,4 +736,19 @@ it("draws Today at once on a later visit, from the sides this device kept", asyn
   // The next call is the one Call pill, its glyph beside the words.
   expect(host.querySelector("[data-call-lens]")?.textContent).toBe("Call now");
   await act(async () => release());
+});
+
+// Bug report #92: Home's next follow-ups run from now, so one later today is in
+// Due Today; Upcoming starts at midnight in India.
+it("opens a follow-up's own list: later today Due Today, after midnight Upcoming", () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  try {
+    vi.setSystemTime(new Date("2026-11-08T06:00:00Z")); // 11:30 IST
+    expect(followUpsDay("2026-11-08T12:00:00Z")).toBe("today"); // 17:30
+    expect(followUpsDay("2026-11-08T18:29:00Z")).toBe("today"); // 23:59
+    expect(followUpsDay("2026-11-08T18:31:00Z")).toBe("upcoming"); // 00:01, 9 Nov
+    expect(followUpsDay(null)).toBe("upcoming");
+  } finally {
+    vi.useRealTimers();
+  }
 });

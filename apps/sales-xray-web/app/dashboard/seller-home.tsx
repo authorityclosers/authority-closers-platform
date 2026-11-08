@@ -143,6 +143,14 @@ const whenDay = (at: string | null) => {
   return `${DAY.format(date)}, ${time}`;
 };
 
+/** The Follow-ups list a follow-up sits in: Due Today until midnight, then
+ *  Upcoming (bug report #92: Home's next follow-ups run from now, so one later
+ *  today opened Upcoming, which starts tomorrow, and the list was empty). */
+export const followUpsDay = (at: string | null): "today" | "upcoming" =>
+  at && IST_DATE.format(new Date(at)) <= IST_DATE.format(new Date())
+    ? "today"
+    : "upcoming";
+
 /** A task's type tag: its lead's side, or General for a task of your own. */
 type TaskTag = Side | "general";
 const TAG_WORDS: Record<TaskTag, string> = {
@@ -850,7 +858,10 @@ function FollowRow({
       <Link
         ref={call}
         className={styles.phone}
-        href={leadsHref(side, { view: "follow_ups", when: "upcoming" })}
+        href={leadsHref(side, {
+          view: "follow_ups",
+          when: followUpsDay(lead.next_action_at),
+        })}
         aria-label={`Call ${displayName(lead.name)}`}
         onClick={() => handOverLead(lead.lead_id, true)}
       >
@@ -899,9 +910,9 @@ export function UpcomingFollowUps({
   return (
     <section className={styles.block} aria-labelledby="follow-ups-title">
       <Head id="follow-ups-title" title="Upcoming follow-ups">
-        <SeeAll
-          href={leadsHref(side, { view: "follow_ups", when: "upcoming" })}
-        />
+        {/* Every follow-up: the next two can be later today and tomorrow,
+            which are two of its lists (bug report #92). */}
+        <SeeAll href={leadsHref(side, { view: "follow_ups" })} />
       </Head>
       {rows.length ? (
         <ul className={styles.rows}>
