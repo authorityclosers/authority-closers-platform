@@ -279,6 +279,18 @@
   box-shadow: var(--sx-shadow-1);
 }
 
+/* Names and counts that can't share one line (a narrow phone with the
+   browser's text scaling, three-digit counts; work-views.tsx measures them):
+   every tab puts its count under its name, all alike, rather than one tab
+   scrolling out of sight (ux-audit N7, 8 Nov 2026). */
+.tabs[data-stacked] .tab {
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-block: 4px;
+}
+
 .tabWord,
 .tabCount {
   white-space: nowrap;
@@ -298,6 +310,10 @@
   padding: 1px 6px;
   border-radius: var(--sx-radius-pill);
   background: var(--sx-fill);
+  /* The second ink, not the muted one: muted figures on the badge's fill were
+     4.43:1 in light (QA robot rows 913770ba, 82378715 and 4ada101e, 7-8 Nov
+     2026). The chosen tab's badge keeps its accent, below. */
+  color: var(--sx-ink-2);
   font-size: min(var(--sx-text-2xs), 3.6cqi);
   line-height: var(--sx-leading-16);
 }

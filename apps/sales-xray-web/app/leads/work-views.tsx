@@ -17,6 +17,7 @@ import { ChevronRight, PhoneCall, Search, X } from "lucide-react";
 import {
   useLayoutEffect,
   useRef,
+  useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
@@ -290,11 +291,50 @@ function Tabs<T extends string>({
   /** Each tab's count, when the list has counted them. */
   counts?: Partial<Record<T, number>> | null;
 }) {
+  // Whether the names and counts fit on one line, from their own widths (a
+  // tab's word and badge never wrap, so they measure alike either way). When
+  // they don't, every tab puts its count under its name rather than one tab
+  // scrolling out of sight (ux-audit N7, 8 Nov 2026: All Leads cut off at 130%
+  // text in a phone's browser).
+  const list = useRef<HTMLDivElement>(null);
+  const [stacked, setStacked] = useState(false);
+  useLayoutEffect(() => {
+    const box = list.current;
+    if (small || !box || typeof ResizeObserver === "undefined") return;
+    const px = (value: string) => parseFloat(value) || 0;
+    const watch = new ResizeObserver(() => {
+      const tabs = [...box.querySelectorAll<HTMLElement>('[role="tab"]')];
+      const own = getComputedStyle(box);
+      let need =
+        px(own.paddingLeft) +
+        px(own.paddingRight) +
+        px(own.columnGap) * Math.max(0, tabs.length - 1);
+      for (const tab of tabs) {
+        const style = getComputedStyle(tab);
+        const parts = [...tab.children];
+        need +=
+          px(style.paddingLeft) +
+          px(style.paddingRight) +
+          px(style.columnGap) * Math.max(0, parts.length - 1) +
+          parts.reduce(
+            (sum, part) => sum + part.getBoundingClientRect().width,
+            0,
+          );
+      }
+      setStacked(need > box.clientWidth + 0.5);
+    });
+    watch.observe(box);
+    for (const part of box.querySelectorAll('[role="tab"] > span'))
+      watch.observe(part);
+    return () => watch.disconnect();
+  }, [small, items, counts]);
   return (
     <div
+      ref={list}
       className={small ? styles.subTabs : styles.tabs}
       role="tablist"
       aria-label={label}
+      data-stacked={stacked ? "" : undefined}
     >
       {items.map((item) => (
         <button

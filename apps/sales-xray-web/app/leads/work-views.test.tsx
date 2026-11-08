@@ -116,6 +116,68 @@ it("puts each view's count on its tab once the list has counted (one count rule,
   expect([999, 117800].map(tabCount)).toEqual(["999", "1.2L"]);
 });
 
+// ux-audit N7, 8 Nov 2026: at 130% text in a phone's browser All Leads ran off
+// the switch. When names and counts can't share one line, every tab puts its
+// count under its name; while they fit, nothing changes.
+it("puts every count under its name only when the names and counts don't fit one line", async () => {
+  const told: ResizeObserverCallback[] = [];
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(callback: ResizeObserverCallback) {
+        told.push(callback);
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  let part = 40;
+  const measure = vi
+    .spyOn(Element.prototype, "getBoundingClientRect")
+    .mockImplementation(function (this: Element) {
+      const width = this.tagName === "SPAN" ? part : 0;
+      return {
+        width,
+        height: 20,
+        top: 0,
+        left: 0,
+        right: width,
+        bottom: 20,
+      } as DOMRect;
+    });
+  const wide = vi
+    .spyOn(HTMLElement.prototype, "clientWidth", "get")
+    .mockReturnValue(331);
+  try {
+    await act(async () =>
+      root.render(
+        <ViewTabs
+          value="to_call"
+          onChange={vi.fn()}
+          counts={{ to_call: 233, follow_ups: 4, all: 294 }}
+        />,
+      ),
+    );
+    const list = host.querySelector('[role="tablist"]')!;
+    const look = () => act(async () => told.at(-1)?.([], {} as ResizeObserver));
+    // Three names and three badges of 40 px: 240 px in a 331 px switch.
+    await look();
+    expect(list.hasAttribute("data-stacked")).toBe(false);
+    // Larger text: 360 px of words and badges don't fit, so every tab stacks.
+    part = 60;
+    await look();
+    expect(list.hasAttribute("data-stacked")).toBe(true);
+    part = 40;
+    await look();
+    expect(list.hasAttribute("data-stacked")).toBe(false);
+  } finally {
+    measure.mockRestore();
+    wide.mockRestore();
+    vi.unstubAllGlobals();
+  }
+});
+
 it("splits Follow-ups into Due Today, Overdue and Upcoming", async () => {
   const onChange = vi.fn();
   await act(async () =>
