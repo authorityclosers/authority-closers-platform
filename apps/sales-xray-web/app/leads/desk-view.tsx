@@ -14,7 +14,7 @@
  */
 
 import { Hand, Inbox, Mail, Phone, X, type LucideIcon } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { ChannelMark } from "../chats/channel-mark";
 import { haptic } from "../ui/haptics";
@@ -33,7 +33,8 @@ import {
 import styles from "./leads.module.css";
 import { reportCallPress } from "./phone-call-steps";
 import { placed } from "./row-window";
-import { SourceMark, shortSource, sourceKind, sourceText } from "./source-mark";
+import { shortSource, sourceText } from "./source-mark";
+import { WhatsAppGlyph } from "./whatsapp-glyph";
 
 const WHY_TONE: Record<LeadRow["why_kind"], Tone> = {
   due: "warn",
@@ -107,17 +108,48 @@ export function nextLine(row: LeadRow, now: Date = new Date()): string {
   return whyLine({ ...row, why }, now);
 }
 
-/** A compact row's last line, only when someone needs to act (orchestrator,
- *  3 Nov 2026, bug 156: two lines a row, a third for attention): a missed call,
- *  no owner yet, or a follow-up due or late. A new Inbound enquiry's wait and an
- *  older enquiry's day end the middle line instead. */
-export function thirdLine(row: LeadRow, now: Date = new Date()): string {
-  const due =
+/** A passed time, short enough for one line: today's time alone, "yesterday
+ *  6:00 pm", else the day without its time ("31 Oct"). */
+function dueWords(iso: string, now: Date): string {
+  const said = when(iso, now);
+  if (said.startsWith("today ")) return said.slice("today ".length);
+  if (said.startsWith("yesterday ")) return said;
+  return new Date(iso).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+/** A work-view row's last line, only when someone needs to act (bug 156, 3 Nov
+ *  2026; the Leads L1 judge, 8 Nov 2026: other rows are two lines): a follow-up
+ *  late, reading "Late · was due 2:00 pm" (the word saying it as well as the
+ *  colour); one due today; a missed call to return; no owner yet; or a new
+ *  enquiry's wait. Empty otherwise. */
+export function stepLine(
+  row: LeadRow,
+  now: Date = new Date(),
+): { text: string; late: boolean } {
+  if (
+    !row.missed_at &&
+    row.why_kind !== "closed" &&
+    row.next_action_at &&
+    late(row, now.getTime())
+  )
+    return {
+      late: true,
+      text: `was due ${dueWords(row.next_action_at, now)}`,
+    };
+  const today =
+    !!row.next_action_at &&
+    row.why_kind !== "closed" &&
+    when(row.next_action_at, now).startsWith("today ");
+  const act =
+    !!row.missed_at ||
+    row.why_kind === "waiting" ||
     row.why_kind === "due" ||
-    (!!row.next_action_at && Date.parse(row.next_action_at) < now.getTime());
-  return row.missed_at || row.why_kind === "waiting" || due
-    ? nextLine(row, now)
-    : "";
+    today ||
+    waiting(row, now) !== null;
+  return { late: false, text: act ? nextLine(row, now) : "" };
 }
 
 /**
@@ -191,6 +223,7 @@ export function LeadLine({
   actions,
   compact = false,
   stageWord,
+  stageTone,
   quietLate = false,
   onPick,
   fresh = false,
@@ -215,6 +248,8 @@ export function LeadLine({
   compact?: boolean;
   /** The stage's name on the side shown (the first is Unworked on Cold Leads). */
   stageWord?: string;
+  /** The stage's colour (journey/stage-look.ts), the dot before its name. */
+  stageTone?: string;
   /** Never red, even when late: Cold Leads for a seller (owner, 31 Oct 2026). */
   quietLate?: boolean;
   /** An owner's tick beside the row on a computer: start picking (bug report 130). */
@@ -236,30 +271,34 @@ export function LeadLine({
         : undefined,
     onHold: actions?.onHold ? () => actions.onHold?.(row) : undefined,
   });
-  const line = compact ? thirdLine(row) : whyLine(row);
-  // A new Inbound enquiry's wait ends the middle line: "waited 12 min" (bug 156).
+  // A work-view row (Leads L1): the name; the stage's dot, its name and the
+  // source, and an older enquiry's day; then, when someone needs to act, the
+  // next step (a new enquiry's wait among them).
+  const step = compact ? stepLine(row) : null;
+  const line = step ? step.text : whyLine(row);
   const wait = compact && !row.missed_at ? waiting(row) : null;
   const older = compact ? olderEnquiry(row) : null;
   const sub = compact ? (
     <>
-      {stageWord ?? row.stage_label}
+      <span
+        className={styles.stageDot}
+        style={
+          { "--stage": stageTone ?? "var(--sx-line-strong)" } as CSSProperties
+        }
+        aria-hidden="true"
+      />
+      <span className={styles.leadStage}>{stageWord ?? row.stage_label}</span>
       {" · "}
       <span className={styles.leadSource} title={row.source_label || undefined}>
-        <SourceMark kind={sourceKind(row)} />
         {shortSource(row)}
       </span>
       {showOwner ? ` · ${row.owner_name ?? "No owner yet"}` : null}
-      {wait !== null ? (
-        <span className={styles.leadWait} data-tone={waitTone(wait)}>
-          {` · waited ${waitWords(wait)}`}
-        </span>
-      ) : null}
       {older ? ` · ${older}` : null}
     </>
   ) : (
     [row.interest, row.company, row.city].filter(Boolean).join(" · ")
   );
-  const red = compact && late(row) && !quietLate;
+  const red = !!step?.late && !quietLate;
   const tap = actions?.onTap;
   // A tap felt at once, while the lead opens to call or message (friction
   // report, 25 Oct 2026: Call showed nothing for about a second).
@@ -336,7 +375,13 @@ export function LeadLine({
           onClick={() => onOpen(row.lead_id)}
           aria-label={`Open ${row.name}`}
         >
-          <Avatar name={row.name} size={34} />
+          {compact ? (
+            <span className={styles.leadAvatar}>
+              <Avatar name={row.name} size={40} />
+            </span>
+          ) : (
+            <Avatar name={row.name} size={34} />
+          )}
           <span className={styles.leadMain}>
             <span className={styles.leadName}>
               <span className={styles.leadNameText}>{row.name}</span>
@@ -348,12 +393,21 @@ export function LeadLine({
                 data-tone={
                   row.missed_at || red
                     ? "bad"
-                    : compact
-                      ? undefined
+                    : step
+                      ? step.late
+                        ? undefined
+                        : waitTone(wait)
                       : WHY_TONE[row.why_kind]
                 }
               >
-                {line}
+                {step?.late ? (
+                  <>
+                    <span className={styles.lateWord}>Late</span>
+                    {` · ${line}`}
+                  </>
+                ) : (
+                  line
+                )}
               </span>
             ) : null}
           </span>
@@ -397,9 +451,10 @@ export function LeadLine({
                   ? firstTap(() => press(row, "call"), reportCallPress)
                   : {})}
               >
-                <Phone size={16} aria-hidden="true" />
+                <Phone size={compact ? 22 : 16} aria-hidden="true" />
               </button>
-              {/* WhatsApp beside Call on a compact row; none without a number. */}
+              {/* WhatsApp beside Call on a compact row, its mark in one
+                  colour (Leads L1); none without a number. */}
               {compact && reachable ? (
                 <button
                   type="button"
@@ -408,7 +463,7 @@ export function LeadLine({
                   aria-label={`WhatsApp ${row.name}`}
                   onClick={() => press(row, "whatsapp")}
                 >
-                  <ChannelMark channel="whatsapp" size={18} />
+                  <WhatsAppGlyph size={22} />
                 </button>
               ) : null}
               {compact ? null : (

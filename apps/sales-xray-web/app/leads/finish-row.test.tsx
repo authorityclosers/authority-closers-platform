@@ -38,7 +38,7 @@ const calls = [
 ];
 
 // Competitor teardown 3 (1 Nov 2026): a call left without its answer stays
-// pinned until it is answered or put away as "Didn't call".
+// first in the list until it is answered or put away as "Didn't call".
 it("pins the newest unanswered call until it is finished or put away", async () => {
   const onFinish = vi.fn();
   await act(async () =>
@@ -46,9 +46,16 @@ it("pins the newest unanswered call until it is finished or put away", async () 
   );
   expect(host.textContent).toContain("Finish: Fictional Asha");
   expect(host.textContent).toContain(
-    "called 4 min ago · How did it go? · 1 more",
+    "Called 4 min ago · How did it go? · 1 more",
   );
   const [open, away] = host.querySelectorAll("button");
+  // Two lines in the list's first card (Leads L1), then a plain "Didn't call".
+  expect(open.querySelector("strong")?.textContent).toBe(
+    "Finish: Fictional Asha",
+  );
+  expect(open.querySelector("span")?.textContent).toMatch(/^Called /);
+  expect(away.textContent).toBe("Didn’t call");
+  expect(away.querySelector("svg")).toBeNull();
   await act(async () => open.click());
   expect(onFinish).toHaveBeenCalledWith("lead-1");
   expect(away.getAttribute("aria-label")).toBe("Didn't call Fictional Asha");
@@ -81,8 +88,8 @@ it("says dialled, not called, when the phone saw no call", async () => {
       />,
     ),
   );
-  expect(host.textContent).toContain("dialled just now · Did you call?");
-  expect(host.textContent).not.toContain("called");
+  expect(host.textContent).toContain("Dialled just now · Did you call?");
+  expect(host.textContent).not.toContain("Called");
 });
 
 // QA robot 95abddab (3 Nov 2026): the line left the page while a lead was open

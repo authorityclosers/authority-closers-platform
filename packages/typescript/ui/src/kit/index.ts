@@ -4,6 +4,8 @@ export * from "./back-close";
 export * from "./sheet";
 export * from "./kit";
 export * from "./side-scroll";
+export * from "./count-tabs";
+export * from "./chip-row";
 export * from "./alerts";
 export * from "./page-skeleton";
 export type { IconComponent, IconProps } from "../sx/icons";

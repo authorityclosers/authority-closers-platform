@@ -114,6 +114,32 @@ it("keeps the last answer, so coming back to Leads draws at once", async () => {
   expect(seen()).toEqual({ numbers: BOTH, settled: true });
 });
 
+it("keeps the last answer on this device, so a reload draws at once (QA robot 22a02493)", async () => {
+  show();
+  const line = {
+    id: "1",
+    kind: "lead_assigned",
+    title: "Asha Fictional is your lead now",
+    href: "/leads?lead=1",
+    urgent: true,
+    read: false,
+    created_at: "2026-11-02T04:00:00Z",
+  };
+  await act(async () => reads.answers[0]({ ...BOTH, bell_lines: [line] }));
+  expect(raised).toHaveLength(1);
+  // A reload: this visit's answers are gone, the device's stays.
+  act(() => root.unmount());
+  forgetSideNumbers(false);
+  root = createRoot(host);
+  show();
+  expect(seen()).toEqual({ numbers: BOTH, settled: true });
+  // Its bell lines were not kept, so nothing is raised twice.
+  expect(raised).toHaveLength(1);
+  // Another person or workspace still waits for its own.
+  show("priya:maple:mine");
+  expect(seen()).toEqual({ numbers: null, settled: false });
+});
+
 it("asks nothing and waits for nothing before there is a role", () => {
   show("signed-out", false);
   expect(reads.calls).toBe(0);

@@ -7,21 +7,32 @@
  * dropdown names every stage the seller sees, in the organisation's order (no
  * row of nine buttons). Search sits on the page with one Filter beside it.
  *
- * Owner, 31 Oct 2026: one pinned head and nothing scrolling above it; Call
- * Next sits in that head, so it never covers a lead or the tab bar. On a
- * computer the head is one toolbar row with the work views under it, and the
- * selected lead's Prospect's Information sits beside the list.
+ * Leads L1 (the owner's pick, 8 Nov 2026: "Build L1"; docs/design/screens/
+ * leads/spec.md): Inbound | Cold as Home has it, then pinned the work views as
+ * text tabs with their counts and one row of stage chips, counted in the view,
+ * with Filter at its end. Search is the app bar's; Call Next is one band above
+ * the tab bar, never over a row. On a computer the list column has the same
+ * stack, and the selected lead's Prospect's Information sits beside it.
  */
 
-import { ChevronRight, PhoneCall, Search, X } from "lucide-react";
+import {
+  ChevronRight,
+  PhoneCall,
+  Search,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 import {
   useLayoutEffect,
   useRef,
-  useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
 
+import { ChipRow, CountTabs } from "@ac/ui/kit";
+
+import lens from "../ui/call-lens/call-lens.module.css";
+import { haptic } from "../ui/haptics";
 import { Picker, type PickerOption } from "../ui/picker";
 import { can as roleCan } from "../organisation/roles";
 import { MAIN_PIPELINE, type StageView } from "./journey/journey-client";
@@ -116,28 +127,29 @@ export function emptyWords(view: WorkView): { title: string; text: string } {
 }
 
 /**
- * The one pinned head over the list. A phone stacks the lead type, search,
- * the work views and the stage pick with Call Next; a computer puts the type,
- * search, stage pick and Call Next in one toolbar row, the views under it.
- * Its height is shared as --work-head-h, so the lead beside the list pins
- * under it.
+ * The head over the list (Leads L1). Inbound | Cold sits above it and scrolls
+ * away; pinned are the work views (text tabs with their counts) and the stage
+ * chips with Filter at their end. Search shows here only while one is on, so it
+ * can be cleared (the app bar's search finds leads). Its height is shared as
+ * --work-head-h, so the lead beside the list pins under it.
  */
 export function WorkHead({
   chip = null,
   side = null,
-  search,
+  search = null,
   stage,
-  call = null,
   views,
-  split = null,
+  syncSlot,
 }: {
   chip?: ReactNode;
   side?: ReactNode;
-  search: ReactNode;
+  search?: ReactNode;
   stage: ReactNode;
-  call?: ReactNode;
   views: ReactNode;
-  split?: ReactNode;
+  /** The list's "Syncing…" sign is drawn here, at the head's lower edge, so
+   *  it takes no room in the list (a 48 px head that came and went moved the
+   *  rows on every load: QA robot 22a02493, 8 Nov 2026). */
+  syncSlot?: (node: HTMLElement | null) => void;
 }) {
   const head = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -152,21 +164,16 @@ export function WorkHead({
     return () => watch.disconnect();
   }, []);
   return (
-    <div ref={head} className={styles.head}>
-      {chip}
-      <div className={styles.headTools}>
-        {side ? <div className={styles.headSide}>{side}</div> : null}
+    <>
+      {side ? <div className={styles.headSide}>{side}</div> : null}
+      <div ref={head} className={styles.head}>
+        {chip}
         {search}
-        <div className={styles.headStage}>
-          {stage}
-          {call}
-        </div>
-      </div>
-      <div className={styles.headViews}>
         {views}
-        {split}
+        <div className={styles.headStage}>{stage}</div>
+        {syncSlot ? <span ref={syncSlot} className={styles.headSync} /> : null}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -291,50 +298,11 @@ function Tabs<T extends string>({
   /** Each tab's count, when the list has counted them. */
   counts?: Partial<Record<T, number>> | null;
 }) {
-  // Whether the names and counts fit on one line, from their own widths (a
-  // tab's word and badge never wrap, so they measure alike either way). When
-  // they don't, every tab puts its count under its name rather than one tab
-  // scrolling out of sight (ux-audit N7, 8 Nov 2026: All Leads cut off at 130%
-  // text in a phone's browser).
-  const list = useRef<HTMLDivElement>(null);
-  const [stacked, setStacked] = useState(false);
-  useLayoutEffect(() => {
-    const box = list.current;
-    if (small || !box || typeof ResizeObserver === "undefined") return;
-    const px = (value: string) => parseFloat(value) || 0;
-    const watch = new ResizeObserver(() => {
-      const tabs = [...box.querySelectorAll<HTMLElement>('[role="tab"]')];
-      const own = getComputedStyle(box);
-      let need =
-        px(own.paddingLeft) +
-        px(own.paddingRight) +
-        px(own.columnGap) * Math.max(0, tabs.length - 1);
-      for (const tab of tabs) {
-        const style = getComputedStyle(tab);
-        const parts = [...tab.children];
-        need +=
-          px(style.paddingLeft) +
-          px(style.paddingRight) +
-          px(style.columnGap) * Math.max(0, parts.length - 1) +
-          parts.reduce(
-            (sum, part) => sum + part.getBoundingClientRect().width,
-            0,
-          );
-      }
-      setStacked(need > box.clientWidth + 0.5);
-    });
-    watch.observe(box);
-    for (const part of box.querySelectorAll('[role="tab"] > span'))
-      watch.observe(part);
-    return () => watch.disconnect();
-  }, [small, items, counts]);
   return (
     <div
-      ref={list}
       className={small ? styles.subTabs : styles.tabs}
       role="tablist"
       aria-label={label}
-      data-stacked={stacked ? "" : undefined}
     >
       {items.map((item) => (
         <button
@@ -365,7 +333,8 @@ function Tabs<T extends string>({
 
 /** To Call, Follow-ups and All Leads, each with its count once the list has one
  *  ("To Call 7"): Inbound To Call is the Leads badge's own number (competitor
- *  teardown #9, one count rule). */
+ *  teardown #9, one count rule). Text tabs on one line that scroll sideways
+ *  where they don't fit, never wrapping (Leads L1; bugs 165, 180, ux-audit N7). */
 export function ViewTabs({
   value,
   onChange,
@@ -376,12 +345,15 @@ export function ViewTabs({
   counts?: Partial<Record<WorkView, number>> | null;
 }) {
   return (
-    <Tabs
+    <CountTabs
       label="Work views"
-      items={WORK_VIEWS}
+      items={WORK_VIEWS.map((view) => ({
+        ...view,
+        count: counts?.[view.key] ?? null,
+      }))}
       value={value}
       onChange={onChange}
-      counts={counts}
+      format={tabCount}
     />
   );
 }
@@ -502,6 +474,140 @@ export function StagePicker({
       all={{ label: "All stages", count: total }}
       onChange={onChange}
     />
+  );
+}
+
+const ALL_STAGES = "all-stages";
+
+/**
+ * The stage pick as one row of chips (Leads L1): "All stages 128", then each
+ * stage holding leads in this view, every count the view's own, so they add
+ * up to the tab's count (the server's step counts: the same people, filters,
+ * view and side, before the stage pick). A stage with none in the view is left
+ * out, except the one chosen; until the counts are in, only All stages and the
+ * chosen one show. Filter is pinned at the row's end.
+ */
+export function StageChips({
+  stages,
+  side,
+  value,
+  counts = null,
+  onChange,
+  end = null,
+}: {
+  stages: readonly StageView[];
+  side: Side;
+  /** A stage key, or null for All stages. */
+  value: string | null;
+  /** Each stage's leads in this view, when the server counts them. */
+  counts?: Readonly<Record<string, number>> | null;
+  onChange: (key: string | null) => void;
+  end?: ReactNode;
+}) {
+  const total = counts
+    ? Object.values(counts).reduce((sum, count) => sum + count, 0)
+    : null;
+  const items = [
+    { key: ALL_STAGES, label: "All stages", count: total },
+    ...stages
+      .filter(
+        (stage) =>
+          stage.key === value ||
+          (counts !== null && (counts[stage.key] ?? 0) > 0),
+      )
+      .map((stage) => ({
+        key: stage.key,
+        label: stageName(stage, side),
+        count: counts ? (counts[stage.key] ?? 0) : null,
+      })),
+  ];
+  // A link may name a stage this list does not offer: it still shows.
+  if (value && !stages.some((stage) => stage.key === value))
+    items.push({ key: value, label: keyWords(value), count: null });
+  return (
+    <ChipRow
+      label="Pipeline stage"
+      items={items}
+      value={value ?? ALL_STAGES}
+      onChange={(key) => onChange(key === ALL_STAGES ? null : key)}
+      end={end}
+      format={tabCount}
+    />
+  );
+}
+
+/** Filter at the chip row's end (Leads L1): a 40 dp circle, 48 dp to a finger,
+ *  with a dot while a filter other than the stage is on. */
+export function FilterButton({
+  count,
+  onOpen,
+}: {
+  /** Filters on, other than the stage. */
+  count: number;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={styles.filterButton}
+      aria-label={count ? `Filter leads, ${count} on` : "Filter leads"}
+      aria-haspopup="dialog"
+      data-on={count ? "" : undefined}
+      onClick={onOpen}
+    >
+      <SlidersHorizontal size={20} aria-hidden="true" />
+    </button>
+  );
+}
+
+/**
+ * Call Next Lead (Inbound) or Start Cold Calling as the screen's one Call
+ * (Leads L1): Home's Call, its look and press, in a band docked above the tab
+ * bar on a phone and at the list's foot on a computer, so it never covers a
+ * row; the list ends above it.
+ */
+export function CallBand({
+  side,
+  view = "to_call",
+  disabled,
+  onStart,
+  count = null,
+}: {
+  side: Side;
+  /** Follow-ups says so: "Call Next Follow-up · 12" (spec §3). */
+  view?: WorkView;
+  disabled: boolean;
+  onStart: () => void;
+  /** How many the round would take: "Start Cold Calling · 900". */
+  count?: number | null;
+}) {
+  return (
+    <div className={styles.callBand}>
+      <button
+        type="button"
+        className={`${lens.capsule} ${styles.callBandButton}`}
+        disabled={disabled}
+        onClick={() => {
+          haptic("tap");
+          onStart();
+        }}
+      >
+        <PhoneCall
+          className={lens.glyph}
+          size={20}
+          strokeWidth={2}
+          aria-hidden="true"
+        />
+        <span>
+          {view === "follow_ups"
+            ? "Call Next Follow-up"
+            : side === "cold"
+              ? "Start Cold Calling"
+              : "Call Next Lead"}
+          {count ? ` · ${tabCount(count)}` : ""}
+        </span>
+      </button>
+    </div>
   );
 }
 
