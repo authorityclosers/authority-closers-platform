@@ -355,15 +355,12 @@ function NoticeCard({
   notice,
   leave,
   docked = false,
-  stays = false,
 }: {
   notice: Notice;
   /** How the card goes away; by default it leaves the notice list. */
   leave?: () => void;
   /** In the page's dock: one line with its action, in the page's flow. */
   docked?: boolean;
-  /** A dock's line shown in the corner or a sheet: it stays, as in the dock. */
-  stays?: boolean;
 }) {
   const reporter = useReporterAvailable();
   const report = notice.tone === "error" && !notice.noReport && reporter;
@@ -428,8 +425,11 @@ function NoticeCard({
       notice.timeout ?? (notice.tone === "error" ? undefined : 5000);
     // A line in the page's dock stays until it is used or closed: one that
     // went by itself lifted the whole page by its height (QA robot a4e9034c,
-    // 1 Nov 2026: a layout shift of 0.1 on every Leads load at 390 px).
-    if (!timeout || notice.onDismiss || docked || stays) return;
+    // 1 Nov 2026: a layout shift of 0.1 on every Leads load at 390 px). In the
+    // corner or a sheet the same line goes by itself like every card ("Yes,
+    // let it fade", the owner on "<name> is your lead now", 8 Nov 2026); the
+    // bell keeps it.
+    if (!timeout || notice.onDismiss || docked) return;
     let timer = 0;
     // Never from under the pointer or keyboard focus; it tries again shortly.
     const go = () => {
@@ -441,7 +441,7 @@ function NoticeCard({
     };
     timer = window.setTimeout(go, timeout);
     return () => window.clearTimeout(timer);
-  }, [notice, remove, docked, stays]);
+  }, [notice, remove, docked]);
   useEffect(() => {
     if (folded) return;
     const node = card.current;
@@ -1127,16 +1127,11 @@ export function NoticeCenter() {
               key={cornerWork.id}
               notice={cornerWork}
               leave={workGone}
-              stays={pageDock !== null}
             />
           ) : null}
           {(sheet ? (sheetCard ? [sheetCard] : []) : shownList).map(
             (notice) => (
-              <NoticeCard
-                key={notice.id}
-                notice={notice}
-                stays={pageDock !== null && docks(notice)}
-              />
+              <NoticeCard key={notice.id} notice={notice} />
             ),
           )}
           {waiting > 0 && !sheet ? (

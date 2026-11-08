@@ -565,9 +565,15 @@ it("puts a line that arrives over a drawn page in the corner, never pushing the 
     await act(async () => line("fictional-late"));
     expect(dock().textContent).toBe("");
     expect(host.textContent).toContain("QA Fictional is your lead now");
-    // As in the dock, it stays until it is used or closed.
+    // In the corner it goes by itself like every card ("Yes, let it fade",
+    // the owner, 8 Nov 2026); Open lead works while it shows.
+    expect(
+      [...host.querySelectorAll("a, button")].some((node) =>
+        /Open lead/.test(node.textContent ?? ""),
+      ),
+    ).toBe(true);
     await act(async () => vi.advanceTimersByTime(60_000));
-    expect(host.textContent).toContain("QA Fictional is your lead now");
+    expect(host.textContent).not.toContain("QA Fictional is your lead now");
     await act(async () => clearAlert("fictional-late"));
     // Over a loading outline: it lands with the page, in the dock.
     under = outline;
