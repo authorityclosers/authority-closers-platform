@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -236,6 +238,28 @@ it("hides itself on a server without seats and retries after an error", async ()
   await vi.waitFor(() =>
     expect(host.textContent).toContain("3 of 4 seats taken"),
   );
+});
+
+it("keeps a long name inside the card, ending in an ellipsis", () => {
+  // The QA robot, 8 Nov 2026: a 300-letter name widened the card's one column
+  // to 2,900 px at 360 and the card cut it off.
+  const css = readFileSync(
+    join(process.cwd(), "app/organisation/seats.module.css"),
+    "utf8",
+  );
+  expect(css).toMatch(/\.card \{[^}]*grid-template-columns: minmax\(0, 1fr\);/);
+  expect(css).toMatch(
+    /\.holderName b \{[^}]*min-width: 0;[^}]*text-overflow: ellipsis;/,
+  );
+  // Call capture's list, in the same card on the same tab.
+  const capture = readFileSync(
+    join(process.cwd(), "app/capture-setup/capture-setup.module.css"),
+    "utf8",
+  );
+  expect(capture).toMatch(
+    /\.team \{[^}]*grid-template-columns: minmax\(0, 1fr\);/,
+  );
+  expect(capture).toMatch(/\.team li > span:first-child \{\s*min-width: 0;/);
 });
 
 it("orders only active members", () => {

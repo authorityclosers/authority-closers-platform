@@ -1,10 +1,17 @@
-/* Leads' work views (Dipak's Home + Leads handoff, 31 Oct 2026; owner, 31 Oct
-   2026): one pinned head (the lead type, search with one Filter, the stage pick
-   with Call Next, To Call | Follow-ups | All Leads), the list under it, and on a
-   wide screen the selected lead beside the list. No boxes around groups. */
+/* Leads' work views (Leads L1, the owner's pick, 8 Nov 2026; docs/design/
+   screens/leads/spec.md): Inbound | Cold, then pinned the work views as text
+   tabs with their counts and one row of stage chips with Filter at its end,
+   the list in a card under them, and one Call band above the tab bar. On a
+   wide screen the selected lead sits beside the list. */
 
-/* The one pinned head: nothing scrolls above it. A solid background, and a
-   shadow only once the list has scrolled under it. */
+/* Inbound | Cold, under the app bar by the page's own top space (16 dp on a
+   phone); it scrolls away with the list. */
+.headSide {
+  min-width: 0;
+}
+
+/* The pinned head: the tabs, 8 dp, the chip row, then 12 dp to the list. A
+   solid background, and a shadow only once the list has scrolled under it. */
 .head {
   position: sticky;
   top: 0;
@@ -12,7 +19,7 @@
   display: grid;
   gap: 8px;
   min-width: 0;
-  padding: 8px 0;
+  padding: 4px 0 12px;
   background: var(--sx-paper);
 }
 
@@ -34,45 +41,26 @@
   }
 }
 
-/* A phone stacks the head: type, search, views, then the stage pick with Call
-   Next; it scrolls the page under the 62 px top bar. */
-.headTools {
-  display: contents;
-}
-
-.headSide {
-  order: 1;
-  min-width: 0;
-}
-
-.searchRow {
-  order: 2;
-}
-
-.headViews {
-  display: grid;
-  order: 3;
-  gap: 8px;
-  min-width: 0;
-}
-
-/* At large text Call Next takes a line of its own, never the stage pick's
-   place (QA robot rows d8ba81ec and 3551c089, 3 Nov 2026). */
 .headStage {
-  display: flex;
-  flex-wrap: wrap;
-  order: 4;
-  gap: 8px;
-  align-items: center;
   min-width: 0;
 }
 
-/* The stage pick keeps room for its words: when Call Next (or Start Cold
-   Calling) would squeeze it to "Al…", Call Next takes the next line
-   (staff, bug 167, 4 Nov 2026). */
-.headStage > .stage {
-  flex: 1 1 auto;
-  min-width: min(100%, 10rem);
+/* The list's "Syncing…", at the head's lower edge over the card's top border,
+   on the page colour: it takes no room, so the rows never move when it goes. */
+.headSync {
+  position: absolute;
+  right: 4px;
+  bottom: -8px;
+  z-index: 1;
+  padding: 0 8px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-paper);
+  pointer-events: none;
+}
+
+.headSync:empty,
+.headSync:has(> [data-quiet]) {
+  display: none;
 }
 
 /* Under the 64 px app bar. A head taller than 40% of the screen (large text)
@@ -87,54 +75,113 @@
   }
 }
 
-/* A computer: one toolbar row (type, search, stage pick, Call Next), the views
-   under it. It scrolls the shell's main, whose 24 px top padding would leave a
-   band above the head: the head sits flush with its edge. */
+/* A computer: the same stack in the list column. It scrolls the shell's main,
+   whose 24 px top padding would leave a band above the head: the head sits
+   flush with its edge. */
 @media (min-width: 900px) {
+  .headSide {
+    max-width: 480px;
+  }
+
   .head {
     top: -24px;
-    padding: 12px 0 8px;
+  }
+}
+
+/* Filter at the chip row's end: a 40 dp circle, 48 dp to a finger, a dot
+   while a filter other than the stage is on. */
+.filterButton {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px solid var(--sx-line);
+  border-radius: 50%;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.filterButton::after {
+  position: absolute;
+  inset: -4px;
+  content: "";
+}
+
+.filterButton[data-on]::before {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--sx-surface);
+  border-radius: 50%;
+  background: var(--sx-accent);
+  content: "";
+}
+
+.filterButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* The one Call: Home's Call in a band on the page colour, 8 dp above and below,
+   docked above the tab bar on a phone, so the list ends above it and no row is
+   ever under it; at the list's foot on a computer. */
+.callBand {
+  z-index: 6;
+  padding-block: 8px;
+  background: var(--sx-paper);
+}
+
+.callBandButton {
+  width: 100%;
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.callBandButton:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+@media (max-width: 899.98px) {
+  .callBand {
+    position: fixed;
+    right: 0;
+    bottom: calc(
+      var(--lx-bottom-nav-h, 64px) + env(safe-area-inset-bottom, 0px)
+    );
+    left: 0;
+    padding-inline: 16px;
   }
 
-  /* At large text the row wraps rather than squeezing the stage pick under
-     its own words (the test robot, 1 Nov 2026: at 130 % its "Pipeline stage:"
-     lay over Add). */
-  .headTools {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 12px;
-    align-items: center;
-    min-width: 0;
+  .splitList {
+    padding-bottom: 80px;
   }
+}
 
-  .headSide {
-    flex: none;
-  }
-
-  .searchRow {
-    flex: 0 1 440px;
-  }
-
-  .headStage {
-    flex: 1 1 auto;
-    flex-wrap: wrap;
-    gap: 8px 12px;
-  }
-
-  .headStage > .stage {
-    flex: 0 1 280px;
-    min-width: min-content;
-  }
-
-  .headStage > .callNextButton {
-    margin-left: auto;
-  }
-
-  .headViews {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: center;
+@media (min-width: 900px) {
+  /* At the window's foot, in the list's column. The shell keeps room under
+     the page for its corner cards (lightbox-shell.module.css, .main's
+     padding-bottom, the same sum as here), and a sticky band would stop above
+     that room; and when a corner card lifted over the band, the room grew and
+     the band rose again (1440, 8 Nov 2026: up to y568 with rows under it).
+     Offset by that room, the band stays at the foot and the card lifts once. */
+  .callBand {
+    position: sticky;
+    bottom: calc(
+      -1 *
+        max(
+          24px,
+          calc(max(var(--sx-corner-h, 0px), var(--sx-guide-h, 0px)) + 16px)
+        )
+    );
   }
 }
 
@@ -279,6 +326,18 @@
   box-shadow: var(--sx-shadow-1);
 }
 
+/* Names and counts that can't share one line (a narrow phone with the
+   browser's text scaling, three-digit counts; work-views.tsx measures them):
+   every tab puts its count under its name, all alike, rather than one tab
+   scrolling out of sight (ux-audit N7, 8 Nov 2026). */
+.tabs[data-stacked] .tab {
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-block: 4px;
+}
+
 .tabWord,
 .tabCount {
   white-space: nowrap;
@@ -298,6 +357,10 @@
   padding: 1px 6px;
   border-radius: var(--sx-radius-pill);
   background: var(--sx-fill);
+  /* The second ink, not the muted one: muted figures on the badge's fill were
+     4.43:1 in light (QA robot rows 913770ba, 82378715 and 4ada101e, 7-8 Nov
+     2026). The chosen tab's badge keeps its accent, below. */
+  color: var(--sx-ink-2);
   font-size: min(var(--sx-text-2xs), 3.6cqi);
   line-height: var(--sx-leading-16);
 }

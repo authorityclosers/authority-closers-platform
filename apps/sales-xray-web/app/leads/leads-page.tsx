@@ -131,11 +131,11 @@ import { TakingSwitch } from "./taking-switch";
 import { can as roleCan } from "../organisation/roles";
 import { listScope, OPENING_STAGE, OPENING_WORK } from "./opening";
 import {
-  CallNext,
+  CallBand,
   callNextView,
-  FollowUpTabs,
+  FilterButton,
   LeadSearch,
-  StagePicker,
+  StageChips,
   resolveStep,
   ViewTabs,
   WorkHead,
@@ -163,7 +163,7 @@ import {
   type RoundNumbers,
 } from "./call-round";
 import { SideSelector } from "../ui/side-selector";
-import { stageName } from "./journey/stage-look";
+import { stageName, stageTone } from "./journey/stage-look";
 import { ViewTools } from "./view-switch";
 import { PipelinePicker } from "./pipeline-picker";
 import { several, usePipelines } from "./use-pipelines";
@@ -206,7 +206,6 @@ import {
   ActiveFilters,
   FilterChip,
   FilterSheet,
-  SortPick,
   filterNames,
   filtersOn as countFilters,
   type LeadFilters,
@@ -567,6 +566,16 @@ export function LeadsRoute({
   // The current tab's first lead: Start calling opens it.
   const [topLead, setTopLead] = useState<string | null>(null);
   const wide = useWide();
+  // Where the list draws its List | Table switch (Leads L1): beside Filter on
+  // a computer, inside the Filter sheet on a phone.
+  const [headLayoutSlot, setHeadLayoutSlot] = useState<HTMLElement | null>(
+    null,
+  );
+  const [sheetLayoutSlot, setSheetLayoutSlot] = useState<HTMLElement | null>(
+    null,
+  );
+  // And its "Syncing…": at the pinned head's lower edge, taking no room.
+  const [syncSlot, setSyncSlot] = useState<HTMLElement | null>(null);
   // Call Next's queue (Dipak's handoff, items 16-17 and 80): the leads served
   // this round, in the list's order. A lead opened any other way is one-off.
   const [queue, setQueue] = useState<ReadonlySet<string> | null>(null);
@@ -1082,7 +1091,6 @@ export function LeadsRoute({
     more.step && journey?.key === journeyKey
       ? resolveStep(journey.view.stages, more.step)
       : (more.step ?? null);
-  const stepLost = !!more.step && stepShown === null;
   useEffect(() => {
     if (!authenticated || !journeyFor) return;
     let live = true;
@@ -1558,10 +1566,6 @@ export function LeadsRoute({
     view === OPENING_STAGE
       ? listTitle(workView, side, more.when ?? null)
       : null;
-  const headingShown =
-    stepLost && heading
-      ? `${heading} · that stage isn't in your list`
-      : heading;
   const stageLabel =
     heading ??
     tabs.find((tab) => tab.key === view)?.label ??
@@ -1569,12 +1573,18 @@ export function LeadsRoute({
   // A row's stage by the organisation's own name, on the row's side. All Leads
   // lists both sides: a Cold row says so (owner, 2 Nov 2026).
   const stagesShown = journey?.key === journeyKey ? journey.view.stages : [];
+  const ownStage = (row: LeadRow) =>
+    stagesShown.find((stage) => stage.key === row.step) ??
+    stagesShown.find((stage) => stage.kind === row.stage && !stage.archived);
   const stageWord = (row: LeadRow) => {
-    const own =
-      stagesShown.find((stage) => stage.key === row.step) ??
-      stagesShown.find((stage) => stage.kind === row.stage && !stage.archived);
+    const own = ownStage(row);
     const word = own ? stageName(own, row.side ?? side) : undefined;
     return workView === "all" ? sideStage(row, word ?? row.stage_label) : word;
+  };
+  // Its colour, the row's dot (Leads L1): the stage's own, as its chip has.
+  const stageDot = (row: LeadRow) => {
+    const own = ownStage(row);
+    return own ? stageTone(own) : undefined;
   };
   // The Pipeline stage pick: every stage this person sees, in the list's order.
   const pickable = pickableStages(
@@ -1981,51 +1991,29 @@ export function LeadsRoute({
                 // Dipak's handoff (31 Oct 2026, items 44-73): the lead type,
                 // search with one Filter, the work views and one stage pick.
                 <WorkHead
-                  chip={
-                    <>
-                      <PhoneLogCard as="chip" />
-                      {/* An answer is never lost (competitor teardown 3). Held
-                          unseen while a lead is open, its room kept, so the
-                          list never jumps (QA robot 95abddab, 3 Nov 2026). */}
-                      <FinishRow
-                        calls={desk.unanswered}
-                        held={!!openLead}
-                        onFinish={(leadId) => open(leadId, "log")}
-                      />
-                    </>
-                  }
+                  syncSlot={setSyncSlot}
                   side={
                     bothSides || more.side ? (
                       <SideSelector
                         value={side}
                         onChange={(next) => pickWork({ side: next })}
+                        tone="calm"
                       />
                     ) : null
                   }
+                  // Search is the app bar's (Leads L1); one on now stays here,
+                  // so it can be read and cleared.
                   search={
-                    <LeadSearch
-                      value={search}
-                      onChange={setSearch}
-                      filter={
-                        <FilterChip
-                          count={
-                            countFilters(
-                              { ...shownFilters, q: "" },
-                              defaultWho,
-                            ) + (sellerOwner ? 1 : 0)
-                          }
-                          onOpen={() =>
-                            setFiltering((current) => ({
-                              round: (current?.round ?? 0) + 1,
-                              open: true,
-                            }))
-                          }
-                        />
-                      }
-                    />
+                    search ? (
+                      <LeadSearch
+                        value={search}
+                        onChange={setSearch}
+                        filter={null}
+                      />
+                    ) : null
                   }
                   stage={
-                    <StagePicker
+                    <StageChips
                       stages={pickable}
                       counts={
                         stepCounts?.key === stepCountsKey
@@ -2040,45 +2028,49 @@ export function LeadsRoute({
                               ?.key ?? null)
                       }
                       onChange={(step) => pickWork({ step })}
+                      end={
+                        <>
+                          {wide ? (
+                            <span
+                              ref={setHeadLayoutSlot}
+                              className={styles.headLayout}
+                            />
+                          ) : null}
+                          <FilterButton
+                            count={
+                              countFilters(
+                                { ...shownFilters, q: "" },
+                                defaultWho,
+                              ) + (sellerOwner ? 1 : 0)
+                            }
+                            onOpen={() =>
+                              setFiltering((current) => ({
+                                round: (current?.round ?? 0) + 1,
+                                open: true,
+                              }))
+                            }
+                          />
+                          {/* + on a computer (Dipak's handoff, item 41): the
+                              phone's + sheet, Add a lead, a call or a task. */}
+                          <button
+                            type="button"
+                            className={styles.headAdd}
+                            aria-label="Add a lead, a call or a task"
+                            aria-haspopup="dialog"
+                            onClick={() =>
+                              window.dispatchEvent(new Event(OPEN_ADD_EVENT))
+                            }
+                          >
+                            <Plus
+                              size={16}
+                              strokeWidth={2.5}
+                              aria-hidden="true"
+                            />
+                            Add
+                          </button>
+                        </>
+                      }
                     />
-                  }
-                  call={
-                    <>
-                      {/* + on a computer (Dipak's handoff, item 41): the phone's
-                          + sheet, Add a lead, a call or a task. */}
-                      <button
-                        type="button"
-                        className={styles.headAdd}
-                        aria-label="Add a lead, a call or a task"
-                        aria-haspopup="dialog"
-                        onClick={() =>
-                          window.dispatchEvent(new Event(OPEN_ADD_EVENT))
-                        }
-                      >
-                        <Plus size={16} strokeWidth={2.5} aria-hidden="true" />
-                        Add
-                      </button>
-                      {/* Call Next Lead or Start Cold Calling: the list's first lead. */}
-                      <CallNext
-                        side={side}
-                        disabled={
-                          workView === "all" ? callCount === 0 : !topLead
-                        }
-                        count={callCount}
-                        onStart={() => {
-                          if (workView === "all") {
-                            void callToCall();
-                            return;
-                          }
-                          if (!topLead) return;
-                          const paused = desk
-                            ? readPaused(desk.me.person_id, side)
-                            : null;
-                          if (paused) setChoosing(paused);
-                          else startRound(null);
-                        }}
-                      />
-                    </>
                   }
                   views={
                     <ViewTabs
@@ -2097,14 +2089,6 @@ export function LeadsRoute({
                         })
                       }
                     />
-                  }
-                  split={
-                    workView === "follow_ups" ? (
-                      <FollowUpTabs
-                        value={more.when ?? null}
-                        onChange={(when) => pickWork({ when })}
-                      />
-                    ) : null
                   }
                 />
               ) : null}
@@ -2191,6 +2175,19 @@ export function LeadsRoute({
             // The list takes the whole width until a lead is open (persona QA,
             // 31 Oct 2026: an empty pane left 1,000 px of nothing at 1920).
             <WorkSplit pane={paneShown ? leadSheet(true) : null}>
+              {/* The list's first cards, which scroll away with it (Leads L1
+                  judge, 8 Nov 2026: pinned in the head they cost a row at
+                  363): call logging, and an answer never lost (competitor
+                  teardown 3), held unseen while a lead is open, its room
+                  kept, so the list never jumps (QA robot 95abddab). */}
+              <div className={styles.listFirst}>
+                <PhoneLogCard as="chip" />
+                <FinishRow
+                  calls={desk.unanswered}
+                  held={!!openLead}
+                  onFinish={(leadId) => open(leadId, "log")}
+                />
+              </div>
               <ListView
                 onTopLead={setTopLead}
                 onOrder={(leadIds, recent) => {
@@ -2200,9 +2197,13 @@ export function LeadsRoute({
                   );
                 }}
                 stageWord={stageWord}
+                stageTone={stageDot}
                 quietLate={side === "cold" && !can}
                 fresh={fresh}
-                heading={headingShown}
+                heading={null}
+                bare
+                layoutSlot={wide ? headLayoutSlot : sheetLayoutSlot}
+                syncSlot={syncSlot}
                 empty={view === OPENING_STAGE ? emptyWords(workView) : null}
                 canManage={can}
                 initial={desk === serverSeed?.desk ? serverSeed : null}
@@ -2233,33 +2234,6 @@ export function LeadsRoute({
                     more: { ...more, sort, order },
                   })
                 }
-                sortPick={
-                  stageView ? (
-                    <SortPick
-                      more={more}
-                      defaultLabel={
-                        workView === "to_call"
-                          ? "Calling order"
-                          : newestFirst
-                            ? "Newest"
-                            : "Next due"
-                      }
-                      same={
-                        workView === "to_call"
-                          ? null
-                          : newestFirst
-                            ? "created"
-                            : "next_action"
-                      }
-                      onChange={({ sort, order }) =>
-                        applyFilters({
-                          ...shownFilters,
-                          more: { ...more, sort, order },
-                        })
-                      }
-                    />
-                  ) : null
-                }
                 filtered={filtersOn}
                 filterNames={filterNames(
                   { ...shownFilters, q: "" },
@@ -2286,6 +2260,29 @@ export function LeadsRoute({
                   begin("importing", setImporting);
                 }}
               />
+              {/* The one Call (Leads L1): Call Next Lead or Start Cold Calling,
+                  the list's first lead, in a band above the tab bar; an empty
+                  view has none. */}
+              {(workView === "all" ? (callCount ?? 0) > 0 : !!topLead) ? (
+                <CallBand
+                  side={side}
+                  view={callNextView(workView)}
+                  disabled={false}
+                  count={callCount}
+                  onStart={() => {
+                    if (workView === "all") {
+                      void callToCall();
+                      return;
+                    }
+                    if (!topLead) return;
+                    const paused = desk
+                      ? readPaused(desk.me.person_id, side)
+                      : null;
+                    if (paused) setChoosing(paused);
+                    else startRound(null);
+                  }}
+                />
+              ) : null}
             </WorkSplit>
           ) : (
             <DeskView
@@ -2318,8 +2315,29 @@ export function LeadsRoute({
             filters={shownFilters}
             defaultWho={defaultWho}
             canPickWho={sees}
+            layoutSlot={stageView && !wide ? setSheetLayoutSlot : undefined}
             pipes={several(pipesShown) ? pipesShown.pipelines : []}
             onApply={applyFilters}
+            // The list's sort lives here in the work views (Leads L1: no sort row
+            // over the list).
+            sort={
+              stageView
+                ? {
+                    defaultLabel:
+                      workView === "to_call"
+                        ? "Calling order"
+                        : newestFirst
+                          ? "Newest"
+                          : "Next due",
+                    same:
+                      workView === "to_call"
+                        ? null
+                        : newestFirst
+                          ? "created"
+                          : "next_action",
+                  }
+                : undefined
+            }
             onClearAll={() =>
               applyView({
                 stage: view,

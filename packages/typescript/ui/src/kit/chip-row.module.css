@@ -1,0 +1,105 @@
+/* One row of filter chips with a pinned end (chip-row.tsx; Leads L1,
+   docs/design/screens/leads/spec.md §3). Only --sx-* tokens. */
+
+.wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The chips scroll sideways inside the row; 8 px of room above and below
+   keeps their 48 dp touch bands and focus rings from being cut. */
+.row {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 8px;
+  min-width: 0;
+  margin-block: -8px;
+  padding-block: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.row::-webkit-scrollbar {
+  display: none;
+}
+
+/* 32 dp drawn, 48 dp to a finger; radius 8; the words never wrap. */
+.chip {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 8px;
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 400;
+  line-height: var(--sx-leading-16);
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chip::after {
+  position: absolute;
+  inset: -8px 0;
+  content: "";
+}
+
+/* The chosen chip: Home's "good" chip colours, a check before its words. */
+.chip[aria-pressed="true"] {
+  border-color: transparent;
+  background: color-mix(in oklab, var(--sx-good) 14%, var(--sx-surface));
+  color: color-mix(in oklab, var(--sx-good) 60%, var(--sx-ink));
+  font-weight: 500;
+}
+
+.chip:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.check {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The pinned end (a Filter button) keeps its size and sits over the chips'
+   last 24 dp, which fade into the page colour under it (spec §3), never a
+   hard cut. */
+.end {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin-left: -32px;
+  padding-left: 24px;
+  background: linear-gradient(90deg, transparent, var(--sx-paper) 24px);
+}
+
+/* The last chip scrolls clear of that fade. */
+.row::after {
+  flex: none;
+  width: 16px;
+  content: "";
+}

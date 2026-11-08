@@ -28,8 +28,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* One column that can't grow past the card: a long name ends in "…" instead of
+   widening the column and being cut off at the card's edge (QA robot, 8 Nov
+   2026, at 360 and 363). */
 .card {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   gap: 10px;
   padding: 14px;

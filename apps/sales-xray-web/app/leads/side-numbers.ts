@@ -5,11 +5,13 @@
  * items 05-06 and 44-45). The page waits for them before it draws (persona QA,
  * 31 Oct 2026: the selector arriving seconds late pushed Search aside, a layout
  * jump of 0.07 at 1440), at most SIDES_WAIT_MS from when they can be asked
- * for; the last answer per person and workspace is kept, so coming back to
- * Leads draws at once.
+ * for; the last answer per person and workspace is kept, in this visit and on
+ * this device, so coming back to Leads draws at once, a reload too (QA robot
+ * 22a02493, 8 Nov 2026: on a slow dev, Inbound | Cold arrived after the wait
+ * and pushed Leads down 52 px).
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { raiseNotificationLines } from "../shell/update-notices";
 import { readSides, type SideNumbers } from "./leads-client";
@@ -20,10 +22,43 @@ import { readSides, type SideNumbers } from "./leads-client";
 export const SIDES_WAIT_MS = 3000;
 
 const kept = new Map<string, SideNumbers>();
+const never = () => () => undefined;
+const STORE = "sx:leads-sides:";
 
-/** Tests: forget the kept answers. */
-export function forgetSideNumbers() {
+/** The last answer kept on this device, without its bell lines (those are
+ *  raised by a fresh answer only). */
+function stored(keyed: string): SideNumbers | null {
+  try {
+    const value = JSON.parse(
+      localStorage.getItem(STORE + keyed) ?? "null",
+    ) as SideNumbers | null;
+    return value?.inbound && value.cold ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function store(keyed: string, value: SideNumbers) {
+  try {
+    const numbers: SideNumbers = { ...value };
+    delete numbers.bell_lines;
+    localStorage.setItem(STORE + keyed, JSON.stringify(numbers));
+  } catch {
+    // Storage blocked: kept for this visit only.
+  }
+}
+
+/** Tests: forget the kept answers; `device` false keeps this device's, as a
+ *  reload does. */
+export function forgetSideNumbers(device = true) {
   kept.clear();
+  if (!device) return;
+  try {
+    for (const key of Object.keys(localStorage))
+      if (key.startsWith(STORE)) localStorage.removeItem(key);
+  } catch {
+    // Storage blocked: nothing was kept there.
+  }
 }
 
 export function useSideNumbers({
@@ -47,12 +82,26 @@ export function useSideNumbers({
     },
   );
   const [gaveUp, setGaveUp] = useState<string | null>(null);
+  // A reload: this device's last answer, once the page is hydrated (the
+  // server never sees it) and before it is drawn, until the fresh one comes.
+  const hydrated = useSyncExternalStore(
+    never,
+    () => true,
+    () => false,
+  );
+  const [looked, setLooked] = useState<string | null>(null);
+  if (hydrated && looked !== keyed) {
+    setLooked(keyed);
+    const value = kept.has(keyed) ? null : stored(keyed);
+    if (value) setGot({ key: keyed, value });
+  }
   useEffect(() => {
     if (!ready) return;
     const controller = new AbortController();
     readSides(scope, controller.signal)
       .then((value) => {
         kept.set(keyed, value);
+        store(keyed, value);
         // A "<name> is your lead now" line lands with the page, in the same
         // commit as the draw this answer lets through; the bell's own first
         // read (at 3 s) then finds it shown (QA robot 10572d93, 2 Nov 2026:

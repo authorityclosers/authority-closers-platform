@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { renderToString } from "react-dom/server";
 import { expect, it } from "vitest";
 
@@ -13,4 +15,16 @@ it("is a whole page with a title, its language and a retry", () => {
   expect(html).toContain("<title>Sales X-Ray · Authority Closers</title>");
   expect(html).toContain("This screen didn’t load");
   expect(html).toContain("Try again");
+});
+
+it("draws its one filled action in the kit's teal, which stays teal in dark mode", () => {
+  // The QA robot, 8 Nov 2026: Go to Home was ink on surface, a white pill in dark.
+  const css = readFileSync(
+    join(process.cwd(), "app/error-page.module.css"),
+    "utf8",
+  );
+  const primary = css.match(/\n\.primary \{([^}]*)\}/)?.[1] ?? "";
+  expect(primary).toContain("background: var(--lx-teal);");
+  expect(primary).toContain("color: var(--lx-on-teal);");
+  expect(primary).not.toContain("--lx-ink");
 });

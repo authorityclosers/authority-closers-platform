@@ -4,12 +4,16 @@ One design source per screen (process fix, `SALES-XRAY-BUGS-2026-11-07.md` §4.1
 spec. Agents get the image files themselves, never a prose paraphrase. The design changes only when the owner picks a new
 image; the old one then moves to `superseded/`.
 
-**Status: chosen. The owner picked L1 on 8 Nov 2026 ("Build L1"). The build follows L1R: these images plus `spec.md`.**
+**Status: built and approved. The owner picked L1 on 8 Nov 2026 ("Build L1"), kept the avatar (B) and approved the build on his
+phone the same evening. The build follows L1R: these images plus `spec.md`.**
 
+- `approved-build-note8pro-20261108.webp`: **the owner-approved build.** The owner viewed it on a real phone (Note 8 Pro, Chrome,
+  dev sandbox, Cold Leads, 8 Nov 2026, 20:21 IST) and said: "Everything is just perfect on that current screen... every single
+  element, love it." This is now the reference for Leads; any change to it needs the owner's OK.
 - `l1r-to-call-light.webp`: the chosen design, To call view, light, 363 × 735 (the owner's OnePlus).
 - `l1r-to-call-dark.webp`, `l1r-follow-ups-light.webp`: the dark pair and the Follow-ups view (rendered 8 Nov).
 - `spec.md`: the measured build spec. Sizes come from Dipak's Home as built; the look comes from the image. It includes the honest
-  true-size row budget and the one open choice for the owner (keep or drop the initials avatar).
+  true-size row budget, the design rulings after the first build (§7) and the owner's ruling of 8 Nov to keep the avatar (§4).
 
 Gallery, with all six directions, the judges' scores and the before images: "Leads: pick one" on the Sales X-Ray design gallery
 artifact (https://claude.ai/artifact/BWLXbg2FLTUeibu3yKBL8j). Research and principles L1–L8:

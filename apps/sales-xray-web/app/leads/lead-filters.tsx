@@ -93,6 +93,7 @@ export function SortPick({
   defaultLabel,
   same = null,
   onChange,
+  mode,
 }: {
   more: ListMore;
   /** The list's order when nothing is picked: "Newest", "Next due", "Calling order". */
@@ -103,6 +104,8 @@ export function SortPick({
     sort: ListSort | null;
     order: "asc" | "desc" | null;
   }) => void;
+  /** "inline" inside a sheet: its list opens in place. */
+  mode?: "inline";
 }) {
   const value = !more.sort
     ? null
@@ -114,6 +117,7 @@ export function SortPick({
       title="Sort"
       label="Sort:"
       icon={<ArrowUpDown size={16} aria-hidden="true" />}
+      mode={mode}
       value={value}
       all={{ label: defaultLabel }}
       options={Object.entries(SORT_CHOICES)
@@ -364,10 +368,19 @@ export function FilterSheet({
   sellerPicker,
   onClearAll,
   fileSources = [],
+  sort,
+  layoutSlot,
 }: {
   open: boolean;
   onClose: () => void;
   filters: LeadFilters;
+  /** On a phone, the list's List | Table switch is drawn here, by the list
+   *  (Leads L1: no row over the list holds it; owner, 24 Oct 2026: the table
+   *  on a phone too). */
+  layoutSlot?: (node: HTMLElement | null) => void;
+  /** The list's sort, first in the sheet (Leads L1: no sort row over the list):
+   *  its own order's words, and the choice that is that order. */
+  sort?: { defaultLabel: string; same: ListSort | null };
   /** The organisation's own lists, from files' Source columns (ph1-18). */
   fileSources?: readonly string[];
   defaultWho: Scope;
@@ -421,6 +434,21 @@ export function FilterSheet({
           apply(draft);
         }}
       >
+        {sort ? (
+          <SortPick
+            more={more}
+            defaultLabel={sort.defaultLabel}
+            same={sort.same}
+            mode="inline"
+            onChange={(next) => setMore(next)}
+          />
+        ) : null}
+        {layoutSlot ? (
+          <div className={styles.sheetLayout}>
+            <span>Show as</span>
+            <span ref={layoutSlot} />
+          </div>
+        ) : null}
         {/* Pipeline first: for a team with several, the choice that matters most
             (orchestrator, 25 Oct 2026); then whose leads. */}
         {pipes.length > 1 ? (
