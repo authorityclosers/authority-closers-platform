@@ -23,6 +23,7 @@ import { PipelineBoard } from "../../leads/pipeline/board";
 import { PipelineDashboard } from "../../leads/pipeline/dashboard";
 import { MeetingCard } from "../../leads/pipeline/meeting-card";
 import { StageSheet } from "../../leads/pipeline/stage-sheet";
+import { StagePath } from "../../leads/pipeline/timeline";
 import {
   CARDS,
   LEAD,
@@ -123,10 +124,13 @@ export function LeadPipelinePreview() {
       >
         <h1 style={{ margin: 0 }}>Sanjay Sample</h1>
         <MeetingCard detail={detail} onChanged={setDetail} />
-        <History
+        {/* The stage path sits above the history, which no longer draws
+            it (lead page P5: the stepper shows the stage). */}
+        <StagePath
           events={detail.events}
           currentLabel={detail.lead.stage_label}
         />
+        <History events={detail.events} />
       </main>
     );
   const lead = withDisplayNames(CARDS.new[0], PEOPLE);

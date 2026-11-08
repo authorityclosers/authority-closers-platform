@@ -156,7 +156,13 @@ it("greys a box that can't work, and a tap says why with its fix", async () => {
   expect(said.action?.label).toBe("Add a number");
   await act(async () => said.action?.run());
   expect(document.body.textContent).toContain("Save details");
-  // Email has no address either: its own words and fix.
-  await act(async () => button("No email on this lead")!.click());
+  // Email has no address either: in More (lead page P5), its own words and fix.
+  await act(async () => button("More for")!.click());
+  const email = [...document.querySelectorAll("button")].find(
+    (item) => item.textContent?.trim() === "Email",
+  )!;
+  expect(email.getAttribute("aria-disabled")).toBe("true");
+  await act(async () => email.click());
+  expect(notices.at(-1)?.title).toBe("No email on this lead");
   expect(notices.at(-1)?.action?.label).toBe("Add an email");
 });

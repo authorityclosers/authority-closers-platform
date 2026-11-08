@@ -13,6 +13,9 @@ import {
   ArrowRightLeft,
   ArrowUp,
   BellPlus,
+  Ban,
+  CalendarCheck,
+  CalendarClock,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -22,23 +25,30 @@ import {
   MessageCircle,
   MessageSquareText,
   Mic,
+  MoreHorizontal,
+  MoreVertical,
   NotebookPen,
   Pencil,
   Phone,
   PhoneMissed,
+  PhoneCall,
   PhoneOff,
   Radio,
+  Repeat,
   Shuffle,
   Trash2,
   Workflow,
   X,
-  FileText,
+  ListChecks,
   ListPlus,
   Sparkles,
+  Upload,
+  UserPlus,
 } from "lucide-react";
 import Link from "next/link";
 import {
   Fragment,
+  isValidElement,
   useCallback,
   useContext,
   useEffect,
@@ -46,7 +56,6 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  type KeyboardEvent,
   type ReactNode,
   type CSSProperties,
 } from "react";
@@ -92,7 +101,6 @@ import {
   undoResult,
 } from "./leads-client";
 import { PersonAvatar } from "../people/person-avatar";
-import { LastCallBrief } from "./call-brief-card";
 import { ReassignSheet } from "./reassign-sheet";
 import { CallLink } from "./call-link";
 import type { FirstTapEvent } from "./first-tap";
@@ -119,8 +127,8 @@ import {
 import { chatFacts, chatOrigin } from "./chat-origin";
 import { SocialThread } from "./social-thread";
 import { WhatsAppThread } from "./whatsapp-thread";
-import { nextLine, whyLine } from "./desk-view";
-import type { Kind } from "./journey/journey-client";
+import { dueWords, whyLine } from "./desk-view";
+import type { Kind, StageView } from "./journey/journey-client";
 import { stageTone as stageDot } from "./journey/stage-look";
 import { firstCallWords, ownerNote } from "./owner-words";
 import { phoneCallText } from "./phone-call-text";
@@ -177,13 +185,7 @@ import { inr } from "../dashboard/revenue-client";
 import { MeetingCard } from "./pipeline/meeting-card";
 import pipe from "./pipeline/pipeline.module.css";
 import { StageSheet } from "./pipeline/stage-sheet";
-import {
-  StagePath,
-  TimelineFilters,
-  shows,
-  sourceBadge,
-  type TimelineFilter,
-} from "./pipeline/timeline";
+import { sourceBadge } from "./pipeline/timeline";
 import { askFeedback } from "../feedback/ask";
 import { DeleteLeadsSheet, type Doomed } from "./delete-leads";
 import { Sheet } from "./sheet-frame";
@@ -192,6 +194,12 @@ import { Sheet as Picker } from "../ui/sheet";
 import deleteStyles from "./delete-leads.module.css";
 import { keepDraft, readDraft } from "./drafts";
 import styles from "./leads.module.css";
+import lens from "../ui/call-lens/call-lens.module.css";
+import { LeadBrief } from "./lead-brief";
+import { LeadPageFrame } from "./lead-page-frame";
+import page from "./lead-page.module.css";
+import { shortSource } from "./source-mark";
+import { mainPath, StageStepper } from "./stage-stepper";
 
 // Sources whose leads arrive with a form's own answers worth showing.
 const FORM_SOURCES = new Set(["meta", "webhook", "sheet", "csv", "google_ads"]);
@@ -1776,19 +1784,6 @@ export function storyLines(
   return lines;
 }
 
-function StorySoFar({ detail }: { detail: LeadDetail }) {
-  return (
-    <div className={styles.story}>
-      <span className={styles.storyTitle}>The story so far</span>
-      <ul>
-        {storyLines(detail).map((line) => (
-          <li key={line}>{line}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 /** "Today", "Yesterday" or "Mon 20 Oct": the history's day headers. */
 /** The stage chip's colour: Won good, Lost and Junk bad, open stages accent. */
 export function stageTone(stage: Stage): "good" | "bad" | "accent" {
@@ -1817,17 +1812,77 @@ export function clockTime(iso: string): string {
   });
 }
 
+type DiscTone = "accent" | "good" | "warn" | "bad" | "plain";
+
+/** Each event's disc on the call history (lead page P5): its kind's tint and
+ *  a 14 dp glyph. Calls and stage work teal, chats green, notes amber, a call
+ *  missed or not answered red, the rest plain. */
+export function historyDisc(event: LeadEvent): {
+  tone: DiscTone;
+  icon: ReactNode;
+} {
+  const size = 14;
+  switch (event.kind) {
+    case "call":
+      return event.direction === "missed" || event.direction === "rejected"
+        ? { tone: "bad", icon: <PhoneMissed size={size} /> }
+        : { tone: "accent", icon: <Phone size={size} /> };
+    case "result":
+      return event.connected
+        ? { tone: "accent", icon: <PhoneCall size={size} /> }
+        : { tone: "bad", icon: <PhoneOff size={size} /> };
+    case "note":
+      return { tone: "warn", icon: <NotebookPen size={size} /> };
+    case "message":
+      return {
+        tone: "good",
+        icon:
+          event.channel === "whatsapp" ? (
+            <MessageCircle size={size} />
+          ) : (
+            <MessageSquareText size={size} />
+          ),
+      };
+    case "scheduled":
+      return { tone: "accent", icon: <CalendarClock size={size} /> };
+    case "task":
+      return { tone: "accent", icon: <ListChecks size={size} /> };
+    case "stage":
+      return { tone: "accent", icon: <ArrowRightLeft size={size} /> };
+    case "meeting":
+      return { tone: "accent", icon: <CalendarCheck size={size} /> };
+    case "captured":
+      return { tone: "plain", icon: <UserPlus size={size} /> };
+    case "repeat":
+      return { tone: "warn", icon: <Repeat size={size} /> };
+    case "assigned":
+    case "reassigned":
+      return { tone: "plain", icon: <Shuffle size={size} /> };
+    case "edited":
+      return { tone: "plain", icon: <Pencil size={size} /> };
+    default:
+      return { tone: "plain", icon: <Sparkles size={size} /> };
+  }
+}
+
+/**
+ * The lead's call history (lead page P5, spec §3): today's history in one
+ * column, newest first, each event a tinted disc on a 2 dp line, its title
+ * and under it the detail and the time. The follow-up still to come is pinned
+ * first with a mint "Upcoming". A call with a Report opens it from anywhere
+ * on its row ("View report" at its end); the newest call's recording in and
+ * not analysed offers "Generate report". The capture state says why a call
+ * has no recording. Day headers come back past five events.
+ */
 export function History({
   events,
   onChanged,
   leadId,
   chats = [],
-  brief = null,
-  currentLabel = null,
   focusAt = null,
   label = "History",
-  only = null,
-  compact = false,
+  upcoming = null,
+  onGenerate,
 }: {
   events: LeadEvent[];
   onChanged?: (next: LeadDetail) => void;
@@ -1835,22 +1890,15 @@ export function History({
   leadId?: string;
   /** The lead's chats, one line per app per day (lead hub, 22 Oct 2026). */
   chats?: ChatDay[];
-  /** Under the newest call with a Report: what that call said. */
-  brief?: ReactNode;
-  /** The lead's stage now: the path of stages so far ends there (Lead OS). */
-  currentLabel?: string | null;
   /** Opened from My work: the line made at this time is scrolled to and lit. */
   focusAt?: string | null;
   /** What a screen reader calls the list. */
   label?: string;
-  /** One kind only (the lead's Calls tab): no filter chips. */
-  only?: TimelineFilter | null;
-  /** The Story tab (owner, #31, 26 Oct 2026): one line per event, the time on
-   *  the right, grouped by day. */
-  compact?: boolean;
+  /** The follow-up still to come, pinned first. */
+  upcoming?: { at: string; note: string | null } | null;
+  /** The newest call's recording is in but not analysed: make its Report. */
+  onGenerate?: () => void;
 }) {
-  const [chosen, setFilter] = useState<TimelineFilter>("all");
-  const filter = only ?? chosen;
   const list = useRef<HTMLOListElement>(null);
   useEffect(() => {
     if (!focusAt) return;
@@ -1863,11 +1911,8 @@ export function History({
     const timer = window.setTimeout(() => delete line.dataset.focus, 2600);
     return () => window.clearTimeout(timer);
   }, [focusAt, events.length]);
-  const briefAt = events.findIndex(
-    (event) => event.kind === "call" && event.submission_id,
-  );
   // Newest first, calls and chats in one line of time.
-  const all: { at: string; index: number; chat?: ChatDay }[] = [
+  const items: { at: string; index: number; chat?: ChatDay }[] = [
     ...events.map((event, index) => ({ at: event.at, index })),
     ...chats.map((chat, index) => ({
       at: chat.at,
@@ -1875,90 +1920,110 @@ export function History({
       chat,
     })),
   ];
-  const items = all.filter((item) =>
-    shows(filter, item.chat ? "chat" : events[item.index]),
-  );
   if (chats.length)
     items.sort(
       (a, b) => Date.parse(b.at) - Date.parse(a.at) || a.index - b.index,
     );
+  const days = items.length > 5;
+  const newestCall = events.findIndex((event) => event.kind === "call");
+  // Under a day header the time alone; without headers, the day too.
+  const stamp = (at: string) =>
+    days ? clockTime(at) : `${dayLabel(at)}, ${clockTime(at)}`;
   return (
-    <>
-      {currentLabel ? (
-        <StagePath events={events} currentLabel={currentLabel} />
+    <ol className={page.timeline} aria-label={label} ref={list}>
+      {upcoming ? (
+        <li className={page.tlRow} data-kind="upcoming">
+          <span className={page.disc} data-tone="now" aria-hidden="true">
+            <CalendarClock size={14} />
+          </span>
+          <span className={page.tlBody}>
+            <span className={page.tlTitle}>
+              Follow-up
+              <span className={page.upcoming}>Upcoming</span>
+            </span>
+            <span className={page.tlDetail}>
+              {[upperFirst(when(upcoming.at)), upcoming.note]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+          </span>
+        </li>
       ) : null}
-      {events.length > 3 && !only ? (
-        <TimelineFilters value={filter} onChange={setFilter} />
-      ) : null}
-      <ol
-        className={styles.history}
-        aria-label={label}
-        data-compact={compact || undefined}
-        ref={list}
-      >
-        {items.map((item, position) => {
-          const day = dayLabel(item.at);
-          const newDay =
-            position === 0 || dayLabel(items[position - 1].at) !== day;
-          const header = newDay ? (
-            <li className={styles.historyDay} aria-hidden="true">
+      {items.map((item, position) => {
+        const day = dayLabel(item.at);
+        const header =
+          days &&
+          (position === 0 || dayLabel(items[position - 1].at) !== day) ? (
+            <li className={page.tlDay} aria-hidden="true">
               {day}
             </li>
           ) : null;
-          if (item.chat)
-            return (
-              <Fragment key={item.chat.key}>
-                {header}
-                <li data-kind="chat">
-                  <span className={styles.historyTitle}>
+        if (item.chat)
+          return (
+            <Fragment key={item.chat.key}>
+              {header}
+              <li className={page.tlRow} data-kind="chat" data-opens="">
+                <span className={page.disc} data-tone="good" aria-hidden="true">
+                  <MessageCircle size={14} />
+                </span>
+                <span className={page.tlBody}>
+                  <span className={page.tlTitle}>
                     {chatDayTitle(item.chat)}
                   </span>
-                  {item.chat.last ? (
-                    <span className={styles.historyDetail}>
-                      {item.chat.last.mine ? "You: " : ""}
-                      {item.chat.last.text}
-                    </span>
-                  ) : null}
-                  <Link
-                    className={styles.historyLink}
-                    href={item.chat.href}
-                    prefetch={false}
-                  >
-                    Open the chat
-                  </Link>
-                </li>
-              </Fragment>
-            );
-          const event = events[item.index];
-          const index = item.index;
-          const text = eventText(event);
-          return (
-            <Fragment key={`${event.at}-${index}`}>
-              {header}
-              <li
-                key={`${event.at}-${index}`}
-                data-kind={event.kind}
-                data-at={event.at}
-                data-report={
-                  event.kind === "call" && event.submission_id ? "" : undefined
-                }
-                data-missed={
-                  event.direction === "missed" || event.direction === "rejected"
-                    ? true
-                    : undefined
-                }
+                  <span className={page.tlDetail}>
+                    {item.chat.last
+                      ? `${item.chat.last.mine ? "You: " : ""}${item.chat.last.text}`
+                      : stamp(item.at)}
+                  </span>
+                </span>
+                <Link
+                  className={page.tlAction}
+                  href={item.chat.href}
+                  prefetch={false}
+                >
+                  Open chat
+                </Link>
+              </li>
+            </Fragment>
+          );
+        const event = events[item.index];
+        const index = item.index;
+        const text = eventText(event);
+        const disc = historyDisc(event);
+        const report = event.kind === "call" ? event.submission_id : null;
+        const generate =
+          event.kind === "call" &&
+          index === newestCall &&
+          !!event.recording &&
+          !event.submission_id &&
+          !!onGenerate;
+        const words = event.private
+          ? "Only you see this call. It isn't counted."
+          : text.detail;
+        return (
+          <Fragment key={`${event.at}-${index}`}>
+            {header}
+            <li
+              className={page.tlRow}
+              data-kind={event.kind}
+              data-at={event.at}
+              data-report={report ? "" : undefined}
+              data-opens={report ? "" : undefined}
+              data-missed={
+                event.direction === "missed" || event.direction === "rejected"
+                  ? true
+                  : undefined
+              }
+            >
+              <span
+                className={page.disc}
+                data-tone={disc.tone}
+                aria-hidden="true"
               >
-                <span className={styles.historyTitle}>
-                  {event.actor_name ? (
-                    <span className={styles.actor} aria-hidden="true">
-                      <PersonAvatar
-                        personId={event.actor_person_id ?? null}
-                        name={event.actor_name}
-                        photoUrl={event.actor_photo_url}
-                        size={20}
-                      />
-                    </span>
-                  ) : null}
+                {disc.icon}
+              </span>
+              <span className={page.tlBody}>
+                <span className={page.tlTitle}>
                   {text.title}
                   {event.private ? (
                     <span className={styles.privateTag}>Private</span>
@@ -1970,15 +2035,12 @@ export function History({
                     <span className={pipe.badge}>via {event.app_label}</span>
                   ) : null}
                 </span>
+                <span className={page.tlDetail}>
+                  {words ? `${words} · ` : null}
+                  <time dateTime={event.at}>{stamp(event.at)}</time>
+                </span>
                 {event.kind === "call" ? (
                   <AutoCaptureState eventId={event.event_id} />
-                ) : null}
-                {text.detail ? (
-                  <span className={styles.historyDetail}>
-                    {event.private
-                      ? "Only you see this call. It isn't counted."
-                      : text.detail}
-                  </span>
                 ) : null}
                 {onChanged ? (
                   <PrivacyButton event={event} onChanged={onChanged} />
@@ -1990,26 +2052,25 @@ export function History({
                     onChanged={onChanged}
                   />
                 ) : null}
-                {event.kind === "call" && event.submission_id ? (
-                  <Link
-                    className={styles.historyLink}
-                    href={callHref(event.submission_id)}
-                  >
-                    Open the call&apos;s Report
-                  </Link>
-                ) : null}
-                <time className={styles.historyTime} dateTime={event.at}>
-                  {clockTime(event.at)}
-                </time>
-              </li>
-              {index === briefAt && brief ? (
-                <li className={styles.historyBrief}>{brief}</li>
+              </span>
+              {report ? (
+                <Link className={page.tlAction} href={callHref(report)}>
+                  View report
+                </Link>
+              ) : generate ? (
+                <button
+                  type="button"
+                  className={page.tlAction}
+                  onClick={onGenerate}
+                >
+                  Generate report
+                </button>
               ) : null}
-            </Fragment>
-          );
-        })}
-      </ol>
-    </>
+            </li>
+          </Fragment>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -2885,14 +2946,17 @@ export function NoteBox({
 function NotesSection({
   detail,
   onSaved,
+  all = false,
 }: {
   detail: LeadDetail;
   onSaved: (next: LeadDetail) => void;
+  /** In the lead's Notes sheet: every note, not the newest two. */
+  all?: boolean;
 }) {
   const notes = detail.events
     .filter((event) => event.kind === "note" && event.note)
-    .slice(0, 2);
-  // The Notes tab names this part; "See all notes" closes it.
+    .slice(0, all ? undefined : 2);
+  // "See all notes" (every lead's) closes it.
   return (
     <div className={styles.notesBlock}>
       {detail.can_edit ? (
@@ -2939,80 +3003,33 @@ function NotesSection({
   );
 }
 
-type LeadTab = "notes" | "calls" | "story";
-
 /** "tomorrow 10:00 AM" → "Tomorrow 10:00 AM", at the start of a line. */
+/** A follow-up whose time has passed, in words: "2:00 pm", "yesterday
+ *  6:00 pm", "31 Oct" (lead page P5); null when it is still to come. */
+function lateFollowUp(at: string | null | undefined): string | null {
+  if (!at || Date.parse(at) >= Date.now()) return null;
+  return dueWords(at, new Date());
+}
+
+/** "Call Shrikant": the first word of the lead's name. */
+const displayFirst = (name: string) => name.trim().split(/\s+/)[0] || name;
+
 const upperFirst = (text: string) =>
   text.charAt(0).toUpperCase() + text.slice(1);
 
-const LEAD_TABS: { key: LeadTab; label: string }[] = [
-  { key: "notes", label: "Notes" },
-  { key: "calls", label: "Calls" },
-  { key: "story", label: "Story" },
-];
-
-/** Notes · Calls · Story under the lead's actions (owner, #31, 26 Oct 2026).
- *  Arrow keys, Home and End move between them, as tabs do. */
-function LeadTabs({
-  id,
-  tab,
-  onTab,
-  counts,
-}: {
-  id: string;
-  tab: LeadTab;
-  onTab: (next: LeadTab) => void;
-  counts: Partial<Record<LeadTab, number>>;
-}) {
-  const keys = (event: KeyboardEvent<HTMLDivElement>) => {
-    const at = LEAD_TABS.findIndex((item) => item.key === tab);
-    const last = LEAD_TABS.length - 1;
-    const next =
-      event.key === "ArrowRight"
-        ? at === last
-          ? 0
-          : at + 1
-        : event.key === "ArrowLeft"
-          ? at === 0
-            ? last
-            : at - 1
-          : event.key === "Home"
-            ? 0
-            : event.key === "End"
-              ? last
-              : null;
-    if (next === null) return;
-    event.preventDefault();
-    onTab(LEAD_TABS[next].key);
-    document.getElementById(`${id}-${LEAD_TABS[next].key}-tab`)?.focus();
-  };
-  return (
-    <div
-      className={styles.leadTabs}
-      role="tablist"
-      aria-label="About this lead"
-      onKeyDown={keys}
-    >
-      {LEAD_TABS.map((item) => (
-        <button
-          key={item.key}
-          id={`${id}-${item.key}-tab`}
-          type="button"
-          role="tab"
-          className={styles.leadTab}
-          aria-selected={item.key === tab}
-          aria-controls={`${id}-${item.key}`}
-          tabIndex={item.key === tab ? 0 : -1}
-          onClick={() => onTab(item.key)}
-        >
-          {item.label}
-          {counts[item.key] ? (
-            <span className={styles.leadTabCount}>{counts[item.key]}</span>
-          ) : null}
-        </button>
-      ))}
-    </div>
-  );
+/** A label that may wrap at large text breaks where its words join
+ *  ("Whats" "App"), never inside one ("WhatsAp" "p"); its words stay as
+ *  written. */
+function joinBreaks(label: string): ReactNode {
+  const parts = label.split(/(?<=[a-z])(?=[A-Z])/);
+  return parts.length < 2
+    ? label
+    : parts.map((part, index) => (
+        <Fragment key={part}>
+          {index ? <wbr /> : null}
+          {part}
+        </Fragment>
+      ));
 }
 
 /** One of the lead's equal action boxes (owner, 25 Oct 2026: "on one grid,
@@ -3028,7 +3045,10 @@ function ActionBox({
   disabled = false,
   why,
   fix,
+  round = false,
 }: {
+  /** The row of four (lead page P5): a 48 dp neutral circle, its word under it. */
+  round?: boolean;
   /** The kind's colour: messages violet, notes amber, tasks blue, moves slate. */
   kind: "message" | "note" | "task" | "stage";
   channel: string;
@@ -3045,15 +3065,21 @@ function ActionBox({
   why?: string;
   fix?: { label: string; run: () => void };
 }) {
-  const inside = (
+  const inside = round ? (
+    <>
+      <span className={page.actCircle}>{icon}</span>
+      <span className={page.actWord}>{joinBreaks(label)}</span>
+    </>
+  ) : (
     <>
       {icon}
       <span className={styles.actionLabel}>{label}</span>
     </>
   );
+  const look = round ? page.act : styles.actionBox;
   return href && !disabled ? (
     <a
-      className={styles.actionBox}
+      className={look}
       data-kind={kind}
       data-channel={channel}
       href={href}
@@ -3064,7 +3090,7 @@ function ActionBox({
   ) : (
     <button
       type="button"
-      className={styles.actionBox}
+      className={look}
       data-kind={kind}
       data-channel={channel}
       aria-label={disabled && why ? why : name}
@@ -3090,18 +3116,6 @@ function ActionBox({
 
 /* ---------- Lead card ---------- */
 
-/** The newest call with an Xray Report, for "View latest report" (item 93).
- *  The story comes newest first: the first one found (QA robot, 1 Nov 2026:
- *  it opened the oldest report). */
-export function latestReportOf(
-  events: readonly { kind: string; submission_id?: string | null }[],
-): string | null {
-  return (
-    events.find((event) => event.kind === "call" && event.submission_id)
-      ?.submission_id ?? null
-  );
-}
-
 export function LeadCard({
   detail,
   me,
@@ -3115,7 +3129,16 @@ export function LeadCard({
   hidePrimary = false,
   onSkip,
   round = null,
+  stages = null,
+  menuSlot = null,
+  onDelete,
 }: {
+  /** The organisation's stages in path order, for the step strip (P5). */
+  stages?: readonly StageView[] | null;
+  /** The page bar's end, where ⋯ goes (P5). */
+  menuSlot?: HTMLElement | null;
+  /** Owners and admins: Delete lead, from ⋯. */
+  onDelete?: () => void;
   detail: LeadDetail;
   me: Me | null;
   onChanged: (next: LeadDetail) => void;
@@ -3148,8 +3171,18 @@ export function LeadCard({
   const [reminding, setReminding] = useState(false);
   // Add task with this customer chosen, and Ask Dipak about them (items 84, 97).
   const [tasking, setTasking] = useState(false);
-  const latestReport = latestReportOf(detail.events ?? []);
   const [asking, setAsking] = useState(false);
+  // The actions beyond the row of four (lead page P5): an item closes More,
+  // then opens its own sheet, so sheets never stack.
+  const [more, setMore] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const afterMore = (run: () => void) => {
+    setMore(false);
+    setMenuOpen(false);
+    window.requestAnimationFrame(run);
+  };
+  // A step tapped on the stage strip: the stage sheet opens on it.
+  const [stageTarget, setStageTarget] = useState<string | null>(null);
   const [messaging, setMessaging] = useState<{
     round: number;
     preset: string | null;
@@ -3299,31 +3332,27 @@ export function LeadCard({
   const [picking, setPicking] = useState(false);
   // Lead OS: the stage chip opens the stage sheet (only the moves allowed).
   const [staging, setStaging] = useState(false);
+  // Notes in a sheet (lead page P5): the Note action and the latest note open it.
+  const [noting, setNoting] = useState(false);
   // The Call bar steps aside while a form or sheet is open over the lead (phone QA,
   // 1 Nov 2026, ph2-32: Cancel in Edit sat under it, and a tap dialled).
   const formOpen =
     editing ||
+    noting ||
     reminding ||
     tasking ||
     asking ||
     picking ||
     staging ||
     testing ||
+    more ||
+    menuOpen ||
     messaging !== null;
-  // The subtitle shows two lines until it is tapped.
-  const [subOpen, setSubOpen] = useState(false);
-  // Notes · Calls · Story; a line opened from My work opens on the Story.
-  const [tab, setTab] = useState<LeadTab>(focusAt ? "story" : "notes");
-  const [focusSeen, setFocusSeen] = useState(focusAt);
-  if (focusAt !== focusSeen) {
-    setFocusSeen(focusAt);
-    if (focusAt) setTab("story");
-  }
-  const tabsId = useId();
-  // The call's recording: above the tabs while there is one to act on now
-  // (back from a call, or the phone found or is still finding it), else in
-  // the Calls tab, so an idle "Add the recording" doesn't sit between the
-  // actions and the tabs on every lead with calls.
+  const historyId = useId();
+  // The call's recording: near the top while there is one to act on now
+  // (back from a call, or the phone found or is still finding it), else
+  // under the call history, so an idle "Add the recording" doesn't sit
+  // between the actions and the brief on every lead with calls.
   const recordingNow =
     afterCall?.step === "recording" ||
     phoneCall !== null ||
@@ -3365,10 +3394,6 @@ export function LeadCard({
         }
       />
     ) : null;
-  const tabCounts = {
-    notes: detail.events.filter((event) => event.kind === "note").length,
-    calls: detail.events.filter((event) => shows("calls", event)).length,
-  };
   const canMove = detail.can_edit && (detail.moves?.length ?? 0) > 0;
   const wonWorth =
     detail.lead.stage === "won" && detail.won_amount
@@ -3377,9 +3402,6 @@ export function LeadCard({
   // The lead's chats, read once for the timeline and the chat sections.
   const conversations = useLeadConversations(lead.lead_id);
   const chats = chatDays(lead.lead_id, conversations.wa, conversations.social);
-  const sub = [lead.company, lead.city, lead.language]
-    .filter(Boolean)
-    .join(" · ");
   const rows: { label: string; value: ReactNode }[] = [
     ...(detail.phone
       ? [
@@ -3432,34 +3454,44 @@ export function LeadCard({
     return !phoneDigits || value.replace(/\D/g, "").slice(-10) !== phoneDigits;
   });
 
+  // The one Call (lead page P5, spec §3): Home's Call lens, "Call Shrikant";
+  // a closed lead's reads "Call again" in outline; with no number, "Add a
+  // phone number" in the same place, never a bar over the page (#178).
   const callAction = detail.phone ? (
     <CallLink
-      className={styles.callButton}
+      className={
+        ["won", "lost", "junk"].includes(lead.stage)
+          ? page.callOutline
+          : `${lens.capsule} ${page.callBand}`
+      }
       phone={detail.phone}
       aria-busy={calling || company.busy || undefined}
+      aria-label={`Call ${lead.name}${company.ready ? " from the company number" : ""}`}
       onCall={callHere}
     >
-      <Phone size={20} aria-hidden="true" />
+      <PhoneCall
+        className={lens.glyph}
+        size={20}
+        strokeWidth={2}
+        aria-hidden="true"
+      />
       <span>
-        <strong>{calling || company.busy ? "Calling…" : "Call"}</strong>
-        <small>
-          {displayPhone(detail.phone)}
-          {company.ready ? " · company number" : ""}
-        </small>
+        {calling || company.busy
+          ? "Calling…"
+          : ["won", "lost", "junk"].includes(lead.stage)
+            ? "Call again"
+            : `Call ${displayFirst(lead.name)}`}
       </span>
     </CallLink>
   ) : detail.can_edit ? (
     <button
       type="button"
-      className={styles.callButton}
+      className={page.callOutline}
       data-empty=""
-      onClick={() => setEditing(true)}
+      onClick={editDetails}
     >
       <Phone size={20} aria-hidden="true" />
-      <span>
-        <strong>Add a phone number</strong>
-        <small>to call this lead</small>
-      </span>
+      Add a phone number
     </button>
   ) : (
     <p className={styles.hint}>No phone number on this lead.</p>
@@ -3495,100 +3527,161 @@ export function LeadCard({
     callAction
   );
 
+  // Lead page P5 (the owner's pick, 8 Nov 2026; spec §3): "City · Source ·
+  // Side" under the name, then the follow-up a tap from its picker, late said
+  // in words; then the stage as a step strip, or its chip when closed.
+  const closed = ["won", "lost", "junk"].includes(lead.stage);
+  const facts = [
+    lead.city,
+    shortSource(lead),
+    lead.side === "cold" ? "Cold" : "Inbound",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const lateWhen = lateFollowUp(lead.next_action_at);
+  const lateNow = lateWhen !== null;
+  const followWords = lateWhen ? (
+    <span>
+      <span className={page.lateWord}>Late</span> · was due{" "}
+      <span className={page.lateWhen}>{lateWhen}</span>
+    </span>
+  ) : (
+    <span>
+      Follow-up ·{" "}
+      {lead.next_action_at ? upperFirst(when(lead.next_action_at)) : "None yet"}
+    </span>
+  );
+  const followLine = closed ? null : detail.can_edit ? (
+    <button
+      type="button"
+      className={page.follow}
+      data-late={lateNow || undefined}
+      aria-haspopup="dialog"
+      onClick={() => setReminding(true)}
+    >
+      <CalendarClock size={16} aria-hidden="true" />
+      {followWords}
+      <Pencil size={16} aria-hidden="true" className={page.followEdit} />
+    </button>
+  ) : lead.next_action_at ? (
+    <p className={page.follow} data-late={lateNow || undefined}>
+      <CalendarClock size={16} aria-hidden="true" />
+      {followWords}
+    </p>
+  ) : null;
+  const side = lead.side === "cold" ? "cold" : "inbound";
+  const currentStep =
+    (lead.step && (stages ?? []).some((stage) => stage.key === lead.step)
+      ? lead.step
+      : (stages ?? []).find(
+          (stage) => stage.kind === lead.stage && !stage.archived,
+        )?.key) ?? null;
+  const steps = mainPath(stages, side, currentStep);
+  const movable = new Set(
+    canMove ? (detail.moves ?? []).map((move) => move.step) : [],
+  );
+  const stageChip = (
+    <span
+      className={styles.stageChip}
+      style={
+        {
+          "--stage": stageDot({ kind: lead.stage as Kind }),
+        } as CSSProperties
+      }
+    >
+      {lead.stage_label}
+      {wonWorth ? ` · ${wonWorth}` : ""}
+    </span>
+  );
+  const stageBlock = closed ? (
+    <span className={page.closedChip}>
+      {lead.stage_label}
+      {wonWorth ? ` · ${wonWorth}` : ""}
+    </span>
+  ) : currentStep && steps.some((step) => step.key === currentStep) ? (
+    <StageStepper
+      steps={steps}
+      current={currentStep}
+      movable={movable}
+      onPick={(key) => {
+        setStageTarget(key);
+        setStaging(true);
+      }}
+    />
+  ) : canMove ? (
+    // No path to draw (the stages not read yet, or a stage beside it): the
+    // stage's chip, which opens the stages.
+    <button
+      type="button"
+      className={styles.stageRow}
+      aria-haspopup="dialog"
+      aria-label={`Stage: ${lead.stage_label}${wonWorth ? `, ${wonWorth}` : ""}. Move this lead`}
+      onClick={() => setStaging(true)}
+    >
+      <small>Stage</small>
+      {stageChip}
+      <ChevronDown size={16} aria-hidden="true" />
+    </button>
+  ) : (
+    <span className={styles.stageRow}>
+      <small>Stage</small>
+      {stageChip}
+    </span>
+  );
+  const firstName = displayFirst(lead.name);
+  const noPhoneFix = () => afterMore(editDetails);
+  const lostMove = (detail.moves ?? []).find(
+    (move) => move.group === "lost" || move.group === "junk",
+  );
+  // The honest count over the history: "Tried 3 times, talked once".
+  const tries =
+    storyLines(detail)
+      .find((line) => /^(Tried|Not called)/.test(line))
+      ?.replace(/\.$/, "") ?? null;
+  const latestNote =
+    detail.events.find((event) => event.kind === "note" && event.note) ?? null;
+  const toRecording = () =>
+    document
+      .querySelector<HTMLElement>('[aria-label="Call recording"]')
+      ?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  // With no call to answer, the question is "Called from another phone? Log
+  // a call": it waits under the brief, the first screen being the lead's.
+  const idleLog = isValidElement(outcome) && outcome.type === LogThis;
+  const question =
+    detail.can_edit && afterCall?.step !== "recording" ? (
+      <OpenMessage.Provider value={target ? openMessage : null}>
+        {outcome}
+      </OpenMessage.Provider>
+    ) : null;
+
   return (
-    <div className={styles.card}>
+    <div className={`${styles.card} ${page.stack}`}>
       {/* One header row (owner, #29, 26 Oct 2026: the avatar floated beside
           a four-line subtitle, the × sat alone in its corner and the lead's
           age was a line of its own): the avatar, the name and the × on one
           line, the subtitle two lines until tapped, then one row of chips
           with the stage, the source and why to call now. */}
-      <header className={styles.leadHead}>
-        <Avatar name={lead.name} size={40} />
-        <div className={styles.cardTitle}>
-          <h2>{lead.name}</h2>
-          {sub ? (
-            <button
-              type="button"
-              className={styles.leadSub}
-              aria-expanded={subOpen}
-              onClick={() => setSubOpen((open) => !open)}
-            >
-              {sub}
-            </button>
-          ) : null}
-          {/* The next follow-up under the name, a tap from its presets
-              (competitor teardown 10, 2 Nov 2026). */}
-          {detail.can_edit && !["won", "lost", "junk"].includes(lead.stage) ? (
-            <button
-              type="button"
-              className={styles.followLine}
-              aria-haspopup="dialog"
-              onClick={() => setReminding(true)}
-            >
-              <span>
-                Follow-up ·{" "}
-                {lead.next_action_at
-                  ? upperFirst(when(lead.next_action_at))
-                  : "None yet"}
-              </span>
-              <Pencil size={14} aria-hidden="true" />
-            </button>
-          ) : null}
+      <section className={page.head} aria-label={lead.name}>
+        <div className={page.headTop}>
+          <Avatar name={lead.name} size={48} />
+          <div className={page.headWords}>
+            <h2 className={page.name}>{lead.name}</h2>
+            {facts ? <p className={page.facts}>{facts}</p> : null}
+            {followLine}
+          </div>
         </div>
-      </header>
-      <div className={styles.cardBadges}>
-        {/* One "Stage" with its coloured chip (owner, 31 Oct 2026): a tap
-            opens the stages, which ask what the move needs. A Won lead says
-            what it was worth once: "Won · ₹2.5 L" (ph1-13, 1 Nov 2026). */}
-        {canMove ? (
-          <button
-            type="button"
-            className={styles.stageRow}
-            aria-haspopup="dialog"
-            aria-label={`Stage: ${lead.stage_label}${wonWorth ? `, ${wonWorth}` : ""}. Move this lead`}
-            onClick={() => setStaging(true)}
-          >
-            <small>Stage</small>
-            <span
-              className={styles.stageChip}
-              style={
-                {
-                  "--stage": stageDot({ kind: lead.stage as Kind }),
-                } as CSSProperties
-              }
-            >
-              {lead.stage_label}
-              {wonWorth ? ` · ${wonWorth}` : ""}
-            </span>
-            <ChevronDown size={16} aria-hidden="true" />
-          </button>
-        ) : (
-          <span className={styles.stageRow}>
-            <small>Stage</small>
-            <span
-              className={styles.stageChip}
-              style={
-                {
-                  "--stage": stageDot({ kind: lead.stage as Kind }),
-                } as CSSProperties
-              }
-            >
-              {lead.stage_label}
-              {wonWorth ? ` · ${wonWorth}` : ""}
-            </span>
-          </span>
-        )}
-        <span className={styles.leadWhy}>{nextLine(lead)}</span>
-      </div>
-      <SuggestedStage detail={detail} onChanged={onChanged} />
-      <MeetingCard detail={detail} onChanged={onChanged} />
-      <LeadTasks detail={detail} onChanged={onChanged} />
+        {stageBlock}
+      </section>
       {canMove ? (
         <StageSheet
           open={staging}
           lead={lead}
           moves={detail.moves ?? []}
-          onClose={() => setStaging(false)}
+          initial={stageTarget}
+          onClose={() => {
+            setStaging(false);
+            setStageTarget(null);
+          }}
           onMoved={onChanged}
         />
       ) : null}
@@ -3609,11 +3702,12 @@ export function LeadCard({
           name={lead.name}
           phone={detail.phone ?? null}
         />
-        <OpenMessage.Provider value={target ? openMessage : null}>
-          {detail.can_edit && afterCall?.step !== "recording" ? outcome : null}
-        </OpenMessage.Provider>
-        <div className={styles.actionGrid} data-sx-equal="lead actions">
+        {/* One row of four, like a phone's contact card (lead page P5; the
+            orchestrator, 3 Nov 2026): WhatsApp, Note, Follow-up and More,
+            which holds the rest, one row each. Call is the band below. */}
+        <div className={page.row4} data-sx-equal="lead actions">
           <ActionBox
+            round
             kind="message"
             channel="whatsapp"
             label="WhatsApp"
@@ -3623,103 +3717,283 @@ export function LeadCard({
             fix={numberFix}
             onClick={() => openMessage(null, "whatsapp")}
           />
-          <ActionBox
-            kind="message"
-            channel="sms"
-            label="SMS"
-            icon={<MessageSquareText size={20} aria-hidden="true" />}
-            disabled={!detail.phone}
-            why="SMS: add a phone number first"
-            fix={numberFix}
-            onClick={() => openMessage(null, "sms")}
-          />
-          <ActionBox
-            kind="message"
-            channel="email"
-            label="Email"
-            icon={<Mail size={20} aria-hidden="true" />}
-            href={detail.email ? `mailto:${detail.email}` : undefined}
-            disabled={!detail.email}
-            why="No email on this lead"
-            fix={
-              detail.can_edit
-                ? { label: "Add an email", run: editDetails }
-                : undefined
-            }
-          />
           {detail.can_edit ? (
             <>
               <ActionBox
+                round
                 kind="note"
                 channel="note"
                 label="Note"
                 name="Add a note"
-                icon={<NotebookPen size={20} aria-hidden="true" />}
+                icon={<NotebookPen size={22} aria-hidden="true" />}
                 onClick={() => {
-                  // The Notes field is just below, in its tab: open the tab
-                  // and focus it there, no jump.
-                  setTab("notes");
-                  window.requestAnimationFrame(() => {
-                    const box = document.getElementById(
-                      `lead-note-${lead.lead_id}`,
-                    );
-                    box?.scrollIntoView?.({
-                      block: "nearest",
-                      behavior: "smooth",
-                    });
-                    box?.focus({ preventScroll: true });
-                  });
+                  // Notes open in their sheet, the field ready to type in.
+                  setNoting(true);
+                  window.requestAnimationFrame(() =>
+                    document
+                      .getElementById(`lead-note-${lead.lead_id}`)
+                      ?.focus(),
+                  );
                 }}
               />
               <ActionBox
-                kind="task"
-                channel="task"
-                label="Task"
-                name={`Add a task for ${lead.name}`}
-                icon={<ListPlus size={20} aria-hidden="true" />}
-                onClick={() => setTasking(true)}
-              />
-              <ActionBox
+                round
                 kind="task"
                 channel="remind"
                 label="Follow-up"
                 name={`Schedule a follow-up with ${lead.name}`}
-                icon={<BellPlus size={20} aria-hidden="true" />}
+                icon={<BellPlus size={22} aria-hidden="true" />}
                 onClick={() => setReminding(true)}
-              />
-              <ActionBox
-                kind="stage"
-                channel="move"
-                label="Move"
-                name={`Move stage, now ${lead.stage_label}`}
-                icon={<ArrowRightLeft size={20} aria-hidden="true" />}
-                disabled={!canMove}
-                why="No other stage to move to"
-                onClick={() => setStaging(true)}
               />
             </>
           ) : null}
           <ActionBox
+            round
             kind="note"
-            channel="ask"
-            label="Ask Dipak"
-            name={`Ask Dipak about ${lead.name}`}
-            icon={<Sparkles size={20} aria-hidden="true" />}
-            onClick={() => setAsking(true)}
+            channel="more"
+            label="More"
+            name={`More for ${lead.name}`}
+            icon={<MoreHorizontal size={22} aria-hidden="true" />}
+            onClick={() => setMore(true)}
           />
         </div>
+        {/* The call's question, under the row (lead page P5: the header and
+            the row of four come first): "How did the call go?" after a call. */}
+        {idleLog ? null : question}
       </div>
-      {latestReport ? (
-        // The latest finished Xray Report of this customer's calls (item 93).
-        <Link
-          className={styles.ownerAction}
-          href={callHref(latestReport)}
-          prefetch={false}
-        >
-          <FileText size={16} aria-hidden="true" />
-          View latest report
-        </Link>
-      ) : null}
+      {/* What to know before calling (lead page P5): the problem, the goal,
+          the last talk and the next step; See more for the rest. */}
+      <LeadBrief detail={detail} onChanged={onChanged} />
+      {/* The suggested stage, the meeting and the open tasks, under the
+          brief: the first screen is the lead, the row and the brief, with
+          Call (spec §4, LP1). */}
+      <SuggestedStage detail={detail} onChanged={onChanged} />
+      <MeetingCard detail={detail} onChanged={onChanged} />
+      <LeadTasks detail={detail} onChanged={onChanged} />
+      {idleLog ? question : null}
+      <Picker open={more} onClose={() => setMore(false)} title="More">
+        <ul className={page.moreList}>
+          <li>
+            <button
+              type="button"
+              className={page.moreItem}
+              onClick={() => afterMore(() => setAsking(true))}
+            >
+              <Sparkles size={20} aria-hidden="true" />
+              Ask Dipak about {firstName}
+            </button>
+          </li>
+          {detail.can_edit ? (
+            <li>
+              <button
+                type="button"
+                className={page.moreItem}
+                onClick={() => afterMore(() => setTasking(true))}
+              >
+                <ListPlus size={20} aria-hidden="true" />
+                Add task
+              </button>
+            </li>
+          ) : null}
+          {detail.can_edit && detail.call_mode === "phone" ? (
+            <li>
+              <button
+                type="button"
+                className={page.moreItem}
+                onClick={() =>
+                  afterMore(() => {
+                    // The recording's place is under the call history.
+                    window.requestAnimationFrame(() =>
+                      document
+                        .querySelector<HTMLElement>(
+                          '[aria-label="Call recording"]',
+                        )
+                        ?.scrollIntoView?.({ block: "center" }),
+                    );
+                  })
+                }
+              >
+                <Upload size={20} aria-hidden="true" />
+                Upload recording
+              </button>
+            </li>
+          ) : null}
+          {detail.can_edit ? (
+            <>
+              <li>
+                <button
+                  type="button"
+                  className={page.moreItem}
+                  aria-disabled={!detail.phone || undefined}
+                  onClick={() =>
+                    detail.phone
+                      ? afterMore(() => openMessage(null, "sms"))
+                      : notify({
+                          id: "why-sms",
+                          tone: "info",
+                          title: "SMS: add a phone number first",
+                          ...(numberFix
+                            ? {
+                                action: {
+                                  label: numberFix.label,
+                                  run: noPhoneFix,
+                                },
+                              }
+                            : {}),
+                        })
+                  }
+                >
+                  <MessageSquareText size={20} aria-hidden="true" />
+                  SMS
+                </button>
+              </li>
+              <li>
+                {detail.email ? (
+                  <a
+                    className={page.moreItem}
+                    href={`mailto:${detail.email}`}
+                    onClick={() => setMore(false)}
+                  >
+                    <Mail size={20} aria-hidden="true" />
+                    Email
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    className={page.moreItem}
+                    aria-disabled
+                    onClick={() =>
+                      notify({
+                        id: "why-email",
+                        tone: "info",
+                        title: "No email on this lead",
+                        action: { label: "Add an email", run: noPhoneFix },
+                      })
+                    }
+                  >
+                    <Mail size={20} aria-hidden="true" />
+                    Email
+                  </button>
+                )}
+              </li>
+              <li>
+                <button
+                  type="button"
+                  className={page.moreItem}
+                  aria-disabled={!canMove || undefined}
+                  onClick={() =>
+                    canMove
+                      ? afterMore(() => setStaging(true))
+                      : notify({
+                          id: "why-move",
+                          tone: "info",
+                          title: "No other stage to move to",
+                        })
+                  }
+                >
+                  <ArrowRightLeft size={20} aria-hidden="true" />
+                  Move stage
+                </button>
+              </li>
+            </>
+          ) : null}
+          {detail.can_assign && detail.reps.length ? (
+            <li>
+              <button
+                type="button"
+                className={page.moreItem}
+                onClick={() => afterMore(() => setPicking(true))}
+              >
+                <Shuffle size={20} aria-hidden="true" />
+                {lead.owner_name ? "Reassign" : "Assign"}
+              </button>
+            </li>
+          ) : null}
+          {canMove && lostMove ? (
+            <li>
+              <button
+                type="button"
+                className={page.moreItem}
+                onClick={() =>
+                  afterMore(() => {
+                    setStageTarget(lostMove.step);
+                    setStaging(true);
+                  })
+                }
+              >
+                <Ban size={20} aria-hidden="true" />
+                Close as lost / junk
+              </button>
+            </li>
+          ) : null}
+          {detail.can_edit ? null : (
+            <li>
+              <CopyLeadLink leadId={lead.lead_id} row />
+            </li>
+          )}
+        </ul>
+      </Picker>
+      {menuSlot
+        ? createPortal(
+            <button
+              type="button"
+              className={page.barButton}
+              aria-label={`Options for ${lead.name}`}
+              aria-haspopup="dialog"
+              onClick={() => setMenuOpen(true)}
+            >
+              <MoreVertical size={22} aria-hidden="true" />
+            </button>,
+            menuSlot,
+          )
+        : null}
+      <Picker
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        title={lead.name}
+      >
+        <ul className={page.moreList}>
+          {detail.can_edit ? (
+            <li>
+              <button
+                type="button"
+                className={page.moreItem}
+                onClick={() => afterMore(editDetails)}
+              >
+                <Pencil size={20} aria-hidden="true" />
+                Edit details
+              </button>
+            </li>
+          ) : null}
+          <li>
+            <CopyLeadLink leadId={lead.lead_id} row />
+          </li>
+          {detail.can_assign && detail.reps.length ? (
+            <li>
+              <button
+                type="button"
+                className={page.moreItem}
+                onClick={() => afterMore(() => setPicking(true))}
+              >
+                <Shuffle size={20} aria-hidden="true" />
+                {lead.owner_name ? "Reassign" : "Assign"}
+              </button>
+            </li>
+          ) : null}
+          {onDelete ? (
+            <li>
+              <button
+                type="button"
+                className={page.moreItem}
+                onClick={() => afterMore(onDelete)}
+              >
+                <Trash2 size={20} aria-hidden="true" />
+                Delete lead
+              </button>
+            </li>
+          ) : null}
+        </ul>
+      </Picker>
       {tasking ? (
         <AddTaskSheet
           open
@@ -3808,84 +4082,67 @@ export function LeadCard({
       ) : null}
       {recordingNow ? recording : null}
 
-      {/* Under the actions, three tabs (owner, #31, 26 Oct 2026): Notes, the
-          Calls (what the calls told us, then each call, the newest with what
-          it said and its Report) and the Story (the lead hub's one line of
-          time: calls, chats one line a day, notes and stage changes). Every
-          panel stays drawn, the others hidden, so nothing is more than a tap
-          away. Then the chats themselves, then about the lead. */}
-      <section className={styles.historyBlock} aria-label="History">
-        <LeadTabs id={tabsId} tab={tab} onTab={setTab} counts={tabCounts} />
-        <div
-          id={`${tabsId}-notes`}
-          role="tabpanel"
-          aria-labelledby={`${tabsId}-notes-tab`}
-          className={styles.leadPanel}
-          hidden={tab !== "notes"}
-        >
-          <NotesSection detail={detail} onSaved={onChanged} />
+      {/* The call history (lead page P5): every call, chat, note and move
+          in one column, the follow-up to come pinned first; then the latest
+          note, which opens Notes. The calls' recording and what they told
+          us follow, then the chats themselves, then about the lead. */}
+      <section className={page.card} aria-labelledby={historyId}>
+        <div className={page.cardHead}>
+          <h3 id={historyId} className={page.cardTitle}>
+            Call history
+          </h3>
+          {tries ? <span className={page.cardMeta}>{tries}</span> : null}
         </div>
-        <div
-          id={`${tabsId}-calls`}
-          role="tabpanel"
-          aria-labelledby={`${tabsId}-calls-tab`}
-          className={styles.leadPanel}
-          hidden={tab !== "calls"}
-        >
-          {recordingNow ? null : recording}
-          {/* Owner, 19 Oct: every call becomes data. What the calls told
-              us, and the few things the engine is unsure of, asked one at a
-              time. */}
-          <CallFacts detail={detail} onChanged={onChanged} />
-          {detail.call_mode === "simulated" && detail.can_edit ? (
-            testing ? (
-              <SimulatedCall detail={detail} onDone={onChanged} />
-            ) : (
-              <button
-                type="button"
-                className={styles.linkButton}
-                onClick={() => setTesting(true)}
-              >
-                Test workspace: try with a sample recording
-              </button>
-            )
-          ) : null}
-          {tabCounts.calls ? (
-            <History
-              events={detail.events}
-              onChanged={onChanged}
-              leadId={lead.lead_id}
-              brief={<LastCallBrief detail={detail} onChanged={onChanged} />}
-              label="Calls"
-              only="calls"
-            />
-          ) : (
-            <p className={styles.hint}>
-              {detail.phone
-                ? "No calls yet. Tap Call to start."
-                : "No calls yet."}
-            </p>
-          )}
-        </div>
-        <div
-          id={`${tabsId}-story`}
-          role="tabpanel"
-          aria-labelledby={`${tabsId}-story-tab`}
-          className={styles.leadPanel}
-          hidden={tab !== "story"}
-        >
-          <StorySoFar detail={detail} />
-          <History
-            events={detail.events}
-            onChanged={onChanged}
-            leadId={lead.lead_id}
-            chats={chats}
-            currentLabel={lead.stage_label}
-            focusAt={focusAt}
-            compact
-          />
-        </div>
+        <History
+          events={detail.events}
+          onChanged={onChanged}
+          leadId={lead.lead_id}
+          chats={chats}
+          focusAt={focusAt}
+          upcoming={
+            lead.next_action_at && !closed && !lateFollowUp(lead.next_action_at)
+              ? { at: lead.next_action_at, note: detail.next_action_note }
+              : null
+          }
+          onGenerate={recording && !recordingNow ? toRecording : undefined}
+        />
       </section>
+      {latestNote ? (
+        <button
+          type="button"
+          className={`${page.card} ${page.noteCard}`}
+          aria-haspopup="dialog"
+          onClick={() => setNoting(true)}
+        >
+          <span className={page.cardTitle}>Latest note</span>
+          <span className={page.noteText}>{latestNote.note}</span>
+          <span className={page.noteBy}>
+            {[latestNote.actor_name, ago(latestNote.at)]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+        </button>
+      ) : null}
+      <Picker open={noting} onClose={() => setNoting(false)} title="Notes">
+        <NotesSection detail={detail} onSaved={onChanged} all />
+      </Picker>
+      {recordingNow ? null : recording}
+      {/* Owner, 19 Oct: every call becomes data. What the calls told us,
+          and the few things the engine is unsure of, asked one at a time. */}
+      <CallFacts detail={detail} onChanged={onChanged} />
+      {detail.call_mode === "simulated" && detail.can_edit ? (
+        testing ? (
+          <SimulatedCall detail={detail} onDone={onChanged} />
+        ) : (
+          <button
+            type="button"
+            className={styles.linkButton}
+            onClick={() => setTesting(true)}
+          >
+            Test workspace: try with a sample recording
+          </button>
+        )
+      ) : null}
 
       <WhatsAppThread
         leadId={lead.lead_id}
@@ -4014,7 +4271,14 @@ export function LeadCard({
 }
 
 /** This lead's own link, to send a teammate or keep (Liquid Glass, 22 Oct 2026). */
-function CopyLeadLink({ leadId }: { leadId: string }) {
+function CopyLeadLink({
+  leadId,
+  row = false,
+}: {
+  leadId: string;
+  /** A row in More or ⋯ (lead page P5). */
+  row?: boolean;
+}) {
   const copy = async () => {
     const link = leadLink(leadId, window.location.origin);
     try {
@@ -4038,10 +4302,10 @@ function CopyLeadLink({ leadId }: { leadId: string }) {
   return (
     <button
       type="button"
-      className={styles.copyLink}
+      className={row ? page.moreItem : styles.copyLink}
       onClick={() => void copy()}
     >
-      <Link2 size={13} aria-hidden="true" />
+      <Link2 size={row ? 20 : 13} aria-hidden="true" />
       Copy link
     </button>
   );
@@ -4154,7 +4418,10 @@ export function LeadSheet({
   inline = false,
   focusAt = null,
   round = null,
+  stages = null,
 }: {
+  /** The organisation's stages in path order, for the step strip (P5). */
+  stages?: readonly StageView[] | null;
   leadId: string | null;
   me: Me | null;
   onClose: () => void;
@@ -4175,6 +4442,7 @@ export function LeadSheet({
   inline?: boolean;
 }) {
   const [primarySlot, setPrimarySlot] = useState<HTMLDivElement | null>(null);
+  const [menuSlot, setMenuSlot] = useState<HTMLElement | null>(null);
   const typing = useTyping();
   const [loaded, setLoaded] = useState<LeadDetail | null>(null);
   const [failed, setFailed] = useState<{
@@ -4311,6 +4579,7 @@ export function LeadSheet({
         }
         label={detail?.lead.name ?? "Lead"}
         onClose={onClose}
+        menuSlot={setMenuSlot}
       >
         {failure?.gone ? (
           // A notice or an old link to a lead that moved on: nothing to try
@@ -4345,6 +4614,21 @@ export function LeadSheet({
                   : undefined
               }
               round={queue ? round : null}
+              stages={stages}
+              menuSlot={inline ? null : menuSlot}
+              onDelete={
+                detail.can_assign
+                  ? () =>
+                      setRemoving((current) => ({
+                        round: (current?.round ?? 0) + 1,
+                        open: true,
+                        lead: {
+                          lead_id: detail.lead.lead_id,
+                          name: detail.lead.name,
+                        },
+                      }))
+                  : undefined
+              }
               detail={detail}
               me={me}
               onChanged={update}
@@ -4401,7 +4685,7 @@ export function LeadSheet({
                 )
               }
             />
-            {detail.can_assign ? (
+            {detail.can_assign && inline ? (
               <div className={deleteStyles.leadFoot}>
                 <button
                   type="button"
@@ -4428,33 +4712,36 @@ export function LeadSheet({
             Opening the lead…
           </div>
         )}
+        {/* In the page: while it is open the page behind it is out of
+            reach (lead-page-frame.tsx). */}
+        {removing ? (
+          <DeleteLeadsSheet
+            key={removing.round}
+            open={removing.open && removing.lead.lead_id === leadId}
+            leads={[removing.lead]}
+            onClose={() =>
+              setRemoving((current) => current && { ...current, open: false })
+            }
+            onDeleted={() => {
+              setRemoving((current) => current && { ...current, open: false });
+              onClose();
+              onChanged();
+            }}
+          />
+        ) : null}
       </PaneOrSheet>
-      {removing ? (
-        <DeleteLeadsSheet
-          key={removing.round}
-          open={removing.open && removing.lead.lead_id === leadId}
-          leads={[removing.lead]}
-          onClose={() =>
-            setRemoving((current) => current && { ...current, open: false })
-          }
-          onDeleted={() => {
-            setRemoving((current) => current && { ...current, open: false });
-            onClose();
-            onChanged();
-          }}
-        />
-      ) : null}
     </>
   );
 }
 
-/** The lead in a sheet, or in the pane beside the list on a wide screen. */
+/** The lead as a page, or in the pane beside the list on a wide screen. */
 function PaneOrSheet({
   inline,
   open,
   footer,
   label,
   onClose,
+  menuSlot,
   children,
 }: {
   inline: boolean;
@@ -4462,22 +4749,25 @@ function PaneOrSheet({
   footer?: ReactNode;
   label: string;
   onClose: () => void;
+  /** The page bar's end, where the lead puts ⋯. */
+  menuSlot?: (node: HTMLElement | null) => void;
   children: ReactNode;
 }) {
   // Beside the list too, Back closes the lead before it leaves Leads, and the
   // lead's address entry is its own (the open lead in the address).
   useBackClose(inline && open, onClose);
+  // A page, not a sheet (lead page P5): one scroll, the list kept behind it.
   if (!inline)
     return (
-      <Sheet
+      <LeadPageFrame
         open={open}
         footer={footer}
         label={label}
         onClose={onClose}
-        className={styles.leadSheetFrame}
+        menuSlot={menuSlot}
       >
         {children}
-      </Sheet>
+      </LeadPageFrame>
     );
   if (!open) return null;
   return (

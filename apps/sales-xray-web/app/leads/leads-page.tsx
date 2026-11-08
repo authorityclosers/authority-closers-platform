@@ -1857,6 +1857,7 @@ export function LeadsRoute({
         focusAt={openLead ? focusAt : null}
         onClose={closeLead}
         onChanged={refresh}
+        stages={stagesShown}
         queue={!!shownLead && !!queue?.has(shownLead)}
         onNext={nextLead}
         round={

@@ -2,7 +2,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { LeadCard, LogThis, latestReportOf } from "./lead-sheet";
+import { LeadCard, LogThis } from "./lead-sheet";
 import type { LeadDetail, LeadEvent } from "./leads-client";
 
 (
@@ -13,8 +13,8 @@ vi.mock("next/link", () => ({
   default: ({ children }: { children: unknown }) => children,
 }));
 
-// The lead sheet's v0.99 pass (owner reports #31 and #34, 26 Oct 2026):
-// "Log it" under Call, and Notes · Calls · Story under the actions.
+// The lead page (P5, 8 Nov 2026; first the v0.99 pass, owner reports #31
+// and #34): Log a call, the call history and the latest note, no tabs.
 let root: Root;
 let host: HTMLDivElement;
 
@@ -115,54 +115,80 @@ async function show(outcome: ReactNode = null) {
   );
 }
 
-const tab = (name: string) =>
-  [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((item) =>
-    item.textContent?.startsWith(name),
+const historyCard = () =>
+  [...host.querySelectorAll<HTMLElement>("section[aria-labelledby]")].find(
+    (section) => section.querySelector("h3")?.textContent === "Call history",
   )!;
-const panel = (name: string) =>
-  document.getElementById(tab(name).getAttribute("aria-controls")!)!;
+const noteCard = () =>
+  [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
+    button.textContent?.startsWith("Latest note"),
+  );
 
-it("shows Notes first, and each tab its own panel", async () => {
+it("puts the call history and the latest note on one page, no tabs (lead page P5)", async () => {
   await show();
-  expect(
-    [...host.querySelectorAll('[role="tab"]')].map((item) => item.textContent),
-  ).toEqual(["Notes1", "Calls1", "Story"]);
-  expect(tab("Notes").getAttribute("aria-selected")).toBe("true");
-  expect(panel("Notes").hidden).toBe(false);
-  expect(panel("Calls").hidden).toBe(true);
-  expect(panel("Story").hidden).toBe(true);
-  expect(panel("Notes").textContent).toContain(
-    "Wants the brochure in Marathi.",
-  );
-
-  await act(async () => tab("Calls").click());
-  expect(panel("Notes").hidden).toBe(true);
-  expect(panel("Calls").hidden).toBe(false);
-  const calls = panel("Calls").querySelector('[aria-label="Calls"]');
-  expect(calls?.textContent).toContain("Interested");
-  expect(calls?.textContent).not.toContain("brochure");
-
-  // Arrow keys move along the tabs, as tabs do.
-  await act(async () =>
-    tab("Calls").dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
-    ),
-  );
-  expect(tab("Story").getAttribute("aria-selected")).toBe("true");
-  expect(document.activeElement).toBe(tab("Story"));
-  // The Story: one line each, the time on the right, under its day.
-  const story = panel("Story").querySelector('ol[aria-label="History"]');
-  expect(story?.hasAttribute("data-compact")).toBe(true);
-  const times = [...(story?.querySelectorAll("time") ?? [])].map(
-    (time) => time.textContent,
-  );
-  expect(times).toHaveLength(2);
-  for (const time of times) expect(time).toMatch(/^\d{1,2}:\d{2}\s?(am|pm)$/i);
+  expect(host.querySelector('[role="tab"], [role="tablist"]')).toBeNull();
+  const card = historyCard();
+  // The honest count beside the title.
+  expect(card.textContent).toContain("Tried 1 time, talked once");
+  // Newest first, one row each, the day and time under the title.
+  const rows = [
+    ...card.querySelectorAll<HTMLElement>('ol[aria-label="History"] > li'),
+  ];
+  expect(rows.map((row) => row.dataset.kind)).toEqual(["note", "result"]);
+  for (const row of rows)
+    expect(row.querySelector("time")?.textContent).toMatch(
+      /\d{1,2}:\d{2}\s?(am|pm)$/i,
+    );
+  // The newest note as written, its author under it.
+  expect(noteCard()?.textContent).toContain("Wants the brochure in Marathi.");
+  expect(noteCard()?.textContent).toContain("Asha Fictional");
 });
 
-it("opens the Notes tab and its field from the Note box", async () => {
+it("pins the follow-up still to come first, with Upcoming", async () => {
+  const later = {
+    ...detail,
+    next_action_note: "Send the fee details",
+    lead: { ...detail.lead, next_action_at: "2099-01-05T05:30:00Z" },
+  };
+  await act(async () =>
+    root.render(
+      <LeadCard
+        detail={later}
+        me={null}
+        onChanged={() => undefined}
+        outcome={null}
+      />,
+    ),
+  );
+  const first = historyCard().querySelector("ol > li");
+  expect(first?.getAttribute("data-kind")).toBe("upcoming");
+  expect(first?.textContent).toContain("Upcoming");
+  expect(first?.textContent).toContain("Send the fee details");
+  // A follow-up already past is no "Upcoming" (the header says it is late).
+  const past = {
+    ...detail,
+    lead: { ...detail.lead, next_action_at: "2026-10-20T05:30:00Z" },
+  };
+  await act(async () =>
+    root.render(
+      <LeadCard
+        detail={past}
+        me={null}
+        onChanged={() => undefined}
+        outcome={null}
+      />,
+    ),
+  );
+  expect(historyCard().querySelector('li[data-kind="upcoming"]')).toBeNull();
+});
+
+it("opens Notes in a sheet from Note, the field ready, and from the latest note", async () => {
   await show();
-  await act(async () => tab("Story").click());
+  const notes = () =>
+    [...document.querySelectorAll("dialog")].find((dialog) =>
+      dialog.textContent?.includes("Wants the brochure in Marathi."),
+    );
+  expect(notes()?.open ?? false).toBe(false);
   const note = host.querySelector<HTMLButtonElement>(
     'button[aria-label="Add a note"]',
   )!;
@@ -170,15 +196,28 @@ it("opens the Notes tab and its field from the Note box", async () => {
     note.click();
     await new Promise((done) => setTimeout(done, 0));
   });
-  expect(tab("Notes").getAttribute("aria-selected")).toBe("true");
+  expect(notes()?.open).toBe(true);
   expect(document.activeElement?.id).toBe(`lead-note-${detail.lead.lead_id}`);
 });
 
-it("puts the call's question line under Call, above the action boxes", async () => {
+it("opens Notes from the latest note card", async () => {
+  await show();
+  await act(async () => noteCard()?.click());
+  const open = [...document.querySelectorAll("dialog")].find(
+    (dialog) => dialog.open,
+  );
+  expect(open?.textContent).toContain("Wants the brochure in Marathi.");
+});
+
+it("keeps Log a call under the brief, the first screen being the lead's (lead page P5)", async () => {
   const opened = vi.fn();
   await show(<LogThis hint={null} onOpen={opened} />);
   const grid = host.querySelector('[data-sx-equal="lead actions"]');
-  const line = grid?.previousElementSibling;
+  // Nothing to answer: the row of four ends its block, the brief follows.
+  expect(grid?.nextElementSibling).toBeNull();
+  const brief = host.querySelector('section[aria-labelledby^="lead-brief-"]');
+  expect(brief?.querySelector("h3")?.textContent).toBe("Before you call");
+  const line = brief?.nextElementSibling;
   expect(line?.textContent).toBe("Called from another phone?Log a call");
   const button = line?.querySelector("button");
   expect(
@@ -189,12 +228,18 @@ it("puts the call's question line under Call, above the action boxes", async () 
   expect(opened).toHaveBeenCalledOnce();
 });
 
+it("keeps a call's open question right under the row of four", async () => {
+  await show(<p>How did the call go?</p>);
+  const grid = host.querySelector('[data-sx-equal="lead actions"]');
+  expect(grid?.nextElementSibling?.textContent).toBe("How did the call go?");
+});
+
 it("says Log this after something happened", async () => {
   await show(<LogThis hint="WhatsApp sent." onOpen={() => undefined} />);
   expect(host.textContent).toContain("WhatsApp sent.Log a call");
 });
 
-it("keeps an idle recording card in the Calls tab, and one to act on now on top", async () => {
+it("keeps an idle recording card under the call history, and one to act on now on top", async () => {
   const me = {
     person_id: "22222222-2222-4222-8222-222222222222",
     name: "Seller",
@@ -212,8 +257,11 @@ it("keeps an idle recording card in the Calls tab, and one to act on now on top"
     ),
   );
   const idle = host.querySelector('[aria-label="Call recording"]');
-  expect(idle?.closest('[role="tabpanel"]')).toBe(panel("Calls"));
-  // Back from a call: the recording step comes before the tabs.
+  expect(idle).not.toBeNull();
+  const after = (a: Node, b: Node) =>
+    Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_PRECEDING);
+  expect(after(idle!, historyCard())).toBe(true);
+  // Back from a call: the recording step comes before the history.
   await act(async () =>
     root.render(
       <LeadCard
@@ -227,7 +275,7 @@ it("keeps an idle recording card in the Calls tab, and one to act on now on top"
   );
   const now = host.querySelector('[aria-label="Call recording"]');
   expect(now).not.toBeNull();
-  expect(now?.closest('[role="tabpanel"]')).toBeNull();
+  expect(after(now!, historyCard())).toBe(false);
 });
 
 // ph2-19 (phone QA, 1 Nov 2026): a note draft survives the app being closed.
@@ -252,9 +300,10 @@ it("keeps a note draft on the phone until it is saved", async () => {
 // ph2-32 (phone QA, 1 Nov 2026): Cancel in Edit sat under the Call bar and dialled.
 it("hides Call while the details are being edited", async () => {
   await show();
+  // The one Call reads "Call <first name>" (lead page P5).
   const call = () =>
     [...host.querySelectorAll("a, button")].find((item) =>
-      /^Call\+91/.test(item.textContent ?? ""),
+      /^Call \S/.test(item.textContent ?? ""),
     );
   const button = (text: string) =>
     [...host.querySelectorAll("button")].find(
@@ -265,17 +314,4 @@ it("hides Call while the details are being edited", async () => {
   expect(call()).toBeUndefined();
   await act(async () => button("Cancel").click());
   expect(call()).toBeTruthy();
-});
-
-it("opens the newest report from View latest report (item 93)", () => {
-  // The story comes newest first (QA robot, 1 Nov 2026: it opened the oldest).
-  expect(
-    latestReportOf([
-      event({ kind: "note", note: "Fictional note." }),
-      event({ kind: "call", submission_id: "newest-fictional" }),
-      event({ kind: "call", submission_id: null }),
-      event({ kind: "call", submission_id: "oldest-fictional" }),
-    ]),
-  ).toBe("newest-fictional");
-  expect(latestReportOf([event({ kind: "note" })])).toBeNull();
 });
