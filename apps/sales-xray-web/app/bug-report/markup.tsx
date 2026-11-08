@@ -86,20 +86,27 @@ export function MarkupEditor({
     let alive = true;
     const url = URL.createObjectURL(source);
     const image = new Image();
+    // The picture's address is let go once the picture has loaded or failed,
+    // never while it is still loading: let go early, the browser logs "Failed
+    // to load resource: net::ERR_FILE_NOT_FOUND" for it (QA robot fecaec8b and
+    // da117607, 8 Nov 2026: Mark up or blur on /performance and
+    // /analysis/calls, where the step was set up a second time before its
+    // picture had loaded; closing it that early did the same).
+    const release = () => URL.revokeObjectURL(url);
     image.onload = () => {
+      release();
       const target = canvas.current;
       const context = target?.getContext("2d");
       if (!alive || !target || !context) return;
       target.width = image.naturalWidth;
       target.height = image.naturalHeight;
       context.drawImage(image, 0, 0);
-      URL.revokeObjectURL(url);
       setReady(true);
     };
+    image.onerror = release;
     image.src = url;
     return () => {
       alive = false;
-      URL.revokeObjectURL(url);
     };
   }, [source]);
 
