@@ -19,13 +19,9 @@ import styles from "./setup.module.css";
 export function OrganisationRules() {
   const [part, setPart] = useState<"routing" | "people" | "limits">("routing");
   return (
+    // No title of its own: Leads setup's switch already says Lead rules
+    // (owner, bug 190, 6 Nov 2026: the same words three times, too much text).
     <div className={styles.stack}>
-      <header className={styles.head}>
-        <div>
-          <h2>Lead rules</h2>
-          <p>Choose who gets new leads and when they move.</p>
-        </div>
-      </header>
       <Segmented
         label="Lead rule setup"
         value={part}

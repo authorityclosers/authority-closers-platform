@@ -131,7 +131,8 @@ function Parts({
       {current.section === "sources" ? (
         <OrganisationSources key="sources" />
       ) : current.section === "stages" ? (
-        <OrganisationStages key="stages" />
+        // The switch above names it: no second title (owner, bug 192).
+        <OrganisationStages key="stages" bare />
       ) : current.section === "lead-rules" ? (
         <OrganisationRules key="rules" />
       ) : (
