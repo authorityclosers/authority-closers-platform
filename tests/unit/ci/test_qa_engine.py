@@ -124,3 +124,34 @@ def test_tap_loop_skips_controls_behind_an_open_dialog() -> None:
     scan = (ROOT / "lib" / "invariants.cjs").read_text(encoding="utf-8")
     assert scan.count('!el.closest("[role=dialog],[aria-modal=true],dialog")) continue;') >= 2
     assert scan.count("under an open :modal dialog") >= 2
+
+
+def test_empty_state_words_are_looked_for_one_block_of_text_at_a_time() -> None:
+    """A tile label and the heading beside it must not read as one "no calls" phrase."""
+    attack = (ROOT / "lib" / "attack.cjs").read_text(encoding="utf-8")
+    assert "EMPTY.test(" not in attack
+    assert attack.count("emptyHit(") >= 8
+    assert "split(/\\n+/)" in attack
+    source = re.search(r"^const EMPTY = /(.*)/i;$", attack, re.MULTILINE)
+    assert source
+    empty = re.compile(source.group(1), re.IGNORECASE)
+    blocks = ["No owner", "Calls today", "No calls yet"]
+    assert empty.search(" ".join(blocks[:2]))  # the old reading: two blocks run together
+    assert not any(empty.search(block) for block in blocks[:2])
+    assert empty.search(blocks[2])
+
+
+def test_focus_look_takes_in_the_box_a_stretched_link_draws_its_ring_on() -> None:
+    """A link's ring on its ::after covers the whole row, outside the link's own box plus 8 px."""
+    attack = (ROOT / "lib" / "attack.cjs").read_text(encoding="utf-8")
+    assert "const reach = (el, b) => {" in attack
+    assert "rect: reach(el, r)," in attack
+    assert "const prevRect = pr ? reach(prev, pr) : null;" in attack
+    assert 'for (const pe of ["::after", "::before"])' in attack
+
+
+def test_empty_list_scan_leaves_out_a_sliver_nobody_can_look_at() -> None:
+    """An empty 8 px avatars list while the Team floor loads is not an empty state a person sees."""
+    scan = (ROOT / "lib" / "invariants.cjs").read_text(encoding="utf-8")
+    assert "if (box.width < 24 || box.height < 24) continue;" in scan
+    assert scan.index("box.width < 24") < scan.index("out.emptyLists.push(")

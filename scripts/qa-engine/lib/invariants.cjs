@@ -242,6 +242,8 @@ function scan(phone) {
     if (out.emptyLists.length >= 6) break;
     if (!visible(el)) continue;
     if (el.querySelectorAll("li,tr,[role=listitem],[role=row],a,button").length) continue;
+    const box = el.getBoundingClientRect();
+    if (box.width < 24 || box.height < 24) continue; // a sliver (an 8 px empty avatars list while it loads) is nothing a person can look at
     const around = ((el.parentElement && el.parentElement.innerText) || "").replace(/\s+/g, " ");
     if (/\b(no|nothing|empty|yet|none|haven|add your|start by)\b/i.test(around)) continue;
     out.emptyLists.push(rec(el, {}));

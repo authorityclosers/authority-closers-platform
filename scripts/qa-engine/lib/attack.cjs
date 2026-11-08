@@ -142,11 +142,21 @@ const CODE_BUG = /TypeError|ReferenceError|RangeError|Cannot read|is not a funct
 const FRIENDLY = /couldn['’]?t|could not|can['’]?t|unable|try again|retry|something went wrong|didn['’]?t load|did not load|not available|offline|too many|problem|failed|went wrong/i;
 const TECH = /\b(?:500|429|502|503)\b|internal server error|too many requests|\b(?:TypeError|SyntaxError|ReferenceError)\b|unexpected token|\bJSON\b|failed to fetch|networkerror|\bundefined\b|\bNaN\b|\[object|"detail"/i;
 const EMPTY = /\b(?:no|nothing|haven['’]t|have no|none)\b[^.]{0,40}\b(?:leads?|calls?|tasks?|follow-?ups?|reports?|notes?|results?|activity)\b/i;
+// The empty-state words, looked for one block of text at a time (FACTS.lines). The page text with its line breaks gone ran
+// a "No owner" tile label into the "Calls today" heading beside it and read that as "there is nothing" (ux-audit, 8 Nov 2026).
+const emptyHit = (f) => {
+  for (const line of (f && f.lines) || []) {
+    const m = EMPTY.exec(line);
+    if (m) return m[0];
+  }
+  return "";
+};
 
 const FACTS = () => {
   const visible = (el) => el.checkVisibility && el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0;
   const main = document.querySelector("main") || document.body;
   const text = (main.innerText || "").replace(/\s+/g, " ").trim();
+  const lines = (main.innerText || "").split(/\n+/).map((s) => s.replace(/\s+/g, " ").trim()).filter(Boolean).slice(0, 400);
   // a clip player's own progress bar ("Clip progress", value 0 of 34 on the Coaching page) is not a page loading
   const mediaBar = (e) => e.getAttribute("role") === "progressbar" && (/clip|playback|audio|video|seek|player|position/i.test(e.getAttribute("aria-label") || "") || !!e.closest("audio,video,[class*='player' i]"));
   const loadingEls = [...document.querySelectorAll('[role=progressbar],[aria-busy="true"],[class*="skeleton" i],[class*="spinner" i],[class*="shimmer" i]')].filter(visible).filter((e) => !mediaBar(e));
@@ -166,13 +176,13 @@ const FACTS = () => {
   const portal = document.querySelector("nextjs-portal");
   const shadow = portal && portal.shadowRoot;
   const overlayText = shadow ? [...shadow.children].filter((e) => e.tagName !== "STYLE").map((e) => e.textContent || "").join(" ").replace(/\s+/g, " ") : "";
-  return { textLength: text.length, text: text.slice(0, 3000), loading, loadingIn, bits, retry, overlay: /unhandled runtime error|application error/i.test(overlayText) ? overlayText.slice(0, 160) : "", theme: document.documentElement.getAttribute("data-theme") || "" };
+  return { textLength: text.length, text: text.slice(0, 3000), lines, loading, loadingIn, bits, retry, overlay: /unhandled runtime error|application error/i.test(overlayText) ? overlayText.slice(0, 160) : "", theme: document.documentElement.getAttribute("data-theme") || "" };
 };
 
 const SHIFT_INIT = `(() => { const s = (window.__qaShifts = []); try { new PerformanceObserver((l) => { for (const e of l.getEntries()) if (!e.hadRecentInput && e.value > 0.002) s.push({ v: e.value, t: Math.round(e.startTime), src: (e.sources || []).slice(0, 3).map((x) => { try { return x.node && x.node.nodeType === 1 && window.__qaSem ? window.__qaSem(x.node) : "(text)"; } catch (err) { return "?"; } }) }); }).observe({ type: "layout-shift", buffered: true }); } catch (e) {} })();`;
 
 async function facts(tab) {
-  return tab.page.evaluate(FACTS).catch(() => ({ textLength: 0, text: "", loading: 0, bits: [], retry: false, overlay: "", theme: "", unreadable: true }));
+  return tab.page.evaluate(FACTS).catch(() => ({ textLength: 0, text: "", lines: [], loading: 0, bits: [], retry: false, overlay: "", theme: "", unreadable: true }));
 }
 
 // Writes are refused. lib/sim.cjs holds /v1 writes 1.2 s and aborts them (so a double press can be counted); any other
@@ -335,7 +345,7 @@ async function faultTrial(ctx, route, kind, target, base, attempt = 0) {
       const mid = await facts(tab);
       const pending = tab.api.inflight > 0;
       if (pending && mid.textLength < 25 && mid.loading === 0) await add("fault:blank-while-waiting", "MAJOR", `${what}: blank, with no outline or loading mark, 3 s after opening`);
-      else if (pending && EMPTY.test(mid.text) && !EMPTY.test(base.text)) await add("fault:false-empty", "MAJOR", `${what}: says there is nothing (${(EMPTY.exec(mid.text) || [""])[0]}) while the call is still waiting`);
+      else if (pending && emptyHit(mid) && !emptyHit(base)) await add("fault:false-empty", "MAJOR", `${what}: says there is nothing (${emptyHit(mid)}) while the call is still waiting`);
       // eight calls delayed 10 s each queue behind the browser's six connections: give the page up to 50 s to fill
       let end = null;
       for (let wait = 0; wait < 10; wait++) {
@@ -376,7 +386,7 @@ async function faultTrial(ctx, route, kind, target, base, attempt = 0) {
           }
         }
         if (b.textLength >= 25 && b.loading === 0 && !calm && !techOnly.length) {
-          if (EMPTY.test(b.text) && !EMPTY.test(base.text)) await add("fault:false-empty", "MAJOR", `${what}: says there is nothing (${(EMPTY.exec(b.text) || [""])[0]}) when the call failed`);
+          if (emptyHit(b) && !emptyHit(base)) await add("fault:false-empty", "MAJOR", `${what}: says there is nothing (${emptyHit(b)}) when the call failed`);
           else if (base.textLength - b.textLength > 80) await add("fault:silent", "MINOR", `${what}: part of the page vanished (${base.textLength - b.textLength} characters) with no message and no Retry`);
         }
         const bug = errs.find((e) => CODE_BUG.test(e));
@@ -444,7 +454,7 @@ async function fam3g(ctx, route) {
     if (base.pending && early.textLength < 25 && early.loading === 0) await ctx.add("net3g:blank-while-loading", "MINOR", "blank with no outline or loading mark while the first calls wait", "");
     await sleep(900);
     const mid = await facts(tab);
-    if (tab.api.inflight > 0 && EMPTY.test(mid.text)) await ctx.add("net3g:false-empty", "MAJOR", `says there is nothing (${(EMPTY.exec(mid.text) || [""])[0]}) while a call is still on its way`, "");
+    if (tab.api.inflight > 0 && emptyHit(mid)) await ctx.add("net3g:false-empty", "MAJOR", `says there is nothing (${emptyHit(mid)}) while a call is still on its way`, "");
     await session.settle(tab, 60000);
     await sleep(1500);
     const shifts = await tab.page.evaluate(() => window.__qaShifts || []).catch(() => []);
@@ -665,10 +675,30 @@ const SAMPLE = () => {
     const cs = getComputedStyle(el);
     return [cs.outlineStyle, cs.outlineWidth, cs.outlineColor, cs.boxShadow, cs.borderTopColor, cs.borderTopWidth, cs.backgroundColor, cs.color, cs.textDecorationLine, cs.opacity, cs.transform].join("|");
   };
+  // A "stretched link" draws its focus ring on a ::after that covers a bigger box (the row): the picture takes that box in too.
+  const reach = (el, b) => {
+    let x0 = b.left;
+    let y0 = b.top;
+    let x1 = b.right;
+    let y1 = b.bottom;
+    for (const pe of ["::after", "::before"]) {
+      const ps = getComputedStyle(el, pe);
+      if (ps.content === "none" || ps.content === "normal" || (ps.position !== "absolute" && ps.position !== "fixed")) continue;
+      if (!(parseFloat(ps.width) > b.width + 2 || parseFloat(ps.height) > b.height + 2)) continue;
+      const holder = getComputedStyle(el).position !== "static" ? el : el.offsetParent;
+      if (!holder) continue;
+      const c = holder.getBoundingClientRect();
+      x0 = Math.min(x0, c.left);
+      y0 = Math.min(y0, c.top);
+      x1 = Math.max(x1, c.right);
+      y1 = Math.max(y1, c.bottom);
+    }
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  };
   const prev = window.__qaPrev;
   const prevBlurSig = prev && prev.isConnected ? sig(prev) : null;
   const pr = prev && prev.isConnected ? prev.getBoundingClientRect() : null;
-  const prevRect = pr ? { x: pr.left, y: pr.top, w: pr.width, h: pr.height } : null;
+  const prevRect = pr ? reach(prev, pr) : null;
   const el = document.activeElement;
   if (!el || el === document.body || el === document.documentElement) return { body: true, prevBlurSig, prevRect };
   el.__qaId = el.__qaId || ++window.__qaN;
@@ -685,7 +715,7 @@ const SAMPLE = () => {
     sig: sig(el),
     prevBlurSig,
     prevRect,
-    rect: { x: r.left, y: r.top, w: r.width, h: r.height },
+    rect: reach(el, r),
     off: r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw,
     tiny: r.width < 2 || r.height < 2,
     coveredBy: top && top !== el && !el.contains(top) && !top.contains(el) ? window.__qaSem(top) : "",
