@@ -230,6 +230,9 @@ export function SeatUsePanel({
   const [now] = useState(() => Date.now());
   const holders = people ? quietestFirst(people, now) : [];
   if (!holders.length) return null;
+  const callsOf = (member: OrgMember) =>
+    usage?.get(member.personId ?? "")?.calls ?? member.calls30d;
+  const most = Math.max(1, ...holders.map(callsOf));
   return (
     <section className={styles.section} aria-labelledby="org-seat-use">
       <div className={styles.head}>
@@ -243,31 +246,44 @@ export function SeatUsePanel({
           {holders.map((member) => {
             const use = usage?.get(member.personId ?? "");
             const quiet = quietSince(member, now) > QUIET_DAYS * 86_400_000;
-            const calls = use?.calls ?? member.calls30d;
+            const calls = callsOf(member);
             const name = member.name || member.email || "Unnamed member";
+            // When they were last here, as a chip beside the name; their calls
+            // as a bar on the team's scale under it (owner, bug 184, 6 Nov 2026:
+            // "depicted using visuals instead of just numbers").
+            const seen = [
+              quiet ? "Quiet" : null,
+              member.lastActiveAt
+                ? activeOn(callDate(member.lastActiveAt, undefined, dates))
+                : "not active yet",
+            ]
+              .filter(Boolean)
+              .join(" · ");
             return (
               <li key={member.personId} className={styles.holder}>
                 <span className={styles.holderName}>
                   <b>
                     <PersonDisplayName name={name} />
                   </b>
-                  {quiet ? <span className={styles.quiet}>Quiet</span> : null}
+                  <span className={styles.seen} data-quiet={quiet || undefined}>
+                    {seen.charAt(0).toUpperCase() + seen.slice(1)}
+                  </span>
                 </span>
-                <small>
-                  {[
-                    plural(calls, "call"),
-                    use
-                      ? `${Math.round(use.minutes).toLocaleString("en-IN")} min`
-                      : null,
-                    member.lastActiveAt
-                      ? activeOn(
-                          callDate(member.lastActiveAt, undefined, dates),
-                        )
-                      : "not active yet",
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </small>
+                <span className={styles.useLine}>
+                  <span className={styles.useBar} aria-hidden="true">
+                    <i style={{ width: `${(calls / most) * 100}%` }} />
+                  </span>
+                  <small>
+                    {[
+                      plural(calls, "call"),
+                      use
+                        ? `${Math.round(use.minutes).toLocaleString("en-IN")} min`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </small>
+                </span>
               </li>
             );
           })}

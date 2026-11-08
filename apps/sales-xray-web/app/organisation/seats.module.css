@@ -209,6 +209,47 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Seat use (bug 184): when each person was last here, beside the name. */
+.seen {
+  flex: none;
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: var(--lx-radius-xs);
+  background: var(--lx-sunken);
+  color: var(--lx-ink-3);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  line-height: var(--sx-leading-16);
+  white-space: nowrap;
+}
+
+.seen[data-quiet] {
+  background: var(--lx-warning-soft);
+  color: var(--lx-ink);
+}
+
+/* Their calls as a bar on the team's scale, the count beside it. */
+.useLine {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.useBar {
+  height: 6px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--lx-sunken);
+}
+
+.useBar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sx-accent);
+}
+
 .quiet {
   flex: none;
   padding: 0 6px;

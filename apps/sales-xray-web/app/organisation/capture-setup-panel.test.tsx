@@ -98,7 +98,7 @@ it("counts who still needs it and names why, never a phone number", async () => 
     (item) => item.textContent,
   );
   expect(items[0]).toContain("Not set up");
-  expect(items[1]).toContain("Said not now on 29 Oct");
+  expect(items[1]).toContain("on 29 Oct");
   expect(items[2]).toContain("Redmi 13 · since 29 Oct");
   expect(host.textContent).not.toMatch(/\+\d{6,}/);
   // Done reads Ready: "Set up" is only ever an action (ph1-38).
@@ -117,15 +117,13 @@ it("says when everyone is set up, and shows nothing it can't read", async () => 
   expect(host.textContent).toBe("");
 });
 
-it("words every state plainly", () => {
-  expect(captureLine(row("A", "phone_pending"))).toBe(
-    "Agreed, but hasn't opened the app on a phone yet",
-  );
-  expect(captureLine(row("A", "turned_off"))).toBe(
-    "Turned call capture off on 29 Oct",
-  );
+// The badge says the state; the line adds only the day (owner, bug 183).
+it("words every state plainly, without repeating its badge", () => {
+  expect(captureLine(row("A", "phone_pending"))).toBe("");
+  expect(captureLine(row("A", "not_started"))).toBe("");
+  expect(captureLine(row("A", "turned_off"))).toBe("on 29 Oct");
   expect(captureLine(row("A", "consent_changed"))).toBe(
-    "The terms changed: needs to agree again",
+    "New terms to agree to",
   );
 });
 
