@@ -40,7 +40,8 @@ it("sorts people, shows seven at first, and opens their People page", () => {
   )!;
   act(() => all.click());
   expect(host.querySelectorAll("ul li")).toHaveLength(8);
-  expect(host.querySelectorAll('svg[role="img"]')).toHaveLength(8);
+  // One picture per person: the bar, no daily line beside it (bug 186).
+  expect(host.querySelectorAll('svg[role="img"]')).toHaveLength(0);
 });
 // A teammate's People page is for those who see the team (roles.ts
 // "team.view"): without it, only your own row opens your page.
@@ -72,9 +73,6 @@ it("shows a seller who only works leads when comparing notes", () => {
     row.textContent?.includes("Lumi Sample"),
   );
   expect(person?.textContent).toContain("30 notes");
-  expect(person?.querySelector("svg")?.getAttribute("aria-label")).toContain(
-    "daily activity updates",
-  );
 });
 it("labels partial comparisons and gaps instead of suggesting inactivity", () => {
   act(() =>
@@ -87,9 +85,6 @@ it("labels partial comparisons and gaps instead of suggesting inactivity", () =>
   );
   expect(host.textContent).toContain("Comparison unavailable");
   expect(host.textContent).toContain("Some older days haven't loaded yet");
-  expect(host.querySelector("svg")?.getAttribute("aria-label")).toContain(
-    "unavailable",
-  );
 });
 it("offers leads as the next action for an empty period", () => {
   act(() =>
@@ -120,9 +115,6 @@ it("shows message-only work in the daily line instead of an idle state", () => {
   expect(host.textContent).not.toContain("No activity recorded");
   expect(host.textContent).toContain("Other updates: 1");
   expect(host.querySelector("ul a")?.textContent).toContain("Mira Fictional");
-  expect(host.querySelector("svg")?.getAttribute("aria-label")).toContain(
-    "daily activity updates",
-  );
 });
 
 it("keeps a skeleton while the single summary request loads", async () => {
