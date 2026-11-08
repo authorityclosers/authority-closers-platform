@@ -110,3 +110,17 @@ def test_units_and_helpers_keep_nothing_in_tmp_and_run_in_the_strikes_slice() ->
     mixed = (ROOT / "systemd" / "qa-engine-mixed.service").read_text(encoding="utf-8")
     for cap in ("CPUQuota=60%", "MemoryMax=3200M", "Nice=15", "IOSchedulingClass=idle"):
         assert cap in mixed
+
+
+def test_workspace_guard_is_for_the_real_owner_alias_only() -> None:
+    """The guard blanks a non-sandbox workspace; the fictional Admin only has a sandbox."""
+    session = (ROOT / "lib" / "session.cjs").read_text(encoding="utf-8")
+    assert 'if (tab.opts.alias === "owner") {' in session
+    assert "isOwnerAlias(tab.opts.alias)" not in session
+
+
+def test_tap_loop_skips_controls_behind_an_open_dialog() -> None:
+    """The covered check and the tap-size loop both leave out what an open sheet covers."""
+    scan = (ROOT / "lib" / "invariants.cjs").read_text(encoding="utf-8")
+    assert scan.count('!el.closest("[role=dialog],[aria-modal=true],dialog")) continue;') >= 2
+    assert scan.count("under an open :modal dialog") >= 2

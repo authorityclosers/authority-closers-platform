@@ -150,6 +150,9 @@ function scan(phone) {
       let r = el.getBoundingClientRect();
       if (r.bottom < 0 || r.top > vh * 2) continue;
       if (r.width >= 44 && r.height >= 44) continue;
+      // a sheet or dialog opened on purpose covers the page behind it: the hit test there says nothing about the controls under it
+      if (out.dialog > 0 && !el.closest("[role=dialog],[aria-modal=true],dialog")) continue;
+      if (modals.length && !modals.some((m) => m.contains(el))) continue; // under an open :modal dialog
       const hit = (px, py) => {
         if (px < 0 || py < 0 || px >= vw || py >= vh) return false;
         const t = document.elementFromPoint(px, py);
