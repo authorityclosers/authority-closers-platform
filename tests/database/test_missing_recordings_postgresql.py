@@ -18,7 +18,7 @@ from ac_platform.call_ai.missing_recordings import (
     missing_today,
 )
 from ac_platform.lead_desk.models import Lead, LeadEvent
-from ac_platform.lead_desk.store import PRIVATE_CALL, LeadDesk, Viewer
+from ac_platform.lead_desk.store import PRIVATE_CALL, TIMED_CALL, LeadDesk, Viewer
 from tests.database.conversation_harness import conversation_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_lead_os_acceptance_postgresql import ROOT, world
@@ -169,5 +169,67 @@ def test_each_side_counts_its_own_calls_without_a_recording(postgres_harness: An
             assert (effort.inbound.attempted, effort.cold.attempted) == (1, 2)
             seller = next(s for s in effort.sellers if s.person_id == here.seller.person_id)
             assert (seller.inbound.missing_recordings, seller.cold.missing_recordings) == (1, 2)
+
+    run(exercise())
+
+
+def test_the_team_counts_missing_recordings_from_the_calls_it_calls_connected(
+    postgres_harness: Any, tmp_path: Path
+):
+    """Bug reports #174 #175 (4 Nov 2026): the owner's Team said "11 connected calls without
+    a recording" from a looser count than its own Connected; one of the 11 was a Call-button
+    dial the phone never confirmed. The Team now counts from the very calls Attempted and
+    Connected count, as the seller's banner does (calls_today): the same number on both."""
+
+    async def exercise():
+        async with world(postgres_harness, tmp_path) as here:
+            lead = UUID(await here.add("Jordan Example", "+12025550141"))
+            now = datetime(2026, 10, 30, 9, 0, tzinfo=UTC)
+            earlier = now - timedelta(minutes=20)
+            seller = here.seller.person_id
+
+            def call(data: dict[str, Any], at: datetime = earlier) -> LeadEvent:
+                return LeadEvent(
+                    id=uuid4(),
+                    tenant_id=here.tenant_id,
+                    lead_id=lead,
+                    kind="call",
+                    actor_person_id=seller,
+                    command_id=uuid4(),
+                    data=data,
+                    created_at=at,
+                )
+
+            # A dial only away from the app 40 s (the phone never said), a dial its phone's
+            # call log timed at 35 s, and a call the phone logged with 30 s: none recorded.
+            untimed = call({"estimated": True, "duration_seconds": 40})
+            timed = call(
+                {"estimated": True, "duration_seconds": 40}, earlier + timedelta(minutes=2)
+            )
+            logged = call({"via": "phone", "duration_seconds": 30}, earlier + timedelta(minutes=4))
+            async with here.setup.sessions() as db, db.begin():
+                db.add_all([untimed, timed, logged])
+                db.add(
+                    LeadEvent(
+                        id=uuid4(),
+                        tenant_id=here.tenant_id,
+                        lead_id=lead,
+                        kind="edited",
+                        actor_person_id=seller,
+                        command_id=uuid4(),
+                        data={TIMED_CALL: str(timed.id), "duration_seconds": 35},
+                        created_at=earlier + timedelta(minutes=5),
+                    )
+                )
+            async with here.setup.sessions() as db:
+                owner = Viewer(person_id=seller, tenant_id=here.tenant_id, role="owner", name="")
+                effort = await LeadDesk(db, owner, now=now).effort(1)
+                banner = await calls_today(
+                    db, tenant_id=here.tenant_id, person_id=seller, role="member", now=now
+                )
+            assert (effort.inbound.attempted, effort.inbound.connected) == (3, 2)
+            assert effort.missing_recordings == effort.inbound.missing_recordings == 2
+            assert banner.missing.total == 2
+            assert {item.event_id for item in banner.items} == {timed.id, logged.id}
 
     run(exercise())

@@ -41,8 +41,12 @@
   font-size: var(--sx-text-xs);
 }
 
+/* With large text the name and buttons go under the photo when they don't fit
+   beside it: "Choose a character" stays one line, so it pushed the whole card
+   past the screen's edge at 130 % (bug sweep N13, 8 Nov 2026). */
 .photoRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 16px;
   padding: 4px 0 12px;
@@ -50,8 +54,10 @@
 
 .photoText {
   display: grid;
+  /* A small base, so the row breaks only when the words can't fit beside it. */
+  flex: 1 1 10rem;
   gap: 4px;
-  min-width: 0;
+  min-width: min(100%, min-content);
 }
 
 .photoText strong {

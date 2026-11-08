@@ -121,13 +121,13 @@
 }
 
 .profileLink:focus-visible {
-  outline: 2px solid var(--sx-focus-ring);
+  outline: 2px solid var(--sx-accent);
   outline-offset: 1px;
 }
 
 .linkish:focus-visible {
   border-radius: 2px;
-  outline: 2px solid var(--sx-focus-ring);
+  outline: 2px solid var(--sx-accent);
   outline-offset: 2px;
 }
 
@@ -139,6 +139,12 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+/* Each period on one line: at 363 px "30 days" broke into "30 / days" in all
+   four segments (bug sweep N12, 8 Nov 2026). Filter takes the next row instead. */
+.filters [aria-label="Period"] button {
+  white-space: nowrap;
 }
 
 .select {
@@ -298,7 +304,7 @@
 }
 
 .column:focus-visible {
-  outline: 2px solid var(--sx-focus-ring);
+  outline: 2px solid var(--sx-accent);
   outline-offset: 1px;
 }
 
@@ -439,7 +445,7 @@ button.barRow:hover {
 }
 
 button.barRow:focus-visible {
-  outline: 2px solid var(--sx-focus-ring);
+  outline: 2px solid var(--sx-accent);
 }
 
 .barLabel {
@@ -582,7 +588,7 @@ button.barRow:focus-visible {
 }
 
 .scrollHeat:focus-visible {
-  outline: 2px solid var(--sx-focus-ring);
+  outline: 2px solid var(--sx-accent);
   outline-offset: -2px;
 }
 
@@ -1269,7 +1275,7 @@ a.callTitle:hover {
   visibility: hidden;
 }
 .clearSearch:focus-visible {
-  outline: 2px solid var(--sx-focus-ring);
+  outline: 2px solid var(--sx-accent);
 }
 .personRow {
   display: flex;

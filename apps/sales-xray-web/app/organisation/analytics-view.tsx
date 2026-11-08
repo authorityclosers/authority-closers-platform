@@ -31,38 +31,6 @@ const count = (value: number) => value.toLocaleString("en-IN");
 const coveredCount = (value: number, complete: boolean) =>
   !complete && value === 0 ? "—" : `${count(value)}${complete ? "" : "+"}`;
 
-function Sparkline({
-  values,
-  peak,
-  label,
-}: {
-  values: (number | null)[];
-  peak: number;
-  label: string;
-}) {
-  // Gaps remain gaps. Every person uses the same daily scale.
-  const last = Math.max(1, values.length - 1);
-  const path = values
-    .map((value, index) =>
-      value === null
-        ? ""
-        : `${index === 0 || values[index - 1] === null ? "M" : "L"}${2 + (index / last) * 112},${30 - (value / Math.max(1, peak)) * 27}`,
-    )
-    .join(" ");
-  return (
-    <svg
-      className={styles.spark}
-      viewBox="0 0 116 34"
-      role="img"
-      aria-label={label}
-    >
-      <title>{label}</title>
-      <path className={styles.baseline} d="M2 30H114" />
-      <path d={path} />
-    </svg>
-  );
-}
-
 /** The period in the address (?days=), kept as the hub's other params are. */
 function usePeriod(fixed: boolean) {
   const [period, setPeriod] = useState<PeriodKey>(() =>
@@ -171,11 +139,7 @@ export function AnalyticsView({
   );
   const rows = all ? sorted : sorted.slice(0, 7);
   const max = Math.max(1, ...sorted.map((row) => row.current[metric]));
-  const peak = Math.max(
-    1,
-    ...sorted.flatMap((row) => row.daily.map((day) => day?.work ?? 0)),
-  );
-  // One day has no line to draw: the bars say it.
+  // More than one day: the foot names the first and last day.
   const lines = data.today > data.start;
   const label = METRICS.find((row) => row.key === metric)!.label.toLowerCase();
   const empty = data.currentComplete && data.currentWork === 0;
@@ -186,7 +150,7 @@ export function AnalyticsView({
           <h2>{team ? "Team activity" : "Your activity"}</h2>
           <p>
             {data.today > data.start
-              ? `Last ${data.today - data.start + 1} days · ${dayText(data.start)} – ${dayText(data.today)} · Today so far`
+              ? `Last ${data.today - data.start + 1} days · ${dayText(data.start)} – ${dayText(data.today)}`
               : `Today so far · ${dayText(data.today)}`}
           </p>
         </div>
@@ -251,7 +215,13 @@ export function AnalyticsView({
           label="Compare activity"
           items={METRICS.map((row) => ({
             key: row.key,
-            label: row.key === "conversations" ? "Connected" : row.label,
+            // Short names, so all four fit one line on a phone (bug 187).
+            label:
+              row.key === "conversations"
+                ? "Connected"
+                : row.key === "moves"
+                  ? "Stages"
+                  : row.label,
           }))}
           value={metric}
           onChange={setMetric}
@@ -278,8 +248,6 @@ export function AnalyticsView({
             aria-label={`People sorted by ${label}`}
           >
             {rows.map((person) => {
-              const daily = person.daily.map((day) => day?.work ?? null);
-              const chartLabel = `${person.name}: daily activity updates, ${daily.map((n, index) => `${dayText(data.start + index)}: ${n === null ? "unavailable" : n}`).join("; ")}`;
               const body = (
                 <>
                   <div className={styles.personHead}>
@@ -320,13 +288,6 @@ export function AnalyticsView({
                         }}
                       />
                     </span>
-                    {lines ? (
-                      <Sparkline
-                        values={daily}
-                        peak={peak}
-                        label={chartLabel}
-                      />
-                    ) : null}
                   </div>
                 </>
               );
@@ -354,12 +315,6 @@ export function AnalyticsView({
             <div className={styles.chartFoot}>
               <span>
                 Bars: 0–{count(max)} {label}
-                {lines ? (
-                  <>
-                    <br />
-                    Daily activity: 0–{count(peak)} updates per day
-                  </>
-                ) : null}
               </span>
               <span>
                 {lines
@@ -381,7 +336,7 @@ export function AnalyticsView({
         <p>
           {team ? "Your team's work" : "Your work"} in {zoneName(data.timezone)}
           . Calls count every call, with a report or not; conversations are the
-          calls that connected. The daily lines count notes and stage moves too.
+          calls that connected.
         </p>
         <p>
           Compared with {dayText(data.prior)} – {dayText(data.start - 1)}.

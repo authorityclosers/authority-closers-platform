@@ -70,9 +70,7 @@ const GrowthLoading = dynamic(
   () =>
     import("../performance/performance-page").then((module) => {
       function GrowthSkeleton() {
-        return (
-          <module.PerformanceSkeleton title="Growth" section="Analytics" />
-        );
+        return <module.PerformanceSkeleton title="Growth" />;
       }
       return GrowthSkeleton;
     }),
