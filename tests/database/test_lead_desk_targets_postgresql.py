@@ -80,17 +80,27 @@ def test_targets_set_once_supersede_and_count_real_activity(
             past = await put(here, str(uuid4()), ("calls", "day", 5), effective_from="2020-01-01")
             assert past.status_code == 422
 
-            # The seller works: one call not reached, one talked with a follow-up.
+            # The seller works: one call not reached, one talked with a follow-up. Each is a
+            # Call-button dial with its answer: an answer alone is no call (Dipak's honest
+            # numbers, 3 Nov 2026; bug report #170).
             here.as_seller()
-            missed = await here.dispose(lead_id, connected=False, reason="did_not_pick")
-            assert missed.status_code == 200, missed.text
-            talked = await here.dispose(
-                lead_id, connected=True, step="interested", follow_up_at=later(days=1)
-            )
-            assert talked.status_code == 200, talked.text
+            answer_only = await here.dispose(lead_id, connected=False, reason="did_not_pick")
+            assert answer_only.status_code == 200, answer_only.text
+            for answer in (
+                {"connected": False, "reason": "did_not_pick"},
+                {"connected": True, "step": "interested", "follow_up_at": later(days=1)},
+            ):
+                dialled = await here.client.post(
+                    f"{BASE}/leads/{lead_id}/calls/phone",
+                    json={"command_id": str(uuid4()), "duration_seconds": 30},
+                    headers=WRITE,
+                )
+                assert dialled.status_code == 200, dialled.text
+                saved = await here.dispose(lead_id, **answer)
+                assert saved.status_code == 200, saved.text
             mine = (await here.client.get(f"{BASE}/targets")).json()
             done = {(p["metric"], p["period"]): p["done"] for p in mine["progress"]}
-            # Neither call was a due follow-up: none done yet.
+            # Two dials, two calls; neither was a due follow-up: none done yet.
             assert done == {("calls", "day"): 2, ("follow_ups", "week"): 0}
 
             # Rights: a seller sets nothing and reads only their own.

@@ -559,11 +559,30 @@ function LightboxShellFrame({
     const bar = tabBarRef.current;
     if (!bar || typeof ResizeObserver === "undefined") return;
     const root = document.documentElement;
+    // The phone's safe area at the bottom: pages add it to the bar's room
+    // themselves, so the room leaves it out.
+    const safeBottom = () => {
+      const probe = document.createElement("div");
+      probe.style.cssText =
+        "position:fixed;bottom:0;height:0;visibility:hidden;padding-bottom:env(safe-area-inset-bottom,0px)";
+      document.body.appendChild(probe);
+      const value = parseFloat(getComputedStyle(probe).paddingBottom) || 0;
+      probe.remove();
+      return value;
+    };
     const publish = () => {
-      // The bar's 62 px plus the 16 px it floats above the edge is 78 px.
-      const room = Math.ceil(bar.getBoundingClientRect().height) + 16;
-      if (room > 78) root.style.setProperty("--lx-bottom-nav-h", `${room}px`);
-      else root.style.removeProperty("--lx-bottom-nav-h");
+      const rect = bar.getBoundingClientRect();
+      // No bar on this screen (a computer's rail): the token's own value.
+      if (!rect.height) {
+        root.style.removeProperty("--lx-bottom-nav-h");
+        return;
+      }
+      // The room the bar really takes from the bottom edge, whatever its
+      // look: the floating capsule (62 px, 16 px up) or the flat bar on the
+      // edge (64 px). Measured, never assumed: the lead sheet stopped 16 px
+      // above the flat bar and showed the list there (Leads 2, 8 Nov 2026).
+      const room = Math.ceil(window.innerHeight - rect.top - safeBottom());
+      root.style.setProperty("--lx-bottom-nav-h", `${room}px`);
     };
     publish();
     const observer = new ResizeObserver(publish);

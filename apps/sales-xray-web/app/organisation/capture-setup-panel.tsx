@@ -199,18 +199,17 @@ function stateLine(row: CaptureTeamRow): string {
     case "set_up":
     case "recording_off":
       return [...phones, on ? `since ${on}` : null].filter(Boolean).join(" · ");
+    // The badge beside the name says the state ("Phone not set up", "Said not
+    // now"); a sentence repeating it made Team a wall of text (owner, bug 183,
+    // 6 Nov 2026). Only the day is added.
     case "phone_pending":
-      return "Agreed, but hasn't opened the app on a phone yet";
-    case "declined":
-      return on ? `Said not now on ${on}. Asked again daily.` : "Said not now";
-    case "turned_off":
-      return on
-        ? `Turned call capture off on ${on}`
-        : "Turned call capture off";
-    case "consent_changed":
-      return "The terms changed: needs to agree again";
     case "not_started":
-      return "Sees the setup the next time they open Sales X-Ray";
+      return "";
+    case "declined":
+    case "turned_off":
+      return on ? `on ${on}` : "";
+    case "consent_changed":
+      return "New terms to agree to";
   }
 }
 
@@ -294,7 +293,9 @@ export function CaptureSetupPanel() {
                     <strong>
                       <PersonDisplayName name={row.name} />
                     </strong>
-                    <small>{named(captureLine(row))}</small>
+                    {captureLine(row) ? (
+                      <small>{named(captureLine(row))}</small>
+                    ) : null}
                     {lines.map((line, at) => {
                       const parts = recordingParts(line.recording, now);
                       if (!line.recording || !parts) return null;

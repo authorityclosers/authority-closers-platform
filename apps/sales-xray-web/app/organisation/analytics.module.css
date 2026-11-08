@@ -163,18 +163,6 @@
   background: var(--sx-accent);
   border-radius: inherit;
 }
-.spark {
-  width: 116px;
-  height: 34px;
-  flex: none;
-  fill: none;
-  stroke: var(--sx-accent);
-  stroke-width: 2;
-}
-.spark .baseline {
-  stroke: var(--sx-muted);
-  stroke-width: 0.5;
-}
 .chartFoot {
   display: flex;
   align-items: center;
@@ -228,9 +216,6 @@
   .visualRow {
     gap: 12px;
   }
-  .spark {
-    width: 84px;
-  }
   .personHead {
     gap: 8px;
   }
@@ -283,9 +268,6 @@
   .people li > div {
     box-sizing: border-box;
     padding: 8px 0;
-  }
-  .spark {
-    height: 24px;
   }
 }
 

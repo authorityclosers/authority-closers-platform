@@ -68,17 +68,18 @@
 
 .filters {
   display: flex;
-  gap: 6px;
+  gap: 4px;
 }
 
 /* A status chip: its dot, its count and a short label; pressed, it filters.
-   Compact, so all three sit on one row at 390 px (owner bug #45). */
+   Compact, so all three sit on one row at 390 px (owner bug #45) and at the
+   owner's 363 px, where "9 Not connected" was cut (bug sweep N6, 8 Nov 2026). */
 .filter {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   min-height: 36px;
-  padding: 0 10px 0 8px;
+  padding: 0 8px 0 7px;
   border: 1px solid transparent;
   border-radius: var(--sx-radius-pill);
   background: var(--sx-fill-soft);

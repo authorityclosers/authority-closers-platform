@@ -85,14 +85,20 @@ def _when(value: Any) -> datetime | None:
 
 
 def facts_from(events: Sequence[tuple[UUID, str, dict[str, Any], datetime]]) -> list[goals.Fact]:
-    """Activity as facts: (lead, kind, data, at) rows of one seller, any order."""
+    """Activity as facts: (lead, kind, data, at) rows of one seller, any order. A call is a
+    call out, connected by the phone's own evidence (call_answered), as Home counts it; a
+    call in, missed or rejected is none (bug report #170, 4 Nov 2026)."""
+    from ac_platform.lead_desk.store import call_answered, call_out  # the store imports us
+
     out: list[goals.Fact] = []
-    calls: dict[UUID, list[tuple[datetime, str, bool]]] = defaultdict(list)
+    calls: dict[UUID, list[tuple[datetime, str]]] = defaultdict(list)
     for lead_id, kind, data, at in sorted(events, key=lambda item: item[3]):
         if kind == "call":
+            if not call_out(data):
+                continue
             key = f"{lead_id}:{at.isoformat()}"
-            calls[lead_id].append((at, key, data.get("connected") is True))
-            out.append(goals.Fact("call", at, call=key))
+            calls[lead_id].append((at, key))
+            out.append(goals.Fact("call", at, call=key, connected=call_answered(data)))
         elif kind == "result":
             # The latest call on the lead within the window, not yet paired, is this one.
             open_calls = calls.get(lead_id, [])
@@ -115,15 +121,16 @@ def facts_from(events: Sequence[tuple[UUID, str, dict[str, Any], datetime]]) -> 
             out.append(goals.Fact("follow_up", at))
         elif kind == "meeting" and data.get("action") == "scheduled":
             out.append(goals.Fact("meeting_booked", at))
-    # A call the phone logged as talked, with no outcome saved: still a connect.
-    for open_calls in calls.values():
-        for at, key, talked in open_calls:
-            if talked:
-                out.append(goals.Fact("result", at, call=key, connected=True))
     return out
 
 
 async def facts(desk: LeadDesk, person: UUID, since: datetime) -> list[goals.Fact]:
+    """The seller's facts since ``since``. Calls are the ones Home and Recent Calls list
+    (``LeadDesk._call_rows``: a private call or a dial the phone never placed is none, and a
+    dial carries the seconds its phone's call log matched later), so a target's calls and
+    connects agree with Home's Attempted and Connected (bug report #170, 4 Nov 2026)."""
+    start = since - CALL_PAIR
+    calls = await desk._call_rows(start, desk.now + timedelta(microseconds=1), person=person)
     rows = (
         await desk.db.execute(
             select(LeadEvent.lead_id, LeadEvent.kind, LeadEvent.data, LeadEvent.created_at)
@@ -131,15 +138,18 @@ async def facts(desk: LeadDesk, person: UUID, since: datetime) -> list[goals.Fac
             .where(
                 LeadEvent.tenant_id == desk.tenant_id,
                 LeadEvent.actor_person_id == person,
-                LeadEvent.kind.in_(ACTIVITY_KINDS),
-                LeadEvent.created_at >= since - CALL_PAIR,
+                LeadEvent.kind.in_(tuple(kind for kind in ACTIVITY_KINDS if kind != "call")),
+                LeadEvent.created_at >= start,
                 LeadEvent.created_at <= desk.now,
                 # An answer its seller undid connected nothing (ph1-40).
                 not_undone(),
             )
         )
     ).tuples()
-    return facts_from([(lead, kind, dict(data or {}), at) for lead, kind, data, at in rows])
+    return facts_from(
+        [(row.lead_id, "call", dict(row.data), row.at) for row in calls]
+        + [(lead, kind, dict(data or {}), at) for lead, kind, data, at in rows]
+    )
 
 
 async def work_hours_of(desk: LeadDesk) -> work_hours.WorkHours | None:

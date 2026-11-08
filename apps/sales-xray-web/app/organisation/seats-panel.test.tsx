@@ -196,10 +196,12 @@ it("lists seat use quietest first, with calls, call minutes and a Quiet mark", a
     "Quiet Seller",
     "Busy Seller",
   ]);
-  expect(rows[0].textContent).toContain("Quiet");
-  expect(rows[0].textContent).toContain("1 call · not active yet");
+  // Last active as a chip by the name, calls as a bar and a count (bug 184).
+  expect(rows[0].textContent).toContain("Quiet · not active yet");
+  expect(rows[0].querySelector("small")?.textContent).toBe("1 call");
   expect(rows[1].textContent).toContain("0 calls · 0 min");
-  expect(rows[2].textContent).toContain("12 calls · 48 min · active today");
+  expect(rows[2].textContent).toContain("Active today");
+  expect(rows[2].querySelector("small")?.textContent).toBe("12 calls · 48 min");
   expect(rows[2].textContent).not.toContain("Quiet");
 });
 
@@ -213,7 +215,8 @@ it("seat use shows nothing until members load, and without calls falls back to t
       <SeatUsePanel people={[member(1, "Busy Seller", 0)]} usage={null} />,
     ),
   );
-  expect(host.textContent).toContain("1 call · active today");
+  expect(host.textContent).toContain("Active today");
+  expect(host.querySelector("small")?.textContent).toBe("1 call");
   expect(host.textContent).not.toContain("min");
 });
 

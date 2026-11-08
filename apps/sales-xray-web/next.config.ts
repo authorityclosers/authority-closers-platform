@@ -145,10 +145,12 @@ const config: NextConfig = {
             },
             // The organisation's settings live in Settings (owner, 20 Oct);
             // its overview stays at /organisation.
+            // Not Company: since 23 Oct it lives in the hub, and
+            // /settings/organisation sends it back there (settings-sections.ts),
+            // so a redirect here left the page loading for ever (bug sweep N3).
             ...(
               [
                 ["members", "/settings/team"],
-                ["company", "/settings/organisation"],
                 ["integrations", "/settings/developers"],
               ] as const
             ).map(([tab, destination]) => ({
