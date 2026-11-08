@@ -27,14 +27,16 @@ def at(day: datetime, hour: int, minute: int = 0) -> datetime:
     return day.replace(hour=hour, minute=minute)
 
 
-def test_a_call_and_its_outcome_are_one_call_and_a_miss_is_no_connect() -> None:
+def test_calls_and_connects_are_the_calls_out_and_their_phone_evidence() -> None:
+    # Dipak's honest numbers (3 Nov 2026; bug report #170): a result is never a call, and
+    # only a call's own evidence connects it, not its saved outcome.
     facts = [
-        Fact("call", at(WED, 11), call="c1"),
+        Fact("call", at(WED, 11), call="c1", connected=True),
         Fact("result", at(WED, 11, 5), call="c1", connected=True),
-        Fact("result", at(WED, 12), connected=False),
-        Fact("call", at(WED, 13), call="c2"),
+        Fact("result", at(WED, 12), connected=True),
+        Fact("call", at(WED, 13), call="c2", connected=False),
     ]
-    assert count(facts, "calls") == 3
+    assert count(facts, "calls") == 2
     assert count(facts, "connects") == 1
 
 

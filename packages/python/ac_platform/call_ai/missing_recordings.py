@@ -139,19 +139,23 @@ async def calls_today(
     start = day_start(now) if day is None else datetime.combine(day, time(0), INDIA).astimezone(UTC)
     end = min(start + timedelta(days=1), now + timedelta(microseconds=1))
     rows = await desk._call_rows(start, end, team=team)
+    return tally(rows, await recorded_calls(database, tenant_id, rows), now)
+
+
+async def recorded_calls(database: Any, tenant_id: UUID, rows: Any) -> set[str]:
+    """Which of these calls (``LeadDesk._call_rows``) have a recording attached, by id."""
     ids = [str(row.event_id) for row in rows]
-    recorded: set[str] = set()
-    if ids:
-        found = await database.scalars(
-            select(LeadEvent.data["for_call"].as_string()).where(
-                LeadEvent.tenant_id == tenant_id,
-                LeadEvent.kind == "call",
-                LeadEvent.data["for_call"].as_string().in_(ids),
-                LeadEvent.data["recording"].as_boolean().is_(True),
-            )
+    if not ids:
+        return set()
+    found = await database.scalars(
+        select(LeadEvent.data["for_call"].as_string()).where(
+            LeadEvent.tenant_id == tenant_id,
+            LeadEvent.kind == "call",
+            LeadEvent.data["for_call"].as_string().in_(ids),
+            LeadEvent.data["recording"].as_boolean().is_(True),
         )
-        recorded = {value for value in found.all() if value}
-    return tally(rows, recorded, now)
+    )
+    return {value for value in found.all() if value}
 
 
 async def missing_today(

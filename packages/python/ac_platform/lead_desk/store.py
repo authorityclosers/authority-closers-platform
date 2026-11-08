@@ -6041,7 +6041,7 @@ class LeadDesk:
         calls Recent Calls lists, so it agrees with Home; a lead's side is its pipeline
         (migration 0146, empty is Inbound).
         """
-        from ac_platform.call_ai.missing_recordings import missing_today
+        from ac_platform.call_ai import missing_recordings
         from ac_platform.lead_desk.models import LeadTask
 
         if month:
@@ -6252,17 +6252,23 @@ class LeadDesk:
             ]
 
         hours = work_hours.parse((await self.settings())[1])
-        missing = await missing_today(
-            self.db, tenant_id=self.tenant_id, now=self.now, person_id=None if team else me
+        # Today's connected calls without a recording, from the very calls Attempted and
+        # Connected count, as Home's own banner counts them (missing_recordings.tally): a dial
+        # the phone never confirmed is no connected call missing its recording (bug reports
+        # #174 #175, 4 Nov 2026: 11 counted the looser way, all on Cold leads, beside
+        # Inbound's 0 tried). Each on its lead's side; keyed by seller, and None for all.
+        today_rows = [row for row in rows if row.at >= missing_recordings.day_start(self.now)]
+        today_calls = missing_recordings.tally(
+            today_rows,
+            await missing_recordings.recorded_calls(self.db, self.tenant_id, today_rows),
+            self.now,
         )
-        # Each side's calls without a recording, by their leads' side (owner, 4 Nov 2026,
-        # #174 #175: Inbound said 0 tried beside "11 connected calls without a recording",
-        # all 11 on Cold leads). Keyed by seller, and None for everyone shown.
-        missing_sides = await self._sides({lead for _, lead in missing.calls})
+        missing = today_calls.missing
+        side_of = {row.event_id: row.side for row in today_rows}
         unrecorded: dict[tuple[UUID | None, str], int] = {}
-        for person_id, lead_id in missing.calls:
-            on = missing_sides.get(lead_id, "inbound")
-            for key in ((person_id, on), (None, on)):
+        for call in today_calls.items:
+            on = side_of.get(call.event_id, "inbound")
+            for key in ((call.person_id, on), (None, on)):
                 unrecorded[key] = unrecorded.get(key, 0) + 1
         tasks_late: dict[UUID | None, int] = {
             owner: int(total)

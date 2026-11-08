@@ -2,8 +2,10 @@
 behind pace (team engine, section 2; docs/product/lead-desk/team-engine.md).
 
 The metrics, from the seller's own activity:
-- ``calls``: each call once, whether the phone logged it, its outcome was saved, or both;
-- ``connects``: outcomes saved as connected;
+- ``calls``: each call out once, as Home's Attempted counts it; a saved outcome with no call
+  of its own is no call (Dipak's honest numbers, the orchestrator, 3 Nov 2026);
+- ``connects``: calls out the phone's own evidence says connected, as Home's Connected; the
+  seller's "We talked" alone is not one;
 - ``follow_ups``: outcomes or moves that set a next action, and tasks done;
 - ``meetings``: meetings booked.
 
@@ -36,7 +38,7 @@ DEFAULT_HOURS: Final = WorkHours(
 @dataclass(frozen=True, slots=True)
 class Fact:
     """One thing the seller did. ``call`` is the call it belongs to, when known: a call and
-    its outcome are one call."""
+    its outcome are one call. On a call, ``connected`` is the phone's own evidence."""
 
     kind: FactKind
     at: datetime
@@ -110,12 +112,13 @@ def pace(period: Period, hours: WorkHours | None, at: datetime) -> float:
 def count(facts: Iterable[Fact], metric: Metric) -> int:
     """How many of this metric the facts hold."""
     facts = list(facts)
+    # Calls and connects as Home counts them (bug report #170, 4 Nov 2026: the seller's
+    # targets read 29 calls and 11 connects beside Home's 15 and 12): call facts only, a
+    # result never.
     if metric == "calls":
-        keyed = {fact.call for fact in facts if fact.kind in ("call", "result") and fact.call}
-        loose = sum(1 for fact in facts if fact.kind == "result" and not fact.call)
-        return len(keyed) + loose
+        return sum(1 for fact in facts if fact.kind == "call")
     if metric == "connects":
-        return sum(1 for fact in facts if fact.kind == "result" and fact.connected is True)
+        return sum(1 for fact in facts if fact.kind == "call" and fact.connected is True)
     if metric == "follow_ups":
         return sum(1 for fact in facts if fact.kind == "follow_up")
     return sum(1 for fact in facts if fact.kind == "meeting_booked")
