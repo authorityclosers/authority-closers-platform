@@ -161,7 +161,10 @@ function needs(
     effort
       ? {
           key: "recordings",
-          count: effort.missing_recordings,
+          // The side shown's own (owner, 4 Nov 2026, #174 #175: Inbound said 0
+          // tried beside 11 without a recording, all on Cold); an older
+          // server's total otherwise.
+          count: day?.missing_recordings ?? effort.missing_recordings,
           label: "connected calls without a recording",
           href: "/analysis/calls",
         }
@@ -467,6 +470,17 @@ const initials = (name: string) =>
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
 
+/** When nobody has called on the side shown but the team has on the other,
+ *  where today's calls are (owner, 4 Nov 2026, #174 #175: "Swamini called and
+ *  this panel says zero"; all her calls were on Cold). */
+export function elsewhere(side: Side, effort: Effort | null): string {
+  const other: Side = side === "cold" ? "inbound" : "cold";
+  const here = effort?.[side]?.attempted ?? 0;
+  const there = effort?.[other]?.attempted ?? 0;
+  if (here || !there) return "";
+  return ` · ${there} tried on ${other === "cold" ? "Cold" : "Inbound"}`;
+}
+
 /** The floor at a glance: the day's ring and every seller's pulse. */
 function FloorHero({ effort, side }: { effort: Effort | null; side: Side }) {
   const now = useMinute();
@@ -520,7 +534,7 @@ function FloorHero({ effort, side }: { effort: Effort | null; side: Side }) {
         </p>
         <p className={styles.heroNote}>
           {day
-            ? `${Math.round(done * 100)}% of today's leads called · ${minutes(day.talk_seconds)} talk`
+            ? `${Math.round(done * 100)}% of today's leads called · ${minutes(day.talk_seconds)} talk${elsewhere(side, effort)}`
             : "\u00a0"}
         </p>
         {!effort || sellers.length ? (

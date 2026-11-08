@@ -129,6 +129,7 @@ async function mount(
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/dashboard");
+  window.localStorage.clear();
   resetHomeReads();
 });
 afterEach(async () => {
@@ -498,7 +499,7 @@ it("switches an owner between Team and Me in one tap", async () => {
   await act(async () => Promise.resolve());
   expect(window.location.search).toBe("?view=mine");
   // The owner's own day is the seller's Home: Dipak's blocks (handoff, 31 Oct).
-  expect(host.textContent).toContain("Next inbound call");
+  expect(host.textContent).toContain("Next action");
   expect(host.querySelector("a[data-card=tasks]")).not.toBeNull();
   const back = Array.from(host.querySelectorAll("button")).find(
     (button) => button.textContent === "Team",

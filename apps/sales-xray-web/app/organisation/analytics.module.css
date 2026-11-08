@@ -235,6 +235,18 @@
     gap: 8px;
   }
 }
+/* The label, number and comparison rows line up across each row of cells. */
+@supports (grid-template-rows: subgrid) {
+  .summary > div,
+  .summary > button {
+    grid-row: span 3;
+    grid-template-rows: subgrid;
+    row-gap: 6px;
+  }
+  .summary strong {
+    align-self: end;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .page * {
     animation: none;
@@ -242,18 +254,23 @@
   }
 }
 
+/* Phones: the four numbers sit two by two, so "Conversations" keeps its
+   whole word at 360 px and 130 % text (owner bugs 85 and 188). Each cell's
+   label, number and comparison share their rows with the cell beside it,
+   so the numbers line up however a label wraps. */
 @media (max-width: 700px) {
   .summary {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .summary > div,
   .summary > button {
-    padding: 12px 8px;
+    padding: 12px;
     align-content: start;
   }
   .summary span {
-    font-size: var(--sx-text-2xs);
-    min-height: 28px;
+    font-size: var(--sx-text-xs);
+    line-height: var(--sx-leading-16);
+    overflow-wrap: anywhere;
   }
   .summary strong {
     font-size: var(--sx-text-2xl);
@@ -287,14 +304,25 @@
 .chart [aria-label="Compare activity"] {
   display: flex;
   width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
+  /* One line always: on a narrow phone or with large text the segments
+     scroll sideways instead of "Stage moves" breaking in two (owner bugs
+     186, 187). */
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.chart [aria-label="Compare activity"]::-webkit-scrollbar {
+  display: none;
 }
 .chart [aria-label="Compare activity"] button {
   min-width: 0;
   min-height: 44px;
-  flex: 1;
-  padding-inline: 6px;
+  flex: 1 0 auto;
+  padding-inline: 12px;
   font-size: var(--sx-text-xs);
+  white-space: nowrap;
 }
 
 .chart > button,

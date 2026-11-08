@@ -58,6 +58,7 @@ export function SideSelector({
         aria-label={label}
         className={styles.selector}
         data-tone={tone}
+        data-value={value}
       >
         {SIDES.map((side) => {
           const chosen = side.key === value;

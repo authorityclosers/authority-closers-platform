@@ -5904,23 +5904,35 @@ a.repName {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* One icon size and stroke in one 44 px disc for every action (owner, bug 177
+   and bug 178, 6 Nov 2026: the icons looked blunt): a soft tint of the action's
+   kind, no outline. */
 .actionBox svg {
   box-sizing: content-box;
   width: 20px;
   height: 20px;
   padding: 11px;
-  border: 1px solid var(--kind-edge, var(--sx-line));
+  border: 1px solid transparent;
   border-radius: 50%;
-  background: var(--kind-soft, var(--sx-surface));
+  background: var(--kind-soft, var(--sx-fill-soft));
   color: var(--kind-ink, var(--sx-ink-2));
+  stroke-width: 1.75;
+  transition: background-color var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+@media (hover: hover) {
+  .actionBox:hover:not(:disabled, [aria-disabled="true"]) svg {
+    border-color: var(--kind-edge, var(--sx-line));
+  }
 }
 
 /* The label shrinks with a narrow box (320 px, larger text) instead of
    losing its end: "WhatsApp" was cut to "WhatsAp…". */
 .actionLabel {
   max-width: 100%;
+  color: var(--sx-ink-2);
   font-size: min(var(--sx-text-xs), 16cqi);
-  font-weight: 650;
+  font-weight: 500;
   line-height: var(--sx-leading-16);
   text-align: center;
   /* Whole, on two lines when the tile is narrow (robot row d65dde5c). */
@@ -5937,10 +5949,23 @@ a.repName {
 }
 
 /* Greyed in its place; a tap says why (competitor teardown 10). */
+/* Reads as off at a glance, not as faded: an empty dashed disc and grey
+   words, still in its place; a tap says why. */
 .actionBox:disabled,
 .actionBox[aria-disabled="true"] {
   cursor: not-allowed;
-  opacity: 0.45;
+}
+
+.actionBox:disabled svg,
+.actionBox[aria-disabled="true"] svg {
+  border: 1px dashed var(--sx-line-strong);
+  background: transparent;
+  color: var(--sx-muted);
+}
+
+.actionBox:disabled .actionLabel,
+.actionBox[aria-disabled="true"] .actionLabel {
+  color: var(--sx-muted);
 }
 
 .actionBox[data-kind="message"] {
@@ -7800,7 +7825,16 @@ fieldset.form {
   .actionGrid {
     grid-auto-flow: row;
     grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px 4px;
   }
+}
+
+/* The lead's Call bar is the sheet's footer: a line above it, so the words
+   end at its edge instead of looking slid under it, and the words keep a
+   footer's room to scroll clear (owner, bug 178, 6 Nov 2026). */
+.leadSheetFrame :global([data-sheet-footer]) {
+  border-top: 1px solid var(--sx-hairline);
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
 }
 
 /* + on a computer (Dipak's handoff, item 41): Add a lead, a call or a task, as the

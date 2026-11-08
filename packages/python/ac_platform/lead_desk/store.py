@@ -6207,7 +6207,9 @@ class LeadDesk:
             if lead_side(pipeline) == "inbound" and minutes is not None:
                 bucket(owner, "inbound")["speeds"].append(minutes)
 
-        def side_view(parts: list[dict[str, Any]], inbound: bool) -> SideEffort:
+        def side_view(
+            parts: list[dict[str, Any]], inbound: bool, unrecorded: int = 0
+        ) -> SideEffort:
             def union(key: str) -> set[UUID]:
                 joined: set[UUID] = set()
                 for part in parts:
@@ -6239,6 +6241,7 @@ class LeadDesk:
                 late=sum(part["late"] for part in parts),
                 missed_calls=sum(part["missed"] for part in parts),
                 not_called_back=sum(part["unanswered"] for part in parts),
+                missing_recordings=unrecorded,
             )
 
         def parts_of(person: UUID | None, side: str) -> list[dict[str, Any]]:
@@ -6252,6 +6255,15 @@ class LeadDesk:
         missing = await missing_today(
             self.db, tenant_id=self.tenant_id, now=self.now, person_id=None if team else me
         )
+        # Each side's calls without a recording, by their leads' side (owner, 4 Nov 2026,
+        # #174 #175: Inbound said 0 tried beside "11 connected calls without a recording",
+        # all 11 on Cold leads). Keyed by seller, and None for everyone shown.
+        missing_sides = await self._sides({lead for _, lead in missing.calls})
+        unrecorded: dict[tuple[UUID | None, str], int] = {}
+        for person_id, lead_id in missing.calls:
+            on = missing_sides.get(lead_id, "inbound")
+            for key in ((person_id, on), (None, on)):
+                unrecorded[key] = unrecorded.get(key, 0) + 1
         tasks_late: dict[UUID | None, int] = {
             owner: int(total)
             for owner, total in (
@@ -6315,8 +6327,12 @@ class LeadDesk:
                 SellerEffort(
                     person_id=person,
                     name=name,
-                    inbound=side_view(parts_of(person, "inbound"), True),
-                    cold=side_view(parts_of(person, "cold"), False),
+                    inbound=side_view(
+                        parts_of(person, "inbound"), True, unrecorded.get((person, "inbound"), 0)
+                    ),
+                    cold=side_view(
+                        parts_of(person, "cold"), False, unrecorded.get((person, "cold"), 0)
+                    ),
                     breaks=tuple(break_view(gap) for gap in call_breaks.longest(gaps)),
                     unplanned_break_minutes=round(unplanned.total_seconds() / 60),
                     first_call_at=min((span.start for span in today), default=None),
@@ -6339,8 +6355,16 @@ class LeadDesk:
             end=self.now,
             team=team,
             sellers=tuple(sellers),
-            inbound=side_view(parts_of(None if team else me, "inbound"), True),
-            cold=side_view(parts_of(None if team else me, "cold"), False),
+            inbound=side_view(
+                parts_of(None if team else me, "inbound"),
+                True,
+                unrecorded.get((None, "inbound"), 0),
+            ),
+            cold=side_view(
+                parts_of(None if team else me, "cold"),
+                False,
+                unrecorded.get((None, "cold"), 0),
+            ),
             missing_recordings=missing.total if team else missing.by_person.get(me, 0),
         )
 

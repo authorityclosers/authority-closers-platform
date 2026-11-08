@@ -23,7 +23,6 @@
  */
 
 import { FileText, Gauge, UsersRound, WifiOff } from "lucide-react";
-import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import type { LibrarySubmission } from "../acquisition-client";
@@ -32,7 +31,6 @@ import { FirstRun } from "./first-run";
 import { MyTasks, SellerBlocks, useSidesAccess } from "./seller-home";
 import type { Side } from "../ui/side-selector";
 import { SetupStart } from "./home-v2";
-import { TodayBar } from "./home-today";
 import { TeamFloor, type StageKeys } from "./team-floor";
 import { HomeLoadWatch, useHomeRead, useOnline } from "./home-load";
 import { RevenueBar } from "./revenue-bar";
@@ -48,7 +46,6 @@ import { ActionList, ActionRow } from "../ui/kit";
 import { ModeSwitch } from "./mode-switch";
 import { OutcomeTiles, TILE_SETS } from "./outcome-tiles";
 import type { HomeDesk } from "./my-day-client";
-import { TodaySkeleton } from "./sales-home-skeleton";
 import styles from "./sales-home.module.css";
 
 const PERIOD_EVENT = "sx:home-period";
@@ -203,31 +200,70 @@ function TeamHome({
   );
 }
 
+const SIDES_KEY = "sx:home-sides";
+const subscribeNothing = () => () => {};
+const readKeptSides = (): string | null => {
+  try {
+    return window.localStorage.getItem(SIDES_KEY);
+  } catch {
+    return null;
+  }
+};
+
+/** Which sides this seller works: the read, or while it is on the way the
+ *  last answer on this device, so the Inbound | Cold selector is in its place
+ *  from the first frame (the test robot, 1 Nov 2026: 0.06 at 360 px when it
+ *  arrived after Today). */
+function useKeptSides(
+  access: { inbound: boolean; cold: boolean } | null,
+): { inbound: boolean; cold: boolean } | null {
+  const kept = useSyncExternalStore(
+    subscribeNothing,
+    readKeptSides,
+    () => null,
+  );
+  useEffect(() => {
+    if (!access) return;
+    try {
+      window.localStorage.setItem(
+        SIDES_KEY,
+        `${Number(access.inbound)}${Number(access.cold)}`,
+      );
+    } catch {
+      // Not kept this time; the read still answers.
+    }
+  }, [access]);
+  if (access) return access;
+  return kept === "11"
+    ? { inbound: true, cold: true }
+    : kept === "10"
+      ? { inbound: true, cold: false }
+      : kept === "01"
+        ? { inbound: false, cold: true }
+        : null;
+}
+
 function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
   const [side, setSide] = useHomeSide();
-  // Which sides this seller works, read beside the desk: the skeleton stays
-  // until both have answered, so the Inbound | Cold selector never arrives
-  // after Today and pushes it down (the test robot, 1 Nov 2026: 0.06 at 360 px).
-  const access = useSidesAccess();
-  if (state.status === "loading" || (state.status !== "error" && !access))
-    return <TodaySkeleton />;
-  if (state.status === "error")
-    return (
-      <section className={styles.block}>
-        <TodayBar />
-        <div className={styles.quiet} role="status">
-          <span>Your leads didn&apos;t load. Come back in a moment.</span>
-          <Link className={styles.more} href="/leads">
-            Open Leads
-          </Link>
-        </div>
-      </section>
-    );
-  const desk: HomeDesk = state.desk;
+  const access = useKeptSides(useSidesAccess());
+  // Loading and a failed read draw the same blocks in the same places, with
+  // placeholders or "–" (FRAMEWORK L6: a skeleton the shape of the result;
+  // the four cards and the next call never vanish on a bad network).
   // Home keeps no Taking new leads pill (Dipak's picture, 2 Nov 2026): it is
   // in Settings and on Leads.
+  // A device that has never seen this seller's sides waits for them before
+  // drawing Today, so the selector never lands above it (the test robot, 1
+  // Nov 2026: 0.06 at 360 px); later visits draw at once from the kept answer.
+  if (!access) return null;
+  const status = state.status;
   return (
-    <SellerBlocks desk={desk} side={side} onSide={setSide} access={access} />
+    <SellerBlocks
+      desk={state.status === "ready" ? (state.desk as HomeDesk) : null}
+      state={status}
+      side={side}
+      onSide={setSide}
+      access={access}
+    />
   );
 }
 
@@ -380,13 +416,19 @@ export function SalesHome({
           You&apos;re offline. Showing what was saved.
         </p>
       )}
-      {/* The month's revenue against its target (capture-setup's bar). */}
-      <RevenueBar scope={shown === "team" ? "team" : "mine"} />
-      {/* The month's revenue bar goes here, above both modes (capture-setup
-          session, 31 Oct 2026). */}
-      {manager && works ? (
-        <ModeSwitch value={view} onChange={chooseView} />
-      ) : null}
+      {/* The month's revenue against its target, above both modes
+          (capture-setup session, 31 Oct 2026), with Team | Me at the end of
+          its line rather than on a row of its own (Home studio, 4 Nov 2026:
+          the row it freed keeps the next call above the fold). */}
+      <RevenueBar
+        scope={shown === "team" ? "team" : "mine"}
+        end={
+          manager && works ? (
+            <ModeSwitch value={view} onChange={chooseView} />
+          ) : undefined
+        }
+      />
+
       <div key={shown} className={styles.mode} data-mode={shown}>
         {shown === "team" ? (
           <TeamHome

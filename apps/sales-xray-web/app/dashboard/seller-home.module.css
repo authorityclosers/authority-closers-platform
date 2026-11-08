@@ -1,8 +1,10 @@
-/* A seller's Home (Dipak's handoff, 31 Oct 2026): one calm column of blocks,
-   numbers read at a glance, each row one tap to its exact place. And calm: flat, neutral
-   surfaces with one accent colour, the big button's (Dipak, 3 Nov 2026). */
-.block,
-.next {
+/* A seller's Home (Dipak's handoff, 31 Oct 2026; his own design, 4 Nov
+   2026): one calm column of blocks, numbers read at a glance, each row one
+   tap to its exact place. White tiles and cards with a 1 px line on the
+   paper ground, no shadows; medium weights throughout; the one solid teal is
+   the Call, with teal words for links and a mint tint for Pending action.
+   4 px grid; radius 16 cards, 14 tiles, 12 task cards, pill controls. */
+.block {
   display: grid;
   gap: 8px;
   min-width: 0;
@@ -11,17 +13,18 @@
 .head {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
+  gap: 4px 12px;
   min-height: 24px;
 }
 
 .head h2 {
   margin: 0;
   color: var(--sx-ink);
-  font-size: var(--sx-text-md);
-  font-weight: 750;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
+  line-height: var(--sx-leading-28);
 }
 
 .headEnd {
@@ -34,7 +37,7 @@
 .sideWord {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 650;
+  line-height: var(--sx-leading-16);
 }
 
 .seeAll,
@@ -42,7 +45,7 @@
 .retry {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   min-height: 44px;
   padding: 0;
   border: 0;
@@ -50,7 +53,7 @@
   color: var(--sx-accent);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 700;
+  font-weight: 500;
   text-decoration: none;
   cursor: pointer;
 }
@@ -64,37 +67,140 @@
 .retry:focus-visible,
 .card:focus-visible,
 .alert:focus-visible,
-.callNow:focus-visible,
+.nextName:focus-visible,
+.tonal:focus-visible,
+.pendingGo:focus-visible,
 .phone:focus-visible {
   outline: none;
   box-shadow: var(--sx-focus-ring);
 }
 
-/* One short line under Inbound | Cold. */
-.sideLine {
+/* A small word in a pill: "1 reminder" and "Overdue" in peach, "Ready to
+   call" in green; the words carry the meaning, the tint only marks it. */
+.chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: var(--sx-radius-pill);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
+  white-space: nowrap;
+}
+
+.chip[data-tone="warn"] {
+  background: color-mix(in oklab, var(--sx-warn) 16%, var(--sx-surface));
+  color: color-mix(in oklab, var(--sx-warn) 45%, var(--sx-ink));
+}
+
+.chip[data-tone="good"] {
+  background: color-mix(in oklab, var(--sx-good) 14%, var(--sx-surface));
+  color: color-mix(in oklab, var(--sx-good) 60%, var(--sx-ink));
+}
+
+/* Pending action: the call still waiting for its answer, on a mint card;
+   the whole last line opens its question. */
+.pending {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 16px 0;
+  border-radius: var(--sx-radius-md);
+  /* Mint over white, not over the grey page, so it reads as mint. */
+  background: color-mix(in oklab, var(--sx-accent) 12%, var(--sx-surface));
+}
+
+.pendingHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pendingHead h2 {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
+}
+
+.pending .pendingLine {
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  overflow-wrap: anywhere;
 }
 
-/* On Cold: fresh enquiries waiting on Inbound, one tap to them. */
+.pendingGo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  margin: 0 -16px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 0 0 var(--sx-radius-md) var(--sx-radius-md);
+  background: none;
+  color: var(--sx-accent);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* On Cold: fresh enquiries waiting on Inbound, one plain row to them. */
 .alert {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   min-height: 44px;
-  padding: 0 14px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-md);
-  background: var(--sx-surface);
+  margin: -6px 0;
+  padding: 0 4px;
+  border-radius: var(--sx-radius-sm);
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
   text-decoration: none;
 }
 
-/* The four cards: 2 x 2 on a phone, one row on a computer. */
+.alert svg {
+  flex: none;
+  color: var(--sx-ink-3);
+}
+
+/* Today's overview: the title, and under it whose activity it counts. */
+.overview {
+  display: grid;
+  gap: 2px;
+}
+
+.overview h2 {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-2xl);
+  font-weight: 500;
+  line-height: var(--sx-leading-28);
+  letter-spacing: -0.01em;
+}
+
+.overview p {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+/* The four tiles: 2 x 2 on a phone, one row on a computer. */
 .cards {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -104,7 +210,7 @@
   list-style: none;
 }
 
-/* One height for the four, whichever caption wraps. */
+/* One height for the four, whichever label wraps. */
 .cards > li {
   display: grid;
 }
@@ -115,20 +221,21 @@
   }
 }
 
-/* Soft glass, as the team's cards. */
-/* At Dipak's height (ux-audit, 3 Nov 2026): the next call stays in the first screen. */
+/* A tile: grey label, Dipak's 32 px figure, grey caption. The words wrap
+   rather than end in "…" at 130 % and 200 % text. */
 .card {
+  position: relative;
   display: grid;
+  grid-template-rows: auto auto 1fr;
   align-content: start;
-  gap: 0;
+  gap: 2px;
   box-sizing: border-box;
-  padding: 6px 12px;
+  padding: 10px 14px;
   border: 1px solid var(--sx-line);
-  border-radius: 16px;
+  border-radius: 14px;
   background: var(--sx-surface);
   color: var(--sx-ink);
   text-decoration: none;
-  transition: transform 180ms var(--sx-ease-out);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -136,160 +243,207 @@
   min-width: 0;
 }
 
-.card:active {
-  transform: scale(0.98);
-}
-
 .cardLabel {
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 500;
   line-height: var(--sx-leading-20);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .card strong {
-  /* Dipak's target, 2 Nov 2026: a 24 px number, the type scale's one named
-     exception (orchestrator, 3 Nov 2026). */
-  font-size: 24px;
-  font-weight: 750;
+  /* Dipak's design, 4 Nov 2026: a 32 px figure at medium weight, two digits. */
+  font-size: var(--sx-text-3xl);
+  font-weight: 500;
   line-height: 1;
   /* An extreme number wraps inside its tile, never over the next. */
   overflow-wrap: anywhere;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
 
-/* One caption under the number (Dipak's picture, 2 Nov 2026). */
+/* Not loaded: a dash, never a 0 it doesn't know. */
+.card strong[data-unknown] {
+  color: var(--sx-muted);
+}
+
 .cardNote {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 550;
   line-height: var(--sx-leading-16);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .card strong[aria-busy] {
   width: 40%;
+  height: 32px;
   border-radius: 6px;
-  background: var(--sx-fill-soft);
+  background: var(--sx-fill);
 }
 
-/* Next to call: one customer and one big button (Dipak's picture). */
+/* Press: a 10 % state layer in 90 ms; hover 6 % on a computer. */
+.card::after,
+.tonal::after,
+.nextName::after,
+.pendingGo::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  content: "";
+  transition: opacity var(--sx-dur-instant) var(--sx-ease-out);
+  pointer-events: none;
+}
+
+a.card:active::after,
+.tonal:active::after,
+a.nextName:active::after,
+.pendingGo:active::after {
+  opacity: 0.1;
+}
+
+@media (hover: hover) {
+  a.card:hover::after,
+  .tonal:hover::after,
+  a.nextName:hover::after,
+  .pendingGo:hover::after {
+    opacity: 0.06;
+  }
+}
+
+/* Next action: one customer and the Call (Dipak's design). Held, it offers
+   Call, Open lead and Later, as a Leads row does. */
 .next {
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
+  display: grid;
+  min-width: 0;
+  padding: 14px 16px 16px;
   border: 1px solid var(--sx-line);
-  border-radius: 20px;
+  border-radius: var(--sx-radius-md);
   background: var(--sx-surface);
+  -webkit-touch-callout: none;
 }
 
-.kicker {
+.nextHead {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
+}
+
+.nextHead h2 {
   margin: 0;
-  color: var(--sx-muted);
-  font-size: var(--sx-text-xs);
-  font-weight: 750;
-}
-
-.kicker span {
-  font-weight: 600;
-}
-
-.nextName {
-  justify-self: start;
   color: var(--sx-ink);
-  font-size: var(--sx-text-md);
-  font-weight: 800;
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
+  line-height: var(--sx-leading-28);
+}
+
+/* The name: the largest words in the card, a 44 px reach (persona QA, 31
+   Oct 2026). Scoped under .next, past the dashboard page's own margins on p. */
+.next .nextName {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  max-width: 100%;
+  min-height: 44px;
+  margin: 2px -6px 0;
+  padding: 0 6px;
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-2xl);
+  font-weight: 500;
+  line-height: var(--sx-leading-28);
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
   text-decoration: none;
 }
 
-.nextWhy {
-  margin: -6px 0 0;
+.next .nextWhy {
+  min-height: 20px;
+  margin: 0 0 14px;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 
-.callNow {
+/* A quiet tonal button in the Call's own 56 px slot: Try again, Open Leads. */
+.tonal {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  min-height: 48px;
+  gap: 8px;
+  min-height: 56px;
+  padding: 0 20px;
+  border: 0;
   border-radius: var(--sx-radius-pill);
-  background: var(--sx-accent);
-  color: var(--lx-on-teal);
+  background: var(--sx-fill);
+  color: var(--sx-ink);
+  font: inherit;
   font-size: var(--sx-text-md);
-  font-weight: 700;
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
   text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.nextBody {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
+/* Waiting: bars in the name's, the reason's and the Call's own places. */
+.nextName[data-wait],
+.nextWhy[data-wait],
+.slot[data-wait] {
+  display: block;
+  border-radius: 8px;
+  background: var(--sx-fill);
+}
+
+.next .nextName[data-wait] {
+  width: 58%;
+  height: 28px;
+  min-height: 0;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.next .nextWhy[data-wait] {
+  width: 40%;
+  height: 16px;
+  min-height: 0;
+  margin: 2px 0 14px;
+}
+
+.slot[data-wait] {
+  height: 56px;
+  border-radius: var(--sx-radius-pill);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .next [data-wait] {
+    animation: wait 1.2s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes wait {
+  to {
+    opacity: 0.55;
+  }
 }
 
 /* Task and follow-up rows. */
 .rows {
   display: grid;
   margin: 0;
-  padding: 0 14px;
-  border: 1px solid var(--sx-line);
-  border-radius: 20px;
+  padding: 0 16px;
+  border-radius: var(--sx-radius-md);
   background: var(--sx-surface);
   list-style: none;
 }
 
-/* Me: one column on a phone; from 1024 px two across the whole width. */
-.me {
-  display: grid;
-  gap: 12px;
-  min-width: 0;
-}
-
-.me > [data-area] {
-  display: grid;
-  align-content: start;
-  min-width: 0;
-}
-
+/* Me: the slots (ui/slots): one column on a phone, twelve from 1024 px. */
 .me > [data-area="side"] {
-  gap: 8px;
-}
-
-@media (min-width: 1024px) {
-  .me {
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    align-items: start;
-    gap: 32px;
-  }
-
-  .me > [data-area] {
-    grid-column: 1 / -1;
-  }
-
-  .me > [data-area="cards"],
-  .me > [data-area="perf"] {
-    grid-column: span 7;
-  }
-
-  .me > [data-area="next"],
-  .me > [data-area="recent"] {
-    grid-column: span 5;
-  }
-
-  .me > [data-area="tasks"],
-  .me > [data-area="follow"] {
-    grid-column: span 6;
-  }
+  gap: 4px;
 }
 
 .taskRow,
@@ -395,9 +549,8 @@
   display: grid;
   gap: 10px;
   margin: 0;
-  padding: 14px 16px;
-  border: 1px solid var(--sx-line);
-  border-radius: 20px;
+  padding: 12px 16px;
+  border-radius: var(--sx-radius-md);
   background: var(--sx-surface);
 }
 
@@ -444,31 +597,28 @@
   font-size: var(--sx-text-sm);
 }
 
-/* A mode opening: each block rises in turn (owner, 31 Oct 2026). */
+/* A mode opening: each block rises in turn (owner, 31 Oct 2026), short and
+   small (4 px, 220 ms), so the 50th open of the day stays quiet. */
 .me > [data-area] {
-  animation: area-in var(--sx-dur-page) var(--sx-ease-out) both;
+  animation: area-in var(--sx-dur-base) var(--sx-ease-out) both;
 }
 
 .me > [data-area]:nth-child(2) {
-  animation-delay: 40ms;
+  animation-delay: 16ms;
 }
 
 .me > [data-area]:nth-child(3) {
-  animation-delay: 80ms;
+  animation-delay: 32ms;
 }
 
-.me > [data-area]:nth-child(4) {
-  animation-delay: 120ms;
-}
-
-.me > [data-area]:nth-child(n + 5) {
-  animation-delay: 160ms;
+.me > [data-area]:nth-child(n + 4) {
+  animation-delay: 48ms;
 }
 
 @keyframes area-in {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(4px);
   }
 }
 
@@ -476,11 +626,6 @@
   .me > [data-area] {
     animation: none;
   }
-}
-
-/* A block with nothing to show takes no room. */
-.me > [data-area]:empty {
-  display: none;
 }
 
 /* + Add up front: sellers write their to-dos here (Dipak, 31 Oct 2026). */
@@ -516,9 +661,8 @@
   justify-content: space-between;
   gap: 12px;
   min-height: 60px;
-  padding: 10px 14px 10px 16px;
-  border: 1px solid var(--sx-line);
-  border-radius: 20px;
+  padding: 10px 16px;
+  border-radius: var(--sx-radius-md);
   background: var(--sx-surface);
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
@@ -694,7 +838,36 @@
   box-shadow: var(--sx-focus-ring);
 }
 
-/* The Finish row's place holds no gap when no call waits for its answer. */
-.me > [data-area="finish"]:empty {
-  display: none;
+/* Today's tasks as Dipak draws them: each task its own soft grey card, no
+   line, the title in medium ink, its time and type in grey, Overdue in a
+   peach pill at the end. */
+.taskList {
+  gap: 8px;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.taskList .taskRow {
+  gap: 12px;
+  padding: 0 12px 0 16px;
+  border-bottom: 0;
+  border-radius: 12px;
+  background: var(--sx-fill-soft);
+}
+
+.taskList .swipeRow[data-swipe="right"] .swipeFace,
+.taskList .swipeRow[data-swipe="left"] .swipeFace {
+  background: var(--sx-fill-soft);
+}
+
+.taskList .rowText strong {
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
+}
+
+.taskList .taskMeta [data-late-time] {
+  color: var(--sx-muted);
+  font-weight: 400;
 }

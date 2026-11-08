@@ -67,8 +67,12 @@
   min-width: 0;
 }
 
+/* The stage pick keeps room for its words: when Call Next (or Start Cold
+   Calling) would squeeze it to "Al…", Call Next takes the next line
+   (staff, bug 167, 4 Nov 2026). */
 .headStage > .stage {
   flex: 1 1 auto;
+  min-width: min(100%, 10rem);
 }
 
 /* Under the 64 px app bar. A head taller than 40% of the screen (large text)
@@ -237,16 +241,42 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* A count beside a view's name ("To Call 7"); where both don't fit (360 px at
-   large text) the count drops under the name instead of being cut. */
+/* To Call | Follow-ups | All Leads: one segmented control, each view's name
+   and its count badge on one line (owner, bug 165 and bug 180, 3-6 Nov 2026:
+   "Follow-ups 4" broke onto two lines beside "To Call 4"). A tab is as wide
+   as its words plus a share of the rest; on a narrow phone at large text the
+   words step down to fit the row, and if they still don't, the row scrolls
+   sideways rather than wrap or cut a word. */
+.tabs {
+  container-type: inline-size;
+  display: flex;
+  padding: 3px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
 .tabs .tab {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex: 1 0 auto;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
-  column-gap: 4px;
-  line-height: 1.15;
-  white-space: normal;
+  gap: 4px;
+  padding: 0 8px;
+  font-size: min(var(--sx-text-sm), 4cqi);
+  line-height: var(--sx-leading-20);
+  white-space: nowrap;
+}
+
+.tabs .tab[aria-selected="true"] {
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
 }
 
 .tabWord,
@@ -254,13 +284,31 @@
   white-space: nowrap;
 }
 
+/* The count as a badge with even figures, so 4, 12 and 294 sit alike. */
 .tabCount {
   font-variant-numeric: tabular-nums;
   font-weight: 500;
 }
 
+.tabs .tabCount {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  box-sizing: border-box;
+  padding: 1px 6px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+  font-size: min(var(--sx-text-2xs), 3.6cqi);
+  line-height: var(--sx-leading-16);
+}
+
 .tab[aria-selected="true"] .tabCount {
   font-weight: 700;
+}
+
+.tabs .tab[aria-selected="true"] .tabCount {
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
 }
 
 .subTabs .tab {
@@ -286,12 +334,19 @@
 
 /* A computer's views are tabs in a row, left aligned, as wide as their words. */
 @media (min-width: 900px) {
+  /* No size containment here: a container measures 0 wide on its own, and
+     a computer's tabs are as wide as their words. */
   .tabs {
+    container-type: normal;
     display: flex;
     gap: 4px;
+    justify-self: start;
+    width: max-content;
+    max-width: 100%;
   }
 
   .tabs .tab {
+    flex: none;
     padding: 0 18px;
   }
 }

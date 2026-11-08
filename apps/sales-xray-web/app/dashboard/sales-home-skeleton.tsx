@@ -8,7 +8,8 @@
  */
 
 import { ActionList, ActionRow, Skeleton, SkeletonRow } from "../ui/kit";
-import myDay from "./my-day.module.css";
+import { NextCall, TodayCards } from "./seller-home";
+import seller from "./seller-home.module.css";
 import styles from "./sales-home.module.css";
 
 /** A list card's rows: sellers or leads. */
@@ -112,45 +113,15 @@ export function FunnelSkeleton() {
   );
 }
 
-/** A salesperson's Today and their day's numbers. */
+/** A salesperson's Home while it loads: the same blocks as the loaded page,
+ *  waiting (Home studio, 4 Nov 2026: the old outline drew a layout Home no
+ *  longer has, so the page jumped when it arrived). */
 export function TodaySkeleton() {
   return (
-    <>
-      {/* Taking new leads: its row's icon and two lines. */}
-      <section className={styles.taking} aria-hidden="true">
-        <SkeletonRow avatar={40} lines={2} />
-      </section>
-      <section className={styles.block} aria-busy="true">
-        <div className={styles.head}>
-          <h2>Today</h2>
-          <span className={styles.meta}>Who to call</span>
-        </div>
-        <div className={styles.chips} aria-hidden="true">
-          {[64, 112, 104].map((width) => (
-            <Skeleton key={width} width={width} height={44} radius="pill" />
-          ))}
-        </div>
-        <RowsSkeleton rows={4} kind="lead" />
-        <Skeleton height={52} radius="pill" />
-        {/* "See all N for today" */}
-        <span className={`${styles.more} ${styles.line}`} aria-hidden="true">
-          <Skeleton width={136} height={12} />
-        </span>
-      </section>
-      <section className={myDay.numbers} aria-hidden="true">
-        <h3 className={myDay.numbersTitle}>Today</h3>
-        <dl className={styles.dayStrip}>
-          {["Calls", "Connected", "Follow-ups done"].map((label) => (
-            <div key={label}>
-              <dt>{label}</dt>
-              <dd className={styles.line}>
-                <Skeleton width={28} height={18} />
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-    </>
+    <div className={seller.me} aria-busy="true">
+      <TodayCards side="inbound" own={null} tasks={null} />
+      <NextCall side="inbound" own={null} state="loading" />
+    </div>
   );
 }
 

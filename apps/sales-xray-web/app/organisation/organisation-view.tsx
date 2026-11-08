@@ -5,6 +5,7 @@ import {
   Building2,
   ChevronDown,
   Crown,
+  Ellipsis,
   Pencil,
   Plus,
   RefreshCw,
@@ -44,7 +45,7 @@ import {
   readSalesXrayWorkspaces,
   type SalesXrayWorkspace as Workspace,
 } from "../sales-xray-workspaces";
-import { Meter, Spark } from "../ui/kit";
+import { ActionList, ActionRow, Meter, Spark } from "../ui/kit";
 import { Picker } from "../ui/picker";
 import { Sheet } from "../ui/sheet";
 import { SectionBoundary } from "../ui/section-boundary";
@@ -1447,6 +1448,15 @@ export const sameName = (typed: string, name: string) =>
   typed.trim().replace(/\s+/g, " ").toLowerCase() ===
   name.trim().replace(/\s+/g, " ").toLowerCase();
 
+/** One action in a member's More sheet. */
+type MemberAction = {
+  key: string;
+  label: string;
+  icon: ReactNode;
+  tone: "accent" | "bad";
+  run: () => void;
+};
+
 function MembersPanel({
   members,
   reload,
@@ -1497,6 +1507,14 @@ function MembersPanel({
     added?: boolean;
   } | null>(null);
   const [typed, setTyped] = useState("");
+  // One person's row actions (make owner, remove, revoke), in one More sheet
+  // instead of icons beside the role (owner bugs #182, #185).
+  const [more, setMore] = useState<{
+    name: string;
+    actions: MemberAction[];
+  } | null>(null);
+  const [shownMore, setShownMore] = useState(more);
+  if (more && more !== shownMore) setShownMore(more);
   // The confirmation keeps its words while its sheet slides away.
   const [shownConfirm, setShownConfirm] = useState(confirming);
   if (confirming && confirming !== shownConfirm) setShownConfirm(confirming);
@@ -1670,6 +1688,32 @@ function MembersPanel({
           </p>
         ) : null}
 
+        <Sheet
+          open={more !== null}
+          onClose={() => setMore(null)}
+          title={shownMore?.name ?? ""}
+          wide="center"
+        >
+          {shownMore ? (
+            <ActionList label={`Actions for ${shownMore.name}`}>
+              {shownMore.actions.map((item) => (
+                <ActionRow
+                  key={item.key}
+                  icon={item.icon}
+                  tone={item.tone}
+                  title={item.label}
+                  chevron={false}
+                  disabled={busy || confirming !== null}
+                  onClick={() => {
+                    setMore(null);
+                    item.run();
+                  }}
+                />
+              ))}
+            </ActionList>
+          ) : null}
+        </Sheet>
+
         {/* Design system v2: a member change is confirmed in a sheet, a
             card in the middle on computers and from the bottom on phones. */}
         <Sheet
@@ -1762,6 +1806,63 @@ function MembersPanel({
               (member.status === "invited" ||
                 isOwner ||
                 member.role === "member");
+            // The same actions, checks and confirmations as before; only
+            // where they sit changed (owner bugs #182, #185).
+            const actions: MemberAction[] = [];
+            if (manageable && isOwner && member.status === "active")
+              actions.push({
+                key: "owner",
+                label: "Make owner",
+                icon: <Crown size={20} />,
+                tone: "accent",
+                run: () => {
+                  setTyped("");
+                  setConfirming({
+                    message: `Make ${name} the owner of ${orgName}?`,
+                    points: [
+                      `${name} gets everything, including billing and closing the organisation.`,
+                      "You become an admin.",
+                      `Only ${name} can give ownership back.`,
+                      "You both get an email.",
+                    ],
+                    typeName: orgName,
+                    verb: "Make owner",
+                    danger: true,
+                    action: (confirmName) =>
+                      transferOwnership(member.personId, confirmName),
+                  });
+                },
+              });
+            if (manageable)
+              actions.push(
+                member.status === "invited"
+                  ? {
+                      key: "revoke",
+                      label: "Revoke invite",
+                      icon: <X size={20} />,
+                      tone: "bad",
+                      run: () =>
+                        setConfirming({
+                          message: `Revoke the invite for ${name}? Its seat becomes free for someone else.`,
+                          verb: "Revoke invite",
+                          danger: true,
+                          action: () => revokeInvite(member.inviteId),
+                        }),
+                    }
+                  : {
+                      key: "remove",
+                      label: "Remove",
+                      icon: <Trash2 size={20} />,
+                      tone: "bad",
+                      run: () =>
+                        setConfirming({
+                          message: `Remove ${name} from the organisation? Their seat becomes free for someone else, and their calls stay with the organisation.`,
+                          verb: "Remove",
+                          danger: true,
+                          action: () => removeMember(member.personId),
+                        }),
+                    },
+              );
             return (
               <div
                 key={`${member.status}:${member.personId ?? member.inviteId}`}
@@ -1887,71 +1988,18 @@ function MembersPanel({
                       <Pencil size={15} />
                     </button>
                   ) : null}
-                  {manageable ? (
-                    <>
-                      {isOwner && member.status === "active" ? (
-                        <button
-                          type="button"
-                          className={styles.icon}
-                          title="Make owner"
-                          aria-label={`Make ${name} the owner`}
-                          disabled={busy || confirming !== null}
-                          onClick={() => {
-                            setTyped("");
-                            setConfirming({
-                              message: `Make ${name} the owner of ${orgName}?`,
-                              points: [
-                                `${name} gets everything, including billing and closing the organisation.`,
-                                "You become an admin.",
-                                `Only ${name} can give ownership back.`,
-                                "You both get an email.",
-                              ],
-                              typeName: orgName,
-                              verb: "Make owner",
-                              danger: true,
-                              action: (confirmName) =>
-                                transferOwnership(member.personId, confirmName),
-                            });
-                          }}
-                        >
-                          <Crown size={15} />
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        className={styles.icon}
-                        title={
-                          member.status === "invited"
-                            ? "Revoke invite"
-                            : "Remove"
-                        }
-                        aria-label={`${member.status === "invited" ? "Revoke invite for" : "Remove"} ${name}`}
-                        disabled={busy || confirming !== null}
-                        onClick={() =>
-                          setConfirming(
-                            member.status === "invited"
-                              ? {
-                                  message: `Revoke the invite for ${name}? Its seat becomes free for someone else.`,
-                                  verb: "Revoke invite",
-                                  danger: true,
-                                  action: () => revokeInvite(member.inviteId),
-                                }
-                              : {
-                                  message: `Remove ${name} from the organisation? Their seat becomes free for someone else, and their calls stay with the organisation.`,
-                                  verb: "Remove",
-                                  danger: true,
-                                  action: () => removeMember(member.personId),
-                                },
-                          )
-                        }
-                      >
-                        {member.status === "invited" ? (
-                          <X size={15} />
-                        ) : (
-                          <Trash2 size={15} />
-                        )}
-                      </button>
-                    </>
+                  {actions.length > 0 ? (
+                    <button
+                      type="button"
+                      className={styles.icon}
+                      title="More"
+                      aria-label={`More actions for ${name}`}
+                      aria-haspopup="dialog"
+                      disabled={busy || confirming !== null}
+                      onClick={() => setMore({ name, actions })}
+                    >
+                      <Ellipsis size={18} aria-hidden="true" />
+                    </button>
                   ) : null}
                 </span>
               </div>
