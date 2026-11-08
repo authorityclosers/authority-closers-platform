@@ -160,10 +160,13 @@
   transform: scale(var(--sx-press-scale));
 }
 
+/* Secondary text, not muted: on the dark card's chip fill, muted text was
+   4.15:1, under the 4.5:1 its 12 px words need (QA robot 6d86266c, 8 Nov
+   2026, Report on an error card at /analysis/calls/:id). */
 .reference {
   border-color: transparent;
   background: var(--sx-fill);
-  color: var(--lx-muted);
+  color: var(--lx-ink-3);
   font-variant-numeric: tabular-nums;
 }
 

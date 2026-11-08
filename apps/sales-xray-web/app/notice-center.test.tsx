@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -1191,4 +1193,19 @@ it("on a page, folds a card that would cover a bar to its pill; opened by a tap 
     dock.remove();
     vi.useRealTimers();
   }
+});
+
+it("gives the card's chips secondary text, never muted", () => {
+  // The QA robot, 8 Nov 2026 (6d86266c): muted on the dark card was 4.15:1.
+  const css = readFileSync(
+    join(process.cwd(), "app/notice-center.module.css"),
+    "utf8",
+  );
+  // The chips' own rule, after the one they share with the card's action.
+  const chip =
+    [...css.matchAll(/\n\.reference \{([^}]*)\}/g)]
+      .map((rule) => rule[1])
+      .find((rule) => rule.includes("border-color: transparent")) ?? "";
+  expect(chip).toContain("color: var(--lx-ink-3);");
+  expect(chip).not.toContain("--lx-muted");
 });
