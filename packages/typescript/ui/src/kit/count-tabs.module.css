@@ -1,0 +1,69 @@
+/* Text tabs with their counts (count-tabs.tsx; Leads L1, docs/design/screens/
+   leads/spec.md §3). Only --sx-* tokens. */
+
+/* One line on a hairline; past the edge it scrolls sideways, with a fade. */
+.row {
+  min-width: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--sx-hairline);
+  scrollbar-width: none;
+}
+
+.row::-webkit-scrollbar {
+  display: none;
+}
+
+.tabs {
+  display: flex;
+  gap: 24px;
+  width: max-content;
+  min-height: 44px;
+}
+
+/* A tab is as wide as its words; the chosen one stands on a 3 dp accent bar
+   the width of its words, its top corners rounded. */
+.tab {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.3em;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 400;
+  line-height: var(--sx-leading-20);
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tab[aria-selected="true"] {
+  color: var(--sx-ink);
+  font-weight: 500;
+}
+
+.tab[aria-selected="true"]::after {
+  position: absolute;
+  inset: auto 0 -1px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--sx-accent);
+  content: "";
+}
+
+.tab:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* The same count on every tab: muted, even figures, after one space. */
+.count {
+  color: var(--sx-muted);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}

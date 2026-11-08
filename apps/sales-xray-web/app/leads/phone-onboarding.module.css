@@ -71,7 +71,7 @@
 }
 
 .close:focus-visible {
-  outline: 2px solid var(--sx-focus-ring);
+  outline: 2px solid var(--sx-accent);
 }
 
 /* The step and its buttons sit together in the middle of the screen, in

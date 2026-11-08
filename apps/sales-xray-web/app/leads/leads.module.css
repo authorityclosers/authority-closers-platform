@@ -234,18 +234,6 @@
   color: var(--sx-bad);
 }
 
-/* A new Inbound enquiry's wait, at the end of the middle line (bug 156):
-   amber from 5 minutes, red from 15, as its own line was. */
-.leadWait[data-tone="warn"] {
-  color: var(--lx-focus-ink);
-  font-weight: 600;
-}
-
-.leadWait[data-tone="bad"] {
-  color: var(--sx-bad);
-  font-weight: 600;
-}
-
 .leadEnd {
   display: grid;
   justify-items: end;
@@ -3424,13 +3412,15 @@ a.repName {
 
 /* A call still waiting for its answer, pinned over the list until answered
    or put away (competitor teardown 3). */
+/* The list's first card (Leads L1): Home's card, two lines, then a plain
+   "Didn't call". */
 .finish {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: 8px;
-  border: 1px solid var(--sx-accent);
-  border-radius: var(--sx-radius-md);
-  background: var(--sx-accent-soft);
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
 }
 
 /* Held while a lead is open: unseen, its room kept, so opening or closing the
@@ -3456,27 +3446,46 @@ a.repName {
 
 .finishOpen strong,
 .finishOpen span {
+  display: block;
   overflow-wrap: anywhere;
 }
 
+.finishOpen strong {
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
+}
+
 .finishOpen span {
-  color: var(--sx-ink-2);
-  font-size: var(--sx-text-sm);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-20);
 }
 
 .finishAway {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 4px;
   min-height: 44px;
   padding: 0 12px;
   border: 0;
   background: none;
-  color: var(--sx-muted);
+  color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-sm);
+  font-weight: 500;
   cursor: pointer;
+}
+
+/* The list's first cards (call logging, Finish): they scroll away with it. */
+.listFirst {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.listFirst:empty {
+  display: none;
 }
 
 .finishOpen:focus-visible,
@@ -4685,7 +4694,7 @@ a.repName {
 }
 
 .contactIcon:focus-visible {
-  outline: 2px solid var(--sx-focus-ring);
+  outline: 2px solid var(--sx-accent);
   outline-offset: 2px;
 }
 
@@ -5260,11 +5269,6 @@ a.repName {
   border-bottom: 1px solid var(--sx-line);
 }
 
-/* A compact row (the work views) keeps "Stage · Source" on a phone too. */
-.leadFace[data-quick][data-compact] .leadSub {
-  display: -webkit-box;
-}
-
 /* The work views' own line over the count: "Inbound leads to call". */
 .listHeading {
   margin: 0;
@@ -5275,6 +5279,15 @@ a.repName {
   font-weight: 700;
   /* Wraps rather than ending in "…": bold again, it must stay whole at 200% text. */
   overflow-wrap: anywhere;
+}
+
+/* The work views (Leads L1): the tab holds the count, Filter the sort and the
+   chip row's end (or the Filter sheet) List | Table, so the list's own head
+   shows only while it says something (a sync under way or paused, Select). */
+.listHead[data-bare]:not(:has(.syncChip:not([data-quiet]))):not(
+    :has(.selectToggle)
+  ) {
+  display: none;
 }
 
 /* The list's sort, where its count was (bugs 126 and 127). */
@@ -8003,4 +8016,244 @@ fieldset.form {
     inset: 0 0 calc(var(--lx-bottom-nav-h) + env(safe-area-inset-bottom, 0px));
     height: auto;
   }
+}
+
+/* ---------- Leads L1: the work views' list (owner, 8 Nov 2026: "Build L1";
+   docs/design/screens/leads/spec.md §3) ---------- */
+
+/* One card, Home's: rows on hairlines across its width. */
+.root[data-tab="all"] .listPanel[data-card],
+.listPanel[data-card] {
+  overflow: clip;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.listPanel[data-card] .leadLine + .leadLine,
+.dayCard .leadLine + .leadLine {
+  border-top-color: var(--sx-hairline);
+}
+
+/* A row: 72 dp at least; the initials, three lines of words, then Call and
+   WhatsApp as two neutral circles, their centres 52 dp apart, 12 dp from the
+   card's edge. The name wraps (at most three lines); nothing ends in "…". */
+.leadFace[data-quick][data-compact] {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "main quick";
+  align-items: center;
+  row-gap: 0;
+  padding-block: 0;
+}
+
+.leadFace[data-quick][data-compact] .leadButton {
+  grid-area: main;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+  padding: 10px 0 10px 12px;
+}
+
+.leadFace[data-compact] .leadEnd[data-quick] {
+  display: contents;
+}
+
+.leadFace[data-quick][data-compact] .leadQuick {
+  grid-area: quick;
+  align-self: center;
+  justify-self: end;
+  gap: 8px;
+  padding: 0 12px 0 8px;
+}
+
+.leadFace[data-compact] .quickAct,
+.leadFace[data-compact] .quickAct[data-channel="call"] {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--sx-line-strong);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+}
+
+.leadFace[data-compact] .quickAct:active {
+  background: var(--sx-fill-soft);
+}
+
+.leadFace[data-compact] .hoverPick {
+  left: 14px;
+}
+
+/* The initials: Home's grey, white, 500. */
+.leadAvatar {
+  display: contents;
+}
+
+.leadAvatar > span {
+  font-weight: 500;
+}
+
+.leadFace[data-compact] .leadMain {
+  gap: 0;
+}
+
+.leadFace[data-compact] .leadName {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.leadFace[data-compact] .leadNameText {
+  overflow: visible;
+}
+
+/* Line 2: the stage's dot and name, then the source. A long source wraps
+   (it ran under Call at 363), and what wraps starts under the stage's name,
+   as line 3 does. */
+.leadFace[data-quick][data-compact] .leadSub {
+  display: block;
+  overflow: visible;
+  padding-left: 14px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-20);
+  white-space: normal;
+  cursor: inherit;
+  -webkit-line-clamp: unset;
+  line-clamp: none;
+  overflow-wrap: anywhere;
+  text-indent: -14px;
+}
+
+.leadFace[data-compact] .leadSource {
+  white-space: normal;
+}
+
+.stageDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--stage);
+  vertical-align: 1px;
+}
+
+.leadStage {
+  color: var(--sx-ink-2);
+}
+
+/* Line 3: the next step, under the stage's name. Late is said in words and
+   red: "Late · was due 2:00 pm". */
+.leadFace[data-compact] .leadWhy {
+  padding-left: 14px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 400;
+  line-height: var(--sx-leading-20);
+}
+
+.leadFace[data-compact] .leadWhy[data-tone="bad"] {
+  color: var(--sx-bad);
+}
+
+.leadFace[data-compact] .leadWhy[data-tone="warn"] {
+  color: var(--lx-focus-ink);
+}
+
+.lateWord {
+  font-weight: 500;
+}
+
+/* With Follow-ups' day cards the list has no card of its own: its head (the
+   sync sign, while it shows) sits on the page. */
+.root[data-tab="all"] .listPanel:not([data-card]) > .listHead[data-bare] {
+  border-bottom: 0;
+  background: transparent;
+}
+
+/* List | Table: beside Filter on a computer; in the Filter sheet on a phone,
+   on its own line under the sort. Neither shows while the list is empty. */
+.headLayout {
+  display: inline-flex;
+  align-items: center;
+}
+
+.headLayout:empty {
+  display: none;
+}
+
+.sheetLayout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.sheetLayout:has(> span:last-child:empty) {
+  display: none;
+}
+
+/* Follow-ups by day: a card a group, its name and count at the top. */
+.dayGroups {
+  display: grid;
+  gap: 12px;
+}
+
+.dayCard {
+  overflow: clip;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.dayHead {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  padding: 12px;
+  border-bottom: 1px solid var(--sx-hairline);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
+}
+
+.dayCount {
+  color: var(--sx-muted);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.dayAll {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-top: 1px solid var(--sx-hairline);
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.dayAll:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--sx-accent);
 }

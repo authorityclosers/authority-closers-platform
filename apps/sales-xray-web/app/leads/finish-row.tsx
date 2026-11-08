@@ -3,13 +3,14 @@
 /**
  * An answer is never lost (competitor teardown 3, 1 Nov 2026; Close keeps
  * the seller on the call until it is logged, Exotel's dialer moves on before
- * the answer is saved): a call of mine with nothing saved since stays pinned
- * at the top of Leads, "Finish: Asha · called 4 min ago · How did it go?",
- * until it is answered or put away with "Didn't call". The server says which
- * calls wait (the desk's `unanswered`); "Didn't call" is kept on this device.
+ * the answer is saved): a call of mine with nothing saved since stays first
+ * in Leads' list, a card of two lines, "Finish: Asha" and "Called 4 min ago ·
+ * How did it go?", until it is answered or put away with "Didn't call" (Leads
+ * L1, 8 Nov 2026: as Home's Pending action, it scrolls away with the list).
+ * The server says which calls wait (the desk's `unanswered`); "Didn't call" is
+ * kept on this device.
  */
 
-import { X } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 
 import { displayName } from "../display-name";
@@ -85,8 +86,8 @@ export function FinishRow({
           {/* A dial the phone never showed may not have been placed (phone
               QA, 3 Nov 2026: a back-out from the dialler read "called"). */}
           {call.phone_saw === false
-            ? `dialled ${ago(call.called_at, now)} · Did you call?`
-            : `called ${ago(call.called_at, now)} · How did it go?`}
+            ? `Dialled ${ago(call.called_at, now)} · Did you call?`
+            : `Called ${ago(call.called_at, now)} · How did it go?`}
           {more > 0 ? ` · ${more} more` : ""}
         </span>
       </button>
@@ -100,7 +101,6 @@ export function FinishRow({
           keepGone(next);
         }}
       >
-        <X size={16} aria-hidden="true" />
         Didn&rsquo;t call
       </button>
     </div>

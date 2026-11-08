@@ -7,6 +7,7 @@ import type { StageView } from "./journey/journey-client";
 import { inWorkView } from "./lead-moves";
 import type { LeadRow } from "./leads-client";
 import {
+  CallBand,
   CallNext,
   callNextView,
   FollowUpTabs,
@@ -114,6 +115,29 @@ it("puts each view's count on its tab once the list has counted (one count rule,
     ["All Leads 1.2K", "false"],
   ]);
   expect([999, 117800].map(tabCount)).toEqual(["999", "1.2L"]);
+});
+
+// Leads L1 (owner, 8 Nov 2026: "Build L1"): the views as text tabs that keep
+// one line and scroll sideways where they don't fit (bugs 165, 180, N7).
+it("keeps the views as text tabs on one line that scroll rather than wrap", async () => {
+  await act(async () =>
+    root.render(
+      <ViewTabs
+        value="follow_ups"
+        onChange={vi.fn()}
+        counts={{ to_call: 233, follow_ups: 4, all: 294 }}
+      />,
+    ),
+  );
+  const list = host.querySelector('[role="tablist"]')!;
+  // The tabs sit in a sideways scroller of their own, never stacked.
+  expect(list.parentElement).not.toBe(host);
+  expect(list.hasAttribute("data-stacked")).toBe(false);
+  expect(tabs()).toEqual([
+    ["To Call 233", "false"],
+    ["Follow-ups 4", "true"],
+    ["All Leads 294", "false"],
+  ]);
 });
 
 it("splits Follow-ups into Due Today, Overdue and Upcoming", async () => {
@@ -245,6 +269,37 @@ it("calls the next lead on Inbound and starts cold calling on Cold", async () =>
     ),
   );
   expect(button().textContent).toBe("Start Cold Calling · 900");
+});
+
+it("names the band's call for its view: Call Next Follow-up on Follow-ups (Leads L1)", async () => {
+  const onStart = vi.fn();
+  const label = () => host.querySelector("button")!.textContent;
+  await act(async () =>
+    root.render(
+      <CallBand side="inbound" disabled={false} onStart={onStart} count={16} />,
+    ),
+  );
+  expect(label()).toBe("Call Next Lead · 16");
+  await act(async () =>
+    root.render(
+      <CallBand
+        side="inbound"
+        view="follow_ups"
+        disabled={false}
+        onStart={onStart}
+        count={12}
+      />,
+    ),
+  );
+  expect(label()).toBe("Call Next Follow-up · 12");
+  await act(async () =>
+    root.render(
+      <CallBand side="cold" disabled={false} onStart={onStart} count={233} />,
+    ),
+  );
+  expect(label()).toBe("Start Cold Calling · 233");
+  await act(async () => host.querySelector("button")!.click());
+  expect(onStart).toHaveBeenCalledTimes(1);
 });
 
 it("remembers the last work view per person, without a lead, a search or whose leads", () => {

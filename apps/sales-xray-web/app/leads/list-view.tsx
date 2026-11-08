@@ -30,7 +30,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { flushSync } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 
 import { inStageList, inWorkView, useLeadMoves, withMoves } from "./lead-moves";
 import { OPENING_STAGE } from "./opening";
@@ -49,7 +49,14 @@ import {
   SelectLine,
   type Doomed,
 } from "./delete-leads";
-import { InlineEmpty, LeadLine, thirdLine, type RowActions } from "./desk-view";
+import {
+  DayGroups,
+  countsToAsk,
+  dayCounts,
+  dayGroups,
+  useDayTotals,
+} from "./day-groups";
+import { InlineEmpty, LeadLine, stepLine, type RowActions } from "./desk-view";
 import {
   DELETE_LIMIT,
   LeadsError,
@@ -344,9 +351,13 @@ export function ListView({
   more: refine = null,
   onSort,
   sortPick = null,
+  bare = false,
+  layoutSlot = null,
+  syncSlot = null,
   onTopLead,
   onOrder,
   stageWord,
+  stageTone,
   quietLate = false,
   heading = null,
   empty = null,
@@ -355,6 +366,8 @@ export function ListView({
   canManage: boolean;
   /** A lead's stage, named for the side shown (compact rows). */
   stageWord?: (row: LeadRow) => string | undefined;
+  /** A lead's stage colour, the dot before its name (compact rows). */
+  stageTone?: (row: LeadRow) => string | undefined;
   /** Rows never turn red: Cold Leads for a seller (owner, 31 Oct 2026). */
   quietLate?: boolean;
   /** Leads that just arrived: their rows pulse once (competitor teardown 12). */
@@ -422,6 +435,13 @@ export function ListView({
   onSort?: (sort: ListSort, order: "asc" | "desc") => void;
   /** The head's sort, in place of the "N leads" line (bugs 126 and 127). */
   sortPick?: ReactNode;
+  /** The work views (Leads L1): the tab holds the count, so no "N leads"
+   *  line; the list's own head shows only while it says something. */
+  bare?: boolean;
+  /** Where the List | Table switch goes instead of the list's head. */
+  layoutSlot?: HTMLElement | null;
+  /** Where the "Syncing…" sign goes instead of the list's head. */
+  syncSlot?: HTMLElement | null;
 }) {
   // Table on phones and computers alike (owner, 24 Oct 2026: "we can't actually
   // access table view ... on mobile"); the choice is remembered per person.
@@ -645,22 +665,31 @@ export function ListView({
       ),
     );
   }, [order, lastTries]);
-  // Only the rows near the view are drawn (NearRows): a row's kind (two lines,
-  // or three for a lead that needs someone now) gives its height until it is
-  // drawn and read.
+  // Only the rows near the view are drawn (NearRows): a row's kind (three
+  // lines, or two for a closed lead with no next step) gives its height until
+  // it is drawn and read.
   const kinds = useMemo(
     () =>
       rows.map((row) =>
         selecting
           ? "select"
           : stage === OPENING_STAGE
-            ? thirdLine(row)
+            ? stepLine(row).text
               ? "three"
               : "two"
             : "full",
       ),
     [rows, selecting, stage],
   );
+  // Follow-ups in its own order (next due first) is grouped by day, a card a
+  // group (Leads L1); another sort, ticking and the table keep one list.
+  const grouped =
+    bare &&
+    stage === OPENING_STAGE &&
+    refine?.view === "follow_ups" &&
+    !refine.sort &&
+    !selecting &&
+    !asTable;
   const syncing = loaded?.key !== key;
   const error = failed?.key === key ? failed.message : null;
   useListLoadWatch({
@@ -682,22 +711,21 @@ export function ListView({
   });
   // Keys on a computer: J/K, Enter, C (asks before calling), L. Not while ticking.
   const list = useRef<HTMLUListElement>(null);
+  const days = useRef<HTMLDivElement>(null);
   const byId = (id: string) => rows.find((row) => row.lead_id === id);
-  useRowKeys(
-    list,
-    {
-      open: onOpen,
-      call: (id) => {
-        const row = byId(id);
-        if (row?.phone_last4) actions?.onCall?.(row);
-      },
-      log: (id) => {
-        const row = byId(id);
-        if (row) actions?.onLog?.(row);
-      },
+  const rowKeys = {
+    open: onOpen,
+    call: (id: string) => {
+      const row = byId(id);
+      if (row?.phone_last4) actions?.onCall?.(row);
     },
-    !selecting && !asTable,
-  );
+    log: (id: string) => {
+      const row = byId(id);
+      if (row) actions?.onLog?.(row);
+    },
+  };
+  useRowKeys(list, rowKeys, !selecting && !asTable && !grouped);
+  useRowKeys(days, rowKeys, grouped);
   const ask = {
     scope,
     owner: owner ?? undefined,
@@ -707,6 +735,23 @@ export function ListView({
     pipeline,
     more: refine,
   };
+  // Each day group's count: from the rows read, else from the server.
+  const groupRows = useMemo(
+    () => (grouped ? dayGroups(rows) : null),
+    [grouped, rows],
+  );
+  const complete = page?.next_offset == null;
+  const firstCounts = groupRows
+    ? dayCounts(groupRows, complete, page?.total ?? null)
+    : null;
+  const dayTotals = useDayTotals(
+    key,
+    firstCounts ? countsToAsk(firstCounts) : [],
+    ask,
+  );
+  const groupCounts = groupRows
+    ? dayCounts(groupRows, complete, page?.total ?? null, dayTotals)
+    : null;
 
   const loadedWindow = useRef({ question, count: rows.length });
   useEffect(() => {
@@ -956,61 +1001,112 @@ export function ListView({
     onChanged?.();
   };
 
+  const leadLine = (
+    row: LeadRow,
+    index: number,
+    count: number,
+    at?: number,
+    kind?: string,
+  ) => (
+    <CachedLeadLine
+      key={row.lead_id}
+      row={row}
+      onOpen={openRow}
+      // The owner's name only on someone else's lead.
+      showOwner={scope !== "mine" && row.owner_person_id !== me}
+      actions={actions ? (picksHere ? ownerActions : rowActions) : undefined}
+      onPick={picksHere ? startPicking : undefined}
+      compact={stage === OPENING_STAGE}
+      stageWord={stageWord?.(row)}
+      stageTone={stageTone?.(row)}
+      quietLate={quietLate}
+      fresh={!!fresh?.has(row.lead_id)}
+      at={at}
+      index={index}
+      count={count}
+      kind={kind}
+    />
+  );
+  const groupsShown =
+    groupRows !== null &&
+    groupCounts !== null &&
+    page !== null &&
+    !!rows.length;
+  // Only when it says something (owner, #73): "Updated just now" on every
+  // list was noise. Where the page gives it a place (the head's edge), there.
+  const syncSign = (
+    <span
+      className={styles.syncChip}
+      aria-label="Lead sync"
+      role="status"
+      aria-live="polite"
+      data-quiet={error || syncing ? undefined : ""}
+    >
+      {error ? "Sync paused" : syncing ? "Syncing…" : ""}
+    </span>
+  );
+  // List and Table as two small icons (owner, 31 Oct 2026), each named on
+  // hover and to screen readers; where the page gives it a place (Leads L1:
+  // beside Filter on a computer, in the Filter sheet on a phone), it is there.
+  const layoutSwitch = (
+    <span
+      className={styles.layoutSwitch}
+      role="group"
+      aria-label="Show leads as"
+    >
+      <button
+        type="button"
+        aria-pressed={!asTable}
+        title="Show as a list"
+        aria-label="List"
+        onClick={() => chooseLayout("list")}
+      >
+        <List size={16} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        aria-pressed={asTable}
+        title="Show as a table"
+        aria-label="Table"
+        onClick={() => chooseLayout("table")}
+      >
+        <Table2 size={16} aria-hidden="true" />
+      </button>
+    </span>
+  );
+
   return (
     <>
-      <section ref={panel} className={styles.listPanel} aria-label={stageLabel}>
+      <section
+        ref={panel}
+        className={styles.listPanel}
+        aria-label={stageLabel}
+        // The work views' list sits in one card (Leads L1); Follow-ups' day
+        // groups are each their own.
+        data-card={bare && stage !== TEST && !groupsShown ? "" : undefined}
+      >
         {heading ? <h2 className={styles.listHeading}>{heading}</h2> : null}
-        <div className={styles.listHead}>
+        {layoutSlot && rows.length && !selecting
+          ? createPortal(layoutSwitch, layoutSlot)
+          : null}
+        {syncSlot ? createPortal(syncSign, syncSlot) : null}
+        <div
+          className={styles.listHead}
+          data-bare={bare && stage !== TEST ? "" : undefined}
+        >
           {sortPick && stage !== TEST ? (
             <span className={styles.listSort}>{sortPick}</span>
-          ) : (
+          ) : bare && stage !== TEST ? null : (
             <span className={styles.listTotal} aria-live="polite">
               {page
                 ? `${page.total} ${stage === TEST ? "test " : ""}${page.total === 1 ? "lead" : "leads"}`
                 : null}
             </span>
           )}
-          {/* Only when it says something (owner, #73): "Updated just now"
-              on every list was noise. */}
-          <span
-            className={styles.syncChip}
-            aria-label="Lead sync"
-            role="status"
-            aria-live="polite"
-            data-quiet={error || syncing ? undefined : ""}
-          >
-            {error ? "Sync paused" : syncing ? "Syncing…" : ""}
-          </span>
+          {syncSlot ? null : syncSign}
           <span className={styles.listTools}>
             {selecting ? null : tools}
-            {rows.length && !selecting ? (
-              // List and Table as two small icons (owner, 31 Oct 2026), each named
-              // on hover and to screen readers.
-              <span
-                className={styles.layoutSwitch}
-                role="group"
-                aria-label="Show leads as"
-              >
-                <button
-                  type="button"
-                  aria-pressed={!asTable}
-                  title="Show as a list"
-                  aria-label="List"
-                  onClick={() => chooseLayout("list")}
-                >
-                  <List size={16} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={asTable}
-                  title="Show as a table"
-                  aria-label="Table"
-                  onClick={() => chooseLayout("table")}
-                >
-                  <Table2 size={16} aria-hidden="true" />
-                </button>
-              </span>
-            ) : null}
+            {rows.length && !selecting && !layoutSlot ? layoutSwitch : null}
             {canManage && (selecting || stage === TEST) ? (
               <button
                 type="button"
@@ -1127,6 +1223,15 @@ export function ListView({
                   onSaved: () => onChanged?.(),
                 }}
               />
+            ) : groupsShown ? (
+              <DayGroups
+                key={question}
+                groups={groupRows}
+                counts={groupCounts}
+                boxRef={days}
+                onShowAll={() => void more()}
+                render={(row, index, count) => leadLine(row, index, count)}
+              />
             ) : (
               <NearRows
                 list={list}
@@ -1145,29 +1250,13 @@ export function ListView({
                       kind={kind}
                     />
                   ) : (
-                    <CachedLeadLine
-                      key={row.lead_id}
-                      row={row}
-                      onOpen={openRow}
-                      // The owner's name only on someone else's lead.
-                      showOwner={scope !== "mine" && row.owner_person_id !== me}
-                      actions={
-                        actions
-                          ? picksHere
-                            ? ownerActions
-                            : rowActions
-                          : undefined
-                      }
-                      onPick={picksHere ? startPicking : undefined}
-                      compact={stage === OPENING_STAGE}
-                      stageWord={stageWord?.(row)}
-                      quietLate={quietLate}
-                      fresh={!!fresh?.has(row.lead_id)}
-                      at={at}
-                      index={index}
-                      count={Math.max(rows.length, page?.total ?? 0)}
-                      kind={kind}
-                    />
+                    leadLine(
+                      row,
+                      index,
+                      Math.max(rows.length, page?.total ?? 0),
+                      at,
+                      kind,
+                    )
                   )
                 }
               />

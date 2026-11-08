@@ -76,9 +76,11 @@
   cursor: pointer;
 }
 
+/* The kit's primary (teal): ink turned it into a white pill in dark mode
+   (QA robot, 8 Nov 2026, at 1440 and 360). */
 .primary {
-  background: var(--lx-ink);
-  color: var(--lx-surface);
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
 }
 
 .secondary {

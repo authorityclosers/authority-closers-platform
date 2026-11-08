@@ -42,15 +42,32 @@ export function useSideScroll<T extends HTMLElement>(
       );
     };
     const frame = requestAnimationFrame(measure);
+    // The row and what it holds: its items grow with the text size and change
+    // as counts arrive, which the row's own box never shows (Leads L1 judge,
+    // 8 Nov 2026: at 130% "All Lea" was cut with no fade).
     const resize =
       typeof ResizeObserver === "undefined"
         ? null
         : new ResizeObserver(measure);
-    resize?.observe(row);
+    const watch = () => {
+      resize?.disconnect();
+      resize?.observe(row);
+      for (const item of Array.from(row.children)) resize?.observe(item);
+    };
+    watch();
+    const items =
+      typeof MutationObserver === "undefined"
+        ? null
+        : new MutationObserver(() => {
+            watch();
+            measure();
+          });
+    items?.observe(row, { childList: true });
     row.addEventListener("scroll", measure, { passive: true });
     return () => {
       cancelAnimationFrame(frame);
       resize?.disconnect();
+      items?.disconnect();
       row.removeEventListener("scroll", measure);
     };
   }, [selector, chosen]);
