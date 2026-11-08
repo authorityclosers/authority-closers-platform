@@ -32,8 +32,11 @@ import {
   type PointerEvent,
 } from "react";
 import { notify } from "../../notice-center";
+import { keepDraft, readDraft } from "../../leads/drafts";
+import { OVERLAY_DEPTH_KEY, OVERLAY_FORWARD_EVENT } from "../../ui/back-close";
 import { Button } from "../../ui/kit";
 import { Sheet } from "../../ui/sheet";
+import { useWorkspaceAccess } from "../../workspace-access";
 import {
   STAGE_COLORS,
   applyTemplate,
@@ -108,6 +111,63 @@ type Open =
 type Drag = { id: string; from: number; to: number; dy: number; step: number };
 
 /**
+ * The open sheet in the address: ?stage=<stage id> for that stage's More,
+ * ?add=stage for a stage of your own (a stage's id can be "new").
+ */
+type SheetAddress = ["stage", string] | ["add", "stage"];
+
+function sheetInAddress(): Open {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("add") === "stage") return { kind: "custom" };
+  const id = params.get("stage");
+  return id ? { kind: "more", id } : null;
+}
+
+/** Whether the current history entry is an open sheet's own (back-close). */
+function onSheetEntry(): boolean {
+  const state: unknown = window.history.state;
+  const depth =
+    state && typeof state === "object"
+      ? (state as Record<string, unknown>)[OVERLAY_DEPTH_KEY]
+      : 0;
+  return typeof depth === "number" && depth > 0;
+}
+
+function writeSheetAddress(sheet: SheetAddress | null) {
+  const before = new URLSearchParams(window.location.search);
+  const next = new URLSearchParams(before);
+  next.delete("stage");
+  if (next.get("add") === "stage") next.delete("add");
+  if (sheet) next.set(sheet[0], sheet[1]);
+  const query = next.toString();
+  if (query === before.toString()) return;
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+  );
+}
+
+/** Unsaved changes kept on this device, only for the list they were made on. */
+function keptDraft(key: string, version: number, ids: string): Draft[] | null {
+  try {
+    const kept = JSON.parse(readDraft(key) || "null") as {
+      version?: number;
+      ids?: string;
+      list?: unknown;
+    } | null;
+    return kept?.version === version &&
+      kept.ids === ids &&
+      Array.isArray(kept.list)
+      ? (kept.list as Draft[])
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Lead stages, as the owner and Dipak want them (31 Oct 2026): a small live preview of the
  * seller's Leads screen, then one plain row per stage (drag, colour, name, sellers see it,
  * more). Changes wait until Save, with Undo in the corner after it (owner, production
@@ -126,23 +186,45 @@ export function StageEditor({
   onSaved: (next: JourneyView) => void;
 }) {
   const saved = useMemo(() => drafts(view), [view]);
-  // Changes not saved yet: nothing reaches the server before Save.
-  const [draft, setDraft] = useState<Draft[] | null>(null);
+  const tenant = useWorkspaceAccess()?.context?.tenantId ?? "";
+  const draftKey = `stages:${tenant}:${pipeline}`;
+  const savedIds = saved.map((stage) => stage.id).join(" ");
+  // Changes not saved yet: nothing reaches the server before Save. They stay on
+  // this device until Save or Discard, so Back, Forward or a refresh never lose
+  // them (QA robot, 8 Nov 2026: a Cold name typed in More was gone after each).
+  const [draft, setDraft] = useState<Draft[] | null>(() =>
+    keptDraft(draftKey, view.version, savedIds),
+  );
+  useEffect(() => {
+    keepDraft(
+      draftKey,
+      draft
+        ? JSON.stringify({ version: view.version, ids: savedIds, list: draft })
+        : "",
+    );
+  }, [draft, draftKey, savedIds, view.version]);
   // The list as the owner last left it, until the server has every change.
   const [pending, setPending] = useState<Draft[] | null>(null);
   const list = draft ?? pending ?? saved;
   const order = live(list);
   const canEdit = view.canEdit;
   const [side, setSide] = useState<Side>("inbound");
-  const [open, setOpen] = useState<Open>(null);
+  const [open, setOpen] = useState<Open>(() =>
+    canEdit ? sheetInAddress() : null,
+  );
   const [renaming, setRenaming] = useState<{
     id: string;
     label: string;
   } | null>(null);
-  const [custom, setCustom] = useState<{ label: string; meaning: Meaning }>({
-    label: "",
-    meaning: "interested",
-  });
+  // A stage of your own: its name is kept as typed, like the list.
+  const customKey = `${draftKey}:new`;
+  const [custom, setCustomNow] = useState<{ label: string; meaning: Meaning }>(
+    () => ({ label: readDraft(customKey), meaning: "interested" }),
+  );
+  const setCustom = (next: { label: string; meaning: Meaning }) => {
+    setCustomNow(next);
+    keepDraft(customKey, next.label);
+  };
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
   const version = useRef(view.version);
@@ -171,6 +253,50 @@ export function StageEditor({
     open && "id" in open
       ? list.find((stage) => stage.id === open.id)
       : undefined;
+
+  // The open sheet is in the address, as Leads keeps ?lead=<id> (orchestrator,
+  // 8 Nov 2026): on the sheet's own Back entry, so Back closes it, and Forward
+  // or a refresh opens it again.
+  const address: SheetAddress | null =
+    open?.kind === "custom"
+      ? ["add", "stage"]
+      : open?.kind === "more" && sheetStage
+        ? ["stage", open.id]
+        : null;
+  const [addressName, addressValue] = address ?? [null, null];
+  useEffect(() => {
+    const sheet =
+      addressName === "add"
+        ? (["add", "stage"] as SheetAddress)
+        : addressName === "stage" && addressValue
+          ? (["stage", addressValue] as SheetAddress)
+          : null;
+    if (!sheet) {
+      // A refresh with a sheet open left it on the page's own entry.
+      if (!onSheetEntry()) writeSheetAddress(null);
+      return;
+    }
+    // Only on the sheet's own entry, never the page's: Back must land clean.
+    let timer = 0;
+    let tries = 0;
+    const write = () => {
+      if (onSheetEntry()) writeSheetAddress(sheet);
+      else if (++tries < 30) timer = window.setTimeout(write, 100);
+    };
+    timer = window.setTimeout(write, 0);
+    return () => window.clearTimeout(timer);
+  }, [addressName, addressValue]);
+  useEffect(() => {
+    if (!canEdit) return;
+    const claim = (event: Event) => {
+      const again = sheetInAddress();
+      if (!again) return;
+      event.preventDefault();
+      setOpen(again);
+    };
+    window.addEventListener(OVERLAY_FORWARD_EVENT, claim);
+    return () => window.removeEventListener(OVERLAY_FORWARD_EVENT, claim);
+  }, [canEdit]);
 
   /** Saves the whole list now, one save after another, then offers Undo. */
   function commit(
@@ -826,9 +952,11 @@ function MoreSheet({
             maxLength={40}
             placeholder={stage.label}
             value={cold}
-            onChange={(event) => setCold(event.target.value)}
-            onBlur={() => {
-              const next = cold.trim() || null;
+            onChange={(event) => {
+              // Into the unsaved list as it is typed: Back closing the sheet
+              // keeps it (QA robot, 8 Nov 2026).
+              setCold(event.target.value);
+              const next = event.target.value.trim() || null;
               if (next !== (stage.coldLabel ?? null)) onColdName(next);
             }}
           />

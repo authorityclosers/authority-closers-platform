@@ -4,6 +4,10 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { OrganisationStages } from "./stages";
 import { notify } from "../../notice-center";
 import {
+  OVERLAY_FORWARD_EVENT,
+  resetBackCloseForTests,
+} from "../../ui/back-close";
+import {
   applyTemplate,
   previewTemplate,
   readJourney,
@@ -83,6 +87,9 @@ const recommended = (labels: string[]) => [
   },
 ];
 beforeEach(() => {
+  resetBackCloseForTests();
+  window.history.replaceState(null, "", "/organisation?tab=leads&part=stages");
+  localStorage.clear();
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -262,6 +269,138 @@ it("previews either side and names the first stage on Cold from More", async () 
     label: "Enquiry",
     coldLabel: "Unworked",
   });
+});
+
+it("keeps unsaved changes on this device until Save or Discard", async () => {
+  // The QA robot, 8 Nov 2026: a refresh lost what had been changed.
+  await render();
+  await tap("Sellers see Talking");
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await render();
+  expect(button("Save")).toBeDefined();
+  expect(button("Sellers see Talking")?.getAttribute("aria-pressed")).toBe(
+    "false",
+  );
+  await tap("Discard");
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await render();
+  expect(button("Save")).toBeUndefined();
+  expect(button("Sellers see Talking")?.getAttribute("aria-pressed")).toBe(
+    "true",
+  );
+});
+
+it("drops kept changes made on a list that has been saved since", async () => {
+  await render();
+  await tap("Sellers see Talking");
+  await act(async () => root.unmount());
+  vi.mocked(readJourney).mockResolvedValue({ ...copy(), version: 9 });
+  root = createRoot(host);
+  await render();
+  expect(button("Save")).toBeUndefined();
+});
+
+it("keeps the Cold name as it is typed, when the sheet closes without leaving the field", async () => {
+  await render();
+  await tap("More for Enquiry");
+  const cold = [...document.querySelectorAll("label")]
+    .find((item) => item.textContent?.startsWith("Name on Cold Leads"))!
+    .querySelector("input")!;
+  await enter(cold, "Walk-ins");
+  // Back or Escape closes the sheet with the field still focused: no blur comes.
+  const sheet = [...document.querySelectorAll("dialog")].find(
+    (item) => item.querySelector("h2")?.textContent === "Enquiry",
+  )!;
+  await act(async () =>
+    sheet.dispatchEvent(new Event("cancel", { cancelable: true })),
+  );
+  await settle();
+  expect(button("Rename Enquiry")?.textContent).toBe("EnquiryWalk-ins");
+  expect(button("Save")).toBeDefined();
+});
+
+it("puts the open sheet in the address and opens the one named there", async () => {
+  await render();
+  await tap("More for Visit");
+  // Written once the sheet's own Back entry is there.
+  for (let i = 0; i < 10 && !window.location.search.includes("stage="); i++)
+    await settle();
+  expect(new URLSearchParams(window.location.search).get("stage")).toBe(
+    "visit",
+  );
+  await act(async () => root.unmount());
+  await settle();
+  // A refresh, or a link, with ?stage= opens that stage's More.
+  window.history.replaceState(
+    null,
+    "",
+    "/organisation?tab=leads&part=stages&stage=talk",
+  );
+  root = createRoot(host);
+  await render();
+  expect(document.body.textContent).toContain("Move down");
+  expect(
+    [...document.querySelectorAll("h2")].some(
+      (item) => item.textContent === "Talking",
+    ),
+  ).toBe(true);
+});
+
+it("opens the sheet again when Forward lands on its entry", async () => {
+  await render();
+  expect(document.body.textContent).not.toContain("Move down");
+  window.history.replaceState(
+    null,
+    "",
+    "/organisation?tab=leads&part=stages&stage=visit",
+  );
+  const forward = new Event(OVERLAY_FORWARD_EVENT, { cancelable: true });
+  await act(async () => window.dispatchEvent(forward));
+  await settle();
+  expect(forward.defaultPrevented).toBe(true);
+  expect(document.body.textContent).toContain("Move down");
+});
+
+it("opens the More of a stage whose id is new, not the New stage sheet", async () => {
+  // Dev's first stage is keyed "new" (the robot's flow, 8 Nov 2026).
+  window.history.replaceState(
+    null,
+    "",
+    "/organisation?tab=leads&part=stages&stage=new",
+  );
+  await render();
+  expect(
+    [...document.querySelectorAll("h2")].some(
+      (item) => item.textContent === "Enquiry",
+    ),
+  ).toBe(true);
+  expect(
+    document.querySelector('input[aria-label="New stage name"]'),
+  ).toBeNull();
+});
+
+it("keeps a new stage's name as typed", async () => {
+  await render();
+  await tap("Custom");
+  const name = document.querySelector<HTMLInputElement>(
+    'input[aria-label="New stage name"]',
+  )!;
+  await enter(name, "Site visit");
+  await act(async () => root.unmount());
+  window.history.replaceState(
+    null,
+    "",
+    "/organisation?tab=leads&part=stages&add=stage",
+  );
+  root = createRoot(host);
+  await render();
+  expect(
+    document.querySelector<HTMLInputElement>(
+      'input[aria-label="New stage name"]',
+    )?.value,
+  ).toBe("Site visit");
 });
 
 it("hides a stage from sellers, never the first one", async () => {
