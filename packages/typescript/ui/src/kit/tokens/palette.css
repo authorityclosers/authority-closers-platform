@@ -192,7 +192,7 @@
   --lx-topbar-h: 64px;
   --lx-content-max: 880px; /* report reading column */
   --lx-chapter-rail-w: 196px;
-  --lx-bottom-nav-h: 78px; /* Liquid Glass: a 62 px capsule floating 16 px up */
+  --lx-bottom-nav-h: 64px; /* Dipak's design: the tab bar sits on the edge, 64 px */
   --lx-mini-player-h: 62px;
   --lx-gradient-brand: linear-gradient(
     135deg,

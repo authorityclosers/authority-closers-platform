@@ -59,7 +59,7 @@ const click = (text: string) =>
       ?.click();
   });
 
-it("a move the phone kept is saved: the sheet closes and says so", async () => {
+it("a move the phone kept is saved: the sheet closes, and the waiting changes' card says so", async () => {
   const closed = vi.fn();
   act(() =>
     root.render(
@@ -76,9 +76,7 @@ it("a move the phone kept is saved: the sheet closes and says so", async () => {
   await click("Fake enquiry");
   await click("Mark as Junk");
   expect(closed).toHaveBeenCalled();
-  expect(notices.at(-1)).toMatchObject({
-    tone: "info",
-    title: "Saved on this phone",
-  });
-  expect(notices.some((notice) => notice.tone === "error")).toBe(false);
+  // No card of its own: "1 change not sent yet" (sync/write-sync) says it was
+  // kept, and a second card said the same (orchestrator, 8 Nov 2026).
+  expect(notices).toEqual([]);
 });

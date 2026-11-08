@@ -505,6 +505,8 @@ it("says All clear with the next call when nothing is left, and no helper lines"
     block?.querySelector<HTMLAnchorElement>("a[href*='view=to_call']")
       ?.textContent,
   ).toContain("Call your next lead");
+  // Once: an empty Upcoming follow-ups says only All clear (ux-audit N9).
+  expect(host.textContent?.split("Call your next lead")).toHaveLength(2);
   expect(host.textContent).not.toContain("Fresh enquiries from ads");
 });
 
