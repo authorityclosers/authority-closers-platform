@@ -91,13 +91,9 @@ export function MeetingCard({
     } catch (reason) {
       if (reason instanceof LeadsError && reason.kept) {
         // Kept on this phone and sent when Sales X-Ray answers: saved, not failed
-        // (durable sync, 41b2e08d), so nobody taps Save again.
-        notify({
-          id: `meeting-${meeting.meeting_id}`,
-          tone: "info",
-          title: "Saved on this phone",
-          message: "It's sent as soon as Sales X-Ray answers.",
-        });
+        // (durable sync, 41b2e08d), so nobody taps Save again. The waiting
+        // changes' own card says so ("1 change not sent yet", sync/write-sync):
+        // a second card here said the same (orchestrator, 8 Nov 2026).
         setMode(null);
         return;
       }
