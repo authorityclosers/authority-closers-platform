@@ -2,7 +2,8 @@
 
 /**
  * The lead's stage as a step strip (Dipak, 31 Oct 2026: not a dropdown; lead
- * page P5, spec §3): the organisation's main path in order, done steps as
+ * page P5, spec §3; the pipeline's round 2): the organisation's main path
+ * in order, each step an equal column of at least 64 dp, done steps as
  * filled dots with a check, the current one a ring with its name in teal,
  * those ahead as small rings, a line joining them, teal up to the current
  * step. Names sit under the dots, up to two lines. A step ahead or behind
@@ -61,8 +62,10 @@ export function StageStepper({
   const at = steps.findIndex((step) => step.key === current);
   // A path wider than the card: the current step in view, a fade at the edge
   // where more steps sit.
+  // The step's own column (its offset within the strip, which is their
+  // positioned parent), not the words inside it.
   const { ref, edges } = useSideScroll<HTMLOListElement>(
-    '[aria-current="step"]',
+    'li[data-state="current"]',
     current,
   );
   return (
@@ -72,7 +75,10 @@ export function StageStepper({
       className={`${styles.stepper} ${sideScrollFades}`}
       aria-label="Stage"
       style={{
-        gridTemplateColumns: `repeat(${steps.length}, minmax(min-content, 1fr))`,
+        // Equal columns, at least 64 dp and wide enough for a step's longest
+        // word (6 em of its xs type: the current step's bold "Connected" fits); spread out when they fit, else the
+        // strip scrolls.
+        gridTemplateColumns: `repeat(${steps.length}, minmax(max(64px, 6em), 1fr))`,
       }}
     >
       {steps.map((step, index) => {

@@ -3540,15 +3540,27 @@ export function LeadCard({
     .join(" · ");
   const lateWhen = lateFollowUp(lead.next_action_at);
   const lateNow = lateWhen !== null;
+  // The pencil sits right after the date, on its line when the words wrap.
+  const pencil = detail.can_edit ? (
+    <Pencil size={16} aria-hidden="true" className={page.followEdit} />
+  ) : null;
   const followWords = lateWhen ? (
     <span>
       <span className={page.lateWord}>Late</span> · was due{" "}
-      <span className={page.lateWhen}>{lateWhen}</span>
+      <span className={page.followWhen}>
+        {lateWhen}
+        {pencil}
+      </span>
     </span>
   ) : (
     <span>
       Follow-up ·{" "}
-      {lead.next_action_at ? upperFirst(when(lead.next_action_at)) : "None yet"}
+      <span className={page.followWhen}>
+        {lead.next_action_at
+          ? upperFirst(when(lead.next_action_at))
+          : "None yet"}
+        {pencil}
+      </span>
     </span>
   );
   const followLine = closed ? null : detail.can_edit ? (
@@ -3561,7 +3573,6 @@ export function LeadCard({
     >
       <CalendarClock size={16} aria-hidden="true" />
       {followWords}
-      <Pencil size={16} aria-hidden="true" className={page.followEdit} />
     </button>
   ) : lead.next_action_at ? (
     <p className={page.follow} data-late={lateNow || undefined}>

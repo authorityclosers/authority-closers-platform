@@ -147,7 +147,9 @@ div.stack {
   overflow-wrap: anywhere;
 }
 
-/* The follow-up, a 48 dp row that opens its picker; late says so in words. */
+/* The follow-up, a 48 dp row that opens its picker; late says so in words.
+   Its target reaches past the words, so the line sits 16 dp above the
+   stepper and close under the facts (the pipeline's round 2). */
 .follow {
   display: flex;
   align-items: center;
@@ -155,6 +157,7 @@ div.stack {
   width: fit-content;
   max-width: 100%;
   min-height: 48px;
+  margin-block: -8px -14px;
   padding: 0;
   border: 0;
   background: none;
@@ -186,14 +189,18 @@ div.stack {
   font-weight: 500;
 }
 
-/* "Oct 31" stays on one line when the words wrap at large text. */
-.lateWhen {
+/* The date ("Oct 31", "Tomorrow 10:00 AM") and its pencil stay on one line
+   when the words wrap at large text. */
+.followWhen {
   white-space: nowrap;
 }
 
+/* The pencil rides with the last words, wrapped or not. */
 .followEdit {
-  flex: none;
+  display: inline-block;
+  margin-left: 8px;
   color: var(--sx-accent);
+  vertical-align: -3px;
 }
 
 .follow:focus-visible {
@@ -215,13 +222,16 @@ div.stack {
 
 /* ---------- The stage stepper ---------- */
 
-/* Each step is as wide as its longest word, never broken inside one; a path
-   too long for the card scrolls sideways rather than squeezing its names. */
+/* Equal columns (stage-stepper.tsx: at least 64 dp, and 6 em of this xs
+   type, so a step's longest word fits whole); a path too long for the card
+   scrolls sideways, the current step in view, a fade at the edge with more. */
 .stepper {
+  position: relative;
   display: grid;
   margin: 0;
   padding: 0;
   overflow-x: auto;
+  font-size: var(--sx-text-xs);
   list-style: none;
   scrollbar-width: none;
 }
@@ -264,7 +274,7 @@ div.stack {
   gap: 6px;
   width: 100%;
   min-height: 48px;
-  padding: 0 2px;
+  padding: 0;
   border: 0;
   background: none;
   color: var(--sx-muted);
@@ -331,11 +341,13 @@ button.stepButton:focus-visible {
   font-weight: 500;
 }
 
+/* Whole words; a word longer than its column (an organisation's own long
+   name) breaks rather than being cut off. */
 .stepLabel {
   display: -webkit-box;
   max-width: 100%;
   overflow: hidden;
-  overflow-wrap: normal;
+  overflow-wrap: break-word;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
@@ -343,11 +355,13 @@ button.stepButton:focus-visible {
 
 /* ---------- The row of four ---------- */
 
-/* No gap between the cells: each is a quarter of the row (about 82 dp at
-   363), so "WhatsApp" fits whole at 130 % and breaks only at larger text. */
+/* No gap between the cells, and the row reaches 8 dp into the gutters:
+   each cell is a quarter (about 87 dp at 363), so "WhatsApp" fits whole at
+   130 %; the circles stay well inside the gutters. */
 .row4 {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-inline: -8px;
 }
 
 /* A 48 dp neutral circle, its word under it. */
