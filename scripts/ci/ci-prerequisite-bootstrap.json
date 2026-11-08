@@ -10,13 +10,13 @@
     "review": "Orchestrator 28 Oct 2026 (v1.3.0 cut): producer run 40724365608 (workbench-checks.yml, push, success, wb-ci --full) on request 5a168c24, whose only parent is the v1.3.0 hold 77b745d3b and which changes only .wb-ci/request.json. Same identity 4db81fe7 (no lockfile change); artifact digest from the API. Replaces the 2e9f74de pin, which passed its 36-hour reuse window at 15:51Z and left e2e unable to admit a new bundle."
   },
   {
-    "artifact_id": 13292960174,
-    "digest": "c435ae1379d1f4b98ecf270d72ff19063c65101bed311c1b6416c1cbfc5af1ec",
+    "artifact_id": 13593039160,
+    "digest": "6d743eb1f1b4f2ce64941fd120de488430abe1c77722d637bbeb6d9f64dbc1e8",
     "identity": "8fed5c6dc9d51ab364d8a09a7d5f66c7d58d9ba10f20f36f5113d2bee337c733",
     "repository": "authorityclosers/authority-closers-platform",
-    "run_id": 41764808051,
-    "source_sha": "42950e303ef0eb7fde913a8992c9d4ccfae523d0",
-    "reviewed_source_sha": "10678bb4f46f373849a3a1a230aba07995c3d123",
-    "review": "Re-pin 4 Nov 2026 (ux-audit for the orchestrator): producer run 41764808051 (workbench-checks.yml, push, success, targeted py job) on request 42950e30, whose only parent is main 10678bb4f, the reviewed and CI-green v1.38.0 release (its lockfiles, packages, workflows and scripts/ci match workbench b0f31415d except .github/workflows/sales-xray-native-image.yml, checked by diff), and which changes only .wb-ci/request.json. Same identity 8fed5c6d; artifact digest from the API. Replaces the 13152235151 pin, which passed its 36-hour reuse window at about 02:53Z and was deleted with the unpinnable 13237225480 (failed pull-request run 41649049162)."
+    "run_id": 42421542696,
+    "source_sha": "df9df1d4edf2ee4f873dd75da59b841aad22de3f",
+    "reviewed_source_sha": "bd2dcfc1d28fea43181c7a552a297abeaa50d972",
+    "review": "Re-pin 8 Nov 2026 (ux-audit for the orchestrator): producer run 42421542696 (workbench-checks.yml, push, success, radar and speed) on request df9df1d4, whose only parent is workbench bd2dcfc1d (dev/live HEAD; its lockfiles, packages, workflows and scripts/ci match main 8656044da except .github/workflows/sales-xray-native-image.yml, checked by diff), and which changes only .wb-ci/request.json. Same identity 8fed5c6d; artifact digest from the API. Taken instead of a new producer over main: this bundle was fresh (made 22:42Z on 7 Nov) and a second one of the same identity would be a duplicate. Replaces the 13292960174 pin, which passed its 36-hour reuse window at about 15:08Z on 5 Nov."
   }
 ]
