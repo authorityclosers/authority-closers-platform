@@ -205,8 +205,12 @@
 }
 
 /* Team: who still needs to set it up. */
+/* One column that can't grow past the card, and a name that may shrink: a
+   long name ends in "…" instead of being cut off at the card's edge (QA robot,
+   8 Nov 2026, Organisation › Members at 360 and 363). */
 .team {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px;
   margin: 0;
   padding: 0;
@@ -225,6 +229,10 @@
 
 .team li:last-child {
   border-bottom: 0;
+}
+
+.team li > span:first-child {
+  min-width: 0;
 }
 
 .team strong {
