@@ -15,12 +15,14 @@
   border: 0;
   background: transparent;
   color: inherit;
-  display: grid;
-  /* One column exactly the stack's width: a pill's one-line title used to
-     size the column, so on a 363 px phone it ran off the right edge (owner,
-     bug 173, 4 Nov 2026). Now it ends in "…" inside the stack. */
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
+  /* The stack's own box is its base line and never moves: each card sits
+     there in the page's layout and is lifted into its row by translate
+     (notice-center.tsx, placeCards), so cards coming, going or folding make no
+     layout shift (QA robot 69792ae8). Each is the stack's width: a pill's
+     one-line title used to run off the right edge on a 363 px phone (owner,
+     bug 173, 4 Nov 2026); it ends in "…" inside the stack. */
+  display: block;
+  height: 0;
   width: min(380px, calc(100vw - 24px));
   max-width: calc(100vw - 24px);
   box-sizing: border-box;
@@ -462,6 +464,40 @@
   }
 
   .stack[data-glide] {
+    transition: none;
+  }
+}
+
+/* Each card at the stack's base line, the stack's width, lifted by translate
+   (above). A pill and "+N more" keep to the right on a computer; on a phone a
+   pill is the full width. Once placed, a card glides to a new row. */
+.stack > .card,
+.stack > .pill,
+.stack > .more,
+.stack > .own {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+}
+
+.stack > .pill,
+.stack > .more {
+  left: auto;
+}
+
+@media (max-width: 760px) {
+  .stack > .pill {
+    left: 0;
+  }
+}
+
+.stack > [data-placed] {
+  transition: translate var(--sx-dur-base) var(--sx-ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stack > [data-placed] {
     transition: none;
   }
 }

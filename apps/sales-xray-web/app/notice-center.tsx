@@ -640,6 +640,71 @@ const notOverBar = () => false;
 /** The room kept between the corner stack and a bar under it. */
 const BAR_GAP = 8;
 
+/** The room between two cards in the stack. */
+const CARD_GAP = 10;
+
+/**
+ * Each of the stack's cards keeps one place in the page's layout, the stack's
+ * base line, and is lifted into its row by `translate`, the newest highest. A
+ * card arriving, leaving, folding to a pill or growing then moves no other
+ * card's layout box, so the stack makes no layout shift (QA robot 69792ae8,
+ * Home at 363: 0.12 as "Couldn't load" came and went; the Home studio's
+ * diagnosis, 8 Nov 2026). A card's first lift isn't animated; later ones
+ * glide (notice-center.module.css, [data-placed]).
+ */
+function placeCards(stack: HTMLElement) {
+  const items = Array.from(stack.children) as HTMLElement[];
+  let rise = 0;
+  for (let at = items.length - 1; at >= 0; at -= 1) {
+    const item = items[at];
+    const height = item.offsetHeight;
+    if (height < 1) continue;
+    item.style.setProperty("translate", `0 ${-(rise + height)}px`);
+    if (!item.hasAttribute("data-placed"))
+      requestAnimationFrame(() => item.setAttribute("data-placed", ""));
+    rise += height + CARD_GAP;
+  }
+}
+
+type Seen = Pick<DOMRect, "top" | "bottom" | "left" | "right" | "height">;
+
+/**
+ * The stack as it is seen: its own box, which holds still at its base line,
+ * and its cards above it (placeCards).
+ */
+function stackBox(stack: HTMLElement): Seen {
+  let { top, bottom, left, right } = stack.getBoundingClientRect();
+  for (const item of Array.from(stack.children)) {
+    const box = item.getBoundingClientRect();
+    if (box.height < 1) continue;
+    top = Math.min(top, box.top);
+    bottom = Math.max(bottom, box.bottom);
+    left = Math.min(left, box.left);
+    right = Math.max(right, box.right);
+  }
+  return { top, bottom, left, right, height: bottom - top };
+}
+
+/** Has `observer` watch the stack and each card in it: a card that comes is
+ *  added (it is reported once), one that left is dropped. */
+function watchCards(
+  observer: ResizeObserver,
+  stack: HTMLElement,
+  seen: Set<Element>,
+) {
+  const now = new Set<Element>([stack, ...Array.from(stack.children)]);
+  for (const item of seen)
+    if (!now.has(item)) {
+      observer.unobserve(item);
+      seen.delete(item);
+    }
+  for (const item of now)
+    if (!seen.has(item)) {
+      observer.observe(item);
+      seen.add(item);
+    }
+}
+
 /**
  * How high the corner stack must sit, from the window's bottom, so that no bar
  * is under it; 0 where it stands (it is measured there, unlifted). A bar is
@@ -650,7 +715,7 @@ const BAR_GAP = 8;
  */
 function liftOverBars(stack: HTMLElement, scope: HTMLElement): number {
   if (typeof document.elementsFromPoint !== "function") return 0;
-  const home = stack.getBoundingClientRect();
+  const home = stackBox(stack);
   if (home.height < 1) return 0;
   const view = window.innerHeight;
   const seen = new Map<Element, HTMLElement | null>();
@@ -720,7 +785,7 @@ function liftOverBars(stack: HTMLElement, scope: HTMLElement): number {
 /** The page's room for the stack (--sx-corner-h): its top to the window's bottom. */
 function keepCornerRoom(node: HTMLElement) {
   const root = document.documentElement;
-  const box = node.getBoundingClientRect();
+  const box = stackBox(node);
   if (box.height < 1) root.style.removeProperty("--sx-corner-h");
   else
     root.style.setProperty(
@@ -806,21 +871,41 @@ export function NoticeCenter() {
   // The page keeps room for the stack, so content scrolls clear of it: the
   // band from the stack's top to the window's bottom, which the shell adds to
   // the end of the page (shell/lightbox-shell.module.css). No card, no room.
+  // Each card is lifted into its row before it is drawn (placeCards), after
+  // every change here and whenever a card's own size changes (a fold, a page's
+  // own card).
+  const cardSizes = useRef<{
+    observer: ResizeObserver;
+    seen: Set<Element>;
+  } | null>(null);
   useEffect(() => {
     const node = stack;
     if (!node || typeof ResizeObserver === "undefined") return;
     const root = document.documentElement;
     const publish = () => keepCornerRoom(node);
     publish();
-    const observer = new ResizeObserver(publish);
-    observer.observe(node);
+    const observer = new ResizeObserver(() => {
+      placeCards(node);
+      publish();
+    });
+    const seen = new Set<Element>();
+    cardSizes.current = { observer, seen };
+    watchCards(observer, node, seen);
     window.addEventListener("resize", publish);
     return () => {
       observer.disconnect();
+      cardSizes.current = null;
       window.removeEventListener("resize", publish);
       root.style.removeProperty("--sx-corner-h");
     };
   }, [stack]);
+  useLayoutEffect(() => {
+    if (!stack) return;
+    placeCards(stack);
+    keepCornerRoom(stack);
+    const sizes = cardSizes.current;
+    if (sizes) watchCards(sizes.observer, stack, sizes.seen);
+  });
 
   // Inside a sheet the stack is a popover on its top layer (as the picker is),
   // so its cards show and answer taps, and the sheet's words keep room to
@@ -840,12 +925,13 @@ export function NoticeCenter() {
       } catch {
         // Without popovers it still sits inside the sheet, over its panel.
       }
-    const across = (a: DOMRect, b: DOMRect) =>
-      a.left < b.right && b.left < a.right;
+    const across = (a: Seen, b: Seen) => a.left < b.right && b.left < a.right;
     let body: HTMLElement | null = null;
     let frame = 0;
+    let watch = () => {};
     const place = () => {
       frame = 0;
+      watch();
       // Gliding down from a sheet that closed: it is placed once it lands.
       if (stack.hasAttribute("data-glide")) return;
       const before = lifted.current;
@@ -859,7 +945,7 @@ export function NoticeCenter() {
       body?.style.removeProperty("--sx-sheet-room");
       body = sheet.querySelector<HTMLElement>("[data-sheet-body]");
       if (!body) return;
-      const box = stack.getBoundingClientRect();
+      const box = stackBox(stack);
       const words = body.getBoundingClientRect();
       const room =
         box.height > 0 && across(box, words)
@@ -894,9 +980,14 @@ export function NoticeCenter() {
     };
     const scrolled = { capture: true, passive: true } as const;
     window.addEventListener("scroll", schedule, scrolled);
+    // The stack's own box holds still (placeCards): its cards' sizes move it.
     const sized =
       typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
-    sized?.observe(stack);
+    const watched = new Set<Element>();
+    watch = () => {
+      if (sized) watchCards(sized, stack, watched);
+    };
+    watch();
     const changed = new MutationObserver(schedule);
     changed.observe(scope, { childList: true, subtree: true });
     window.addEventListener("resize", place);

@@ -320,6 +320,54 @@ it("puts a new card at the top, so the cards already there stay put", async () =
   }
 });
 
+it("lifts each card into its row by translate, so one coming or going moves no other card", async () => {
+  // QA robot 69792ae8 (Home at 363, the Home studio's diagnosis, 8 Nov 2026):
+  // "Couldn't load" coming and going shifted the stack's cards, 0.12 in all.
+  // Each card keeps its place in the layout, the stack's base line; only its
+  // translate lifts it, and a card that comes or goes changes no other's.
+  const tall = vi
+    .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+    .mockImplementation(function (this: HTMLElement) {
+      const inStack =
+        this.parentElement?.getAttribute("aria-live") === "polite";
+      return inStack && this.textContent ? 64 : 0;
+    });
+  const card = (title: string) =>
+    [...host.querySelectorAll<HTMLElement>('[aria-live="polite"] > *')].find(
+      (node) => node.textContent?.includes(title),
+    );
+  try {
+    await act(async () =>
+      notify({
+        id: "steady",
+        tone: "info",
+        title: "Fictional steady card",
+        timeout: 0,
+      }),
+    );
+    expect(card("Fictional steady card")?.style.translate).toBe("0 -64px");
+    await act(async () =>
+      notify({
+        id: "glitch",
+        tone: "error",
+        title: "Fictional couldn't load",
+        timeout: 0,
+      }),
+    );
+    // The new card above it, 10 px apart; the steady card holds its row.
+    expect(card("Fictional couldn't load")?.style.translate).toBe("0 -138px");
+    expect(card("Fictional steady card")?.style.translate).toBe("0 -64px");
+    await act(async () => dismissNotice("glitch"));
+    expect(card("Fictional couldn't load")).toBeUndefined();
+    expect(card("Fictional steady card")?.style.translate).toBe("0 -64px");
+  } finally {
+    tall.mockRestore();
+    await act(async () =>
+      ["steady", "glitch"].forEach((id) => dismissNotice(id)),
+    );
+  }
+});
+
 // Competitor teardown 12 (1 Nov 2026): a new enquiry is a one-line pill with
 // its Call now in it, never a sheet over the list; the X is "Later".
 it("keeps a new enquiry's Call now in its one-line pill", async () => {
