@@ -163,7 +163,7 @@
 
 .signIn:focus-visible,
 .guest:focus-visible {
-  outline: 2px solid var(--sx-focus-ring);
+  outline: 2px solid var(--sx-accent);
   outline-offset: 3px;
 }
 

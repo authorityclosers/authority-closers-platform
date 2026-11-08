@@ -76,7 +76,7 @@
 .button:focus-visible,
 .primary:focus-visible,
 .choice:focus-visible {
-  outline: 2px solid var(--sx-focus-ring);
+  outline: 2px solid var(--sx-accent);
   outline-offset: 2px;
 }
 .search {
@@ -266,7 +266,7 @@
   cursor: pointer;
 }
 .stageEdit:focus-visible {
-  outline: 2px solid var(--sx-focus-ring);
+  outline: 2px solid var(--sx-accent);
   outline-offset: 2px;
 }
 .stageEdit > svg {
@@ -365,7 +365,7 @@
 .chip:focus-visible,
 .textButton:focus-visible,
 .pick:focus-visible {
-  outline: 2px solid var(--sx-focus-ring);
+  outline: 2px solid var(--sx-accent);
   outline-offset: 2px;
 }
 .chips {
