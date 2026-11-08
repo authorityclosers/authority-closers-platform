@@ -145,6 +145,16 @@ const render = async () => {
   await settle();
 };
 
+it("says it is loading as a status, so the label has a role to carry it", async () => {
+  // The QA robot, 8 Nov 2026 (a6cd56b0): axe aria-prohibited-attr on the
+  // loader, a label on a plain div.
+  vi.mocked(readJourney).mockReturnValue(new Promise<never>(() => {}));
+  await render();
+  const loader = host.querySelector('[aria-label="Loading lead stages"]');
+  expect(loader?.getAttribute("role")).toBe("status");
+  expect(loader?.getAttribute("aria-busy")).toBe("true");
+});
+
 it("keeps the screen to a title, one line, the preview and plain rows", async () => {
   await render();
   expect(host.querySelector("h2")?.textContent).toBe("Lead stages");
