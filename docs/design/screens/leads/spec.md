@@ -93,9 +93,10 @@ makes two filter entry points, not three (#171, Dipak's "3 → 2"). A dot on the
 - Text column, 12 dp after the avatar:
   - name `--sx-text-md` 500 `--sx-ink`, line height 22, wraps (never "…"; at most 3 lines);
   - line 2: an 8 dp stage-colour dot (`stage-look.ts`), 6 dp gap, the stage word in `--sx-ink-2`, then " · " and the source in `--sx-muted`;
-  - line 3: the next step in `--sx-muted`, starting under the stage word.
+  - line 3: the next step in `--sx-muted`, starting under the stage word, **only when it needs attention** (ruling R5 in §7).
   - Lines 2 and 3 are `--sx-text-xs`, line height 18.
 - Late: line 3 reads "Late · was due 2:00 pm" in `--sx-bad`, with "Late" in 500. The word carries it, not only the colour.
+  Before today, the time goes: "Late · was due yesterday 6:00 pm", "Late · was due 31 Oct" (R4).
 - Actions: Call, then WhatsApp, as 44 dp neutral outline circles (1 px `--sx-line-strong`, 22 dp glyph in `--sx-ink`). Centres are 52 dp apart, each a 48 dp touch box, vertically centred, 12 dp from the card edge.
 - Tapping the row opens the lead, as today.
 
@@ -106,7 +107,8 @@ tint.
 **Follow-ups view** (`l1r-follow-ups-light.webp`; the image wraps "Meeting scheduled 2" and cuts Due today after one row: the rules here win). The same screen, with the list grouped by day: one card per group
 (Overdue 3, Due today 6, Upcoming 3). Each card has a header row inside it: the label in `--sx-text-sm` 500 `--sx-ink`, the count in
 `--sx-muted`. Headers are never red; only the "Late · was due …" lines are. Group counts and chip counts add up to the tab's 12. A
-group longer than 5 rows ends with "Show all N".
+group longer than 5 rows ends with "Show all N". The groups follow the server's split: Overdue means planned before today, in
+India's day. A lead due at 2 pm today sits under Due today, with its red "Late · was due 2:00 pm" line (the image puts it under Overdue).
 
 ## 4. True-size row budget (read this before promising rows)
 
@@ -151,3 +153,25 @@ Open for the owner, one choice:
 | #88 | Six control rows become three (control, tabs, chips); controls take 160 dp instead of about 336 dp. |
 | #166 | Counts count the selected side (data fix; the design shows per-side counts). |
 | #67 | Cached first paint with a syncing sign (Loading state above). |
+
+## 7. Design rulings after the first build (8 Nov 2026)
+
+From judging Leads 2's build side by side at 363 × 735, 360 × 800, 390 × 844 and 1440, 100 % and 130 %, light and dark.
+These rules win over the image.
+
+| # | Ruling |
+|---|---|
+| R1 | **The Finish row ("Finish: <name> · Did you call?") is not pinned.** It is the first card in the list and scrolls away, like Home's "Pending action". Two lines at 100 %: "Finish: <name>" / "Dialled 45 min ago · Did you call?", with "Didn't call" as the trailing text button. |
+| R2 | Chip labels are `--sx-text-xs` (13 px), so about 4 chips show at 363. The chip row fades (24 dp) under the Filter button instead of clipping. The tab row, when it scrolls (130 %), fades at its right edge. |
+| R3 | The Follow-ups Call label is "Call Next Follow-up · 12". |
+| R4 | A late date before today drops the time and stays on one line: "Late · was due yesterday 6:00 pm", "Late · was due 31 Oct". |
+| R5 | **Line 3 only for attention** (bug 156, 3 Nov: "two lines, a third only for attention"): a due time today, late, or call back. Every other row is two lines (no "Added 8 days ago"). The image's third line on every row came from the prompt content, not an owner ask. |
+| R6 | At 1440, the List \| Table toggle sits at the chip row's end, beside Filter and + Add. There is no empty strip at the top of the card. |
+
+Accepted as built:
+- Dipak's casing ("To Call", "All Leads", "New Lead", "Call Next Lead").
+- The server's Follow-ups split.
+- Line 2 wrapping with the avatar (build B).
+- The app's own corner notices.
+
+Outside L1: the workspace name truncates ("AC S…") in the shared header at 363.
