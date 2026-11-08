@@ -4579,6 +4579,7 @@ export function LeadSheet({
       <PaneOrSheet
         inline={inline}
         open={leadId !== null}
+        rowKey={leadId}
         footer={
           detail && !questionOpen ? (
             <div
@@ -4753,6 +4754,7 @@ function PaneOrSheet({
   label,
   onClose,
   menuSlot,
+  rowKey = null,
   children,
 }: {
   inline: boolean;
@@ -4762,6 +4764,8 @@ function PaneOrSheet({
   onClose: () => void;
   /** The page bar's end, where the lead puts ⋯. */
   menuSlot?: (node: HTMLElement | null) => void;
+  /** The lead's id, for its row in the list. */
+  rowKey?: string | null;
   children: ReactNode;
 }) {
   // Beside the list too, Back closes the lead before it leaves Leads, and the
@@ -4776,6 +4780,7 @@ function PaneOrSheet({
         label={label}
         onClose={onClose}
         menuSlot={menuSlot}
+        rowKey={rowKey}
       >
         {children}
       </LeadPageFrame>

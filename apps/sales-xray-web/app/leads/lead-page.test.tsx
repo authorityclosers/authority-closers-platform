@@ -204,6 +204,13 @@ it("lights the lead's row for a second back on the list, a positioned row only",
   expect(row.classList.length).toBe(before + 1);
   vi.advanceTimersByTime(1000);
   expect(row.classList.length).toBe(before);
+  // A tap that focused nothing: the lead's row, found by its key.
+  row.setAttribute("data-row-key", "lead-7");
+  expect(lightRow(document.body, "lead-7")).toBe(row);
+  expect(row.classList.length).toBe(before + 1);
+  vi.advanceTimersByTime(1000);
+  expect(lightRow(document.body, "another-lead")).toBeNull();
+  expect(row.classList.length).toBe(before);
   // A row that isn't positioned would light its whole list: not lit.
   row.style.position = "static";
   lightRow(open);

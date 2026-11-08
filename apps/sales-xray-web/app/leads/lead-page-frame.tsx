@@ -19,13 +19,25 @@ import { useBackClose } from "../ui/back-close";
 import styles from "./lead-page.module.css";
 
 /** The row the lead was opened from, lit for a second once the page has
- *  closed: only a row that is itself positioned, so the light covers it alone. */
-export function lightRow(from: Element | null) {
-  const row = from?.closest<HTMLElement>("[data-lead-row]");
-  if (!row || getComputedStyle(row).position === "static") return;
+ *  closed: the row holding what had focus, else the lead's own row by its key
+ *  (a tap on a phone may focus nothing: Note 8 Pro, 9 Nov 2026). Only a row
+ *  that is itself positioned, so the light covers it alone. */
+export function lightRow(
+  from: Element | null,
+  key: string | null = null,
+): HTMLElement | null {
+  const row =
+    from?.closest<HTMLElement>("[data-lead-row]") ??
+    (key
+      ? document.querySelector<HTMLElement>(
+          `[data-lead-row][data-row-key="${key}"]`,
+        )
+      : null);
+  if (!row || getComputedStyle(row).position === "static") return null;
   row.scrollIntoView?.({ block: "nearest" });
   row.classList.add(styles.backLit);
   window.setTimeout(() => row.classList.remove(styles.backLit), 1000);
+  return row;
 }
 
 export function LeadPageFrame({
@@ -34,11 +46,14 @@ export function LeadPageFrame({
   onClose,
   footer,
   menuSlot,
+  rowKey = null,
   children,
 }: {
   open: boolean;
   label: string;
   onClose: () => void;
+  /** The lead's row key in the list (its id), lit on Back. */
+  rowKey?: string | null;
   /** Its foot above the tab bar: the one Call. */
   footer?: ReactNode;
   /** The bar's end, where the lead puts its ⋯ menu. */
@@ -47,6 +62,11 @@ export function LeadPageFrame({
 }) {
   useBackClose(open, onClose);
   const back = useRef<HTMLButtonElement>(null);
+  // The last lead shown (the key goes as the page closes).
+  const lastKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (rowKey) lastKey.current = rowKey;
+  }, [rowKey]);
   useEffect(() => {
     if (!open) return;
     const page = document.getElementById("main-content");
@@ -58,10 +78,11 @@ export function LeadPageFrame({
     back.current?.focus({ preventScroll: true });
     return () => {
       page?.removeAttribute("inert");
-      if (before?.isConnected) {
-        before.focus({ preventScroll: true });
-        lightRow(before);
-      }
+      const kept = before?.isConnected && before !== document.body;
+      if (kept) before.focus({ preventScroll: true });
+      const row = lightRow(kept ? before : null, lastKey.current);
+      // Nothing had focus: it goes back to the lead's row.
+      if (!kept && row && row.tabIndex >= 0) row.focus({ preventScroll: true });
     };
   }, [open]);
   if (!open || typeof document === "undefined") return null;
