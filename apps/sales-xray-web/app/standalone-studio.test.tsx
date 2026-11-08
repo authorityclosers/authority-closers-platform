@@ -138,9 +138,15 @@ async function flush() {
   });
 }
 
-/** Page outlines arrive with their page's own code (next/dynamic). */
+/** Page outlines arrive with their page's own code (next/dynamic): waits up to
+ *  3 s, as a cold import took about 930 ms on ac (Leads 2, 8 Nov 2026), past the
+ *  old 500 ms. It returns once the outline is drawn, so a warm run is no slower. */
 async function outline(selector: string) {
-  for (let tries = 0; tries < 50 && !container.querySelector(selector); tries++)
+  for (
+    let tries = 0;
+    tries < 300 && !container.querySelector(selector);
+    tries++
+  )
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
@@ -343,7 +349,8 @@ it("draws the page's own skeleton while access is checked", async () => {
     expect(container.querySelector('[data-testid="page-skeleton"]')).toBeNull();
     await act(async () => root.render(<></>));
   }
-});
+  // Four cold imports at up to 3 s each.
+}, 15_000);
 
 it("keeps a requested saved call on a neutral access-check surface", async () => {
   const pending = deferred<Response>();

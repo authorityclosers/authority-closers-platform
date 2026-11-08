@@ -517,10 +517,16 @@ a.row:focus-visible {
   min-width: 0;
 }
 
+/* Side by side, 8 px apart, wrapping when the team is long: each face's two
+   rings (4 px) sit clear of the next, so every seller's initials read whole.
+   Overlapped by 6 px, each ring covered its neighbour's second letter at
+   363 px, worse at 130 % (ux-audit N14, 8 Nov 2026). */
 .avatars ul {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin: 0;
-  padding: 0 0 0 6px;
+  padding: 4px;
   list-style: none;
 }
 
@@ -529,7 +535,6 @@ a.row:focus-visible {
   place-items: center;
   width: 30px;
   height: 30px;
-  margin-left: -6px;
   border-radius: 50%;
   background: var(--sx-elevated);
   box-shadow:

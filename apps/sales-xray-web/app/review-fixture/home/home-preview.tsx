@@ -120,10 +120,16 @@ type Mode = {
   sides?: "both" | "inbound" | "cold";
   /** `&revenue=1`: this month's revenue against a target. */
   revenue?: boolean;
+  /** `&prod=1`: production's shapes (bug triage, 7 Nov 2026): 3-digit counts,
+   *  an imported test lead's long name, Marathi words. */
+  prod?: boolean;
 };
 
+/** Production's longest lead name, as an imported test row carries it. */
+const LONG_NAME = "<test Lead: Dummy Data For Full_name>";
+
 /** One side of the seller's day, as the desk's `sides` carries it. */
-function homeSide(now: number, cold: boolean) {
+function homeSide(now: number, cold: boolean, prod = false) {
   const rows = queue(now);
   const numbers = cold
     ? {
@@ -141,16 +147,25 @@ function homeSide(now: number, cold: boolean) {
         new_assigned: 3,
       };
   return {
-    counts: cold
-      ? { new: 180, open_leads: 25, follow_ups_today: 4 }
-      : { new: 6, open_leads: 2, follow_ups_today: 3 },
+    counts: prod
+      ? { new: 387, open_leads: 142, follow_ups_today: 104 }
+      : cold
+        ? { new: 180, open_leads: 25, follow_ups_today: 4 }
+        : { new: 6, open_leads: 2, follow_ups_today: 3 },
     numbers,
     numbers_week: numbers,
     numbers_month: numbers,
     to_call_today: cold ? { left: 40, called: 24 } : { left: 9, called: 18 },
-    next_lead: cold
-      ? { ...rows[2], why: "New lead", source_label: "October cold list" }
-      : { ...rows[1], why: "New lead", source_label: "Website form" },
+    next_lead: prod
+      ? {
+          ...rows[1],
+          name: LONG_NAME,
+          why: "New lead",
+          source_label: "फेसबुक जाहिरात · Meta lead form",
+        }
+      : cold
+        ? { ...rows[2], why: "New lead", source_label: "October cold list" }
+        : { ...rows[1], why: "New lead", source_label: "Website form" },
     upcoming: rows.slice(3, 5),
     new_key: "new",
     open_key: "open_leads",
@@ -539,7 +554,32 @@ function answers(now: number, path: string, mode: Mode): unknown {
   if (path === "/v1/lead-desk/my-day") return myDay(now, mode);
   // Today's tasks: two due, one past its time (owner Home, 28 Oct 2026).
   if (path.startsWith("/v1/lead-desk/tasks?view=today"))
-    return { tasks: [], counts: { today: 2, overdue: 1 } };
+    return mode.prod
+      ? {
+          tasks: [
+            [
+              `Follow up with ${LONG_NAME} about the site visit`,
+              -95,
+              true,
+              LONG_NAME,
+            ],
+            ["साइट भेटीसाठी पुन्हा कॉल करा", 40, false, "सुनील पाटील"],
+            ["Send the price list on WhatsApp", 150, false, null],
+          ].map(([title, minutes, overdue, lead], index) => ({
+            task_id: `00000000-0000-4000-8000-0000000009${index}0`,
+            kind: "call",
+            title,
+            starts_at: new Date(now + Number(minutes) * MINUTE).toISOString(),
+            ends_at: null,
+            status: "open",
+            overdue,
+            lead_id: lead ? queue(now)[index].lead_id : null,
+            lead_name: lead,
+            lead_side: lead ? "inbound" : null,
+          })),
+          counts: { today: 3, overdue: 1 },
+        }
+      : { tasks: [], counts: { today: 2, overdue: 1 } };
   if (path.startsWith("/v1/lead-desk/activity?") && path.includes("team=1"))
     return teamWork(now);
   if (path.startsWith("/v1/lead-desk/activity?"))
@@ -621,12 +661,15 @@ function answers(now: number, path: string, mode: Mode): unknown {
       queue: empty ? [] : queue(now),
       sides: empty
         ? null
-        : { inbound: homeSide(now, false), cold: homeSide(now, true) },
+        : {
+            inbound: homeSide(now, false, mode.prod),
+            cold: homeSide(now, true, mode.prod),
+          },
       unanswered: mode.finish
         ? [
             {
               lead_id: queue(now)[0].lead_id,
-              name: "asha fictional",
+              name: mode.prod ? LONG_NAME : "asha fictional",
               called_at: new Date(now - 4 * MINUTE).toISOString(),
               event_id: "fixture-finish-1",
               phone_saw: true,
@@ -903,6 +946,7 @@ function Preview() {
           ? (params.get("sides") as "inbound" | "cold")
           : "both",
       revenue: params.get("revenue") === "1",
+      prod: params.get("prod") === "1",
     }),
   );
   // `&switcher=1`: the workspace list open, with long fictional names: the

@@ -807,18 +807,22 @@ const late = (task: ListedTask) =>
   task.status !== "done" && task.overdue === true;
 
 /** An empty block: one line, and the next thing to do, never a dead end
- *  (competitor teardown #1, 1 Nov 2026). */
-function AllClear({ side }: { side: Side }) {
+ *  (competitor teardown #1, 1 Nov 2026). Only Today's tasks offers the next
+ *  call (ux-audit N9, 8 Nov 2026: an empty Upcoming follow-ups said "Call your
+ *  next lead" a second time, just under it). */
+function AllClear({ side, call = true }: { side: Side; call?: boolean }) {
   return (
     <p className={styles.allClear}>
       <span>All clear</span>
-      <Link
-        className={styles.nextAction}
-        href={leadsHref(side, { view: "to_call" })}
-      >
-        {side === "cold" ? "Start Cold Calling" : "Call your next lead"}
-        <ChevronRight size={16} aria-hidden="true" />
-      </Link>
+      {call ? (
+        <Link
+          className={styles.nextAction}
+          href={leadsHref(side, { view: "to_call" })}
+        >
+          {side === "cold" ? "Start Cold Calling" : "Call your next lead"}
+          <ChevronRight size={16} aria-hidden="true" />
+        </Link>
+      ) : null}
     </p>
   );
 }
@@ -926,7 +930,7 @@ export function UpcomingFollowUps({
           ))}
         </ul>
       ) : (
-        <AllClear side={side} />
+        <AllClear side={side} call={false} />
       )}
       <LaterSheet
         open={later !== null}

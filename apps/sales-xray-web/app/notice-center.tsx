@@ -978,6 +978,11 @@ export function NoticeCenter() {
   // lifted the others, a layout shift); older ones wait under "+N more".
   const shownList = [...(expanded ? corner : corner.slice(-SHOWN))].reverse();
   const dockList = [...docked.slice(-SHOWN)].reverse();
+  // In an open sheet, one card: the newest, else the work alert. A pile there
+  // covered the sheet's own controls (orchestrator, 8 Nov 2026: three cards over
+  // the lead sheet's actions at 363); the rest come back with the page's stack
+  // once the sheet closes.
+  const sheetCard = sheet && corner.length ? corner[corner.length - 1] : null;
   // While a sheet holds the dock's lines (above), the dock keeps their room on
   // the page under it, so the page doesn't rise as a lead's sheet opens and
   // drop as it closes (QA robot 95abddab and 77641e07, 3 Nov 2026: 52 px each
@@ -1026,7 +1031,7 @@ export function NoticeCenter() {
           data-capture-skip=""
           popover={sheet ? "manual" : undefined}
         >
-          {cornerWork ? (
+          {cornerWork && !sheetCard ? (
             <NoticeCard
               key={cornerWork.id}
               notice={cornerWork}
@@ -1034,14 +1039,16 @@ export function NoticeCenter() {
               stays={pageDock !== null}
             />
           ) : null}
-          {shownList.map((notice) => (
-            <NoticeCard
-              key={notice.id}
-              notice={notice}
-              stays={pageDock !== null && docks(notice)}
-            />
-          ))}
-          {waiting > 0 ? (
+          {(sheet ? (sheetCard ? [sheetCard] : []) : shownList).map(
+            (notice) => (
+              <NoticeCard
+                key={notice.id}
+                notice={notice}
+                stays={pageDock !== null && docks(notice)}
+              />
+            ),
+          )}
+          {waiting > 0 && !sheet ? (
             <button
               type="button"
               className={styles.more}

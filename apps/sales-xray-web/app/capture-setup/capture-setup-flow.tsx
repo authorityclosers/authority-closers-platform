@@ -933,6 +933,8 @@ function UploadsStep({
   refresh,
   onDone,
   onProblem,
+  required = false,
+  organisation = null,
 }: {
   titleId: string;
   phone: Phone;
@@ -940,6 +942,9 @@ function UploadsStep({
   refresh: () => Promise<Phone>;
   onDone: () => void;
   onProblem: (step: "profile" | "consent") => void;
+  /** An organisation's seller, who can't skip this step. */
+  required?: boolean;
+  organisation?: string | null;
 }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -974,7 +979,13 @@ function UploadsStep({
       icon={UploadCloud}
       title="Turn uploads on"
       titleId={titleId}
-      line="Calls with your leads upload by themselves. A notice gives you 60 seconds to Undo each one."
+      // A required step says why it can't be skipped: Back here leaves the app
+      // (bug sweep N1, 8 Nov 2026: it closed with no word of why).
+      line={
+        required
+          ? `${organisation ?? "Your company"} asks every seller to turn this on. Calls with your leads then upload by themselves, with 60 seconds to Undo each one.`
+          : "Calls with your leads upload by themselves. A notice gives you 60 seconds to Undo each one."
+      }
       actions={
         !facts.notifications ? (
           <Button
@@ -1481,6 +1492,8 @@ export function CaptureSetupFlow({
           refresh={refresh}
           onDone={next}
           onProblem={problem}
+          required={required}
+          organisation={organisation}
         />
       );
       break;

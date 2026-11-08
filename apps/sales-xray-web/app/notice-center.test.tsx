@@ -879,6 +879,58 @@ it("lifts a card above the lead sheet's Save & Close bar and folds it to its pil
   }
 });
 
+it("shows one card in an open sheet, the newest; the rest come back when it closes", async () => {
+  // Orchestrator, 8 Nov 2026: at 363 "… is your lead now", "Saved on this
+  // phone" and "1 change not sent yet" piled over the lead sheet's actions.
+  vi.useFakeTimers();
+  const boxes = new Map<Element, Box>();
+  const restore = phone(boxes);
+  const { sheet } = leadSheet(boxes);
+  try {
+    await act(async () =>
+      notify({
+        id: "fictional",
+        tone: "lead",
+        title: "Fictional Asha is your lead now",
+      }),
+    );
+    await act(async () =>
+      notify({ id: "fictional-older", tone: "info", title: "Fictional older" }),
+    );
+    await act(async () =>
+      notify({
+        id: "fictional-newest",
+        tone: "info",
+        title: "1 change not sent yet",
+      }),
+    );
+    await act(async () => sheet.setAttribute("open", ""));
+    await frames();
+    expect(cornerStack()?.parentElement).toBe(sheet);
+    expect(sheet.textContent).toContain("1 change not sent yet");
+    expect(sheet.textContent).not.toContain("Fictional older");
+    expect(sheet.textContent).not.toContain("is your lead now");
+    expect(sheet.textContent).not.toContain("more");
+    // Closed, the page's stack holds them again: the newest two, one under +1.
+    await act(async () => sheet.removeAttribute("open"));
+    await frames();
+    const page = cornerStack()?.textContent ?? "";
+    expect(cornerStack()?.parentElement).not.toBe(sheet);
+    expect(page).toContain("1 change not sent yet");
+    expect(page).toContain("Fictional older");
+    expect(page).toContain("+1 more");
+  } finally {
+    await act(async () => {
+      dismissNotice("fictional-older");
+      dismissNotice("fictional-newest");
+    });
+    await act(async () => sheet.remove());
+    await frames();
+    restore();
+    vi.useRealTimers();
+  }
+});
+
 it("keeps a card above the lead's Call bar, then above Save & Close once Log a call opens", async () => {
   vi.useFakeTimers();
   const boxes = new Map<Element, Box>();

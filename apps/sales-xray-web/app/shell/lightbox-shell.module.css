@@ -2700,8 +2700,18 @@
     display: none;
   }
 
+  /* The page's name stays at 22 px whatever the text size, so the longest
+     word ("Organisation", 137 px) keeps clear of the + on a 363 px phone; at
+     130 % it grew to 28 px and ran under it (ux-audit N4, 8 Nov 2026). */
+  .mobileWorkspace b {
+    font-size: min(var(--sx-text-xl), 22px);
+  }
+
+  /* Five names share 363 px: from 14 px they stop growing, so "Ask Dipak"
+     keeps one line at 130 % text like the others. */
   .bottomLink {
     color: var(--sx-muted);
+    font-size: min(var(--sx-text-xs), 14px);
   }
 
   .bottomLink[aria-current="page"],
