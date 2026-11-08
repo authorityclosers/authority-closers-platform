@@ -1,6 +1,6 @@
 # Leads, first viewport: build spec (L1R, chosen 8 Nov 2026)
 
-**Status: chosen. The owner picked L1 on 8 Nov 2026 ("Build L1").** Build this. Three independent judges (a high-volume
+**Status: chosen. The owner picked L1 on 8 Nov 2026 ("Build L1") and then option B, keeping the avatar (§4).** Build this. Three independent judges (a high-volume
 seller, the owner and coach, an Apple/CRED-level visual designer) ranked round-1 direction L1 first of six (31, 31, 29 of 36;
 looks 8, 8, 8; all "above" today's Leads, style match with Dipak's Home "strong"). L1R is L1 with their fixes.
 
@@ -118,20 +118,19 @@ At true size the image's row (avatar + text + two 44 dp circles) leaves a **151 
 16.5 px, and "New lead · Meta lead form" wraps at 13 px. Built honestly, 363 × 735 shows **about 3 rows of these long-name
 leads** and about 4 rows of typical names, not the image's 5. Today's Leads shows 2.5 truncated rows.
 
-Open for the owner, one choice:
-- **A. Drop the initials avatar.** The text column becomes 203 dp; most names fit on one line, line 2 fits, and 363 shows
-  about **4 rows even of long names**. The stage dot leads each row instead. This is my recommendation as designer; it changes
-  the picture, so it needs his yes.
-- **B. Keep the avatar as drawn.** About 3 rows of long names, 4 of typical ones.
+**Owner's ruling (8 Nov 2026): B, keep the avatar as drawn.** He chose it on the sign-off page, which showed both versions side by
+side. With the avatar, 363 shows about 3 rows of long names (3 whole rows plus the Finish card, as built) and about 4 rows of
+typical names.
 
-**Build B (as drawn) until the owner says otherwise:** he picked the image with the avatar. A is a later, separate choice.
+Option A was not taken: drop the initials avatar for a 203 dp text column and about 4 rows even of long names. It stays here only as
+the record of what was offered.
 
 ## 5. Other acceptance sizes and states
 
 | Size / state | Behaviour |
 |---|---|
-| 360 × 800 (Vivo) | Same layout; the list viewport grows by 65 dp: about 4 rows of long names (B), 5 (A). |
-| 390 × 844 | Text column 178 dp (B) / 230 dp (A); about 5 rows. |
+| 360 × 800 (Vivo) | Same layout; the list viewport grows by 65 dp: about 4 rows of long names (4 whole rows as built). |
+| 390 × 844 | Text column 178 dp; about 5 rows. |
 | 1440 × 900 | Today's desktop frame stays. The list column gets the same stack (Inbound \| Cold, tabs, chip row, rows). At this width all chips fit without scrolling, and the Filter button sits at the row's end. A 1440 image is rendered once the owner picks. |
 | 130 % / 200 % text | Tabs and chips scroll sideways and never wrap. Names wrap to 3 lines. The Call label wraps to its own line (v1.38 rule). At 200 %, at least 1 whole row shows (L1). |
 | Dark | Home's dark tokens. The Call is `#2dd4bf` with a near-black label. Red only on "Late …". Image: `l1r-to-call-dark.webp`. |
