@@ -509,4 +509,20 @@ function rollup(findings, viewportKey) {
   return out;
 }
 
-module.exports = { INIT, scan, findingsFrom, rollup, ROLLED };
+// A control drawn under 48 px gets the kit's data-reach at idle (packages/typescript/ui/src/kit/tap-reach.ts: requestIdleCallback with a 1.5 s timeout, after each DOM change, touch screens only), so a scan right after a change
+// can run before the tag lands and list a control that is about to answer a 48 px tap (ux-audit, 9 Nov 2026; replayed with idle callbacks held 1.4 s: listed at +0.05 and +0.4 s, not from +1.8 s).
+// Look once more REACH_WAIT_MS later and keep only the controls that are still small.
+const REACH_WAIT_MS = 1700;
+async function settleSmall(page, s, phone) {
+  if (!phone || !s || !Array.isArray(s.small) || !s.small.length) return s;
+  await new Promise((resolve) => setTimeout(resolve, REACH_WAIT_MS));
+  const again = await page.evaluate(scan, phone).catch(() => null);
+  if (!again || !Array.isArray(again.small) || again.url !== s.url) return s;
+  const still = new Set(again.small.map((t) => t.s));
+  const before = s.small.length;
+  s.small = s.small.filter((t) => still.has(t.s));
+  s.reachSettled = before - s.small.length;
+  return s;
+}
+
+module.exports = { INIT, scan, findingsFrom, rollup, ROLLED, settleSmall, REACH_WAIT_MS };

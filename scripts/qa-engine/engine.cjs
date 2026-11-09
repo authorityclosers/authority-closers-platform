@@ -515,7 +515,7 @@ async function rejudge() {
       const opened = await session.go(tab, g.route, { wait: 30000 });
       if (!opened.ok) continue;
       const phone = tab.dev.phone;
-      const s = await tab.page.evaluate(inv.scan, phone).catch(() => null);
+      const s = await inv.settleSmall(tab.page, await tab.page.evaluate(inv.scan, phone).catch(() => null), phone);
       const found = s ? inv.rollup(inv.findingsFrom(s, { route: routeOf(tab.page.url()), phone }), tab.dev.key) : [];
       if (g.keys.some(([, v]) => v.rule.startsWith("axe:"))) found.push(...(await axeFindings(tab, routeOf(tab.page.url()))));
       const now = new Set(found.map((f) => report.fingerprintOf(g.area, f)));
@@ -565,7 +565,7 @@ async function foldExisting() {
       if (!opened.ok) continue;
       const route = routeOf(tab.page.url());
       const phone = tab.dev.phone;
-      const s = await tab.page.evaluate(inv.scan, phone).catch(() => null);
+      const s = await inv.settleSmall(tab.page, await tab.page.evaluate(inv.scan, phone).catch(() => null), phone);
       if (!s) continue;
       const roll = inv.rollup(inv.findingsFrom(s, { route, phone }), tab.dev.key).filter((f) => f.rolled);
       for (const f of roll) {

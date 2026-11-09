@@ -195,6 +195,9 @@ async function walk(job) {
       await sleep(1000);
       s = await page.evaluate(inv.scan, phone).catch(() => s);
     }
+    // a control under 44 px may be about to get the kit's data-reach (tagged at idle, up to 1.5 s after a change): look again once before calling it small
+    if (s) s = await inv.settleSmall(page, s, phone);
+    if (s && s.reachSettled) note(`${s.reachSettled} control(s) under 44 px got the kit's reach tag within ${inv.REACH_WAIT_MS} ms: not counted`);
     // still loading (calls in flight) is not blank: that is a missing loading mark at worst, judged elsewhere
     if (s && s.textLength < 25 && tab.inflight > 0) s.textLength = 25;
     const q = await page

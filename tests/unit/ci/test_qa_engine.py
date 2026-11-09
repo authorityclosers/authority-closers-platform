@@ -171,3 +171,15 @@ def test_tap_scan_reports_the_pointer_and_judges_a_fine_pointer_at_24_px() -> No
     assert 'finding.rule === "layout:shift"' in sim
     assert "${shiftTxt}" in sim
     assert "pointer:${[...new Set(" in sim
+
+
+def test_tap_scan_looks_again_before_calling_a_control_small() -> None:
+    """A small control gets the kit's reach tag within 1.5 s: the scan looks once more first."""
+    scan = (ROOT / "lib" / "invariants.cjs").read_text(encoding="utf-8")
+    sim = (ROOT / "lib" / "sim.cjs").read_text(encoding="utf-8")
+    engine = (ROOT / "engine.cjs").read_text(encoding="utf-8")
+    assert "const REACH_WAIT_MS = 1700;" in scan
+    assert "async function settleSmall(page, s, phone)" in scan
+    assert "settleSmall, REACH_WAIT_MS };" in scan
+    assert "inv.settleSmall(page, s, phone)" in sim
+    assert engine.count("inv.settleSmall(tab.page,") == 2
