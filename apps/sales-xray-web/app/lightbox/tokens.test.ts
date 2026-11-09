@@ -195,7 +195,7 @@ describe("Lightbox token derivative", () => {
       ["radius-md", "16px"],
       ["radius-lg", "22px"],
       ["radius-xl", "30px"],
-      ["bottom-nav-h", "78px"],
+      ["bottom-nav-h", "64px"],
       // One teal accent (owner, 11 Oct 2026): info is slate, not blue.
       ["info", "#56637a"],
       ["info-soft", "#eceff4"],
