@@ -19,6 +19,7 @@ vi.mock("next/link", () => ({
 
 import { SalesHome } from "./sales-home";
 import { resetHomeReads } from "./home-load";
+import { NoticeCenter } from "../notice-center";
 import type { LibrarySubmission } from "../acquisition-client";
 
 (
@@ -464,6 +465,48 @@ it("says it is offline, keeps what it had, and reads again when back", async () 
     expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThan(asked);
   } finally {
     delete (navigator as { onLine?: boolean }).onLine;
+  }
+});
+
+// ux-audit (9 Nov 2026): in the page's flow, the offline line moved Home 28 to
+// 40 px as it came and went. It is a corner card, over the page, so Home stays.
+it("says it is offline in the corner, over the page, not in Home's flow", async () => {
+  answer({
+    "/v1/lead-desk": owner(desk([])),
+    "/v1/lead-desk/reports/performance*": performance(),
+    "/v1/lead-desk/team": team({ new: 4 }),
+    "/v1/lead-desk/performance/sellers*": effort(true),
+    ...counts("inbound", 4, 7, 2),
+  });
+  const corner = document.createElement("div");
+  document.body.append(corner);
+  const cornerRoot = createRoot(corner);
+  await act(async () => cornerRoot.render(<NoticeCenter />));
+  await mount(true);
+  let online = false;
+  Object.defineProperty(navigator, "onLine", {
+    configurable: true,
+    get: () => online,
+  });
+  try {
+    await act(async () => {
+      window.dispatchEvent(new Event("offline"));
+    });
+    expect(document.querySelector("[data-corner-own]")?.textContent).toBe(
+      "You're offline. Showing what was saved.",
+    );
+    expect(host.querySelector("[data-home]")?.textContent).not.toContain(
+      "You're offline",
+    );
+    online = true;
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    expect(document.querySelector("[data-corner-own]")?.textContent).toBe("");
+  } finally {
+    delete (navigator as { onLine?: boolean }).onLine;
+    await act(async () => cornerRoot.unmount());
+    corner.remove();
   }
 });
 
