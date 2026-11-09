@@ -69,7 +69,12 @@ export function LeadPageFrame({
   }, [rowKey]);
   useEffect(() => {
     if (!open) return;
-    const page = document.getElementById("main-content");
+    // Everything under the page is out of reach, the app's top bars too (QA
+    // robot 8a93e05c, 9 Nov 2026: Tab reached Account, Chats and Search behind
+    // it); the tab bar, outside the shell's content, stays in reach.
+    const page =
+      document.querySelector<HTMLElement>("[data-shell-content]") ??
+      document.getElementById("main-content");
     const before =
       document.activeElement instanceof HTMLElement
         ? document.activeElement

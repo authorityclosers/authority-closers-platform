@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import type { StageView } from "./journey/journey-client";
-import { lightRow } from "./lead-page-frame";
+import { LeadPageFrame, lightRow } from "./lead-page-frame";
 import { LeadCard } from "./lead-sheet";
 import type { LeadDetail } from "./leads-client";
 
@@ -187,6 +187,30 @@ it("puts Add a phone number in the Call's place when there is no number", async 
     button.textContent?.includes("WhatsApp"),
   );
   expect(whatsapp?.getAttribute("aria-disabled")).toBe("true");
+});
+
+it("keeps everything under the page out of reach, its top bars too, never the tab bar", async () => {
+  const shell = document.createElement("div");
+  shell.setAttribute("data-shell-content", "");
+  const bar = document.createElement("header");
+  bar.append(document.createElement("button"));
+  const main = document.createElement("main");
+  main.id = "main-content";
+  shell.append(bar, main);
+  const tabs = document.createElement("nav");
+  document.body.append(shell, tabs);
+  const frame = (open: boolean) => (
+    <LeadPageFrame open={open} label="Shrikant" onClose={() => undefined}>
+      <p>The lead</p>
+    </LeadPageFrame>
+  );
+  await act(async () => root.render(frame(true)));
+  expect(shell.hasAttribute("inert")).toBe(true);
+  expect(tabs.hasAttribute("inert")).toBe(false);
+  await act(async () => root.render(frame(false)));
+  expect(shell.hasAttribute("inert")).toBe(false);
+  shell.remove();
+  tabs.remove();
 });
 
 it("lights the lead's row for a second back on the list, a positioned row only", () => {

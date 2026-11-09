@@ -16,8 +16,12 @@
   flex-direction: column;
   overflow-y: auto;
   overscroll-behavior: contain;
-  /* What is scrolled to (focus, See more) clears the bar and the Call band. */
-  scroll-padding-block: 64px 80px;
+  /* What is scrolled to (focus, See more) clears the bar, the Call band and a
+     corner card over it (QA robot 8a93e05c, 9 Nov 2026: Copy link took focus
+     under "Open lead"; --sx-corner-h is the card's top, from the window's
+     bottom). */
+  scroll-padding-block: 64px
+    max(80px, calc(var(--sx-corner-h, 0px) - var(--lx-bottom-nav-h, 0px) + 8px));
   background: var(--sx-paper);
   color: var(--sx-ink);
 }
