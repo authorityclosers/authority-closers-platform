@@ -337,6 +337,17 @@ export function SideBlock({
   );
 }
 
+/** The selector's place while this device has never seen which sides the
+ *  seller works: its own track at its own size, without its words, so Today
+ *  draws at once and the selector arrives where it waited. */
+function SideWait({ side }: { side: Side }) {
+  return (
+    <div className={styles.sideWait} aria-hidden="true" inert>
+      <SideSelector value={side} onChange={() => {}} tone="calm" />
+    </div>
+  );
+}
+
 /** 2. Four cards, each opening the exact list it counts (items 08-12). */
 export function TodayCards({
   side,
@@ -1121,7 +1132,8 @@ export function SellerBlocks({
   desk: HomeDesk | null;
   side: Side;
   onSide: (side: Side) => void;
-  /** Which sides this seller works, when the page read them beside the desk. */
+  /** Which sides this seller works, when the page read them beside the desk;
+   *  null while they are on the way, and the selector's place is held. */
   access?: SidesAccess | null;
   /** Loading and error draw the top four blocks in their final places and
    *  sizes, so nothing moves when the desk arrives (FRAMEWORK L6). */
@@ -1165,6 +1177,8 @@ export function SellerBlocks({
             inbound={desk?.sides?.inbound ?? null}
             onSide={onSide}
           />
+        ) : given === null ? (
+          <SideWait side={shown} />
         ) : null,
         cards: (
           <TodayCards

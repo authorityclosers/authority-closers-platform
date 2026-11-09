@@ -263,14 +263,18 @@ function SellerHome({
   // the four cards and the next call never vanish on a bad network).
   // Home keeps no Taking new leads pill (Dipak's picture, 2 Nov 2026): it is
   // in Settings and on Leads.
-  // A device that has never seen this seller's sides waits for them before
-  // drawing Today, so the selector never lands above it (the test robot, 1
-  // Nov 2026: 0.06 at 360 px); later visits draw at once from the kept answer.
-  if (!access) return null;
-  const status = state.status;
+  // A device that has never seen this seller's sides draws Today's outline at
+  // once, the selector's place held, and fills both in when the sides are
+  // known: never a blank page on a slow line (QA robot 4cf9a9c7 and 054a9c20,
+  // 9 Nov 2026, 3G at 360 and 390), and the selector never lands above Today
+  // (the test robot, 1 Nov 2026: 0.06 at 360 px). Later visits draw at once
+  // from the kept answer.
+  const status = access ? state.status : "loading";
   return (
     <SellerBlocks
-      desk={state.status === "ready" ? (state.desk as HomeDesk) : null}
+      desk={
+        access && state.status === "ready" ? (state.desk as HomeDesk) : null
+      }
       state={status}
       side={side}
       onSide={setSide}

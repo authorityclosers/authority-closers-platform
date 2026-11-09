@@ -627,9 +627,11 @@ it("puts a call waiting for its answer first, as Pending action that opens its q
 });
 
 // The test robot (1 Nov 2026): on a slow network the Inbound | Cold selector
-// arrived after Today's cards and pushed them down (0.06 at 360 px). Home keeps
-// its skeleton until it knows the seller's sides, so they come in together.
-it("waits for the seller's sides before drawing Today, so nothing moves", async () => {
+// arrived after Today's cards and pushed them down (0.06 at 360 px). Waiting
+// for the sides instead left Home blank on 3G (QA robot 4cf9a9c7 and 054a9c20,
+// 9 Nov 2026). Today's outline draws at once, the selector's place held
+// unseen, and the selector arrives in that place.
+it("draws Today's outline at once and holds the selector's place until the sides are known", async () => {
   answer({ inbound: { leads: 40 }, cold: { imported: 200 } });
   const served = globalThis.fetch;
   let release: () => void = () => {};
@@ -644,11 +646,15 @@ it("waits for the seller's sides before drawing Today, so nothing moves", async 
     }),
   );
   await mount();
-  expect(host.querySelector('[data-area="cards"]')).toBeNull();
+  const side = () => host.querySelector('[data-area="side"]');
+  expect(host.querySelector('[data-area="cards"]')).not.toBeNull();
+  expect(side()?.querySelector("[inert] [role=radiogroup]")).not.toBeNull();
+  expect(host.querySelector("[data-call-lens]")).toBeNull();
   await act(async () => release());
   for (let step = 0; step < 4; step += 1)
     await act(async () => Promise.resolve());
-  expect(host.querySelector('[data-area="side"]')).not.toBeNull();
+  expect(side()?.querySelector("[role=radiogroup]")).not.toBeNull();
+  expect(side()?.querySelector("[inert]")).toBeNull();
   expect(host.querySelector('[data-area="cards"]')).not.toBeNull();
 });
 

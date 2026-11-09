@@ -904,3 +904,10 @@ a.nextName:active::after,
   color: var(--sx-muted);
   font-weight: 400;
 }
+
+/* While this device has never seen the seller's sides: the selector's track
+   alone, at its size; its words and its chosen side wait, unseen. */
+.sideWait [role="radiogroup"]::before,
+.sideWait [role="radio"] {
+  visibility: hidden;
+}
