@@ -168,4 +168,6 @@ def test_tap_scan_reports_the_pointer_and_judges_a_fine_pointer_at_24_px() -> No
     tap_block = after_tap_comment.split("// overlapping controls", 1)[0]
     assert "r.width >= 44 && r.height >= 44" not in tap_block
     assert 's.pointer === "fine"' in sim
+    assert 'finding.rule === "layout:shift"' in sim
+    assert "${shiftTxt}" in sim
     assert "pointer:${[...new Set(" in sim

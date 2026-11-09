@@ -176,7 +176,9 @@ async function walk(job) {
       if (["BLOCKER", "MAJOR"].includes(finding.severity) && areaOfRoute(finding.route) === row.area) out.rowBugs.push(res.bugId);
     }
     const ptr = /tap-target/.test(finding.rule) ? ` pointer:${[...new Set((String(finding.detail || "").match(/\(pointer (\w+)\)/g) || []).map((m) => m.slice(9, -1)))].join("+") || "?"}` : "";
-    log(`  ${res.action} ${res.bugId || ""} ${finding.rule} ${finding.route} ${finding.selector}${ptr}${res.reason ? ` (${res.reason})` : ""}`);
+    // a layout shift's size and what led up to it ride on the line, so a repeat sighting can be read without a replay
+    const shiftTxt = finding.rule === "layout:shift" ? ` ${String(finding.detail || "").replace(/ during the step/, "")} at ${tab.dev.key} ${row.state} after: ${steps.slice(-3).join(" ").slice(0, 200)}` : "";
+    log(`  ${res.action} ${res.bugId || ""} ${finding.rule} ${finding.route} ${finding.selector}${ptr}${shiftTxt}${res.reason ? ` (${res.reason})` : ""}`);
   };
 
   // what the page and the log say after a step
