@@ -656,7 +656,43 @@ it("asks nothing about a sandbox for a plain member or a personal workspace", as
 // coaching for those the server reads it for (team-coaching-access.ts): a
 // member's sandbox card keeps only what is theirs to open.
 it("offers a member no Team coaching or Insights from the sandbox card", async () => {
-  fetchMock.mockImplementation(() => new Promise<Response>(() => {}));
+  // The member's desk and sides answer, so Home's sales block draws and the
+  // card follows it (QA robot 474deee5, 9 Nov 2026); everything else waits.
+  fetchMock.mockImplementation(async (path: string) =>
+    path === "/v1/lead-desk"
+      ? new Response(
+          JSON.stringify({
+            me: {
+              person_id: "person-1",
+              name: "asha",
+              role: "member",
+              can_manage: false,
+            },
+            numbers: {
+              calls: 5,
+              connected: 2,
+              talk_seconds: 300,
+              follow_ups_done: 1,
+              new_assigned: 0,
+            },
+            counts: {
+              open: 3,
+              new: 1,
+              follow_up_due: 0,
+              not_connected: 0,
+              later_today: 0,
+              unassigned: null,
+            },
+            queue: [],
+            call_mode: "phone",
+            sandbox: true,
+            generated_at: "2026-10-22T05:30:00Z",
+          }),
+        )
+      : path.startsWith("/v1/lead-desk/sides")
+        ? new Response("{}")
+        : new Promise<Response>(() => {}),
+  );
   await act(async () => {
     root.render(
       <InitialSessionProvider value={SERVED}>
@@ -703,7 +739,9 @@ it("offers a member no Team coaching or Insights from the sandbox card", async (
       </InitialSessionProvider>,
     );
   });
-  expect(host.textContent).toContain("A made-up sales team");
+  await vi.waitFor(() =>
+    expect(host.textContent).toContain("A made-up sales team"),
+  );
   const views = [
     ...host.querySelectorAll<HTMLAnchorElement>(
       'nav[aria-label="Sandbox views"] a',
@@ -753,18 +791,19 @@ it("shows the sandbox card from the server's read, from the first paint", async 
       </InitialSessionProvider>,
     );
   });
-  // Above the figures from the start: it never arrives late and pushes them.
+  // There from the first paint, and at the page's end, its one place: put
+  // first while Home's sales block was not yet known, it jumped to the end
+  // when the block came (QA robot 474deee5, 9 Nov 2026).
   expect(host.textContent).toContain("A made-up sales team");
   const card = host.querySelector('[aria-labelledby="sandbox-title"]');
   const figures = host.querySelector('dl[aria-label="Dashboard figures"]');
   expect(card).not.toBeNull();
-  // It leads the page, so nothing loading below it can push it.
-  expect(card?.parentElement?.firstElementChild).toBe(card);
+  expect(card?.parentElement?.lastElementChild).toBe(card);
   expect(
     figures === null ||
       Boolean(
         card!.compareDocumentPosition(figures) &
-          Node.DOCUMENT_POSITION_FOLLOWING,
+          Node.DOCUMENT_POSITION_PRECEDING,
       ),
   ).toBe(true);
 });

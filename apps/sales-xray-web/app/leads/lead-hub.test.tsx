@@ -109,7 +109,7 @@ it("folds a day's chat into one line per app, newest first", () => {
   expect(chatDays(LEAD, { ...wa([]), connected: false }, null)).toEqual([]);
 });
 
-it("puts chats among calls and notes by time, and the summary under the newest call", async () => {
+it("puts chats among calls and notes by time, with no report bar among them (lead page P5)", async () => {
   const events = [
     event("note", "2026-10-22T07:00:00Z"),
     event("call", "2026-10-22T03:00:00Z", {
@@ -124,26 +124,18 @@ it("puts chats among calls and notes by time, and the summary under the newest c
     wa([message("2026-10-22T05:00:00Z", "in", "See you Sunday")]),
     null,
   );
-  await act(async () =>
-    root.render(
-      <History
-        events={events}
-        chats={chats}
-        brief={<p>What the last call said</p>}
-      />,
-    ),
-  );
+  await act(async () => root.render(<History events={events} chats={chats} />));
   const rows = [...host.querySelectorAll("li:not([aria-hidden])")].map(
     (row) => row.getAttribute("data-kind") ?? row.textContent,
   );
-  // Note (07:00), chat (05:00), call (03:00) and its summary, then yesterday's call.
-  expect(rows).toEqual([
-    "note",
-    "chat",
-    "call",
-    "What the last call said",
-    "call",
-  ]);
+  // Note (07:00), chat (05:00), call (03:00), then yesterday's call.
+  expect(rows).toEqual(["note", "chat", "call", "call"]);
+  // Each call with a Report says so at its end.
+  expect(
+    [...host.querySelectorAll('li[data-kind="call"]')].map(
+      (row) => row.querySelector("a")?.textContent,
+    ),
+  ).toEqual(["View report", "View report"]);
   const chat = host.querySelector('li[data-kind="chat"]')!;
   expect(chat.textContent).toContain("1 WhatsApp message");
   expect(chat.textContent).toContain("See you Sunday");

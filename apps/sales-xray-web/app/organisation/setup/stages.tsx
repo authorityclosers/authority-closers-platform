@@ -95,7 +95,10 @@ export function OrganisationStages({ bare = false }: { bare?: boolean }) {
             Try loading stages again
           </button>
         ) : (
-          <div aria-busy="true" aria-label="Loading lead stages">
+          // A status, as the other loaders are: a label on a plain div has no
+          // role to carry it (QA robot a6cd56b0, 8 Nov 2026, axe
+          // aria-prohibited-attr at 1920).
+          <div role="status" aria-busy="true" aria-label="Loading lead stages">
             <Skeleton height={240} />
             <Skeleton height={432} />
           </div>

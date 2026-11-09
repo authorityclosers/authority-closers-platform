@@ -102,13 +102,25 @@ export function SeatsPanel({
   }, [version, attempt, onSeats]);
 
   if (seats === "off") return null;
+  // While the counts load: the heading, the bar and one legend line, the
+  // loaded card's own parts, so People under it never moves when they come
+  // (QA robot 0f2cebf6, 8 Nov 2026: 8 px on 3G at 363, from a card with no
+  // heading and two lines more).
   if (seats === null)
     return (
-      <section className={styles.section} aria-label="Seats" aria-busy="true">
+      <section
+        className={styles.section}
+        aria-labelledby="org-seats"
+        aria-busy="true"
+      >
+        <div className={styles.head}>
+          <h2 id="org-seats" className={styles.title}>
+            Seats
+          </h2>
+        </div>
         <div className={styles.card} data-loading="">
-          <span className={styles.skeletonLine} />
           <span className={styles.meter} />
-          <span className={styles.skeletonLine} data-short="" />
+          <span className={styles.skeletonLine} data-legend="" />
         </div>
       </section>
     );

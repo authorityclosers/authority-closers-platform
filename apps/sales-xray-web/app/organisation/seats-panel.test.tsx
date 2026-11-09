@@ -240,6 +240,19 @@ it("hides itself on a server without seats and retries after an error", async ()
   );
 });
 
+it("keeps the loaded card's heading and parts while the counts load", async () => {
+  // The QA robot, 8 Nov 2026 (0f2cebf6): with no heading and two lines more,
+  // the loading card was 9 px shorter, and People moved down when it loaded.
+  fetchMock.mockImplementation(() => new Promise<Response>(() => {}));
+  await act(async () => root.render(<SeatsPanel version={0} />));
+  const loading = host.querySelector('section[aria-busy="true"]')!;
+  expect(loading.querySelector("h2")?.textContent).toBe("Seats");
+  expect(loading.getAttribute("aria-labelledby")).toBe("org-seats");
+  expect(loading.querySelectorAll('[class*="meter"]')).toHaveLength(1);
+  expect(loading.querySelectorAll("[data-legend]")).toHaveLength(1);
+  expect(loading.querySelectorAll('[class*="skeletonLine"]')).toHaveLength(1);
+});
+
 it("keeps a long name inside the card, ending in an ellipsis", () => {
   // The QA robot, 8 Nov 2026: a 300-letter name widened the card's one column
   // to 2,900 px at 360 and the card cut it off.

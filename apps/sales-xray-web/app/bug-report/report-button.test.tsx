@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -59,4 +61,15 @@ it("opens the reporter, stays out of its own picture, and hides until shown agai
   } finally {
     window.removeEventListener(REPORT_PROBLEM_EVENT, opened);
   }
+});
+
+it("makes Hide at least 24 px, the least a pointer target may be", () => {
+  // The QA robot, 8 Nov 2026 (171c4df6): 20 px at 1440 on /coaching.
+  const css = readFileSync(
+    join(process.cwd(), "app/bug-report/bug-report.module.css"),
+    "utf8",
+  );
+  const hide = /\n\.cornerHide \{([^}]*)\}/.exec(css)?.[1] ?? "";
+  expect(hide).toContain("width: 24px;");
+  expect(hide).toContain("height: 24px;");
 });

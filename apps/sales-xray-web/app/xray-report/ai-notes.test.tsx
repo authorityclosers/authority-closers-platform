@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -164,4 +166,29 @@ it("keeps a chip ready when its sheet closes unsaved, and shows only updates the
   expect(chip.textContent).toBe("Apply: Mark Won");
   expect(chip.disabled).toBe(false);
   expect(notify).not.toHaveBeenCalled();
+});
+
+it("gives Send the report's solid green and its own text", () => {
+  // The QA robot, 9 Nov 2026 (e32abfcf): white on the green mark was 2.75:1.
+  const css = readFileSync(
+    join(process.cwd(), "app/xray-report/ai-notes.module.css"),
+    "utf8",
+  );
+  const send = /\n\.send \{([^}]*)\}/.exec(css)?.[1] ?? "";
+  expect(send).toContain("background: var(--xr-green);");
+  expect(send).toContain("color: var(--xr-solid-text);");
+  expect(send).not.toContain("--xr-on-mark");
+});
+
+it("keeps Wrong? Tell us inside the card on a phone", () => {
+  // 9 Nov 2026: at 363 the field's built-in width pushed the form and Send
+  // past the card's edge; the field takes its width from the row instead.
+  const css = readFileSync(
+    join(process.cwd(), "app/xray-report/ai-notes.module.css"),
+    "utf8",
+  );
+  const field = /\n\.tell input \{([^}]*)\}/.exec(css)?.[1] ?? "";
+  expect(field).toContain("flex: 1;");
+  expect(field).toContain("width: 0;");
+  expect(field).toContain("min-width: 0;");
 });

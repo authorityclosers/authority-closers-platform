@@ -108,3 +108,15 @@ it("gives motion springs and a reduced-motion answer", () => {
 it("is loaded for every screen", () => {
   expect(styles).toContain('@import "./ui/sx-tokens.css";');
 });
+
+it("draws the accent badge's words darker than the plain accent", () => {
+  // The QA robot, 9 Nov 2026 (7d642443): "Owner" and "Admin" were 4.32:1.
+  const kit = readFileSync(
+    join(here, "../../../../packages/typescript/ui/src/kit/kit.module.css"),
+    "utf8",
+  );
+  const badge = /\.badge\[data-tone="accent"\] \{([^}]*)\}/.exec(kit)?.[1];
+  expect(badge).toContain(
+    "color: color-mix(in oklab, var(--sx-accent) 80%, var(--sx-ink));",
+  );
+});
