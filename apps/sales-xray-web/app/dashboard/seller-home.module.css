@@ -10,9 +10,11 @@
   min-width: 0;
 }
 
+/* A block's title and its link on one row: at 130 % text on a 363 px phone
+   the title wraps in its own column and See all keeps its place on the right
+   (it used to drop under "Upcoming follow-ups"). */
 .head {
   display: flex;
-  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: 4px 12px;
@@ -20,16 +22,20 @@
 }
 
 .head h2 {
+  min-width: 0;
   margin: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-xl);
   font-weight: 500;
   line-height: var(--sx-leading-28);
+  overflow-wrap: anywhere;
 }
 
 .headEnd {
   display: flex;
+  flex: none;
   flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 10px;
 }
@@ -848,9 +854,11 @@ a.nextName:active::after,
   background: none;
 }
 
+/* 10 px above and below, so a lead's name that wraps keeps its 44 px reach
+   inside the card instead of being cut at its edge (363 px, 130 %). */
 .taskList .taskRow {
   gap: 12px;
-  padding: 0 12px 0 16px;
+  padding: 10px 12px 10px 16px;
   border-bottom: 0;
   border-radius: 12px;
   background: var(--sx-fill-soft);
@@ -861,10 +869,35 @@ a.nextName:active::after,
   background: var(--sx-fill-soft);
 }
 
+/* A task's whole title, wrapped, never ended in "…" (a long imported name in
+   "Follow up with …" lost what the task was). */
 .taskList .rowText strong {
+  overflow: visible;
   font-size: var(--sx-text-md);
   font-weight: 500;
   line-height: var(--sx-leading-24);
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.taskList .taskMeta a {
+  overflow-wrap: anywhere;
+}
+
+/* Overdue sits on the title's row, as Dipak draws it, and the box is centred
+   on that first line, however far a long title wraps. */
+.taskList .taskRow,
+.taskList .swipeFace {
+  min-height: 0;
+}
+
+.taskList .swipeFace {
+  align-items: flex-start;
+}
+
+.taskList .check {
+  margin-block: -10px;
 }
 
 .taskList .taskMeta [data-late-time] {

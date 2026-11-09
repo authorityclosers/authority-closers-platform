@@ -2700,8 +2700,11 @@
     display: none;
   }
 
+  /* Five names share 363 px: from 14 px they stop growing, so "Ask Dipak"
+     keeps one line at 130 % text like the others. */
   .bottomLink {
     color: var(--sx-muted);
+    font-size: min(var(--sx-text-xs), 14px);
   }
 
   .bottomLink[aria-current="page"],
