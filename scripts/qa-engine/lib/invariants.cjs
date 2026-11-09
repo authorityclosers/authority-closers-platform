@@ -50,6 +50,8 @@ function scan(phone) {
   }).length;
   out.loading = document.querySelectorAll('[role=progressbar],[role=status],[aria-busy="true"],[class*="spinner" i],[class*="loading" i]').length;
   out.dialog = [...document.querySelectorAll("[role=dialog]")].filter(visible).length;
+  // the pointer this page sees: a phone tab is meant to be coarse (touch); a fine one is a mouse, held to WCAG 2.5.8's 24 px
+  out.pointer = matchMedia("(pointer: coarse)").matches ? "coarse" : "fine";
   // sideways scroll
   out.overflow = { sw: document.documentElement.scrollWidth, cw: vw, items: [] };
   for (const el of document.querySelectorAll("body *")) {
@@ -145,11 +147,12 @@ function scan(phone) {
   // tap targets under 44 px (phone sizes)
   out.small = [];
   if (phone) {
+    const tapNeed = out.pointer === "fine" ? 24 : 44;
     for (const el of interactive) {
       if (out.small.length >= 40) break;
       let r = el.getBoundingClientRect();
       if (r.bottom < 0 || r.top > vh * 2) continue;
-      if (r.width >= 44 && r.height >= 44) continue;
+      if (r.width >= tapNeed && r.height >= tapNeed) continue;
       // a sheet or dialog opened on purpose covers the page behind it: the hit test there says nothing about the controls under it
       if (out.dialog > 0 && !el.closest("[role=dialog],[aria-modal=true],dialog")) continue;
       if (modals.length && !modals.some((m) => m.contains(el))) continue; // under an open :modal dialog
@@ -176,22 +179,22 @@ function scan(phone) {
       // judge the tap area, not the box: a ::after can make a 28 px box a 44 px target; a control reaches 44 px with (44 - size) / 2 on each side, so probe that far out, less 1 px for the edge
       const mx = r.left + r.width / 2;
       const my = r.top + r.height / 2;
-      const reachY = Math.max(1, Math.floor((44 - r.height) / 2) - 1);
-      const reachX = Math.max(1, Math.floor((44 - r.width) / 2) - 1);
-      const tallEnough = r.height >= 44 || hit(mx, r.top - reachY) || hit(mx, r.bottom + reachY);
-      const wideEnough = r.width >= 44 || hit(r.left - reachX, my) || hit(r.right + reachX, my);
+      const reachY = Math.max(1, Math.floor((tapNeed - r.height) / 2) - 1);
+      const reachX = Math.max(1, Math.floor((tapNeed - r.width) / 2) - 1);
+      const tallEnough = r.height >= tapNeed || hit(mx, r.top - reachY) || hit(mx, r.bottom + reachY);
+      const wideEnough = r.width >= tapNeed || hit(r.left - reachX, my) || hit(r.right + reachX, my);
       let small = !(tallEnough && wideEnough);
       if (small && getComputedStyle(el).display === "inline" && el.tagName === "A") small = false;
       if (small) {
         const wrap = el.closest("label,a,button,[role=button],[role=tab],[role=radio]");
         if (wrap && wrap !== el) {
           const w = wrap.getBoundingClientRect();
-          if (w.width >= 44 && w.height >= 44) small = false;
+          if (w.width >= tapNeed && w.height >= tapNeed) small = false;
         }
       }
       const size = { w: Math.round(r.width), h: Math.round(r.height) };
       if (back) back();
-      if (small) out.small.push(rec(el, size));
+      if (small) out.small.push(rec(el, { ...size, pointer: out.pointer }));
     }
   }
   // overlapping controls: two shown controls whose boxes cross, neither inside the other
@@ -440,7 +443,7 @@ function findingsFrom(s, { route, phone, shift = 0, events = [] }) {
   for (const c of s.covered) f("layout:covered", c.s, "MAJOR", "A control is covered by something else", `${c.s} is under ${c.by}`, c.p);
   for (const o of s.overlaps) f("layout:overlap", `${o.s} + ${o.o}`, "MINOR", "Two controls overlap", `${o.s} overlaps ${o.o}`, o.p);
   for (const c of s.clipped) f("layout:text-clipped", c.s, "MINOR", "Text is cut off", `${c.s}: the text is ${c.sw}px wide in a ${c.cw}px box that hides the rest`, c.p);
-  for (const t of s.small) f("layout:tap-target-44", t.s, "POLISH", "Tap target under 44 px", `${t.s} is ${t.w}x${t.h}px`, t.p);
+  for (const t of s.small) f("layout:tap-target-44", t.s, "POLISH", "Tap target under 44 px", `${t.s} is ${t.w}x${t.h}px (pointer ${t.pointer || "unknown"})`, t.p);
   if (s.design) {
     const filed = designFiling();
     if (filed.has("edge-mask")) for (const x of s.design.edgeMask) f("layout:edge-mask", x.s, "MINOR", "A row that scrolls sideways fades out or is masked at its edges", x.d);

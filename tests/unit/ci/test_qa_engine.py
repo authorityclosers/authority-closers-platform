@@ -155,3 +155,16 @@ def test_empty_list_scan_leaves_out_a_sliver_nobody_can_look_at() -> None:
     scan = (ROOT / "lib" / "invariants.cjs").read_text(encoding="utf-8")
     assert "if (box.width < 24 || box.height < 24) continue;" in scan
     assert scan.index("box.width < 24") < scan.index("out.emptyLists.push(")
+
+
+def test_tap_scan_reports_the_pointer_and_judges_a_fine_pointer_at_24_px() -> None:
+    """The scan names the pointer it saw and holds a fine pointer to 24 px."""
+    scan = (ROOT / "lib" / "invariants.cjs").read_text(encoding="utf-8")
+    sim = (ROOT / "lib" / "sim.cjs").read_text(encoding="utf-8")
+    assert 'out.pointer = matchMedia("(pointer: coarse)").matches ? "coarse" : "fine";' in scan
+    assert 'const tapNeed = out.pointer === "fine" ? 24 : 44;' in scan
+    assert "(pointer ${t.pointer" in scan
+    after_tap_comment = scan.split("// tap targets under 44 px", 1)[1]
+    tap_block = after_tap_comment.split("// overlapping controls", 1)[0]
+    assert "r.width >= 44 && r.height >= 44" not in tap_block
+    assert 's.pointer === "fine"' in sim
