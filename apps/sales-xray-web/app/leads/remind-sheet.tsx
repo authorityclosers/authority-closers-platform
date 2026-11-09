@@ -7,11 +7,13 @@
  * also asks where. It shows in Tasks on its day and the phone reminds once.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { notify } from "../notice-center";
+import { closingByBack } from "../ui/back-close";
 import { Button } from "../ui/kit";
 import { ActionSheet } from "./action-sheet";
+import { keepDraft, readDraft } from "./drafts";
 import {
   LeadsError,
   addTask,
@@ -22,6 +24,42 @@ import {
 } from "./leads-client";
 import { TASK_KINDS, localInput, quickTimes } from "./task-words";
 import styles from "./tasks.module.css";
+
+/**
+ * What was written for a reminder, kept on this device for the lead
+ * (drafts.ts): a refresh loses nothing, and the sheet opened again shows it
+ * (the robot, 9 Nov 2026: 40 characters in "Follow-up" gone after a refresh at
+ * 360). Saving, Cancel, X, a tap outside or a swipe down drops it; Back keeps
+ * it.
+ */
+type Kept = {
+  kind: TaskKind;
+  quick: string | null;
+  picked: string;
+  where: string;
+  note: string;
+};
+
+const keptKey = (leadId: string) => `remind:${leadId}`;
+
+function keptRemind(leadId: string): Kept | null {
+  try {
+    const kept = JSON.parse(
+      readDraft(keptKey(leadId)) || "null",
+    ) as Partial<Kept> | null;
+    if (!kept || typeof kept !== "object") return null;
+    const known = TASK_KINDS.some((item) => item.key === kept.kind);
+    return {
+      kind: known ? (kept.kind as TaskKind) : "call_back",
+      quick: typeof kept.quick === "string" ? kept.quick : null,
+      picked: typeof kept.picked === "string" ? kept.picked : "",
+      where: typeof kept.where === "string" ? kept.where : "",
+      note: typeof kept.note === "string" ? kept.note : "",
+    };
+  } catch {
+    return null;
+  }
+}
 
 export function RemindSheet({
   open,
@@ -48,6 +86,29 @@ export function RemindSheet({
   const [error, setError] = useState<string | null>(null);
   // One command per opening: a second tap on Save is the same task.
   const [command, setCommand] = useState(commandId);
+  // Opened with nothing written yet: what was kept comes back.
+  const [openedFor, setOpenedFor] = useState(false);
+  if (openedFor !== open) {
+    setOpenedFor(open);
+    const kept = open && !note && !where ? keptRemind(leadId) : null;
+    if (kept && (kept.note.trim() || kept.where.trim())) {
+      setKind(kept.kind);
+      setQuick(kept.quick);
+      setPicked(kept.picked);
+      setWhere(kept.where);
+      setNote(kept.note);
+    }
+  }
+  // Kept as it is written; nothing written, nothing kept.
+  useEffect(() => {
+    if (!open) return;
+    keepDraft(
+      keptKey(leadId),
+      note.trim() || where.trim()
+        ? JSON.stringify({ kind, quick, picked, where, note } satisfies Kept)
+        : "",
+    );
+  }, [open, leadId, kind, quick, picked, where, note]);
 
   const times = quickTimes(now());
   const chosen = quick
@@ -65,6 +126,13 @@ export function RemindSheet({
     setNote("");
     setError(null);
     setCommand(commandId());
+    keepDraft(keptKey(leadId), "");
+  };
+  // Back keeps what was written for next time; Cancel, X, a tap outside or a
+  // swipe down drops it.
+  const close = () => {
+    if (!closingByBack()) reset();
+    onClose();
   };
 
   const save = async () => {
@@ -116,7 +184,7 @@ export function RemindSheet({
       open={open}
       title="Remind me"
       sub={`About ${firstName(leadName)}`}
-      onClose={onClose}
+      onClose={close}
     >
       <div className={styles.remind}>
         <div>
@@ -204,7 +272,7 @@ export function RemindSheet({
           </p>
         ) : null}
         <div className={styles.save}>
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={close}>
             Cancel
           </Button>
           <Button

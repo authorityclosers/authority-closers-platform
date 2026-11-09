@@ -10,7 +10,7 @@
 import { X } from "lucide-react";
 import { useEffect, useId, useRef, type ReactNode } from "react";
 
-import { useBackClose } from "../ui/back-close";
+import { closeAsBack, useBackClose } from "../ui/back-close";
 import styles from "./leads.module.css";
 
 export function ActionSheet({
@@ -48,7 +48,8 @@ export function ActionSheet({
       aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault();
-        onClose();
+        // Escape, or a phone's back gesture: Back to whoever asks.
+        closeAsBack(onClose);
       }}
       onClick={(event) => {
         if (

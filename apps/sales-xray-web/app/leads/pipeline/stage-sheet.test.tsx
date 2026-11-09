@@ -13,6 +13,7 @@ vi.mock("../lead-moves", async (original) => ({
   noteLeadMoved: vi.fn(),
 }));
 
+import { resetBackCloseForTests } from "../../ui/back-close";
 import { noteLeadMoved } from "../lead-moves";
 
 import { amountOf } from "./blocks";
@@ -345,4 +346,106 @@ it("asks a Won deal's amount and sends it in whole rupees", async () => {
   await act(async () => save.click());
   const move = sent.find((item) => item.url.endsWith("/stage"));
   expect(move?.body).toMatchObject({ step: "won", amount: 150000 });
+});
+
+// The robot, 9 Nov 2026 (karan at 360, 5395d517, 42e464f2, 676122ea): what
+// was typed in "Move to Open Leads" was gone after Back, Forward and a
+// refresh. It is kept for the lead and shows when the same move opens again.
+const OPEN_LEADS = option("open_leads", "Open Leads", "active", [], {
+  asks: ["reason", "note"],
+  reasons: [{ key: "call_later", label: "Call Later" }],
+});
+const WORDS = "QA draft 1 — Rahul ko kal call karna hai";
+const KEPT = `sx-draft:move:${LEAD.lead_id}`;
+const noteBox = () => document.querySelector<HTMLTextAreaElement>("textarea");
+const typeNote = (text: string) =>
+  act(() => {
+    const box = noteBox()!;
+    Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value",
+    )!.set!.call(box, text);
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+const settleSheet = () => act(async () => Promise.resolve());
+function sheetAt(open: boolean, closed: () => void) {
+  act(() =>
+    root.render(
+      <StageSheet
+        open={open}
+        lead={LEAD}
+        moves={[OPEN_LEADS]}
+        initial="open_leads"
+        onClose={closed}
+        onMoved={() => {}}
+      />,
+    ),
+  );
+}
+
+it("keeps what was typed through Back and a refresh, and drops it on X", async () => {
+  localStorage.clear();
+  resetBackCloseForTests();
+  window.history.replaceState(null, "", "/leads?view=all&lead=one");
+  const closed = vi.fn();
+  // As on the lead page: there closed, then opened from its step.
+  sheetAt(false, closed);
+  sheetAt(true, closed);
+  await settleSheet();
+  await typeNote(WORDS);
+  expect(localStorage.getItem(KEPT)).toContain(WORDS);
+
+  // Back closes it and keeps the words; the step opens it with them.
+  await act(async () => window.history.back());
+  await settleSheet();
+  expect(closed).toHaveBeenCalledTimes(1);
+  sheetAt(false, closed);
+  sheetAt(true, closed);
+  expect(noteBox()?.value).toBe(WORDS);
+
+  // A refresh: the page starts again and the same move shows them.
+  act(() => root.unmount());
+  root = createRoot(container);
+  sheetAt(true, closed);
+  expect(noteBox()?.value).toBe(WORDS);
+
+  // X is a cancel: the words go, and the move opens empty.
+  await settleSheet();
+  act(() =>
+    document
+      .querySelector<HTMLButtonElement>('button[aria-label="Close"]')!
+      .click(),
+  );
+  expect(localStorage.getItem(KEPT)).toBeNull();
+  sheetAt(false, closed);
+  sheetAt(true, closed);
+  expect(noteBox()?.value).toBe("");
+});
+
+it("drops what was kept once the move is made", async () => {
+  localStorage.clear();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify({ lead: { lead_id: LEAD.lead_id } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    ),
+  );
+  const closed = vi.fn();
+  sheetAt(false, closed);
+  sheetAt(true, closed);
+  await typeNote(WORDS);
+  expect(localStorage.getItem(KEPT)).toContain(WORDS);
+  await act(async () =>
+    document
+      .querySelector<HTMLButtonElement>(
+        'button[data-group="active"]:not([aria-pressed])',
+      )!
+      .click(),
+  );
+  expect(closed).toHaveBeenCalled();
+  expect(localStorage.getItem(KEPT)).toBeNull();
 });

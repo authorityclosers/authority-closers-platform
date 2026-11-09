@@ -277,8 +277,10 @@ async function mount() {
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/dashboard");
-  // Home keeps the seller's sides on the device; each test starts fresh.
+  // Home keeps the seller's sides on the device and its answers in memory;
+  // each test starts fresh.
   window.localStorage.clear();
+  resetHomeReads();
   doneFails = false;
   emptyToday = false;
   lateBrochure = false;
@@ -723,6 +725,38 @@ it("keeps every block in place with a dash when the leads didn't load", async ()
 
 // Later visits draw at once from the sides this device saw last, so Today
 // and the selector arrive together, with no wait and nothing moving.
+// QA robot 27a7dd88 (9 Nov 2026): back on Home from Tasks, Recent calls drew
+// three outline rows and shrank to its one line, and Today's tasks grew, so the
+// blocks under them jumped with the page's end in view. A return draws what
+// they showed last, at once, while their reads refresh them.
+it("draws Today's tasks and Recent calls at once on a return, from what they showed", async () => {
+  window.localStorage.setItem("sx:home-sides", "11");
+  answer({ inbound: { leads: 40 }, cold: { imported: 200 } });
+  await mount();
+  for (let step = 0; step < 4; step += 1)
+    await act(async () => Promise.resolve());
+  const task = () => host.textContent?.includes("Send proposal to Neha");
+  const call = () => host.textContent?.includes("Aakash Sample");
+  expect(task()).toBe(true);
+  expect(call()).toBe(true);
+  await act(async () => root.unmount());
+  host.remove();
+  // Back on Home: the reads are on their way again, and nothing has answered yet.
+  const served = globalThis.fetch;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>((input, init) =>
+      String(input).startsWith("/v1/lead-desk/tasks") ||
+      String(input).startsWith("/v1/lead-desk/activity")
+        ? new Promise<Response>(() => {})
+        : served(input, init),
+    ),
+  );
+  await mount();
+  expect(task()).toBe(true);
+  expect(call()).toBe(true);
+});
+
 it("draws Today at once on a later visit, from the sides this device kept", async () => {
   window.localStorage.setItem("sx:home-sides", "11");
   answer({ inbound: { leads: 40 }, cold: { imported: 200 } });

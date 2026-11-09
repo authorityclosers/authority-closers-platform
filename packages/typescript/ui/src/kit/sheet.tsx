@@ -26,7 +26,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { useBackClose } from "./back-close";
+import { closeAsBack, useBackClose } from "./back-close";
 import { tick } from "./haptics";
 import styles from "./sheet.module.css";
 
@@ -418,7 +418,9 @@ export function Sheet({
       aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault();
-        onClose();
+        // Escape, or a phone's back gesture, which a modal dialog takes
+        // before the page's history: Back to whoever asks (closingByBack).
+        closeAsBack(onClose);
       }}
       onClick={(event) => {
         // A tap outside a sheet that leaves room around it (the lead sheet
