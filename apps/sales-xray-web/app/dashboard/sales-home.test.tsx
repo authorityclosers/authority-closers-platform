@@ -543,6 +543,34 @@ const team = (byStage: Record<string, number>) => ({
   waiting_first_call: 0,
 });
 
+it("says when its content is drawn, so the sandbox card can follow it", async () => {
+  // The QA robot, 9 Nov 2026 (474deee5): the sandbox card under Home was
+  // drawn while this block was still empty, and pushed down when it filled.
+  const drawn = vi.fn();
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async (input) => {
+      if (String(input) !== "/v1/lead-desk")
+        return new Response("{}", { status: 404 });
+      await held;
+      return new Response(JSON.stringify(desk([])));
+    }),
+  );
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () =>
+    root.render(<SalesHome manager={false} onDrawn={drawn} />),
+  );
+  expect(drawn).not.toHaveBeenCalled();
+  await act(async () => release());
+  await vi.waitFor(() => expect(drawn).toHaveBeenCalled());
+});
+
 it("starts a new seller with three steps, no empty figures", async () => {
   answer({ "/v1/lead-desk": empty() });
   await mount(false);

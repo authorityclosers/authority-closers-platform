@@ -243,9 +243,20 @@ function useKeptSides(
         : null;
 }
 
-function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
+function SellerHome({
+  state,
+  onDrawn,
+}: {
+  state: ReturnType<typeof useDesk>;
+  onDrawn?: () => void;
+}) {
   const [side, setSide] = useHomeSide();
   const access = useKeptSides(useSidesAccess());
+  const answered = state.status !== "loading";
+  const known = access !== null;
+  useEffect(() => {
+    if (known && answered) onDrawn?.();
+  }, [known, answered, onDrawn]);
   // Loading and a failed read draw the same blocks in the same places, with
   // placeholders or "–" (FRAMEWORK L6: a skeleton the shape of the result;
   // the four cards and the next call never vanish on a bad network).
@@ -348,6 +359,7 @@ function brandNew(desk: HomeDesk): boolean {
 export function SalesHome({
   manager,
   layout = "v1",
+  onDrawn,
 }: {
   manager: boolean;
   /** Kept for callers; Home has one layout now (28 Oct 2026). */
@@ -356,6 +368,13 @@ export function SalesHome({
   layout?: "v1" | "v2";
   /** The latest saved calls the dashboard already read, for Recent calls. */
   recent?: readonly LibrarySubmission[] | null;
+  /**
+   * Called once this block has drawn its content (the desk has answered and,
+   * on My day, the seller's sides are known): the dashboard puts the sandbox
+   * card after it only then, so the card never sits where this content lands
+   * (QA robot 474deee5, 9 Nov 2026).
+   */
+  onDrawn?: () => void;
 }) {
   const desk = useDesk();
   const [view, setView] = useHomeView();
@@ -388,12 +407,22 @@ export function SalesHome({
   const works = me === null || can(me.role, "leads.work");
   const manages = me?.can_manage === true;
   // A brand-new workspace: three first steps, not empty figures (owner, #20).
-  if (
+  const starting =
     desk.status === "ready" &&
     works &&
     brandNew(desk.desk) &&
-    (!manager || teamLeads === 0)
-  )
+    (!manager || teamLeads === 0);
+  // Team | Me (owner, 31 Oct 2026): for those who manage sellers and work
+  // leads, one toggle; the whole screen slides in from its side.
+  const shown: HomeView =
+    manager && (view === "team" || !works) ? "team" : "mine";
+  // The first steps and the team's view are drawn once the desk has
+  // answered; My day says so itself, once the seller's sides are known too.
+  const answered = desk.status !== "loading";
+  useEffect(() => {
+    if (answered && (starting || shown === "team")) onDrawn?.();
+  }, [answered, starting, shown, onDrawn]);
+  if (starting)
     return (
       <div className={styles.home}>
         {layout === "v2" ? (
@@ -403,10 +432,6 @@ export function SalesHome({
         )}
       </div>
     );
-  // Team | Me (owner, 31 Oct 2026): for those who manage sellers and work
-  // leads, one toggle; the whole screen slides in from its side.
-  const shown: HomeView =
-    manager && (view === "team" || !works) ? "team" : "mine";
   return (
     <div className={styles.home} data-home="">
       <HomeLoadWatch />
@@ -438,7 +463,7 @@ export function SalesHome({
             stages={stagesOf(desk)}
           />
         ) : (
-          <SellerHome state={desk} />
+          <SellerHome state={desk} onDrawn={onDrawn} />
         )}
       </div>
     </div>
