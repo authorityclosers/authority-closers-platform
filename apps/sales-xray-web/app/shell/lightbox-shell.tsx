@@ -2041,6 +2041,13 @@ function LightboxShellFrame({
             note="Your calls and reports are safe."
             resetKey={pathname}
           >
+            {/* Leads on a phone: a new enquiry or a lead given to you is one
+                line here, never over the rows (competitor teardown 12). Above
+                the outline, so a line waiting as Leads is tapped shows in its
+                place from the first frame, never under the outline at the
+                foot of the screen first (QA robot, 9 Nov 2026: "… is your lead
+                now" was drawn at y 721, then sat at y 76, at 360 to 390). */}
+            {phoneTab === "leads" ? <NoticeDock /> : null}
             {/* A tapped place shows its outline at once, while the router
                 fetches it; the page underneath stays mounted until then. A
                 switch of workspace shows this page's outline until the page
@@ -2050,9 +2057,6 @@ function LightboxShellFrame({
                 <RouteLoading pathname={outline} />
               </StandInContext.Provider>
             ) : null}
-            {/* Leads on a phone: a new enquiry or a lead given to you is one
-                line here, never over the rows (competitor teardown 12). */}
-            {phoneTab === "leads" ? <NoticeDock /> : null}
             <div
               className={styles.pageSlot}
               data-page-slot=""

@@ -214,6 +214,16 @@ it("draws no days for today, and a dash when nobody called", async () => {
   expect(host.textContent).toContain("Compared with yesterday");
 });
 
+// QA robot 49a966dd (9 Nov 2026): while loading, each placeholder tile held
+// the icon's box beside its dt and dd in a definition list, which axe flags.
+// Placeholders are plain boxes, four of them, still waiting.
+it("draws its four placeholders as plain boxes while it loads", async () => {
+  await draw(null);
+  expect(host.querySelector("dl, dt, dd")).toBeNull();
+  expect(host.querySelectorAll("[data-skeleton]")).toHaveLength(4);
+  expect(host.querySelector('[aria-busy="true"]')).not.toBeNull();
+});
+
 it("says when the numbers didn't load", async () => {
   await draw(null, 7, vi.fn(), true);
   expect(host.textContent).toContain("Sales numbers didn't load");

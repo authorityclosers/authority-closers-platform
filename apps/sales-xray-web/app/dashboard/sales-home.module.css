@@ -123,14 +123,14 @@
   color: var(--tone);
 }
 
-.outcome dt {
+.outcome .outcomeTerm {
   align-self: end;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
   font-weight: 600;
 }
 
-.outcome dd {
+.outcome .outcomeFigure {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -582,11 +582,11 @@
     grid-row: auto;
   }
 
-  .outcome dt {
+  .outcome .outcomeTerm {
     align-self: center;
   }
 
-  .outcome dd {
+  .outcome .outcomeFigure {
     grid-column: 1 / -1;
   }
 

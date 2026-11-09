@@ -7,7 +7,7 @@ kind's stage."""
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -15,6 +15,7 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy import Engine, inspect, update
 
+from ac_platform.lead_desk import store
 from ac_platform.lead_desk.hours import IST
 from ac_platform.lead_desk.models import Lead
 from tests.database.conversation_harness import conversation_harness
@@ -27,14 +28,9 @@ def postgres_harness() -> Iterator[Engine]:
     yield from conversation_harness(ROOT)
 
 
-async def worklist(here: World) -> None:
-    """The seller's fictional leads, none with a step: what to call, follow-ups, a closed one."""
-    first = UUID(await here.add("Fictional won", "98760 42000"))
-    base = await here.stored(str(first))
-    keys = [attribute.key for attribute in inspect(Lead).column_attrs]
-    now = datetime.now(UTC)
-    shapes = [
-        # name, stage, next action, arrived
+def shapes(now: datetime) -> list[tuple[str, str, datetime | None, datetime]]:
+    """name, stage, next action, arrived; times from the moment the leads are built."""
+    return [
         ("Fictional new older", "new", None, now - timedelta(days=3)),
         ("Fictional new newer", "new", None, now - timedelta(days=1)),
         (
@@ -57,11 +53,22 @@ async def worklist(here: World) -> None:
             now - timedelta(days=6),
         ),
     ]
+
+
+def ist_day(at: datetime) -> date:
+    return at.astimezone(IST).date()
+
+
+async def worklist(here: World, now: datetime) -> None:
+    """The seller's fictional leads, none with a step: what to call, follow-ups, a closed one."""
+    first = UUID(await here.add("Fictional won", "98760 42000"))
+    base = await here.stored(str(first))
+    keys = [attribute.key for attribute in inspect(Lead).column_attrs]
     async with here.setup.sessions() as db, db.begin():
         await db.execute(
             update(Lead).where(Lead.id == first).values(stage="won", next_action_at=None, step=None)
         )
-        for n, (name, stage, at, arrived) in enumerate(shapes):
+        for n, (name, stage, at, arrived) in enumerate(shapes(now)):
             values: dict[str, Any] = {key: getattr(base, key) for key in keys}
             values.update(
                 id=uuid4(),
@@ -91,10 +98,33 @@ async def worklist(here: World) -> None:
         db.add(Lead(**values))
 
 
-def test_work_views_and_the_stage_filter(postgres_harness: Any, tmp_path: Path) -> None:
+# Where the desk's clock stands: noon in India, and either side of midnight, where a time
+# a few minutes back is yesterday's (the v1.48 cut ran this at 00:02-00:06 IST and counted
+# the follow-up due 10 minutes before as overdue). Each lead's day is worked out the way
+# the desk does it, so the test holds at any hour.
+CLOCKS = {"noon IST": time(12, 0), "00:05 IST": time(0, 5), "23:55 IST": time(23, 55)}
+
+
+@pytest.mark.parametrize("clock", list(CLOCKS))
+def test_work_views_and_the_stage_filter(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clock: str
+) -> None:
+    # The leads are built a second before the desk reads its clock.
+    now = datetime.combine(datetime.now(IST).date(), CLOCKS[clock], tzinfo=IST).astimezone(UTC)
+    desk_now = now + timedelta(seconds=1)
+    monkeypatch.setattr(store, "utcnow", lambda: desk_now)
+    planned = {name: at for name, _, at, _ in shapes(now) if at is not None}
+    # Planned before today, India time: overdue, and the backlog in To Call.
+    late = [
+        name
+        for name, at in sorted(planned.items(), key=lambda item: item[1])
+        if ist_day(at) < ist_day(desk_now)
+    ]
+    near = ["Fictional retry late", "Fictional follow-up due"]
+
     async def exercise() -> None:
         async with world(postgres_harness, tmp_path) as here:
-            await worklist(here)
+            await worklist(here, now)
             here.as_seller()
 
             async def names(**query: str) -> list[str]:
@@ -105,28 +135,15 @@ def test_work_views_and_the_stage_filter(postgres_harness: Any, tmp_path: Path) 
             # To Call in its calling order, next lead first (Dipak's handoff p.12, one rule
             # with Home's next lead): due today and already due, then new leads never called
             # (oldest first), then the older backlog (phone personas, 1 Nov 2026: Home said
-            # Kiara while Leads dialled Krishna).
+            # Kiara while Leads dialled Krishna). Just after midnight India time the retry
+            # and the follow-up due are yesterday's: the backlog.
             to_call = await names(scope="mine", side="inbound", view="to_call")
-            now = datetime.now(UTC)
-            if (now - timedelta(hours=2)).astimezone(IST).date() == now.astimezone(IST).date():
-                assert to_call == [
-                    "Fictional retry late",
-                    "Fictional follow-up due",
-                    "Fictional new older",
-                    "Fictional new newer",
-                    "Fictional follow-up old",
-                ]
-            else:
-                # Just after midnight India time the retry is yesterday's: the backlog.
-                assert sorted(to_call) == sorted(
-                    [
-                        "Fictional retry late",
-                        "Fictional follow-up due",
-                        "Fictional new older",
-                        "Fictional new newer",
-                        "Fictional follow-up old",
-                    ]
-                )
+            assert to_call == [
+                *(name for name in near if name not in late),
+                "Fictional new older",
+                "Fictional new newer",
+                *late,
+            ]
             # Home's next Inbound lead is that list's first row.
             desk = await here.client.get(BASE)
             assert desk.status_code == 200, desk.text
@@ -139,14 +156,8 @@ def test_work_views_and_the_stage_filter(postgres_harness: Any, tmp_path: Path) 
                 "Fictional follow-up due",
                 "Fictional follow-up later",
             ]
-            today_retry = (now - timedelta(hours=2)).astimezone(IST).date() == now.astimezone(
-                IST
-            ).date()
-            assert await names(scope="mine", side="inbound", view="follow_ups", when="overdue") == (
-                ["Fictional follow-up old"]
-                if today_retry
-                else ["Fictional follow-up old", "Fictional retry late"]
-            )
+            overdue = await names(scope="mine", side="inbound", view="follow_ups", when="overdue")
+            assert overdue == late
             assert await names(
                 scope="mine", side="inbound", view="follow_ups", when="upcoming"
             ) == ["Fictional follow-up later"]

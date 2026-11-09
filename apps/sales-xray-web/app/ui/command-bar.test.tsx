@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -183,4 +185,19 @@ it("puts a row's quick action in a small button beside it", async () => {
   expect(call).toHaveBeenCalledTimes(1);
   expect(asha.run).not.toHaveBeenCalled();
   expect(bar.onClose).toHaveBeenCalledTimes(1);
+});
+
+it("keeps the search sheet one height while a search answers", () => {
+  // The QA robot, 9 Nov 2026 (d63e649a): the results area took the height
+  // of its results, between a minimum and a maximum, so the sheet shrank and
+  // its top dropped by 117 px when the answer came.
+  const css = readFileSync(
+    join(process.cwd(), "app/ui/command-bar.module.css"),
+    "utf8",
+  );
+  const results = /\n\.results \{([^}]*)\}/.exec(css)?.[1] ?? "";
+  expect(results).toContain("height: min(64dvh, 520px);");
+  expect(results).not.toContain("min-height");
+  expect(results).not.toContain("max-height");
+  expect(results).toContain("overflow-y: auto;");
 });
