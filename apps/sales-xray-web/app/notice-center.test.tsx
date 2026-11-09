@@ -601,6 +601,58 @@ it("puts a line that arrives over a drawn page in the corner, never pushing the 
   }
 });
 
+it("docks a line that comes while the next page is still its outline", async () => {
+  // QA robot, 9 Nov 2026: Leads tapped from Home, "… is your lead now" was
+  // drawn under the outline at the foot of the screen, then sat at the top.
+  // The dock is above the outline now; what lies under it is the outline's
+  // own top, not marked busy, and the page beside it is standing in.
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+  const top = document.createElement("header");
+  top.textContent = "Leads";
+  document.body.append(top);
+  Object.defineProperty(document, "elementFromPoint", {
+    configurable: true,
+    value: () => top,
+  });
+  const page = document.createElement("div");
+  document.body.append(page);
+  const pageRoot = createRoot(page);
+  const dock = () => page.querySelector<HTMLElement>("[data-notice-dock]")!;
+  try {
+    await act(async () =>
+      pageRoot.render(
+        <>
+          <NoticeDock />
+          <div data-page-slot="" data-standing-in="" />
+        </>,
+      ),
+    );
+    await act(async () =>
+      raiseAlert({
+        id: "fictional-coming",
+        level: "normal",
+        title: "QA Fictional is your lead now",
+        action: { label: "Open lead", href: "/leads" },
+      }),
+    );
+    expect(dock().textContent).toContain("QA Fictional is your lead now");
+    await act(async () => pageRoot.unmount());
+  } finally {
+    await act(async () => clearAlert("fictional-coming"));
+    delete (document as { elementFromPoint?: unknown }).elementFromPoint;
+    top.remove();
+    page.remove();
+    vi.unstubAllGlobals();
+  }
+});
+
 it("keeps the dock's room while a sheet holds its lines, so the page never jumps", async () => {
   // QA robot 95abddab and 77641e07, 3 Nov 2026: "… is your lead now" left the
   // page's dock for the lead sheet, and the page rose 52 px, then dropped back
