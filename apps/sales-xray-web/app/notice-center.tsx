@@ -188,6 +188,10 @@ const inDockHere = new Map<string, boolean>();
  *  with the answer that draws it, side-numbers.ts). */
 function pageShownUnder(node: HTMLElement): boolean {
   if (typeof document.elementFromPoint !== "function") return false;
+  // The page is still on its way: the shell draws its outline under the dock
+  // (lightbox-shell.tsx), which goes as the page comes.
+  if (node.parentElement?.querySelector(":scope > [data-standing-in]"))
+    return false;
   const y = node.getBoundingClientRect().bottom + 8;
   if (y >= window.innerHeight) return false;
   const under = document.elementFromPoint(window.innerWidth / 2, y);

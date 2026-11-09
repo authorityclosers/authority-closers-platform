@@ -6985,10 +6985,6 @@ fieldset.form {
     display: none;
   }
 
-  .layoutSwitch svg {
-    display: none;
-  }
-
   .leadFace[data-quick] .leadTags {
     align-self: center;
   }
@@ -8212,6 +8208,13 @@ fieldset.form {
 
 .sheetLayout:has(> span:last-child:empty) {
   display: none;
+}
+
+/* The sheet's List | Table: two icons, each a whole tap (owner bug 194, 9 Nov
+   2026: on his phone both buttons were empty pills 16 px wide). */
+.sheetLayout .layoutSwitch button {
+  justify-content: center;
+  min-width: 44px;
 }
 
 /* Follow-ups by day: a card a group, its name and count at the top. */
