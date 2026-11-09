@@ -22,7 +22,13 @@
 
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 import { deskRequest, type LeadPage } from "../leads/leads-client";
 import {
@@ -481,6 +487,35 @@ export function elsewhere(side: Side, effort: Effort | null): string {
   return ` · ${there} tried on ${other === "cold" ? "Cold" : "Inbound"}`;
 }
 
+const FACES_KEY = "sx:home-floor-faces";
+const subscribeNothing = () => () => {};
+const readKeptFaces = (): string | null => {
+  try {
+    return window.localStorage.getItem(FACES_KEY);
+  } catch {
+    return null;
+  }
+};
+
+/** How many faces the floor drew last on this device: seven, the most it
+ *  draws, until it has drawn once. */
+function useKeptFaces(drawn: number | null): number {
+  const kept = useSyncExternalStore(
+    subscribeNothing,
+    readKeptFaces,
+    () => null,
+  );
+  useEffect(() => {
+    if (drawn === null) return;
+    try {
+      window.localStorage.setItem(FACES_KEY, String(drawn));
+    } catch {
+      // Not kept this time; the next visit holds room for seven.
+    }
+  }, [drawn]);
+  return kept !== null && /^[0-7]$/.test(kept) ? Number(kept) : 7;
+}
+
 /** The floor at a glance: the day's ring and every seller's pulse. */
 function FloorHero({ effort, side }: { effort: Effort | null; side: Side }) {
   const now = useMinute();
@@ -489,6 +524,11 @@ function FloorHero({ effort, side }: { effort: Effort | null; side: Side }) {
   // Of the calls whose outcome the phone told us (owner and Dipak, 2 Nov 2026).
   const known = day ? day.attempted - (day.unknown ?? 0) : 0;
   const sellers = effort?.sellers ?? [];
+  // Until the team's numbers land, the note and the faces hold their room
+  // unseen: a zero day's note wraps as the real one will, and the faces drawn
+  // last time fill their rows (the Home studio, 9 Nov 2026: the hero grew
+  // 67 px under the pager at 363 as they landed).
+  const faces = useKeptFaces(effort ? Math.min(sellers.length, 7) : null);
   const live = sellers.filter((seller) => pulse(seller, now) === "live").length;
   return (
     <Link
@@ -533,13 +573,22 @@ function FloorHero({ effort, side }: { effort: Effort | null; side: Side }) {
           ) : null}
         </p>
         <p className={styles.heroNote}>
-          {day
-            ? `${Math.round(done * 100)}% of today's leads called · ${minutes(day.talk_seconds)} talk${elsewhere(side, effort)}`
-            : "\u00a0"}
+          {day ? (
+            `${Math.round(done * 100)}% of today's leads called · ${minutes(day.talk_seconds)} talk${elsewhere(side, effort)}`
+          ) : (
+            <span className={styles.wait}>
+              {`0% of today's leads called · ${minutes(0)} talk`}
+            </span>
+          )}
         </p>
-        {!effort || sellers.length ? (
+        {(effort ? sellers.length > 0 : faces > 0) ? (
           <div className={styles.avatars}>
             <ul>
+              {effort
+                ? null
+                : Array.from({ length: faces }, (_, index) => (
+                    <li key={index} data-wait="" />
+                  ))}
               {sellers.slice(0, 7).map((seller) => {
                 const state = pulse(seller, now);
                 return (

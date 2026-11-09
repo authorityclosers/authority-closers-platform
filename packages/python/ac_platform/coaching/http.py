@@ -49,6 +49,26 @@ CoachingRead = TypeVar("CoachingRead", CoachingView, CallCoachingView)
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
 
 
+class CoachingNotShared(BaseModel):
+    """The one answer for a person's coaching this viewer may not read.
+
+    A rep who has not shared, a person outside this organisation and no such
+    person all read exactly the same, so nobody can be found out by asking.
+    It was a 404, which the browser logs as a failed load on every owner's
+    visit to a person's page (QA robot 04fbf889 and 88c16462, 9 Nov 2026).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
+
+    schema_id: Literal["ac.sales-xray.coaching-not-shared/1"] = Field(
+        default="ac.sales-xray.coaching-not-shared/1", alias="schema"
+    )
+    shared: Literal[False] = False
+    message: Literal["This coaching is not shared with you."] = (
+        "This coaching is not shared with you."
+    )
+
+
 class ShareChoice(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     shared: bool
@@ -244,13 +264,18 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
             )
             return view.model_copy(update={"session_id": actor.session_id})
 
-    @router.get("/people/{person_id}", response_model=CoachingView, response_model_by_alias=True)
+    @router.get(
+        "/people/{person_id}",
+        response_model=CoachingView | CoachingNotShared,
+        response_model_by_alias=True,
+    )
     async def person_coaching(
         person_id: UUID, request: Request, response: Response
-    ) -> CoachingView:
+    ) -> CoachingView | CoachingNotShared:
         # A fictional AC Sandbox rep for the person who imported it, or a real
         # rep who shares their coaching with this owner/admin. Private by
-        # default: an unshared rep looks the same as no rep.
+        # default: an unshared rep looks the same as no rep, and both answer
+        # 200 "not shared" (CoachingNotShared), never a 404.
         async with account_library(request, response) as (library, actor):
             sandbox = await sandbox_for(library, actor)
             view = await sandbox.read_rep(actor.person_id, person_id) if sandbox else None
@@ -258,8 +283,10 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
                 try:
                     view = await library.read_shared(actor, person_id)
                 except ConversationError as error:
+                    if error.status in (403, 404):
+                        return CoachingNotShared()
                     raise HTTPException(
-                        404 if error.status in (403, 404) else error.status,
+                        error.status,
                         "This coaching is not shared with you.",
                         headers=PRIVATE,
                     ) from None

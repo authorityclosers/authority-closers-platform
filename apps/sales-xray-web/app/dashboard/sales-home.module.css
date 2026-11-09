@@ -14,15 +14,32 @@
   }
 }
 
-/* Offline: one calm line above both modes; the last good numbers stay below. */
+/* Offline: one calm line in a corner card, over the page with the other
+   corner cards (notice-center.tsx, InCorner), so Home never moves as it comes
+   and goes; the last good numbers stay where they were (ux-audit, 9 Nov 2026:
+   in the page's flow it moved Home 28 to 40 px each way at 363). */
 .offline {
   display: flex;
   align-items: center;
+  justify-self: end;
   gap: 8px;
   margin: 0;
-  color: var(--sx-muted);
+  padding: 10px 12px;
+  border: 1px solid var(--sx-glass-edge);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-glass-thick);
+  -webkit-backdrop-filter: var(--sx-glass-blur);
+  backdrop-filter: var(--sx-glass-blur);
+  box-shadow: var(--sx-glass-shine), var(--sx-glass-shadow);
+  color: var(--lx-ink);
   font-size: var(--sx-text-sm);
   font-weight: 600;
+  line-height: var(--sx-leading-20);
+  text-wrap: balance;
+}
+
+.offline svg {
+  flex: none;
 }
 
 .block {

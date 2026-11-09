@@ -19,6 +19,7 @@ from ac_platform.conversation_intelligence.synthetic_import_models import (
 from ac_platform.tenancy.models import Membership, Organisation
 from tests.database.test_coaching_postgresql import install
 from tests.database.test_coaching_postgresql import postgres_harness as _postgres_harness
+from tests.database.test_coaching_sharing_postgresql import assert_not_shared
 from tests.database.test_conversation_account_library_postgresql import _session
 from tests.database.test_conversation_postgresql import run, seed
 from tests.database.test_conversation_submission_http_postgresql import ORIGIN, _setup
@@ -66,7 +67,7 @@ def test_sandbox_coaching_is_the_importers_fictional_view_only(
                 client.cookies.set(setup.settings.session_cookie_name, setup.token)
                 rep = rep_uuid(tenant, "syn-fixture-R1")
                 # Not a sandbox yet: no fictional reps, and Team stays anonymous.
-                assert (await client.get(f"/v1/me/coaching/people/{rep}")).status_code == 404
+                await assert_not_shared(client, str(rep))
                 assert (await client.get("/v1/me/coaching/team")).json()["scope"] == "anonymous"
                 async with setup.sessions() as db, db.begin():
                     db.add(
@@ -146,7 +147,8 @@ def test_sandbox_coaching_is_the_importers_fictional_view_only(
                 # Another admin and a member never read the importer's private coaching.
                 for token in (admin_token, member_token):
                     client.cookies.set(setup.settings.session_cookie_name, token)
-                    for path in (f"people/{rep}", f"calls/{newest}", f"calls/{loaded}"):
+                    await assert_not_shared(client, str(rep))
+                    for path in (f"calls/{newest}", f"calls/{loaded}"):
                         assert (await client.get(f"/v1/me/coaching/{path}")).status_code == 404
                 client.cookies.set(setup.settings.session_cookie_name, admin_token)
                 assert (await client.get("/v1/me/coaching")).json()["sandbox_reps"] == 0
@@ -157,7 +159,7 @@ def test_sandbox_coaching_is_the_importers_fictional_view_only(
                     demote = update(Membership).where(Membership.person_id == owner)
                     await db.execute(demote.values(role="member"))
                 client.cookies.set(setup.settings.session_cookie_name, setup.token)
-                assert (await client.get(f"/v1/me/coaching/people/{rep}")).status_code == 404
+                await assert_not_shared(client, str(rep))
         finally:
             await setup.engine.dispose()
 

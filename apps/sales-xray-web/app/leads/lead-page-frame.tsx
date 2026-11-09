@@ -12,7 +12,7 @@
  */
 
 import { ArrowLeft } from "lucide-react";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { useBackClose } from "../ui/back-close";
@@ -67,6 +67,21 @@ export function LeadPageFrame({
   useEffect(() => {
     if (rowKey) lastKey.current = rowKey;
   }, [rowKey]);
+  // What the page covers isn't drawn while it covers it (QA robot aeb37673,
+  // 9 Nov 2026): the list under it can still move (a lead arriving, the list
+  // filling in), and the browser counts that as the page jumping (0.08 for one
+  // row) though nobody sees it. A layout effect, so the list is drawn again in
+  // the same frame the page goes, never a blank one.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const covered = document.querySelector<HTMLElement>("[data-shell-content]");
+    if (!covered) return;
+    const was = covered.style.visibility;
+    covered.style.visibility = "hidden";
+    return () => {
+      covered.style.visibility = was;
+    };
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     // Everything under the page is out of reach, the app's top bars too (QA

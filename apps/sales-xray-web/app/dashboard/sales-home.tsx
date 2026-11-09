@@ -43,6 +43,7 @@ import {
   type Period,
 } from "../leads/leads-client";
 import { ActionList, ActionRow } from "../ui/kit";
+import { InCorner } from "../notice-center";
 import { ModeSwitch } from "./mode-switch";
 import { OutcomeTiles, TILE_SETS } from "./outcome-tiles";
 import type { HomeDesk } from "./my-day-client";
@@ -435,11 +436,16 @@ export function SalesHome({
   return (
     <div className={styles.home} data-home="">
       <HomeLoadWatch />
+      {/* Offline: a corner card over the page, with the other corner cards,
+          so Home never moves as it comes and goes (ux-audit, 9 Nov 2026: in
+          the page's flow it moved Home 28 to 40 px each way at 363). */}
       {online ? null : (
-        <p className={styles.offline} role="status">
-          <WifiOff size={16} aria-hidden="true" />
-          You&apos;re offline. Showing what was saved.
-        </p>
+        <InCorner>
+          <p className={styles.offline} role="status">
+            <WifiOff size={16} aria-hidden="true" />
+            You&apos;re offline. Showing what was saved.
+          </p>
+        </InCorner>
       )}
       {/* The month's revenue against its target, above both modes
           (capture-setup session, 31 Oct 2026), with Team | Me at the end of
