@@ -536,6 +536,23 @@ it("shows an honest no-focus state only after the authorized coaching read succe
   );
 });
 
+it("reads the server's 200 not-shared answer as it read the old 404", async () => {
+  // The orchestrator for the QA robot, 9 Nov 2026 (04fbf889, 88c16462): the
+  // server answers a coaching it will not show with 200 "not shared", the
+  // same for a rep who has not shared and for no such person.
+  routes[`/v1/me/coaching/people/${ashaId}`] = {
+    status: 200,
+    body: {
+      schema: "ac.sales-xray.coaching-not-shared/1",
+      shared: false,
+      message: "This coaching is not shared with you.",
+    },
+  };
+  await show(ashaId);
+  expect(host.textContent).toContain("This coaching is not shared with you.");
+  expect(host.textContent).not.toContain("No focus yet");
+});
+
 it("keeps known totals honest when individual calls cannot be listed", async () => {
   routes[`/v1/organisation/members/${ashaId}/activity?weeks=12`] = {
     status: 200,

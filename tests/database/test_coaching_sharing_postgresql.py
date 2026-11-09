@@ -38,6 +38,20 @@ FEEDBACK = "/v1/me/coaching/feedback"
 WRITE = {"Origin": ORIGIN, "Content-Type": "application/json"}
 JSON_ONLY = {"Content-Type": "application/json"}
 CONTEXT = "/v1/me/coaching/context"
+# The one answer for a coaching this viewer may not read (9 Nov 2026).
+NOT_SHARED = {
+    "schema": "ac.sales-xray.coaching-not-shared/1",
+    "shared": False,
+    "message": "This coaching is not shared with you.",
+}
+
+
+async def assert_not_shared(client: httpx.AsyncClient, person: str) -> None:
+    """200 "not shared", private, the same body whoever was asked for."""
+    answer = await client.get(f"/v1/me/coaching/people/{person}")
+    assert answer.status_code == 200, answer.text
+    assert answer.json() == NOT_SHARED
+    assert answer.headers["cache-control"] == "private, no-store"
 
 
 @pytest.fixture
@@ -110,9 +124,14 @@ def test_share_reaches_admins_only_and_revocation_is_immediate(
                 own = (await client.get("/v1/me/coaching")).json()
                 focus, origin = own["focus"]["skill_id"], own["mission"]["origin_submission_id"]
 
-                # Private by default: org admin role alone never reads it.
+                # Private by default: org admin role alone never reads it. A rep
+                # who has not shared, someone in another organisation and no
+                # one at all get one and the same answer, so nobody can be
+                # found out by asking (QA robot 04fbf889, 9 Nov 2026).
                 as_(admin_token)
-                assert (await client.get(f"/v1/me/coaching/people/{rep}")).status_code == 404
+                outsider = await seed(setup.engine, role="member")
+                for person in (rep, str(outsider.person_id), str(uuid4())):
+                    await assert_not_shared(client, person)
                 private = (await client.get(TEAM)).json()
                 assert private["reps"] == [] and private["named_rep_details"] is False
 
@@ -153,7 +172,7 @@ def test_share_reaches_admins_only_and_revocation_is_immediate(
 
                 # An ordinary teammate never reads it, shared or not.
                 as_(teammate_token)
-                assert (await client.get(f"/v1/me/coaching/people/{rep}")).status_code == 404
+                await assert_not_shared(client, rep)
                 assert (await client.get(TEAM)).status_code == 403
 
                 as_(setup.token)
@@ -169,7 +188,7 @@ def test_share_reaches_admins_only_and_revocation_is_immediate(
                 assert [r.status_code for r in stops] == [200, 200], [r.text for r in stops]
                 assert {r.json()["revision"] for r in stops} == {2}
                 as_(admin_token)
-                assert (await client.get(f"/v1/me/coaching/people/{rep}")).status_code == 404
+                await assert_not_shared(client, rep)
                 assert (await client.get(TEAM)).json()["reps"] == []
 
                 # Consent does not survive a membership change (removal and
@@ -187,7 +206,7 @@ def test_share_reaches_admins_only_and_revocation_is_immediate(
                     )
                 assert (await client.get(SHARING)).json()["shared"] is False
                 as_(admin_token)
-                assert (await client.get(f"/v1/me/coaching/people/{rep}")).status_code == 404
+                await assert_not_shared(client, rep)
                 assert (await client.get(TEAM)).json()["reps"] == []
                 as_(setup.token)
                 renewed = await client.put(

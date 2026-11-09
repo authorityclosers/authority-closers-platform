@@ -341,6 +341,11 @@ export async function readCoaching(
     if (!response.headers.get("content-type")?.includes("application/json"))
       return { data: null, error: "Coaching didn’t load. Try again." };
     const raw: unknown = await response.json();
+    // A person's coaching the server will not show answers 200 "not shared"
+    // (coaching/http.py, 9 Nov 2026), as it once answered 404: both read the
+    // same, so the page is right whichever server it meets.
+    if (person && object(raw).schema === "ac.sales-xray.coaching-not-shared/1")
+      return { data: null, error: "This coaching is not shared with you." };
     const data =
       callId === "team"
         ? parseTeamCoaching(raw)
