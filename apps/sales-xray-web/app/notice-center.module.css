@@ -7,7 +7,12 @@
   z-index: 80;
   top: auto;
   right: 20px;
-  bottom: max(20px, var(--sx-stack-lift, 0px));
+  bottom: 20px;
+  /* Over a bar (--sx-stack-lift, from the window's bottom) it rises by
+     translate, its box staying put: a fixed box that moves counts as the page
+     jumping (QA robot d63e649a, 9 Nov 2026: the card rose as the Call band
+     came, 0.09 at 360). The same place as before. */
+  translate: 0 calc(-1 * max(0px, var(--sx-stack-lift, 0px) - 20px));
   left: auto;
   margin: 0;
   padding: 0;
@@ -386,19 +391,21 @@
 /* A computer: above the corner's Report a problem button. */
 @media (min-width: 900px) and (hover: hover) {
   .stack {
-    bottom: max(72px, var(--sx-stack-lift, 0px));
+    bottom: 72px;
+    translate: 0 calc(-1 * max(0px, var(--sx-stack-lift, 0px) - 72px));
   }
 }
 
 /* Phones and tablets: above the bottom tab bar, which shows below 900 px. */
 @media (max-width: 899.98px) {
   .stack {
-    bottom: max(
-      calc(
-        var(--lx-bottom-nav-h, 56px) + 8px + env(safe-area-inset-bottom, 0px)
-      ),
-      var(--sx-stack-lift, 0px)
+    --stack-base: calc(
+      var(--lx-bottom-nav-h, 56px) + 8px + env(safe-area-inset-bottom, 0px)
     );
+
+    bottom: var(--stack-base);
+    translate: 0
+      calc(-1 * max(0px, var(--sx-stack-lift, 0px) - var(--stack-base)));
   }
 }
 
@@ -451,7 +458,7 @@
 
 /* Out of a sheet that closed: down to its place in one glide (ph2-36). */
 .stack[data-glide] {
-  transition: bottom var(--sx-dur-sheet, 280ms) var(--sx-ease-out, ease-out);
+  transition: translate var(--sx-dur-sheet, 280ms) var(--sx-ease-out, ease-out);
 }
 
 /* A card that only moved (out of a closed sheet) doesn't arrive again. */

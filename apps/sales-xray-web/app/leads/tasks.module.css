@@ -45,6 +45,19 @@
   overflow-wrap: anywhere;
 }
 
+/* On a touch screen the switch's segments are drawn 40 px tall; each takes
+   taps 4 px above and below from its first frame, a clear layer, so a finger
+   finds 48 px before the kit's tap reach has measured it (QA robot 8e67a27e
+   and fb584118, 9 Nov 2026: a check right after the view opened found 40 px).
+   Nothing moves or shows. */
+@media (pointer: coarse) {
+  .head > :first-child > button::before {
+    position: absolute;
+    inset: -4px 0;
+    content: "";
+  }
+}
+
 .add {
   display: grid;
   flex: none;
