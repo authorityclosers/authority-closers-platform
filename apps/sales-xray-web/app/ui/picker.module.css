@@ -207,8 +207,15 @@
   list-style: none;
 }
 
+/* Open in a sheet, the choices sit in their own card under their heading, so
+   the heading and its choices read apart (owner bug 195, 9 Nov 2026: "a little
+   bit separation of heading and things under the drop-down"). */
 .root[data-mode="inline"] .list {
-  padding: 6px 0 10px;
+  margin: 8px 0 12px;
+  padding: 4px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
 }
 
 .option {
