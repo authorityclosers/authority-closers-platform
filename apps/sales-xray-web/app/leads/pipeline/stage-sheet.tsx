@@ -20,9 +20,11 @@ import {
 
 import { notify } from "../../notice-center";
 import { track, waitBand } from "../../telemetry";
+import { closingByBack } from "../../ui/back-close";
 import { tick } from "../../ui/haptics";
 import { Button } from "../../ui/kit";
 import { Sheet } from "../../ui/sheet";
+import { keepDraft, readDraft } from "../drafts";
 import type { Kind } from "../journey/journey-client";
 import { stageTone } from "../journey/stage-look";
 import {
@@ -92,6 +94,44 @@ const BLANK: Draft = {
   meeting: EMPTY_MEETING,
   amount: "",
 };
+
+/**
+ * What was filled in for a move, kept on this device for the lead (drafts.ts):
+ * Back, Forward and a refresh lose nothing, and the same move opened again
+ * shows it (the robot, 9 Nov 2026: "Move to Open Leads" at 360 lost its words
+ * on Back, Forward and a refresh). A move made, or the sheet closed by X, a
+ * tap outside or a swipe down, drops it; Back (a phone's gesture, Escape)
+ * keeps it.
+ */
+type Kept = { target: string | null; draft: Draft };
+
+const keptKey = (leadId: string) => `move:${leadId}`;
+
+function opening(
+  leadId: string,
+  initial: string | null,
+  preset: Partial<Draft> | undefined,
+): Kept {
+  const fresh: Draft = { ...BLANK, ...preset };
+  const none: Kept = { target: initial, draft: fresh };
+  let kept: { target?: unknown; draft?: Partial<Draft> } | null;
+  try {
+    kept = JSON.parse(readDraft(keptKey(leadId)) || "null") as typeof kept;
+  } catch {
+    return none;
+  }
+  const target = typeof kept?.target === "string" ? kept.target : null;
+  if (!kept?.draft || typeof kept.draft !== "object" || !target) return none;
+  if (initial !== null && target !== initial) return none;
+  return {
+    target,
+    draft: {
+      ...fresh,
+      ...kept.draft,
+      meeting: { ...fresh.meeting, ...kept.draft.meeting },
+    },
+  };
+}
 
 /** What the move still lacks (the server refuses it without these). */
 export function missing(move: MoveOption, draft: Draft): string[] {
@@ -165,20 +205,52 @@ export function StageSheet({
   onClose,
   onMoved,
 }: StageSheetProps) {
-  const [target, setTarget] = useState<string | null>(initial);
-  const [draft, setDraft] = useState<Draft>({ ...BLANK, ...preset });
+  // Opened at once (a board's drop), it starts from what was kept too.
+  const [first] = useState<Kept>(() =>
+    open
+      ? opening(lead.lead_id, initial, preset)
+      : { target: initial, draft: { ...BLANK, ...preset } },
+  );
+  const [target, setTarget] = useState<string | null>(first.target);
+  const [draft, setDraft] = useState<Draft>(first.draft);
+  // Something changed in this opening: worth keeping (an untouched sheet
+  // never overwrites what another move kept).
+  const [touched, setTouched] = useState(false);
   const [saving, setSaving] = useState(false);
-  // A new opening starts again from its own target.
+  // A new opening starts again from its own target, or from what was kept.
   const [openedFor, setOpenedFor] = useState({ open, initial });
   // When this opening began: telemetry's time from open to Save.
   const opened = useRef(0);
   if (openedFor.open !== open || openedFor.initial !== initial) {
     setOpenedFor({ open, initial });
     if (open) {
-      setTarget(initial);
-      setDraft({ ...BLANK, ...preset });
+      const again = opening(lead.lead_id, initial, preset);
+      setTarget(again.target);
+      setDraft(again.draft);
+      setTouched(false);
     }
   }
+  useEffect(() => {
+    if (!open || !touched || saving) return;
+    const fresh: Draft = { ...BLANK, ...preset };
+    keepDraft(
+      keptKey(lead.lead_id),
+      JSON.stringify(draft) === JSON.stringify(fresh)
+        ? ""
+        : JSON.stringify({ target, draft } satisfies Kept),
+    );
+  }, [open, touched, saving, target, draft, preset, lead.lead_id]);
+  // Gone for good, even if the sheet stays open a moment longer.
+  const forget = () => {
+    setTouched(false);
+    keepDraft(keptKey(lead.lead_id), "");
+  };
+  // Back keeps what was typed for next time; X, a tap outside or a swipe
+  // down cancels.
+  const close = () => {
+    if (!closingByBack()) forget();
+    onClose();
+  };
   useEffect(() => {
     if (open) opened.current = Date.now();
   }, [open, initial]);
@@ -212,8 +284,10 @@ export function StageSheet({
   );
   const lacking = move ? missing(move, draft) : [];
   const asks = new Set(move ? [...move.needs, ...move.asks] : []);
-  const set = (next: Partial<Draft>) =>
+  const set = (next: Partial<Draft>) => {
+    setTouched(true);
     setDraft((current) => ({ ...current, ...next }));
+  };
 
   const save = async () => {
     if (!move || lacking.length || saving) return;
@@ -221,6 +295,7 @@ export function StageSheet({
     try {
       // A reopen is a move too: the same lead, back to work, its history kept.
       await moveLead(lead, move.step, { ...moveInput(move, draft), via });
+      forget();
       const moved = await readLead(lead.lead_id);
       // Every list and To call follow the move at once (lead-moves.ts).
       noteLeadMoved(moved.lead);
@@ -255,6 +330,7 @@ export function StageSheet({
         // (durable sync, 41b2e08d), so nobody taps Save again. The waiting
         // changes' own card says so ("1 change not sent yet", sync/write-sync):
         // a second card here said the same (orchestrator, 8 Nov 2026).
+        forget();
         onClose();
         return;
       }
@@ -355,7 +431,7 @@ export function StageSheet({
   ) : null;
 
   return (
-    <Sheet open={open} onClose={onClose} title={title} footer={footer}>
+    <Sheet open={open} onClose={close} title={title} footer={footer}>
       {grouped.length ? (
         <div className={styles.sheetBody}>
           {grouped.map((part) => (
@@ -372,9 +448,10 @@ export function StageSheet({
                         className={styles.target}
                         data-group={item.group}
                         aria-pressed={item.step === target}
-                        onClick={() =>
-                          setTarget(item.step === target ? null : item.step)
-                        }
+                        onClick={() => {
+                          setTouched(true);
+                          setTarget(item.step === target ? null : item.step);
+                        }}
                       >
                         <svg
                           className={styles.targetDot}

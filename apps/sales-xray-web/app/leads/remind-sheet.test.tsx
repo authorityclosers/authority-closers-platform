@@ -128,3 +128,39 @@ it("counts a reminder the phone kept as saved", async () => {
   expect(saved).toEqual([null]);
   expect(calls.notify.mock.calls[0][0].tone).toBe("info");
 });
+
+// The robot, 9 Nov 2026 (karan at 360): 40 characters in "Follow-up" were gone
+// after a refresh. Kept for the lead through a refresh and Back; Cancel drops.
+it("keeps what was written through a refresh and Back, and drops it on Cancel", async () => {
+  localStorage.clear();
+  const words = "QA draft 1 — Rahul ko kal call karna hai";
+  const note = () => container.querySelector("textarea")!;
+  await show();
+  await click("Meeting");
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value",
+    )!.set!.call(note(), words);
+    note().dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(localStorage.getItem("sx-draft:remind:lead-1")).toContain(words);
+
+  // A refresh: the page starts again, and the sheet shows what was written.
+  act(() => root.unmount());
+  root = createRoot(container);
+  await show();
+  expect(note().value).toBe(words);
+  expect(button("Meeting")?.getAttribute("aria-pressed")).toBe("true");
+
+  // Back closes it and keeps the words.
+  await act(async () => Promise.resolve());
+  await act(async () => window.history.back());
+  await act(async () => Promise.resolve());
+  expect(localStorage.getItem("sx-draft:remind:lead-1")).toContain(words);
+
+  // Cancel drops them.
+  await click("Cancel");
+  expect(localStorage.getItem("sx-draft:remind:lead-1")).toBeNull();
+  expect(note().value).toBe("");
+});

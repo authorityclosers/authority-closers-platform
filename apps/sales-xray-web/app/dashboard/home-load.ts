@@ -58,6 +58,18 @@ export function resetHomeReads() {
   emit();
 }
 
+/** The answer a block that reads on its own showed last in this workspace,
+ *  kept with Home's other reads and forgotten with them on a switch: a return
+ *  to Home draws it at once, at its size, and its read only refreshes it (QA
+ *  robot 27a7dd88, 9 Nov 2026). */
+export function homeKept<T>(key: string): T | null {
+  return (kept.get(key) as T | undefined) ?? null;
+}
+
+export function keepHome<T>(key: string, value: T) {
+  kept.set(key, value);
+}
+
 type Got<T> = { key: string; value: T | null; failed: boolean };
 
 /** One of Home's reads: its answer (or the last good one) and whether it failed. */
