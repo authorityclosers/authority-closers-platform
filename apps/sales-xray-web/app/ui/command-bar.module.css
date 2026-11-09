@@ -58,10 +58,13 @@
   }
 }
 
+/* One height, the tallest it was allowed, whatever the results: the sheet
+   never grows or shrinks as a search answers, so nothing in it moves (QA robot
+   d63e649a, 9 Nov 2026: from 662 to 545 px, its top from 78 to 195, a shift of
+   0.141 at 360). It opens as before; the results scroll inside it. */
 .results {
   display: grid;
-  min-height: min(56dvh, 440px);
-  max-height: min(64dvh, 520px);
+  height: min(64dvh, 520px);
   align-content: start;
   overflow-y: auto;
   overscroll-behavior: contain;
