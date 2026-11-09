@@ -149,7 +149,7 @@ async function walk(job) {
   const axeSeen = new Set();
   const note = (text) => steps.push(`${steps.length + 1}. ${text}`);
   let lastMark = tab.mark();
-  let pointerNoted = false;
+  let lastPointer = null;
   const t0 = Date.now();
   const file = async (finding, extra = {}) => {
     const key = `${finding.rule}|${finding.route}|${finding.selector}`;
@@ -175,7 +175,8 @@ async function walk(job) {
       out.bugs.push(res.bugId);
       if (["BLOCKER", "MAJOR"].includes(finding.severity) && areaOfRoute(finding.route) === row.area) out.rowBugs.push(res.bugId);
     }
-    log(`  ${res.action} ${res.bugId || ""} ${finding.rule} ${finding.route} ${finding.selector}${res.reason ? ` (${res.reason})` : ""}`);
+    const ptr = /tap-target/.test(finding.rule) ? ` pointer:${[...new Set((String(finding.detail || "").match(/\(pointer (\w+)\)/g) || []).map((m) => m.slice(9, -1)))].join("+") || "?"}` : "";
+    log(`  ${res.action} ${res.bugId || ""} ${finding.rule} ${finding.route} ${finding.selector}${ptr}${res.reason ? ` (${res.reason})` : ""}`);
   };
 
   // what the page and the log say after a step
@@ -202,10 +203,10 @@ async function walk(job) {
         return o;
       })
       .catch(() => ({ cls: 0, events: [] }));
-    if (phone && s && s.pointer === "fine" && !pointerNoted) {
-      pointerNoted = true;
-      note("this phone tab reports a fine pointer ((pointer: coarse) is false): tap sizes are judged at 24 px");
-      log(`  pointer fine on a phone tab at ${route} (${tab.dev.key}, ${row.state})`);
+    if (phone && s && s.pointer && s.pointer !== lastPointer) {
+      if (lastPointer !== null || s.pointer === "fine") log(`  pointer ${lastPointer || "start"} -> ${s.pointer} on a phone tab at ${route} (${tab.dev.key}, ${row.state}) after: ${steps.slice(-3).join(" ").slice(0, 220)}`);
+      if (s.pointer === "fine") note("this phone tab reports a fine pointer ((pointer: coarse) is false): tap sizes are judged at 24 px");
+      lastPointer = s.pointer;
     }
     let found = s ? inv.rollup(inv.findingsFrom(s, { route, phone, shift: q.cls, events: q.events }), tab.dev.key) : [];
     const seen = tab.since(lastMark);
