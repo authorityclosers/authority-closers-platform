@@ -858,9 +858,18 @@ export function ListView({
     }
   };
 
-  // The next page loads by itself when the list's end comes into view; the
-  // button stays for keyboards and when scrolling can't be watched.
+  // The next page loads by itself as the list's end comes near: two or three
+  // screens ahead, so its rows arrive below the screen and the end (Show
+  // more, the quick add) never jumps down in view (QA robot 64de155b, 9 Nov
+  // 2026: on a computer the list scrolls in the content area, which hid the
+  // end from a page-wide watch until it was on screen; 0.09 each page at
+  // 1440). Watched again after each page, in case the end is still near.
+  // Someone at the end by keyboard (Show more, the quick add) keeps it where
+  // it is: the next page waits for Show more, so the box they're in doesn't
+  // jump off screen (the robot's part 2: focusing the quick add). The button
+  // stays for keyboards and when scrolling can't be watched.
   const end = useRef<HTMLDivElement>(null);
+  const quickEnd = useRef<HTMLDivElement>(null);
   const loadMore = useRef(more);
   useEffect(() => {
     loadMore.current = more;
@@ -870,16 +879,26 @@ export function ListView({
     const target = end.current;
     if (!hasMore || !target || typeof IntersectionObserver === "undefined")
       return;
+    const scroller = scrollParent(target);
     const seen = new IntersectionObserver(
       (entries) => {
-        if (entries.some((entry) => entry.isIntersecting))
-          void loadMore.current();
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        const active = document.activeElement;
+        if (
+          active &&
+          (target.contains(active) || quickEnd.current?.contains(active))
+        )
+          return;
+        void loadMore.current();
       },
-      { rootMargin: "600px 0px" },
+      {
+        root: scroller === document.scrollingElement ? null : scroller,
+        rootMargin: "2400px 0px",
+      },
     );
     seen.observe(target);
     return () => seen.disconnect();
-  }, [hasMore, key]);
+  }, [hasMore, key, rows.length]);
 
   // From the latest ticks, so quick taps in a row each count.
   const toggle = (row: LeadRow) =>
@@ -1279,7 +1298,7 @@ export function ListView({
         rows.length > 0 &&
         !selecting &&
         !(asTable && rows.length) ? (
-          <div className={styles.quickAddAfter}>
+          <div className={styles.quickAddAfter} ref={quickEnd}>
             <QuickAddBar
               pipeline={quickAdd.pipeline}
               onAdded={quickAdd.onAdded}
