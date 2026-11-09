@@ -209,9 +209,12 @@
   white-space: nowrap;
 }
 
+/* The words are the accent toward ink: plain accent on its own tint over a
+   tinted surface was 4.32:1 at 13 px, under 4.5:1 (QA robot 7d642443, 9 Nov
+   2026, the role badge on a person's page at 360). Colour only. */
 .badge[data-tone="accent"] {
   background: var(--sx-accent-soft);
-  color: var(--sx-accent);
+  color: color-mix(in oklab, var(--sx-accent) 80%, var(--sx-ink));
 }
 
 .badge[data-tone="good"] {
