@@ -216,9 +216,13 @@ export function TasksView({
 
   return (
     <section className={styles.tasks} aria-labelledby="tasks-heading">
-      <h2 id="tasks-heading" className={styles.title}>
+      {/* The screen's own title, so its one h1: the page had none, and the
+          title read as a heading-sized label over the lists' switch (QA
+          robot 62d680b6, 9 Nov 2026, /leads?tab=tasks at 360, seen 104
+          times). The same class: it looks as it did. */}
+      <h1 id="tasks-heading" className={styles.title}>
         Tasks
-      </h2>
+      </h1>
       <div className={styles.head}>
         <Segmented
           label="Which tasks"
