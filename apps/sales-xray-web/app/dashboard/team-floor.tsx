@@ -616,16 +616,7 @@ function FloorHero({ effort, side }: { effort: Effort | null; side: Side }) {
   );
 }
 
-export function TeamFloor({
-  side,
-  onSide,
-  controls,
-  outcomes,
-  more,
-  mine = null,
-  me = null,
-  stages,
-}: {
+type FloorProps = {
   side: Side;
   onSide: (side: Side) => void;
   /** Team controls, for those who manage leads. */
@@ -640,18 +631,70 @@ export function TeamFloor({
   me?: string | null;
   /** The stages the lead cards open (undefined until the desk is read). */
   stages: StageKeys | undefined;
-}) {
+};
+
+export function TeamFloor(props: FloorProps) {
   const effortRead = useEffort();
-  const countsRead = useSideCounts(side, stages);
-  const effort = effortRead.value;
-  const counts = countsRead.value;
+  const countsRead = useSideCounts(props.side, props.stages);
+  // Needs you now waits for both reads (or a failure), so it never reorders as they land.
+  const settled =
+    (effortRead.value !== null || effortRead.failed) &&
+    (countsRead.value !== null || countsRead.failed);
+  return (
+    <FloorBody
+      {...props}
+      effort={effortRead.value}
+      counts={countsRead.value}
+      settled={settled}
+    />
+  );
+}
+
+/** The floor before anything is read (Home's outline, home-outline.tsx): the
+ *  same blocks in the same places as TeamFloor draws them while its reads are
+ *  on the way, with no reads of its own. */
+export function FloorOutline({
+  outcomes,
+  more,
+}: {
+  outcomes: ReactNode;
+  more: ReactNode;
+}) {
+  return (
+    <FloorBody
+      side="inbound"
+      onSide={() => {}}
+      controls={null}
+      outcomes={outcomes}
+      more={more}
+      stages={undefined}
+      effort={null}
+      counts={null}
+      settled={false}
+    />
+  );
+}
+
+function FloorBody({
+  side,
+  onSide,
+  controls,
+  outcomes,
+  more,
+  mine = null,
+  me = null,
+  stages,
+  effort,
+  counts,
+  settled,
+}: FloorProps & {
+  effort: Effort | null;
+  counts: SideCounts | null;
+  settled: boolean;
+}) {
   const day = effort?.[side] ?? null;
   const figures = pages(side, counts, day, stages);
   const waiting = needs(side, counts, effort, stages);
-  // Needs you now waits for both reads (or a failure), so it never reorders as they land.
-  const settled =
-    (effort !== null || effortRead.failed) &&
-    (counts !== null || countsRead.failed);
   return (
     <div className={styles.floor}>
       <div className={styles.main}>

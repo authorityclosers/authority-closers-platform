@@ -4,6 +4,7 @@ import { can } from "../organisation/roles";
 import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 import {
+  useEffect,
   useSyncExternalStore,
   type CSSProperties,
   type ReactNode,
@@ -75,6 +76,39 @@ export function useSalesRole(): "manager" | "seller" | null {
       (workspace) => workspace.tenant_id === access.context?.tenantId,
     )?.kind === "organisation";
   return inOrganisation && team !== null ? (team ? "manager" : "seller") : null;
+}
+
+const ROLE_KEY = "sx:home-role";
+const readKeptRole = (): string | null => {
+  try {
+    return window.localStorage.getItem(ROLE_KEY);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Which Home to outline while the workspace list loads (home-outline.tsx): the
+ * role this device saw last, a seller's until it has seen one, and none where
+ * it last saw no organisation. Once the list is in, the live answer, kept for
+ * the next visit (orchestrator, 9 Nov 2026).
+ */
+export function useHomeOutline(): "manager" | "seller" | null {
+  const access = useWorkspaceAccess();
+  const team = useDashboardTeam();
+  const live = useSalesRole();
+  const listed = team !== null && access?.workspaces !== undefined;
+  const kept = useSyncExternalStore(subscribeNothing, readKeptRole, () => null);
+  useEffect(() => {
+    if (!listed) return;
+    try {
+      window.localStorage.setItem(ROLE_KEY, live ?? "none");
+    } catch {
+      // Not kept this time; the next visit outlines a seller's Home.
+    }
+  }, [listed, live]);
+  if (team !== null) return live;
+  return kept === "none" ? null : kept === "manager" ? "manager" : "seller";
 }
 
 /** A word-shaped placeholder inside a line of text, so the line keeps its height. */
