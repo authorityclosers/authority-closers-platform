@@ -48,22 +48,27 @@ const row = (n: number): LeadRow => ({
 });
 
 // The browser's watch on the list's end, by hand: each keeps how it was asked
-// to watch, and the test says when the end comes near.
-type Told = (entries: { isIntersecting: boolean }[]) => void;
+// to watch, and the test says when the end comes near and where its top is
+// (the screen's bottom is 900, below the content area's top).
+type Told = (
+  entries: { isIntersecting: boolean; boundingClientRect: { top: number } }[],
+) => void;
 type Watching = {
   told: Told;
   options: IntersectionObserverInit | undefined;
   on: boolean;
+  observed: number;
 };
 let watches: Watching[];
 class Near {
   private readonly own: Watching;
   constructor(told: Told, options?: IntersectionObserverInit) {
-    this.own = { told, options, on: false };
+    this.own = { told, options, on: false, observed: 0 };
     watches.push(this.own);
   }
   observe() {
     this.own.on = true;
+    this.own.observed += 1;
   }
   unobserve() {}
   disconnect() {
@@ -71,9 +76,10 @@ class Near {
   }
 }
 const live = () => watches.filter((watch) => watch.on);
-const near = () =>
+const near = (top = 3000) =>
   act(async () => {
-    for (const watch of live()) watch.told([{ isIntersecting: true }]);
+    for (const watch of live())
+      watch.told([{ isIntersecting: true, boundingClientRect: { top } }]);
   });
 async function settle() {
   for (let n = 0; n < 6; n += 1)
@@ -102,6 +108,8 @@ beforeEach(() => {
   // On a computer the list scrolls in the app's content area, not the page.
   scroller = document.createElement("div");
   scroller.style.overflowY = "auto";
+  scroller.getBoundingClientRect = () =>
+    ({ top: 0, bottom: 900, left: 0, right: 1440 }) as DOMRect;
   host = document.createElement("div");
   scroller.append(host);
   document.body.append(scroller);
@@ -179,6 +187,26 @@ it("holds the next page while someone is at the end by keyboard, and goes on aft
 
   await act(async () => name!.blur());
   await near();
+  await settle();
+  expect(asked()).toEqual([0, 50]);
+});
+
+// The robot's recheck, 9 Nov 2026: scrolled straight to the quick add, the end
+// was on screen when the list first saw it, and the next page pushed it off
+// (0.094). Show more is right there; once the page moves, the list looks again.
+it("leaves an end already on screen where it is, and looks again once the page moves", async () => {
+  await act(async () => root.render(allLeads));
+  await settle();
+  const watch = live()[0];
+  const looks = watch.observed;
+
+  await near(700);
+  await settle();
+  expect(asked()).toEqual([0]);
+
+  await act(async () => scroller.dispatchEvent(new Event("scroll")));
+  expect(watch.observed).toBe(looks + 1);
+  await near(1400);
   await settle();
   expect(asked()).toEqual([0, 50]);
 });

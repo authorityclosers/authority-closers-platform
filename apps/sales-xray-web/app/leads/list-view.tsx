@@ -866,8 +866,11 @@ export function ListView({
   // 1440). Watched again after each page, in case the end is still near.
   // Someone at the end by keyboard (Show more, the quick add) keeps it where
   // it is: the next page waits for Show more, so the box they're in doesn't
-  // jump off screen (the robot's part 2: focusing the quick add). The button
-  // stays for keyboards and when scrolling can't be watched.
+  // jump off screen (the robot's part 2: focusing the quick add). So does an
+  // end already on screen, reached in one jump (End, a scrollbar drag, the
+  // robot's scroll into view, 9 Nov 2026: 0.094 as the page came under it);
+  // the list looks again once the page moves. The button stays for keyboards
+  // and when scrolling can't be watched.
   const end = useRef<HTMLDivElement>(null);
   const quickEnd = useRef<HTMLDivElement>(null);
   const loadMore = useRef(more);
@@ -880,24 +883,41 @@ export function ListView({
     if (!hasMore || !target || typeof IntersectionObserver === "undefined")
       return;
     const scroller = scrollParent(target);
-    const seen = new IntersectionObserver(
+    const root = scroller === document.scrollingElement ? null : scroller;
+    const moves: EventTarget = root ?? window;
+    let seen: IntersectionObserver | null = null;
+    const again = () => {
+      seen?.unobserve(target);
+      seen?.observe(target);
+    };
+    seen = new IntersectionObserver(
       (entries) => {
-        if (!entries.some((entry) => entry.isIntersecting)) return;
+        const near = entries.find((entry) => entry.isIntersecting);
+        if (!near) return;
         const active = document.activeElement;
-        if (
-          active &&
-          (target.contains(active) || quickEnd.current?.contains(active))
-        )
+        const typing =
+          !!active &&
+          (target.contains(active) || !!quickEnd.current?.contains(active));
+        const bottom = root
+          ? root.getBoundingClientRect().bottom
+          : window.innerHeight;
+        if (typing || near.boundingClientRect.top < bottom) {
+          moves.addEventListener("scroll", again, {
+            once: true,
+            passive: true,
+          });
           return;
+        }
         void loadMore.current();
       },
-      {
-        root: scroller === document.scrollingElement ? null : scroller,
-        rootMargin: "2400px 0px",
-      },
+      { root, rootMargin: "2400px 0px" },
     );
     seen.observe(target);
-    return () => seen.disconnect();
+    return () => {
+      moves.removeEventListener("scroll", again);
+      seen?.disconnect();
+      seen = null;
+    };
   }, [hasMore, key, rows.length]);
 
   // From the latest ticks, so quick taps in a row each count.
