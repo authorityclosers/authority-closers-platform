@@ -1,15 +1,13 @@
 "use client";
 
 /**
- * Home's outline while it loads, in the final layout (Liquid Glass, 22 Oct
- * 2026): each block keeps its heading, its card and its rows' height, so only
- * the numbers and names fill in. The route's loading screen draws these, and
- * so does each block while its own read is on the way.
+ * Blocks' outlines while they load, in the final layout (Liquid Glass, 22 Oct
+ * 2026): each keeps its heading, its card and its rows' height, so only the
+ * numbers and names fill in. Each block draws its own while its read is on the
+ * way; Home's whole outline is home-outline.tsx.
  */
 
 import { ActionList, ActionRow, Skeleton, SkeletonRow } from "../ui/kit";
-import { NextCall, TodayCards } from "./seller-home";
-import seller from "./seller-home.module.css";
 import styles from "./sales-home.module.css";
 
 /** A list card's rows: sellers or leads. */
@@ -110,64 +108,5 @@ export function FunnelSkeleton() {
         </li>
       ))}
     </ul>
-  );
-}
-
-/** A salesperson's Home while it loads: the same blocks as the loaded page,
- *  waiting (Home studio, 4 Nov 2026: the old outline drew a layout Home no
- *  longer has, so the page jumped when it arrived). */
-export function TodaySkeleton() {
-  return (
-    <div className={seller.me} aria-busy="true">
-      <TodayCards side="inbound" own={null} tasks={null} />
-      <NextCall side="inbound" own={null} state="loading" />
-    </div>
-  );
-}
-
-/** The whole Home in an organisation, for the route's loading screen. */
-export function SalesHomeSkeleton({ manager }: { manager: boolean }) {
-  return (
-    <div className={styles.home} aria-busy="true" aria-label="Loading Home">
-      {manager ? (
-        <>
-          {/* Team | My day */}
-          <Skeleton height={46} radius="pill" />
-          <section className={styles.block}>
-            <div className={styles.head}>
-              <h2>How sales are going</h2>
-              {/* The period chip */}
-              <Skeleton width={101} height={38} radius="pill" />
-            </div>
-            <OutcomesSkeleton />
-            {/* "N for you to call today" */}
-            <div className={styles.chips} aria-hidden="true">
-              <Skeleton width={190} height={44} radius="pill" />
-            </div>
-          </section>
-          <section className={styles.block}>
-            <div className={styles.head}>
-              <h2>Needs you</h2>
-            </div>
-            <NeedsSkeleton />
-          </section>
-          <section className={styles.block}>
-            <div className={styles.head}>
-              <h2>Sellers</h2>
-              <span className={styles.meta}>By what they won</span>
-            </div>
-            <RowsSkeleton rows={3} kind="seller" />
-          </section>
-          <section className={styles.block}>
-            <div className={styles.head}>
-              <h2>Open leads by stage</h2>
-            </div>
-            <FunnelSkeleton />
-          </section>
-        </>
-      ) : (
-        <TodaySkeleton />
-      )}
-    </div>
   );
 }

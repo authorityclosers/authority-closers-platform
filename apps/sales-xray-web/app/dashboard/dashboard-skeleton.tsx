@@ -3,27 +3,24 @@
 import {
   DashboardBody,
   useDashboardTeam,
-  useSalesRole,
+  useHomeOutline,
 } from "./dashboard-body";
-import { SalesHomeSkeleton } from "./sales-home-skeleton";
+import { HomeOutline } from "./home-outline";
 
 /**
  * The dashboard while its route loads: the page's own skeleton, line for line.
- * In an organisation that is Home's sales outline (owner or seller), as loaded.
+ * In an organisation that is Home's own outline (home-outline.tsx), for the
+ * role this device saw last, a seller's until it has seen one.
  */
 export function DashboardSkeleton() {
   const team = useDashboardTeam();
-  const salesRole = useSalesRole();
+  const outline = useHomeOutline();
   return (
     <DashboardBody
       team={team}
       skeleton
-      sales={
-        salesRole ? (
-          <SalesHomeSkeleton manager={salesRole === "manager"} />
-        ) : null
-      }
-      salesRole={salesRole}
+      sales={outline ? <HomeOutline manager={outline === "manager"} /> : null}
+      salesRole={outline}
     />
   );
 }

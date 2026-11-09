@@ -136,6 +136,39 @@ function usePerformance() {
 
 /** The team's Home: the floor, on the side the address names; the
  *  owner's own tasks beside it when they work leads. */
+/** The ways on from the team's Home: Performance, the team, call reports. */
+export function TeamMore({ sellers }: { sellers: number }) {
+  return (
+    <ActionList label="More">
+      <ActionRow
+        icon={<Gauge size={20} />}
+        tone="neutral"
+        title="Performance"
+        note="Each seller's calls, talk time and breaks"
+        href="/growth"
+      />
+      <ActionRow
+        icon={<UsersRound size={20} />}
+        tone="neutral"
+        title="Your team"
+        note={
+          sellers
+            ? `${sellers} ${sellers === 1 ? "seller" : "sellers"}`
+            : "Sellers and how each one does"
+        }
+        href="/organisation?tab=team"
+      />
+      <ActionRow
+        icon={<FileText size={20} />}
+        tone="neutral"
+        title="Call reports"
+        note="Every analysed call"
+        href="/reports"
+      />
+    </ActionList>
+  );
+}
+
 function TeamHome({
   manages,
   mine,
@@ -168,35 +201,7 @@ function TeamHome({
           layout="grid"
         />
       }
-      more={
-        <ActionList label="More">
-          <ActionRow
-            icon={<Gauge size={20} />}
-            tone="neutral"
-            title="Performance"
-            note="Each seller's calls, talk time and breaks"
-            href="/growth"
-          />
-          <ActionRow
-            icon={<UsersRound size={20} />}
-            tone="neutral"
-            title="Your team"
-            note={
-              sellers
-                ? `${sellers} ${sellers === 1 ? "seller" : "sellers"}`
-                : "Sellers and how each one does"
-            }
-            href="/organisation?tab=team"
-          />
-          <ActionRow
-            icon={<FileText size={20} />}
-            tone="neutral"
-            title="Call reports"
-            note="Every analysed call"
-            href="/reports"
-          />
-        </ActionList>
-      }
+      more={<TeamMore sellers={sellers} />}
     />
   );
 }
@@ -215,7 +220,7 @@ const readKeptSides = (): string | null => {
  *  last answer on this device, so the Inbound | Cold selector is in its place
  *  from the first frame (the test robot, 1 Nov 2026: 0.06 at 360 px when it
  *  arrived after Today). */
-function useKeptSides(
+export function useKeptSides(
   access: { inbound: boolean; cold: boolean } | null,
 ): { inbound: boolean; cold: boolean } | null {
   const kept = useSyncExternalStore(
@@ -397,7 +402,12 @@ export function SalesHome({
       // Storage refused (a private window): Team, as before.
     }
   }, [person]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The screen slides in from its side when a person switches Team | Me, not
+  // as Home first draws: Home's outline stands there first, and the page takes
+  // its place without a flicker (home-outline.tsx).
+  const [switched, setSwitched] = useState(false);
   const chooseView = (next: HomeView) => {
+    setSwitched(true);
     setView(next);
     try {
       if (person) window.localStorage.setItem(`sx:home-view:${person}`, next);
@@ -464,7 +474,12 @@ export function SalesHome({
         }
       />
 
-      <div key={shown} className={styles.mode} data-mode={shown}>
+      <div
+        key={shown}
+        className={styles.mode}
+        data-mode={shown}
+        data-still={switched ? undefined : ""}
+      >
         {shown === "team" ? (
           <TeamHome
             manages={manages}

@@ -348,6 +348,34 @@ function SideWait({ side }: { side: Side }) {
   );
 }
 
+/** Today before anything is read (Home's outline, home-outline.tsx): the same
+ *  blocks in the same places as SellerBlocks draws them while the desk and the
+ *  seller's sides are on the way, with no reads of its own. The selector's
+ *  place is held unless this device knows the seller works one side. */
+export function SellerOutline({ access }: { access: SidesAccess | null }) {
+  const side: Side =
+    access && !access.inbound && access.cold ? "cold" : "inbound";
+  return (
+    <SlotLayout
+      plan={SELLER_HOME}
+      className={styles.me}
+      blocks={{
+        finish: null,
+        side:
+          !access || (access.inbound && access.cold) ? (
+            <SideWait side={side} />
+          ) : null,
+        cards: <TodayCards side={side} own={null} tasks={null} />,
+        next: <NextCall side={side} own={null} state="loading" />,
+        tasks: null,
+        follow: null,
+        recent: null,
+        perf: null,
+      }}
+    />
+  );
+}
+
 /** 2. Four cards, each opening the exact list it counts (items 08-12). */
 export function TodayCards({
   side,

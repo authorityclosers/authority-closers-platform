@@ -664,6 +664,11 @@
   --mode-from: 24px;
 }
 
+/* As Home first draws, and in its outline: no slide (home-outline.tsx). */
+.mode[data-still] {
+  animation: none;
+}
+
 @keyframes home-mode-in {
   from {
     opacity: 0;

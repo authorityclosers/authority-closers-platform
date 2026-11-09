@@ -27,6 +27,7 @@ import {
   DashboardBody,
   toState,
   useDashboardTeam,
+  useHomeOutline,
   useSalesRole,
   type ReadState,
 } from "./dashboard-body";
@@ -42,6 +43,7 @@ import {
   rememberCallsPage,
   rememberPanel,
 } from "../calls-cache";
+import { HomeOutline } from "./home-outline";
 import { SalesHome } from "./sales-home";
 
 /**
@@ -239,6 +241,9 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
   const team = useDashboardTeam();
   // In an organisation, Home starts with sales (owner, 22 Oct 2026).
   const salesRole = useSalesRole();
+  // Until the workspace list says who is looking, Home's own outline for the
+  // role this device saw last, never the old dashboard's.
+  const outline = useHomeOutline();
   // Home v2 (owner, 27 Oct 2026): recent calls and activity first; its Recent
   // calls merge the saved calls read here with the phone's.
   const sales = salesRole ? (
@@ -250,6 +255,8 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
       recent={recentState.status === "ready" ? recentState.value : null}
       onDrawn={drawn}
     />
+  ) : outline ? (
+    <HomeOutline manager={outline === "manager"} />
   ) : null;
   useEffect(() => {
     if (team !== true) return;
