@@ -541,3 +541,8 @@
     margin-block: -1px;
   }
 }
+
+/* All stages' count, its figures even (owner bug 193). */
+.stageCount {
+  font-variant-numeric: tabular-nums;
+}

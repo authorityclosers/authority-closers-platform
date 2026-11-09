@@ -189,6 +189,8 @@ export function Picker({
   name,
   buttonRef,
   icon = null,
+  variant,
+  display,
 }: {
   /** The list's name: the sheet's title and the listbox's label. */
   title: string;
@@ -221,6 +223,12 @@ export function Picker({
   buttonRef?: Ref<HTMLButtonElement | null>;
   /** A small mark before the choice, inside the same button (the list's sort: ⇅). */
   icon?: ReactNode;
+  /** "chip": the button is a chip at the head of a chip row (Leads' "All
+      stages", owner bug 193, 9 Nov 2026), checked while the `all` row is the
+      choice, its chevron saying it opens a list. */
+  variant?: "chip";
+  /** The button's own words in place of the choice's ("All stages 929"). */
+  display?: ReactNode;
 }) {
   const phone = usePhone();
   const [open, setOpen] = useState(defaultOpen);
@@ -232,6 +240,9 @@ export function Picker({
   const inline = mode === "inline";
   const cell = mode === "cell";
   const sheet = !inline && !cell && phone;
+  // A cell's list, and a chip's on a computer, float in the top layer: no
+  // scrolling box (a table, a chip row) clips them.
+  const floats = cell || (variant === "chip" && !sheet && !inline);
   const rows: Row[] = [
     ...(all ? [{ key: null, label: all.label, count: all.count }] : []),
     ...options,
@@ -283,7 +294,7 @@ export function Picker({
   useLayoutEffect(() => {
     const floating = pop.current;
     const anchor = button.current;
-    if (!open || !cell || !floating || !anchor) return;
+    if (!open || !floats || !floating || !anchor) return;
     floating.showPopover?.();
     const box = anchor.getBoundingClientRect();
     floating.style.minWidth = `${box.width}px`;
@@ -304,7 +315,7 @@ export function Picker({
     };
     window.addEventListener("scroll", scrolled, true);
     return () => window.removeEventListener("scroll", scrolled, true);
-  }, [open, cell]);
+  }, [open, floats]);
 
   const list = (
     <Options
@@ -323,6 +334,7 @@ export function Picker({
       ref={root}
       className={[styles.root, className].filter(Boolean).join(" ")}
       data-mode={inline ? "inline" : cell ? "cell" : undefined}
+      data-variant={variant}
       onClick={(event) => {
         // Inside a label, a tap on a row would reach the label, which clicks
         // the button and opens the list again.
@@ -347,6 +359,7 @@ export function Picker({
         type="button"
         className={styles.button}
         data-value={value ?? ""}
+        data-current={variant === "chip" && value === null ? "" : undefined}
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -365,17 +378,34 @@ export function Picker({
         {ariaLabel ? (
           <span className={styles.srOnly}>{`${ariaLabel} `}</span>
         ) : null}
-        {label ? <span className={styles.label}>{label}</span> : null}
-        <span className={styles.value}>
-          {icon}
-          {chosen.tone ? <Dot tone={chosen.tone} /> : null}
-          <span
-            className={styles.valueWords}
-            data-empty={chosen.empty ? "" : undefined}
-          >
-            {chosen.label}
-          </span>
-        </span>
+        {display !== undefined ? (
+          <>
+            {variant === "chip" && value === null ? (
+              <svg
+                className={styles.chipCheck}
+                viewBox="0 0 16 16"
+                aria-hidden="true"
+              >
+                <path d="M3.5 8.5l3 3 6-7" />
+              </svg>
+            ) : null}
+            {display}
+          </>
+        ) : (
+          <>
+            {label ? <span className={styles.label}>{label}</span> : null}
+            <span className={styles.value}>
+              {icon}
+              {chosen.tone ? <Dot tone={chosen.tone} /> : null}
+              <span
+                className={styles.valueWords}
+                data-empty={chosen.empty ? "" : undefined}
+              >
+                {chosen.label}
+              </span>
+            </span>
+          </>
+        )}
         <ChevronDown size={18} aria-hidden="true" className={styles.mark} />
       </button>
       {name ? <input type="hidden" name={name} value={value ?? ""} /> : null}
@@ -395,7 +425,7 @@ export function Picker({
         <div
           ref={pop}
           className={styles.pop}
-          popover={cell ? "manual" : undefined}
+          popover={floats ? "manual" : undefined}
         >
           {list}
         </div>

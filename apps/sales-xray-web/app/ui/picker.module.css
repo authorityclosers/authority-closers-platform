@@ -306,3 +306,55 @@
     transition: none;
   }
 }
+
+/* A chip at the head of a chip row (Leads' "All stages", owner bug 193, 9 Nov
+   2026): the row's own chip (kit chip-row.module.css), checked while every
+   stage is the choice, and a chevron saying it opens the list of all stages. */
+.root[data-variant="chip"] {
+  flex: none;
+}
+
+.root[data-variant="chip"] .button {
+  position: relative;
+  display: inline-flex;
+  gap: 4px;
+  width: auto;
+  min-height: 32px;
+  padding: 0 8px 0 12px;
+  border-radius: 8px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 400;
+  line-height: var(--sx-leading-16);
+  white-space: nowrap;
+}
+
+.root[data-variant="chip"] .button::after {
+  position: absolute;
+  inset: -8px 0;
+  content: "";
+}
+
+.root[data-variant="chip"] .button[data-current] {
+  border-color: transparent;
+  background: color-mix(in oklab, var(--sx-good) 14%, var(--sx-surface));
+  color: color-mix(in oklab, var(--sx-good) 60%, var(--sx-ink));
+  font-weight: 500;
+}
+
+.root[data-variant="chip"] .mark {
+  width: 14px;
+  height: 14px;
+  color: currentColor;
+}
+
+.chipCheck {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

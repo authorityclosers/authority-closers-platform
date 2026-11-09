@@ -55,6 +55,7 @@ export function ChipRow<T extends string>({
   items,
   value,
   onChange,
+  start = null,
   end = null,
   format = String,
 }: {
@@ -63,6 +64,8 @@ export function ChipRow<T extends string>({
   items: readonly RowChip<T>[];
   value: T;
   onChange: (key: T) => void;
+  /** First in the row, inside the scroll: a chip that opens a list. */
+  start?: ReactNode;
   /** Pinned at the row's end, outside the scroll: a Filter button. */
   end?: ReactNode;
   format?: (count: number) => string;
@@ -81,6 +84,7 @@ export function ChipRow<T extends string>({
         onFocus={(event) => clearOfEdges(event.currentTarget, event.target)}
         {...edges}
       >
+        {start}
         {items.map((item) => (
           <button
             key={item.key}

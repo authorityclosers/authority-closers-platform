@@ -436,6 +436,25 @@ const keyWords = (key: string) => {
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
 
+/** Every stage, each with its colour dot and count; a stage a link names that
+ *  this list does not offer still shows. */
+function stageOptions(
+  stages: readonly StageView[],
+  side: Side,
+  value: string | null,
+  counts: Readonly<Record<string, number>> | null,
+): PickerOption[] {
+  const options: PickerOption[] = stages.map((stage) => ({
+    key: stage.key,
+    label: stageName(stage, side),
+    tone: stageTone(stage),
+    count: counts ? (counts[stage.key] ?? 0) : null,
+  }));
+  if (value && !stages.some((stage) => stage.key === value))
+    options.push({ key: value, label: keyWords(value) });
+  return options;
+}
+
 /** The stage pick: the one picker, each stage with its colour dot and count. */
 export function StagePicker({
   stages,
@@ -452,15 +471,7 @@ export function StagePicker({
   counts?: Readonly<Record<string, number>> | null;
   onChange: (key: string | null) => void;
 }) {
-  const options: PickerOption[] = stages.map((stage) => ({
-    key: stage.key,
-    label: stageName(stage, side),
-    tone: stageTone(stage),
-    count: counts ? (counts[stage.key] ?? 0) : null,
-  }));
-  // A link may name a stage this list does not offer: it still shows.
-  if (value && !stages.some((stage) => stage.key === value))
-    options.push({ key: value, label: keyWords(value) });
+  const options = stageOptions(stages, side, value, counts);
   const total = counts
     ? Object.values(counts).reduce((sum, count) => sum + count, 0)
     : null;
@@ -485,7 +496,10 @@ const ALL_STAGES = "all-stages";
  * up to the tab's count (the server's step counts: the same people, filters,
  * view and side, before the stage pick). A stage with none in the view is left
  * out, except the one chosen; until the counts are in, only All stages and the
- * chosen one show. Filter is pinned at the row's end.
+ * chosen one show. Filter is pinned at the row's end. All stages opens the list
+ * of every stage, its chevron saying so (owner bug 193, 9 Nov 2026: "clicking on
+ * this can open up a down popup which has listed all the real stages", with "a
+ * slight indication of maybe there's a drop-down").
  */
 export function StageChips({
   stages,
@@ -508,7 +522,6 @@ export function StageChips({
     ? Object.values(counts).reduce((sum, count) => sum + count, 0)
     : null;
   const items = [
-    { key: ALL_STAGES, label: "All stages", count: total },
     ...stages
       .filter(
         (stage) =>
@@ -530,6 +543,27 @@ export function StageChips({
       items={items}
       value={value ?? ALL_STAGES}
       onChange={(key) => onChange(key === ALL_STAGES ? null : key)}
+      start={
+        <Picker
+          variant="chip"
+          title="Pipeline stage"
+          value={value}
+          options={stageOptions(stages, side, value, counts)}
+          all={{ label: "All stages", count: total }}
+          onChange={onChange}
+          display={
+            <span>
+              All stages
+              {total !== null ? (
+                <>
+                  {" "}
+                  <span className={styles.stageCount}>{tabCount(total)}</span>
+                </>
+              ) : null}
+            </span>
+          }
+        />
+      }
       end={end}
       format={tabCount}
     />
