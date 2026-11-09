@@ -43,6 +43,7 @@ import {
   useGo,
   useWeekActivity,
   weekCalls,
+  type WeekActivity,
 } from "../calls/call-rows";
 import { CallRowsSkeleton } from "../calls/phone-calls";
 import { readGone } from "../leads/finish-row";
@@ -69,7 +70,7 @@ import { CallLens } from "../ui/call-lens/call-lens";
 import { SideSelector, type Side } from "../ui/side-selector";
 import { SlotLayout } from "../ui/slots/slot-layout";
 import { SELLER_HOME } from "./home-slots/plans";
-import { retryHome } from "./home-load";
+import { homeKept, keepHome, retryHome } from "./home-load";
 import { LaterSheet, SwipeRow, type Later } from "./home-swipe";
 import { breakLength } from "./home-today";
 import { Count } from "./metric-pager";
@@ -195,6 +196,9 @@ export function useTaskList() {
   };
 }
 
+const TODAY_KEY = "tasks:today";
+type Today = { tasks: ListedTask[]; overdue: number };
+
 /** The Tasks page's Today, and how many are overdue: one truth with Tasks
  *  (persona QA, 31 Oct 2026: Home and Tasks counted different tasks). */
 export function useTodayTasks(): {
@@ -204,16 +208,24 @@ export function useTodayTasks(): {
   setTasks: (next: ListedTask[]) => void;
   reload: () => void;
 } {
-  const [tasks, setTasks] = useState<ListedTask[] | null>(null);
-  const [overdue, setOverdue] = useState<number | null>(null);
+  // What Today showed last in this workspace, so a return to Home draws the
+  // tasks at once and the read only refreshes them (QA robot 27a7dd88).
+  const [tasks, setShown] = useState<ListedTask[] | null>(
+    () => homeKept<Today>(TODAY_KEY)?.tasks ?? null,
+  );
+  const [overdue, setOverdue] = useState<number | null>(
+    () => homeKept<Today>(TODAY_KEY)?.overdue ?? null,
+  );
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
     readTasks("today", controller.signal).then(
       (list) => {
-        setTasks(list.tasks);
-        setOverdue(list.counts.overdue ?? 0);
+        const overdue = list.counts.overdue ?? 0;
+        keepHome<Today>(TODAY_KEY, { tasks: list.tasks, overdue });
+        setShown(list.tasks);
+        setOverdue(overdue);
       },
       () => {
         if (!controller.signal.aborted) setFailed(true);
@@ -224,6 +236,14 @@ export function useTodayTasks(): {
   const reload = useCallback(() => {
     setFailed(false);
     setAttempt((value) => value + 1);
+  }, []);
+  // A task ticked here is kept as ticked.
+  const setTasks = useCallback((next: ListedTask[]) => {
+    setShown(next);
+    keepHome<Today>(TODAY_KEY, {
+      tasks: next,
+      overdue: homeKept<Today>(TODAY_KEY)?.overdue ?? 0,
+    });
   }, []);
   return { tasks, overdue, failed, setTasks, reload };
 }
@@ -997,8 +1017,18 @@ export function onSide<T extends { side?: Side | null }>(
 
 /** 6. The last three calls, each with its outcome and time (Dipak's
  *  picture): Calls has the rest. */
+const WEEK_KEY = "week:mine";
+
 export function RecentCalls({ side = null }: { side?: Side | null }) {
-  const [week, retry] = useWeekActivity();
+  const [read, retry] = useWeekActivity();
+  // While the week is read again on a return to Home, the week it showed last,
+  // at its size, not a three-row outline that shrinks to one line (QA robot
+  // 27a7dd88, 9 Nov 2026: 164 px at 390 after Back, with the page's end in view).
+  useEffect(() => {
+    if (read.status === "ready") keepHome<WeekActivity>(WEEK_KEY, read);
+  }, [read]);
+  const shown = homeKept<WeekActivity>(WEEK_KEY);
+  const week = read.status === "loading" && shown ? shown : read;
   const [now] = useState(() => new Date());
   if (week.status === "off") return null;
   const rows =
