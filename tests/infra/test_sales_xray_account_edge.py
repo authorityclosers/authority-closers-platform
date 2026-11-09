@@ -345,3 +345,105 @@ def test_the_api_and_mcp_hosts_describe_themselves_and_send_sign_in_to_the_app(
         302,
         "https://app.salesxray.in/.well-known/oauth-authorization-server",
     )
+
+
+# Old links (owner, 10 Nov 2026): a browser's visit to a page on the old address moves to the same
+# page on app.salesxray.in. The installed app, the API, OAuth, a sign-in finishing, build files,
+# the website line and anything that is not a top-level page visit stay where they are.
+BROWSER = (
+    "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/131.0.0.0 Mobile Safari/537.36"
+)
+VISIT = {
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Site": "none",
+    "User-Agent": BROWSER,
+}
+
+
+def _visit(
+    edge: Edge, path: str, headers: dict[str, str], *, method: str = "GET", host: str = ""
+) -> tuple[int, str | None, str | None]:
+    edge.seen.clear()
+    connection = http.client.HTTPConnection("127.0.0.1", edge.port, timeout=5)
+    try:
+        connection.request(method, path, headers={"Host": host or edge.host(), **headers})
+        response = connection.getresponse()
+        response.read()
+        return response.status, response.getheader("Location"), response.getheader("Cache-Control")
+    finally:
+        connection.close()
+
+
+@pytest.mark.parametrize(
+    "path", ("/", "/leads?tab=sources", "/login", "/privacy", "/analysis/calls/c1?x=1&y=2")
+)
+def test_a_browser_visit_to_an_old_page_moves_to_the_customer_domain(edge: Edge, path: str):
+    status, where, cache = _visit(edge, path, VISIT)
+    if edge.environment != "production":
+        assert (status, where) == (200, None)  # staging keeps its one address
+        return
+    # 301 with no-store: browsers and Cloudflare don't keep it, so taking it out works at once.
+    assert (status, where, cache) == (301, f"https://app.salesxray.in{path}", "no-store")
+    assert edge.seen == []
+
+
+@pytest.mark.parametrize("version", ("1.0.45", "0.3"))
+def test_the_installed_android_app_stays_on_the_old_address(edge: Edge, version: str):
+    # The app's WebView adds SalesXrayApp/<version> to its user agent (sales-xray-apps).
+    app = f"Mozilla/5.0 (Linux; Android 14; K; wv) AppleWebKit/537.36 SalesXrayApp/{version}"
+    assert _visit(edge, "/leads", {**VISIT, "User-Agent": app})[:2] == (200, None)
+    assert edge.seen[0][:2] == ("GET", "/leads")
+
+
+@pytest.mark.parametrize(
+    "headers",
+    (
+        {},  # a crawler, a console's URL check or a script
+        {"User-Agent": BROWSER},
+        {**VISIT, "Sec-Fetch-Dest": "iframe"},
+        {**VISIT, "Sec-Fetch-Mode": "cors", "Sec-Fetch-Dest": "empty"},  # the page's own fetch
+        {"Sec-Fetch-Mode": "navigate", "User-Agent": BROWSER},
+    ),
+)
+def test_what_is_not_a_top_level_page_visit_stays(edge: Edge, headers: dict[str, str]):
+    assert _visit(edge, "/privacy", headers)[:2] == (200, None)
+    assert edge.seen[0][:2] == ("GET", "/privacy")
+
+
+@pytest.mark.parametrize(
+    "path",
+    (
+        "/v1/auth/google/callback?code=c&state=s",
+        "/v1/lead-desk/meta/webhook?hub.mode=subscribe",
+        "/v1/mcp",
+        "/.well-known/assetlinks.json",
+        "/.well-known/oauth-authorization-server",
+        "/connect?client_id=c&redirect_uri=https%3A%2F%2Fclaude.ai%2Fcallback",
+        "/connect/reflex",
+        "/auth/complete?flow=f",
+        "/sx.js",
+        "/_next/static/chunks/app.js",
+    ),
+)
+def test_api_oauth_sign_in_build_files_and_the_website_line_stay(edge: Edge, path: str):
+    assert _visit(edge, path, VISIT)[:2] == (200, None)
+    assert edge.seen[0][:2] == ("GET", path)
+
+
+def test_only_reading_a_page_moves(edge: Edge):
+    # A form post would lose its body in a redirect: it stays.
+    assert _visit(edge, "/leads", VISIT, method="POST")[:2] == (200, None)
+    assert edge.seen[0][:2] == ("POST", "/leads")
+    if edge.environment == "production":
+        assert _visit(edge, "/leads", VISIT, method="HEAD")[:2] == (
+            301,
+            "https://app.salesxray.in/leads",
+        )
+
+
+def test_the_customer_domain_never_moves_to_itself(edge: Edge):
+    _production_only(edge)
+    assert _visit(edge, "/leads", VISIT, host="app.salesxray.in")[:2] == (200, None)
+    assert edge.seen[0][:2] == ("GET", "/leads")
