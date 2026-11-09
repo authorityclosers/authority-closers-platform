@@ -172,3 +172,34 @@ describe("call-specific coaching read", () => {
     expect(result.error).not.toContain("private upstream");
   });
 });
+
+describe("a teammate's coaching read", () => {
+  const person = "11111111-1111-4111-8111-111111111111";
+  const answer = (status: number, body: unknown) =>
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify(body), {
+            status,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+  it("reads the server's 200 not-shared answer as it read the old 404", async () => {
+    // 9 Nov 2026: the server answers 200 "not shared" where it answered 404.
+    answer(200, {
+      schema: "ac.sales-xray.coaching-not-shared/1",
+      shared: false,
+      message: "This coaching is not shared with you.",
+    });
+    const now = await readCoaching(`person:${person}`);
+    answer(404, { detail: "This coaching is not shared with you." });
+    const before = await readCoaching(`person:${person}`);
+    expect(now).toEqual({
+      data: null,
+      error: "This coaching is not shared with you.",
+    });
+    expect(before).toEqual(now);
+  });
+});

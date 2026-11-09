@@ -507,6 +507,12 @@ a.row:focus-visible {
   font-size: var(--sx-text-xs);
 }
 
+/* While the team's numbers are on the way: their room, unseen. */
+.wait,
+.avatars li[data-wait] {
+  visibility: hidden;
+}
+
 .avatars {
   display: flex;
   flex-wrap: wrap;

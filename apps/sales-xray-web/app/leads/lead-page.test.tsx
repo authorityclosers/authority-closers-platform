@@ -207,8 +207,12 @@ it("keeps everything under the page out of reach, its top bars too, never the ta
   await act(async () => root.render(frame(true)));
   expect(shell.hasAttribute("inert")).toBe(true);
   expect(tabs.hasAttribute("inert")).toBe(false);
+  // Not drawn while covered, so its moves aren't counted as the page jumping
+  // (QA robot aeb37673); drawn again as the page goes.
+  expect(shell.style.visibility).toBe("hidden");
   await act(async () => root.render(frame(false)));
   expect(shell.hasAttribute("inert")).toBe(false);
+  expect(shell.style.visibility).toBe("");
   shell.remove();
   tabs.remove();
 });
