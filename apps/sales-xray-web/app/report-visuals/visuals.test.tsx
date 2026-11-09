@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 
@@ -258,4 +260,18 @@ it("draws the measured sound when there is no speech, and the player's position"
   expect(
     html(<CallTimeline durationMs={10_000} envelope={envelope} />),
   ).not.toContain("left:50%");
+});
+
+it("draws the Play chip's time darker than the plain accent, at its own size", () => {
+  // The QA robot, 8 to 9 Nov 2026 (fc334f5d, b22cb4b8, dbd150e6, e32abfcf):
+  // the plain accent on the chip's tint over a tinted card was under 4.5:1.
+  const css = readFileSync(
+    join(process.cwd(), "app/report-visuals/visuals.module.css"),
+    "utf8",
+  );
+  const chip = /\n\.play \{([^}]*)\}/.exec(css)?.[1] ?? "";
+  expect(chip).toContain(
+    "color: color-mix(in oklab, var(--sx-accent) 80%, var(--sx-ink));",
+  );
+  expect(chip).toContain("height: 24px;");
 });
