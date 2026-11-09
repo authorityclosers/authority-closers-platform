@@ -64,29 +64,34 @@ export function NeedsSkeleton() {
   );
 }
 
-/** The four outcome tiles, each line at its loaded height. */
+/** The four outcome tiles, each line at its loaded height. Placeholders, so
+ *  plain boxes, not a definition list: the icon's box sat in each group beside
+ *  its dt and dd, which a list's groups may not hold (QA robot 49a966dd, 9 Nov
+ *  2026, axe definition-list on the owner's Home while it loads). */
 export function OutcomesSkeleton() {
   return (
-    <dl className={styles.outcomes} aria-busy="true">
+    <div className={styles.outcomes} aria-busy="true">
       {[0, 1, 2, 3].map((index) => (
         <div key={index} className={styles.outcome} data-skeleton="">
           <span className={styles.outcomeIcon}>
             <Skeleton width={36} height={36} />
           </span>
-          <dt className={styles.line}>
+          <span className={`${styles.outcomeTerm} ${styles.line}`}>
             <Skeleton width="64%" height={12} />
-          </dt>
-          <dd>
+          </span>
+          <span className={styles.outcomeFigure}>
             <span className={`${styles.outcomeValue} ${styles.line}`}>
               <Skeleton width={44} height={24} />
             </span>
-          </dd>
-          <dd className={`${styles.outcomeNote} ${styles.line}`}>
+          </span>
+          <span
+            className={`${styles.outcomeFigure} ${styles.outcomeNote} ${styles.line}`}
+          >
             <Skeleton width="78%" height={10} />
-          </dd>
+          </span>
         </div>
       ))}
-    </dl>
+    </div>
   );
 }
 
