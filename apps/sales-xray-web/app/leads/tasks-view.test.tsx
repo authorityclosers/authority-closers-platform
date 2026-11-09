@@ -154,6 +154,16 @@ it("lists today's tasks with what, for whom, where and when, and counts each lis
   expect(text).not.toContain("Meeting · Ravi Sample");
 });
 
+it("titles the screen Tasks as its one h1", async () => {
+  // The QA robot, 9 Nov 2026 (62d680b6): the title was an h2 on a page with
+  // no h1, so it read as a heading-sized label over the lists' switch.
+  await show();
+  const titles = container.querySelectorAll("h1");
+  expect(titles).toHaveLength(1);
+  expect(titles[0].textContent).toBe("Tasks");
+  expect(titles[0].id).toBe("tasks-heading");
+});
+
 it("adds a task with + and then shows the list it landed in", async () => {
   await show();
   await act(async () => button("Add task")?.click());

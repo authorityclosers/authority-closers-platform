@@ -1,0 +1,945 @@
+/* The lead as a page (lead page P5, the owner's pick, 8 Nov 2026; docs/design/
+   screens/lead/spec.md). Only --sx-* tokens; sizes from the spec, not the
+   image's 80 %. */
+
+/* ---------- The page ---------- */
+
+/* From the top of the screen to the tab bar (its measured room), over the
+   app bar; one scroll. On a computer narrower than the list-and-lead split it
+   covers the window, its own bar in place of the app's. */
+.page {
+  position: fixed;
+  z-index: 35;
+  inset: 0 0
+    calc(var(--lx-bottom-nav-h, 0px) + env(safe-area-inset-bottom, 0px)) 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* What is scrolled to (focus, See more) clears the bar, the Call band and a
+     corner card over it (QA robot 8a93e05c, 9 Nov 2026: Copy link took focus
+     under "Open lead"; --sx-corner-h is the card's top, from the window's
+     bottom). */
+  scroll-padding-block: 64px
+    max(80px, calc(var(--sx-corner-h, 0px) - var(--lx-bottom-nav-h, 0px) + 8px));
+  background: var(--sx-paper);
+  color: var(--sx-ink);
+}
+
+@media (min-width: 900px) {
+  .page {
+    z-index: 55;
+  }
+}
+
+/* Back and ⋯, no title: the name is the header card's. */
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 56px;
+  padding: env(safe-area-inset-top, 0px) 4px 0;
+  background: var(--sx-paper);
+}
+
+.barButton {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.barButton:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: -2px;
+}
+
+.barEnd {
+  display: inline-flex;
+}
+
+/* Its end scrolls clear of a corner card over the Call band, as the app's
+   pages do (--sx-corner-h: the card's top, from the window's bottom). */
+.body {
+  flex: 1 0 auto;
+  min-width: 0;
+  padding: 8px 16px
+    max(
+      16px,
+      calc(var(--sx-corner-h, 0px) - var(--lx-bottom-nav-h, 0px) - 64px)
+    );
+}
+
+/* The one Call, 8 dp above and below, on the page colour; the page ends above
+   it, so nothing is ever under it. */
+/* Held 1 px past the page's end, so no words show through a rounding seam
+   above the tab bar (3.5x phones). */
+.dock {
+  position: sticky;
+  bottom: -1px;
+  z-index: 3;
+  flex: none;
+  padding: 8px 16px 9px;
+  background: var(--sx-paper);
+}
+
+/* ---------- The header card ---------- */
+
+/* The lead's cards 12 dp apart (spec §2: header, row of four, brief), in a
+   560 dp column on a wider screen (spec §5). The element in the selector
+   outweighs the leads card's own 16 dp gap. */
+div.stack {
+  gap: 12px;
+  width: 100%;
+  max-width: 560px;
+  margin-inline: auto;
+}
+
+.head {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.headTop {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.headWords {
+  display: grid;
+  min-width: 0;
+}
+
+/* The name wraps (at most three lines), never "…" on one. */
+.name {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
+  line-height: var(--sx-leading-28);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+/* "City · Source · Side". */
+.facts {
+  margin: 2px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  overflow-wrap: anywhere;
+}
+
+/* The follow-up, a 48 dp row that opens its picker; late says so in words.
+   Its target reaches past the words, so the line sits 16 dp above the
+   stepper and close under the facts (the pipeline's round 2). */
+.follow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 48px;
+  margin-block: -8px -14px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.follow > svg {
+  flex: none;
+  color: var(--sx-muted);
+}
+
+.follow[data-late] {
+  color: var(--sx-bad);
+  font-weight: 400;
+}
+
+.follow[data-late] > svg {
+  color: var(--sx-bad);
+}
+
+.lateWord {
+  font-weight: 500;
+}
+
+/* The date ("Oct 31", "Tomorrow 10:00 AM") and its pencil stay on one line
+   when the words wrap at large text. */
+.followWhen {
+  white-space: nowrap;
+}
+
+/* The pencil rides with the last words, wrapped or not. */
+.followEdit {
+  display: inline-block;
+  margin-left: 8px;
+  color: var(--sx-accent);
+  vertical-align: -3px;
+}
+
+.follow:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
+/* A closed lead: its state as a chip, in the stepper's place. */
+.closedChip {
+  justify-self: start;
+  padding: 4px 12px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
+}
+
+/* ---------- The stage stepper ---------- */
+
+/* Equal columns (stage-stepper.tsx: at least 64 dp, and 6 em of this xs
+   type, so a step's longest word fits whole); a path too long for the card
+   scrolls sideways, the current step in view, a fade at the edge with more. */
+.stepper {
+  position: relative;
+  display: grid;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  font-size: var(--sx-text-xs);
+  list-style: none;
+  scrollbar-width: none;
+}
+
+.stepper::-webkit-scrollbar {
+  display: none;
+}
+
+.step {
+  position: relative;
+  min-width: 0;
+}
+
+/* The line to the step before, through the dots' centres (10 dp down). */
+.step::before {
+  position: absolute;
+  top: 9px;
+  right: 50%;
+  left: -50%;
+  height: 2px;
+  background: var(--sx-line-strong);
+  content: "";
+}
+
+.step:first-child::before {
+  display: none;
+}
+
+.step[data-state="done"]::before,
+.step[data-state="current"]::before {
+  background: var(--sx-accent);
+}
+
+.stepButton {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+  text-align: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button.stepButton {
+  cursor: pointer;
+}
+
+button.stepButton:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+  border-radius: var(--sx-radius-sm);
+}
+
+/* Ahead: a 14 dp ring. */
+.stepDot {
+  display: grid;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  place-items: center;
+  margin-top: 3px;
+  border: 2px solid var(--sx-line-strong);
+  border-radius: 50%;
+  background: var(--sx-surface);
+}
+
+/* Done: a 16 dp dot with a check. */
+.step[data-state="done"] .stepDot {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 0;
+  background: var(--sx-accent);
+}
+
+.stepDot svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: var(--sx-accent-ink);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+/* Now: a 20 dp ring, its name in teal. */
+.step[data-state="current"] .stepDot {
+  width: 20px;
+  height: 20px;
+  margin-top: 0;
+  border-color: var(--sx-accent);
+}
+
+.step[data-state="current"] .stepButton {
+  color: var(--sx-accent);
+  font-weight: 500;
+}
+
+/* Whole words; a word longer than its column (an organisation's own long
+   name) breaks rather than being cut off. */
+.stepLabel {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* ---------- The row of four ---------- */
+
+/* No gap between the cells, and the row reaches 8 dp into the gutters:
+   each cell is a quarter (about 87 dp at 363), so "WhatsApp" fits whole at
+   130 %; the circles stay well inside the gutters. */
+.row4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-inline: -8px;
+}
+
+/* A 48 dp neutral circle, its word under it. */
+.act {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.actCircle {
+  display: grid;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  box-sizing: border-box;
+  place-items: center;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: 50%;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+}
+
+.actCircle svg {
+  width: 22px;
+  height: 22px;
+}
+
+.act[aria-disabled="true"] .actCircle,
+.act[aria-disabled="true"] .actWord {
+  opacity: 0.5;
+}
+
+.act:focus-visible {
+  outline: none;
+}
+
+.act:focus-visible .actCircle {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
+/* Wraps between words (and at a name's join, "Whats" "App"); inside a word
+   only when nothing else fits, at the largest text. */
+.actWord {
+  max-width: 100%;
+  overflow-wrap: break-word;
+}
+
+/* ---------- The cards under the header (Home's card) ---------- */
+
+.card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.cardTitle {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
+}
+
+/* A teal word that opens more in place ("See more"), its target 48 dp tall. */
+.textAction {
+  justify-self: start;
+  min-height: 48px;
+  margin: -12px 0 -16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.textAction:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+  border-radius: var(--sx-radius-sm);
+}
+
+/* ---------- "Before you call" ---------- */
+
+/* Two columns: a 96 dp label column, the values at one indent, 8 dp apart. */
+.brief {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+/* The label column is 96 dp, growing with large text to 120 dp (spec §5). */
+.briefRow {
+  display: grid;
+  grid-template-columns: clamp(96px, 6.4em, 120px) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+  font-size: var(--sx-text-sm);
+}
+
+.briefRow dt {
+  display: grid;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.briefNote {
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+}
+
+.briefRow dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  overflow-wrap: anywhere;
+}
+
+.briefRow dd[data-unknown] {
+  color: var(--sx-muted);
+}
+
+/* Short until "See more": two lines a value, all of it once opened. */
+.card:not([data-open]) > .brief dd {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.briefMore {
+  display: grid;
+  gap: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.briefArea {
+  display: grid;
+  gap: 8px;
+}
+
+.briefArea h4 {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
+}
+
+.briefUnknown {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+}
+
+/* ---------- Call history ---------- */
+
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+/* "Tried 3 times, talked once": the honest count, beside the title. */
+.cardMeta {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+}
+
+/* One column: a 40 dp lane holding 24 dp discs on a 2 dp line, the words,
+   then a row's one action at its end. */
+.timeline {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tlRow {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 8px;
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 8px 0;
+  border-radius: var(--sx-radius-md);
+}
+
+/* The line through the discs' centres, from the first disc to the last. */
+.tlRow::before,
+.tlDay::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 19px;
+  width: 2px;
+  background: var(--sx-line);
+  content: "";
+}
+
+.tlRow:first-child::before {
+  top: 20px;
+}
+
+.tlRow:last-child::before {
+  bottom: auto;
+  height: 20px;
+}
+
+.tlRow:only-child::before {
+  display: none;
+}
+
+/* Under a first day header, the line starts at the first disc. */
+.tlDay:first-child::before {
+  display: none;
+}
+
+.tlDay:first-child + .tlRow::before {
+  top: 20px;
+}
+
+/* A 24 dp disc in its kind's tint, a 14 dp glyph, a ring of the card's
+   colour where it sits on the line. */
+.disc {
+  position: relative;
+  display: grid;
+  justify-self: center;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--sx-ink) 8%, var(--sx-surface));
+  box-shadow: 0 0 0 3px var(--sx-surface);
+  color: var(--sx-ink-2);
+}
+
+.disc[data-tone="accent"] {
+  background: color-mix(in oklab, var(--sx-accent) 14%, var(--sx-surface));
+  color: var(--sx-accent);
+}
+
+.disc[data-tone="good"] {
+  background: color-mix(in oklab, var(--sx-good) 14%, var(--sx-surface));
+  color: color-mix(in oklab, var(--sx-good) 60%, var(--sx-ink));
+}
+
+.disc[data-tone="warn"] {
+  background: color-mix(in oklab, var(--sx-warn) 16%, var(--sx-surface));
+  color: color-mix(in oklab, var(--sx-warn) 45%, var(--sx-ink));
+}
+
+.disc[data-tone="bad"] {
+  background: var(--sx-bad-soft);
+  color: var(--sx-bad);
+}
+
+/* The follow-up to come: a teal clock disc. */
+.disc[data-tone="now"] {
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+
+.tlBody {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.tlTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
+  overflow-wrap: anywhere;
+}
+
+.tlDetail {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* "View report" / "Generate report" / "Open chat": teal 500 words, a 48 dp
+   target, level with the disc. */
+.tlAction {
+  display: inline-flex;
+  align-items: center;
+  align-self: start;
+  min-height: 48px;
+  margin: -12px 0;
+  padding: 0 0 0 8px;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tlAction:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: -2px;
+  border-radius: var(--sx-radius-sm);
+}
+
+/* A row that opens something opens it from anywhere on it; its own buttons
+   and links (Private, Undo, the capture state's fix) still answer first. */
+.tlRow[data-opens] .tlAction::after {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--sx-radius-md);
+  content: "";
+}
+
+/* A row's own small actions (Make private, Undo): xs words in teal, a
+   48 dp target that keeps the row's rhythm. */
+.tlBody > button {
+  justify-self: start;
+  min-height: 48px;
+  margin: -14px 0 -16px;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
+}
+
+.tlRow[data-opens] .tlBody :is(a, button) {
+  position: relative;
+  z-index: 1;
+}
+
+.tlRow[data-opens]:active {
+  background: var(--sx-fill-soft);
+}
+
+/* Opened from My work: the line the seller made, lit for a moment. */
+.tlRow[data-focus] {
+  background: var(--sx-accent-soft);
+  transition: background var(--sx-dur-fast, 150ms) ease;
+}
+
+/* Day headers, past five events. */
+.tlDay {
+  position: relative;
+  padding: 12px 0 4px 48px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
+}
+
+/* Home's mint chip. */
+.upcoming {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: var(--sx-radius-pill);
+  background: color-mix(in oklab, var(--sx-good) 14%, var(--sx-surface));
+  color: color-mix(in oklab, var(--sx-good) 60%, var(--sx-ink));
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
+  white-space: nowrap;
+}
+
+/* ---------- The latest note ---------- */
+
+/* The whole card opens Notes. */
+.noteCard {
+  width: 100%;
+  gap: 8px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.noteCard:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
+.noteCard:active {
+  background: var(--sx-fill-soft);
+}
+
+/* As written: Marathi, Hindi or English, its own line breaks. */
+.noteText {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+}
+
+.noteBy {
+  margin-top: -4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+}
+
+/* The brief's "Use as follow-up", under its value. */
+.briefAction {
+  grid-column: 2;
+  margin: -14px 0 -12px;
+}
+
+/* ---------- Back on the list ---------- */
+
+/* The row of the lead just closed, lit for a second, then fading (spec §3).
+   lead-page-frame.tsx adds it only to a positioned row. */
+.backLit::after {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  background: color-mix(in oklab, var(--sx-accent) 16%, transparent);
+  content: "";
+  pointer-events: none;
+  animation: back-lit 1s var(--sx-ease-out, ease-out) forwards;
+}
+
+@keyframes back-lit {
+  0%,
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backLit::after {
+    animation: none;
+  }
+}
+
+/* ---------- More: one 56 dp row each ---------- */
+
+.moreList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.moreItem {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 56px;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 1px solid var(--sx-hairline);
+  background: none;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.moreItem > svg {
+  flex: none;
+  color: var(--sx-ink-2);
+}
+
+.moreItem[aria-disabled="true"] {
+  color: var(--sx-muted);
+}
+
+.moreItem:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: -2px;
+}
+
+/* ---------- The Call band ---------- */
+
+/* On a computer, as wide as the lead's 560 dp column. */
+.callBand {
+  width: 100%;
+  max-width: 560px;
+  margin-inline: auto;
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* No phone, or a closed lead: the same place, an outline button. */
+.callOutline {
+  display: flex;
+  max-width: 560px;
+  margin-inline: auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 56px;
+  box-sizing: border-box;
+  padding: 8px 16px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.callOutline:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}

@@ -101,3 +101,53 @@ it("presses the chosen chip with a check, keeps the end outside the scroll, and 
   await act(async () => chips[1].click());
   expect(onChange).toHaveBeenCalledWith("new");
 });
+
+it("brings a chip taking keyboard focus clear of the fades and the pinned end", async () => {
+  // The QA robot, 8 Nov 2026 (a83aab5d, e3a00def): the browser scrolls a
+  // focused chip in only when none of it shows, so "Not Connected", half under
+  // Filter, took focus there (/leads at 363).
+  await act(async () =>
+    root.render(
+      <ChipRow
+        label="Stage"
+        items={[
+          { key: "all", label: "All stages", count: 128 },
+          { key: "new", label: "New lead", count: 46 },
+          { key: "not_connected", label: "Not connected", count: 14 },
+        ]}
+        value="all"
+        onChange={vi.fn()}
+        end={<button type="button">Filter</button>}
+      />,
+    ),
+  );
+  const row = host.querySelector<HTMLElement>('[role="group"]')!;
+  const [first, , last] = [...row.querySelectorAll("button")];
+  const box = (left: number, width: number) =>
+    ({ left, right: left + width, width, top: 0, bottom: 32 }) as DOMRect;
+  // The row as at 363: 16 to 307 px, Filter over its last 32.
+  row.getBoundingClientRect = () => box(16, 291);
+  last.getBoundingClientRect = () => box(222, 143);
+  first.getBoundingClientRect = () => box(-40, 134);
+  const keyboard = (chip: HTMLElement, on: boolean) => {
+    chip.matches = (selector: string) => on && selector === ":focus-visible";
+  };
+
+  // A tap's focus: the row stays where it is.
+  row.scrollLeft = 188;
+  keyboard(last, false);
+  await act(async () => last.focus());
+  expect(row.scrollLeft).toBe(188);
+  last.blur();
+
+  // From the keyboard: clear of the end, 44 px from the row's right edge.
+  keyboard(last, true);
+  await act(async () => last.focus());
+  expect(row.scrollLeft).toBe(188 + (365 - (307 - 44)));
+
+  // And clear of the fade at the start, 28 px in.
+  row.scrollLeft = 188;
+  keyboard(first, true);
+  await act(async () => first.focus());
+  expect(row.scrollLeft).toBe(188 - (16 + 28 - -40));
+});

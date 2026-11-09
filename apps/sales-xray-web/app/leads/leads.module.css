@@ -151,6 +151,15 @@
   }
 }
 
+/* On a computer, clear of the Call band at the list's foot too (QA robot
+   31299828, 9 Nov 2026: at 1440 a row's Open, Call and WhatsApp took focus
+   under "Call Next Lead · 16"): the band is 56 dp with 8 above and below. */
+@media (min-width: 900px) {
+  .leadList :is(a, button, input, select, textarea, [tabindex]) {
+    scroll-margin-bottom: 88px;
+  }
+}
+
 .leadLine + .leadLine {
   border-top: 1px solid var(--sx-line);
 }

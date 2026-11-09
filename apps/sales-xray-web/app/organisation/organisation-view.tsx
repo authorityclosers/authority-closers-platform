@@ -598,12 +598,18 @@ export function OrganisationView({
               </SectionBoundary>
             )}
 
-            {/* Who hasn't set up call capture (owner, 30 Oct 2026). */}
-            {shows("members") && live && can(myRole, "leads.manage") && (
-              <SectionBoundary name="Call capture">
-                <CaptureSetupPanel key={tenantId} />
-              </SectionBoundary>
-            )}
+            {/* Who hasn't set up call capture (owner, 30 Oct 2026). It waits
+                for the people above it, whose list grows from its loading rows
+                when they come and would push it down the page (QA robot
+                0f2cebf6, 8 Nov 2026, on 3G at 363). */}
+            {shows("members") &&
+              live &&
+              can(myRole, "leads.manage") &&
+              members.status !== "loading" && (
+                <SectionBoundary name="Call capture">
+                  <CaptureSetupPanel key={tenantId} />
+                </SectionBoundary>
+              )}
 
             {shows("members") && seesSeats && seesTeam && (
               <SectionBoundary name="Seat use">

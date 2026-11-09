@@ -277,6 +277,13 @@
   width: 35%;
 }
 
+/* The legend's one line, at the legend's own size. */
+.skeletonLine[data-legend] {
+  width: 70%;
+  height: 1lh;
+  font-size: var(--sx-text-xs);
+}
+
 @media (max-width: 720px) {
   .chip {
     height: 44px;

@@ -573,6 +573,32 @@ it("does not invent rows or usage when members cannot load", async () => {
       ?.disabled,
   ).toBe(true);
 });
+it("shows Call capture only once the people have loaded, so the list never pushes it down", async () => {
+  // The QA robot, 8 Nov 2026 (0f2cebf6): on 3G at 363 the People list grew
+  // from its loading rows and pushed Call capture, already on screen, down.
+  const serve = fetchMock.getMockImplementation() as (
+    path: string,
+    init?: RequestInit,
+  ) => Promise<Response>;
+  let release = () => {};
+  const people = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  fetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === "/v1/organisation/members") await people;
+    if (path.endsWith("/capture-setup/team"))
+      return new Promise<Response>(() => {});
+    return serve(path, init);
+  });
+  await render();
+  await click("Members");
+  expect(host.querySelector('[aria-label="Loading members"]')).not.toBeNull();
+  expect(host.textContent).not.toContain("Call capture");
+  await act(async () => release());
+  await vi.waitFor(() => expect(host.textContent).toContain("Call capture"));
+  expect(host.textContent).toContain("Checking…");
+});
+
 it("shows no promised Create/Join buttons on Personal and reads only your invitations", async () => {
   (
     routes["/v1/me/sales-xray-workspaces"] as { selected_tenant_id: string }

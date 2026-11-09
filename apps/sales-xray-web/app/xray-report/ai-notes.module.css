@@ -95,8 +95,12 @@
   min-width: 0;
 }
 
+/* No width of its own: the row gives it the room. A field's built-in width
+   (about 220 px) made the form at least 287 px, and the notes' grid column
+   grew to it past a 251 px card at 363 (orchestrator, 9 Nov 2026). */
 .tell input {
   flex: 1;
+  width: 0;
   min-width: 0;
   min-height: 36px;
   padding: 0 12px;
@@ -108,13 +112,16 @@
   font-size: var(--sx-text-sm);
 }
 
+/* The report's solid green and its own text: white on the green mark was
+   2.75:1 in light and 2.18:1 in dark (QA robot e32abfcf, 9 Nov 2026, the
+   report's story view at 1920). Colour only. */
 .send {
   min-height: 36px;
   padding: 0 14px;
   border: 0;
   border-radius: 999px;
-  background: var(--xr-green-mark);
-  color: var(--xr-on-mark);
+  background: var(--xr-green);
+  color: var(--xr-solid-text);
   font: inherit;
   font-size: var(--sx-text-xs);
   font-weight: 650;

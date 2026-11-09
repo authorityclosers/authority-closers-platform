@@ -85,6 +85,7 @@ import { LeadsMenu, type LeadsMenuItem } from "./leads-menu";
 
 import { SellerChips } from "./seller-chips";
 import { useNudgeCard } from "./nudge-card";
+import { StartWhenAsked } from "./start-when-asked";
 import {
   LEADS_PATH,
   LeadsError,
@@ -388,15 +389,11 @@ const PipelineDashboard = dynamic(
 );
 
 // Route splitting (launch readiness, 23 Oct 2026: /leads was 467 KB of
-// script before its first paint on a mid-range phone): the lead sheet and
-// Start calling, and the Team, Stages and Sources views, load after the list.
+// script before its first paint on a mid-range phone): the lead page and the
+// Team, Stages and Sources views load after the list.
 const loadLeadSheet = () => import("./lead-sheet");
 const LeadSheet = dynamic(
   () => loadLeadSheet().then((module) => module.LeadSheet),
-  { ssr: false },
-);
-const CallingLoop = dynamic(
-  () => loadLeadSheet().then((module) => module.CallingLoop),
   { ssr: false },
 );
 const TeamView = dynamic(
@@ -547,7 +544,11 @@ export function LeadsRoute({
   const waiters = useRef<(() => void)[]>([]);
   const readAhead = useRef(false);
   const lastRead = useRef(0);
-  const [calling, setCalling] = useState(false);
+  // Start calling asked from outside the list (the command palette, a nudge):
+  // Call Next's round starts once the list is there (StartWhenAsked), so a
+  // lead opens one way, the lead page (orchestrator, 9 Nov 2026).
+  const [startAsked, setStartAsked] = useState(0);
+  const [startServed, setStartServed] = useState(0);
   const [adding, setAdding] = useState(false);
   // Settings → Lead sources → Import opens here (/leads?import=file).
   const [importing, setImporting] = useState(
@@ -654,7 +655,6 @@ export function LeadsRoute({
   const [picks, setPicks] = useState<PickedContact[]>([]);
   // Each opening mounts a fresh dialog, so nothing is reset in an effect.
   const [rounds, setRounds] = useState({
-    calling: 0,
     adding: 0,
     importing: 0,
     menu: 0,
@@ -1249,7 +1249,7 @@ export function LeadsRoute({
       setFocusAt(at);
       setOpenLead(leadId);
     };
-    const round = (which: "calling" | "adding") =>
+    const round = (which: "adding") =>
       setRounds((value) => ({ ...value, [which]: value[which] + 1 }));
     return {
       commands: [
@@ -1259,12 +1259,9 @@ export function LeadsRoute({
                 id: "leads:start-calling",
                 group: "Actions",
                 label: "Start calling",
-                hint: "One due lead at a time",
+                hint: "To Call's leads, one at a time",
                 icon: <PhoneCall size={16} aria-hidden="true" />,
-                run: () => {
-                  round("calling");
-                  setCalling(true);
-                },
+                run: () => setStartAsked((asked) => asked + 1),
               },
             ]
           : []),
@@ -1312,7 +1309,7 @@ export function LeadsRoute({
     authenticated,
     canStart,
     setAdding,
-    setCalling,
+    setStartAsked,
     setDialling,
     setFocusAt,
     setHolding,
@@ -1333,14 +1330,7 @@ export function LeadsRoute({
 
   // Opened from a nudge (?nudge=1): its words as the urgent card, with Start
   // calling (owner program, 25 Oct 2026, section 3).
-  useNudgeCard(
-    canStart
-      ? () => {
-          setRounds((value) => ({ ...value, calling: value.calling + 1 }));
-          setCalling(true);
-        }
-      : null,
-  );
+  useNudgeCard(canStart ? () => setStartAsked((asked) => asked + 1) : null);
 
   if (!authenticated) {
     const loading =
@@ -1857,6 +1847,7 @@ export function LeadsRoute({
         focusAt={openLead ? focusAt : null}
         onClose={closeLead}
         onChanged={refresh}
+        stages={stagesShown}
         queue={!!shownLead && !!queue?.has(shownLead)}
         onNext={nextLead}
         round={
@@ -1929,7 +1920,7 @@ export function LeadsRoute({
                     </Button>
                     <Button
                       variant="primary"
-                      onClick={() => begin("calling", setCalling)}
+                      onClick={() => void callToCall()}
                       disabled={desk.counts.open === 0}
                     >
                       <PhoneCall size={14} aria-hidden="true" />
@@ -2510,19 +2501,12 @@ export function LeadsRoute({
             onChanged={refresh}
           />
         ) : null}
-        {calling ? (
-          <CallingLoop
-            key={`calling-${rounds.calling}`}
-            open={calling}
-            me={desk.me}
-            pipeline={toCallPipeline}
-            onClose={() => {
-              setCalling(false);
-              refresh();
-            }}
-            onChanged={refresh}
-          />
-        ) : null}
+        <StartWhenAsked
+          asked={startAsked}
+          served={startServed}
+          onServed={setStartServed}
+          onStart={() => void callToCall()}
+        />
         {shared ? (
           <AddLeadDialog
             key={`shared-${hash}`}

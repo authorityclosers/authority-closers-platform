@@ -176,6 +176,11 @@
 
 /* ---------- Evidence ---------- */
 
+/* The time's words are the accent toward ink: plain accent on the chip's own
+   tint over a tinted card was 4.41 to 4.47:1 in light, under the 4.5:1 its
+   12 px words need (QA robot fc334f5d, b22cb4b8, dbd150e6, e32abfcf, 8 to 9
+   Nov 2026, the report at 1440 and 1920). Colour only: the chip keeps its
+   size and place. */
 .play {
   position: relative;
   display: inline-flex;
@@ -188,7 +193,7 @@
   border: 1px solid color-mix(in oklab, var(--sx-accent) 28%, transparent);
   border-radius: var(--lx-radius-pill);
   background: var(--sx-accent-soft);
-  color: var(--sx-accent);
+  color: color-mix(in oklab, var(--sx-accent) 80%, var(--sx-ink));
   font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;

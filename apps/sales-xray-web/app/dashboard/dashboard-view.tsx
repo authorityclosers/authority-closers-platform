@@ -114,6 +114,9 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
   });
 
   const [hiddenRecent, setHiddenRecent] = useState(0);
+  // Home's sales block has drawn its content: the sandbox card may follow it.
+  const [salesDrawn, setSalesDrawn] = useState(false);
+  const drawn = useCallback(() => setSalesDrawn(true), []);
   const [retryCount, setRetryCount] = useState(0);
   const [summaryState, setSummaryState] = useState<
     ReadState<CallSummary | null>
@@ -136,12 +139,6 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
       ? seed.sandbox.value
       : (cached?.sandbox ?? null),
   );
-  // Known at the first paint, the card leads the page, where nothing loading
-  // below it can push it (robot 95650d5c, 1 Nov 2026: 0.17 at 5 s on 3G, Home
-  // filling in above it); learnt later, it closes the page, where it pushes
-  // nothing down.
-  const [sandboxFirst] = useState(() => sandbox !== null);
-
   // A cancelled read (unmount, or a re-run of the effect) must not paint
   // "Not loaded": only the live request may change a panel.
   const loadSummary = useCallback(
@@ -251,6 +248,7 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
       // Team v2 (approved 27 Oct 2026): Needs you, Team today, then the charts.
       team="v2"
       recent={recentState.status === "ready" ? recentState.value : null}
+      onDrawn={drawn}
     />
   ) : null;
   useEffect(() => {
@@ -328,7 +326,7 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
         <DashboardBody
           team={team}
           sandbox={sandbox}
-          sandboxFirst={sandboxFirst}
+          salesDrawn={salesDrawn}
           summary={summaryState}
           activity={activityState}
           allowance={allowanceState}
@@ -343,7 +341,7 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
         <DashboardBody
           team={team}
           sandbox={sandbox}
-          sandboxFirst={sandboxFirst}
+          salesDrawn={salesDrawn}
           skeleton
           sales={sales}
           salesRole={salesRole}

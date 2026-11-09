@@ -92,8 +92,8 @@ type DashboardBodyProps = {
   team: boolean | null;
   /** The fictional AC Sandbox's contents, when this workspace is the sandbox. */
   sandbox?: SandboxFacts | null;
-  /** The card leads the page (known at the first paint) or closes it. */
-  sandboxFirst?: boolean;
+  /** The sales block above has drawn its content, so the sandbox card may follow. */
+  salesDrawn?: boolean;
   summary?: ReadState<CallSummary | null>;
   activity?: ReadState<CallActivity | null>;
   allowance?: ReadState<Allowance>;
@@ -120,7 +120,7 @@ type DashboardBodyProps = {
 export function DashboardBody({
   team,
   sandbox = null,
-  sandboxFirst = false,
+  salesDrawn = false,
   summary: summaryState = LOADING,
   activity: activityState = LOADING,
   allowance: allowanceState = LOADING,
@@ -160,17 +160,20 @@ export function DashboardBody({
   const label = (teamText: string, ownText: string, width: string) =>
     team === null ? <Ph w={width} /> : team ? teamText : ownText;
 
-  const sandboxCard = sandbox?.sandbox ? (
-    <SandboxCard facts={sandbox} team={team === true} />
-  ) : null;
-  // On an organisation's sales Home the seller's work comes first and the
-  // sandbox's own card closes the page (Home studio, 4 Nov 2026: leading it,
-  // the card pushed the next call under the tab bar for the sandbox sellers
-  // the robot and the testers use). It still never arrives above anything.
-  const cardFirst = sandboxFirst && !sales;
+  // The sandbox's own card closes the page: the work comes first (Home
+  // studio, 4 Nov 2026: leading it, the card pushed the next call under the
+  // tab bar for the sandbox sellers the robot and the testers use). A sandbox
+  // is always an organisation, whose Home is the sales Home, so the end is
+  // the card's one place, and it is drawn there once the sales block above
+  // has drawn its content. Drawn first, or under a sales block still empty,
+  // it was pushed down the page as Home filled in (QA robot 474deee5, 9 Nov
+  // 2026: 0.22 to 0.44 on load at 363 and 390, seen 345 times).
+  const sandboxCard =
+    sandbox?.sandbox && (!sales || salesDrawn) ? (
+      <SandboxCard facts={sandbox} team={team === true} />
+    ) : null;
   const content = (
     <>
-      {cardFirst ? sandboxCard : null}
       {/* One steady heading; New analysis lives in the shell, not here too.
           The workspace is named in the bar above, so the line stays put. */}
       {sales ?? (
@@ -414,7 +417,7 @@ export function DashboardBody({
           )}
         </>
       )}
-      {cardFirst ? null : sandboxCard}
+      {sandboxCard}
     </>
   );
 

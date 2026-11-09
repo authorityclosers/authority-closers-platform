@@ -110,7 +110,7 @@ export function nextLine(row: LeadRow, now: Date = new Date()): string {
 
 /** A passed time, short enough for one line: today's time alone, "yesterday
  *  6:00 pm", else the day without its time ("31 Oct"). */
-function dueWords(iso: string, now: Date): string {
+export function dueWords(iso: string, now: Date): string {
   const said = when(iso, now);
   if (said.startsWith("today ")) return said.slice("today ".length);
   if (said.startsWith("yesterday ")) return said;

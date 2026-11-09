@@ -629,14 +629,16 @@
   box-shadow: var(--sx-focus-ring);
 }
 
+/* 24 px, the least a pointer target may be (WCAG 2.5.8; QA robot 171c4df6,
+   8 Nov 2026: 20 px at 1440 on /coaching); its centre stays where it was. */
 .cornerHide {
   position: absolute;
-  top: -6px;
-  right: -6px;
+  top: -8px;
+  right: -8px;
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 1px solid var(--sx-line);
   border-radius: 50%;
