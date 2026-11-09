@@ -3,6 +3,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import {
+  closeAsBack,
+  closingByBack,
   leavingOverlay,
   OVERLAY_DEPTH_KEY,
   OVERLAY_FORWARD_EVENT,
@@ -50,6 +52,23 @@ function Host({ keep = false }: { keep?: boolean }) {
         }}
       />
       <Overlay name="Second" open={second} onClose={() => setSecond(false)} />
+    </>
+  );
+}
+
+// What each close was told: Back or not.
+const told: boolean[] = [];
+function Told() {
+  const [open, setOpen] = useState(false);
+  const shut = () => {
+    told.push(closingByBack());
+    setOpen(false);
+  };
+  useBackClose(open, shut);
+  return (
+    <>
+      <button type="button" id="open" onClick={() => setOpen(true)} />
+      <button type="button" id="close" onClick={shut} />
     </>
   );
 }
@@ -164,4 +183,26 @@ it("lets a page claim Forward onto an overlay's entry, else steps over it", asyn
   window.dispatchEvent(new PopStateEvent("popstate"));
   window.removeEventListener(OVERLAY_FORWARD_EVENT, claim);
   expect(back).toHaveBeenCalledTimes(1);
+});
+
+// The robot, 9 Nov 2026: "Move to Open Leads" lost its words on Back. An
+// overlay can tell Back (keep them for next time) from a tap that closes it.
+it("tells an overlay's close whether Back closed it", async () => {
+  told.length = 0;
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () => root.render(<Told />));
+  await tap("open");
+  await settle();
+  await act(async () => window.history.back());
+  await settle();
+  await tap("open");
+  await settle();
+  await tap("close");
+  await settle();
+  // A dialog's own cancel (Escape, a phone's back gesture) is Back too.
+  closeAsBack(() => told.push(closingByBack()));
+  expect(told).toEqual([true, false, true]);
+  expect(closingByBack()).toBe(false);
 });

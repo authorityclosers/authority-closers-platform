@@ -41,6 +41,7 @@ let travelling = false;
 let travelTimer = 0;
 let leftAt = -Infinity;
 let installed = false;
+let backing = false;
 
 function stateOf(): Record<string, unknown> {
   const state: unknown = window.history.state;
@@ -99,7 +100,9 @@ function onPop() {
   if (here < stack.length) {
     // Back: the overlays above this entry close, the top one first.
     const closing = stack.splice(here).reverse();
-    for (const entry of closing) entry.close();
+    closeAsBack(() => {
+      for (const entry of closing) entry.close();
+    });
     return;
   }
   // An entry a link left behind (no overlay is open there): step over it,
@@ -141,6 +144,29 @@ export function leavingOverlay() {
   leftAt = performance.now();
 }
 
+/**
+ * True while Back is closing overlays, inside their `onClose`: an overlay
+ * keeps what was typed for next time on Back, and drops it on X, a tap
+ * outside or a swipe down, a cancel (the robot, 9 Nov 2026: "Move to Open
+ * Leads" lost its words on Back). A dialog's own cancel (Escape, or a phone's
+ * back gesture, which a modal dialog takes before the page's history) counts
+ * as Back too: see closeAsBack.
+ */
+export function closingByBack(): boolean {
+  return backing;
+}
+
+/** Runs `close` as Back closes an overlay, so closingByBack() says so. */
+export function closeAsBack(close: () => void) {
+  const was = backing;
+  backing = true;
+  try {
+    close();
+  } finally {
+    backing = was;
+  }
+}
+
 /** While `open`, Back calls `onClose` instead of leaving the page. */
 export function useBackClose(open: boolean, onClose: () => void) {
   const latest = useRef(onClose);
@@ -175,6 +201,7 @@ export function resetBackCloseForTests() {
   travelling = false;
   window.clearTimeout(travelTimer);
   leftAt = -Infinity;
+  backing = false;
   if (installed) {
     window.removeEventListener("popstate", onPop);
     document.removeEventListener("click", onClick, true);
