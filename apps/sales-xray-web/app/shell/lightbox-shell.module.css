@@ -1088,7 +1088,9 @@
   /* r17: on phones and tablets the shell owns one 16 px gutter. The end
      keeps room for the corner cards above the tab bar (notice-center.tsx;
      the bar's own room is in .content) or the first-run tour's card,
-     whichever reaches higher (guide-overlay.tsx), so content scrolls clear. */
+     whichever reaches higher (guide-overlay.tsx), so content scrolls clear.
+     As a card leaves with the page at its end, the end keeps what reaches
+     the screen until the page scrolls up (--sx-end-hold, end-hold.ts). */
   .main {
     padding: 12px max(16px, env(safe-area-inset-right, 0px))
       max(
@@ -1096,7 +1098,8 @@
         calc(
           max(var(--sx-corner-h, 0px), var(--sx-guide-h, 0px)) -
             var(--lx-bottom-nav-h) - env(safe-area-inset-bottom, 0px) + 16px
-        )
+        ),
+        var(--sx-end-hold, 0px)
       )
       max(16px, env(safe-area-inset-left, 0px));
   }
@@ -1196,12 +1199,15 @@
      keeps room for the corner cards (notice-center.tsx) or the first-run
      tour's card (guide-overlay.tsx), so content scrolls clear of them; and a
      control given keyboard focus is scrolled clear of them too (the test
-     robot, 1 Nov 2026: 9d1c35d2). */
+     robot, 1 Nov 2026: 9d1c35d2). As a card leaves with the page at its
+     end, the end keeps what reaches the screen until the page scrolls up,
+     so nothing on screen drops (--sx-end-hold, end-hold.ts). */
   .main {
     min-height: 0;
     padding-bottom: max(
       24px,
-      calc(max(var(--sx-corner-h, 0px), var(--sx-guide-h, 0px)) + 16px)
+      calc(max(var(--sx-corner-h, 0px), var(--sx-guide-h, 0px)) + 16px),
+      var(--sx-end-hold, 0px)
     );
     scroll-padding-bottom: calc(
       max(var(--sx-corner-h, 0px), var(--sx-guide-h, 0px)) + 8px

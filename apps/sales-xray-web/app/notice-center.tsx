@@ -31,6 +31,7 @@ import {
   useReporterAvailable,
 } from "./bug-report/open";
 import { installErrorRecorder, recordError } from "./bug-report/recent-errors";
+import { keepEndInView } from "./end-hold";
 import {
   AlertHost,
   clearAlert,
@@ -784,14 +785,20 @@ function liftOverBars(stack: HTMLElement, scope: HTMLElement): number {
 
 /** The page's room for the stack (--sx-corner-h): its top to the window's bottom. */
 function keepCornerRoom(node: HTMLElement) {
-  const root = document.documentElement;
   const box = stackBox(node);
-  if (box.height < 1) root.style.removeProperty("--sx-corner-h");
-  else
-    root.style.setProperty(
-      "--sx-corner-h",
-      `${Math.ceil(window.innerHeight - box.top)}px`,
-    );
+  setCornerRoom(box.height < 1 ? 0 : Math.ceil(window.innerHeight - box.top));
+}
+
+/** Less room keeps what's on screen in place (end-hold.ts). */
+function setCornerRoom(room: number) {
+  const root = document.documentElement;
+  const was = parseFloat(root.style.getPropertyValue("--sx-corner-h")) || 0;
+  const set = () => {
+    if (room > 0) root.style.setProperty("--sx-corner-h", `${room}px`);
+    else root.style.removeProperty("--sx-corner-h");
+  };
+  if (room < was) keepEndInView(set);
+  else set();
 }
 
 /**
@@ -881,7 +888,6 @@ export function NoticeCenter() {
   useEffect(() => {
     const node = stack;
     if (!node || typeof ResizeObserver === "undefined") return;
-    const root = document.documentElement;
     const publish = () => keepCornerRoom(node);
     publish();
     const observer = new ResizeObserver(() => {
@@ -896,7 +902,7 @@ export function NoticeCenter() {
       observer.disconnect();
       cardSizes.current = null;
       window.removeEventListener("resize", publish);
-      root.style.removeProperty("--sx-corner-h");
+      setCornerRoom(0);
     };
   }, [stack]);
   useLayoutEffect(() => {
