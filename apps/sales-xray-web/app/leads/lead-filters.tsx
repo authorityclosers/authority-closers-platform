@@ -538,20 +538,27 @@ export function FilterSheet({
           value={more.when}
           onChange={(when) => setMore({ when, due: null })}
         />
-        <Choices
-          label="Sort by"
-          words={SORT_CHOICES}
-          value={
-            more.sort === "created" && more.order === "asc" ? OLDEST : more.sort
-          }
-          onChange={(sort) =>
-            setMore(
-              sort === OLDEST
-                ? { sort: "created", order: "asc" }
-                : { sort, order: null },
-            )
-          }
-        />
+        {/* One sort: the list's own, first in the sheet, when the list gives
+            it (Leads L1); this row only where it doesn't (Redmi QA F1, 10 Nov
+            2026: "Sort: Next due" at the top and "Sort by Any" at the foot). */}
+        {sort ? null : (
+          <Choices
+            label="Sort by"
+            words={SORT_CHOICES}
+            value={
+              more.sort === "created" && more.order === "asc"
+                ? OLDEST
+                : more.sort
+            }
+            onChange={(sort) =>
+              setMore(
+                sort === OLDEST
+                  ? { sort: "created", order: "asc" }
+                  : { sort, order: null },
+              )
+            }
+          />
+        )}
       </form>
     </Sheet>
   );

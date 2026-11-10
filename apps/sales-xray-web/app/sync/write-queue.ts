@@ -574,6 +574,8 @@ export type WritesSnapshot = Readonly<{
   nextAt: number;
   /** A waiting change needs the person signed in again. */
   signIn: boolean;
+  /** A waiting change was sent and didn't go (no answer, or one to try again). */
+  failed: boolean;
   /** The phone's storage refused the changes: they wait only while the app runs. */
   storageFull: boolean;
   /** When the oldest unsent change was made; 0 with none. */
@@ -589,6 +591,7 @@ const NONE: WritesSnapshot = {
   sending: false,
   nextAt: 0,
   signIn: false,
+  failed: false,
   storageFull: false,
   oldestAt: 0,
   deviceTotal: 0,
@@ -607,6 +610,7 @@ function read(): WritesSnapshot {
       ? Math.min(...waiting.map((item) => item.nextAt))
       : 0,
     signIn: waiting.some((item) => item.status === 401),
+    failed: waiting.some((item) => item.attempts > 0 || item.status !== null),
     storageFull: !storageOk && mine.length > 0,
     oldestAt: mine.length ? Math.min(...mine.map((item) => item.at)) : 0,
     deviceTotal: items().length,

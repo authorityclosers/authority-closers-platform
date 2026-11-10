@@ -358,6 +358,30 @@ it("asks for the pipeline first, then whose leads, then source, date and follow-
   expect(fields[5]).toContain("Sort by");
 });
 
+// Redmi QA F1 (10 Nov 2026): "Sort: Next due" at the top and "Sort by Any" at
+// the foot. With the list's sort first in the sheet, no second sort row.
+it("has one sort row when the list's sort is first in the sheet", async () => {
+  await act(async () =>
+    root.render(
+      <FilterSheet
+        open
+        onClose={() => undefined}
+        filters={NONE}
+        defaultWho="team"
+        canPickWho
+        pipes={PIPES}
+        onApply={() => undefined}
+        sort={{ defaultLabel: "Next due", same: "next_action" }}
+      />,
+    ),
+  );
+  const fields = [...document.querySelectorAll("form > *")].map(
+    (field) => field.textContent ?? "",
+  );
+  expect(fields.filter((text) => text.startsWith("Sort"))).toHaveLength(1);
+  expect(fields.some((text) => text.includes("Sort by"))).toBe(false);
+});
+
 it("sorts oldest first: the newest-first order, reversed", async () => {
   const onApply = vi.fn();
   await act(async () =>
