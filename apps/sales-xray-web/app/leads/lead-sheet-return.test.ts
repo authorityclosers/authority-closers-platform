@@ -17,6 +17,9 @@ it("brings the call's question into view from below or above", () => {
   expect(questionPlace(-240, 735)).toBe("start");
   expect(questionPlace(30, 735)).toBe("start");
   expect(questionPlace(200, 735)).toBeNull();
+  // In sight, but its answers under the Call and the tab bar: up to the top.
+  expect(questionPlace(200, 735, 64, 690)).toBe("start");
+  expect(questionPlace(200, 735, 64, 560)).toBeNull();
 });
 
 // Redmi QA C2 (10 Nov 2026): back from a call the phone app placed, nothing

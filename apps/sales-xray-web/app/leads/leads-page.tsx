@@ -62,6 +62,7 @@ import { PhoneLogCard } from "./phone-log-card";
 
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { ActionSheet } from "./action-sheet";
+import { useTabAgain } from "../shell/tab-again";
 import { backToOpener } from "./back-to-opener";
 import { IN_APP_CALL, InAppCallHint, useInPhoneApp } from "./call-hint";
 import { deskWithMoves, useLeadMoves } from "./lead-moves";
@@ -148,6 +149,7 @@ import {
   pickableStages,
   pipelinesFor,
   rememberView,
+  keepsView,
   sideStage,
   stagesPipeline,
   useWide,
@@ -633,6 +635,11 @@ export function LeadsRoute({
   const [search, setSearch] = useState(() => params.get("q") ?? "");
   // Sort and the other filters, over the whole list (owner, 24 Oct 2026).
   const [more, setMore] = useState<ListMore>(() => moreFrom(params));
+  // The list the address opened with (a Home tile, a link): shown, never kept
+  // as the last view.
+  const [openedWith] = useState<ListMore | null>(() =>
+    params.toString() ? moreFrom(params) : null,
+  );
   const [query, setQuery] = useState(() => (params.get("q") ?? "").trim());
   // Counts answer a question (who, search, pipeline); a refresh asks it again
   // and the last answer stays on the tabs meanwhile (Redmi, 22 Oct 2026: the
@@ -1196,6 +1203,7 @@ export function LeadsRoute({
   const restoredNow = restoredFor === contextKey;
   useEffect(() => {
     if (!restoredNow || !stageView || view !== OPENING_STAGE) return;
+    if (!keepsView(more, openedWith)) return;
     // The view's own address too, so a refresh or Back keeps it.
     if (rememberView(contextKey, more) && !addressKey)
       window.history.replaceState(
@@ -1203,7 +1211,20 @@ export function LeadsRoute({
         "",
         viewHref(OPENING_STAGE, null, { more }),
       );
-  }, [restoredNow, stageView, view, more, addressKey, contextKey]);
+  }, [restoredNow, stageView, view, more, addressKey, contextKey, openedWith]);
+  // The Leads tab on a lead's page shows the list (Redmi QA N1, 10 Nov 2026:
+  // the tab took ?lead= off the address and the lead stayed open over it).
+  // Above the page's early returns, so its hooks keep their order; it closes
+  // what closeLead closes, with no step back (the tab stays on Leads).
+  useTabAgain("leads", () => {
+    if (!openLead) return;
+    setReturnTo(null);
+    setBook(NO_ROUND);
+    setOpenLead(null);
+    setIntent(null);
+    setFocusAt(null);
+    setQueue(null);
+  });
   // A table on a computer takes the whole width; a lead opens beside it.
   const [tableMode, setTableMode] = useState(false);
   const onCounts = useCallback(

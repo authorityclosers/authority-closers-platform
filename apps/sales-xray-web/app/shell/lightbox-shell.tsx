@@ -56,6 +56,7 @@ import { AddSheet } from "./add-sheet";
 import { AskDipakSheet } from "./ask-deepak";
 import { searchTogether, warmLeadsSearch } from "./search-together";
 import { useAppRouter } from "./app-router";
+import { tabAgain } from "./tab-again";
 import { useShellProfile } from "./profile-store";
 import { callHref, type Allowance } from "../acquisition-client";
 import { CALLS_PATH } from "../analysis-routes";
@@ -549,6 +550,8 @@ function LightboxShellFrame({
   // A light tap in the hand when the phone's tab changes, as iOS does.
   const tapTab = (tab: PhoneTab) => () => {
     if (tab !== phoneTab) tick();
+    // Its place is on screen: back to its start (Leads: the list, N1).
+    else tabAgain(tab);
   };
   // Phones call the dashboard Home, as its tab does (owner, 17 Oct).
   const barTitle = place === "dashboard" && !pageName ? "Home" : pageTitle;
