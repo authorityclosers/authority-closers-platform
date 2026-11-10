@@ -12,6 +12,7 @@ import {
   callNextView,
   FollowUpTabs,
   LeadSearch,
+  StageChips,
   StagePicker,
   ViewTabs,
   WorkSplit,
@@ -223,6 +224,44 @@ it("names every stage a seller sees, on the chosen side, in the list's order", a
   );
   await act(async () => rows()[0].click());
   expect(onChange).toHaveBeenLastCalledWith(null);
+});
+
+// Owner bug 193 (9 Nov 2026, his OnePlus): All stages opens a list of every
+// stage, with a cue that it is a drop-down; the chips after it still pick the
+// stages holding leads in one tap.
+it("opens every stage from All stages, its chevron saying so", async () => {
+  const onChange = vi.fn();
+  const seller = pickableStages(STAGES, false);
+  await act(async () =>
+    root.render(
+      <StageChips
+        stages={seller}
+        side="inbound"
+        value={null}
+        counts={{ new: 3 }}
+        onChange={onChange}
+      />,
+    ),
+  );
+  const all = host.querySelector<HTMLButtonElement>(
+    'button[aria-haspopup="listbox"]',
+  )!;
+  expect(all.textContent).toBe("All stages 3");
+  expect(all.getAttribute("aria-expanded")).toBe("false");
+  expect(all.querySelectorAll("svg")).toHaveLength(2);
+  expect(
+    [...host.querySelectorAll("button[aria-pressed]")].map(
+      (chip) => chip.textContent,
+    ),
+  ).toEqual(["New Lead 3"]);
+  await act(async () => all.click());
+  expect(
+    [...host.querySelectorAll('[role="option"]')].map((row) => row.textContent),
+  ).toEqual(["All stages3", "New Lead3", "Open Leads0", "Not Connected0"]);
+  await act(async () =>
+    host.querySelectorAll<HTMLElement>('[role="option"]')[2].click(),
+  );
+  expect(onChange).toHaveBeenLastCalledWith("open_leads");
 });
 
 it("searches on the page, and clearing the search leaves the Filter alone", async () => {
