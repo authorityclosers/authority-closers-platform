@@ -264,3 +264,22 @@ it("is the line above the rows on a phone page with a dock, not a corner card ov
   expect(dock?.textContent).toContain("Finish setting up");
   expect(dock?.textContent).toContain("Finish");
 });
+
+it("waits while a sheet is up, so it never covers the sheet's buttons", async () => {
+  // Redmi QA on production (10 Nov 2026): "Finish setting up" sat over the
+  // account menu's Appearance, Add lead's footer, Notes, Remind me and Move.
+  fakePhone(() => ({ ...ALL, callLog: false }));
+  await mount();
+  await act(async () => byLabel("Not now: Call log").click());
+  await settle();
+  expect(reminder()).toBe(true);
+  const sheet = document.createElement("dialog");
+  document.body.append(sheet);
+  await act(async () => sheet.setAttribute("open", ""));
+  await settle();
+  expect(reminder()).toBe(false);
+  await act(async () => sheet.removeAttribute("open"));
+  await settle();
+  expect(reminder()).toBe(true);
+  sheet.remove();
+});

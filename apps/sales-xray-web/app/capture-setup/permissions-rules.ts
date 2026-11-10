@@ -108,8 +108,17 @@ const REQUIRED: ReadonlySet<PermissionKey> = new Set<PermissionKey>([
   "phone",
   "contacts",
   "notifications",
-  "recordings",
   ...(BATTERY_REQUIRED ? (["battery"] as const) : []),
+]);
+
+/**
+ * Never holds the app, in either workspace: the recordings folder has Not now,
+ * then the slim reminder until it is done (Redmi QA on production, 10 Nov
+ * 2026: a new seller who wouldn't choose a folder couldn't reach Home, and
+ * Back did nothing).
+ */
+const ALWAYS_CAN_WAIT: ReadonlySet<PermissionKey> = new Set<PermissionKey>([
+  "recordings",
 ]);
 
 /**
@@ -140,8 +149,10 @@ export function permissionItems(
     value: Omit<PermissionItem, "required" | "canWait">,
   ): PermissionItem => ({
     ...value,
-    required: needs(value.key),
-    canWait: organisation && !REQUIRED.has(value.key),
+    required: needs(value.key) && !ALWAYS_CAN_WAIT.has(value.key),
+    canWait:
+      (organisation && !REQUIRED.has(value.key)) ||
+      ALWAYS_CAN_WAIT.has(value.key),
   });
   const items = [
     item({
