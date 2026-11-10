@@ -165,9 +165,10 @@ it("shows one section with its title, the way back, and the side list lit", asyn
     ),
   );
   expect(host.querySelector("h1")?.textContent).toBe("Selling");
-  expect(host.querySelector('a[href="/settings"]')?.textContent).toContain(
-    "Settings",
-  );
+  // The top bar says Settings; the way back is its chevron, named for readers.
+  const back = host.querySelector('a[href="/settings"]');
+  expect(back?.getAttribute("aria-label")).toBe("Back to Settings");
+  expect(back?.textContent).toBe("");
   expect(
     host.querySelector("a[aria-current='page']")?.getAttribute("href"),
   ).toBe("/settings/selling");

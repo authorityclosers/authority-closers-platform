@@ -137,9 +137,13 @@ export function SettingsShell({ children }: { children: ReactNode }) {
       <div className={styles.content} id="settings-content">
         {section ? (
           <>
-            <Link href="/settings" className={styles.back}>
-              <ChevronLeft size={16} aria-hidden="true" />
-              Settings
+            <Link
+              href="/settings"
+              className={styles.back}
+              aria-label="Back to Settings"
+              title="Back to Settings"
+            >
+              <ChevronLeft size={22} aria-hidden="true" />
             </Link>
             <header className={styles.header}>
               <h1>{section.label}</h1>
