@@ -1814,7 +1814,7 @@ function LightboxShellFrame({
         data-shell-content=""
         data-arrived={arrived ? "" : undefined}
       >
-        <header className={styles.mobileBar}>
+        <header className={styles.mobileBar} data-pull-bar="">
           {/* r17: the lens, then where you are: workspace over page title. */}
           {workspaceLabel || pageTitle ? (
             <div className={styles.mobileWorkspace}>

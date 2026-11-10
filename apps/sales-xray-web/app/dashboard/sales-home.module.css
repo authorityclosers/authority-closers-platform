@@ -1,6 +1,7 @@
 /* Home in an organisation (owner, 22 Oct 2026): sales first. Tokens only. */
 
 .home {
+  position: relative;
   display: grid;
   gap: 20px;
   min-width: 0;

@@ -511,6 +511,69 @@ it("confirms renewal at checkout when no server quote exists", async () => {
 
 // Plans and prices are for whoever pays (roles.ts "billing.view"): a Seller of
 // an organisation who opens /plans reads one calm line, with nothing to buy.
+it("shows an organisation's owner its seats with billing, and a seller none", async () => {
+  // The owner's bug 185 (6 Nov 2026): seats are managed with billing, not on Team.
+  const seats = {
+    paid_seats: 0,
+    complimentary_seats: 4,
+    total_seats: 4,
+    active_members: 2,
+    pending_invites: 1,
+    seats_available: 1,
+    can_buy: true,
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: unknown) =>
+      String(url).includes("/v1/organisation/seats")
+        ? new Response(JSON.stringify(seats), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          })
+        : new Response("{}", { status: 404 }),
+    ),
+  );
+  const pane = (role: "owner" | "member") => (
+    <WorkspaceAccessContext.Provider
+      value={{
+        status: "ready",
+        authenticated: true,
+        context: {
+          personId: "fictional-person",
+          sessionId: "fictional-session",
+          tenantId: "fictional-workspace",
+        },
+        workspaces: [
+          {
+            tenant_id: "fictional-workspace",
+            kind: "organisation",
+            name: "Fictional Homes",
+            role,
+            sales_xray_enabled: true,
+          },
+        ],
+        retry: () => {},
+      }}
+    >
+      <PlanAndBillingPane
+        status="ready"
+        allowance={{ state: "error" }}
+        onRetry={() => {}}
+      />
+    </WorkspaceAccessContext.Provider>
+  );
+  try {
+    await act(async () => root.render(pane("owner")));
+    await vi.waitFor(() =>
+      expect(host.textContent).toContain("3 of 4 seats taken"),
+    );
+    await act(async () => root.render(pane("member")));
+    expect(host.textContent).not.toContain("seats taken");
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
 it("shows a Seller of an organisation no plans, prices or buttons to pay", async () => {
   await act(async () =>
     root.render(

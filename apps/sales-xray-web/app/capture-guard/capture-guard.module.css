@@ -35,16 +35,24 @@
   padding-inline: 14px;
 }
 
+/* The words take at least 10 rem; when the action would leave them less, it
+   goes under them instead of squeezing them into a column a few words wide
+   (owner's bug 115, re-checked at 130% text, 10 Nov 2026: "Automatic uploads"
+   beside "Apps & devices"). A short check still keeps its action beside it. */
 .check {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 4px 12px;
   padding-block: 10px;
   border-bottom: 1px solid var(--sx-line);
 }
 .check span {
   min-width: 0;
+}
+.check > span:first-child {
+  flex: 1 1 10rem;
 }
 .check strong,
 .check small {

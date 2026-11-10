@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """sx: the Sales X-Ray command line and MCP server, on the public API (/v1/api).
 
-Download: https://salesxray.authorityclosers.com/developers/sx.py
+Download: https://app.salesxray.in/developers/sx.py
 
 One file, Python 3.10+ standard library only. Uses an API key made in Sales X-Ray
 under Organisation -> Integrations; the key is read from SX_API_KEY (never a
 command-line argument, so it stays out of shell history and process lists).
 
     export SX_API_KEY=sxk_live_...            # or sxk_test_... on staging
-    export SX_API_BASE=https://salesxray.authorityclosers.com/v1/api   # the default
+    export SX_API_BASE=https://api.salesxray.in/v1/api         # the default
 
     sx me                                     # the key's organisation and scopes
     sx calls [--before CALL_ID]               # calls, newest first, 50 a page
@@ -46,7 +46,7 @@ import uuid
 from collections.abc import Callable
 from typing import Any
 
-DEFAULT_BASE = "https://salesxray.authorityclosers.com/v1/api"
+DEFAULT_BASE = "https://api.salesxray.in/v1/api"
 VERSION = "1.0.0"
 TIMEOUT = 30
 

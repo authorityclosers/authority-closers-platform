@@ -74,6 +74,7 @@ import {
   ORG_ROLES,
   readMemberPhotos,
   readOrganisation,
+  readSeats,
   removeMember,
   revokeInvite,
   saveDomains,
@@ -88,12 +89,7 @@ import { can, ROLE_HINT, ROLE_LABEL, rolesToGive } from "./roles";
 import styles from "./organisation.module.css";
 import { ReceiptActivitySection } from "./receipt-activity";
 import { CaptureSetupPanel } from "./capture-setup-panel";
-import {
-  inviteBlock,
-  SeatsPanel,
-  SeatUsePanel,
-  seatUseFrom,
-} from "./seats-panel";
+import { inviteBlock, SeatUsePanel, seatUseFrom } from "./seats-panel";
 import { readEffort, type Effort } from "../performance/performance-client";
 import { TeamPatternsSection } from "./team-patterns-section";
 import {
@@ -404,8 +400,26 @@ export function OrganisationView({
   // Owners, admins and Finance see seats; a member change reads them again.
   const seesSeats = live && (canManage || can(myRole, "billing.view"));
   const [seatsVersion, setSeatsVersion] = useState(0);
-  // The Seats card's counts: Invite closes, with the reason, when none is free.
   const [orgSeats, setOrgSeats] = useState<OrgSeats | null>(null);
+  // Seats are shown with billing now, in Settings › Plan & usage (owner's bug
+  // 185, 6 Nov 2026: "Seats should be managed ... at a separate level"). Team
+  // still reads them, so Invite closes with the reason when no seat is free.
+  const onTeam = shows("members");
+  useEffect(() => {
+    if (!seesSeats || !onTeam) return;
+    const controller = new AbortController();
+    readSeats(controller.signal).then(
+      (seats) => {
+        if (!controller.signal.aborted) setOrgSeats(seats);
+      },
+      () => {
+        if (!controller.signal.aborted) setOrgSeats(null);
+      },
+    );
+    return () => controller.abort();
+  }, [seesSeats, onTeam, tenantId, seatsVersion]);
+  // Overview's Invite people opens Team with the invite sheet up.
+  const [inviteOnOpen, setInviteOnOpen] = useState(false);
   // Seat use counts the calls Analytics counts: the lead desk's own, last 30
   // days (persona QA, 31 Oct 2026: 0 here, 343 in Analytics).
   const [deskCalls, setDeskCalls] = useState<Effort | null>(null);
@@ -546,11 +560,14 @@ export function OrganisationView({
                 members={members}
                 memberCount={memberCount}
                 team={seesTeam}
-                onInvite={() =>
-                  (embedded || sections) && router
-                    ? router.push("/settings/team")
-                    : setTab("members")
-                }
+                onInvite={() => {
+                  if ((embedded || sections) && router)
+                    router.push("/settings/team");
+                  else {
+                    setInviteOnOpen(true);
+                    setTab("members");
+                  }
+                }}
                 retry={reloadActivity}
                 analysed={
                   seesTeam && tenantId !== null ? (
@@ -572,12 +589,6 @@ export function OrganisationView({
               />
             )}
 
-            {shows("members") && seesSeats && (
-              <SectionBoundary name="Seats">
-                <SeatsPanel version={seatsVersion} onSeats={setOrgSeats} />
-              </SectionBoundary>
-            )}
-
             {shows("members") && (
               <SectionBoundary name="Members">
                 <MembersPanel
@@ -594,6 +605,8 @@ export function OrganisationView({
                   yourPersonId={access?.context?.personId ?? null}
                   onMissing={() => setMissing(true)}
                   inviteBlocked={seesSeats ? inviteBlock(orgSeats) : null}
+                  inviteOnOpen={inviteOnOpen}
+                  onInviteOpened={() => setInviteOnOpen(false)}
                 />
               </SectionBoundary>
             )}
@@ -1473,6 +1486,8 @@ function MembersPanel({
   yourPersonId,
   onMissing,
   inviteBlocked = null,
+  inviteOnOpen = false,
+  onInviteOpened,
 }: {
   members: Live<OrgMember[]>;
   reload: () => void;
@@ -1486,8 +1501,18 @@ function MembersPanel({
   onMissing: () => void;
   /** Why no invite can go out now (no free seat), or null. */
   inviteBlocked?: string | null;
+  /** Opens the invite sheet as the panel shows (Overview's Invite people). */
+  inviteOnOpen?: boolean;
+  onInviteOpened?: () => void;
 }) {
   const [email, setEmail] = useState("");
+  // Invite is its own sheet, opened from the + by People (owner's bug 185,
+  // 6 Nov 2026: "just a plus, for giving you a nicer pop-up way to invite
+  // people"), not a form above the list.
+  const [inviting, setInviting] = useState(inviteOnOpen && canManage);
+  useEffect(() => {
+    if (inviteOnOpen) onInviteOpened?.();
+  }, [inviteOnOpen, onInviteOpened]);
   const dates = useDisplayDates();
   // Photos, titles and teams from the organisation's Pulse link, when it has one.
   const [pulsePeople, setPulsePeople] = useState<Record<string, PulsePerson>>(
@@ -1559,26 +1584,27 @@ function MembersPanel({
       return;
     }
     setInvalid("");
-    setConfirming({
-      message: `Invite ${address} as ${ROLE_LABEL[additionRole]}? ${ROLE_HINT[additionRole]} They join once they accept.`,
-      verb: "Invite",
-      action: async () => {
-        const answer = await addMember(address, additionRole);
-        // Older servers add people at once; newer ones invite them.
-        const invitedNow =
-          !answer ||
-          typeof answer !== "object" ||
-          (answer as { status?: unknown }).status !== "active";
-        notify({
-          id: ACTION_NOTICE,
-          tone: "success",
-          title: invitedNow ? `${address} is invited` : `${address} was added`,
-          message: invitedNow
-            ? "When they sign in with this email, the invitation waits in their workspace menu."
-            : undefined,
-        });
-      },
-      added: true,
+    // The invite sheet is the deliberate step (it shows the role's hint), so
+    // its Invite sends, with no second sheet to confirm (owner's bug 185).
+    void run(async () => {
+      const answer = await addMember(address, additionRole);
+      // Older servers add people at once; newer ones invite them.
+      const invitedNow =
+        !answer ||
+        typeof answer !== "object" ||
+        (answer as { status?: unknown }).status !== "active";
+      notify({
+        id: ACTION_NOTICE,
+        tone: "success",
+        title: invitedNow ? `${address} is invited` : `${address} was added`,
+        message: invitedNow
+          ? "When they sign in with this email, the invitation waits in their workspace menu."
+          : undefined,
+      });
+    }).then((saved) => {
+      if (!saved) return;
+      setEmail("");
+      setInviting(false);
     });
   };
 
@@ -1617,15 +1643,40 @@ function MembersPanel({
             <span className={styles.count}>{rows.length - invited}</span>
           ) : null}
         </h2>
-        {invited > 0 ? (
-          <span>
-            {invited} {invited === 1 ? "invite" : "invites"} waiting
-          </span>
-        ) : null}
+        <span className={styles.headTools}>
+          {invited > 0 ? (
+            <span>
+              {invited} {invited === 1 ? "invite" : "invites"} waiting
+            </span>
+          ) : null}
+          {canManage ? (
+            <button
+              type="button"
+              className={styles.inviteButton}
+              aria-label="Invite people"
+              title="Invite people"
+              disabled={members.status !== "ready"}
+              onClick={() => setInviting(true)}
+            >
+              <UserPlus size={18} aria-hidden="true" />
+            </button>
+          ) : null}
+        </span>
       </div>
       <div className={styles.surface}>
-        {canManage ? (
-          <form className={styles.addRow} onSubmit={add} noValidate>
+        {!canManage && members.status === "ready" ? (
+          <p className={styles.footnote}>
+            Only owners and admins see everyone, add people or change roles.
+          </p>
+        ) : null}
+
+        <Sheet
+          open={inviting}
+          onClose={() => setInviting(false)}
+          title="Invite people"
+          wide="center"
+        >
+          <form className={styles.inviteForm} onSubmit={add} noValidate>
             <label
               className={styles.field}
               data-invalid={invalid ? "" : undefined}
@@ -1633,7 +1684,7 @@ function MembersPanel({
               <UserPlus size={15} aria-hidden="true" />
               <input
                 type="email"
-                placeholder="Invite people by email"
+                placeholder="Their email address"
                 value={email}
                 onChange={(event) => {
                   setEmail(event.target.value);
@@ -1650,8 +1701,13 @@ function MembersPanel({
                 }
               />
             </label>
+            <label className={styles.inviteLabel} htmlFor="org-invite-role">
+              Role
+            </label>
             <Picker
+              id="org-invite-role"
               className={styles.select}
+              mode="inline"
               title="Role for the new person"
               value={additionRole}
               options={rolesToGive(isOwner).map((item) => ({
@@ -1662,13 +1718,9 @@ function MembersPanel({
               disabled={addDisabled}
               ariaLabel="Role for the new person"
             />
-            <button
-              type="submit"
-              className={styles.primary}
-              disabled={addDisabled}
-            >
-              Invite
-            </button>
+            <p className={styles.inviteHint}>
+              {ROLE_HINT[additionRole]} They join once they accept.
+            </p>
             {inviteBlocked && !invalid ? (
               <small
                 id="org-add-blocked"
@@ -1677,6 +1729,11 @@ function MembersPanel({
               >
                 {inviteBlocked}
               </small>
+            ) : null}
+            {inviteBlocked && !invalid ? (
+              <Link className={styles.seatsLink} href="/settings/plan">
+                See seats in Plan &amp; usage
+              </Link>
             ) : null}
             {invalid ? (
               <small
@@ -1687,12 +1744,15 @@ function MembersPanel({
                 {invalid}
               </small>
             ) : null}
+            <button
+              type="submit"
+              className={styles.primary}
+              disabled={addDisabled}
+            >
+              {busy ? "Sending…" : "Invite"}
+            </button>
           </form>
-        ) : members.status === "ready" ? (
-          <p className={styles.footnote}>
-            Only owners and admins see everyone, add people or change roles.
-          </p>
-        ) : null}
+        </Sheet>
 
         <Sheet
           open={more !== null}

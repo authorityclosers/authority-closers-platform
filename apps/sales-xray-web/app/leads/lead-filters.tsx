@@ -14,7 +14,13 @@
  */
 
 import { ArrowUpDown, ChevronDown, SlidersHorizontal, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { Button } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
@@ -401,6 +407,24 @@ export function FilterSheet({
     onApply({ ...next, q: next.q.trim() });
     onClose();
   };
+  // Show as applies the sheet and closes it, so the list shows its new look
+  // at once (owner, 10 Nov 2026, his OnePlus: tapping Show as "changes
+  // everything below, and it's unclear what happened"). The switch is the
+  // list's own, portalled here, so its click is heard in the page, once the
+  // list has taken it.
+  const applyNow = useRef<() => void>(() => undefined);
+  useLayoutEffect(() => {
+    applyNow.current = () => apply(draft);
+  });
+  const layoutRow = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return;
+    const heard = (event: Event) => {
+      if ((event.target as Element | null)?.closest?.("button"))
+        window.setTimeout(() => applyNow.current(), 0);
+    };
+    node.addEventListener("click", heard);
+    return () => node.removeEventListener("click", heard);
+  }, []);
   return (
     <Sheet
       open={open}
@@ -444,7 +468,7 @@ export function FilterSheet({
           />
         ) : null}
         {layoutSlot ? (
-          <div className={styles.sheetLayout}>
+          <div className={styles.sheetLayout} ref={layoutRow}>
             <span>Show as</span>
             <span ref={layoutSlot} />
           </div>

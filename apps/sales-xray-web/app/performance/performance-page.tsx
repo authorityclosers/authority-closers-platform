@@ -36,8 +36,11 @@ export function PerformanceSkeleton({
 export function PerformanceRoute({
   title = "Performance",
   section,
+  visual = false,
 }: {
   title?: string;
+  /** Growth's tiles and day rhythm instead of the tables. */
+  visual?: boolean;
   /** A heading over the view: "Analytics" on My Growth. */
   section?: string;
 }) {
@@ -70,6 +73,7 @@ export function PerformanceRoute({
       {section ? <h2 className={styles.section}>{section}</h2> : null}
       <PerformanceView
         key={`${access.context?.personId}:${access.context?.tenantId}`}
+        visual={visual}
       />
     </AcquisitionShell>
   );

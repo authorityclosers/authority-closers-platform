@@ -27,6 +27,36 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
+it("says one call, not 1 calls", () => {
+  // Seen at the owner's settings, 10 Nov 2026: "Authority Closers 1 calls".
+  const one = {
+    ...analyticsFixture,
+    members: analyticsFixture.members.slice(0, 1),
+    items: [
+      {
+        event_id: "fixture-one-call",
+        lead_id: "fictional-lead",
+        lead_name: "Fictional Lead",
+        stage_label: null,
+        event: {
+          kind: "call",
+          at: new Date(
+            Date.parse(analyticsFixture.now) - 3600000,
+          ).toISOString(),
+          actor_person_id: analyticsFixture.members[0].personId,
+          actor_name: analyticsFixture.members[0].name,
+          connected: true,
+          duration_seconds: 60,
+        },
+      },
+    ],
+  } as typeof analyticsFixture;
+  act(() => root.render(<AnalyticsView team initial={one} />));
+  const row = host.querySelector('ul[aria-label="People sorted by calls"] li');
+  expect(row?.textContent).toContain("1 call");
+  expect(row?.textContent).not.toContain("1 calls");
+});
+
 it("sorts people, shows seven at first, and opens their People page", () => {
   act(() => root.render(<AnalyticsView team initial={analyticsFixture} />));
   expect(

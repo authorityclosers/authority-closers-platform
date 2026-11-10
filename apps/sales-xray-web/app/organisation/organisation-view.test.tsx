@@ -263,7 +263,18 @@ async function typeOrganisationName(value: string) {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
+/** People's + opens the invite sheet (owner's bug 185); its X closes it. */
+const openInvite = () => click("Invite people");
+const closeInvite = () =>
+  act(async () =>
+    host
+      .querySelector<HTMLButtonElement>(
+        'dialog[open] button[aria-label="Close"]',
+      )!
+      .click(),
+  );
 async function add() {
+  await openInvite();
   await act(async () => {
     const input = host.querySelector<HTMLInputElement>(
       'input[aria-label="Email to invite"]',
@@ -276,8 +287,10 @@ async function add() {
   });
   await act(async () =>
     host
-      .querySelector("form")!
-      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+      .querySelector<HTMLInputElement>('input[aria-label="Email to invite"]')!
+      .form!.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      ),
   );
 }
 
@@ -298,14 +311,34 @@ it("reads the header, zero usage, dates and invite identity from the real contra
   expect(host.textContent).not.toContain("Minutes");
 });
 
+it("sends an invite from its sheet as one keyed action and refreshes both reads", async () => {
+  // The invite sheet is the deliberate step, so Invite sends at once (owner's
+  // bug 185, 6 Nov 2026: "a nicer pop-up way to invite people").
+  await render();
+  await click("Members");
+  await add();
+  expect(writes()).toHaveLength(1);
+  const [url, init] = writes()[0];
+  expect(url).toBe("/v1/organisation/members");
+  expect(init.method).toBe("POST");
+  expect(JSON.parse(String(init.body))).toEqual({
+    email: "add@example.com",
+    role: "member",
+  });
+  expect(new Headers(init.headers).get("Idempotency-Key")).toMatch(
+    /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/,
+  );
+  // The invite sheet slides away, then closes.
+  await vi.waitFor(() =>
+    expect(host.querySelector('dialog[open], [role="dialog"]')).toBeNull(),
+  );
+  for (const read of ["/v1/organisation", "/v1/organisation/members"])
+    expect(
+      fetchMock.mock.calls.filter(([url]) => url === read).length,
+    ).toBeGreaterThan(1);
+});
+
 it.each([
-  [
-    "add",
-    add,
-    "/v1/organisation/members",
-    "POST",
-    { email: "add@example.com", role: "member" },
-  ],
   [
     "role",
     () => select("Role for Dipak", "admin"),
@@ -407,7 +440,9 @@ it("cancels a role change without writing", async () => {
 it("refreshes ownership permissions and uses member additions after a transfer", async () => {
   await render();
   await click("Members");
+  await openInvite();
   await select("Role for the new person", "admin");
+  await closeInvite();
   await pick("Dipak", "Make owner");
   await typeOrganisationName("Authority Closers");
   org().role = "admin";
@@ -418,8 +453,8 @@ it("refreshes ownership permissions and uses member additions after a transfer",
   // An admin now: Dipak can be removed, never made owner from here.
   expect(await moreItems("Dipak")).toEqual(["Remove"]);
   expect(picker("Role for Dipak")).toBeNull();
+  // The invite sheet's Invite sends; no second sheet asks again (bug 185).
   await add();
-  await confirm();
   expect(JSON.parse(String(writes()[1][1].body)).role).toBe("member");
 });
 it("allows admins to add/remove members and revoke pending invites", async () => {
@@ -430,6 +465,7 @@ it("allows admins to add/remove members and revoke pending invites", async () =>
   list.members[2].role = "admin";
   await render();
   await click("Members");
+  await openInvite();
   await act(async () => picker("Role for the new person")!.click());
   expect(
     [...host.querySelectorAll('[role="option"]')].map(
@@ -437,6 +473,7 @@ it("allows admins to add/remove members and revoke pending invites", async () =>
     ),
   ).toEqual(["Sales manager", "Seller", "Viewer", "Finance"]);
   await act(async () => picker("Role for the new person")!.click());
+  await closeInvite();
   expect(picker("Role for Dipak")).toBeNull();
   expect(button("More actions for Admin")).toBeUndefined();
   expect(button("More actions for Dipak").disabled).toBe(false);
@@ -535,8 +572,9 @@ it("gives a new organisation one next step instead of zero tiles", async () => {
       .querySelector('button[aria-label="Members"]')
       ?.getAttribute("aria-pressed"),
   ).toBe("true");
+  // Straight into the invite sheet (owner's bug 185).
   expect(
-    host.querySelector('input[aria-label="Email to invite"]'),
+    host.querySelector('dialog[open] input[aria-label="Email to invite"]'),
   ).not.toBeNull();
 
   // With a team but no calls yet: the next step is a call, not an invite.
@@ -568,10 +606,7 @@ it("does not invent rows or usage when members cannot load", async () => {
   expect(host.querySelectorAll('[role="row"]')).toHaveLength(1);
   expect(host.textContent).toContain("Members could not be loaded");
   expect(host.textContent).not.toContain("admin@example.com");
-  expect(
-    host.querySelector<HTMLInputElement>('input[aria-label="Email to invite"]')
-      ?.disabled,
-  ).toBe(true);
+  expect(button("Invite people").disabled).toBe(true);
 });
 it("shows Call capture only once the people have loaded, so the list never pushes it down", async () => {
   // The QA robot, 8 Nov 2026 (0f2cebf6): on 3G at 363 the People list grew
@@ -1441,7 +1476,7 @@ it("uses the shared measured display name in People rows without rewriting ident
   expect(writes()).toHaveLength(0);
 });
 
-it("shows seats above People and reads them again after a removal frees one", async () => {
+it("reads seats for Invite on Team, shows them only with billing, and reads them again after a removal frees one", async () => {
   routes["/v1/organisation/seats"] = {
     paid_seats: 0,
     complimentary_seats: 4,
@@ -1453,13 +1488,12 @@ it("shows seats above People and reads them again after a removal frees one", as
   };
   await render();
   await click("Members");
-  await vi.waitFor(() =>
-    expect(host.textContent).toContain("3 of 4 seats taken"),
-  );
-  expect(host.textContent).toContain("4 free seats from Authority Closers");
   const seatReads = () =>
     fetchMock.mock.calls.filter(([url]) => url === "/v1/organisation/seats")
       .length;
+  await vi.waitFor(() => expect(seatReads()).toBeGreaterThan(0));
+  // The card itself is in Settings › Plan & usage now (owner's bug 185).
+  expect(host.textContent).not.toContain("seats taken");
   const before = seatReads();
   await pick("Dipak", "Remove");
   expect(
@@ -1494,6 +1528,7 @@ it("closes Invite with the reason when no seat is free, and keeps Remove and Rev
   routes["/v1/organisation/seats"] = noFreeSeat;
   await render();
   await click("Members");
+  await openInvite();
   const reason =
     "No seats yet, so invites can't go out. Buy seats to invite your team.";
   await vi.waitFor(() =>
@@ -1531,6 +1566,7 @@ it.each([
     ).toBe(true),
   );
   await act(async () => undefined);
+  await openInvite();
   expect(host.querySelector("#org-add-blocked")).toBeNull();
   expect(button("Invite").disabled).toBe(false);
   expect(

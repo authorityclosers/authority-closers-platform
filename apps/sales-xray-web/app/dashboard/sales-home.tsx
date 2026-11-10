@@ -32,7 +32,8 @@ import { MyTasks, SellerBlocks, useSidesAccess } from "./seller-home";
 import type { Side } from "../ui/side-selector";
 import { SetupStart } from "./home-v2";
 import { TeamFloor, type StageKeys } from "./team-floor";
-import { HomeLoadWatch, useHomeRead, useOnline } from "./home-load";
+import { HomeLoadWatch, retryHome, useHomeRead, useOnline } from "./home-load";
+import { PullMark, usePullToRefresh } from "../shell/pull-refresh";
 import { RevenueBar } from "./revenue-bar";
 import { TeamControls } from "./team-controls";
 import {
@@ -387,21 +388,16 @@ export function SalesHome({
   onDrawn?: () => void;
 }) {
   const desk = useDesk();
+  // Pull Home down at its top, or pull the top bar, to read everything again
+  // (owner, 10 Nov 2026, his OnePlus: "Refresh isn't well done").
+  const { area, spinner } = usePullToRefresh(retryHome);
   const [view, setView] = useHomeView();
   const online = useOnline();
-  const person = desk.status === "ready" ? desk.desk.me.person_id : null;
-  // Remembered per person on this device; the address still says which, so
-  // Back returns to it.
-  useEffect(() => {
-    if (!person || new URLSearchParams(window.location.search).has("view"))
-      return;
-    try {
-      if (window.localStorage.getItem(`sx:home-view:${person}`) === "mine")
-        setView("mine");
-    } catch {
-      // Storage refused (a private window): Team, as before.
-    }
-  }, [person]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Team | Me: Team every visit for those who manage, Me only once chosen in
+  // this visit, in the address so Back returns to it. Nothing switches the
+  // view after Home has drawn (owner, 10 Nov 2026, his OnePlus: on Home, even
+  // as admin, he was "redirected from Team to Me"; a choice of Me remembered
+  // on the device was applied once the desk had answered).
   // The screen slides in from its side when a person switches Team | Me, not
   // as Home first draws: Home's outline stands there first, and the page takes
   // its place without a flicker (home-outline.tsx).
@@ -409,11 +405,6 @@ export function SalesHome({
   const chooseView = (next: HomeView) => {
     setSwitched(true);
     setView(next);
-    try {
-      if (person) window.localStorage.setItem(`sx:home-view:${person}`, next);
-    } catch {
-      // Not remembered this time; the address still has it.
-    }
   };
   const teamLeads = useTeamLeadCount(manager);
   // A Viewer sees the team and works no leads (Roles B, 27 Oct 2026): the Team
@@ -448,7 +439,8 @@ export function SalesHome({
       </div>
     );
   return (
-    <div className={styles.home} data-home="">
+    <div className={styles.home} data-home="" ref={area}>
+      <PullMark mark={spinner} />
       <HomeLoadWatch />
       {/* Offline: a corner card over the page, with the other corner cards,
           so Home never moves as it comes and goes (ux-audit, 9 Nov 2026: in

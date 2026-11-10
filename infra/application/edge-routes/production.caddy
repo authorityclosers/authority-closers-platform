@@ -178,6 +178,29 @@
 		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 		reverse_proxy ac-production-api:8000
 	}
+	# Old links (owner, 10 Nov 2026): a person's browser opening a page on the old address goes to
+	# the same page on app.salesxray.in. Only a top-level page visit moves: the browser says so with
+	# Sec-Fetch-Mode navigate and Sec-Fetch-Dest document. These stay on the old address, which
+	# answers for good:
+	# - the installed Android app (user agent SalesXrayApp/<version>);
+	# - the API, webhooks, MCP and OAuth: /v1, /.well-known and the /connect sign-in;
+	# - a sign-in finishing here (/auth);
+	# - build files, and the website line on customers' sites (/sx.js);
+	# - crawlers, console checks and scripts, which send no Sec-Fetch headers.
+	# no-store: neither browsers nor Cloudflare keep the move, so taking it out works at once.
+	@production_sales_xray_old_pages {
+		host salesxray.authorityclosers.com
+		method GET HEAD
+		header Sec-Fetch-Mode navigate
+		header Sec-Fetch-Dest document
+		not header User-Agent *SalesXrayApp/*
+		not path /v1 /v1/* /.well-known/* /connect /connect/* /auth /auth/* /_next/* /sx.js
+	}
+	handle @production_sales_xray_old_pages {
+		import base_security_headers
+		header Cache-Control "no-store"
+		redir https://app.salesxray.in{uri} 301
+	}
 	# Content-hashed build files are immutable: let browsers and Cloudflare keep them (AUT-1342).
 	@production_sales_xray_static {
 		host salesxray.authorityclosers.com app.salesxray.in
