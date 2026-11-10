@@ -567,6 +567,22 @@ it("opens an owner's Home on Team, whatever was chosen on an earlier visit", asy
   expect(window.location.search).not.toContain("view=mine");
 });
 
+// The owner (10 Nov 2026): "Refresh isn't well done". Home pulls to refresh as
+// Leads does; its mark waits, unseen, at the top.
+it("can be pulled down to read everything again", async () => {
+  answer({
+    "/v1/lead-desk": owner(desk([])),
+    "/v1/lead-desk/reports/performance*": performance(),
+    "/v1/lead-desk/team": team({ new: 4 }),
+    "/v1/lead-desk/performance/sellers*": effort(true),
+    ...counts("inbound", 4, 7, 2),
+  });
+  await mount(true);
+  const mark = host.querySelector('[data-home] > [aria-hidden="true"]');
+  expect(mark?.getAttribute("data-mode")).toBe("idle");
+  expect(mark?.querySelectorAll("i")).toHaveLength(5);
+});
+
 it("keeps every figure calm when nothing waits", async () => {
   answer({
     "/v1/lead-desk": owner(desk([])),

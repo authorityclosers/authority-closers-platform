@@ -32,7 +32,8 @@ import { MyTasks, SellerBlocks, useSidesAccess } from "./seller-home";
 import type { Side } from "../ui/side-selector";
 import { SetupStart } from "./home-v2";
 import { TeamFloor, type StageKeys } from "./team-floor";
-import { HomeLoadWatch, useHomeRead, useOnline } from "./home-load";
+import { HomeLoadWatch, retryHome, useHomeRead, useOnline } from "./home-load";
+import { PullMark, usePullToRefresh } from "../shell/pull-refresh";
 import { RevenueBar } from "./revenue-bar";
 import { TeamControls } from "./team-controls";
 import {
@@ -387,6 +388,9 @@ export function SalesHome({
   onDrawn?: () => void;
 }) {
   const desk = useDesk();
+  // Pull Home down at its top, or pull the top bar, to read everything again
+  // (owner, 10 Nov 2026, his OnePlus: "Refresh isn't well done").
+  const { area, spinner } = usePullToRefresh(retryHome);
   const [view, setView] = useHomeView();
   const online = useOnline();
   // Team | Me: Team every visit for those who manage, Me only once chosen in
@@ -435,7 +439,8 @@ export function SalesHome({
       </div>
     );
   return (
-    <div className={styles.home} data-home="">
+    <div className={styles.home} data-home="" ref={area}>
+      <PullMark mark={spinner} />
       <HomeLoadWatch />
       {/* Offline: a corner card over the page, with the other corner cards,
           so Home never moves as it comes and goes (ux-audit, 9 Nov 2026: in
