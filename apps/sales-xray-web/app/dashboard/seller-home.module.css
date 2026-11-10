@@ -206,10 +206,11 @@
   line-height: var(--sx-leading-20);
 }
 
-/* The four tiles: 2 x 2 on a phone, one row on a computer. */
+/* The four tiles: 2 x 2 on a phone, one row on a computer, all one height. */
 .cards {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
   gap: 8px;
   margin: 0;
   padding: 0;
@@ -549,7 +550,26 @@ a.nextName:active::after,
   color: var(--sx-accent);
 }
 
-/* Today's performance: one compact row. */
+/* Today's list rows (smart-home.tsx): the row sets its own height. */
+.listRow .swipeFace {
+  min-height: 0;
+}
+
+/* "1 late" on the Tasks tile: red, and the word says it. */
+.lateNote {
+  color: var(--sx-bad);
+  font-weight: 500;
+}
+
+.listQuiet {
+  margin: 0;
+  padding: 4px 0 10px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+/* The owner's Team Home keeps Today's performance as Dipak drew it. */
 /* Two by two, as Dipak's picture, under one line saying what they count. */
 .figures {
   display: grid;
