@@ -389,19 +389,11 @@ export function SalesHome({
   const desk = useDesk();
   const [view, setView] = useHomeView();
   const online = useOnline();
-  const person = desk.status === "ready" ? desk.desk.me.person_id : null;
-  // Remembered per person on this device; the address still says which, so
-  // Back returns to it.
-  useEffect(() => {
-    if (!person || new URLSearchParams(window.location.search).has("view"))
-      return;
-    try {
-      if (window.localStorage.getItem(`sx:home-view:${person}`) === "mine")
-        setView("mine");
-    } catch {
-      // Storage refused (a private window): Team, as before.
-    }
-  }, [person]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Team | Me: Team every visit for those who manage, Me only once chosen in
+  // this visit, in the address so Back returns to it. Nothing switches the
+  // view after Home has drawn (owner, 10 Nov 2026, his OnePlus: on Home, even
+  // as admin, he was "redirected from Team to Me"; a choice of Me remembered
+  // on the device was applied once the desk had answered).
   // The screen slides in from its side when a person switches Team | Me, not
   // as Home first draws: Home's outline stands there first, and the page takes
   // its place without a flicker (home-outline.tsx).
@@ -409,11 +401,6 @@ export function SalesHome({
   const chooseView = (next: HomeView) => {
     setSwitched(true);
     setView(next);
-    try {
-      if (person) window.localStorage.setItem(`sx:home-view:${person}`, next);
-    } catch {
-      // Not remembered this time; the address still has it.
-    }
   };
   const teamLeads = useTeamLeadCount(manager);
   // A Viewer sees the team and works no leads (Roles B, 27 Oct 2026): the Team
