@@ -75,6 +75,7 @@ import {
   leadLink,
   addNote,
   ago,
+  dialPhone,
   dispose,
   displayPhone,
   editLead,
@@ -617,9 +618,14 @@ export function CallOutcome({
     const box = ref.current;
     if (!box || (!attention && !ask)) return;
     // The lead's name and Call stay in view (Redmi at 360 px, 22 Oct 2026): the
-    // sheet opens at its top and moves only when the question is out of sight.
-    if (box.getBoundingClientRect().top > window.innerHeight * 0.7)
-      box.scrollIntoView({ behavior: "smooth", block: "center" });
+    // sheet opens at its top and moves only when the question is out of sight,
+    // below or above (Redmi QA C3, 10 Nov 2026: Log a call, tapped lower down,
+    // opened the question above the screen and nothing seemed to happen).
+    const place = questionPlace(
+      box.getBoundingClientRect().top,
+      window.innerHeight,
+    );
+    if (place) box.scrollIntoView({ behavior: "smooth", block: place });
     if (ask)
       box
         .querySelector<HTMLButtonElement>("button")
@@ -1281,7 +1287,73 @@ export function LogThis({
   );
 }
 
+/** Where the call's question scrolls to when it opens: under the screen's
+ *  last third, to the middle; above the screen or under its top bar, to the
+ *  top; in sight, nowhere. */
+export function questionPlace(
+  top: number,
+  viewport: number,
+  bar = 64,
+): "center" | "start" | null {
+  if (top > viewport * 0.7) return "center";
+  if (top < bar) return "start";
+  return null;
+}
+
 /* ---------- Back from the dialer ---------- */
+
+/** A call the phone app placed from this page: when the phone can't say how
+ *  it ended (no call history, some phones), coming back still says so, with
+ *  Log this, as a browser's dialler does (Redmi QA C2, 10 Nov 2026: back from
+ *  a call, nothing showed). The call is on the lead already; nothing more is
+ *  logged. */
+const APP_CALL = "sx-leads-app-call";
+const APP_CALL_MAX_MS = 30 * 60 * 1000;
+
+export function rememberAppCall(leadId: string, now: number = Date.now()) {
+  try {
+    localStorage.setItem(APP_CALL, JSON.stringify({ leadId, at: now }));
+  } catch {
+    // Storage blocked: the phone's own end of the call still asks.
+  }
+}
+
+/** The app's call to this lead, once it has been away 4 s or more; taken, so it
+ *  is said once. Null when there is none, it is fresh, or it is too old. */
+export function takeAppCall(
+  leadId: string,
+  now: number = Date.now(),
+): { leadId: string; at: number } | null {
+  try {
+    const raw = localStorage.getItem(APP_CALL);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as { leadId?: unknown; at?: unknown };
+    if (typeof value.leadId !== "string" || typeof value.at !== "number") {
+      localStorage.removeItem(APP_CALL);
+      return null;
+    }
+    if (now - value.at > APP_CALL_MAX_MS) {
+      localStorage.removeItem(APP_CALL);
+      return null;
+    }
+    if (value.leadId !== leadId || now - value.at < 4_000) return null;
+    localStorage.removeItem(APP_CALL);
+    return { leadId: value.leadId, at: value.at };
+  } catch {
+    return null;
+  }
+}
+
+/** The phone told us how the call ended: nothing to say from here. */
+export function forgetAppCall(leadId: string) {
+  try {
+    const raw = localStorage.getItem(APP_CALL);
+    if (raw && (JSON.parse(raw) as { leadId?: unknown }).leadId === leadId)
+      localStorage.removeItem(APP_CALL);
+  } catch {
+    // Nothing to clear.
+  }
+}
 
 /**
  * Calls `onReturn` with the seconds away when the seller comes back to the
@@ -1361,15 +1433,21 @@ export function askAboutCall(
 function usePhoneAppCall(
   leadId: string | null,
   onCall: (call: NativeCall) => void,
+  /** Back from the app's call with no end from the phone (C2). */
+  onBack: () => void = () => undefined,
 ) {
   const latest = useRef(onCall);
+  const back = useRef(onBack);
   useEffect(() => {
     latest.current = onCall;
+    back.current = onBack;
   });
   useEffect(() => {
     if (!leadId || !inPhoneApp()) return;
     const take = (call: NativeCall) => {
-      if (call.leadId === leadId && call.endedMs) latest.current(call);
+      if (call.leadId !== leadId || !call.endedMs) return;
+      forgetAppCall(leadId);
+      latest.current(call);
     };
     // On opening or coming back: the last call only if it is new to this phone.
     // The app's own call-ended events (again when the recording is final) pass.
@@ -1377,6 +1455,7 @@ function usePhoneAppCall(
       if (document.visibilityState !== "visible") return;
       void readLastCall(leadId).then((call) => {
         if (call && askAboutCall(call)) take(call);
+        else if (!call?.endedMs && takeAppCall(leadId)) back.current();
       });
     };
     const stop = onPhoneCall((call) => {
@@ -3243,6 +3322,7 @@ export function LeadCard({
         name: lead.name,
       });
       callStep("bridge_ok", { ms: performance.now() - sent });
+      rememberAppCall(lead.lead_id);
     } catch (error) {
       callStep("bridge_error", {
         ms: performance.now() - began,
@@ -3255,7 +3335,7 @@ export function LeadCard({
       setPermits(false);
       rememberCall(lead.lead_id);
       callStep("fallback_tel", { mode: "browser" });
-      window.location.href = `tel:${detail.phone}`;
+      window.location.href = `tel:${dialPhone(detail.phone)}`;
     } finally {
       setCalling(false);
     }
@@ -3270,7 +3350,7 @@ export function LeadCard({
     if (inPhoneApp()) void callFromApp(false);
     else {
       rememberCall(lead.lead_id);
-      window.location.href = `tel:${detail.phone}`;
+      window.location.href = `tel:${dialPhone(detail.phone)}`;
     }
   };
   // A press on Call or the number (first-tap.ts): the app places it, a
@@ -3290,7 +3370,8 @@ export function LeadCard({
       return;
     }
     rememberCall(lead.lead_id);
-    if (event.type !== "click") window.location.href = `tel:${detail.phone}`;
+    if (event.type !== "click")
+      window.location.href = `tel:${dialPhone(detail.phone)}`;
   };
   // Once per opening: the intent came with this lead.
   const acted = useRef(false);
@@ -4066,7 +4147,7 @@ export function LeadCard({
               onClick={() => {
                 setPermits(false);
                 rememberCall(lead.lead_id);
-                window.location.href = `tel:${detail.phone}`;
+                window.location.href = `tel:${dialPhone(detail.phone)}`;
               }}
             >
               Just call
@@ -4561,18 +4642,24 @@ export function LeadSheet({
       .catch(() => undefined);
   });
 
-  usePhoneAppCall(leadId, (call) => {
-    setHeard(call);
-    const key = `${call.leadId}:${call.startedMs}`;
-    if (logged.current !== key) {
-      logged.current = key;
-      setBackFrom(call.leadId);
-      logPhoneCall(call.leadId, call.durationSeconds ?? 0)
-        .then(update)
-        .catch(() => undefined);
-    }
-    if (call.final) void forgetCall(call.leadId);
-  });
+  usePhoneAppCall(
+    leadId,
+    (call) => {
+      setHeard(call);
+      const key = `${call.leadId}:${call.startedMs}`;
+      if (logged.current !== key) {
+        logged.current = key;
+        setBackFrom(call.leadId);
+        logPhoneCall(call.leadId, call.durationSeconds ?? 0)
+          .then(update)
+          .catch(() => undefined);
+      }
+      if (call.final) void forgetCall(call.leadId);
+    },
+    () => {
+      if (leadId) setBackFrom(leadId);
+    },
+  );
 
   return (
     <>

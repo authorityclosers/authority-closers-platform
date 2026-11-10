@@ -3,7 +3,10 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-vi.mock("../../notice-center", () => ({ notify: () => undefined }));
+const notices = vi.hoisted(() => [] as Array<Record<string, unknown>>);
+vi.mock("../../notice-center", () => ({
+  notify: (notice: Record<string, unknown>) => notices.push(notice),
+}));
 vi.mock("../../telemetry", () => ({
   track: () => undefined,
   waitBand: () => "unknown",
@@ -197,6 +200,11 @@ it("sends the move with only what was asked", async () => {
   });
   expect(move?.body).not.toHaveProperty("nextActionAt");
   expect(moved).toHaveBeenCalled();
+  // Where it went in the title, whose lead under it (Redmi QA G4).
+  expect(notices.at(-1)).toMatchObject({
+    title: expect.stringMatching(/^Moved to /),
+    message: "Asha Fictional",
+  });
   // The lists leave the moved lead behind at once (owner, 30 Oct 2026).
   expect(noteLeadMoved).toHaveBeenCalledWith(
     expect.objectContaining({ lead_id: LEAD.lead_id }),

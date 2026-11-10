@@ -10,6 +10,7 @@
 import type { AnchorHTMLAttributes, ReactNode } from "react";
 
 import { firstTap, type FirstTapEvent } from "./first-tap";
+import { dialPhone } from "./leads-client";
 import { reportCallPress } from "./phone-call-steps";
 
 export function CallLink({
@@ -25,7 +26,7 @@ export function CallLink({
   return (
     <a
       {...rest}
-      href={`tel:${phone}`}
+      href={`tel:${dialPhone(phone)}`}
       data-sx-call=""
       {...firstTap(onCall, reportCallPress)}
     >

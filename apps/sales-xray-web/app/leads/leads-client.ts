@@ -1972,7 +1972,18 @@ export const SAMPLE_CSV = [
  *  of ten digits (ph2-22: "+91 00000 19999", never a run of digits). */
 export function displayPhone(phone: string): string {
   const india = /^\+91(\d{5})(\d{5})$/.exec(phone);
-  return india ? `+91 ${india[1]} ${india[2]}` : phone;
+  if (india) return `+91 ${india[1]} ${india[2]}`;
+  // India's toll-free and shared-cost numbers as people read them: 1800 889 9999.
+  const service = /^\+91(1\d{3})(\d{3})(\d{3,4})$/.exec(phone);
+  return service ? `${service[1]} ${service[2]} ${service[3]}` : phone;
+}
+
+/** The number a call dials: India's toll-free and shared-cost numbers (1800,
+ *  1860) as they are dialled at home, without +91 (Redmi QA, 10 Nov 2026). */
+export function dialPhone(phone: string | null | undefined): string {
+  if (!phone) return "";
+  const service = /^\+91(1\d{9,10})$/.exec(phone);
+  return service ? service[1] : phone;
 }
 
 /** A WhatsApp chat with this number (digits only, country code included). */

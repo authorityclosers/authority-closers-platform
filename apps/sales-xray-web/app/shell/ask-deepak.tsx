@@ -206,9 +206,9 @@ function PickLead({
       </p>
       <label className={styles.find} htmlFor={field}>
         <Search size={18} aria-hidden="true" />
-        <span className="visually-hidden">Which lead?</span>
         <input
           id={field}
+          aria-label="Which lead?"
           type="search"
           inputMode="search"
           autoComplete="off"

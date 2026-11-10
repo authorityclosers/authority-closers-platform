@@ -4016,14 +4016,27 @@ a.repName {
   margin: 0;
 }
 
+/* The grip: 124 x 21 px for a finger, the line in it 44 x 5, drawn on its own
+   (Redmi QA G3, 10 Nov 2026: in the phone app a background clipped to the
+   content box filled the whole grip, a grey block over Remind me). */
 .grabber {
+  position: relative;
   width: 44px;
   height: 5px;
   margin: 4px auto 0;
   padding: 8px 40px;
-  border-radius: 999px;
-  background: var(--sx-line-strong) content-box;
   touch-action: none;
+}
+
+.grabber::before {
+  position: absolute;
+  top: 8px;
+  left: 40px;
+  width: 44px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--sx-line-strong);
+  content: "";
 }
 
 /* Symmetric under the centred grabber (owner, 25 Oct 2026): an empty 44 px
@@ -8138,8 +8151,11 @@ fieldset.form {
   text-indent: -14px;
 }
 
+/* A source wraps between its words, never inside one: a website stays whole
+   on the next line (Redmi QA F2, 10 Nov 2026: "dipakvishwakarma.co" over "m"). */
 .leadFace[data-compact] .leadSource {
   white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .stageDot {

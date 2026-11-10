@@ -26,7 +26,9 @@ vi.mock("../workspace-access", () => ({
 const { discardWrite, resetWrites, sendWrite, setWriteIdentity, unsentWrites } =
   await import("./write-queue");
 const { announceWorkspaceChange } = await import("../workspace-change");
-const { WriteSync, WAITING_NOTICE } = await import("./write-sync");
+const { WriteSync, WAITING_NOTICE, WAITING_GRACE_MS } = await import(
+  "./write-sync"
+);
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -90,6 +92,47 @@ it("shows what waits, sends it at the start, then says all changes are saved", a
   expect(unsentWrites()).toEqual([]);
   expect(mocks.dismissed).toContain(WAITING_NOTICE);
   expect(titles()).toContain("All changes saved");
+});
+
+// Redmi QA G2 (10 Nov 2026): every save flashed "1 change not sent yet" over
+// its sheet while online. A change that goes at once shows no card at all.
+it("shows nothing for a change that goes at once", async () => {
+  setWriteIdentity("p-asha:t-homes");
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(answer(200)));
+  await act(async () => root.render(<WriteSync />));
+  await settle();
+  await act(async () => {
+    await sendWrite(DISPOSE, body("c-quick"));
+  });
+  await settle();
+  expect(unsentWrites()).toEqual([]);
+  expect(titles()).not.toContain("1 change not sent yet");
+  expect(titles()).not.toContain("All changes saved");
+});
+
+it("says a change waits once it has been on its way a while", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  try {
+    setWriteIdentity("p-asha:t-homes");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>(() => undefined)),
+    );
+    await act(async () => root.render(<WriteSync />));
+    await settle();
+    await act(async () => {
+      void sendWrite(DISPOSE, body("c-slow"));
+    });
+    await settle();
+    expect(titles()).not.toContain("1 change not sent yet");
+    await act(async () => {
+      vi.advanceTimersByTime(WAITING_GRACE_MS + 100);
+    });
+    await settle();
+    expect(titles()).toContain("1 change not sent yet");
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it("shows a change the server refused, with the words typed and the way back to the lead", async () => {

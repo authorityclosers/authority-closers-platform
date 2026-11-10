@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -253,4 +255,22 @@ it("from the tab bar, finds the lead by name first, and goes back to another", a
   )!;
   await act(async () => other.click());
   expect(document.querySelector('input[type="search"]')).not.toBeNull();
+});
+
+it("names its field once and keeps to the sheet's width", async () => {
+  // Redmi QA on production (10 Nov 2026): "Which lead? Which lead? Typ...", the
+  // intro cut at the right, and the sheet scrolling sideways at 130% text.
+  await act(async () => root.render(<AskDipakSheet open onClose={() => {}} />));
+  const input = document.querySelector<HTMLInputElement>(
+    'input[type="search"]',
+  )!;
+  expect(input.getAttribute("aria-label")).toBe("Which lead?");
+  expect(input.closest("label")?.textContent).toBe("");
+  const css = readFileSync(
+    join(process.cwd(), "app/shell/ask-deepak.module.css"),
+    "utf8",
+  );
+  expect(css).toMatch(
+    /\n\.body \{[^}]*grid-template-columns: minmax\(0, 1fr\);/,
+  );
 });

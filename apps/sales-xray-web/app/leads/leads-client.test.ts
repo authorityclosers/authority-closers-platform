@@ -8,6 +8,7 @@ import {
   localInputValue,
   minutesLabel,
   NOT_CONNECTED_REASONS,
+  dialPhone,
   displayPhone,
   nextCallTime,
   parseContactText,
@@ -231,6 +232,11 @@ describe("calling from the desk", () => {
     expect(displayPhone("+14155550100")).toBe("+14155550100");
     // ph2-22 (1 Nov 2026): any ten-digit Indian number reads in its groups.
     expect(displayPhone("+910000019999")).toBe("+91 00000 19999");
+    // A toll-free number reads and dials as it does at home (Redmi QA, 10 Nov 2026).
+    expect(displayPhone("+9118008899999")).toBe("1800 889 9999");
+    expect(dialPhone("+9118008899999")).toBe("18008899999");
+    expect(dialPhone("+919876543210")).toBe("+919876543210");
+    expect(dialPhone("+18008899999")).toBe("+18008899999");
   });
 
   it("opens WhatsApp with the number's digits", () => {

@@ -32,6 +32,8 @@ import {
 
 export const WAITING_NOTICE = "writes-waiting";
 export const STORAGE_NOTICE = "writes-storage";
+/** How long a change may be on its way, online, before the card says it waits. */
+export const WAITING_GRACE_MS = 2_500;
 
 /** The leads page opened on one lead (leads-client.ts leadLink). */
 const leadHref = (leadId: string) =>
@@ -80,8 +82,16 @@ export function WriteSync() {
     };
   }, []);
 
-  const { waiting, check, sending, nextAt, signIn, storageFull, oldestAt } =
-    useWrites();
+  const {
+    waiting,
+    check,
+    sending,
+    nextAt,
+    signIn,
+    storageFull,
+    oldestAt,
+    failed,
+  } = useWrites();
 
   // And when the next retry is due.
   useEffect(() => {
@@ -96,25 +106,42 @@ export function WriteSync() {
   const shown = useRef(0);
   useEffect(() => {
     if (waiting > 0) {
-      shown.current = waiting;
-      notify({
-        id: WAITING_NOTICE,
-        tone: "info",
-        title:
-          waiting === 1
-            ? "1 change not sent yet"
-            : `${waiting} changes not sent yet`,
-        message: signIn
-          ? "Kept on this phone. Sign in again and it goes to Sales X-Ray."
-          : "Kept on this phone. It goes to Sales X-Ray as soon as it answers.",
-        action: {
-          label: sending ? "Sending…" : "Send now",
-          run: () => void replayWrites({ force: true }),
-        },
-        // Closing it hides it until something changes; the change still waits.
-        onDismiss: async () => undefined,
-      });
-      return;
+      const show = () => {
+        shown.current = waiting;
+        notify({
+          id: WAITING_NOTICE,
+          tone: "info",
+          title:
+            waiting === 1
+              ? "1 change not sent yet"
+              : `${waiting} changes not sent yet`,
+          message: signIn
+            ? "Kept on this phone. Sign in again and it goes to Sales X-Ray."
+            : "Kept on this phone. It goes to Sales X-Ray as soon as it answers.",
+          action: {
+            label: sending ? "Sending…" : "Send now",
+            run: () => void replayWrites({ force: true }),
+          },
+          // Closing it hides it until something changes; the change still waits.
+          onDismiss: async () => undefined,
+        });
+      };
+      // Online, a save usually goes within a second: the card waits a moment,
+      // and a change sent in that moment never flashes it over the sheet
+      // (Redmi QA G2, 10 Nov 2026: every note and outcome flashed "1 change
+      // not sent yet" for half a second). Once a send has failed, offline, or
+      // signed out, at once; once shown, it keeps its count.
+      const now =
+        shown.current > 0 ||
+        signIn ||
+        failed ||
+        (typeof navigator !== "undefined" && navigator.onLine === false);
+      if (now) {
+        show();
+        return;
+      }
+      const timer = window.setTimeout(show, WAITING_GRACE_MS);
+      return () => window.clearTimeout(timer);
     }
     if (shown.current > 0) {
       shown.current = 0;
@@ -127,7 +154,7 @@ export function WriteSync() {
           title: "All changes saved",
         });
     }
-  }, [waiting, sending, signIn, check.length]);
+  }, [waiting, sending, signIn, check.length, failed]);
 
   // The phone's storage refused: say so, never lose it silently (orchestrator,
   // 24 Oct 2026). The changes wait in the app while it runs; Try again stores them.

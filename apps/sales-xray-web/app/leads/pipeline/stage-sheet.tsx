@@ -18,6 +18,7 @@ import {
   type CSSProperties,
 } from "react";
 
+import { displayName } from "../../display-name";
 import { notify } from "../../notice-center";
 import { track, waitBand } from "../../telemetry";
 import { closingByBack } from "../../ui/back-close";
@@ -317,10 +318,13 @@ export function StageSheet({
           ...(took >= 0 && took <= 3_600_000 ? { wait_ms: took } : {}),
         });
       }
+      // Where it went first, whose lead under it: a long name never cuts the
+      // stage off (Redmi QA G4, 10 Nov 2026: "QA Redmi 10 Nov - test: Inte…").
       notify({
         id: `moved-${lead.lead_id}`,
         tone: "success",
-        title: `${lead.name}: ${move.label}`,
+        title: `Moved to ${move.label}`,
+        message: displayName(lead.name),
         timeout: 4000,
       });
       onClose();
