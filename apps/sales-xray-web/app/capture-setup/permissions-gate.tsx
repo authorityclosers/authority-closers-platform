@@ -429,6 +429,10 @@ export function PermissionsGate() {
   // Capture setup's own "Recording isn't set up" card says the same thing for
   // now: the reminder waits until it has gone.
   const recordingCard = useNoticeShown("capture-setup");
+  // New analysis's "Analysis minutes used up" is the card that matters there:
+  // the reminder waits for it too (Redmi QA on production, 10 Nov 2026: the two
+  // stacked at the foot of New analysis).
+  const minutesCard = useNoticeShown("analysis-minutes-out");
   const away = useRef(false);
 
   useEffect(() => {
@@ -530,7 +534,7 @@ export function PermissionsGate() {
   // itself after 5 s). On Leads it is the line above the rows; elsewhere the
   // corner, which the page keeps room for.
   const remind =
-    open || fullPage || sheet || recordingCard
+    open || fullPage || sheet || recordingCard || minutesCard
       ? ""
       : later.map((item) => item.label).join(" · ");
   useEffect(() => {

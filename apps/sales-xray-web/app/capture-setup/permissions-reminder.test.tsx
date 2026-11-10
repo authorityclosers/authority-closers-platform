@@ -3,7 +3,12 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { dismissNotice, NoticeCenter, NoticeDock } from "../notice-center";
+import {
+  dismissNotice,
+  NoticeCenter,
+  NoticeDock,
+  notify,
+} from "../notice-center";
 import { WorkspaceAccessContext } from "../workspace-access";
 import { CAPTURE_SETUP_ATTRIBUTE } from "./capture-setup-rules";
 import { PermissionsGate } from "./permissions-gate";
@@ -297,4 +302,26 @@ it("stays away for the day after its X, even after the app opens again", async (
   expect(reminder()).toBe(false);
   await reopenApp();
   expect(reminder()).toBe(false);
+});
+
+it("waits while New analysis says the minutes are used up", async () => {
+  // Redmi QA on production (10 Nov 2026): "Finish setting up" stacked under
+  // "Analysis minutes used up" at the foot of New analysis.
+  fakePhone(() => ({ ...ALL, callLog: false }));
+  await mount();
+  await act(async () => byLabel("Not now: Call log").click());
+  await settle();
+  expect(reminder()).toBe(true);
+  await act(async () =>
+    notify({
+      id: "analysis-minutes-out",
+      tone: "info",
+      title: "Analysis minutes used up",
+    }),
+  );
+  await settle();
+  expect(reminder()).toBe(false);
+  await act(async () => dismissNotice("analysis-minutes-out"));
+  await settle();
+  expect(reminder()).toBe(true);
 });
