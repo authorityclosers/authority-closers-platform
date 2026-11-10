@@ -134,6 +134,41 @@ it("applies whose leads and a pipeline together", async () => {
   });
 });
 
+// The owner (10 Nov 2026, his OnePlus): tapping Show as "changes everything
+// below, and it's unclear what happened". Choosing List or Table applies the
+// sheet and closes it, so the list shows the change at once.
+it("applies and closes the sheet when Show as is chosen", async () => {
+  const onApply = vi.fn();
+  const onClose = vi.fn();
+  let slot = null as HTMLElement | null;
+  await act(async () =>
+    root.render(
+      <FilterSheet
+        open
+        onClose={onClose}
+        filters={NONE}
+        defaultWho="team"
+        canPickWho
+        pipes={PIPES}
+        onApply={onApply}
+        layoutSlot={(node) => {
+          slot = node;
+        }}
+      />,
+    ),
+  );
+  const table = document.createElement("button");
+  table.type = "button";
+  table.textContent = "Table";
+  slot!.append(table);
+  await act(async () => {
+    table.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(onApply).toHaveBeenCalledTimes(1);
+  expect(onClose).toHaveBeenCalled();
+});
+
 it("a seller sees no whose-leads choice, and Clear Filters clears", async () => {
   const onApply = vi.fn();
   await act(async () =>
