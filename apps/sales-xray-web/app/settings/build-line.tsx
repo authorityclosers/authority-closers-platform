@@ -17,15 +17,54 @@ import styles from "./build-line.module.css";
 /** A long press, as the phone's own: half a second held. */
 const HOLD_MS = 500;
 
-/** "Build 3b08990 · App 1.0.84": a commit to its first 7, the app's version
+/** "Version 1.53.0 · 3b08990 · App 1.0.84", or "Build 3b08990" while the
+ *  release's number isn't known: a commit to its first 7, the app's version
  *  when there is one; "dev" for a build with no release id. */
-export function buildLine(release: string | null, app: string | null): string {
+export function buildLine(
+  release: string | null,
+  app: string | null,
+  version: string | null = null,
+): string {
   const build = release
     ? /^[0-9a-f]{12}$/.test(release)
       ? release.slice(0, 7)
       : release
     : "dev";
-  return app ? `Build ${build} · App ${app}` : `Build ${build}`;
+  const head = version ? `Version ${version} · ${build}` : `Build ${build}`;
+  return app ? `${head} · App ${app}` : head;
+}
+
+/**
+ * The release's number, from the signed manifest of the phone apps' live web
+ * updates, when it is this very build (its commit); null otherwise, and on an
+ * environment that publishes none (the orchestrator, 10 Nov 2026: support must
+ * tell builds apart; Redmi QA on production: no screen showed the version).
+ */
+export async function readVersion(
+  release: string | null,
+): Promise<string | null> {
+  if (!release || !/^[0-9a-f]{7,}$/.test(release)) return null;
+  try {
+    const response = await fetch("/v1/app-web/manifest.json", {
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { accept: "application/json" },
+    });
+    if (!response.ok) return null;
+    const manifest = (await response.json()) as { payload?: unknown };
+    if (typeof manifest.payload !== "string") return null;
+    const payload = JSON.parse(manifest.payload) as {
+      version?: unknown;
+      sha?: unknown;
+    };
+    return typeof payload.version === "string" &&
+      typeof payload.sha === "string" &&
+      payload.sha.startsWith(release)
+      ? payload.version
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 const failed = () =>
@@ -38,6 +77,17 @@ const failed = () =>
 
 export function BuildLine() {
   const [app, setApp] = useState<string | null>(null);
+  const [version, setVersion] = useState<string | null>(null);
+  const release = releaseLabel(process.env.NEXT_PUBLIC_AC_RELEASE_ID);
+  useEffect(() => {
+    let alive = true;
+    void readVersion(release).then((found) => {
+      if (alive) setVersion(found);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [release]);
   const [copied, setCopied] = useState(false);
   const hold = useRef<number | undefined>(undefined);
   const touch = useRef(false);
@@ -56,10 +106,7 @@ export function BuildLine() {
     return () => window.clearTimeout(timer);
   }, [copied]);
   useEffect(() => () => window.clearTimeout(hold.current), []);
-  const line = buildLine(
-    releaseLabel(process.env.NEXT_PUBLIC_AC_RELEASE_ID),
-    app,
-  );
+  const line = buildLine(release, app, version);
   const copy = () => {
     const done = navigator.clipboard?.writeText(line);
     if (!done) return failed();

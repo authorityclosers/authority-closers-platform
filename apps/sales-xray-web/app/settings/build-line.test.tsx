@@ -57,6 +57,35 @@ it("says the web build, and the app's version in the phone app", async () => {
   expect(host.textContent).toBe("Build 3b08990 · App 1.0.84");
 });
 
+it("names the release when the published manifest is this very build", async () => {
+  // The orchestrator, 10 Nov 2026: "Version 1.53.0 · <short commit>".
+  expect(buildLine("3b08990aaaaa", "1.0.99", "1.53.0")).toBe(
+    "Version 1.53.0 · 3b08990 · App 1.0.99",
+  );
+  const manifest = (sha: string) =>
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            format: "sx-web-bundle/1",
+            payload: JSON.stringify({ version: "1.53.0", sha }),
+          }),
+          { status: 200 },
+        ),
+    );
+  vi.stubGlobal("fetch", manifest(`3b08990${"a".repeat(33)}`));
+  await mount();
+  await act(async () => Promise.resolve());
+  expect(host.textContent).toBe("Version 1.53.0 · 3b08990");
+  // Another build's manifest names nothing.
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  vi.stubGlobal("fetch", manifest(`9c1d2e3${"b".repeat(33)}`));
+  await mount();
+  await act(async () => Promise.resolve());
+  expect(host.textContent).toBe("Build 3b08990");
+});
+
 it("copies the line when it is held, and says so", async () => {
   status.mockImplementation(async () => ({ version: "1.0.84" }));
   const writeText = vi.fn(async () => undefined);
