@@ -119,11 +119,11 @@ function answer(value: Effort) {
   );
 }
 
-async function mount() {
+async function mount(visual = false) {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  await act(async () => root.render(<PerformanceView />));
+  await act(async () => root.render(<PerformanceView visual={visual} />));
   await act(async () => Promise.resolve());
 }
 
@@ -228,6 +228,28 @@ it("shows an owner the team and each seller, flags first", async () => {
     "Between calls, outside set breaks: 2 h 15 min",
   );
   expect(host.textContent).toContain("≈ Next to a call from the app");
+});
+
+it("opens a seller's day on Growth as tiles, with no table anywhere", async () => {
+  // Owner, 10 Nov 2026: "In 2026 we don't work with tables"; the day's sheet
+  // still had Work done and Missed as tables.
+  answer(effort(true));
+  await mount(true);
+  expect(host.querySelector("table")).toBeNull();
+  const row = host.querySelector<HTMLButtonElement>(
+    '[aria-label="Each seller\'s calls"] button',
+  );
+  await act(async () => row?.click());
+  await act(async () => Promise.resolve());
+  const sheet = document.querySelector("dialog[open]");
+  expect(sheet?.querySelector("table")).toBeNull();
+  expect(
+    sheet?.querySelector('[data-growth-view="tiles"] h2')?.textContent,
+  ).toBe("Work done");
+  // The breaks stay, as a list.
+  expect(
+    sheet?.querySelector('[aria-label="3 longest breaks"]'),
+  ).not.toBeNull();
 });
 
 it("shows a seller only their own, and reads 7 days on request", async () => {
