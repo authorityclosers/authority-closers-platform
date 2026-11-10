@@ -172,6 +172,8 @@ let calls: { path: string; method: string; body?: string }[];
 let doneFails = false;
 let emptyToday = false;
 let lateBrochure = false;
+let noFollowUps = false;
+let lateOwn = false;
 
 function answer(sides: {
   inbound: { leads: number };
@@ -187,11 +189,34 @@ function answer(sides: {
         method: init?.method ?? "GET",
         body: typeof init?.body === "string" ? init.body : undefined,
       });
-      if (path === "/v1/lead-desk") return Response.json(desk);
+      if (path === "/v1/lead-desk")
+        return Response.json(
+          noFollowUps
+            ? {
+                ...desk,
+                sides: {
+                  ...desk.sides,
+                  inbound: { ...desk.sides.inbound, upcoming: [] },
+                },
+              }
+            : desk,
+        );
       if (path === "/v1/lead-desk/sides?scope=mine")
         return Response.json(sides);
       if (path === "/v1/lead-desk/tasks?view=overdue")
-        return Response.json({ tasks: [], counts: {} });
+        return Response.json({
+          tasks: lateOwn
+            ? [
+                task("1", "Call the bank about the loan papers", {
+                  lead_id: null,
+                  lead_name: null,
+                  overdue: true,
+                  bucket: "overdue",
+                }),
+              ]
+            : [],
+          counts: {},
+        });
       if (path === "/v1/lead-desk/tasks?view=today" && emptyToday)
         return Response.json({ tasks: [], counts: { today: 0, overdue: 0 } });
       if (path.endsWith("/snooze"))
@@ -284,6 +309,8 @@ beforeEach(() => {
   doneFails = false;
   emptyToday = false;
   lateBrochure = false;
+  noFollowUps = false;
+  lateOwn = false;
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -296,7 +323,7 @@ const card = (key: string) =>
 const radios = () =>
   Array.from(host.querySelectorAll<HTMLButtonElement>('[role="radio"]'));
 
-it("is Dipak's Home: the work in six blocks, each opening its exact place", async () => {
+it("is the owner's Smart lists Home: the work in five blocks, each opening its exact place", async () => {
   answer({ inbound: { leads: 40 }, cold: { imported: 200 } });
   await mount();
   // Both types: the selector.
@@ -308,9 +335,11 @@ it("is Dipak's Home: the work in six blocks, each opening its exact place", asyn
   expect(card("new")?.getAttribute("href")).toBe(
     "/leads?view=to_call&step=new",
   );
-  // One caption under the number (Dipak's picture, 2 Nov 2026); the number
-  // in two digits (his design, 4 Nov 2026).
-  expect(card("new")?.textContent).toBe("New leads08First call pending");
+  // One caption under the number (Dipak's picture, 2 Nov 2026); the number as
+  // H5 writes it, beside a coloured icon (owner's pick, 10 Nov 2026).
+  expect(card("new")?.textContent).toBe("New leads8First call pending");
+  expect(card("new")?.querySelector("[data-icon] svg")).not.toBeNull();
+  expect(card("new")?.getAttribute("data-tone")).toBe("teal");
   expect(card("open")?.getAttribute("href")).toBe(
     "/leads?view=all&step=open_leads",
   );
@@ -319,10 +348,12 @@ it("is Dipak's Home: the work in six blocks, each opening its exact place", asyn
   expect(card("follow_ups")?.getAttribute("href")).toBe(
     "/leads?view=follow_ups&when=today",
   );
-  expect(card("follow_ups")?.textContent).toBe("Follow-ups07Due today");
+  expect(card("follow_ups")?.textContent).toBe("Follow-ups7Due today");
   // Tasks: the Tasks page's Today, the non-calling work (Dipak's handoff;
-  // one truth with Tasks, persona QA, 31 Oct 2026).
-  expect(card("tasks")?.textContent).toBe("Tasks04Due today");
+  // one truth with Tasks, persona QA, 31 Oct 2026), a box per task due (H3).
+  // One overdue on Tasks' Overdue: "1 late", as H5 says it.
+  expect(card("tasks")?.textContent).toBe("Tasks4Due today, 1 late");
+  expect(card("tasks")?.querySelectorAll("i")).toHaveLength(4);
   // Today's overview, and whose activity it counts.
   expect(host.querySelector("#today-title")?.textContent).toBe(
     "Today's overview",
@@ -343,36 +374,50 @@ it("is Dipak's Home: the work in six blocks, each opening its exact place", asyn
   );
   // To Call by name: a bare /leads opens the person's last view (31 Oct).
   expect(call?.getAttribute("href")).toBe("/leads?view=to_call");
-  // Today's tasks: three at most; a task with no lead is General.
-  const tasks = Array.from(
-    host.querySelectorAll('[aria-labelledby="tasks-title"] li'),
+  // Today's list: today's tasks and today's follow-ups in one list by time,
+  // five at most (H5); each says its kind (H4); a past follow-up is Late, its
+  // time in red (H1), and its phone opens the list it sits in (bug report #92).
+  const list = host.querySelector('[aria-labelledby="list-title"]');
+  expect(list?.querySelector("h2")?.textContent).toBe("Today's list");
+  const rows = Array.from(
+    list?.querySelectorAll("[data-today-row]") ?? [],
     (item) => item.textContent?.replace(/\s+/g, " "),
   );
-  expect(tasks).toHaveLength(3);
-  expect(tasks[1]).toContain("Prepare tomorrow's demo");
-  expect(tasks[1]).toContain("General");
-  // Upcoming follow-ups: two at most; See all opens every follow-up on this
-  // side, and each row's Call the list it sits in (bug report #92: these were
-  // in Due Today, not Upcoming).
-  const follow = host.querySelector('[aria-labelledby="follow-ups-title"]');
-  expect(follow?.querySelectorAll("li")).toHaveLength(2);
-  expect(follow?.textContent).toContain("Discuss proposal");
+  expect(rows).toHaveLength(5);
+  expect(rows[0]).toContain("Send proposal to Neha");
+  expect(rows[0]).toContain("Task");
+  // Its lead under the words, which don't name her in full; the words open her.
+  expect(rows[0]).toContain("Neha Example");
   expect(
-    follow?.querySelector('a[href="/leads?view=follow_ups"]'),
-  ).not.toBeNull();
+    list?.querySelector("[data-today-row] a[href^='/leads?lead=']")
+      ?.textContent,
+  ).toBe("Send proposal to Neha");
+  expect(rows[1]).toContain("Prepare tomorrow's demo");
+  expect(rows[4]).toContain("Call back Neha Example");
+  expect(rows[4]).toContain("Follow-up");
+  expect(rows[4]).toContain("Late");
+  expect(rows[4]).toContain("Discuss proposal");
+  const followRow = list?.querySelectorAll("[data-today-row]")[4];
+  expect(followRow?.querySelector("[data-late-time]")).not.toBeNull();
   expect(
-    Array.from(
-      follow?.querySelectorAll('a[aria-label^="Call "]') ?? [],
-      (link) => link.getAttribute("href"),
-    ),
-  ).toEqual([
-    "/leads?view=follow_ups&when=today",
-    "/leads?view=follow_ups&when=today",
-  ]);
-  // Today's performance: one row, this side only.
+    followRow
+      ?.querySelector('a[aria-label="Call Neha Example"]')
+      ?.getAttribute("href"),
+  ).toBe("/leads?view=follow_ups&when=today");
+  // Upcoming follow-ups and Recent calls left Me with the pick.
+  expect(host.querySelector('[aria-labelledby="follow-ups-title"]')).toBeNull();
+  expect(host.querySelector('[aria-labelledby="recent-title"]')).toBeNull();
+  // Done today: two by two, this side only; each number beside a ring, the
+  // arc a real share or none (Connected of Attempted).
   const performance = host.querySelector(
     '[aria-labelledby="performance-title"]',
   );
+  expect(performance?.querySelector("h2")?.textContent).toBe("Done today");
+  expect(
+    Array.from(performance?.querySelectorAll("[data-share]") ?? [], (ring) =>
+      ring.closest("a")?.getAttribute("data-done"),
+    ),
+  ).toEqual(["connected"]);
   expect(
     Array.from(
       performance?.querySelectorAll("li") ?? [],
@@ -385,17 +430,6 @@ it("is Dipak's Home: the work in six blocks, each opening its exact place", asyn
     "Follow-ups done3",
   ]);
   expect(performance?.textContent).toContain("Inbound calls only · Today");
-  // The last three calls, each with its outcome and time; Calls has the rest.
-  const recent = host.querySelector('[aria-labelledby="recent-title"]');
-  const rows = recent?.querySelectorAll("a[data-sx-action]") ?? [];
-  expect(rows).toHaveLength(3);
-  // Outcome and time only, never the capture line (production report 146).
-  expect(recent?.textContent).not.toContain("Waiting");
-  expect(rows[0]?.textContent).toContain("Outcome unknown");
-  expect(rows[1]?.textContent).toContain("Connected · 1:17");
-  expect(
-    recent?.querySelector('a[href="/analysis/calls"]')?.textContent,
-  ).toContain("See all");
   // Not in the picture: the longest breaks and the Taking new leads pill.
   expect(host.textContent).not.toContain("Your longest breaks");
   expect(host.textContent).not.toContain("Taking new leads");
@@ -458,19 +492,22 @@ it("completes a task in one tap, and puts it back if it wasn't saved", async () 
 });
 
 const tasksBlock = () =>
-  host.querySelector<HTMLElement>('section[aria-labelledby="tasks-title"]');
+  host.querySelector<HTMLElement>('section[aria-labelledby="list-title"]');
 
 // Competitor teardown #1 (1 Nov 2026, Pipedrive Focus, Close Inbox): a late
-// task goes first, in red; swipe left, hold or right-click moves it to one of
-// the after-call's times.
-it("puts a late task first in red, and moves it to next week", async () => {
+// task says so in red, its time red as H1 draws it (owner's pick, 10 Nov 2026),
+// and the word Late beside its kind; swipe left, hold or right-click moves it
+// to one of the after-call's times.
+it("marks a late task in red, and moves it to next week", async () => {
   lateBrochure = true;
   answer({ inbound: { leads: 40 }, cold: { imported: 0 } });
   await mount();
-  const first = tasksBlock()?.querySelector<HTMLLIElement>("ul > li");
-  expect(first?.textContent).toContain("Share brochure");
+  const first = Array.from(
+    tasksBlock()?.querySelectorAll<HTMLLIElement>("ul > li") ?? [],
+  ).find((item) => item.textContent?.includes("Share brochure"));
   expect(first?.hasAttribute("data-late")).toBe(true);
   expect(first?.querySelector("[data-late-time]")).not.toBeNull();
+  expect(first?.textContent).toContain("Late");
   await act(async () => {
     first?.dispatchEvent(
       new MouseEvent("contextmenu", { bubbles: true, cancelable: true }),
@@ -497,8 +534,31 @@ it("puts a late task first in red, and moves it to next week", async () => {
   expect(JSON.parse(snooze?.body ?? "{}").choice).toBe("week");
 });
 
+// Tasks moves a task to Overdue a while after its time; Home's list read only
+// Today, so a late task vanished from Home. Now it comes first, Late in red
+// (owner's pick, 10 Nov 2026), and one tap marks it done.
+it("brings a task from Tasks' Overdue into Today's list, Late, and ticks it done", async () => {
+  lateOwn = true;
+  answer({ inbound: { leads: 40 }, cold: { imported: 0 } });
+  await mount();
+  const first = tasksBlock()?.querySelector("[data-today-row]");
+  expect(first?.textContent).toContain("Call the bank about the loan papers");
+  expect(first?.textContent).toContain("Late");
+  expect(first?.querySelector("[data-late-time]")).not.toBeNull();
+  const box = first?.querySelector<HTMLInputElement>('input[type="checkbox"]');
+  await act(async () => box?.click());
+  await act(async () => Promise.resolve());
+  expect(
+    calls.some(
+      (item) =>
+        item.path.endsWith("-00000000001/done") && item.method === "POST",
+    ),
+  ).toBe(true);
+});
+
 it("says All clear with the next call when nothing is left, and no helper lines", async () => {
   emptyToday = true;
+  noFollowUps = true;
   answer({ inbound: { leads: 40 }, cold: { imported: 0 } });
   await mount();
   const block = tasksBlock();
@@ -725,20 +785,17 @@ it("keeps every block in place with a dash when the leads didn't load", async ()
 
 // Later visits draw at once from the sides this device saw last, so Today
 // and the selector arrive together, with no wait and nothing moving.
-// QA robot 27a7dd88 (9 Nov 2026): back on Home from Tasks, Recent calls drew
-// three outline rows and shrank to its one line, and Today's tasks grew, so the
-// blocks under them jumped with the page's end in view. A return draws what
-// they showed last, at once, while their reads refresh them.
-it("draws Today's tasks and Recent calls at once on a return, from what they showed", async () => {
+// QA robot 27a7dd88 (9 Nov 2026): back on Home from Tasks, the blocks under
+// Today's tasks jumped as it grew. A return draws Today's list from what it
+// showed last, at once, while its read refreshes it.
+it("draws Today's list at once on a return, from what it showed", async () => {
   window.localStorage.setItem("sx:home-sides", "11");
   answer({ inbound: { leads: 40 }, cold: { imported: 200 } });
   await mount();
   for (let step = 0; step < 4; step += 1)
     await act(async () => Promise.resolve());
   const task = () => host.textContent?.includes("Send proposal to Neha");
-  const call = () => host.textContent?.includes("Aakash Sample");
   expect(task()).toBe(true);
-  expect(call()).toBe(true);
   await act(async () => root.unmount());
   host.remove();
   // Back on Home: the reads are on their way again, and nothing has answered yet.
@@ -754,7 +811,6 @@ it("draws Today's tasks and Recent calls at once on a return, from what they sho
   );
   await mount();
   expect(task()).toBe(true);
-  expect(call()).toBe(true);
 });
 
 it("draws Today at once on a later visit, from the sides this device kept", async () => {

@@ -1,0 +1,633 @@
+/* Home's smart pieces (owner's pick, 10 Nov 2026: H5 Smart lists with H1, H3,
+   H4 and H2 touches). Dipak's look carries over: white tiles and cards with a
+   1 px line on the paper ground, no shadows, medium weights, 4 px grid, radius
+   14 tiles and 16 cards. Colour marks a kind; words always say it too. */
+
+/* A tile: the icon top left, the number top right, then the label and its
+   caption; the words wrap rather than end in "…" at 130 % and 200 % text. */
+.counter {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "icon value"
+    "label label"
+    "note note"
+    "marks marks";
+  grid-template-rows: auto auto 1fr auto;
+  align-content: start;
+  column-gap: 8px;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 14px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.icon {
+  display: grid;
+  grid-area: icon;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 8px;
+  border-radius: 50%;
+}
+
+.icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* H5's four: teal and indigo solid, amber and grey soft. */
+.counter[data-tone="teal"] .icon {
+  background: var(--sx-accent);
+  color: var(--lx-on-teal);
+}
+
+.counter[data-tone="amber"] .icon {
+  background: color-mix(in oklab, var(--sx-warn) 22%, var(--sx-surface));
+  color: color-mix(in oklab, var(--sx-warn) 62%, var(--sx-ink));
+}
+
+.counter[data-tone="indigo"] .icon {
+  background: var(--lx-info);
+  color: var(--lx-on-teal);
+}
+
+.counter[data-tone="slate"] .icon {
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+}
+
+.value {
+  grid-area: value;
+  align-self: center;
+  justify-self: end;
+  margin-bottom: 8px;
+  /* Dipak's 32 px figure at medium weight. */
+  font-size: var(--sx-text-3xl);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* Not loaded: a dash, never a 0 it doesn't know. */
+.value[data-unknown] {
+  color: var(--sx-muted);
+}
+
+/* While it is read: a quiet bar in the number's place. */
+.value[aria-busy] {
+  width: 48px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--sx-fill);
+}
+
+.label {
+  grid-area: label;
+  min-width: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  line-height: var(--sx-leading-24);
+  overflow-wrap: anywhere;
+}
+
+/* The caption a step under the label, as H5: one line at 130 % text. */
+.note {
+  grid-area: note;
+  min-width: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+  overflow-wrap: anywhere;
+}
+
+.marks {
+  grid-area: marks;
+  margin-top: 6px;
+}
+
+/* Press: a 10 % state layer in 90 ms; hover 6 % on a computer. */
+.counter::after,
+.done a::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  content: "";
+  transition: opacity var(--sx-dur-instant) var(--sx-ease-out);
+  pointer-events: none;
+}
+
+a.counter:active::after,
+.done a:active::after {
+  opacity: 0.1;
+}
+
+@media (hover: hover) {
+  a.counter:hover::after,
+  .done a:hover::after {
+    opacity: 0.06;
+  }
+}
+
+.counter:focus-visible,
+.done a:focus-visible,
+.call:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* H3's task-due boxes: 16 px, ticked in teal when done. */
+.taskMarks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.taskMarks i {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid color-mix(in oklab, var(--sx-ink) 30%, transparent);
+  border-radius: 4px;
+}
+
+.taskMarks i[data-done] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent);
+}
+
+.taskMarks svg {
+  fill: none;
+  stroke: var(--lx-on-teal);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.taskMarks > span {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
+}
+
+/* A card with its title inside, as Next action (H5): Today's list, Done
+   today, Your day. */
+.card {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 14px 16px 6px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  container-type: inline-size;
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  min-height: 28px;
+}
+
+.cardHead h2 {
+  min-width: 0;
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
+  line-height: var(--sx-leading-28);
+  overflow-wrap: anywhere;
+}
+
+/* See all keeps its 44 px reach without pushing the title down. */
+.cardHead > :not(h2) {
+  margin-block: -8px;
+}
+
+/* Today's list: a line between rows (H4, H5). */
+.rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rows > li + li {
+  border-top: 1px solid var(--sx-line);
+}
+
+/* One row: the box or the call, the time in its own column, a hairline, then
+   the words; the time column is sized in the row's text, so it grows with it
+   and every title starts at one edge. */
+.row {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: 22px auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 10px;
+  min-width: 0;
+  padding: 10px 0;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+}
+
+/* One width for every time, in its own text, so every title starts at one
+   edge (H5). */
+.time {
+  width: 4.5em;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* H1: a late time in red, and the word Late under the title. */
+.time[data-late-time] {
+  color: var(--sx-bad);
+  font-weight: 600;
+}
+
+.words {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding-left: 10px;
+  border-left: 1px solid var(--sx-line);
+}
+
+.title {
+  color: var(--sx-ink);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.row[data-done] .title {
+  color: var(--sx-muted);
+  text-decoration: line-through;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
+}
+
+.kind,
+.late {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: var(--sx-radius-pill);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
+  white-space: nowrap;
+}
+
+.kind[data-kind="task"] {
+  background: color-mix(in oklab, var(--sx-accent) 12%, var(--sx-surface));
+  color: color-mix(in oklab, var(--sx-accent) 70%, var(--sx-ink));
+}
+
+.kind[data-kind="follow_up"] {
+  background: color-mix(in oklab, var(--lx-info) 12%, var(--sx-surface));
+  color: color-mix(in oklab, var(--lx-info) 70%, var(--sx-ink));
+}
+
+.late {
+  background: color-mix(in oklab, var(--sx-bad) 12%, var(--sx-surface));
+  color: color-mix(in oklab, var(--sx-bad) 78%, var(--sx-ink));
+}
+
+.extra {
+  min-width: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+  overflow-wrap: anywhere;
+}
+
+/* A lead's name keeps a 44 px reach inside the row. */
+.extra a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-block: -14px;
+  color: inherit;
+  text-decoration: none;
+}
+
+/* The box (a task) and the call (a follow-up): 44 px targets around 22 px
+   marks; a late one's ring is red (H2). */
+.tick,
+.call {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -11px;
+  border-radius: 50%;
+  color: var(--sx-accent);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tick input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.tick > span {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  border: 2px solid color-mix(in oklab, var(--sx-ink) 32%, transparent);
+  border-radius: 50%;
+  color: var(--lx-on-teal);
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    border-color var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.tick > span svg {
+  opacity: 0;
+}
+
+.tick input:checked + span {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent);
+}
+
+.tick input:checked + span svg {
+  opacity: 1;
+}
+
+.tick input:focus-visible + span {
+  box-shadow: var(--sx-focus-ring);
+}
+
+.row[data-late] .tick > span {
+  border-color: var(--sx-bad);
+}
+
+.row[data-late] .call {
+  color: var(--sx-bad);
+}
+
+/* Done today: two by two, one row where the card has room. */
+.doneNote {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
+}
+
+.done {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@container (min-width: 520px) {
+  .done {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.done li {
+  display: grid;
+  min-width: 0;
+}
+
+.done a {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 6px 0;
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-ink);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.doneWords {
+  display: grid;
+  min-width: 0;
+}
+
+.doneWords > span {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: var(--sx-leading-16);
+  overflow-wrap: anywhere;
+}
+
+.word {
+  white-space: nowrap;
+}
+
+.doneWords strong {
+  font-size: var(--sx-text-xl);
+  font-weight: 500;
+  line-height: var(--sx-leading-28);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* H2's ring: a quiet track, a teal arc only for a real share, the icon in it. */
+.ring {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+}
+
+/* The ring itself, not the icon in it, starts at twelve o'clock. */
+.ring > svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+
+.track,
+.arc {
+  fill: none;
+  stroke-width: 3;
+}
+
+.track {
+  stroke: var(--sx-fill-strong);
+}
+
+.arc {
+  stroke: var(--sx-accent);
+  stroke-linecap: round;
+}
+
+.ringIcon {
+  display: grid;
+  color: var(--sx-accent);
+}
+
+.ringIcon svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* H2's Your day (not on Home yet): the hours down a rail, each item at its
+   hour, and the Now line. */
+.day {
+  --day-time: 4.6em;
+  display: grid;
+  margin: 0;
+  padding: 4px 0 8px;
+  list-style: none;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  background: linear-gradient(var(--sx-line), var(--sx-line)) no-repeat
+    calc(var(--day-time) + 14px) 0 / 1px 100%;
+}
+
+.dayHour,
+.dayItem,
+.dayNow {
+  display: grid;
+  grid-template-columns: var(--day-time) 14px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  min-height: 24px;
+}
+
+.dayTime {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dayDot {
+  justify-self: center;
+  box-sizing: border-box;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--sx-line-strong);
+  border-radius: 50%;
+  background: var(--sx-surface);
+}
+
+.dayState {
+  justify-self: center;
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--sx-accent);
+  border-radius: 50%;
+  background: var(--sx-surface);
+}
+
+.dayItem[data-late] .dayState {
+  border-color: var(--sx-bad);
+}
+
+.dayItem[data-done] .dayState {
+  background: var(--sx-accent);
+}
+
+.dayWords {
+  min-width: 0;
+  padding: 4px 0;
+  color: var(--sx-ink);
+  overflow-wrap: anywhere;
+}
+
+.dayWords > span {
+  color: var(--sx-muted);
+}
+
+.dayWords b {
+  color: var(--sx-bad);
+  font-weight: 500;
+}
+
+.dayNow {
+  grid-template-columns: var(--day-time) minmax(0, 1fr) auto;
+}
+
+.dayNow .dayTime {
+  justify-self: start;
+  padding: 0 6px;
+  border-radius: var(--sx-radius-pill);
+  background: color-mix(in oklab, var(--sx-accent) 14%, var(--sx-surface));
+  color: var(--sx-accent);
+  font-weight: 600;
+}
+
+.dayNowRule {
+  height: 2px;
+  border-radius: 1px;
+  background: var(--sx-accent);
+}
+
+.dayNowWord {
+  color: var(--sx-accent);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tick > span {
+    transition: none;
+  }
+}
