@@ -9,18 +9,36 @@
  *     when fresh inbound leads wait.
  *  2. Today's overview: New leads (Inbound) or Unworked leads (Cold), Open
  *     leads, Follow-ups (the side's own) and Tasks (shared, never a call),
- *     each with one caption. Each tile opens the exact Leads list it counts.
+ *     each a coloured icon, its number, a label and one caption (the owner's
+ *     pick, 10 Nov 2026: H5 Smart lists); Tasks shows a box per task due
+ *     today, ticked when done (H3). Each tile opens the exact list it counts.
  *  3. Next action: one customer, and Call now or Start Cold Calling.
- *  4. Today's tasks: three at most, See all.
- *  5. Upcoming follow-ups: two at most, each with its call button, See all.
- *  6. Recent calls: the last three, each with its outcome and time, never the
- *     capture line (Calls has it, with its fix).
- *  7. Today's performance: two by two (Attempted, Connected, Talk time,
- *     Follow-ups done), each opening the calls or follow-ups it counts.
- * The desk carries both sides, so the selector switches with no second read.
+ *  4. Today's list: today's tasks and the follow-ups due today in time order,
+ *     five at most; a late one's time in red with the word Late (H1), its kind
+ *     under its words and a line between rows (H4).
+ *  5. Done today: Attempted, Connected, Talk time and Follow-ups done, each
+ *     beside a ring (H2) and opening the calls or follow-ups it counts.
+ * Recent calls and Upcoming follow-ups left Me with that pick: Calls has the
+ * calls, and today's follow-ups are in Today's list. The pieces are in
+ * smart-home.tsx. The desk carries both sides, so the selector switches with
+ * no second read.
  */
 
-import { ArrowRight, Check, ChevronRight, Phone, RotateCw } from "lucide-react";
+import {
+  ArrowRight,
+  CalendarCheck,
+  CalendarDays,
+  Check,
+  ChevronRight,
+  Clock,
+  Layers,
+  Phone,
+  PhoneCall,
+  PhoneOutgoing,
+  RotateCw,
+  SquareCheck,
+  UserPlus,
+} from "lucide-react";
 import Link from "next/link";
 import {
   useCallback,
@@ -76,6 +94,17 @@ import { breakLength } from "./home-today";
 import { Count } from "./metric-pager";
 import type { HomeDesk, HomeSide } from "./my-day-client";
 import styles from "./seller-home.module.css";
+import {
+  CallMark,
+  DoneToday,
+  SmartCounter,
+  TaskMarks,
+  TickMark,
+  TodayList,
+  TodayRow,
+  type CounterTone,
+  type DoneFigure,
+} from "./smart-home";
 import { talkOrDash } from "./talk-time";
 
 /** Which lead types this seller works: GET /sides (Leads session, 31 Oct). */
@@ -166,29 +195,38 @@ const tagOf = (task: ListedTask): TaskTag | null =>
 
 /** Today's tasks with done and undo: the box ticks at once and goes back if
  *  the server says no, so the screen never shows work that didn't happen. */
-export function useTaskList() {
-  const today = useTodayTasks();
-  const { tasks, setTasks } = today;
+export function useTaskList(withLate = false) {
+  const today = useTodayTasks(withLate);
+  const { tasks, setTasks, late, setLate } = today;
   const done = (task: ListedTask) => {
     const next = task.status === "done" ? "undo" : "done";
     const before = tasks ?? [];
-    setTasks(
-      before.map((item) =>
-        item.task_id === task.task_id
-          ? { ...item, status: next === "done" ? "done" : "open" }
-          : item,
-      ),
-    );
+    const beforeLate = late;
+    const flip = (list: ListedTask[]) =>
+      list.map(
+        (item): ListedTask =>
+          item.task_id === task.task_id
+            ? { ...item, status: next === "done" ? "done" : "open" }
+            : item,
+      );
+    const put = (list: ListedTask[], saved: ListedTask) =>
+      list.map((item) => (item.task_id === saved.task_id ? saved : item));
+    setTasks(flip(before));
+    setLate(flip(beforeLate));
     taskAction(task, next).then(
-      (saved) =>
-        setTasks(
-          before.map((item) => (item.task_id === saved.task_id ? saved : item)),
-        ),
-      () => setTasks(before),
+      (saved) => {
+        setTasks(put(before, saved));
+        setLate(put(beforeLate, saved));
+      },
+      () => {
+        setTasks(before);
+        setLate(beforeLate);
+      },
     );
   };
   return {
     tasks,
+    late,
     overdue: today.overdue,
     failed: today.failed,
     reload: today.reload,
@@ -197,15 +235,21 @@ export function useTaskList() {
 }
 
 const TODAY_KEY = "tasks:today";
+const LATE_KEY = "tasks:late";
 type Today = { tasks: ListedTask[]; overdue: number };
 
 /** The Tasks page's Today, and how many are overdue: one truth with Tasks
- *  (persona QA, 31 Oct 2026: Home and Tasks counted different tasks). */
-export function useTodayTasks(): {
+ *  (persona QA, 31 Oct 2026: Home and Tasks counted different tasks). With
+ *  `withLate`, the overdue ones themselves too, for a seller's Today's list:
+ *  Tasks moves a task to Overdue a while after its time, and Home never showed
+ *  it again (owner's pick, 10 Nov 2026: late in red, never hidden). */
+export function useTodayTasks(withLate = false): {
   tasks: ListedTask[] | null;
+  late: ListedTask[];
   overdue: number | null;
   failed: boolean;
   setTasks: (next: ListedTask[]) => void;
+  setLate: (next: ListedTask[]) => void;
   reload: () => void;
 } {
   // What Today showed last in this workspace, so a return to Home draws the
@@ -215,6 +259,9 @@ export function useTodayTasks(): {
   );
   const [overdue, setOverdue] = useState<number | null>(
     () => homeKept<Today>(TODAY_KEY)?.overdue ?? null,
+  );
+  const [late, setLateShown] = useState<ListedTask[]>(() =>
+    withLate ? (homeKept<ListedTask[]>(LATE_KEY) ?? []) : [],
   );
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -231,8 +278,17 @@ export function useTodayTasks(): {
         if (!controller.signal.aborted) setFailed(true);
       },
     );
+    // The late ones are extra: when they don't load, Today's still shows.
+    if (withLate)
+      readTasks("overdue", controller.signal).then(
+        (list) => {
+          keepHome<ListedTask[]>(LATE_KEY, list.tasks);
+          setLateShown(list.tasks);
+        },
+        () => undefined,
+      );
     return () => controller.abort();
-  }, [attempt]);
+  }, [attempt, withLate]);
   const reload = useCallback(() => {
     setFailed(false);
     setAttempt((value) => value + 1);
@@ -245,7 +301,14 @@ export function useTodayTasks(): {
       overdue: homeKept<Today>(TODAY_KEY)?.overdue ?? 0,
     });
   }, []);
-  return { tasks, overdue, failed, setTasks, reload };
+  const setLate = useCallback(
+    (next: ListedTask[]) => {
+      setLateShown(next);
+      if (withLate) keepHome<ListedTask[]>(LATE_KEY, next);
+    },
+    [withLate],
+  );
+  return { tasks, late, overdue, failed, setTasks, setLate, reload };
 }
 
 function Head({
@@ -387,38 +450,53 @@ export function SellerOutline({ access }: { access: SidesAccess | null }) {
           ) : null,
         cards: <TodayCards side={side} own={null} tasks={null} />,
         next: <NextCall side={side} own={null} state="loading" />,
-        tasks: null,
-        follow: null,
-        recent: null,
-        perf: null,
+        list: null,
+        done: null,
       }}
     />
   );
 }
 
-/** 2. Four cards, each opening the exact list it counts (items 08-12). */
+/** 2. Four tiles, each opening the exact list it counts (items 08-12), as
+ *  H5 draws them (owner's pick, 10 Nov 2026). */
 export function TodayCards({
   side,
   own,
   tasks,
+  taskMarks = null,
+  lateTasks = null,
   failed = false,
 }: {
   side: Side;
   own: HomeSide | null;
   tasks: number | null;
+  /** Tasks past their time, on Tasks' Overdue: "Due today, 1 late". */
+  lateTasks?: number | null;
+  /** Today's tasks, done and still open: a box each on the Tasks tile (H3). */
+  taskMarks?: { done: number; open: number } | null;
   /** The leads didn't load: every card keeps its place and says "–", never
    *  a 0 it doesn't know (honest numbers, 3 Nov 2026). */
   failed?: boolean;
 }) {
   const cold = side === "cold";
   const counts = own?.counts;
-  const cards = [
+  const cards: {
+    key: string;
+    label: string;
+    note: ReactNode;
+    value: number | null | undefined;
+    href: string;
+    icon: ReactNode;
+    tone: CounterTone;
+  }[] = [
     {
       key: "new",
       label: cold ? "Unworked leads" : "New leads",
       note: cold ? "Never attempted" : "First call pending",
       value: counts?.new,
       href: leadsHref(side, { view: "to_call", step: own?.new_key ?? "new" }),
+      icon: cold ? <PhoneOutgoing /> : <UserPlus />,
+      tone: "teal",
     },
     {
       key: "open",
@@ -431,6 +509,8 @@ export function TodayCards({
         view: "all",
         step: own?.open_key ?? "open_leads",
       }),
+      icon: <Layers />,
+      tone: "indigo",
     },
     {
       key: "follow_ups",
@@ -438,13 +518,24 @@ export function TodayCards({
       note: "Due today",
       value: counts?.follow_ups_today,
       href: leadsHref(side, { view: "follow_ups", when: "today" }),
+      icon: <CalendarDays />,
+      tone: "amber",
     },
     {
       key: "tasks",
       label: "Tasks",
-      note: "Due today",
+      note: lateTasks ? (
+        <>
+          Due today,{" "}
+          <span className={styles.lateNote}>{`${lateTasks} late`}</span>
+        </>
+      ) : (
+        "Due today"
+      ),
       value: tasks,
       href: "/leads?tab=tasks",
+      icon: <SquareCheck />,
+      tone: "slate",
     },
   ];
   return (
@@ -462,44 +553,32 @@ export function TodayCards({
               !(own && card.key === "new" && own.new_key === null) &&
               !(own && card.key === "open" && own.open_key === null),
           )
-          .map((card) => {
-            const unknown = failed && card.value == null;
-            const body = (
-              <>
-                <span className={styles.cardLabel}>{card.label}</span>
-                <strong
-                  aria-busy={(!unknown && card.value == null) || undefined}
-                  data-unknown={unknown || undefined}
-                >
-                  {unknown ? (
-                    "–"
-                  ) : card.value == null ? (
-                    " "
+          .map((card) => (
+            <li key={card.key}>
+              <SmartCounter
+                id={card.key}
+                icon={card.icon}
+                tone={card.tone}
+                label={card.label}
+                note={card.note}
+                // The number as H5 writes it, "4", not Dipak's "04".
+                value={
+                  card.value == null ? (
+                    card.value
                   ) : (
-                    <Count value={twoDigits(card.value)} />
-                  )}
-                </strong>
-                <span className={styles.cardNote}>{card.note}</span>
-              </>
-            );
-            return (
-              <li key={card.key}>
-                {unknown ? (
-                  <div className={styles.card} data-card={card.key}>
-                    {body}
-                  </div>
-                ) : (
-                  <Link
-                    className={styles.card}
-                    href={card.href}
-                    data-card={card.key}
-                  >
-                    {body}
-                  </Link>
-                )}
-              </li>
-            );
-          })}
+                    <Count value={String(card.value)} />
+                  )
+                }
+                unknown={failed && card.value == null}
+                href={card.href}
+                marks={
+                  card.key === "tasks" && taskMarks ? (
+                    <TaskMarks done={taskMarks.done} open={taskMarks.open} />
+                  ) : null
+                }
+              />
+            </li>
+          ))}
       </ul>
     </section>
   );
@@ -1003,6 +1082,244 @@ export function UpcomingFollowUps({
   );
 }
 
+/** 4. Today's list (owner's pick, 10 Nov 2026: H5 Smart lists, with H1's red
+ *  late time and H4's kinds and lines): today's tasks and the follow-ups due
+ *  today in one list by time, five at most. The box ticks a task done; a
+ *  follow-up's phone calls it. Swipe right does it, left or a hold moves it.
+ *  The desk sends the next two follow-ups, so two of today's at most; the
+ *  Follow-ups tile opens them all. */
+const LIST_MAX = 5;
+
+type ListItem =
+  | { kind: "task"; at: string | null; task: ListedTask }
+  | { kind: "follow_up"; at: string | null; lead: Upcoming };
+
+const timeOf = (at: string | null) =>
+  at ? Date.parse(at) : Number.POSITIVE_INFINITY;
+
+export function TodaysList({
+  side,
+  own,
+  tasks,
+  failed,
+  onDone,
+  onRetry,
+  onMoved,
+}: {
+  side: Side;
+  own: HomeSide | null;
+  tasks: ListedTask[] | null;
+  failed: boolean;
+  onDone: (task: ListedTask) => void;
+  onRetry: () => void;
+  /** A task moved to another time: read the list again. */
+  onMoved: () => void;
+}) {
+  const go = useGo();
+  // The clock once, as the list opens: a follow-up past it is late.
+  const [now] = useState(() => Date.now());
+  const [laterTask, setLaterTask] = useState<ListedTask | null>(null);
+  const [laterLead, setLaterLead] = useState<Upcoming | null>(null);
+  // A follow-up moved here leaves at once, while Home reads again.
+  const [moved, setMoved] = useState<string[]>([]);
+  const follow = (own?.upcoming ?? []).filter(
+    (lead) =>
+      !moved.includes(lead.lead_id) &&
+      lead.next_action_at !== null &&
+      followUpsDay(lead.next_action_at) === "today",
+  );
+  const items: ListItem[] = [
+    ...(tasks ?? []).map(
+      (task): ListItem => ({ kind: "task", at: task.starts_at, task }),
+    ),
+    ...follow.map(
+      (lead): ListItem => ({
+        kind: "follow_up",
+        at: lead.next_action_at,
+        lead,
+      }),
+    ),
+  ]
+    .sort((a, b) => timeOf(a.at) - timeOf(b.at))
+    .slice(0, LIST_MAX);
+  const moveTask = async (task: ListedTask, time: Later) => {
+    setLaterTask(null);
+    try {
+      const saved = await snoozeTask(task, SNOOZE[time]);
+      notify({
+        id: "home-later",
+        tone: "success",
+        title: `Moved to ${whenDay(saved.starts_at)}`,
+        timeout: 3000,
+      });
+      onMoved();
+    } catch {
+      notify({
+        id: "home-later",
+        tone: "error",
+        title: "Not moved",
+        message: "Try again.",
+      });
+    }
+  };
+  const moveLead = async (lead: Upcoming, time: Later) => {
+    setLaterLead(null);
+    const at = nextCallTime(time);
+    try {
+      await setFollowUp(lead, at);
+      setMoved((ids) => [...ids, lead.lead_id]);
+      notify({
+        id: "home-later",
+        tone: "success",
+        title: `Moved to ${whenDay(at.toISOString())}`,
+        timeout: 3000,
+      });
+      retryHome();
+    } catch {
+      notify({
+        id: "home-later",
+        tone: "error",
+        title: "Not moved",
+        message: "Try again.",
+      });
+    }
+  };
+  const rows = items.map((item) => {
+    if (item.kind === "task") {
+      const task = item.task;
+      const done = task.status === "done";
+      return (
+        <SwipeRow
+          key={task.task_id}
+          className={styles.listRow}
+          done="Done"
+          late={late(task)}
+          onDone={done ? undefined : () => onDone(task)}
+          onLater={done ? undefined : () => setLaterTask(task)}
+        >
+          <TodayRow
+            kind="task"
+            at={task.starts_at}
+            late={late(task)}
+            done={done}
+            mark={
+              <TickMark
+                label={`Done: ${task.title}`}
+                checked={done}
+                onChange={() => onDone(task)}
+              />
+            }
+            // A task on a lead opens it from its words; the lead's name
+            // shows under them only when the words don't already say it.
+            title={
+              task.lead_id ? (
+                <Link href={`/leads?lead=${task.lead_id}`}>{task.title}</Link>
+              ) : (
+                task.title
+              )
+            }
+            extra={
+              task.lead_name &&
+              !task.title
+                .toLowerCase()
+                .includes(displayName(task.lead_name).toLowerCase())
+                ? displayName(task.lead_name)
+                : null
+            }
+          />
+        </SwipeRow>
+      );
+    }
+    const lead = item.lead;
+    const name = displayName(lead.name);
+    const behind = timeOf(lead.next_action_at) < now;
+    const href = leadsHref(side, {
+      view: "follow_ups",
+      when: followUpsDay(lead.next_action_at),
+    });
+    return (
+      <SwipeRow
+        key={lead.lead_id}
+        className={styles.listRow}
+        done="Call"
+        late={behind}
+        onDone={() => {
+          handOverLead(lead.lead_id, true);
+          go(href);
+        }}
+        onLater={() => setLaterLead(lead)}
+      >
+        <TodayRow
+          kind="follow_up"
+          at={lead.next_action_at}
+          late={behind}
+          mark={
+            <CallMark
+              href={href}
+              label={`Call ${name}`}
+              onClick={() => handOverLead(lead.lead_id, true)}
+            />
+          }
+          title={
+            <Link
+              href={`/leads?lead=${lead.lead_id}`}
+            >{`Call back ${name}`}</Link>
+          }
+          extra={lead.next_action_note || null}
+        />
+      </SwipeRow>
+    );
+  });
+  // Tasks on the way: one quiet line, never the follow-ups alone with the
+  // tasks arriving between them.
+  const waiting = tasks === null && !failed;
+  return (
+    <TodayList
+      id="list-title"
+      title="Today's list"
+      end={<SeeAll href="/leads?tab=tasks" />}
+      rows={waiting ? [] : rows}
+      empty={
+        failed ? null : waiting ? (
+          <p className={styles.listQuiet} role="status">
+            Loading tasks…
+          </p>
+        ) : (
+          <AllClear side={side} />
+        )
+      }
+      after={
+        <>
+          {failed ? (
+            <p className={styles.listQuiet} role="alert">
+              Tasks didn&apos;t load.{" "}
+              <button type="button" className={styles.retry} onClick={onRetry}>
+                Try again
+              </button>
+            </p>
+          ) : null}
+          <LaterSheet
+            open={laterTask !== null}
+            title={laterTask?.title ?? ""}
+            onClose={() => setLaterTask(null)}
+            onPick={(time) => {
+              if (laterTask) void moveTask(laterTask, time);
+            }}
+          />
+          <LaterSheet
+            open={laterLead !== null}
+            title={laterLead ? displayName(laterLead.name) : ""}
+            onClose={() => setLaterLead(null)}
+            onPick={(time) => {
+              if (laterLead) void moveLead(laterLead, time);
+            }}
+          />
+        </>
+      }
+    />
+  );
+}
+
 /** The calls on one side's leads, or all of them without a side (Swamini,
  *  4 Nov 2026, #170: Inbound's Recent calls listed Cold calls); a lead with
  *  no side is Inbound, as on the server. */
@@ -1104,20 +1421,38 @@ export function TodayPerformance({
   const unknown = numbers?.unknown ?? 0;
   const talked = numbers?.talk_seconds ?? 0;
   const recorded = numbers?.talk_recorded_seconds;
-  const figures = [
-    { label: "Attempted", value: numbers?.calls, href: calls },
+  // A ring's arc is a real share or nothing (honest numbers): Connected, or
+  // Outcome known, of the calls attempted. A total has only its track.
+  const figures: DoneFigure[] = [
+    {
+      key: "attempted",
+      label: "Attempted",
+      value: numbers?.calls,
+      href: calls,
+      icon: <PhoneOutgoing />,
+    },
     unknown && numbers
       ? {
+          key: "known",
           label: "Outcome known",
           value: numbers.calls - unknown,
           href: `${calls}&outcome=known`,
+          icon: <PhoneCall />,
+          share: numbers.calls
+            ? (numbers.calls - unknown) / numbers.calls
+            : null,
         }
       : {
+          key: "connected",
           label: "Connected",
           value: numbers?.connected,
           href: `${calls}&outcome=connected`,
+          icon: <PhoneCall />,
+          share: numbers?.calls ? numbers.connected / numbers.calls : null,
         },
     {
+      key: "talk",
+      icon: <Clock />,
       label:
         !talked || recorded === undefined
           ? "Talk time"
@@ -1136,49 +1471,40 @@ export function TodayPerformance({
       href: `${calls}&outcome=connected`,
     },
     {
+      key: "follow_ups",
       label: "Follow-ups done",
       value: numbers?.follow_ups_done,
       href: leadsHref(side, { view: "follow_ups", when: "today" }),
+      icon: <CalendarCheck />,
     },
   ];
   return (
-    <section className={styles.block} aria-labelledby="performance-title">
-      <Head id="performance-title" title="Today's performance">
+    <DoneToday
+      id="performance-title"
+      end={
         <Link className={styles.seeAll} href="/growth">
           See details
           <ChevronRight size={16} aria-hidden="true" />
         </Link>
-      </Head>
-      <div className={styles.figures}>
-        <p className={styles.figuresNote}>
-          {side === "cold" ? "Cold calls only" : "Inbound calls only"} · Today
-        </p>
-        <ul>
-          {figures.map((figure) => (
-            <li key={figure.label}>
-              <Link href={figure.href}>
-                <span>{figure.label}</span>
-                <strong>{figure.value ?? " "}</strong>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </div>
+      }
+      note={`${side === "cold" ? "Cold calls only" : "Inbound calls only"} · Today`}
+      figures={figures}
+    >
       {numbers && !numbers.calls && other?.numbers?.calls ? (
-        <p className={styles.quiet}>
+        <p className={styles.listQuiet}>
           {`${other.numbers.calls} tried on ${side === "cold" ? "Inbound" : "Cold"} today`}
         </p>
       ) : null}
       {unknown && readable === false ? (
-        <p className={styles.quiet}>
+        <p className={styles.listQuiet}>
           Call history isn&apos;t available in this app version yet
         </p>
       ) : null}
-    </section>
+    </DoneToday>
   );
 }
 
-/** The six blocks for one seller's day, in the handoff's order. */
+/** One seller's day, in H5's order (owner's pick, 10 Nov 2026). */
 export function SellerBlocks({
   desk,
   side,
@@ -1199,7 +1525,7 @@ export function SellerBlocks({
 }) {
   const fetched = useSidesAccess(given === undefined);
   const access = given === undefined ? fetched : given;
-  const { tasks, failed, reload, done } = useTaskList();
+  const { tasks, late, overdue, failed, reload, done } = useTaskList(true);
   // Only the type this seller works when they don't have both.
   const shown: Side =
     access && !access.inbound && access.cold
@@ -1248,26 +1574,42 @@ export function SellerBlocks({
                 ? tasks.filter((task) => task.status !== "done").length
                 : null
             }
+            taskMarks={
+              ready && tasks
+                ? {
+                    done: tasks.filter((task) => task.status === "done").length,
+                    open: tasks.filter((task) => task.status !== "done").length,
+                  }
+                : null
+            }
+            lateTasks={ready ? overdue : null}
           />
         ),
         next: (
           <NextCall side={shown} own={own} state={ready ? "ready" : state} />
         ),
-        tasks: ready ? (
-          <TodayTasks
-            tasks={tasks}
+        list: ready ? (
+          <TodaysList
+            side={shown}
+            own={own}
+            tasks={
+              tasks === null
+                ? null
+                : [
+                    ...late.filter(
+                      (task) =>
+                        !tasks.some((item) => item.task_id === task.task_id),
+                    ),
+                    ...tasks,
+                  ]
+            }
             failed={failed}
             onDone={done}
             onRetry={reload}
-            onAdded={reload}
-            side={shown}
             onMoved={reload}
-            canAdd={false}
           />
         ) : null,
-        follow: ready ? <UpcomingFollowUps side={shown} own={own} /> : null,
-        recent: ready ? <RecentCalls side={shown} /> : null,
-        perf: ready ? (
+        done: ready ? (
           <TodayPerformance
             side={shown}
             own={own}

@@ -25,6 +25,7 @@ import argparse
 import http.client
 import json
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -42,15 +43,19 @@ FAMILIES: dict[str, dict[str, object]] = {
         "api": "salesxray.authorityclosers.com",
         "mcp": "salesxray.authorityclosers.com",
         "forward": (),
+        "landing": (),
     },
-    # The customer domain; salesxray.in and www forward to the app until the landing site is live.
+    # The customer domain. Since 10 Nov 2026 salesxray.in is the landing site (Cloudflare Pages, not
+    # our edge); www still forwards to the app through the edge.
     "new": {
         "app": "app.salesxray.in",
         "api": "api.salesxray.in",
         "mcp": "mcp.salesxray.in",
-        "forward": ("salesxray.in", "www.salesxray.in"),
+        "forward": ("www.salesxray.in",),
+        "landing": ("salesxray.in",),
     },
 }
+LANDING_TITLE = re.compile(rb"<title>([^<]*Sales X-Ray[^<]*)</title>", re.IGNORECASE)
 
 Result = tuple[bool, str]
 
@@ -166,6 +171,15 @@ def checks(
 
         return run
 
+    def landing(host: str) -> Callable[[], Result]:
+        def run() -> Result:
+            status, _, data = get(host, "GET", "/")
+            title = LANDING_TITLE.search(data)
+            shown = title[1].decode(errors="replace").strip() if title else "no Sales X-Ray title"
+            return status == 200 and title is not None, f"{status} {shown}"
+
+        return run
+
     found += [
         ("page", page),
         ("mcp-metadata", resource),
@@ -178,6 +192,8 @@ def checks(
     if forward:
         found += [(f"forward-{host}", forwards(str(host))) for host in names["forward"]]  # type: ignore[union-attr]
         found += [(f"forward-{host}", forwards(host)) for host in sorted({api, mcp} - {app})]
+    if get.edge is None:  # the landing site is served by Cloudflare Pages, never by our edge
+        found += [(f"landing-{host}", landing(str(host))) for host in names["landing"]]  # type: ignore[union-attr]
     if not deep:
         return found
 
