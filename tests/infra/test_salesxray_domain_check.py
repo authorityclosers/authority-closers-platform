@@ -100,12 +100,32 @@ def test_both_address_families_pass_through_the_edge(edge: str, capsys) -> None:
         "PASS old page",
         "PASS new mcp-metadata",
         "PASS new mcp-challenge",
-        "PASS new forward-salesxray.in",
+        "PASS new forward-www.salesxray.in",
         "PASS new forward-mcp.salesxray.in",
     ):
         assert line in " ".join(out.split())
     # The old address forwards nothing: its API and MCP stay on it.
     assert "PASS old forward" not in " ".join(out.split())
+    # salesxray.in is the landing site on Cloudflare Pages (10 Nov 2026): the edge isn't asked.
+    assert "forward-salesxray.in" not in out and "landing" not in out
+
+
+def test_the_landing_site_answers_with_its_page_on_the_public_address() -> None:
+    pages = {"salesxray.in": (200, {}, b"<html><title>Sales X-Ray: see inside</title></html>")}
+
+    class Public:
+        edge = None
+
+        def __call__(self, host: str, method: str, path: str, **_: object):
+            return pages.get(host, (404, {}, b"")) if path == "/" else (404, {}, b"")
+
+    rows = dict(check.checks("new", Public(), deep=False, forward=True))  # type: ignore[arg-type]
+    assert rows["landing-salesxray.in"]() == (True, "200 Sales X-Ray: see inside")
+    # The old forward to the app, or any other page, is a failure.
+    pages["salesxray.in"] = (302, {"location": "https://app.salesxray.in/"}, b"")
+    assert rows["landing-salesxray.in"]() == (False, "302 no Sales X-Ray title")
+    old = dict(check.checks("old", Public(), deep=False, forward=True))  # type: ignore[arg-type]
+    assert "landing-salesxray.in" not in old
 
 
 def test_a_secret_row_runs_only_when_its_secret_is_given(edge: str, capsys, monkeypatch) -> None:
