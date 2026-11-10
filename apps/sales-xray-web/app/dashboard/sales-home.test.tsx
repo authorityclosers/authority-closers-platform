@@ -561,9 +561,13 @@ it("opens an owner's Home on Team, whatever was chosen on an earlier visit", asy
   await mount(true);
   await act(async () => Promise.resolve());
   await act(async () => Promise.resolve());
-  expect(host.querySelector("[data-mode]")?.getAttribute("data-mode")).toBe(
-    "team",
-  );
+  // The Team | Me view, not Home's pull-to-refresh mark, which says its own
+  // mode too ("idle") and comes first since pull to refresh (62edc21f0).
+  expect(
+    host
+      .querySelector('[data-mode]:not([aria-hidden="true"])')
+      ?.getAttribute("data-mode"),
+  ).toBe("team");
   expect(window.location.search).not.toContain("view=mine");
 });
 
