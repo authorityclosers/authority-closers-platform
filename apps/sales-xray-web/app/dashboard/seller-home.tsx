@@ -1270,6 +1270,12 @@ export function TodaysList({
       </SwipeRow>
     );
   });
+  // See all opens the Tasks list that holds what this shows: Overdue when a
+  // late task is here (Redmi QA, 10 Nov 2026: two late tasks here, and See all
+  // opened Today, "Nothing due today").
+  const seeAll = (tasks ?? []).some(late)
+    ? "/leads?tab=tasks&tasks=overdue"
+    : "/leads?tab=tasks";
   // Tasks on the way: one quiet line, never the follow-ups alone with the
   // tasks arriving between them.
   const waiting = tasks === null && !failed;
@@ -1277,7 +1283,7 @@ export function TodaysList({
     <TodayList
       id="list-title"
       title="Today's list"
-      end={<SeeAll href="/leads?tab=tasks" />}
+      end={<SeeAll href={seeAll} />}
       rows={waiting ? [] : rows}
       empty={
         failed ? null : waiting ? (
