@@ -328,8 +328,12 @@ it("says nothing when all is well, uploads are off or the app is older", async (
   root = undefined;
 });
 it("names the hold on a call and links its fix", async () => {
+  // Minutes: who can add them, no Fix and no prices (Redmi QA, 10 Nov 2026).
   await render(<CaptureStateLabel state="held" hold="allowance" />);
-  expect(host.textContent).toContain("Waiting for call minutes");
+  expect(host.textContent).toBe(
+    "Waiting for analysis minutes · your owner or an admin can add them",
+  );
+  expect(host.querySelector("a, button")).toBeNull();
   await act(async () => root?.unmount());
   host.remove();
   await render(<CaptureStateLabel state="held" hold="profile" />);
@@ -338,9 +342,12 @@ it("names the hold on a call and links its fix", async () => {
   );
   await act(async () => root?.unmount());
   host.remove();
-  // An older app's held call keeps the review wording.
+  // A hold the phone can't explain says what to do, and never opens phone setup.
   await render(<CaptureStateLabel state="held" />);
-  expect(host.textContent).toContain("Upload paused · review this call");
+  expect(host.textContent).toBe(
+    "Upload paused · add its recording by hand on the lead",
+  );
+  expect(host.querySelector("a, button")).toBeNull();
 });
 it("carries the phone's hold reason into a lead's call row", async () => {
   vi.mocked(autoCaptureStates).mockResolvedValue([
@@ -387,13 +394,24 @@ it("tracks each call from dialled to its report, or where it is stuck", () => {
   expect(trackFor(held, null)).toMatchObject({
     done: 2,
     stuck: true,
-    label: "Waiting for call minutes",
-    fix: { label: "Fix uploads" },
+    label: "Waiting for analysis minutes · your owner or an admin can add them",
   });
+  expect(trackFor(held, null)?.fix).toBeUndefined();
   // The hold says why, even after the server's 30-minute deadline.
   expect(trackFor(held, serverCall({ state: "missing" }))?.label).toBe(
-    "Waiting for call minutes",
+    "Waiting for analysis minutes · your owner or an admin can add them",
   );
+  // A hold the phone can't explain never sends the seller to phone setup.
+  expect(trackFor({ eventId: "event", state: "held" }, null)).toMatchObject({
+    label: "Upload paused · add its recording by hand on the lead",
+    stuck: true,
+  });
+  expect(
+    trackFor({ eventId: "event", state: "held" }, null)?.fix,
+  ).toBeUndefined();
+  expect(
+    trackFor({ eventId: "event", state: "held", hold: "profile" }, null)?.fix,
+  ).toMatchObject({ label: "Open Profile", href: "/settings/profile" });
   // A call with no recording 30 minutes on ended without one: calm, with its fix, never
   // "Stuck" in red (persona QA, 31 Oct 2026).
   expect(trackFor(null, serverCall({ state: "missing" }))).toMatchObject({
