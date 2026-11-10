@@ -13,6 +13,7 @@ import { TeamView, WorkHoursPanel } from "../../leads/team-view";
 import { SellerSheet } from "../../leads/seller-sheet";
 import { readCallAi, type CallAiSettings } from "../../call-ai/call-ai-client";
 import { Segmented, Skeleton } from "../../ui/kit";
+import { SideScroll } from "../../ui/side-scroll";
 import { PersonDisplayName } from "../people/person-display-name";
 import styles from "./setup.module.css";
 
@@ -22,16 +23,21 @@ export function OrganisationRules() {
     // No title of its own: Leads setup's switch already says Lead rules
     // (owner, bug 190, 6 Nov 2026: the same words three times, too much text).
     <div className={styles.stack}>
-      <Segmented
-        label="Lead rule setup"
-        value={part}
-        onChange={setPart}
-        items={[
-          { key: "routing", label: "Match leads" },
-          { key: "people", label: "Seller rules" },
-          { key: "limits", label: "Limits" },
-        ]}
-      />
+      {/* Each label on one line: at large text the switch scrolls sideways
+          inside itself, as Leads setup's own switch does (owner's bug 190,
+          re-checked at 130% text on 10 Nov 2026: the labels wrapped). */}
+      <SideScroll chosen={part}>
+        <Segmented
+          label="Lead rule setup"
+          value={part}
+          onChange={setPart}
+          items={[
+            { key: "routing", label: "Match leads" },
+            { key: "people", label: "Seller rules" },
+            { key: "limits", label: "Limits" },
+          ]}
+        />
+      </SideScroll>
       {part === "routing" ? (
         <div className={styles.routing}>
           <RoutingRules />
