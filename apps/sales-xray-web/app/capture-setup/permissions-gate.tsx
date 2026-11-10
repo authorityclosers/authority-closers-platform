@@ -321,6 +321,32 @@ async function ask(key: PermissionKey): Promise<void> {
   }
 }
 
+/**
+ * The reminder's X: quiet until tomorrow, per person and workspace (Redmi QA on
+ * production, 10 Nov 2026: X hid it only until the next cold start, and it sat
+ * at the foot of every page again).
+ */
+const quietKey = (person: string, tenant: string) =>
+  `sales-xray:permissions-reminder-quiet:${person}:${tenant}`;
+const today = () =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(
+    new Date(),
+  );
+function quietToday(key: string): boolean {
+  try {
+    return window.localStorage.getItem(key) === today();
+  } catch {
+    return false;
+  }
+}
+function keepQuiet(key: string) {
+  try {
+    window.localStorage.setItem(key, today());
+  } catch {
+    // Without storage the X lasts for this app open, as before.
+  }
+}
+
 /** Not now, per person and workspace: a reminder, never a choice made for them. */
 function laterKey(person: string, tenant: string): string {
   return `sales-xray:permissions-later:${person}:${tenant}`;
@@ -411,8 +437,10 @@ export function PermissionsGate() {
     return () => window.removeEventListener(OPEN_EVENT, open);
   }, []);
 
-  const storageKey =
-    organisation && person && tenant ? laterKey(person, tenant) : "";
+  // Kept in Personal too, now that the folder has Not now there (Redmi QA on
+  // production, 10 Nov 2026).
+  const storageKey = person && tenant ? laterKey(person, tenant) : "";
+  const quiet = person && tenant ? quietKey(person, tenant) : "";
   const putOff = useMemo<ReadonlySet<string>>(
     () =>
       new Set([...(storageKey ? readLater(storageKey) : []), ...visitLater]),
@@ -506,7 +534,7 @@ export function PermissionsGate() {
       ? ""
       : later.map((item) => item.label).join(" · ");
   useEffect(() => {
-    if (!remind || reminded.current) {
+    if (!remind || reminded.current || (quiet && quietToday(quiet))) {
       dismissNotice(REMINDER_ID);
       return;
     }
@@ -530,9 +558,10 @@ export function PermissionsGate() {
       timeout: 0,
       onDismiss: async () => {
         reminded.current = true;
+        if (quiet) keepQuiet(quiet);
       },
     });
-  }, [remind]);
+  }, [remind, quiet]);
 
   // Back is Not now for the rows that can wait (never the battery's Done or the
   // consent, which are the seller's own words), and closes the checklist the

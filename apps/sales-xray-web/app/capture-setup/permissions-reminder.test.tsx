@@ -283,3 +283,18 @@ it("waits while a sheet is up, so it never covers the sheet's buttons", async ()
   expect(reminder()).toBe(true);
   sheet.remove();
 });
+
+it("stays away for the day after its X, even after the app opens again", async () => {
+  // Redmi QA on production (10 Nov 2026): X hid "Finish setting up" only until
+  // the next cold start.
+  fakePhone(() => ({ ...ALL, callLog: false }));
+  await mount();
+  await act(async () => byLabel("Not now: Call log").click());
+  await settle();
+  expect(reminder()).toBe(true);
+  await act(async () => byLabel("Dismiss").click());
+  await settle();
+  expect(reminder()).toBe(false);
+  await reopenApp();
+  expect(reminder()).toBe(false);
+});
