@@ -54,6 +54,7 @@ import {
 import { useBranding } from "./branding-store";
 import { AddSheet } from "./add-sheet";
 import { AskDipakSheet } from "./ask-deepak";
+import { searchTogether, warmLeadsSearch } from "./search-together";
 import { useAppRouter } from "./app-router";
 import { useShellProfile } from "./profile-store";
 import { callHref, type Allowance } from "../acquisition-client";
@@ -638,6 +639,11 @@ function LightboxShellFrame({
   // Ctrl K or ⌘K opens the command bar from anywhere (slice 9 of the new
   // map): places, actions, settings, leads and calls in one search.
   const [commandOpen, setCommandOpen] = useState(false);
+  // Search's lead reader starts loading as search opens, not on the first
+  // letters (Redmi QA on production, 10 Nov 2026: 3-4 s of "Looking...").
+  useEffect(() => {
+    if (commandOpen) warmLeadsSearch();
+  }, [commandOpen]);
   const quiet = useQuiet();
   // Report a problem before the reporter loaded: load it now.
   const reportWaiting = useReportWaiting();
@@ -1297,16 +1303,17 @@ function LightboxShellFrame({
         icon: <Search size={17} />,
         run: () => go(`${CALLS_PATH}?q=${encodeURIComponent(text)}`),
       };
-      let leads: Command[] = [];
-      if (inOrganisation && !leadsSearchedElsewhere)
+      const readLeadsFound = async (): Promise<Command[]> => {
+        if (!inOrganisation || leadsSearchedElsewhere) return [];
         try {
-          // Loaded on the first search, not with every page.
+          // Loaded on the first search, not with every page (warmed when
+          // search opens).
           const { leadLink, readLeads } = await import("../leads/leads-client");
           const page = await readLeads(
             { scope: orgAdmin ? "team" : "mine", search: text },
             signal,
           );
-          leads = page.leads.slice(0, 5).map((lead) => ({
+          return page.leads.slice(0, 5).map((lead) => ({
             id: `lead:${lead.lead_id}`,
             group: "Leads",
             label: withCapitals(lead.name),
@@ -1319,12 +1326,12 @@ function LightboxShellFrame({
           }));
         } catch {
           // A failed read shows the calls only.
+          return [];
         }
-      const found = await Promise.allSettled(
-        registered.searches.map((search) => search(text, signal)),
-      );
-      const theirs = found.flatMap((result) =>
-        result.status === "fulfilled" ? result.value : [],
+      };
+      const [leads, theirs] = await searchTogether(
+        readLeadsFound,
+        registered.searches.map((search) => () => search(text, signal)),
       );
       return [...leads, ...theirs, ...calls, everyCall];
     },
