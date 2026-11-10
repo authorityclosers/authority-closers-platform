@@ -4275,6 +4275,21 @@ a.repName {
   composes: appBanner;
 }
 
+/* Its title on its own line, what it does under it (ux-audit, the Redmi pass,
+   10 Nov 2026: "Log work calls by themselves" ran into "Only calls with your
+   leads..."). */
+.phoneLogCard > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.phoneLogCard > span > small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
 .phoneLogSims {
   grid-column: 1 / -1;
   display: flex;
@@ -4776,12 +4791,15 @@ a.repName {
     gap: 8px;
   }
   .compactStack .appBanner > span,
-  .compactStack .alertsCard > span,
-  .compactStack .phoneLogCard > span {
+  .compactStack .alertsCard > span {
     display: -webkit-box;
     overflow: hidden;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
+    font-size: var(--sx-text-sm);
+    line-height: var(--sx-leading-20);
+  }
+  .compactStack .phoneLogCard > span {
     font-size: var(--sx-text-sm);
     line-height: var(--sx-leading-20);
   }

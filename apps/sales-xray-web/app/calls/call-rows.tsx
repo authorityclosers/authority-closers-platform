@@ -399,7 +399,8 @@ export function CallRows({
                 onClick={(click) => {
                   if (row.report || !leadId) return;
                   click.preventDefault();
-                  handOverLead(leadId, false, row.at);
+                  // Its Back comes back here (Redmi QA R2, 10 Nov 2026).
+                  handOverLead(leadId, false, row.at, true);
                   go("/leads");
                 }}
               >
