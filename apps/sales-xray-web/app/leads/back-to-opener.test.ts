@@ -1,14 +1,20 @@
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from "vitest";
 
 import { backToOpener } from "./back-to-opener";
 
 // Redmi QA R2 (10 Nov 2026): a call opened from Calls, and the lead's Back
 // landed on Leads. Leads takes one more step back, to the page that opened it.
-let back: ReturnType<typeof vi.fn>;
+let back: MockInstance<() => void>;
 beforeEach(() => {
   vi.useFakeTimers();
-  back = vi.fn();
-  vi.spyOn(window.history, "back").mockImplementation(back);
+  back = vi.spyOn(window.history, "back").mockImplementation(() => undefined);
 });
 afterEach(() => {
   vi.useRealTimers();
