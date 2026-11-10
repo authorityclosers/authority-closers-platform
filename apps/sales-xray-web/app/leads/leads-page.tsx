@@ -1160,12 +1160,21 @@ export function LeadsRoute({
   } | null>(null);
   // The follow-up filter counts too; inside Follow-ups it is the tab's own split
   // (robot J181, 2 Nov 2026).
+  // The order changes no count, so a new sort keeps the tabs' counts while
+  // the list reads again (Redmi QA F1, 10 Nov 2026: sorting by name emptied
+  // To Call, Follow-ups and All Leads until the list came back).
   const viewCountsKey = JSON.stringify([
     contextKey,
     scope,
     query,
     pipeline,
-    { ...more, view: null, when: workView === "follow_ups" ? null : more.when },
+    {
+      ...more,
+      view: null,
+      sort: null,
+      order: null,
+      when: workView === "follow_ups" ? null : more.when,
+    },
   ]);
   const onViewCounts = useCallback(
     (value: Partial<Record<WorkView, number>>) =>

@@ -26,6 +26,7 @@ import {
   type CompanyCall,
 } from "./company-call-client";
 import styles from "./company-call.module.css";
+import { dialPhone } from "./leads-client";
 
 const POLL_MS = 2500;
 // A call nobody heard the end of: stop asking after this long.
@@ -207,7 +208,7 @@ export function CompanyCallStrip({
         <span>{error ?? (call ? callLine(call, name) : "")}</span>
       </span>
       {error && phone ? (
-        <a className={styles.action} href={`tel:${phone}`}>
+        <a className={styles.action} href={`tel:${dialPhone(phone)}`}>
           Call from my phone
         </a>
       ) : null}

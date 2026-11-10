@@ -141,7 +141,7 @@ describe("permissionItems", () => {
     expect(permissionsMissing(permissionItems(status(ALL), ORG))).toBe(false);
   });
 
-  it("needs phone, contacts, notifications and the folder in an organisation; contacts never hold Personal", () => {
+  it("needs phone, contacts and notifications in an organisation; contacts never hold Personal", () => {
     const noContacts = status({ ...ALL, contacts: false });
     expect(permissionsMissing(permissionItems(noContacts, ORG))).toBe(true);
     expect(permissionsMissing(permissionItems(noContacts, PERSONAL))).toBe(
@@ -150,12 +150,28 @@ describe("permissionItems", () => {
     const required = permissionItems(status(ALL), ORG)
       .filter((item) => item.required)
       .map((item) => item.key);
-    expect(required).toEqual([
-      "phone",
-      "contacts",
-      "notifications",
-      "recordings",
-    ]);
+    expect(required).toEqual(["phone", "contacts", "notifications"]);
+  });
+
+  it("lets the recordings folder wait in either workspace, with a reminder after", () => {
+    // Redmi QA on production (10 Nov 2026): a new seller couldn't reach Home
+    // without choosing a recordings folder.
+    for (const where of [ORG, PERSONAL]) {
+      const items = permissionItems(
+        status(ALL, { folderPicked: false }),
+        where,
+      );
+      const folder = items.find((item) => item.key === "recordings")!;
+      expect(folder.required).toBe(false);
+      expect(folder.canWait).toBe(true);
+      expect(permissionsMissing(items)).toBe(false);
+      expect(checklistOpen(items, new Set())).toBe(true);
+      const later = new Set([putOffKey(folder)]);
+      expect(checklistOpen(items, later)).toBe(false);
+      expect(reminders(items, later).map((item) => item.key)).toEqual([
+        "recordings",
+      ]);
+    }
   });
 
   it("offers call history, the battery and the consent with Not now, never holding the app", () => {
@@ -166,7 +182,7 @@ describe("permissionItems", () => {
     expect(permissionsMissing(items)).toBe(false);
     expect(
       items.filter((item) => item.canWait).map((item) => item.key),
-    ).toEqual(["callLog", "battery", "autoAnalysis"]);
+    ).toEqual(["callLog", "recordings", "battery", "autoAnalysis"]);
     // Not answered yet: the checklist opens for them once.
     expect(checklistOpen(items, new Set())).toBe(true);
     const later = new Set(items.filter((i) => i.canWait).map(putOffKey));
@@ -264,7 +280,11 @@ type Listener = (event: { data: unknown }) => void;
 let root: Root;
 let host: HTMLDivElement;
 
-function fakePhone(checks: () => Record<string, boolean>, family = "xiaomi") {
+function fakePhone(
+  checks: () => Record<string, boolean>,
+  family = "xiaomi",
+  folderPicked = true,
+) {
   const listeners: Listener[] = [];
   const sent: Sent[] = [];
   vi.stubGlobal("SXPhone", {
@@ -283,7 +303,7 @@ function fakePhone(checks: () => Record<string, boolean>, family = "xiaomi") {
               version: "1.0.60",
               device: "install-fictional-1",
               folderPickSupported: true,
-              folderPicked: true,
+              folderPicked,
               callLogSupported: true,
             };
       queueMicrotask(() =>
@@ -442,6 +462,27 @@ describe("PermissionsGate", () => {
     await resume();
     expect(host.querySelector("dialog[data-permissions]")).not.toBeNull();
     expect(button("Allow Notifications")).toBeTruthy();
+  });
+
+  it("lets a seller put the recordings folder off with Not now or Back", async () => {
+    // Redmi QA on production (10 Nov 2026): in Personal the folder had no Not
+    // now, Back did nothing, and two cold starts stayed on it.
+    fakePhone(() => ALL, "xiaomi", false);
+    await mount("personal");
+    expect(host.querySelector("dialog")).not.toBeNull();
+    await act(async () => button("Not now: Recordings folder").click());
+    await settle();
+    expect(host.querySelector("dialog")).toBeNull();
+
+    window.localStorage.clear();
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    fakePhone(() => ALL, "xiaomi", false);
+    await mount();
+    expect(host.querySelector("dialog")).not.toBeNull();
+    await act(async () => window.history.back());
+    await settle();
+    expect(host.querySelector("dialog")).toBeNull();
   });
 
   it("keeps Personal as it was: contacts don't wait, no battery or consent row, no Not now", async () => {

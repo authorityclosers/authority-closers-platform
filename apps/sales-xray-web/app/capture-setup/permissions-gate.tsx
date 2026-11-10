@@ -70,6 +70,7 @@ import {
   readAutoAnalysis,
   type AutoAnalysis,
 } from "../settings/auto-analysis-client";
+import { useBackClose } from "../ui/back-close";
 import { Button } from "../ui/kit";
 import { FIRST_RUN_ATTRIBUTE } from "../welcome/setup-state";
 import { useWorkspaceAccess } from "../workspace-access";
@@ -126,6 +127,23 @@ function watchFullPage(changed: () => void) {
 const fullPageOpen = () =>
   FULL_PAGE.some((name) => document.documentElement.hasAttribute(name));
 const noFullPage = () => false;
+
+/**
+ * A sheet is up: the reminder waits until it closes, so it never covers the
+ * sheet's own buttons (Redmi QA on production, 10 Nov 2026: Appearance in the
+ * account menu, Add lead's footer, Notes, Remind me's times, Move).
+ */
+function watchSheets(changed: () => void) {
+  const watch = new MutationObserver(changed);
+  watch.observe(document.body, {
+    attributes: true,
+    attributeFilter: ["open"],
+    childList: true,
+    subtree: true,
+  });
+  return () => watch.disconnect();
+}
+const sheetOpen = () => document.querySelector("dialog[open]") !== null;
 
 /**
  * Turn on from the Calls line (owner, 3 Nov 2026): the checklist again, at the
@@ -381,6 +399,7 @@ export function PermissionsGate() {
     fullPageOpen,
     noFullPage,
   );
+  const sheet = useSyncExternalStore(watchSheets, sheetOpen, noFullPage);
   const away = useRef(false);
 
   useEffect(() => {
@@ -480,7 +499,9 @@ export function PermissionsGate() {
   // itself after 5 s). On Leads it is the line above the rows; elsewhere the
   // corner, which the page keeps room for.
   const remind =
-    open || fullPage ? "" : later.map((item) => item.label).join(" · ");
+    open || fullPage || sheet
+      ? ""
+      : later.map((item) => item.label).join(" · ");
   useEffect(() => {
     if (!remind || reminded.current) {
       dismissNotice(REMINDER_ID);
@@ -510,7 +531,30 @@ export function PermissionsGate() {
     });
   }, [remind]);
 
-  // A modal dialog over every page; Escape and Back don't close it.
+  // Back is Not now for the rows that can wait (never the battery's Done or the
+  // consent, which are the seller's own words), and closes the checklist the
+  // reminder reopened (Redmi QA on production, 10 Nov 2026: Back did nothing).
+  // What the app needs to work still holds it; Escape still doesn't close it.
+  useBackClose(open, () => {
+    if (reopened) {
+      setReopened(false);
+      return;
+    }
+    const keys = toAnswer(items, putOff)
+      .filter(
+        (item) =>
+          item.canWait &&
+          !waitsFor(item) &&
+          item.key !== "battery" &&
+          item.key !== "autoAnalysis",
+      )
+      .map(putOffKey);
+    if (!keys.length) return;
+    setVisitLater(new Set([...visitLater, ...keys]));
+    if (storageKey) writeLater(storageKey, new Set([...putOff, ...keys]));
+  });
+
+  // A modal dialog over every page; Escape doesn't close it.
   const frame = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const node = frame.current;
@@ -586,7 +630,7 @@ export function PermissionsGate() {
           putOff={reopened ? new Set() : putOff}
           onAllow={(key) => void allow(key)}
           onSettings={settings}
-          onLater={organisation ? putAside : undefined}
+          onLater={putAside}
         />
       </div>
     </dialog>

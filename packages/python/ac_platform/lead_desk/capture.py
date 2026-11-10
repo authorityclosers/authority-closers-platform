@@ -283,6 +283,12 @@ def normalise_phone(raw: object, *, default_country: str = "91") -> str | None:
         if len(digits) == 11 and digits.startswith("0"):
             # A trunk 0: a mobile (0 98765 43210) or a landline with its STD code.
             digits = default_country + digits[1:]
+        elif len(digits) == 11 and digits.startswith("1") and default_country == "91":
+            # India's service numbers, toll-free 1800 and shared-cost 1860 (Redmi QA
+            # on production, 10 Nov 2026: "18008899999" was saved as +1, a US
+            # number). Without a + or 00 a number is national: an Indian seller's
+            # leading 1 is never the US code.
+            digits = default_country + digits
         elif len(digits) == 10 and digits[0] in "6789":
             digits = default_country + digits
         elif len(digits) == 12 and digits.startswith(default_country) and digits[2] in "6789":
