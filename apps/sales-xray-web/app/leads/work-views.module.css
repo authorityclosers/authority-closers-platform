@@ -75,6 +75,24 @@
   }
 }
 
+/* Large text on a phone: the view tabs step down to fit their row rather than
+   run past its edge; at a phone's own text size they are as before (owner bug
+   165, 3 Nov 2026: "if the mobile is redoing the font size then make sure that
+   it does not"). The row is their measure. */
+@media (max-width: 899.98px) {
+  .head > :has(> [role="tablist"][aria-label="Work views"]) {
+    container-type: inline-size;
+  }
+
+  .head [role="tablist"][aria-label="Work views"] {
+    gap: min(24px, 7cqi);
+  }
+
+  .head [aria-label="Work views"] [role="tab"] {
+    font-size: min(var(--sx-text-sm), 4.5cqi);
+  }
+}
+
 /* A computer: the same stack in the list column. It scrolls the shell's main,
    whose 24 px top padding would leave a band above the head: the head sits
    flush with its edge. */
@@ -522,4 +540,9 @@
     height: 44px;
     margin-block: -1px;
   }
+}
+
+/* All stages' count, its figures even (owner bug 193). */
+.stageCount {
+  font-variant-numeric: tabular-nums;
 }
