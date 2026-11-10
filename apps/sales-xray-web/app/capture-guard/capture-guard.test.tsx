@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
@@ -720,4 +722,14 @@ it("opens the Phone app's call recording setting from a waiting row", async () =
   await act(async () => fix?.click());
   expect(recorderOpen).toHaveBeenCalledWith("settings");
   expect(pickRecordingsFolder).not.toHaveBeenCalled();
+});
+
+it("lets a check's action go under its words rather than squeeze them", () => {
+  // The owner's bug 115, re-checked at 130% text (10 Nov 2026).
+  const css = readFileSync(
+    join(process.cwd(), "app/capture-guard/capture-guard.module.css"),
+    "utf8",
+  );
+  expect(css).toMatch(/\n\.check \{[^}]*flex-wrap: wrap;/);
+  expect(css).toMatch(/\n\.check > span:first-child \{\s*flex: 1 1 10rem;/);
 });
