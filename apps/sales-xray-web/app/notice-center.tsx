@@ -155,6 +155,17 @@ function subscribe(listener: () => void) {
   };
 }
 
+/** Whether a card with this id is up now: one setup card at a time (Redmi QA
+ *  on production, 10 Nov 2026: "Finish setting up" over "Recording isn't set
+ *  up" on Home). */
+export function useNoticeShown(id: string): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => notices.some((item) => item.id === id),
+    () => false,
+  );
+}
+
 const EMPTY: readonly Notice[] = [];
 
 // ----- the dock --------------------------------------------------------------------------
