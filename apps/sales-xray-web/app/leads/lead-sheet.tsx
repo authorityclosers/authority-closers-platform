@@ -75,6 +75,7 @@ import {
   leadLink,
   addNote,
   ago,
+  dialPhone,
   dispose,
   displayPhone,
   editLead,
@@ -3334,7 +3335,7 @@ export function LeadCard({
       setPermits(false);
       rememberCall(lead.lead_id);
       callStep("fallback_tel", { mode: "browser" });
-      window.location.href = `tel:${detail.phone}`;
+      window.location.href = `tel:${dialPhone(detail.phone)}`;
     } finally {
       setCalling(false);
     }
@@ -3349,7 +3350,7 @@ export function LeadCard({
     if (inPhoneApp()) void callFromApp(false);
     else {
       rememberCall(lead.lead_id);
-      window.location.href = `tel:${detail.phone}`;
+      window.location.href = `tel:${dialPhone(detail.phone)}`;
     }
   };
   // A press on Call or the number (first-tap.ts): the app places it, a
@@ -3369,7 +3370,8 @@ export function LeadCard({
       return;
     }
     rememberCall(lead.lead_id);
-    if (event.type !== "click") window.location.href = `tel:${detail.phone}`;
+    if (event.type !== "click")
+      window.location.href = `tel:${dialPhone(detail.phone)}`;
   };
   // Once per opening: the intent came with this lead.
   const acted = useRef(false);
@@ -4145,7 +4147,7 @@ export function LeadCard({
               onClick={() => {
                 setPermits(false);
                 rememberCall(lead.lead_id);
-                window.location.href = `tel:${detail.phone}`;
+                window.location.href = `tel:${dialPhone(detail.phone)}`;
               }}
             >
               Just call

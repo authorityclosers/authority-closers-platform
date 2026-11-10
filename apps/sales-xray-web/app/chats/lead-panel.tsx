@@ -15,6 +15,7 @@ import { sourceText } from "../leads/desk-view";
 import {
   addNote,
   ago,
+  dialPhone,
   displayPhone,
   LeadsError,
   readLead,
@@ -349,7 +350,9 @@ export function LeadPanel({
         <dl className={styles.facts}>
           {detail.phone ? (
             <Fact label="Phone">
-              <a href={`tel:${detail.phone}`}>{displayPhone(detail.phone)}</a>
+              <a href={`tel:${dialPhone(detail.phone)}`}>
+                {displayPhone(detail.phone)}
+              </a>
             </Fact>
           ) : null}
           {detail.email ? (

@@ -38,6 +38,17 @@ from ac_platform.lead_desk.capture import (
         # A 10-digit national number is never read as "00" + an international one (ph2-22).
         ("0000019999", "+910000019999"),
         ("00000 19999", "+910000019999"),
+        # India's toll-free and shared-cost numbers stay Indian (Redmi QA, 10 Nov 2026:
+        # 18008899999 was saved as US +1 800 889 9999).
+        ("18008899999", "+9118008899999"),
+        ("1800 889 9999", "+9118008899999"),
+        ("1800-889-9999", "+9118008899999"),
+        ("1860 500 1234", "+9118605001234"),
+        ("9876543210", "+919876543210"),
+        ("020 1234 5678", "+912012345678"),
+        # Written with its code, a US number stays one.
+        ("+1 800 889 9999", "+18008899999"),
+        ("001 800 889 9999", "+18008899999"),
     ],
 )
 def test_phones_normalise_so_repeats_match(raw: object, phone: str | None) -> None:
