@@ -1,7 +1,11 @@
 /* Ask Dipak's sheet (28 Oct 2026 meeting): tokens only. */
 
+/* One column the sheet's width: no item can widen it, so the intro and the
+   field stay inside the sheet and it never scrolls sideways (Redmi QA on
+   production, 10 Nov 2026, at 130% text). */
 .body {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   gap: 12px;
   padding: 4px 0 8px;
