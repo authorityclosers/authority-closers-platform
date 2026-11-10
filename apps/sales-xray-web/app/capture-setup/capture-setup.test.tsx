@@ -411,6 +411,31 @@ describe("CaptureSetupFlow", () => {
     expect(title()).toBe("You're set");
   });
 
+  it("goes straight on after Skip the test call, with no screen saying recording isn't working", async () => {
+    // Owner's S2 (10 Nov 2026): fewer screens before Home; Redmi QA saw
+    // "Recording isn't working yet" right after skipping the test call.
+    fakePhone({
+      recorderProfile: {
+        kind: "folder",
+        maker: "xiaomi",
+        dialerLabel: "Phone",
+        recording: "on",
+        folders: [],
+      },
+    });
+    fakeServer(setup({ consent: "on" }), "on");
+    const { finished } = await flow(setup({ consent: "on" }));
+    await act(async () => button("Continue").click());
+    await settle();
+    await act(async () => button("Skip").click());
+    await settle();
+    expect(title()).not.toBe("Recording isn't working yet");
+    expect(finished).toHaveBeenCalledOnce();
+    expect(
+      window.localStorage.getItem(`sx-recordings-later:${DEVICE}`),
+    ).not.toBeNull();
+  });
+
   it("says the exact fix when the test recording doesn't arrive", async () => {
     fakePhone({
       recorderProfile: {
@@ -441,7 +466,13 @@ describe("CaptureSetupFlow", () => {
     );
     expect(button("Test again")).toBeTruthy();
     expect(button("Choose the folder again")).toBeTruthy();
-    expect(button("Skip the test call")).toBeTruthy();
+    // Skip sits beside the dialer, on the same row (Redmi QA, 10 Nov 2026).
+    expect(button("Skip").getAttribute("aria-label")).toBe(
+      "Skip the test call",
+    );
+    expect(button("Skip").parentElement).toBe(
+      button("Test again").parentElement,
+    );
   });
 
   it("tells a Xiaomi phone to choose No restrictions on the battery step", async () => {
