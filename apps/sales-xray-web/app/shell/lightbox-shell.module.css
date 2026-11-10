@@ -2744,3 +2744,24 @@
       center / 24px 24px no-repeat;
   }
 }
+
+/* Phones: the page's name keeps one line in the bar. Its length
+   (--sx-bar-chars, from the shell) sizes it down only when it would not fit
+   the room, at about 0.55 em a letter; short names keep their size. At 363 px
+   and 130 % text the room is 127 px, so "New analysis" (135 px at 22 px) went
+   to two lines and out of the 64 px bar (Redmi QA on the owner's production
+   build, 10 Nov 2026). */
+@media (max-width: 899.98px) {
+  .mobileWorkspace b {
+    --sx-bar-fit: calc(100cqi / (var(--sx-bar-chars, 1) * 0.55));
+    overflow: hidden;
+    max-width: 100%;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: min(var(--sx-text-xl), 22px, var(--sx-bar-fit));
+  }
+
+  .shell[data-scrolled] .mobileWorkspace b {
+    font-size: min(var(--sx-text-md), var(--sx-bar-fit));
+  }
+}

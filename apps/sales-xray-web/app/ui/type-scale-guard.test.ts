@@ -26,6 +26,10 @@ const ALLOWED = new Set([
   "app/dashboard/seller-home.module.css | font-size: 24px",
   // The page header and footer a printed Report carries.
   "app/report-modes.module.css | font: 8pt sans-serif",
+  // A phone bar's page name: its step, capped to fit its room on one line by its length
+  // (Redmi QA, 10 Nov 2026: "New analysis" took two lines at 130 % text).
+  "app/shell/lightbox-shell.module.css | font-size: min(var(--sx-text-xl), 22px, var(--sx-bar-fit))",
+  "app/shell/lightbox-shell.module.css | font-size: min(var(--sx-text-md), var(--sx-bar-fit))",
 ]);
 /** The call Report's printable document keeps its own document scale (owner, 3 Nov 2026). */
 const ALLOWED_FILES = new Set(["app/report-document.module.css"]);
