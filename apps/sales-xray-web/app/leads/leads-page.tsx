@@ -62,6 +62,7 @@ import { PhoneLogCard } from "./phone-log-card";
 
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { ActionSheet } from "./action-sheet";
+import { backToOpener } from "./back-to-opener";
 import { IN_APP_CALL, InAppCallHint, useInPhoneApp } from "./call-hint";
 import { deskWithMoves, useLeadMoves } from "./lead-moves";
 import { preloadFirstLeads } from "./list-cache";
@@ -533,6 +534,8 @@ export function LeadsRoute({
   const [error, setError] = useState<LeadsError | null>(null);
   const [version, setVersion] = useState(0);
   const [openLead, setOpenLead] = useState<string | null>(null);
+  // A lead handed over from another page that its Back returns to (R2).
+  const [returnTo, setReturnTo] = useState<string | null>(null);
   const [intent, setIntent] = useState<LeadIntent | null>(null);
   // Opened from My work: the history line to show.
   const [focusAt, setFocusAt] = useState<string | null>(null);
@@ -687,6 +690,7 @@ export function LeadsRoute({
       }
       setFocusAt(handed.at ?? null);
       setOpenLead(handed.leadId);
+      setReturnTo(handed.back ? handed.leadId : null);
       refresh();
     };
     show(takeHandedLead());
@@ -1454,6 +1458,10 @@ export function LeadsRoute({
     setOpenLead(leadId);
   };
   const closeLead = (pause: unknown = true) => {
+    // A call opened from Calls goes back to Calls once it closes, by the arrow
+    // or the phone's Back (Redmi QA R2, 10 Nov 2026: it landed on Leads).
+    if (returnTo && returnTo === openLead) backToOpener();
+    setReturnTo(null);
     // A round closed before its end pauses: the next start offers Continue.
     if (pause && book.on && queue && desk)
       keepPaused(desk.me.person_id, {

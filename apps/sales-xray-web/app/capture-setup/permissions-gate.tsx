@@ -64,7 +64,7 @@ import {
   setupStatus,
   type SetupStatus,
 } from "../leads/native-phone";
-import { dismissNotice, notify } from "../notice-center";
+import { dismissNotice, notify, useNoticeShown } from "../notice-center";
 import {
   chooseAutoAnalysis,
   readAutoAnalysis,
@@ -400,6 +400,9 @@ export function PermissionsGate() {
     noFullPage,
   );
   const sheet = useSyncExternalStore(watchSheets, sheetOpen, noFullPage);
+  // Capture setup's own "Recording isn't set up" card says the same thing for
+  // now: the reminder waits until it has gone.
+  const recordingCard = useNoticeShown("capture-setup");
   const away = useRef(false);
 
   useEffect(() => {
@@ -499,7 +502,7 @@ export function PermissionsGate() {
   // itself after 5 s). On Leads it is the line above the rows; elsewhere the
   // corner, which the page keeps room for.
   const remind =
-    open || fullPage || sheet
+    open || fullPage || sheet || recordingCard
       ? ""
       : later.map((item) => item.label).join(" · ");
   useEffect(() => {

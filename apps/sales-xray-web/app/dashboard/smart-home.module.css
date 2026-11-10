@@ -445,11 +445,18 @@ a.counter:active::after,
   min-width: 0;
 }
 
+/* The label over its ring and number, the cell's whole width, so it keeps to
+   one line at 130 % text (orchestrator, 10 Nov 2026: "Talk · recordings" and
+   "Follow-ups done" still wrapped beside the ring). */
 .done a {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-areas:
+    "label label"
+    "ring value";
   align-items: center;
-  gap: 10px;
+  gap: 2px 10px;
   min-width: 0;
   min-height: 56px;
   padding: 6px 0;
@@ -459,12 +466,13 @@ a.counter:active::after,
   -webkit-tap-highlight-color: transparent;
 }
 
-.doneWords {
-  display: grid;
-  min-width: 0;
+.done .ring {
+  grid-area: ring;
 }
 
-.doneWords > span {
+.doneLabel {
+  grid-area: label;
+  min-width: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
   font-weight: 500;
@@ -476,7 +484,9 @@ a.counter:active::after,
   white-space: nowrap;
 }
 
-.doneWords strong {
+.doneValue {
+  grid-area: value;
+  min-width: 0;
   font-size: var(--sx-text-xl);
   font-weight: 500;
   line-height: var(--sx-leading-28);

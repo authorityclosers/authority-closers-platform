@@ -504,12 +504,15 @@ function RecordingsStep({
   leave,
   refresh,
   onDone,
+  onSkip,
 }: {
   titleId: string;
   phone: Phone;
   leave: (after: () => Promise<void>) => void;
   refresh: () => Promise<Phone>;
   onDone: () => void;
+  /** Skip the test call: on, and no closing "isn't working yet" screen. */
+  onSkip: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -715,19 +718,28 @@ function RecordingsStep({
   else if (first === "test")
     actions = (
       <>
-        {!test || test.gaveUp ? (
-          <Button variant="primary" onClick={startTest}>
-            {test ? "Test again" : "Open the dialer"}
+        {/* Skip beside the dialer, never under the fold (Redmi QA on
+            production, 10 Nov 2026: at 130% text it showed only after a
+            scroll, so the test call felt forced). */}
+        <span className={own.pair}>
+          {!test || test.gaveUp ? (
+            <Button variant="primary" onClick={startTest}>
+              {test ? "Test again" : "Open the dialer"}
+            </Button>
+          ) : null}
+          <Button
+            variant="ghost"
+            aria-label="Skip the test call"
+            onClick={onSkip}
+          >
+            Skip
           </Button>
-        ) : null}
+        </span>
         {test?.gaveUp && recorderOn ? (
           <Button variant="ghost" disabled={busy} onClick={chooseFolder}>
             Choose the folder again
           </Button>
         ) : null}
-        <Button variant="ghost" onClick={onDone}>
-          Skip the test call
-        </Button>
       </>
     );
   else
@@ -1049,11 +1061,14 @@ function DoneStep({
   onDone,
   onRecordings,
   onLater,
+  skippedTest = false,
 }: {
   titleId: string;
   phone: Phone;
   setup: CaptureSetup;
   personal: boolean;
+  /** The seller skipped the test call in this run. */
+  skippedTest?: boolean;
   onDone: (next: CaptureSetup | null) => void;
   /** Back to the recording check, when recordings don't work yet. */
   onRecordings: () => void;
@@ -1070,6 +1085,15 @@ function DoneStep({
   // (orchestrator, 1 Nov 2026: one finished with no folder, counted as done for
   // good, and its seller sent no recording in a week).
   const stuck = !personal && facts !== null && !recordingsReady(facts);
+  // Just skipped the test call: straight on, as Not now would (owner's S2, 10
+  // Nov 2026), with no screen saying recording isn't working yet.
+  const skipEnd = stuck && skippedTest;
+  const ended = useRef(false);
+  useEffect(() => {
+    if (!skipEnd || ended.current) return;
+    ended.current = true;
+    onLater();
+  }, [skipEnd, onLater]);
 
   // Recorded for Team as soon as the screen shows, once recordings work.
   useEffect(() => {
@@ -1094,7 +1118,7 @@ function DoneStep({
     };
   }, [personal, facts, attempt, stuck]);
 
-  if (!facts) return null;
+  if (!facts || skipEnd) return null;
   const when = savedWhen(facts.newestMs, now);
   const recordings = facts.folderPicked && !facts.privateDialler;
   // Each line, and what a line left undone means for the seller (persona QA,
@@ -1342,6 +1366,9 @@ export function CaptureSetupFlow({
   const [steps, setSteps] = useState<CaptureStep[] | null>(null);
   const [index, setIndex] = useState(0);
   const [away, setAway] = useState(false);
+  // The seller skipped the test call in this run: no closing screen saying
+  // recording isn't working yet (owner's S2, 10 Nov 2026: fewer steps).
+  const [skippedTest, setSkippedTest] = useState(false);
   const afterAway = useRef<(() => Promise<void>) | null>(null);
   const titleId = useId();
 
@@ -1469,6 +1496,10 @@ export function CaptureSetupFlow({
           leave={leave}
           refresh={refresh}
           onDone={next}
+          onSkip={() => {
+            setSkippedTest(true);
+            next();
+          }}
         />
       );
       break;
@@ -1504,6 +1535,7 @@ export function CaptureSetupFlow({
           phone={phone}
           setup={setup}
           personal={personal}
+          skippedTest={skippedTest}
           onDone={(saved) => {
             // This phone went through what "Set up this phone" asks: it never asks again by itself.
             if (inApp) markPhoneOnboarded();

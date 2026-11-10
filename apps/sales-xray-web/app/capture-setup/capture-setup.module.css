@@ -171,6 +171,13 @@
 }
 
 /* Report a problem: small, under each step's buttons. */
+/* The test call's two answers on one row: the dialer and Skip. */
+.pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
 .report {
   justify-self: center;
   padding: 0 12px;

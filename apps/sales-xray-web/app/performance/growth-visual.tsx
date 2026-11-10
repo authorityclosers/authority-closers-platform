@@ -221,7 +221,7 @@ export function PulseTiles({
       aria-labelledby="growth-tiles-title"
     >
       <h2 id="growth-tiles-title" className={styles.heading}>
-        Team
+        {effort.team ? "Team" : "Your work"}
       </h2>
       {/* One total a tile, no Inbound | Cold split (owner, 10 Nov 2026: "we
           don't have to focus on inbound and cold leads"), each with one
@@ -297,7 +297,7 @@ export function PulseTiles({
         )}
       </div>
 
-      {sellers.length ? (
+      {effort.team && sellers.length ? (
         <div className={styles.card}>
           <h3 className={styles.cardTitle}>Each seller</h3>
           {/* Sellers with calls get a row; the rest are one line, not a
@@ -456,7 +456,11 @@ const monthDays = () =>
     }).format(new Date()),
   );
 
-async function readRhythm(period: GrowthPeriod, signal: AbortSignal) {
+async function readRhythm(
+  period: GrowthPeriod,
+  team: boolean,
+  signal: AbortSignal,
+) {
   if (period === "1") {
     const items: ActivityPage["items"] = [];
     let before: string | null = null;
@@ -464,7 +468,7 @@ async function readRhythm(period: GrowthPeriod, signal: AbortSignal) {
     for (let page = 0; page < PAGES; page++) {
       const read: ActivityPage = await readDayCalls(
         "today",
-        { person: null, team: true },
+        { person: null, team },
         before,
         signal,
       );
@@ -480,7 +484,9 @@ async function readRhythm(period: GrowthPeriod, signal: AbortSignal) {
     };
   }
   const days = period === "7" ? 7 : monthDays();
-  const query = new URLSearchParams({ days: String(days), team: "true" });
+  // The team's days for those who see the team, a seller's own otherwise.
+  const query = new URLSearchParams({ days: String(days) });
+  if (team) query.set("team", "true");
   const response = await fetch(`/v1/lead-desk/activity/summary?${query}`, {
     credentials: "same-origin",
     cache: "no-store",
@@ -501,25 +507,29 @@ async function readRhythm(period: GrowthPeriod, signal: AbortSignal) {
   };
 }
 
-function useRhythm(period: GrowthPeriod): Rhythm {
-  // Each answer is kept with the period it is for, so a new period reads as
+function useRhythm(period: GrowthPeriod, team: boolean): Rhythm {
+  // Each answer is kept with the read it is for, so a new period reads as
   // loading until its own answer lands, with no reset inside the effect.
-  const [rhythm, setRhythm] = useState<{ period: GrowthPeriod; value: Rhythm }>(
-    { period, value: { status: "loading" } },
-  );
+  const key = `${period}:${team}`;
+  const [rhythm, setRhythm] = useState<{ key: string; value: Rhythm }>({
+    key,
+    value: { status: "loading" },
+  });
   useEffect(() => {
     const controller = new AbortController();
-    readRhythm(period, controller.signal).then(
-      (ready) => setRhythm({ period, value: { status: "ready", ...ready } }),
+    const asked = `${period}:${team}`;
+    readRhythm(period, team, controller.signal).then(
+      (ready) =>
+        setRhythm({ key: asked, value: { status: "ready", ...ready } }),
       (reason: unknown) => {
         if (reason instanceof DOMException && reason.name === "AbortError")
           return;
-        setRhythm({ period, value: { status: "error" } });
+        setRhythm({ key: asked, value: { status: "error" } });
       },
     );
     return () => controller.abort();
-  }, [period]);
-  return rhythm.period === period ? rhythm.value : { status: "loading" };
+  }, [period, team]);
+  return rhythm.key === key ? rhythm.value : { status: "loading" };
 }
 
 /** The busiest slot's words, or null with no calls. */
@@ -588,7 +598,7 @@ export function DayRhythm({
     .sort((a, b) => b.seconds - a.seconds)
     .slice(0, 4);
   const longest = Math.max(1, ...talkers.map((row) => row.seconds));
-  const rhythm = useRhythm(period);
+  const rhythm = useRhythm(period, effort.team);
   const top = rhythm.status === "ready" ? busiest(rhythm.slots) : null;
   return (
     <section
@@ -637,7 +647,14 @@ export function DayRhythm({
         <strong className={styles.bigFigure}>
           {talkTime(both(effort, "talk_seconds"))}
         </strong>
-        {talkers.length ? (
+        {!effort.team ? (
+          // A seller's own Growth (owner, 10 Nov 2026: no tables in 2026).
+          <p className={styles.meta}>
+            {connected
+              ? `${talkTime(both(effort, "talk_seconds") / connected)} a connected call`
+              : "No connected calls yet."}
+          </p>
+        ) : talkers.length ? (
           <ul className={styles.talkers} aria-label="Talk time by seller">
             {talkers.map(({ seller, seconds }, index) => (
               <li key={seller.person_id}>

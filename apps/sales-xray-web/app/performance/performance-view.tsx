@@ -373,7 +373,9 @@ export function PerformanceView({
         </p>
       ) : (
         <>
-          {effort.team && visual ? (
+          {/* Growth: tiles and the day rhythm, the team's or a seller's own
+              (owner, 10 Nov 2026: "In 2026 we don't work with tables"). */}
+          {visual ? (
             <>
               <SpeedTile effort={effort} />
               {GROWTH_VIEWS.map((view) =>
@@ -428,7 +430,7 @@ export function PerformanceView({
             ) : (
               <p className={styles.quiet}>No sellers yet.</p>
             )
-          ) : (
+          ) : visual ? null : (
             <section className={styles.list} aria-label="Sellers">
               {effort.sellers.map((seller) => (
                 <SellerCard key={seller.person_id} seller={seller} own />
