@@ -830,3 +830,17 @@
   overflow-wrap: anywhere;
   white-space: normal;
 }
+
+/* The first stage's Cold Leads name goes under its name when the two don't
+   fit side by side, instead of squeezing the name to a word a line (130%
+   text, 10 Nov 2026: "New / Lead" beside "Unworked"). A name on two lines
+   breaks evenly. */
+.name {
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+
+.name span,
+.previewToggle span {
+  text-wrap: balance;
+}

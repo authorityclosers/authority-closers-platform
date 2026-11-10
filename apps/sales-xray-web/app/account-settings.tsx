@@ -44,6 +44,8 @@ import { revealAboveTabBar } from "./billing/reveal";
 import { RefundRequest } from "./billing/refund-request";
 import { usePlansOnWebLine, usePurchasesAllowed } from "./purchase-policy";
 import { useWorkspaceAccess } from "./workspace-access";
+import { SeatsPanel } from "./organisation/seats-panel";
+import { can } from "./organisation/roles";
 import { useBillingAccount } from "./billing/use-billing-account";
 import { count, day, formatMoney, money } from "./billing/money";
 import {
@@ -1280,9 +1282,18 @@ export function PlanAndBillingPane({
   // Offer only the top-up the selected workspace can buy: Personal in a personal
   // workspace, Organisation in an organisation (unknown: both).
   const access = useWorkspaceAccess();
-  const workspaceKind = access?.workspaces?.find(
+  const here = access?.workspaces?.find(
     (workspace) => workspace.tenant_id === access.context?.tenantId,
-  )?.kind;
+  );
+  const workspaceKind = here?.kind;
+  // Seats live with billing (owner's bug 185, 6 Nov 2026), for those Team
+  // showed them to: owners, admins and Finance.
+  const seesSeats =
+    variant !== "dialog" &&
+    here?.kind === "organisation" &&
+    (here.role === "owner" ||
+      here.role === "admin" ||
+      can(here.role, "billing.view"));
   const packs = workspaceKind
     ? topUpPacks.filter(
         (pack) =>
@@ -1497,6 +1508,8 @@ export function PlanAndBillingPane({
           </p>
         ) : null}
       </div>
+
+      {seesSeats ? <SeatsPanel version={0} /> : null}
 
       <div className={styles.billingCard}>
         <div className={styles.billingCardHead}>

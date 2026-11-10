@@ -1833,10 +1833,12 @@
   cursor: pointer;
 }
 
+/* The picture fills most of its 44 px box: 40 px (owner, 10 Nov 2026, his
+   OnePlus: the top-left profile picture "looks too small"). */
 .mobileAvatar > span {
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   overflow: hidden;
   place-items: center;
   border-radius: 50%;

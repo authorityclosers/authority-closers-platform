@@ -1963,7 +1963,6 @@ export function LeadsRoute({
                   <div className={styles.toolbar} data-head="">
                     {/* Taking new leads is on Home's Today line (owner, #69:
                       a crowded header); the views and the gear stay here. */}
-                    <PhoneLogCard as="chip" />
                     <span className={styles.toolbarEnd}>
                       <button
                         type="button"
@@ -2166,13 +2165,14 @@ export function LeadsRoute({
             // The list takes the whole width until a lead is open (persona QA,
             // 31 Oct 2026: an empty pane left 1,000 px of nothing at 1920).
             <WorkSplit pane={paneShown ? leadSheet(true) : null}>
-              {/* The list's first cards, which scroll away with it (Leads L1
-                  judge, 8 Nov 2026: pinned in the head they cost a row at
-                  363): call logging, and an answer never lost (competitor
-                  teardown 3), held unseen while a lead is open, its room
-                  kept, so the list never jumps (QA robot 95abddab). */}
+              {/* The list's first card, which scrolls away with it (Leads L1
+                  judge, 8 Nov 2026: pinned in the head it cost a row at 363):
+                  an answer never lost (competitor teardown 3), held unseen
+                  while a lead is open, its room kept, so the list never jumps
+                  (QA robot 95abddab). No Logging calls pill here: on his phone
+                  it filled the whole bar (owner, 10 Nov 2026); call logging
+                  lives in Settings and on Calls. */}
               <div className={styles.listFirst}>
-                <PhoneLogCard as="chip" />
                 <FinishRow
                   calls={desk.unanswered}
                   held={!!openLead}
@@ -2246,10 +2246,6 @@ export function LeadsRoute({
                 layoutOwner={contextKey}
                 pipelineNames={pipelineNames}
                 me={current && desk ? desk.me.person_id : null}
-                onPasteRows={(text) => {
-                  setPastedRows(text);
-                  begin("importing", setImporting);
-                }}
               />
               {/* The one Call (Leads L1): Call Next Lead or Start Cold Calling,
                   the list's first lead, in a band above the tab bar; an empty

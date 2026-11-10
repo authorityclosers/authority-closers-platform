@@ -745,3 +745,44 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* A phone: every column in its row and the whole table sideways in its card,
+   the tick and the lead's name pinned at the left edge (owner, 10 Nov 2026,
+   his OnePlus: "In Table format the table should scroll sideways"). */
+.wrap[data-scroll] {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.wrap[data-scroll] .table {
+  width: max-content;
+  min-width: 100%;
+}
+
+.wrap[data-scroll] .table [data-column] {
+  width: 140px;
+  max-width: 140px;
+}
+
+.wrap[data-scroll] .table .pick,
+.wrap[data-scroll] .table [data-column="name"] {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--sx-surface);
+}
+
+.wrap[data-scroll] .table thead .pick,
+.wrap[data-scroll] .table thead [data-column="name"] {
+  z-index: 3;
+}
+
+.wrap[data-scroll] .table [data-column="name"] {
+  width: 168px;
+  max-width: 168px;
+  box-shadow: 1px 0 0 var(--sx-line);
+}
+
+.wrap[data-scroll] .table .pick ~ [data-column="name"] {
+  left: 44px;
+}

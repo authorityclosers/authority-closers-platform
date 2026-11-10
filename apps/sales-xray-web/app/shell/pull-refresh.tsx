@@ -104,10 +104,18 @@ export function usePullToRefresh(onRefresh: () => Promise<unknown> | void) {
       return document.scrollingElement;
     };
 
+    // The phone's top bar starts a pull too, reading the page's own scroller:
+    // the top of the screen is where a finger reaches for it (owner, 10 Nov
+    // 2026, his OnePlus: "Refresh isn't well done"; bug 180: "the refresh is
+    // not working from the top bar").
+    const bar = document.querySelector<HTMLElement>("[data-pull-bar]");
     const onStart = (event: TouchEvent) => {
       if (busy || event.touches.length !== 1) return;
       if ((event.target as Element | null)?.closest?.("dialog")) return;
-      const scroller = scrollerOf(event.target);
+      const scroller =
+        bar && bar.contains(event.target as Node)
+          ? scrollerOf(host)
+          : scrollerOf(event.target);
       if (!scroller || scroller.scrollTop > 0) return;
       const touch = event.touches[0];
       start = { x: touch.clientX, y: touch.clientY, scroller };
@@ -159,15 +167,20 @@ export function usePullToRefresh(onRefresh: () => Promise<unknown> | void) {
           show(0, "idle");
         });
     };
-    host.addEventListener("touchstart", onStart, { passive: true });
-    host.addEventListener("touchmove", onMove, { passive: true });
-    host.addEventListener("touchend", onEnd, { passive: true });
-    host.addEventListener("touchcancel", onEnd, { passive: true });
+    const listeners = [host, ...(bar ? [bar] : [])];
+    for (const node of listeners) {
+      node.addEventListener("touchstart", onStart, { passive: true });
+      node.addEventListener("touchmove", onMove, { passive: true });
+      node.addEventListener("touchend", onEnd, { passive: true });
+      node.addEventListener("touchcancel", onEnd, { passive: true });
+    }
     detach.current = () => {
-      host.removeEventListener("touchstart", onStart);
-      host.removeEventListener("touchmove", onMove);
-      host.removeEventListener("touchend", onEnd);
-      host.removeEventListener("touchcancel", onEnd);
+      for (const node of listeners) {
+        node.removeEventListener("touchstart", onStart);
+        node.removeEventListener("touchmove", onMove);
+        node.removeEventListener("touchend", onEnd);
+        node.removeEventListener("touchcancel", onEnd);
+      }
     };
   }, []);
 

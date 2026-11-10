@@ -6,6 +6,7 @@ import { PolicyFooter } from "../policy-footer";
 import { CodeBlock, CodeTabs } from "./code-block";
 import {
   API,
+  API_HOST,
   CONNECT_URL,
   ENDPOINTS,
   ERRORS,
@@ -535,8 +536,8 @@ python3 sx.py add-lead --name "Asha Rao" --phone +919800000000 --external-id crm
               </tbody>
             </table>
             <p className={styles.note}>
-              Base address on production: <code>{HOST}</code>. Test keys work on
-              the test sites only, and live keys on production only.
+              Base address on production: <code>{API_HOST}</code>. Test keys
+              work on the test sites only, and live keys on production only.
             </p>
           </Section>
         </article>

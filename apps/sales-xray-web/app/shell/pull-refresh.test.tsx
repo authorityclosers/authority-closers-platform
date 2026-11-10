@@ -100,6 +100,34 @@ it("ticks as the line is crossed inside the phone app, once", () => {
   expect(phone.buzz).toHaveBeenCalledTimes(1);
 });
 
+// The owner (10 Nov 2026, his OnePlus): "Refresh isn't well done"; bug 180:
+// "the refresh is not working from the top bar". A pull that starts on the
+// phone's top bar refreshes the page under it.
+it("refreshes from a pull that starts on the top bar", async () => {
+  await act(async () => root.unmount());
+  const bar = document.createElement("header");
+  bar.setAttribute("data-pull-bar", "");
+  document.body.prepend(bar);
+  root = createRoot(host);
+  await act(async () => root.render(<Page />));
+  try {
+    const on = (type: string, y: number) => {
+      const event = new Event(type, { bubbles: true }) as Event & {
+        touches: { clientX: number; clientY: number }[];
+      };
+      event.touches = type === "touchend" ? [] : [{ clientX: 100, clientY: y }];
+      bar.dispatchEvent(event);
+    };
+    on("touchstart", 20);
+    on("touchmove", 20 + PULL_READY * 2);
+    on("touchend", 0);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await act(async () => finish());
+  } finally {
+    bar.remove();
+  }
+});
+
 it("lets a short pull go without refreshing", () => {
   touch("touchstart", 100);
   touch("touchmove", 140);

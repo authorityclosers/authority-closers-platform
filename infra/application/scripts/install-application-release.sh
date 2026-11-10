@@ -459,8 +459,9 @@ validate_release_profile() {
         )
         ;;
       production)
+        # The customer domain is canonical (owner, 10 Nov 2026); the old address keeps answering.
         expected_profile_assignments+=(
-          "AC_SALES_XRAY_APP_URL=https://salesxray.authorityclosers.com"
+          "AC_SALES_XRAY_APP_URL=https://app.salesxray.in"
         )
         ;;
     esac

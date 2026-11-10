@@ -22,6 +22,12 @@ import {
   type SellerEffort,
   type SideEffort,
 } from "./performance-client";
+import {
+  DayRhythm,
+  GROWTH_VIEWS,
+  PulseTiles,
+  SpeedTile,
+} from "./growth-visual";
 import { RevenueSplit } from "./revenue-split";
 import { SellerDay } from "./seller-day";
 import { SellerTable } from "./seller-table";
@@ -305,7 +311,13 @@ export function PerformanceLoading({
   );
 }
 
-export function PerformanceView() {
+export function PerformanceView({
+  visual = false,
+}: {
+  /** Growth's look: tiles and the day rhythm in place of the tables (owner's
+   *  pick, 10 Nov 2026: "G4 and G1 are better"). Performance keeps its tables. */
+  visual?: boolean;
+} = {}) {
   const [period, setPeriod] = useState<Period>("1");
   const [state, setState] = useState<State>({ status: "loading" });
   // Try again: the same period read once more.
@@ -361,7 +373,19 @@ export function PerformanceView() {
         </p>
       ) : (
         <>
-          {effort.team ? (
+          {effort.team && visual ? (
+            <>
+              <SpeedTile effort={effort} />
+              {GROWTH_VIEWS.map((view) =>
+                view === "tiles" ? (
+                  <PulseTiles key={view} effort={effort} onOpen={setOpened} />
+                ) : (
+                  <DayRhythm key={view} effort={effort} period={period} />
+                ),
+              )}
+            </>
+          ) : null}
+          {effort.team && !visual ? (
             <section className={styles.card} aria-labelledby="team-title">
               <h2 id="team-title">Team</h2>
               <MeasureTable
@@ -384,11 +408,13 @@ export function PerformanceView() {
             effort.sellers.length ? (
               <>
                 {/* One row a seller, for owners and managers (teardown #18). */}
-                <SellerTable
-                  sellers={effort.sellers}
-                  file={`performance-${chosen.file}.csv`}
-                  onOpen={setOpened}
-                />
+                {visual ? null : (
+                  <SellerTable
+                    sellers={effort.sellers}
+                    file={`performance-${chosen.file}.csv`}
+                    onOpen={setOpened}
+                  />
+                )}
                 <SellerDay
                   key={opened?.person_id ?? "none"}
                   seller={opened}

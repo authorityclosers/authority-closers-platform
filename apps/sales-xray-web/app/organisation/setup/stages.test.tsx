@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -528,4 +530,14 @@ it("hides Use recommended when the list is the recommended one", async () => {
   );
   await render();
   expect(button("Use recommended")).toBeUndefined();
+});
+
+it("puts the Cold Leads name under a stage's name when both don't fit", () => {
+  // 130% text, 10 Nov 2026: "New Lead" took two lines beside "Unworked".
+  const css = readFileSync(
+    join(process.cwd(), "app/organisation/setup/stage-editor.module.css"),
+    "utf8",
+  );
+  expect(css).toMatch(/\n\.name \{\s*flex-wrap: wrap;/);
+  expect(css).toMatch(/\.previewToggle span \{\s*text-wrap: balance;/);
 });

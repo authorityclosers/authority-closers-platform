@@ -68,7 +68,6 @@ import {
   type ListSort,
   type WorkView,
 } from "./leads-client";
-import { QuickAddBar, type PasteRows } from "./quick-add";
 import {
   FIRST_VIEW,
   ROW_ESTIMATE,
@@ -347,7 +346,6 @@ export function ListView({
   layoutOwner,
   pipelineNames = null,
   me = null,
-  onPasteRows,
   more: refine = null,
   onSort,
   sortPick = null,
@@ -427,8 +425,6 @@ export function ListView({
   pipelineNames?: ReadonlyMap<string, string> | null;
   /** The viewer: the table lets a seller change their own leads in place. */
   me?: string | null;
-  /** Rows pasted into quick add go to the import. */
-  onPasteRows?: PasteRows;
   /** Sort and filters over the whole list, answered by the server. */
   more?: ListMore | null;
   /** A table head tapped: sort the whole list by it. */
@@ -475,11 +471,9 @@ export function ListView({
     }
   };
   const tableKeys = useRef<HTMLDivElement>(null);
-  // Quick add where a new lead lands: All leads and New (owner P0, 23 Oct 2026).
-  const quickAdd =
-    stage === "open" || stage === "new" || stage === OPENING_STAGE
-      ? { pipeline, onAdded: () => onChanged?.(), onPasteRows }
-      : null;
+  // No quick add on the list or the table: the + adds a lead (owner, 10 Nov
+  // 2026, his OnePlus: "New lead add", "add or paste" and the phone field at
+  // the top "don't work", "don't belong there and cause confusion").
   // Counts and sync update the parent callbacks. Keep unchanged rows reusable,
   // while their next tap always uses the handlers from the latest commit.
   const handlers = useRef({ onOpen, actions });
@@ -872,7 +866,6 @@ export function ListView({
   // the list looks again once the page moves. The button stays for keyboards
   // and when scrolling can't be watched.
   const end = useRef<HTMLDivElement>(null);
-  const quickEnd = useRef<HTMLDivElement>(null);
   const loadMore = useRef(more);
   useEffect(() => {
     loadMore.current = more;
@@ -895,9 +888,7 @@ export function ListView({
         const near = entries.find((entry) => entry.isIntersecting);
         if (!near) return;
         const active = document.activeElement;
-        const typing =
-          !!active &&
-          (target.contains(active) || !!quickEnd.current?.contains(active));
+        const typing = !!active && target.contains(active);
         const bottom = root
           ? root.getBoundingClientRect().bottom
           : window.innerHeight;
@@ -1246,7 +1237,6 @@ export function ListView({
                 onToggle={startPicking}
                 keysRef={tableKeys}
                 columnsSlot={columnsSlot}
-                quickAdd={selecting ? null : quickAdd}
                 serverSort={
                   onSort
                     ? {
@@ -1313,19 +1303,6 @@ export function ListView({
             ) : null}
           </>
         )}
-        {quickAdd &&
-        page !== null &&
-        rows.length > 0 &&
-        !selecting &&
-        !(asTable && rows.length) ? (
-          <div className={styles.quickAddAfter} ref={quickEnd}>
-            <QuickAddBar
-              pipeline={quickAdd.pipeline}
-              onAdded={quickAdd.onAdded}
-              onPasteRows={quickAdd.onPasteRows}
-            />
-          </div>
-        ) : null}
       </section>
       {selecting && page && rows.length ? (
         <SelectBar

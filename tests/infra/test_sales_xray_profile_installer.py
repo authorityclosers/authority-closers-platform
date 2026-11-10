@@ -86,7 +86,8 @@ printf '%s\\n' "${{profile_values[AC_SALES_XRAY_APP_URL]-MISSING}}"
     ("target_environment", "expected_origin"),
     (
         ("staging", "https://salesxray-staging.authorityclosers.com"),
-        ("production", "https://salesxray.authorityclosers.com"),
+        # The customer domain is canonical in production (owner, 10 Nov 2026).
+        ("production", "https://app.salesxray.in"),
     ),
 )
 def test_installer_accepts_exact_sales_xray_origin_in_frozen_profiles(
@@ -118,7 +119,8 @@ def test_installer_keeps_sales_xray_origin_optional_for_older_profiles(tmp_path:
     ("target_environment", "reviewed_origin"),
     (
         ("staging", "https://salesxray-staging.authorityclosers.com"),
-        ("production", "https://salesxray.authorityclosers.com"),
+        # The customer domain is canonical in production (owner, 10 Nov 2026).
+        ("production", "https://app.salesxray.in"),
     ),
 )
 def test_installer_rejects_unreviewed_sales_xray_origin(

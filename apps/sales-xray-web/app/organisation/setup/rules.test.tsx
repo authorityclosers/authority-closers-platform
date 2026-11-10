@@ -70,6 +70,18 @@ async function tap(text: string) {
   expect(item).toBeDefined();
   await act(async () => item!.click());
 }
+it("keeps the rule switch in its own sideways scroller, so no label wraps", async () => {
+  // The owner's bug 190, re-checked at 130% text (10 Nov 2026): "Match leads"
+  // and "Seller rules" each took two lines in a switch the width of the page.
+  await act(async () => root.render(<OrganisationRules />));
+  const group = host.querySelector(
+    '[role="group"][aria-label="Lead rule setup"]',
+  )!;
+  const stack = host.firstElementChild!;
+  expect(group.parentElement).not.toBe(stack);
+  expect(group.parentElement?.parentElement).toBe(stack);
+});
+
 it("opens rule setup instead of a team dashboard", async () => {
   await act(async () => root.render(<OrganisationRules />));
   expect(host.textContent).toContain("Try a lead");

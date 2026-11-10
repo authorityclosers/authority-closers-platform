@@ -189,6 +189,22 @@ const KEY_ORDER: Column[] = [
 ];
 
 /** The pane's width in CSS px, or 0 before it is known (a test, the server). */
+const PHONE = "(max-width: 767.98px)";
+const watchPhone = (change: () => void) => {
+  const query = window.matchMedia?.(PHONE);
+  query?.addEventListener?.("change", change);
+  return () => query?.removeEventListener?.("change", change);
+};
+
+/** A phone's screen: its table scrolls sideways rather than fitting the pane. */
+function usePhone(): boolean {
+  return useSyncExternalStore(
+    watchPhone,
+    () => window.matchMedia?.(PHONE).matches ?? false,
+    () => false,
+  );
+}
+
 function usePaneWidth(pane: RefObject<HTMLElement | null>): number {
   const [width, setWidth] = useState(0);
   // Measured before the first paint, so a phone never sees the wide table.
@@ -346,6 +362,11 @@ export function LeadsTable({
   const grid = useRef<HTMLTableElement>(null);
   const pane = useRef<HTMLDivElement | null>(null);
   const paneWidth = usePaneWidth(pane);
+  // A phone scrolls the whole table sideways, every column in its row and no
+  // chevron to open under it (owner, 10 Nov 2026, his OnePlus: "In Table
+  // format the table should scroll sideways", no drop-down); a computer still
+  // fits a narrow pane.
+  const phone = usePhone();
   // Narrow rows opened to show the columns that don't fit.
   const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
   // A stage that asks for something (a reason, a follow-up, the meeting).
@@ -389,12 +410,14 @@ export function LeadsTable({
       ["source", "next", "last", "age", "contact", "reason", "created"] as const
     ).filter((column) => visible.has(column)),
   ];
-  const fit = fitColumns(
-    paneWidth,
-    columns.filter((column) => column !== "name"),
-    KEY_ORDER,
-    selecting || ticks,
-  );
+  const fit = phone
+    ? null
+    : fitColumns(
+        paneWidth,
+        columns.filter((column) => column !== "name"),
+        KEY_ORDER,
+        selecting || ticks,
+      );
   // In a narrow pane: Name and the key columns in the row, the rest under it.
   const rowColumns: Column[] = fit ? ["name", ...fit.keys] : columns;
   // The next action rides under the stage (or under the name, with no room
@@ -738,6 +761,7 @@ export function LeadsTable({
     <div
       className={styles.wrap}
       data-fit={fit ? "" : undefined}
+      data-scroll={phone ? "" : undefined}
       ref={(node) => {
         pane.current = node;
         if (keysRef) keysRef.current = node;

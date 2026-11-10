@@ -257,7 +257,10 @@ export function AnalyticsView({
                         person.current[metric],
                         data.currentComplete,
                       )}{" "}
-                      {label}
+                      {/* One call, not "1 calls" (10 Nov 2026). */}
+                      {person.current[metric] === 1
+                        ? label.replace(/s$/, "")
+                        : label}
                     </span>
                   </div>
                   {metric === "calls" &&

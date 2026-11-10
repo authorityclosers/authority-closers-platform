@@ -161,31 +161,24 @@ it("watches the end in the list's own scroller, 2400 px ahead, and again after e
   expect(asked()).toEqual([0, 50, 100]);
 });
 
-// The robot's part 2: focusing the quick add brought the end on screen and
-// the next page pushed the box being typed in off it.
+// The robot's part 2: someone at the end by keyboard had the next page push
+// the end off screen. The list has no quick add since 10 Nov 2026 (the owner,
+// his OnePlus: it didn't work and didn't belong); Show more is the end.
 it("holds the next page while someone is at the end by keyboard, and goes on after", async () => {
   await act(async () => root.render(allLeads));
   await settle();
   const more = [...host.querySelectorAll("button")].find((button) =>
     button.textContent?.startsWith("Show more"),
   );
-  const name = host.querySelector<HTMLInputElement>(
-    'input[aria-label="New lead\'s name"]',
-  );
   expect(more).toBeDefined();
-  expect(name).not.toBeNull();
+  expect(host.querySelector('input[aria-label="New lead\'s name"]')).toBeNull();
 
   await act(async () => more!.focus());
   await near();
   await settle();
   expect(asked()).toEqual([0]);
 
-  await act(async () => name!.focus());
-  await near();
-  await settle();
-  expect(asked()).toEqual([0]);
-
-  await act(async () => name!.blur());
+  await act(async () => more!.blur());
   await near();
   await settle();
   expect(asked()).toEqual([0, 50]);

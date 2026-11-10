@@ -5,8 +5,12 @@
  * and fictional throughout.
  */
 
-export const HOST = "https://salesxray.authorityclosers.com";
-export const API = `${HOST}/v1/api`;
+// The customer domain (owner, 10 Nov 2026): people sign in and approve apps on the app, programs
+// call the API host and AI assistants the MCP host. salesxray.authorityclosers.com keeps answering
+// all of them for good, so nothing set up there before has to change.
+export const HOST = "https://app.salesxray.in";
+export const API_HOST = "https://api.salesxray.in";
+export const API = `${API_HOST}/v1/api`;
 
 export type Param = {
   name: string;
@@ -538,7 +542,7 @@ export const TOKEN = `curl ${HOST}/v1/oauth/token \\
   -d code_verifier=<verifier> \\
   -u sxc_...:sxcs_...        # client secret; public apps send client_id and no secret`;
 
-export const MCP_URL = `${HOST}/v1/mcp`;
+export const MCP_URL = "https://mcp.salesxray.in/v1/mcp";
 
 export const MCP_TOOLS: [string, string, string][] = [
   ["whoami", "any", "Who this connection reads as, and its scopes"],
