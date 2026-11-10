@@ -8,11 +8,13 @@ import {
 /** Growth (Dipak's tab bar, 31 Oct 2026): Analytics now, Coaching later. One
  *  word, as its tab: "My Growth" took two lines at 360 px, so the top bar grew
  *  on arrival (robot 2ac64000, 3 Nov 2026). No "Analytics" heading over the
- *  period switch: a one-word heading that does nothing (robot 7c4f00ca, 8 Nov). */
+ *  period switch: a one-word heading that does nothing (robot 7c4f00ca, 8 Nov).
+ *  Shown as tiles and a day rhythm, no tables (owner, 10 Nov 2026: "G4 and G1
+ *  are better"; "In 2026 we don't work with tables"). */
 export default function Page() {
   return (
     <Suspense fallback={<PerformanceSkeleton title="Growth" />}>
-      <PerformanceRoute title="Growth" />
+      <PerformanceRoute title="Growth" visual />
     </Suspense>
   );
 }

@@ -1,0 +1,462 @@
+/* Growth without tables (owner, 10 Nov 2026: G1's tiles and G4's day rhythm).
+   One colour, one meaning: Inbound is the accent, Cold the closing blue, late
+   work red, work still to do amber. Every card is the same width; the four
+   tiles are the same height. Motion is calm and off when the phone asks. */
+
+.view {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.heading {
+  margin: 4px 0 0;
+  color: var(--sx-ink);
+  font: var(--sx-text-panel);
+}
+
+.label {
+  color: var(--lx-ink-3, var(--sx-muted));
+  font: var(--sx-text-label);
+}
+
+.meta {
+  margin: 0;
+  color: var(--sx-muted);
+  font: var(--sx-text-meta);
+}
+
+.card,
+.tile,
+.big,
+.speed {
+  box-sizing: border-box;
+  min-width: 0;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.card {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.cardTitle {
+  margin: 0;
+  color: var(--sx-ink);
+  font: var(--sx-text-panel);
+}
+
+/* G2's speed to a new lead: one slim tile, never a big one. */
+.speed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+.speedWords {
+  display: grid;
+  min-width: 0;
+}
+
+.speedFigure {
+  flex: none;
+  color: var(--sx-ink);
+  font: var(--sx-text-headline);
+}
+
+/* G1: two columns of equal tiles; a tile's figure shrinks with its width. */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 10px;
+}
+
+.tile {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  align-content: start;
+  gap: 6px;
+  padding: 12px;
+  container-type: inline-size;
+}
+
+.figure {
+  overflow-wrap: anywhere;
+  color: var(--sx-ink);
+  font: var(--sx-text-kpi);
+  font-size: min(var(--sx-text-2xl), 17cqi);
+}
+
+.figureRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+/* Inbound and Cold in one bar, grown from the left. */
+.split {
+  display: flex;
+  align-self: center;
+  gap: 2px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--sx-line);
+}
+
+.split[data-thick] {
+  height: 12px;
+}
+
+.split > span {
+  flex-basis: 0;
+  min-width: 4px;
+}
+
+.split > [data-side="inbound"],
+.legend [data-side="inbound"]::before {
+  background: var(--sx-accent);
+}
+
+.split > [data-side="cold"],
+.legend [data-side="cold"]::before {
+  background: var(--lx-closing, var(--sx-muted));
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  color: var(--sx-muted);
+  font: var(--sx-text-meta);
+}
+
+/* A tile's last line sits on its floor, level with its neighbour's. */
+.tile > :last-child {
+  align-self: end;
+}
+
+.legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend > span::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  content: "";
+}
+
+.legend b {
+  color: var(--sx-ink);
+  font-weight: 500;
+}
+
+/* The connect ring draws itself round. */
+.ring {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+}
+
+.ring[data-big] {
+  width: 72px;
+  height: 72px;
+}
+
+.ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.ringTrack,
+.ringValue {
+  fill: none;
+  stroke-width: 5;
+}
+
+.ringTrack {
+  stroke: var(--sx-line);
+}
+
+.ringValue {
+  stroke: var(--sx-accent);
+  stroke-linecap: round;
+}
+
+.ringWords {
+  color: var(--sx-ink);
+  font: var(--sx-text-badge);
+}
+
+.ring[data-big] .ringWords {
+  font: var(--sx-text-label);
+}
+
+/* Needs attention: a dot whose colour says late (red) or still to do (amber). */
+.needs,
+.sellers,
+.talkers {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.needs li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  border-top: 1px solid var(--sx-line);
+  color: var(--sx-ink);
+  font: var(--sx-text-body);
+}
+
+.needs li:first-child {
+  border-top: 0;
+}
+
+.needs li::before {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--lx-warning, var(--sx-warn));
+  content: "";
+}
+
+.needs li[data-tone="late"]::before {
+  background: var(--lx-danger, var(--sx-warn));
+}
+
+.needWords {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.needs b {
+  font-weight: 700;
+}
+
+/* Each seller: their calls on one scale, the connected part darker. */
+.sellerRow {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 0;
+  border: 0;
+  border-top: 1px solid var(--sx-line);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.sellers li:first-child .sellerRow {
+  border-top: 0;
+}
+
+.sellerRow:disabled {
+  cursor: default;
+}
+
+.sellerRow:focus-visible {
+  border-radius: var(--sx-radius-sm, 8px);
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.sellerTop,
+.talkerTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sellerName {
+  overflow: hidden;
+  color: var(--sx-ink);
+  font: var(--sx-text-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sellerBar,
+.talkTrack {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--sx-line);
+}
+
+.sellerTried {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in oklab, var(--sx-accent) 35%, var(--sx-surface));
+}
+
+.sellerSpoke {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sx-accent);
+}
+
+/* G4: four larger cards, one a row. */
+.big {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.bigFigure {
+  color: var(--sx-ink);
+  font: var(--sx-text-large);
+}
+
+.bigTitle {
+  min-height: calc(var(--sx-text-md) * var(--sx-leading-24));
+  color: var(--sx-ink);
+  font: var(--sx-text-headline);
+}
+
+.bigRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.bigWords {
+  display: grid;
+  min-width: 0;
+}
+
+.talkers {
+  gap: 10px;
+}
+
+.talkers li {
+  display: grid;
+  gap: 4px;
+}
+
+.talkBar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sx-accent);
+}
+
+/* When calls happen: bars rising from one baseline, every third labelled. */
+.bars {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  align-items: end;
+  gap: 3px;
+  height: 120px;
+}
+
+.bars[data-empty] {
+  display: grid;
+  place-items: center;
+  border-radius: var(--sx-radius-md, 10px);
+  background: color-mix(in oklab, var(--sx-line) 45%, transparent);
+}
+
+.barSlot {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  align-items: end;
+  height: 100%;
+  min-width: 0;
+}
+
+.bar {
+  display: block;
+  width: 100%;
+  border-radius: 4px 4px 1px 1px;
+  background: var(--sx-accent);
+}
+
+.barLabel {
+  min-height: calc(var(--sx-text-xs) * var(--sx-leading-16));
+  overflow: visible;
+  color: var(--sx-muted);
+  font: var(--sx-text-meta);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Arrivals: each part grows once, in turn. */
+@media (prefers-reduced-motion: no-preference) {
+  .tile,
+  .big {
+    animation: gv-rise 360ms cubic-bezier(0.2, 0, 0, 1) both;
+    animation-delay: var(--gv-delay, 0ms);
+  }
+
+  .split,
+  .sellerTried,
+  .talkBar {
+    transform-origin: left center;
+    animation: gv-grow 700ms cubic-bezier(0.2, 0, 0, 1) both;
+    animation-delay: calc(var(--gv-delay, 0ms) + 120ms);
+  }
+
+  .ringValue {
+    animation: gv-draw 900ms cubic-bezier(0.2, 0, 0, 1) both 150ms;
+  }
+
+  .bar {
+    transform-origin: center bottom;
+    animation: gv-lift 600ms cubic-bezier(0.2, 0, 0, 1) both;
+    animation-delay: calc(var(--gv-delay, 0ms) / 2 + 150ms);
+  }
+}
+
+@keyframes gv-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes gv-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes gv-draw {
+  from {
+    stroke-dashoffset: var(--gv-around);
+  }
+}
+
+@keyframes gv-lift {
+  from {
+    transform: scaleY(0);
+  }
+}
