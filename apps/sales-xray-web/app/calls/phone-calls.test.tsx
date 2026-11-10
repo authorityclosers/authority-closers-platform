@@ -169,10 +169,12 @@ it("lists this week's calls first and opens each one", async () => {
   expect(rows[0].dataset.sxAction).toBe("lead_open");
   await act(async () => rows[0].click());
   expect(push).toHaveBeenCalledWith("/leads");
+  // Its Back comes back to Calls (Redmi QA R2, 10 Nov 2026).
   expect(takeHandedLead()).toEqual({
     leadId: "lead-e1",
     call: false,
     at: "2026-10-27T09:30:00Z",
+    back: true,
   });
 });
 

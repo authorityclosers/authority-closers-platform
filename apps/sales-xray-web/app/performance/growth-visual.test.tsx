@@ -262,3 +262,26 @@ it("names today's busiest hour on G4's fourth card, from the team's calls", asyn
     ),
   ).toEqual(["Priya Kulkarni1 h", "Rohan Deshmukh30 min"]);
 });
+
+it("draws a seller's own Growth the same way, with no list of sellers", async () => {
+  // Redmi QA on production (10 Nov 2026): a seller's Growth was still a table.
+  const own = { ...effort, team: false, sellers: effort.sellers.slice(1) };
+  act(() => root.render(<PulseTiles effort={own} />));
+  expect(host.querySelector("h2")?.textContent).toBe("Your work");
+  expect(host.textContent).not.toContain("Each seller");
+  expect(host.querySelector("table")).toBeNull();
+  vi.mocked(readDayCalls).mockResolvedValue({
+    items: [],
+    next_before: null,
+    counts: {},
+  } as never);
+  await act(async () => root.render(<DayRhythm effort={own} period="1" />));
+  expect(readDayCalls).toHaveBeenCalledWith(
+    "today",
+    { person: null, team: false },
+    null,
+    expect.anything(),
+  );
+  expect(host.querySelector('[aria-label="Talk time by seller"]')).toBeNull();
+  expect(host.textContent).toContain("4 min a connected call");
+});

@@ -145,8 +145,15 @@
   font-size: var(--sx-text-sm);
 }
 
+/* The way back, a chevron alone with a full tap target: the top bar already
+   says Settings (Redmi QA on production, 10 Nov 2026). */
 .back {
   display: none;
+  min-width: 44px;
+  min-height: 44px;
+  margin-inline-start: -12px;
+  place-items: center;
+  justify-content: center;
   align-items: center;
   gap: 2px;
   justify-self: start;

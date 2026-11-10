@@ -24,6 +24,7 @@ import {
   NoticeCenter,
   NoticeDock,
   notify,
+  useNoticeShown,
 } from "./notice-center";
 import { clearAlert, raiseAlert } from "./ui/alerts";
 
@@ -1260,4 +1261,25 @@ it("gives the card's chips secondary text, never muted", () => {
       .find((rule) => rule.includes("border-color: transparent")) ?? "";
   expect(chip).toContain("color: var(--lx-ink-3);");
   expect(chip).not.toContain("--lx-muted");
+});
+
+it("says whether a card is up, so one setup card waits for another", async () => {
+  // Redmi QA on production (10 Nov 2026): two setup cards stacked on Home.
+  const seen: boolean[] = [];
+  function Probe() {
+    seen.push(useNoticeShown("capture-setup"));
+    return null;
+  }
+  await act(async () => root.render(<Probe />));
+  await act(async () =>
+    notify({
+      id: "capture-setup",
+      tone: "info",
+      title: "Recording isn't set up",
+    }),
+  );
+  await act(async () => dismissNotice("capture-setup"));
+  expect(seen[0]).toBe(false);
+  expect(seen).toContain(true);
+  expect(seen.at(-1)).toBe(false);
 });

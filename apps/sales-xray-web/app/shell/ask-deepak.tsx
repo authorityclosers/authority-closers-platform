@@ -213,7 +213,7 @@ function PickLead({
           inputMode="search"
           autoComplete="off"
           enterKeyHint="search"
-          placeholder="Which lead? Type their name"
+          placeholder="Type a lead's name"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />

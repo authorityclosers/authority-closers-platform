@@ -361,13 +361,13 @@ export function DoneToday({
         {figures.map((figure) => (
           <li key={figure.key}>
             <Link href={figure.href} data-done={figure.key}>
-              <DoneRing icon={figure.icon} share={figure.share} />
-              <span className={styles.doneWords}>
-                <span>
-                  <Words text={figure.label} />
-                </span>
-                <strong>{figure.value ?? " "}</strong>
+              <span className={styles.doneLabel}>
+                <Words text={figure.label} />
               </span>
+              <DoneRing icon={figure.icon} share={figure.share} />
+              <strong className={styles.doneValue}>
+                {figure.value ?? " "}
+              </strong>
             </Link>
           </li>
         ))}
