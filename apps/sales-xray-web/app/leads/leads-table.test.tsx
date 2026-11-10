@@ -289,6 +289,44 @@ const atWidth = async (width: number, run: () => Promise<void>) => {
   }
 };
 
+// The owner (10 Nov 2026, his OnePlus): "In Table format the table should
+// scroll sideways", with no drop-down under the rows. A phone keeps every
+// column in its row and scrolls the table in its card; a computer still fits.
+it("scrolls the whole table sideways on a phone, every column in its row", async () => {
+  const phone = vi.spyOn(window, "matchMedia").mockImplementation(
+    (query: string) =>
+      ({
+        matches: query.includes("max-width: 767.98px"),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }) as unknown as MediaQueryList,
+  );
+  try {
+    await atWidth(358, async () => {
+      await act(async () =>
+        root.render(
+          <LeadsTable
+            rows={[
+              row(1, { next_action_at: "2026-10-25T10:00:00Z" }),
+              row(2, { name: "ravi sample" }),
+            ]}
+            onOpen={vi.fn()}
+            showOwner={false}
+          />,
+        ),
+      );
+      expect(host.querySelector("[data-fit]")).toBeNull();
+      expect(host.querySelector("[data-scroll]")).not.toBeNull();
+      expect(host.textContent).not.toContain("under each row");
+      expect(headers()).not.toContain("More");
+      expect(headers().length).toBeGreaterThan(3);
+    });
+  } finally {
+    phone.mockRestore();
+  }
+});
+
 it("opens the columns that don't fit under a row, without opening the lead", async () => {
   const onOpen = vi.fn();
   await atWidth(358, async () => {
