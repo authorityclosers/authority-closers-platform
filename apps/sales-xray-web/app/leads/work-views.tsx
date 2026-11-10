@@ -101,6 +101,15 @@ export function keepsView(more: ListMore, arrival: ListMore | null): boolean {
   return !opened || words(more) !== opened;
 }
 
+/** Why the list isn't here: offline, it says so and that it comes back by
+ *  itself (Redmi QA, 10 Nov 2026: offline, "Sales X-Ray isn't answering. Try
+ *  again." and no word that the network was the cause). */
+export function notLoadedText(message: string, online: boolean): string {
+  return online
+    ? message
+    : "You're offline. They load by themselves once you're back online.";
+}
+
 export function rememberView(person: string, more: ListMore): boolean {
   const kept = new URLSearchParams(moreParams(more)).toString();
   try {

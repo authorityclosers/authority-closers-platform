@@ -150,6 +150,7 @@ import {
   pipelinesFor,
   rememberView,
   keepsView,
+  notLoadedText,
   sideStage,
   stagesPipeline,
   useWide,
@@ -869,9 +870,13 @@ export function LeadsRoute({
       refresh();
     };
     const onVisible = () => again();
+    // Back online: at once (Redmi QA, 10 Nov 2026: after the network came
+    // back, Leads stayed on its error until Try again).
+    const onOnline = () => again(true);
     const timer = window.setInterval(() => again(true), REFRESH_EVERY_MS);
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
+    window.addEventListener("online", onOnline);
     const stop = onPhoneSignal((event) => {
       if (event === "resume" || event === "alert" || event === "calls")
         again(event !== "resume");
@@ -880,6 +885,7 @@ export function LeadsRoute({
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
+      window.removeEventListener("online", onOnline);
       stop();
     };
   }, [authenticated, refresh]);
@@ -1422,7 +1428,10 @@ export function LeadsRoute({
             <Empty
               icon={PhoneCall}
               title="Your leads didn't load"
-              text={error.message}
+              text={notLoadedText(
+                error.message,
+                typeof navigator === "undefined" || navigator.onLine !== false,
+              )}
               action={{ onClick: refresh, label: "Try again" }}
             />
           )}
