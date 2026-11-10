@@ -222,7 +222,8 @@ def test_sales_xray_serves_personal_and_all_registered_organisations(
                 # Never given minutes is not "used": the seller is told what's true.
                 assert refused.status_code == 409, refused.text
                 assert refused.json()["detail"] == (
-                    "Call analysis isn't on for this organisation yet. Ask your owner."
+                    "Call analysis isn't on for this organisation yet: it has no analysis "
+                    "allowance. Ask your owner."
                 )
 
                 # An Admin grant applies in the organisation: the eligibility gate
