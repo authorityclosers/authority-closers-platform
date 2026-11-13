@@ -137,11 +137,20 @@
   font-size: var(--sx-text-md);
 }
 
+/* Each step's mark keeps its 18 px and sits on its name's first line, done
+   or not: a done step's two-line name shrank its tick and centred it on the
+   whole block (Redmi QA on the owner's production build, 13 Nov 2026). */
 .checks li {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   color: var(--sx-muted);
+}
+
+.checks li svg {
+  flex: none;
+  margin-top: 2px;
+  margin-top: max(0px, (1lh - 18px) / 2);
 }
 
 .checks li[data-on] {
@@ -150,16 +159,6 @@
 
 .checks li[data-on] svg {
   color: var(--sx-good);
-}
-
-/* A line left undone says what that means, under it. */
-.checks li:not([data-on]) {
-  align-items: flex-start;
-}
-
-.checks li:not([data-on]) svg {
-  flex: none;
-  margin-top: 2px;
 }
 
 .why {
