@@ -32,6 +32,7 @@ import {
 } from "./bug-report/open";
 import { installErrorRecorder, recordError } from "./bug-report/recent-errors";
 import { keepEndInView } from "./end-hold";
+import { SCREEN_SETTLED_EVENT } from "./shell/screen-transition";
 import {
   AlertHost,
   clearAlert,
@@ -1001,6 +1002,9 @@ export function NoticeCenter() {
     };
     const scrolled = { capture: true, passive: true } as const;
     window.addEventListener("scroll", schedule, scrolled);
+    // A screen that slid in: its fixed bars (Leads' Call band) reach their
+    // place only as the motion ends, which moves no element, so measure again.
+    window.addEventListener(SCREEN_SETTLED_EVENT, schedule);
     // The stack's own box holds still (placeCards): its cards' sizes move it.
     const sized =
       typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
@@ -1017,6 +1021,7 @@ export function NoticeCenter() {
       changed.disconnect();
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", schedule, scrolled);
+      window.removeEventListener(SCREEN_SETTLED_EVENT, schedule);
       cancelAnimationFrame(frame);
       cancelAnimationFrame(glide);
       window.clearTimeout(landed);

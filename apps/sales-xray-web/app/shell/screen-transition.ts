@@ -94,6 +94,13 @@ export function screenMove(
 export const SCREEN_GOING_EVENT = "sx:screen-going";
 /** Asks the frame to give the page back: a press that never became a tap. */
 export const SCREEN_BACK_EVENT = "sx:screen-back";
+/** Said once a screen's motion ends. Its fixed bars only reach their place
+ *  then: while the page moves it holds them, so the corner cards measure the
+ *  bars again (Redmi QA on production, 13 Nov 2026: "Finish setting up" sat
+ *  over Leads' Call Next Lead instead of lifting over it). */
+export const SCREEN_SETTLED_EVENT = "sx:screen-settled";
+
+const settled = () => window.dispatchEvent(new Event(SCREEN_SETTLED_EVENT));
 
 /** How long an outline may stand in before the old screen comes back. */
 export const SCREEN_GIVE_UP_MS = 12_000;
@@ -122,11 +129,11 @@ function animate(
 ) {
   if (typeof element.animate !== "function") return;
   try {
-    element.animate(frames, options).finished.catch(() => undefined);
+    element.animate(frames, options).finished.then(settled, () => undefined);
   } catch {
     element
       .animate(frames, { ...options, easing: EASE_OUT })
-      .finished.catch(() => undefined);
+      .finished.then(settled, () => undefined);
   }
 }
 
