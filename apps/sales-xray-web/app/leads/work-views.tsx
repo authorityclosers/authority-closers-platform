@@ -627,6 +627,8 @@ export function CallBand({
   disabled,
   onStart,
   count = null,
+  label = null,
+  className,
 }: {
   side: Side;
   /** Follow-ups says so: "Call Next Follow-up · 12" (spec §3). */
@@ -635,9 +637,19 @@ export function CallBand({
   onStart: () => void;
   /** How many the round would take: "Start Cold Calling · 900". */
   count?: number | null;
+  /** Its own words in place of the list's: Home's "Call Asha" (the owner's
+   *  pick, 13 Nov 2026: "Call band above tab bar"). */
+  label?: string | null;
+  /** The page's own class beside the band's (Home keeps it to phones). */
+  className?: string;
 }) {
   return (
-    <div className={styles.callBand}>
+    <div
+      className={
+        className ? `${styles.callBand} ${className}` : styles.callBand
+      }
+      data-call-band=""
+    >
       <button
         type="button"
         className={`${lens.capsule} ${styles.callBandButton}`}
@@ -654,12 +666,14 @@ export function CallBand({
           aria-hidden="true"
         />
         <span>
-          {view === "follow_ups"
-            ? "Call Next Follow-up"
-            : side === "cold"
-              ? "Start Cold Calling"
-              : "Call Next Lead"}
-          {count ? ` · ${tabCount(count)}` : ""}
+          {label ??
+            `${
+              view === "follow_ups"
+                ? "Call Next Follow-up"
+                : side === "cold"
+                  ? "Start Cold Calling"
+                  : "Call Next Lead"
+            }${count ? ` · ${tabCount(count)}` : ""}`}
         </span>
       </button>
     </div>
