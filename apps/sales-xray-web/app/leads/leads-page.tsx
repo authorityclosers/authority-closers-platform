@@ -154,9 +154,11 @@ import {
   notLoadedText,
   sideStage,
   stagesPipeline,
+  tabCount,
   useWide,
 } from "./work-views";
 import {
+  continueWords,
   keepPaused,
   nextInRound,
   readPaused,
@@ -2309,6 +2311,12 @@ export function LeadsRoute({
                   view={callNextView(workView)}
                   disabled={false}
                   count={callCount}
+                  // A paused round: the band says Continue, as a tap offers.
+                  label={continueWords(
+                    desk ? readPaused(desk.me.person_id, side) : null,
+                    callCount,
+                    tabCount,
+                  )}
                   onStart={() => {
                     if (workView === "all") {
                       void callToCall();

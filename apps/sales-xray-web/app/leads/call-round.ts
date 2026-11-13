@@ -187,6 +187,20 @@ export function readPaused(
   }
 }
 
+/** The Call band's words while a round is paused: what a tap does (Redmi QA
+ *  batch 12, 13 Nov 2026: after Pause the band still said "Call Next Lead ·
+ *  5"). "Continue Calling · 2 of 5", where it stopped; null with none. */
+export function continueWords(
+  paused: PausedRound | null,
+  count: number | null,
+  show: (count: number) => string = String,
+): string | null {
+  if (!paused) return null;
+  return count
+    ? `Continue Calling · ${show(paused.served.length)} of ${show(count)}`
+    : "Continue Calling";
+}
+
 /** The leads tried in the last hour, from the list's rows. */
 export function triedLately(
   rows: readonly { lead_id: string; last_contact_at?: string | null }[],
