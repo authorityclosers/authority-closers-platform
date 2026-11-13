@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from ac_platform.application.asyncio_runtime import run_async
 from ac_platform.application.release_identity import require_baked_release_id
 from ac_platform.application.settings import Settings
+from ac_platform.call_ai.policy import TRANSCRIPT_ONLY_CANARIES
 from ac_platform.conversation_intelligence.acquisition_processing import (
     AcquisitionProcessing,
     upload_policy,
@@ -33,6 +34,10 @@ from ac_platform.conversation_intelligence.acquisition_source import (
 )
 from ac_platform.conversation_intelligence.application import ConversationError
 from ac_platform.conversation_intelligence.canary import mark_canary_submission
+from ac_platform.conversation_intelligence.canary_contracts import (
+    UNAVAILABLE,
+    check_stage_contracts,
+)
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.hosted_runtime import (
     compose_hosted_intake,
@@ -225,6 +230,7 @@ async def poll(
     result: dict[str, Any],
 ) -> None:
     accepted = False
+    revision: str | None = None
     last = time.monotonic()
     observed_stage = "C1"
     while True:
@@ -274,6 +280,33 @@ async def poll(
                     return
                 result.update(ok=True, stage_reached="C6")
                 return
+            skip = progress.get("ai_skip") or {}
+            if (
+                result["depth"] == "transcript"
+                and progress["state"] == "held"
+                and skip.get("level") == "data_only"
+                and skip.get("stopped_before") == "C4"
+            ):
+                # Staging stops after the transcript (TRANSCRIPT_ONLY_CANARIES): the
+                # real C2 is proven here, C4 and C5 offline against their contracts.
+                used = await transcription_route(db, UUID(progress["recording_id"]))
+                result["transcription_route"] = used
+                expected = result.get("active_transcription_route")
+                if used is None:
+                    result["failure_code"] = "c2_not_completed"
+                    return
+                if expected is not None and used != expected:
+                    result["failure_code"] = "c2_route_mismatch"
+                    return
+                try:
+                    result["stage_contracts"] = check_stage_contracts(revision)
+                except (ValueError, TypeError, KeyError) as error:
+                    result["failure_code"] = (
+                        UNAVAILABLE if str(error) == UNAVAILABLE else "stage_contract_invalid"
+                    )
+                    return
+                result.update(ok=True, stage_reached="C2")
+                return
             if (
                 progress["local_state"] in {"failed", "cancelled"}
                 or progress["state"] in {"failed", "held", "cancelled"}
@@ -295,6 +328,7 @@ async def poll(
                     DEFAULT_TRANSCRIPTION_ROUTE if active is None else "/".join(active)
                 )
                 quote = await plans.quote(actor, recording_id, key=f"canary-quote:{submission_id}")
+                revision = quote.get("coaching_prompt_revision")
                 result["cost_paise"] = quote["max_cost_paise"]
                 if result["cost_paise"] > MAX_QUOTE_PAISE:
                     result["failure_code"] = "canary_quote_over_cap"
@@ -363,6 +397,9 @@ async def canary(args: argparse.Namespace) -> dict[str, Any]:
         transcription_route=None,
         analysis_pipeline=None,
         one_pass=None,
+        # Staging's canary ends at the transcript; production's runs every stage.
+        depth="transcript" if environment in TRANSCRIPT_ONLY_CANARIES else "full",
+        stage_contracts=None,
     )
     try:
         bundle = load_pinned_approval(settings)
@@ -423,7 +460,7 @@ async def canary(args: argparse.Namespace) -> dict[str, Any]:
                                 ownership(db, settings), runtime, upload, path, environment
                             )
                 await poll(sessions, settings, runtime, submission_id, token, result)
-                if result["ok"]:
+                if result["ok"] and result["depth"] == "full":
                     recording = await _recording_of(sessions, settings, submission_id, token)
                     await check_one_pass(sessions, environment, recording, result)
                     if result["failure_code"] is not None:
