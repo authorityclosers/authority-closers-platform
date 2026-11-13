@@ -8239,14 +8239,35 @@ fieldset.form {
   display: none;
 }
 
+/* A row like the sheet's others (picker rows in a sheet): its name at their
+   size and weight, a line under it (Redmi QA batch 8, 13 Nov 2026: "Show as"
+   was smaller and greyer than the rows around it). */
 .sheetLayout {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 44px;
-  color: var(--sx-ink-2);
+  box-sizing: border-box;
+  min-height: 52px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--sx-line);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+}
+
+/* An open list (Sort, Lead source...) reads under its heading: its choices a
+   step smaller and regular, the one picked in weight and a soft fill, not
+   only by its thin check (Redmi QA batch 8, 13 Nov 2026: the Sort list
+   outweighed "Sort:"). */
+.filterForm [data-mode="inline"] [role="option"] {
   font-size: var(--sx-text-sm);
+  font-weight: 400;
+}
+
+.filterForm [data-mode="inline"] [role="option"][aria-selected="true"] {
+  background: var(--sx-fill-soft);
+  font-weight: 600;
 }
 
 .sheetLayout:has(> span:last-child:empty) {

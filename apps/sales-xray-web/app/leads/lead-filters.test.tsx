@@ -318,7 +318,7 @@ it("the sort and the new filters show as chips that remove themselves", async ()
   expect(labels).toEqual([
     "Remove filter Late",
     "Remove filter File upload",
-    "Remove filter By name, reversed",
+    "Back to the list's own order (Sort: Name, reversed)",
   ]);
   await act(async () =>
     host
