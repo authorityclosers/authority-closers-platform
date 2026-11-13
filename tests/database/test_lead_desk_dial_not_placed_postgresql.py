@@ -68,6 +68,10 @@ def test_a_dial_never_placed_is_no_call(postgres_harness: Any, tmp_path: Path) -
                 await here.client.get(f"{BASE}/activity", params={"day": "today", "kind": "call"})
             ).json()
             assert not [item for item in page["items"] if item["lead_id"] == lead]
+            assert page["today_counts"].get("call", 0) == 0
+            # Nor on the lead's own history, for its seller.
+            history = (await here.client.get(f"{BASE}/leads/{lead}")).json()["events"]
+            assert not [event for event in history if event["kind"] == "call"]
 
             # A dial the phone's call history timed was placed: it can't be marked.
             timed = await here.add("Fictional Real Call", "98760 69202")

@@ -2351,6 +2351,8 @@ class LeadDesk:
         window = activity_window(self, after, upto, person=person, team=team)
         joined = and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id)
         hidden = await self._private_calls(after)
+        # "Didn't call": never a call, for its seller too (Redmi QA, 13 Nov 2026).
+        never = await self._private_calls(after, not_placed=True)
         aggregate = (
             select(
                 LeadEvent.kind,
@@ -2383,7 +2385,7 @@ class LeadDesk:
             if isinstance(data, dict)
             and is_dial(data)
             and event_id not in placed_ids
-            and str(event_id) not in hidden
+            and (str(event_id) not in hidden or str(event_id) in never)
         }
         week_start = start - timedelta(days=6)
         for at in unplaced.values():
@@ -2586,6 +2588,7 @@ class LeadDesk:
         )
         day_end = self._day_start() + timedelta(days=1)
         hidden = await self._private_calls(lead_id=lead.id)
+        never = await self._private_calls(lead_id=lead.id, not_placed=True)
         # Changes an AI app made and someone undid (docs/product/ai-writes.md).
         undone = frozenset(
             str(event.data[UNDO_OF])
@@ -2670,6 +2673,7 @@ class LeadDesk:
                 # A field the call filled and someone undid (call_data undo-fill).
                 and not (event.data.get("via") == CALL_FILL and str(event.id) in undone)
                 and (str(event.id) not in hidden or event.actor_person_id == self.viewer.person_id)
+                and str(event.id) not in never
                 and str(event.id) not in absorbed
             ),
             can_edit=can_edit,
@@ -5884,9 +5888,15 @@ class LeadDesk:
         return found
 
     async def _private_calls(
-        self, since: datetime | None = None, *, lead_id: UUID | None = None
+        self,
+        since: datetime | None = None,
+        *,
+        lead_id: UUID | None = None,
+        not_placed: bool = False,
     ) -> frozenset[str]:
-        """Ids of phone-logged calls their sellers marked private (the newest marker wins).
+        """Ids of phone-logged calls their sellers marked private (the newest marker wins);
+        with ``not_placed``, only the dials their sellers said were never placed ("Didn't
+        call"), which leave the seller's own lists too, not only everyone else's.
 
         A marker always comes after its call, so markers since ``since`` cover the
         calls since then.
@@ -5902,7 +5912,9 @@ class LeadDesk:
         for data in (await self.db.scalars(query.order_by(LeadEvent.created_at))).all():
             call = data.get(PRIVATE_CALL) if isinstance(data, dict) else None
             if isinstance(call, str):
-                state[call] = data.get("private") is True
+                state[call] = data.get("private") is True and (
+                    not not_placed or data.get("reason") == "not_placed"
+                )
         return frozenset(call for call, private in state.items() if private)
 
     async def set_call_privacy(self, event_id: UUID, command: CallPrivacy) -> LeadDetail:
@@ -5927,9 +5939,14 @@ class LeadDesk:
         if event is None or event.actor_person_id != self.viewer.person_id:
             raise DeskError(404, "Only your own calls from your phone can be made private.")
         if command.reason == "not_placed":
-            # Only a Call-button dial the phone's call history hasn't timed: a call the
-            # phone logged was placed, whatever the seller taps (honest numbers).
-            if not is_dial(event.data) or PHONE_SECONDS in event.data:
+            # Only a Call-button dial the phone's call history hasn't timed (its seconds
+            # sit in a marker beside it): a call the phone logged was placed, whatever
+            # the seller taps (honest numbers).
+            if (
+                not is_dial(event.data)
+                or PHONE_SECONDS in event.data
+                or str(event.id) in await self._call_timings([event.id])
+            ):
                 raise DeskError(409, "Your phone logged this call, so it was placed.")
         elif event.data.get("via") not in {"phone", "dialler_recording"}:
             raise DeskError(404, "Only your own calls from your phone can be made private.")
