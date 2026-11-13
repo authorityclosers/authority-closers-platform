@@ -32,6 +32,7 @@ import {
   useGo,
   useWeekActivity,
   weekCalls,
+  answersFor,
   type CallsFilter,
 } from "./call-rows";
 import styles from "./phone-calls.module.css";
@@ -93,6 +94,9 @@ export function PhoneCalls({
         )
       : [];
   const items = filter ? calls : calls.slice(0, SHOWN_CALLS);
+  // A call the phone couldn't tell the end of reads as its seller answered it.
+  const answers: ReturnType<typeof answersFor> =
+    week.status === "ready" ? answersFor(week.items) : new Map();
   const more =
     !filter &&
     week.status === "ready" &&
@@ -149,7 +153,9 @@ export function PhoneCalls({
       ) : (
         <CallRows
           rows={items.map((item) =>
-            theirs ? rowFromTheirs(item) : rowFromActivity(item),
+            theirs
+              ? rowFromTheirs(item, answers.get(item.event_id) ?? null)
+              : rowFromActivity(item, answers.get(item.event_id) ?? null),
           )}
           now={now}
           label="Your calls, newest first"

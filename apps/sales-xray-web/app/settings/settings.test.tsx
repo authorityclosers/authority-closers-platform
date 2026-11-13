@@ -367,3 +367,21 @@ it("keeps Plan & usage for an organisation's owner and in a personal workspace",
     );
   }
 });
+
+it("says Settings once on a phone and lets a row's line wrap", async () => {
+  // Redmi QA on production (10 Nov 2026, 363 px at 130% text): "Settings" in
+  // the top bar and again as the heading; row lines cut to "phone a...".
+  const css = (await import("node:fs")).readFileSync(
+    (await import("node:path")).join(
+      process.cwd(),
+      "app/settings/settings-shell.module.css",
+    ),
+    "utf8",
+  );
+  expect(css).toMatch(
+    /@media \(max-width: 899px\) \{[\s\S]*?\.overviewHead h1 \{[^}]*clip-path: inset\(50%\);/,
+  );
+  const hint = /\n\.hint \{([^}]*)\}/.exec(css)?.[1] ?? "";
+  expect(hint).not.toContain("ellipsis");
+  expect(hint).not.toContain("nowrap");
+});

@@ -321,6 +321,32 @@ async function ask(key: PermissionKey): Promise<void> {
   }
 }
 
+/**
+ * The reminder's X: quiet until tomorrow, per person and workspace (Redmi QA on
+ * production, 10 Nov 2026: X hid it only until the next cold start, and it sat
+ * at the foot of every page again).
+ */
+const quietKey = (person: string, tenant: string) =>
+  `sales-xray:permissions-reminder-quiet:${person}:${tenant}`;
+const today = () =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(
+    new Date(),
+  );
+function quietToday(key: string): boolean {
+  try {
+    return window.localStorage.getItem(key) === today();
+  } catch {
+    return false;
+  }
+}
+function keepQuiet(key: string) {
+  try {
+    window.localStorage.setItem(key, today());
+  } catch {
+    // Without storage the X lasts for this app open, as before.
+  }
+}
+
 /** Not now, per person and workspace: a reminder, never a choice made for them. */
 function laterKey(person: string, tenant: string): string {
   return `sales-xray:permissions-later:${person}:${tenant}`;
@@ -403,6 +429,10 @@ export function PermissionsGate() {
   // Capture setup's own "Recording isn't set up" card says the same thing for
   // now: the reminder waits until it has gone.
   const recordingCard = useNoticeShown("capture-setup");
+  // New analysis's "Analysis minutes used up" is the card that matters there:
+  // the reminder waits for it too (Redmi QA on production, 10 Nov 2026: the two
+  // stacked at the foot of New analysis).
+  const minutesCard = useNoticeShown("analysis-minutes-out");
   const away = useRef(false);
 
   useEffect(() => {
@@ -411,8 +441,10 @@ export function PermissionsGate() {
     return () => window.removeEventListener(OPEN_EVENT, open);
   }, []);
 
-  const storageKey =
-    organisation && person && tenant ? laterKey(person, tenant) : "";
+  // Kept in Personal too, now that the folder has Not now there (Redmi QA on
+  // production, 10 Nov 2026).
+  const storageKey = person && tenant ? laterKey(person, tenant) : "";
+  const quiet = person && tenant ? quietKey(person, tenant) : "";
   const putOff = useMemo<ReadonlySet<string>>(
     () =>
       new Set([...(storageKey ? readLater(storageKey) : []), ...visitLater]),
@@ -502,11 +534,11 @@ export function PermissionsGate() {
   // itself after 5 s). On Leads it is the line above the rows; elsewhere the
   // corner, which the page keeps room for.
   const remind =
-    open || fullPage || sheet || recordingCard
+    open || fullPage || sheet || recordingCard || minutesCard
       ? ""
       : later.map((item) => item.label).join(" · ");
   useEffect(() => {
-    if (!remind || reminded.current) {
+    if (!remind || reminded.current || (quiet && quietToday(quiet))) {
       dismissNotice(REMINDER_ID);
       return;
     }
@@ -530,9 +562,10 @@ export function PermissionsGate() {
       timeout: 0,
       onDismiss: async () => {
         reminded.current = true;
+        if (quiet) keepQuiet(quiet);
       },
     });
-  }, [remind]);
+  }, [remind, quiet]);
 
   // Back is Not now for the rows that can wait (never the battery's Done or the
   // consent, which are the seller's own words), and closes the checklist the

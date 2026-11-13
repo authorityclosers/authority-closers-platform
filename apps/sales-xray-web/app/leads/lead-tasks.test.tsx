@@ -69,6 +69,25 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
+// Redmi QA (10 Nov 2026): Add task "Send QA brochure" showed as "WhatsApp".
+it("shows a task by the words its seller gave it", async () => {
+  await act(async () =>
+    root.render(
+      <LeadTasks
+        detail={
+          {
+            ...detail,
+            tasks: [{ ...task, kind: "whatsapp", title: "Send QA brochure" }],
+          } as unknown as LeadDetail
+        }
+        onChanged={() => undefined}
+        now={() => NOW}
+      />,
+    ),
+  );
+  expect(host.querySelector("strong")?.textContent).toBe("Send QA brochure");
+});
+
 it("snoozes an open task from the lead, beside Done", async () => {
   const changed = vi.fn();
   await act(async () =>

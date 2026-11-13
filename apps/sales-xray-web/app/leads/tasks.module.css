@@ -40,9 +40,14 @@
   min-width: 0;
 }
 
+/* Each list's name whole on one line, a step smaller, at 130 % text on a
+   363 px phone (Redmi QA, 10 Nov 2026: "Overdue / 5", "Toda / y" and
+   "Upcomin / g" broke inside their words). */
 .head > :first-child > button {
   min-width: 0;
-  overflow-wrap: anywhere;
+  padding-inline: 6px;
+  font-size: var(--sx-text-sm);
+  white-space: nowrap;
 }
 
 /* On a touch screen the switch's segments are drawn 40 px tall; each takes

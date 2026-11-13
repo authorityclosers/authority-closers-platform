@@ -8,6 +8,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 // room pulls the page down.
 let keepEndInView: (shrink: () => void) => void;
 let main: HTMLElement;
+let flow = "auto";
 let room: number;
 let top: number;
 const CONTENT = 3000;
@@ -24,6 +25,7 @@ beforeEach(async () => {
   vi.resetModules();
   ({ keepEndInView } = await import("./end-hold"));
   document.documentElement.style.removeProperty("--sx-end-hold");
+  flow = "auto";
   main = document.createElement("main");
   main.id = "main-content";
   document.body.append(main);
@@ -31,7 +33,7 @@ beforeEach(async () => {
   vi.spyOn(globalThis, "getComputedStyle").mockImplementation((node, pseudo) =>
     node === main
       ? ({
-          overflowY: "auto",
+          overflowY: flow,
           paddingBottom: `${pad()}px`,
         } as CSSStyleDeclaration)
       : style(node, pseudo),
@@ -100,4 +102,15 @@ it("holds nothing when the room that goes was below the screen anyway", () => {
   });
   expect(held()).toBe(0);
   expect(scrollTop()).toBe(1000);
+});
+
+it("holds nothing in a fitted frame, whose own panel scrolls", () => {
+  // Redmi QA on production (10 Nov 2026): on New analysis the first-call
+  // guide's room stayed after its X; the frame never scrolls, so the hold
+  // never let go and Choose a file sat out of reach.
+  flow = "hidden";
+  keepEndInView(() => {
+    room = 0;
+  });
+  expect(held()).toBe(0);
 });

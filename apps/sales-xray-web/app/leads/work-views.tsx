@@ -89,6 +89,27 @@ const lastViewKey = (person: string) => `sx:leads-last-view:${person}`;
 
 /** Keep the work view (never a lead, a search or whose leads); true when it is
  *  more than where Leads opens. */
+/** Whether the list on screen is kept as the person's last view: never the
+ *  one Leads was opened with from elsewhere (a Home tile, a link), only what
+ *  they pick here (Redmi QA, 10 Nov 2026: a Home New leads tile's filter was
+ *  still on Leads hours later). `arrival`: the list the address opened with. */
+export function keepsView(more: ListMore, arrival: ListMore | null): boolean {
+  if (!arrival) return true;
+  const words = (value: ListMore) =>
+    new URLSearchParams(moreParams(value)).toString();
+  const opened = words(arrival);
+  return !opened || words(more) !== opened;
+}
+
+/** Why the list isn't here: offline, it says so and that it comes back by
+ *  itself (Redmi QA, 10 Nov 2026: offline, "Sales X-Ray isn't answering. Try
+ *  again." and no word that the network was the cause). */
+export function notLoadedText(message: string, online: boolean): string {
+  return online
+    ? message
+    : "You're offline. They load by themselves once you're back online.";
+}
+
 export function rememberView(person: string, more: ListMore): boolean {
   const kept = new URLSearchParams(moreParams(more)).toString();
   try {

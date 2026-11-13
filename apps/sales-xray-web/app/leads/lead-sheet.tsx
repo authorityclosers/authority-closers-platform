@@ -621,10 +621,10 @@ export function CallOutcome({
     // sheet opens at its top and moves only when the question is out of sight,
     // below or above (Redmi QA C3, 10 Nov 2026: Log a call, tapped lower down,
     // opened the question above the screen and nothing seemed to happen).
-    const place = questionPlace(
-      box.getBoundingClientRect().top,
-      window.innerHeight,
-    );
+    // Its answers in sight too (Redmi QA C2, 10 Nov 2026: opened from Home's
+    // Pending action, the question's buttons were under the fold).
+    const rect = box.getBoundingClientRect();
+    const place = questionPlace(rect.top, window.innerHeight, 64, rect.bottom);
     if (place) box.scrollIntoView({ behavior: "smooth", block: place });
     if (ask)
       box
@@ -1294,19 +1294,23 @@ export function questionPlace(
   top: number,
   viewport: number,
   bar = 64,
+  /** Its foot: under the Call and the tab bar, it moves up to the top. */
+  bottom: number | null = null,
+  foot = 140,
 ): "center" | "start" | null {
   if (top > viewport * 0.7) return "center";
   if (top < bar) return "start";
+  if (bottom !== null && bottom > viewport - foot) return "start";
   return null;
 }
 
 /* ---------- Back from the dialer ---------- */
 
 /** A call the phone app placed from this page: when the phone can't say how
- *  it ended (no call history, some phones), coming back still says so, with
- *  Log this, as a browser's dialler does (Redmi QA C2, 10 Nov 2026: back from
- *  a call, nothing showed). The call is on the lead already; nothing more is
- *  logged. */
+ *  it ended (no call history, some phones), coming back asks how it went, as
+ *  Home's Pending action does (Redmi QA C2, 10 Nov 2026: back from a call,
+ *  nothing showed on the lead). The call is on the lead already; nothing more
+ *  is logged. */
 const APP_CALL = "sx-leads-app-call";
 const APP_CALL_MAX_MS = 30 * 60 * 1000;
 
@@ -4656,8 +4660,9 @@ export function LeadSheet({
       }
       if (call.final) void forgetCall(call.leadId);
     },
+    // Its question, open on the lead (C2).
     () => {
-      if (leadId) setBackFrom(leadId);
+      if (leadId) setLogging(leadId);
     },
   );
 

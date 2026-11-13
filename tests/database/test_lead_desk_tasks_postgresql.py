@@ -444,3 +444,20 @@ def test_a_task_of_your_own_needs_no_lead_and_is_on_its_creators_list(
             assert named.json()["title"] == "Renew the brochure print order"
 
     run(exercise())
+
+
+def test_growth_counts_overdue_tasks_as_tasks_does(postgres_harness: Any, tmp_path: Path) -> None:
+    """Growth's "tasks overdue" is Tasks' Overdue: a call back is the lead's own late follow-up,
+    never a task (Redmi QA on production, 10 Nov 2026: Growth 4 tasks overdue, Tasks 2)."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            lead_id = await here.add("Fictional Task Five", "98760 60005")
+            await task(here, lead_id, kind="whatsapp", starts_at=later(minutes=-30))
+            await task(here, lead_id, kind="call_back", starts_at=later(minutes=-30))
+            listed = (await here.client.get(f"{BASE}/tasks", params={"view": "overdue"})).json()
+            effort = await here.client.get(f"{BASE}/performance/sellers?days=1")
+            assert effort.status_code == 200, effort.text
+            assert effort.json()["sellers"][0]["tasks_late"] == listed["counts"]["overdue"] == 1
+
+    run(exercise())
