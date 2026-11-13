@@ -2165,14 +2165,9 @@ export function LeadsRoute({
               ) : null}
             </>
           )}
-          {error ? (
-            <div className={styles.notice} role="status">
-              {error.message}
-              <Button variant="ghost" onClick={refresh}>
-                Try again
-              </Button>
-            </div>
-          ) : null}
+          {/* A read that failed over the saved list: the list's corner card
+              says it once, with Retry (load-watch.ts), never a line here too
+              (Redmi QA, 10 Nov 2026: three signs for one failure). */}
           {manage === "team" ? (
             <TeamView onChanged={refresh} onOpen={(leadId) => open(leadId)} />
           ) : manage === "stages" ? (

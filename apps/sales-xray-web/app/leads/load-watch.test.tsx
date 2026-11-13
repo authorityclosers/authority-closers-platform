@@ -99,6 +99,17 @@ it("shows a failed refresh over rows at once, and leaves an empty list to its Tr
   expect(notices.gone).toContain(LIST_LOAD_NOTICE);
 });
 
+// Redmi QA (10 Nov 2026): offline, the card said "Couldn't load" and never why.
+it("says the phone is offline over saved rows", () => {
+  const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+  try {
+    show({ waiting: true, failed: true, showing: true });
+    expect(notices.shown.at(-1)?.title).toBe("You're offline");
+  } finally {
+    online.mockRestore();
+  }
+});
+
 it("a quick answer shows nothing", () => {
   show({ waiting: true });
   act(() => vi.advanceTimersByTime(300));
