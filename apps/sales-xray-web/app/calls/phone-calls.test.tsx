@@ -263,6 +263,27 @@ it("each connected call shows its way to a Report; missed calls and reports don'
   expect(rows[2].querySelector('[role="img"]')).toBeNull();
 });
 
+// Redmi QA batch 8 (13 Nov 2026): header search's "Search calls for …" opened
+// Calls with every call in Your calls; only the saved calls far below kept the
+// words. Your calls finds them too, says so, and All calls clears them.
+it("finds the searched words in this week's calls", async () => {
+  await act(async () => root.render(<PhoneCalls query=" Ravi " />));
+  const rows = [
+    ...container.querySelectorAll<HTMLAnchorElement>("a[data-sx-action]"),
+  ];
+  expect(rows).toHaveLength(1);
+  expect(rows[0].textContent).toContain("Ravi Sample");
+  expect(container.querySelector("h2")?.textContent).toBe(
+    "Your calls with “Ravi”",
+  );
+  const all = [...container.querySelectorAll("a")].find(
+    (link) => link.textContent === "All calls",
+  );
+  expect(all?.getAttribute("href")).toBe("/analysis/calls");
+  await act(async () => root.render(<PhoneCalls query="nobody" />));
+  expect(container.textContent).toContain("No calls this week with “nobody”.");
+});
+
 it("shows at most a few, with the way to all of them", async () => {
   answer.body = {
     items: Array.from({ length: SHOWN_CALLS + 2 }, (_, index) =>

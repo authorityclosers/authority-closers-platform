@@ -1653,6 +1653,7 @@ function CallsLibraryContent({
             key={identityKey}
             onSettled={settlePhone}
             filter={callsFilter(searchParams)}
+            query={query}
           />
         </SectionBoundary>
       ) : null}
