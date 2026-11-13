@@ -497,8 +497,16 @@ describe("acquisition source-bound presentation", () => {
     expect(() =>
       parseEntry({ ...accountEntry, site_key: entry.site_key }),
     ).toThrow();
+    // The three-hour trial is an entry (owner, 13 Nov 2026); past it, none.
+    expect(
+      parseEntry({ ...accountEntry, allowance_seconds: 10_800 })
+        .allowance_seconds,
+    ).toBe(10_800);
+    expect(
+      parseEntry({ ...entry, allowance_seconds: 10_800 }).allowance_seconds,
+    ).toBe(10_800);
     expect(() =>
-      parseEntry({ ...accountEntry, allowance_seconds: 6001 }),
+      parseEntry({ ...accountEntry, allowance_seconds: 10_801 }),
     ).toThrow();
   });
 });

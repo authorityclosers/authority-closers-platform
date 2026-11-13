@@ -754,6 +754,18 @@
   overscroll-behavior-x: contain;
 }
 
+/* A swipe stops on a whole column at the pinned name's edge (--pinned-w,
+   measured in leads-table.tsx, which then sets data-snap), never half under
+   it (Redmi QA batch 8, 13 Nov 2026). */
+.wrap[data-scroll][data-snap] {
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline-start: var(--pinned-w, 0px);
+}
+
+.wrap[data-scroll] .table thead th[data-column]:not([data-column="name"]) {
+  scroll-snap-align: start;
+}
+
 .wrap[data-scroll] .table {
   width: max-content;
   min-width: 100%;

@@ -57,11 +57,22 @@ export function useListLoadWatch({
       dismissNotice(LIST_LOAD_NOTICE);
       return;
     }
+    // Offline over saved rows, it says so and that they update by themselves
+    // (Redmi QA, 10 Nov 2026: offline, "Couldn't load" and an inline "isn't
+    // answering" said the same thing twice, and never why).
+    const offline =
+      typeof navigator !== "undefined" && navigator.onLine === false;
     notify({
       id: LIST_LOAD_NOTICE,
       tone: "info",
       noReport: true,
-      title: "Couldn't load",
+      title: offline ? "You're offline" : "Couldn't load",
+      ...(offline
+        ? {
+            message:
+              "Showing what was saved. It updates once you're back online.",
+          }
+        : {}),
       action: {
         label: "Retry",
         run: () => {

@@ -27,7 +27,9 @@ function Page() {
   return (
     <div ref={area} data-testid="area">
       <PullMark mark={spinner} />
+      <header style={{ position: "sticky", top: 0 }}>Inbound | Cold</header>
       <p>Leads</p>
+      <footer style={{ position: "fixed", bottom: 0 }}>Call Next Lead</footer>
     </div>
   );
 }
@@ -74,6 +76,12 @@ it("rises with the pull, refreshes past the line with one tick, then folds away"
   // The page moves down with the finger; the mark sits in the gap above it.
   const page = host.querySelector("p") as HTMLElement;
   expect(page.style.transform).toBe("translate3d(0, 20px, 0)");
+  // Its pinned head drops with it, so nothing slides under it (Redmi QA batch
+  // 8, 13 Nov 2026); a bar fixed to the window holds still.
+  const head = host.querySelector("header") as HTMLElement;
+  expect(head.style.transform).toBe("translate3d(0, 20px, 0)");
+  const bar = host.querySelector("footer") as HTMLElement;
+  expect(bar.style.transform).toBe("");
   expect(Number(mark().style.getPropertyValue("--pull"))).toBeCloseTo(
     20 / PULL_READY,
   );
@@ -88,6 +96,7 @@ it("rises with the pull, refreshes past the line with one tick, then folds away"
   expect(mark().dataset.mode).toBe("idle");
   expect(mark().style.opacity).toBe("0");
   expect(page.style.transform).toBe("");
+  expect(head.style.transform).toBe("");
 });
 
 it("ticks as the line is crossed inside the phone app, once", () => {

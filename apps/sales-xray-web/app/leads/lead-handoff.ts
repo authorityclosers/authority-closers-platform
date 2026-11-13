@@ -11,7 +11,8 @@ export const LEAD_ADDED_EVENT = "sx:lead-added";
 /** `at`: the line of its history to show, such as the call tapped on Calls;
  *  `round`: start a calling round at this lead (its card first); `log`: open
  *  it on its after-call question (Home's Finish row); `back`: its Back returns
- *  to the page that handed it over (Calls; Redmi QA R2, 10 Nov 2026). */
+ *  to the page that handed it over (Calls; Redmi QA R2, 10 Nov 2026), `from`:
+ *  that page's path, for its tab and the lead's Back (batch 6, 13 Nov 2026). */
 export type HandedLead = {
   leadId: string;
   call: boolean;
@@ -19,6 +20,7 @@ export type HandedLead = {
   round?: boolean;
   log?: boolean;
   back?: boolean;
+  from?: string;
 };
 
 let waiting: HandedLead | null = null;
@@ -34,7 +36,14 @@ export function handOverLead(
     leadId,
     call,
     ...(at ? { at } : {}),
-    ...(back ? { back } : {}),
+    ...(back
+      ? {
+          back,
+          ...(typeof window !== "undefined"
+            ? { from: window.location.pathname }
+            : {}),
+        }
+      : {}),
   };
   if (typeof window !== "undefined")
     window.dispatchEvent(

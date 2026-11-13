@@ -55,7 +55,9 @@ export function usePullToRefresh(onRefresh: () => Promise<unknown> | void) {
     let pull = 0;
     let busy = false;
     let ready = false;
-    // What moves with the finger: the page's own blocks, not anything pinned.
+    // What moves with the finger: the page's own blocks, its pinned ones too
+    // (a pull starts at the page's top, where they sit in their place), never
+    // a bar fixed to the window.
     let moving: HTMLElement[] = [];
 
     const still = () =>
@@ -119,11 +121,14 @@ export function usePullToRefresh(onRefresh: () => Promise<unknown> | void) {
       if (!scroller || scroller.scrollTop > 0) return;
       const touch = event.touches[0];
       start = { x: touch.clientX, y: touch.clientY, scroller };
+      // Leads' work tabs are pinned under Inbound | Cold: held still, the
+      // switch slid down under them and was lost while the finger held (Redmi
+      // QA batch 8, 13 Nov 2026). Everything drops together.
       moving = Array.from(host.children).filter(
         (child): child is HTMLElement =>
           child instanceof HTMLElement &&
           child !== spinner.current &&
-          !/^(fixed|sticky)$/.test(getComputedStyle(child).position),
+          getComputedStyle(child).position !== "fixed",
       );
       pull = 0;
       ready = false;

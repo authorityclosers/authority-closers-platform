@@ -145,6 +145,52 @@ function watchSheets(changed: () => void) {
 }
 const sheetOpen = () => document.querySelector("dialog[open]") !== null;
 
+/** Fields a keyboard types into; a box, a switch or a button isn't one. */
+const NOT_TYPED = new Set([
+  "button",
+  "checkbox",
+  "color",
+  "file",
+  "hidden",
+  "image",
+  "radio",
+  "range",
+  "reset",
+  "submit",
+]);
+
+/**
+ * Someone is typing: the reminder waits until they leave the field, so it never
+ * rides the keyboard over a form (Redmi QA on the owner's production build,
+ * 1.55, 13 Nov 2026: on Edit details it sat above the keyboard over the
+ * fields). Leaving one field for the next is one stretch of typing.
+ */
+function typingNow(): boolean {
+  const at = document.activeElement;
+  if (!(at instanceof HTMLElement)) return false;
+  if (at.isContentEditable || at instanceof HTMLTextAreaElement) return true;
+  return at instanceof HTMLInputElement && !NOT_TYPED.has(at.type);
+}
+const TYPING_PAUSE_MS = 200;
+function watchTyping(changed: () => void) {
+  let timer = 0;
+  const now = () => {
+    window.clearTimeout(timer);
+    changed();
+  };
+  const soon = () => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(changed, TYPING_PAUSE_MS);
+  };
+  document.addEventListener("focusin", now);
+  document.addEventListener("focusout", soon);
+  return () => {
+    window.clearTimeout(timer);
+    document.removeEventListener("focusin", now);
+    document.removeEventListener("focusout", soon);
+  };
+}
+
 /**
  * Turn on from the Calls line (owner, 3 Nov 2026): the checklist again, at the
  * consent row with its sealed words. Only the phone app has the checklist.
@@ -433,6 +479,7 @@ export function PermissionsGate() {
   // the reminder waits for it too (Redmi QA on production, 10 Nov 2026: the two
   // stacked at the foot of New analysis).
   const minutesCard = useNoticeShown("analysis-minutes-out");
+  const typing = useSyncExternalStore(watchTyping, typingNow, noFullPage);
   const away = useRef(false);
 
   useEffect(() => {
@@ -534,7 +581,7 @@ export function PermissionsGate() {
   // itself after 5 s). On Leads it is the line above the rows; elsewhere the
   // corner, which the page keeps room for.
   const remind =
-    open || fullPage || sheet || recordingCard || minutesCard
+    open || fullPage || sheet || recordingCard || minutesCard || typing
       ? ""
       : later.map((item) => item.label).join(" · ");
   useEffect(() => {

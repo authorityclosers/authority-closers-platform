@@ -16,6 +16,7 @@ import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { useBackClose } from "../ui/back-close";
+import { useLeadOpener } from "./lead-opener";
 import styles from "./lead-page.module.css";
 
 /** The row the lead was opened from, lit for a second once the page has
@@ -61,6 +62,8 @@ export function LeadPageFrame({
   children: ReactNode;
 }) {
   useBackClose(open, onClose);
+  // Opened from Calls, its Back goes there and says so (batch 6).
+  const opener = useLeadOpener();
   const back = useRef<HTMLButtonElement>(null);
   // The last lead shown (the key goes as the page closes).
   const lastKey = useRef<string | null>(null);
@@ -113,7 +116,7 @@ export function LeadPageFrame({
           ref={back}
           type="button"
           className={styles.barButton}
-          aria-label="Back to Leads"
+          aria-label={`Back to ${opener?.name ?? "Leads"}`}
           onClick={onClose}
         >
           <ArrowLeft size={24} aria-hidden="true" />

@@ -68,6 +68,10 @@ it("draws a tile: icon, number, label and caption, opening its list", async () =
   expect(
     tile?.querySelector('[data-icon][aria-hidden="true"] svg'),
   ).not.toBeNull();
+  // It looks tappable: a chevron after its number (the 13 Nov 2026 meeting).
+  expect(
+    tile?.querySelector('strong [data-go][aria-hidden="true"]'),
+  ).not.toBeNull();
 });
 
 // Honest numbers (3 Nov 2026): not loaded is a dash and opens nothing; while
@@ -86,6 +90,7 @@ it("says a dash when the number didn't load, and waits quietly while read", asyn
     />,
   );
   expect(host.querySelector("a")).toBeNull();
+  expect(host.querySelector("[data-go]")).toBeNull();
   expect(host.querySelector("strong")?.textContent).toBe("–");
   await draw(
     <SmartCounter

@@ -9,7 +9,7 @@ import pytest
 
 from ac_platform.billing.projection import LotKind
 from ac_platform.billing.trial import TRIAL_LOT_ID, TrialPolicy
-from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS
+from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS, TRIAL_SECONDS
 
 T0 = datetime(2026, 10, 1, 12, tzinfo=UTC)
 SWITCH = datetime(2026, 10, 15, tzinfo=UTC)
@@ -19,18 +19,24 @@ def hours(number: float) -> datetime:
     return T0 + timedelta(hours=number)
 
 
+def test_the_trial_is_three_hours() -> None:
+    # Owner, 13 Nov 2026: "Give it with basic rules: three hours... make it x3".
+    assert TRIAL_SECONDS == 10_800
+    assert TrialPolicy().seconds(T0) == 10_800
+
+
 def test_v1_is_the_shared_quota_with_no_end() -> None:
     policy = TrialPolicy()
     assert policy.version == "v1"
     assert policy.active_version(T0) == "v1"
-    assert policy.seconds(T0) == 3600
+    assert policy.seconds(T0) == TRIAL_SECONDS
     assert policy.per_call_seconds(T0) == CALL_LIMIT_SECONDS
 
     lot = policy.lot(first_use_at=hours(-48), now=T0)
     assert lot.lot_id == TRIAL_LOT_ID
     assert lot.kind is LotKind.TRIAL
-    assert lot.seconds == 3600
-    assert lot.capacity == 3600
+    assert lot.seconds == TRIAL_SECONDS
+    assert lot.capacity == TRIAL_SECONDS
     assert lot.valid_from == hours(-48)
     assert lot.expires_at is None
     assert lot.valid_at(hours(-48)) and lot.valid_at(T0 + timedelta(days=3650))
@@ -65,10 +71,10 @@ def test_v2_switch_keeps_v1_before_the_instant_and_never_starts_before_it() -> N
     before = SWITCH - timedelta(seconds=1)
 
     assert policy.active_version(before) == "v1"
-    assert policy.seconds(before) == 3600
+    assert policy.seconds(before) == TRIAL_SECONDS
     assert policy.per_call_seconds(before) == CALL_LIMIT_SECONDS
     v1_lot = policy.lot(first_use_at=T0, now=before)
-    assert (v1_lot.seconds, v1_lot.expires_at, v1_lot.valid_from) == (3600, None, T0)
+    assert (v1_lot.seconds, v1_lot.expires_at, v1_lot.valid_from) == (TRIAL_SECONDS, None, T0)
 
     assert policy.active_version(SWITCH) == "v2"
     assert policy.per_call_seconds(SWITCH) == CALL_LIMIT_SECONDS

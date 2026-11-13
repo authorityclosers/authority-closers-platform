@@ -440,13 +440,22 @@
   font-size: var(--sx-text-sm);
 }
 
+/* The dot, the words and Fix in three columns: the words wrap beside Fix,
+   which keeps its place at the line's end (Redmi QA on the owner's
+   production build, 13 Nov 2026, 363 px at 130 %: Fix dropped onto a line of
+   its own under "1 call today has no recording ·"). */
 .missingLine p {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0 6px;
+  gap: 0 8px;
   margin: 0;
   color: var(--sx-ink);
+}
+
+/* The dot between the words and Fix only parted them on one wrapping line. */
+.missingLine p > span[aria-hidden="true"] {
+  display: none;
 }
 
 .missingLine p::before {

@@ -144,6 +144,7 @@ import { ChatsTabIcon, useUnreadChats } from "../chats/chats-badge";
 import type { Command } from "../ui/command-bar";
 import { useRegisteredCommands } from "../ui/command-registry";
 import { handOverLead } from "../leads/lead-handoff";
+import { useLeadOpener } from "../leads/lead-opener";
 import { leavingOverlay } from "../ui/back-close";
 import { leaveTo } from "./leave-to";
 import { haptic, tick } from "../ui/haptics";
@@ -522,6 +523,13 @@ function LightboxShellFrame({
     pageName ?? (inSettings(shownPath) ? "Settings" : undefined),
   );
   const phoneTab = phoneTabFor(shownPath, active);
+  // A lead opened from Calls keeps Calls lit over it, as its Back goes there
+  // (Redmi QA batch 6, 13 Nov 2026: Leads lit); the page's own tab is Leads.
+  const opener = useLeadOpener();
+  const litTab =
+    opener && phoneTab === "leads"
+      ? phoneTabFor(opener.path, active)
+      : phoneTab;
   // Phones: the large title shrinks once the page scrolls and the bar's
   // hairline appears, as iOS does. The bar keeps its height, so nothing
   // under it moves; an attribute, not state, so scrolling never re-renders.
@@ -549,9 +557,10 @@ function LightboxShellFrame({
   }, [pathname]);
   // A light tap in the hand when the phone's tab changes, as iOS does.
   const tapTab = (tab: PhoneTab) => () => {
-    if (tab !== phoneTab) tick();
-    // Its place is on screen: back to its start (Leads: the list, N1).
-    else tabAgain(tab);
+    if (tab !== litTab) tick();
+    // Its place is on screen: back to its start (Leads: the list, N1), also
+    // while the lead's opener is lit over it.
+    if (tab === phoneTab) tabAgain(tab);
   };
   // Phones call the dashboard Home, as its tab does (owner, 17 Oct).
   const barTitle = place === "dashboard" && !pageName ? "Home" : pageTitle;
@@ -597,7 +606,7 @@ function LightboxShellFrame({
     };
   }, []);
   useGlide(railRef, `.${styles.areaActive} .${styles.railPill}`, litArea);
-  useGlide(tabBarRef, `[aria-current="page"] .${styles.tabPill}`, phoneTab);
+  useGlide(tabBarRef, `[aria-current="page"] .${styles.tabPill}`, litTab);
   // ...and, once quiet, the calls list Home and Calls open with.
   usePlacePrefetch(authenticated && !loading, () => {
     void warmCallsList(recentContextKey);
@@ -2095,7 +2104,7 @@ function LightboxShellFrame({
           className={styles.bottomLink}
           href="/dashboard"
           onClick={tapTab("dashboard")}
-          aria-current={phoneTab === "dashboard" ? "page" : undefined}
+          aria-current={litTab === "dashboard" ? "page" : undefined}
         >
           <LayoutGrid size={20} aria-hidden="true" />
           <span className={styles.tabPill} aria-hidden="true" />
@@ -2107,7 +2116,7 @@ function LightboxShellFrame({
             className={styles.bottomLink}
             href="/leads"
             onClick={tapTab("leads")}
-            aria-current={phoneTab === "leads" ? "page" : undefined}
+            aria-current={litTab === "leads" ? "page" : undefined}
             aria-label={`Leads${leadsWords}`}
           >
             <LeadsTabIcon size={20} live={leadsLive} />
@@ -2155,7 +2164,7 @@ function LightboxShellFrame({
             className={styles.bottomLink}
             href="/analysis/calls"
             onClick={tapTab("reports")}
-            aria-current={phoneTab === "reports" ? "page" : undefined}
+            aria-current={litTab === "reports" ? "page" : undefined}
           >
             <ChartColumn size={20} aria-hidden="true" />
             <span className={styles.tabPill} aria-hidden="true" />
@@ -2168,7 +2177,7 @@ function LightboxShellFrame({
             className={styles.bottomLink}
             href="/growth"
             onClick={tapTab("growth")}
-            aria-current={phoneTab === "growth" ? "page" : undefined}
+            aria-current={litTab === "growth" ? "page" : undefined}
           >
             <TrendingUp size={20} aria-hidden="true" />
             <span className={styles.tabPill} aria-hidden="true" />

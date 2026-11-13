@@ -46,6 +46,10 @@ export type UploadPolicy = {
   retention_mode?: string;
 };
 export const MAX_ACQUISITION_FILE_BYTES = 100_000_000;
+/** The most an entry offers: the trial, three hours (the server's
+ *  limits.TRIAL_SECONDS; owner, 13 Nov 2026). A larger one is no entry this
+ *  app knows; at 6,000 s the three-hour trial broke New analysis. */
+export const MAX_ENTRY_ALLOWANCE_SECONDS = 10_800;
 export type Submission = {
   id: string;
   recordingId: string;
@@ -466,7 +470,10 @@ export function parseEntry(value: unknown): Entry {
       site_key: null,
       challenge_action: null,
       policy_revision: entry.policy_revision,
-      allowance_seconds: integer(entry.allowance_seconds, 6000),
+      allowance_seconds: integer(
+        entry.allowance_seconds,
+        MAX_ENTRY_ALLOWANCE_SECONDS,
+      ),
       ...parseLanguageCapabilities(entry),
     };
   }
@@ -485,7 +492,10 @@ export function parseEntry(value: unknown): Entry {
     site_key: entry.site_key,
     challenge_action: entry.challenge_action,
     policy_revision: entry.policy_revision,
-    allowance_seconds: integer(entry.allowance_seconds, 6000),
+    allowance_seconds: integer(
+      entry.allowance_seconds,
+      MAX_ENTRY_ALLOWANCE_SECONDS,
+    ),
     ...parseLanguageCapabilities(entry),
   };
 }

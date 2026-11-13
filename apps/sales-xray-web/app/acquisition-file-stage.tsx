@@ -30,6 +30,10 @@ export type AcquisitionFileStageProps = Readonly<{
   maxBytes?: number;
   maxMinutes?: number;
   disabled: boolean;
+  /** Why no file can be chosen now (no analysis minutes): said under the
+   *  button, which is off (Redmi QA on the owner's production build, 13 Nov
+   *  2026: Choose a file stayed on for a call that couldn't be analysed). */
+  blocked?: string | null;
 }>;
 
 function fileSize(bytes: number): string {
@@ -47,6 +51,7 @@ export function AcquisitionFileStage({
   maxBytes,
   maxMinutes,
   disabled,
+  blocked = null,
 }: AcquisitionFileStageProps) {
   const input = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -145,11 +150,16 @@ export function AcquisitionFileStage({
           <button
             className={styles.browse}
             type="button"
-            disabled={disabled}
+            disabled={disabled || Boolean(blocked)}
             onClick={() => input.current?.click()}
           >
             {hasFiles ? "Choose another file" : "Choose a file"}
           </button>
+          {blocked ? (
+            <p className={styles.blocked} role="status">
+              {blocked}
+            </p>
+          ) : null}
         </div>
         <input
           ref={input}

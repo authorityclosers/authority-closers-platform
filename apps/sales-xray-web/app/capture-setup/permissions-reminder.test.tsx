@@ -304,6 +304,39 @@ it("stays away for the day after its X, even after the app opens again", async (
   expect(reminder()).toBe(false);
 });
 
+it("steps aside while someone types, and comes back once they leave the field", async () => {
+  // Redmi QA on the owner's production build, 1.55, 13 Nov 2026: on Edit
+  // details the reminder rode above the keyboard over the form.
+  fakePhone(() => ({ ...ALL, callLog: false }));
+  await mount();
+  await act(async () => byLabel("Not now: Call log").click());
+  await settle();
+  expect(reminder()).toBe(true);
+  const name = document.createElement("input");
+  const note = document.createElement("textarea");
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  document.body.append(name, note, box);
+  try {
+    await act(async () => name.focus());
+    await settle();
+    expect(reminder()).toBe(false);
+    // The next field is the same stretch of typing.
+    await act(async () => note.focus());
+    await settle();
+    expect(reminder()).toBe(false);
+    // A tick box is no typing: once the field is left, it is back.
+    await act(async () => box.focus());
+    await act(async () => new Promise((done) => setTimeout(done, 250)));
+    await settle();
+    expect(reminder()).toBe(true);
+  } finally {
+    name.remove();
+    note.remove();
+    box.remove();
+  }
+});
+
 it("waits while New analysis says the minutes are used up", async () => {
   // Redmi QA on production (10 Nov 2026): "Finish setting up" stacked under
   // "Analysis minutes used up" at the foot of New analysis.

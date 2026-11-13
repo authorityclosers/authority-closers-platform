@@ -167,15 +167,59 @@ it("lists this week's calls first and opens each one", async () => {
 
   // A phone call opens its lead, at that call.
   expect(rows[0].dataset.sxAction).toBe("lead_open");
+  window.history.replaceState(null, "", "/analysis/calls");
   await act(async () => rows[0].click());
   expect(push).toHaveBeenCalledWith("/leads");
-  // Its Back comes back to Calls (Redmi QA R2, 10 Nov 2026).
+  // Its Back comes back to Calls (Redmi QA R2, 10 Nov 2026), named and lit
+  // as Calls on the way (batch 6, 13 Nov 2026).
   expect(takeHandedLead()).toEqual({
     leadId: "lead-e1",
     call: false,
     at: "2026-10-27T09:30:00Z",
     back: true,
+    from: "/analysis/calls",
   });
+  window.history.replaceState(null, "", "/");
+});
+
+// Redmi QA batch 6 (13 Nov 2026): Back from a lead opened on Calls landed at
+// the top of the list. The row opened sits where it was once the list is back.
+it("puts the opened row back where it sat on screen", async () => {
+  window.history.replaceState(null, "", "/analysis/calls");
+  let top = 420;
+  const rect = vi
+    .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+    .mockImplementation(function (this: HTMLElement) {
+      return { top: this.dataset.callKey === "e2" ? top : 0 } as DOMRect;
+    });
+  const scroll = vi.spyOn(window, "scrollBy").mockImplementation(() => {});
+  await act(async () => root.render(<PhoneCalls />));
+  const missed = container.querySelector<HTMLAnchorElement>(
+    'a[data-call-key="e2"]',
+  );
+  await act(async () => missed?.click());
+  act(() => root.unmount());
+  // Back: the list comes again, scrolled to its top, the row 300 px higher.
+  top = 120;
+  root = createRoot(container);
+  await act(async () => root.render(<PhoneCalls />));
+  expect(scroll).toHaveBeenCalledWith(0, -300);
+  // The list comes again as it loads: still put back.
+  scroll.mockClear();
+  act(() => root.unmount());
+  root = createRoot(container);
+  await act(async () => root.render(<PhoneCalls />));
+  expect(scroll).toHaveBeenCalledWith(0, -300);
+  // Once the seller moves the page, it's theirs: a later visit starts at the top.
+  act(() => window.dispatchEvent(new Event("wheel")));
+  scroll.mockClear();
+  act(() => root.unmount());
+  root = createRoot(container);
+  await act(async () => root.render(<PhoneCalls />));
+  expect(scroll).not.toHaveBeenCalled();
+  rect.mockRestore();
+  scroll.mockRestore();
+  window.history.replaceState(null, "", "/");
 });
 
 it("each connected call shows its way to a Report; missed calls and reports don't", async () => {
@@ -217,6 +261,27 @@ it("each connected call shows its way to a Report; missed calls and reports don'
   expect(rows[0].querySelector("a")).toBeNull();
   expect(rows[1].querySelector('[role="img"]')).toBeNull();
   expect(rows[2].querySelector('[role="img"]')).toBeNull();
+});
+
+// Redmi QA batch 8 (13 Nov 2026): header search's "Search calls for …" opened
+// Calls with every call in Your calls; only the saved calls far below kept the
+// words. Your calls finds them too, says so, and All calls clears them.
+it("finds the searched words in this week's calls", async () => {
+  await act(async () => root.render(<PhoneCalls query=" Ravi " />));
+  const rows = [
+    ...container.querySelectorAll<HTMLAnchorElement>("a[data-sx-action]"),
+  ];
+  expect(rows).toHaveLength(1);
+  expect(rows[0].textContent).toContain("Ravi Sample");
+  expect(container.querySelector("h2")?.textContent).toBe(
+    "Your calls with “Ravi”",
+  );
+  const all = [...container.querySelectorAll("a")].find(
+    (link) => link.textContent === "All calls",
+  );
+  expect(all?.getAttribute("href")).toBe("/analysis/calls");
+  await act(async () => root.render(<PhoneCalls query="nobody" />));
+  expect(container.textContent).toContain("No calls this week with “nobody”.");
 });
 
 it("shows at most a few, with the way to all of them", async () => {

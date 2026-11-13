@@ -65,6 +65,29 @@ async function renderStage(props: Partial<AcquisitionFileStageProps> = {}) {
   );
 }
 
+it("turns Choose a file off and says why when no file can be analysed", async () => {
+  // Redmi QA on the owner's production build, 13 Nov 2026: with the minutes
+  // used up, Choose a file stayed on and a corner card covered it.
+  await renderStage({
+    blocked:
+      "Analysis minutes used up. Ask your workspace owner for more minutes.",
+  });
+  const browse = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Choose a file",
+  );
+  expect(browse?.disabled).toBe(true);
+  expect(host.querySelector('[role="status"]')?.textContent).toBe(
+    "Analysis minutes used up. Ask your workspace owner for more minutes.",
+  );
+  await renderStage({ blocked: null });
+  expect(
+    [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "Choose a file",
+    )?.disabled,
+  ).toBe(false);
+  expect(host.querySelector('[role="status"]')).toBeNull();
+});
+
 it("offers accessible local browse and only supplied file limits", async () => {
   await renderStage();
   expect(host.textContent).toContain("Drop your call recording here");

@@ -267,6 +267,39 @@ it("shows a slim card as the pill, whose tap opens the rest", async () => {
   await act(async () => close().click());
   expect(host.textContent).not.toContain("Fictional line");
 });
+it("holds the corner's news while a lead's after-call question is open", async () => {
+  // Home studio (13 Nov 2026): "… is your lead now", lifted over the after-call
+  // Save & Close, covered "Pick a time instead". News waits until the call is
+  // answered; a problem still shows at once.
+  const question = document.createElement("section");
+  question.setAttribute("data-after-call", "");
+  document.body.append(question);
+  try {
+    await act(async () =>
+      notify({
+        id: "fictional",
+        tone: "lead",
+        title: "Fictional Asha is your lead now",
+      }),
+    );
+    expect(host.textContent).not.toContain("Fictional Asha is your lead now");
+    await act(async () =>
+      notify({
+        id: "fictional-problem",
+        tone: "error",
+        title: "Fictional save didn't go through",
+      }),
+    );
+    expect(host.textContent).toContain("Fictional save didn't go through");
+    // Answered: the news comes now.
+    await act(async () => question.remove());
+    expect(host.textContent).toContain("Fictional Asha is your lead now");
+  } finally {
+    question.remove();
+    await act(async () => dismissNotice("fictional-problem"));
+  }
+});
+
 it("shows a work alert as a corner card that folds like every card", async () => {
   // One notification system (owner via the orchestrator, 31 Oct 2026): no
   // banner over the top of the page; work rides at the top of the stack.
