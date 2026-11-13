@@ -312,10 +312,12 @@ describe("where the lead went after Save (persona QA, 31 Oct 2026)", () => {
     await act(async () => tile("Interested").click());
     await act(async () => tile("Save").click());
     const said = notices.shown.at(-1);
-    expect(said?.title).toMatch(
-      new RegExp(`^Moved to ${after.lead.stage_label} · next call `),
+    // Where it went, as the title (it fits a pill over the Call bar); when
+    // and whom under it (Redmi QA batch 10, 13 Nov 2026).
+    expect(said?.title).toBe(`Moved to ${after.lead.stage_label}`);
+    expect(said?.message).toMatch(
+      new RegExp(`^Next call .+ · ${after.lead.name}$`),
     );
-    expect(said?.message).toBe(after.lead.name);
   });
 });
 
@@ -404,7 +406,7 @@ describe("a save the phone kept, sent later", () => {
       title: string;
       action?: { label: string };
     };
-    expect(card.title).toMatch(/^Moved to interested · next call /);
+    expect(card.title).toBe("Moved to interested");
     expect(card.action?.label).toBe("Undo");
     expect(host.textContent).not.toContain("Not sent yet");
     expect(saved).toHaveBeenCalledTimes(1);
