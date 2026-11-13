@@ -306,6 +306,19 @@ it("keeps the five tabs for an unconfirmed session; signed out offers Home, New 
       </AcquisitionShell>,
     ),
   ).toEqual(["Home", "New", "Sign in"]);
+  // The phone app keeps it too: signed out, Home's own Sign in is below the
+  // fold (Redmi QA on production, 10 Nov 2026, W1).
+  const host = document.createElement("div");
+  host.innerHTML = renderToStaticMarkup(
+    <AcquisitionShell authenticated={false} active="dashboard">
+      <p>Dashboard</p>
+    </AcquisitionShell>,
+  );
+  const signIn = host.querySelector<HTMLAnchorElement>(
+    'nav[aria-label="Mobile Sales Xray navigation"] a[href="/login"]',
+  );
+  expect(signIn?.textContent?.trim()).toBe("Sign in");
+  expect(signIn?.closest(".sx-web-only")).toBeNull();
 });
 
 it("names the current workspace in the phone header and the desktop top bar", () => {
