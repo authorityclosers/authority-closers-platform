@@ -3,6 +3,7 @@ import { afterEach, expect, it } from "vitest";
 
 import {
   PAUSE_KEEP_MS,
+  continueWords,
   keepPaused,
   nextInRound,
   readPaused,
@@ -128,4 +129,22 @@ it("finds the leads tried in the last hour", () => {
       now,
     ),
   ).toEqual(["a"]);
+});
+
+// Redmi QA batch 12 (13 Nov 2026, production): after Pause the band still said
+// "Call Next Lead · 5". With a round paused it says what a tap does.
+it("says Continue Calling, where it stopped, while a round is paused", () => {
+  const paused = {
+    side: "inbound",
+    served: ["a", "b"],
+    skipped: [],
+    at: 0,
+    start: null,
+  };
+  expect(continueWords(paused, 5)).toBe("Continue Calling · 2 of 5");
+  expect(continueWords(paused, null)).toBe("Continue Calling");
+  expect(continueWords(paused, 1200, (count) => `${count / 1000}K`)).toBe(
+    "Continue Calling · 0.002K of 1.2K",
+  );
+  expect(continueWords(null, 5)).toBeNull();
 });

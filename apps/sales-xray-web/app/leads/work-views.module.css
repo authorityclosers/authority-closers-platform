@@ -184,6 +184,14 @@
   }
 }
 
+/* Select: the ticked leads' bar is the one action, so the Call band steps
+   aside and the bar's buttons are never under it (owner bug 197, 10 Nov 2026,
+   Cold on his OnePlus: "the button is just hiding the part where we need to
+   edit"). */
+.splitList:has([data-select-bar]) .callBand {
+  display: none;
+}
+
 @media (min-width: 900px) {
   /* At the window's foot, in the list's column. The shell keeps room under
      the page for its corner cards (lightbox-shell.module.css, .main's

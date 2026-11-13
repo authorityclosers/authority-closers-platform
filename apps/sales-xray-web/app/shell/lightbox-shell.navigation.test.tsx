@@ -19,6 +19,7 @@ vi.mock("next/link", () => ({
 import { AcquisitionShell } from "../acquisition-shell";
 import { LiveDataBanner } from "../live-data-banner";
 import { recentCallsForContext } from "./shell-store";
+import { CALLS_PAGE_NAME } from "../calls-page-name";
 import {
   WorkspaceAccessProvider,
   type WorkspaceAccessValue,
@@ -156,7 +157,7 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
     mobileNav?.querySelectorAll<HTMLAnchorElement>(
       'a[data-next-client-link="true"]',
     ) ?? [],
-  ).find((link) => link.textContent?.trim() === "Reports");
+  ).find((link) => link.textContent?.trim() === CALLS_PAGE_NAME);
   // Reports opens on All Calls (Dipak's handoff, 31 Oct 2026).
   expect(mobileCalls?.getAttribute("href")).toBe("/analysis/calls");
   expect(
@@ -343,7 +344,14 @@ it("names the current workspace in the phone header and the desktop top bar", ()
   expect(phone?.tagName).toBe("BUTTON");
   expect(phone?.getAttribute("aria-haspopup")).toBe("dialog");
   expect(phone?.querySelector("small")?.textContent).toBe("Authority Closers");
-  expect(phone?.querySelector("b")?.textContent).toBe("Calls");
+  // The page's title is its tab's name, one setting for both (owner, 13 Nov
+  // 2026: "call it Reports for now").
+  expect(phone?.querySelector("b")?.textContent).toBe(CALLS_PAGE_NAME);
+  expect(
+    host.querySelector(
+      'nav[aria-label="Mobile Sales Xray navigation"] a[href="/analysis/calls"]',
+    )?.textContent,
+  ).toBe(CALLS_PAGE_NAME);
   // In an organisation Team joins the ribbon, and Leads has All leads.
   const aside = host.querySelector('aside[aria-label="Sales Xray navigation"]');
   expect(ribbon(aside).map(([label, , current]) => [label, current])).toEqual([

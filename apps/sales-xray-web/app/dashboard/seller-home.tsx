@@ -49,6 +49,7 @@ import {
   type HTMLAttributes,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { displayName } from "../display-name";
 import { ActionSheet } from "../leads/action-sheet";
@@ -65,6 +66,7 @@ import {
 } from "../calls/call-rows";
 import { CallRowsSkeleton } from "../calls/phone-calls";
 import { readGone } from "../leads/finish-row";
+import { CallBand } from "../leads/work-views";
 import {
   handOverAnswer,
   handOverLead,
@@ -621,6 +623,15 @@ export function NextCall({
     : null;
   const name = lead ? displayName(lead.name) : "";
   const callTo = leadsHref(side, { view: "to_call" });
+  // Home's Call band says what the card's Call does, to whom (the owner's
+  // pick, 13 Nov 2026: "Call band above tab bar"; seller Flow 1, F1: the
+  // card's Call now sat under the fold at his size).
+  const first = name.split(" ")[0];
+  const bandWords = missed
+    ? `Call back ${first}`
+    : cold
+      ? "Start Cold Calling"
+      : `Call ${first}`;
   // Start cold calling opens a round at this card and dials nothing until
   // Call (ph2-33: backing out of the dialler left a phantom call); a
   // call-back or an Inbound lead dials at once.
@@ -722,6 +733,25 @@ export function NextCall({
       </section>
       {lead ? (
         <>
+          {/* Leads' own Call band, above the tab bar on a phone, always in
+              sight; nothing else on Home moves. On the page's body: Home's
+              blocks are containers (container queries), which would hold a
+              fixed band inside them. */}
+          {typeof document === "undefined"
+            ? null
+            : createPortal(
+                <CallBand
+                  side={side}
+                  disabled={false}
+                  label={bandWords}
+                  className={styles.homeBand}
+                  onStart={() => {
+                    call();
+                    go(callTo);
+                  }}
+                />,
+                document.body,
+              )}
           <ActionSheet
             open={held}
             title={name}
@@ -1478,7 +1508,10 @@ export function TodayPerformance({
     },
     {
       key: "follow_ups",
-      label: "Follow-ups done",
+      // Under "Done today", "Follow-ups" says it, and leaves room for the
+      // chevron that says it opens (the Orchestrator for the owner, 13 Nov
+      // 2026; seller Flow 1, F4).
+      label: "Follow-ups",
       value: numbers?.follow_ups_done,
       href: leadsHref(side, { view: "follow_ups", when: "today" }),
       icon: <CalendarCheck />,
@@ -1543,87 +1576,98 @@ export function SellerBlocks({
   const go = useGo();
   const ready = desk !== null && state === "ready";
   return (
-    <SlotLayout
-      plan={SELLER_HOME}
-      className={styles.me}
-      blocks={{
-        // A call still waiting for its answer comes first, as on Leads
-        // (teardown 3: an answer is never lost); Finish opens it at its
-        // question there.
-        finish: desk ? (
-          <PendingAction
-            calls={desk.unanswered}
-            onFinish={(leadId) => {
-              handOverAnswer(leadId);
-              go("/leads");
-            }}
-          />
-        ) : null,
-        side: access ? (
-          <SideBlock
-            side={shown}
-            access={access}
-            own={own}
-            inbound={desk?.sides?.inbound ?? null}
-            onSide={onSide}
-          />
-        ) : given === null ? (
-          <SideWait side={shown} />
-        ) : null,
-        cards: (
-          <TodayCards
-            side={shown}
-            own={own}
-            failed={state === "error"}
-            tasks={
-              ready && tasks
-                ? tasks.filter((task) => task.status !== "done").length
-                : null
-            }
-            taskMarks={
-              ready && tasks
-                ? {
-                    done: tasks.filter((task) => task.status === "done").length,
-                    open: tasks.filter((task) => task.status !== "done").length,
-                  }
-                : null
-            }
-            lateTasks={ready ? overdue : null}
-          />
-        ),
-        next: (
-          <NextCall side={shown} own={own} state={ready ? "ready" : state} />
-        ),
-        list: ready ? (
-          <TodaysList
-            side={shown}
-            own={own}
-            tasks={
-              tasks === null
-                ? null
-                : [
-                    ...late.filter(
-                      (task) =>
-                        !tasks.some((item) => item.task_id === task.task_id),
-                    ),
-                    ...tasks,
-                  ]
-            }
-            failed={failed}
-            onDone={done}
-            onRetry={reload}
-            onMoved={reload}
-          />
-        ) : null,
-        done: ready ? (
-          <TodayPerformance
-            side={shown}
-            own={own}
-            other={desk?.sides?.[shown === "cold" ? "inbound" : "cold"] ?? null}
-          />
-        ) : null,
-      }}
-    />
+    <>
+      <SlotLayout
+        plan={SELLER_HOME}
+        className={styles.me}
+        blocks={{
+          // A call still waiting for its answer comes first, as on Leads
+          // (teardown 3: an answer is never lost); Finish opens it at its
+          // question there.
+          finish: desk ? (
+            <PendingAction
+              calls={desk.unanswered}
+              onFinish={(leadId) => {
+                handOverAnswer(leadId);
+                go("/leads");
+              }}
+            />
+          ) : null,
+          side: access ? (
+            <SideBlock
+              side={shown}
+              access={access}
+              own={own}
+              inbound={desk?.sides?.inbound ?? null}
+              onSide={onSide}
+            />
+          ) : given === null ? (
+            <SideWait side={shown} />
+          ) : null,
+          cards: (
+            <TodayCards
+              side={shown}
+              own={own}
+              failed={state === "error"}
+              tasks={
+                ready && tasks
+                  ? tasks.filter((task) => task.status !== "done").length
+                  : null
+              }
+              taskMarks={
+                ready && tasks
+                  ? {
+                      done: tasks.filter((task) => task.status === "done")
+                        .length,
+                      open: tasks.filter((task) => task.status !== "done")
+                        .length,
+                    }
+                  : null
+              }
+              lateTasks={ready ? overdue : null}
+            />
+          ),
+          next: (
+            <NextCall side={shown} own={own} state={ready ? "ready" : state} />
+          ),
+          list: ready ? (
+            <TodaysList
+              side={shown}
+              own={own}
+              tasks={
+                tasks === null
+                  ? null
+                  : [
+                      ...late.filter(
+                        (task) =>
+                          !tasks.some((item) => item.task_id === task.task_id),
+                      ),
+                      ...tasks,
+                    ]
+              }
+              failed={failed}
+              onDone={done}
+              onRetry={reload}
+              onMoved={reload}
+            />
+          ) : null,
+          done: ready ? (
+            <TodayPerformance
+              side={shown}
+              own={own}
+              other={
+                desk?.sides?.[shown === "cold" ? "inbound" : "cold"] ?? null
+              }
+            />
+          ) : null,
+        }}
+      />
+      {/* The page's end keeps the Call band's room, so its last block
+          scrolls clear of it, as Leads' list does. */}
+      {ready && own?.next_lead ? (
+        <div className={styles.bandRoom} aria-hidden="true" />
+      ) : null}
+    </>
   );
 }
 

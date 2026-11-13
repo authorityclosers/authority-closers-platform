@@ -105,6 +105,17 @@ it("records a person's outcome in one tap and shows it as the call outcome", asy
   // Until a person records it, the analysis's reading stays labelled as such.
   expect(outcome().textContent).toContain("As heard on the call");
   expect(picture().textContent).toContain("Not set yet");
+  // The outcome comes after the read, never first (orchestrator, 13 Nov
+  // 2026, Flow 2 G6): a filled Record outcome only while it has none.
+  const result = picture().querySelector('[aria-label="Call result"]')!;
+  expect(result.textContent).toContain("Record outcome");
+  expect(picture().firstElementChild).not.toBe(result);
+  const numbers = picture().querySelector(
+    '[aria-label="Overall score"], [aria-label="Call statistics"]',
+  )!;
+  expect(
+    numbers.compareDocumentPosition(result) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
   const wonButton = [
     ...picture().querySelectorAll<HTMLButtonElement>("button"),
   ].find((b) => b.textContent === "Won")!;
@@ -122,6 +133,9 @@ it("records a person's outcome in one tap and shows it as the call outcome", asy
   expect(
     picture().querySelector('button[aria-pressed="true"]')?.textContent,
   ).toBe("Won");
+  // Recorded: one quiet line.
+  expect(picture().querySelector('[aria-label="Call result"]')).toBeNull();
+  expect(picture().textContent).toContain("Recorded outcome · Won");
   await act(async () => root.unmount());
 });
 

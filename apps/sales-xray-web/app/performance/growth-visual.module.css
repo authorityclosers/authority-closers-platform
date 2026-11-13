@@ -115,11 +115,6 @@
   place-items: center;
 }
 
-.ring[data-big] {
-  width: 72px;
-  height: 72px;
-}
-
 .ring svg {
   position: absolute;
   inset: 0;
@@ -145,10 +140,6 @@
 .ringWords {
   color: var(--sx-ink);
   font: var(--sx-text-badge);
-}
-
-.ring[data-big] .ringWords {
-  font: var(--sx-text-label);
 }
 
 /* Needs attention: a dot whose colour says late (red) or still to do (amber). */
@@ -267,33 +258,17 @@
   background: var(--sx-accent);
 }
 
-/* G4: four larger cards, one a row. */
+/* G4: its larger cards, one a row. */
 .big {
   display: grid;
   gap: 10px;
   padding: 16px;
 }
 
-.bigFigure {
-  color: var(--sx-ink);
-  font: var(--sx-text-large);
-}
-
 .bigTitle {
   min-height: calc(var(--sx-text-md) * var(--sx-leading-24));
   color: var(--sx-ink);
   font: var(--sx-text-headline);
-}
-
-.bigRow {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.bigWords {
-  display: grid;
-  min-width: 0;
 }
 
 .talkers {

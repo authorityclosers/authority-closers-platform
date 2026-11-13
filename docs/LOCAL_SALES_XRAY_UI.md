@@ -30,6 +30,11 @@ pnpm dev:sales-xray:production:down
 pnpm dev:sales-xray:review
 ```
 
+On a phone (live design mode), link it with `adb reverse tcp:3016 tcp:3016`
+and start with `-BrowserOrigin http://localhost:3016`: the phone can't resolve
+`*.localhost`. The dev server runs Turbopack, as `pnpm dev` does; `-Webpack`
+keeps the older bundler.
+
 The app is at `http://salesxray.localhost:3016/`; the workbench is
 `http://salesxray.localhost:3016/__review/`. Review mode uses authenticated real
 API reads and blocks analysis/data mutations. Captured states have shareable

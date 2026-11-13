@@ -272,6 +272,13 @@ export function minutesOutNotice(
 }
 
 /**
+ * A file New analysis can't take, in plain words: what it does take (Dipak,
+ * bug 201, 13 Nov 2026: "your file isn't supported, kindly upload mp3").
+ */
+export const FILE_REFUSED =
+  "That file can't be analysed. Choose a call recording up to 100 MB: MP3, WAV, M4A, AAC or another audio or video file.";
+
+/**
  * Why New analysis can't take a file now, said under Choose a file, or null.
  * Out of minutes where none can be bought here (a member, or the Google Play
  * app), the button is off and this says who can help; said there, it isn't a
@@ -1583,9 +1590,7 @@ export function AcquisitionStudio({
       !next.size ||
       next.size > policy.maximum_file_bytes
     ) {
-      setError(
-        "Choose an audio or video recording within the displayed size limit.",
-      );
+      setError(FILE_REFUSED);
       setLocalValidationError(true);
       return;
     }
@@ -1619,9 +1624,7 @@ export function AcquisitionStudio({
     const hasInvalidFiles = valid.length !== candidates.length;
     if (valid.length === 0) {
       if (hasInvalidFiles) {
-        setError(
-          "Choose an audio or video recording within the displayed size limit.",
-        );
+        setError(FILE_REFUSED);
         setLocalValidationError(true);
       }
       return;
@@ -1634,9 +1637,7 @@ export function AcquisitionStudio({
       ]);
     if (!file) choose(valid[0]);
     if (hasInvalidFiles) {
-      setError(
-        "Choose an audio or video recording within the displayed size limit.",
-      );
+      setError(FILE_REFUSED);
       setLocalValidationError(true);
     }
   }
@@ -2458,7 +2459,7 @@ export function AcquisitionStudio({
     error: review.frame
       ? pausedFailureMessage(review.frame.progress.failure_code)
       : localObservation?.phase === "upload.validation.error"
-        ? "Choose an audio or video recording within the displayed size limit."
+        ? FILE_REFUSED
         : rootAnalysisState === "needs_action" &&
             !plan?.accepted &&
             !progress?.automatic_progression &&
@@ -3651,6 +3652,23 @@ export function AcquisitionStudio({
                           )}
                           {busy || "Analyse my call"}
                         </button>
+                        {/* Off for want of minutes: why, under the button
+                            itself (Dipak, bugs 200 and 201, 13 Nov 2026: "it
+                            doesn't click here"; his WAV was fine, the reason
+                            sat at the top, out of sight). */}
+                        {minutesBlockedReason(
+                          minutesOut,
+                          purchasesAllowed,
+                          allowanceLine,
+                        ) ? (
+                          <p className="small-text" role="status">
+                            {minutesBlockedReason(
+                              minutesOut,
+                              purchasesAllowed,
+                              allowanceLine,
+                            )}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                   )}

@@ -423,12 +423,7 @@ it("is the owner's Smart lists Home: the work in five blocks, each opening its e
       performance?.querySelectorAll("li") ?? [],
       (item) => item.textContent,
     ),
-  ).toEqual([
-    "Attempted12",
-    "Connected7",
-    "Talk time34 min",
-    "Follow-ups done3",
-  ]);
+  ).toEqual(["Attempted12", "Connected7", "Talk time34 min", "Follow-ups3"]);
   expect(performance?.textContent).toContain("Inbound calls only · Today");
   // Not in the picture: the longest breaks and the Taking new leads pill.
   expect(host.textContent).not.toContain("Your longest breaks");

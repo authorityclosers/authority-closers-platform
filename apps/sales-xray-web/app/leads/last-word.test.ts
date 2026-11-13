@@ -51,3 +51,19 @@ it("says the last answer, its words and day, and the tries", () => {
   expect(long.last).toContain(`“${"x".repeat(39)}…”`);
   expect(lastWord(detail([], 0), NOW)).toEqual({ last: null, tries: null });
 });
+
+// Redmi QA batch 12 (13 Nov 2026, production): the question said "Tries: 3"
+// under a call history that said "Tried 5 times". One count for both.
+it("counts tries as the call history does: attempts, calls or the phone's", () => {
+  const counted = (events: LeadEvent[], attempts: number, calls: number) =>
+    lastWord(
+      { events, lead: { attempts, calls } } as unknown as Pick<
+        LeadDetail,
+        "events" | "lead"
+      >,
+      NOW,
+    ).tries;
+  expect(counted([], 3, 5)).toBe("Tries: 5");
+  const phone = event({ kind: "call", via: "phone", connected: true });
+  expect(counted([phone, phone], 1, 0)).toBe("Tries: 2");
+});

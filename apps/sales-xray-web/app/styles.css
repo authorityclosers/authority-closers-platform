@@ -3435,3 +3435,47 @@ html[data-sx-app] .sx-web-only {
     );
   }
 }
+
+/* Touch screens: the app's own words (buttons, chips, tiles, rows, tabs,
+   headers) aren't selectable, as in an app; a long press there no longer
+   selects text (owner, 10 Nov 2026, bug 196 on Leads: "It is not an app
+   behaviour"). Words people keep stay selectable: paragraphs (notes, messages,
+   a report's text), fields and anything marked data-selectable. Sales X-Ray
+   only: the app's root, and in the phone app the whole page, since sheets
+   open outside the root. */
+@media (hover: none) and (pointer: coarse) {
+  .xray-app,
+  html[data-sx-app] body {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  :is(.xray-app, html[data-sx-app] body) :is(p, blockquote, pre, q),
+  :is(.xray-app, html[data-sx-app] body) :is(input, textarea),
+  :is(.xray-app, html[data-sx-app] body)
+    [contenteditable]:not([contenteditable="false"]),
+  :is(.xray-app, html[data-sx-app] body) [data-selectable],
+  :is(.xray-app, html[data-sx-app] body) [data-selectable] * {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+  }
+
+  /* A paragraph inside a control is the control's label. */
+  :is(.xray-app, html[data-sx-app] body)
+    :is(
+      button,
+      a,
+      label,
+      summary,
+      [role="button"],
+      [role="tab"],
+      [role="option"],
+      [role="menuitem"]
+    )
+    :is(p, blockquote, pre, q) {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
