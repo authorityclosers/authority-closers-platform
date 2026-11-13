@@ -3,9 +3,18 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const notices = vi.hoisted(() => [] as Array<{ title: string }>);
+const notices = vi.hoisted(
+  () =>
+    [] as Array<{
+      title: string;
+      action?: { label: string; run: () => void };
+    }>,
+);
 vi.mock("../notice-center", () => ({
-  notify: (notice: { title: string }) => notices.push(notice),
+  notify: (notice: {
+    title: string;
+    action?: { label: string; run: () => void };
+  }) => notices.push(notice),
 }));
 
 import { resetBackCloseForTests } from "../ui/back-close";
@@ -55,6 +64,9 @@ beforeEach(() => {
       asked.push({ url, body: String(init?.body ?? "") });
       if (url.endsWith("/snooze"))
         return Response.json({ ...task, starts_at: "2026-11-02T05:30:00Z" });
+      if (url.endsWith("/done"))
+        return Response.json({ ...task, status: "done", revision: 3 });
+      if (url.endsWith("/undo")) return Response.json({ ...task, revision: 4 });
       return Response.json({ ...detail, tasks: [] });
     }),
   );
@@ -86,6 +98,45 @@ it("shows a task by the words its seller gave it", async () => {
     ),
   );
   expect(host.querySelector("strong")?.textContent).toBe("Send QA brochure");
+});
+
+// Redmi QA (10 Nov 2026): Done made the row vanish 2-3 s later, with no tick
+// and no Undo. It ticks at once, and its card's Undo puts the task back.
+it("ticks a task done at once, with Undo in its card", async () => {
+  const changed = vi.fn();
+  await act(async () =>
+    root.render(
+      <LeadTasks
+        detail={detail as unknown as LeadDetail}
+        onChanged={changed}
+        now={() => NOW}
+      />,
+    ),
+  );
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>(
+        'button[aria-label="Done: Call Ravi back"]',
+      )!
+      .click(),
+  );
+  expect(host.querySelector("li[data-ticked]")).not.toBeNull();
+  await act(async () => {
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+  });
+  const card = notices.at(-1);
+  expect(card?.title).toBe("Done");
+  expect(card?.action?.label).toBe("Undo");
+  await act(async () => card?.action?.run());
+  await act(async () => {
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+  });
+  const undone = asked.find((call) => call.url.endsWith("/undo"));
+  expect(JSON.parse(undone?.body ?? "{}")).toMatchObject({
+    expected_revision: 3,
+  });
+  // Back on the list, no longer struck through.
+  expect(host.querySelector("li[data-ticked]")).toBeNull();
 });
 
 it("snoozes an open task from the lead, beside Done", async () => {
