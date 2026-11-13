@@ -63,7 +63,8 @@ export type NavIcon =
   | "offers"
   | "bugs"
   | "feedback"
-  | "sellers";
+  | "sellers"
+  | "testers";
 
 type Need =
   | { kind: "console" }
@@ -110,6 +111,13 @@ export const NAVIGATION: readonly NavGroup[] = [
         href: "/feedback",
         label: "Feedback",
         icon: "feedback",
+        need: { kind: "salesXray" },
+      },
+      // Play testers: who applied, who was sent, who installed (owner, 13 Nov 2026).
+      {
+        href: "/testers",
+        label: "Testers",
+        icon: "testers",
         need: { kind: "salesXray" },
       },
     ],
