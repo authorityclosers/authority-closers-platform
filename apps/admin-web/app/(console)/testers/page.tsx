@@ -5,6 +5,8 @@ import { adminRead } from "@/app/lib/server-api";
 import { TesterActions } from "@/app/testers/tester-actions";
 import {
   EXPORT_PATH,
+  HOURS_LABEL,
+  HOURS_TONE,
   STAGE_LABEL,
   STAGE_TONE,
   aboutLine,
@@ -50,6 +52,11 @@ function Stage({ tester }: { tester: Tester }) {
         <Badge tone="bad">Email failed</Badge>
       ) : null}
       {tester.emailStatus === "queued" ? <Badge>Email sending</Badge> : null}
+      {tester.hours ? (
+        <Badge tone={HOURS_TONE[tester.hours]}>
+          {HOURS_LABEL[tester.hours]}
+        </Badge>
+      ) : null}
       {tester.bugs ? (
         <Badge tone="accent">
           {tester.bugs === 1 ? "1 bug report" : `${tester.bugs} bug reports`}

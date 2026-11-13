@@ -29,20 +29,33 @@ export function TesterActions({
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [said, setSaid] = useState<string | null>(null);
   const step = nextStep(tester);
-  if (!step) return null;
+  const hoursDue =
+    tester.hours === "due" &&
+    tester.stage !== "applied" &&
+    tester.stage !== "declined";
+  if (!step && !hoursDue && !said) return null;
   const base = `/v1/admin/testers/${tester.id}`;
 
   const run = async (command: Command) => {
     if (busy) return;
     setBusy(true);
     setProblem(null);
-    const result = await send("POST", command.path, command.body, null);
+    const result = await send<{ hours_words?: unknown }>(
+      "POST",
+      command.path,
+      command.body,
+      null,
+    );
     setBusy(false);
     if (!result.ok) {
       setProblem(result.message);
       return;
     }
+    // What happened to their 3 hours of call analysis, in the server's words.
+    const words = result.data?.hours_words;
+    setSaid(typeof words === "string" ? words : null);
     router.refresh();
   };
 
@@ -114,9 +127,19 @@ export function TesterActions({
       }),
     ];
 
+  if (hoursDue)
+    actions.push(button("Give 3 hours", { path: `${base}/hours`, body: {} }));
+
   return (
     <span className={styles.actions}>
-      <span className={styles.actionRow}>{actions}</span>
+      {actions.length ? (
+        <span className={styles.actionRow}>{actions}</span>
+      ) : null}
+      {said ? (
+        <small className={kitStyles.muted} role="status">
+          {said}
+        </small>
+      ) : null}
       {copied && step === "add_to_group" ? (
         <small className={kitStyles.muted} role="status">
           Address copied: paste it in Add members.

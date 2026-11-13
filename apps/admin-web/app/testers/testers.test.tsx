@@ -47,6 +47,7 @@ const RAW = {
       bugs: 2,
       email_status: "sent",
       emailed_via: "gmail",
+      hours: "due",
     },
     { id: "not-a-uuid", email: "x@example.test", stage: "active" },
     { id: ID, email: "y@example.test", stage: "somewhere" },
@@ -79,7 +80,9 @@ describe("the tester list", () => {
       bugs: 2,
       emailedVia: "gmail",
       emailStatus: "sent",
+      hours: "due",
     });
+    expect(page.items[0]!.hours).toBeNull();
     const empty = normalizeTesters({});
     expect(empty.items).toEqual([]);
     expect(empty.activeDays).toBe(7);
@@ -147,10 +150,17 @@ describe("the team's buttons", () => {
   it("approves an application and refreshes the list", async () => {
     const fetcher = vi.fn(
       async () =>
-        new Response("{}", {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
+        new Response(
+          JSON.stringify({
+            hours: "trial",
+            hours_words:
+              "Their personal account has 3 hours of call analysis (the trial).",
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
     );
     vi.stubGlobal("fetch", fetcher);
     await act(async () =>
@@ -171,6 +181,39 @@ describe("the team's buttons", () => {
       }),
     );
     expect(refresh).toHaveBeenCalled();
+    expect(host.textContent).toContain("3 hours of call analysis");
+  });
+
+  it("offers Give 3 hours to an organisation member who still lacks them", async () => {
+    const fetcher = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            hours: "granted",
+            hours_words: "3 hours of call analysis granted in their workspace.",
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    await act(async () =>
+      root.render(
+        <TesterActions
+          tester={{ ...tester("active"), hours: "due" }}
+          groupUrl="https://groups.google.com/x"
+        />,
+      ),
+    );
+    expect(buttons()).toEqual(["Give 3 hours"]);
+    await click("Give 3 hours");
+    expect(fetcher).toHaveBeenCalledWith(
+      `/v1/admin/testers/${ID}/hours`,
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(host.textContent).toContain("granted in their workspace");
   });
 
   it("copies the address and opens the group, then marks them added and emails", async () => {

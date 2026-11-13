@@ -153,3 +153,20 @@ def test_the_export_never_runs_a_cell_as_a_formula() -> None:
     header, line = text.strip().split("\n")
     assert header.split(",")[:3] == ["email", "name", "stage"]
     assert "'=HYPERLINK(1)" in line and "'-dash" in line and ",yes," in line
+
+
+def test_every_tester_has_three_hours_by_trial_or_grant() -> None:
+    from types import SimpleNamespace
+    from uuid import UUID
+
+    from ac_platform.testers import hours
+
+    person, personal, org = uuid4(), UUID(int=1), UUID(int=2)
+    settings = SimpleNamespace(public_learner_tenant_id=personal)
+    assert hours.TESTER_MINUTES == 180
+    assert hours._state(settings, person, [], set()) == "on_sign_in"
+    assert hours._state(settings, person, [personal], set()) == "trial"
+    assert hours._state(settings, person, [personal, org], set()) == "due"
+    assert hours._state(settings, person, [org], {(person, org)}) == "granted"
+    for outcome in ("granted", "already", "trial", "on_sign_in", "not_allowed", "unavailable"):
+        assert hours.HOURS_WORDS[outcome]

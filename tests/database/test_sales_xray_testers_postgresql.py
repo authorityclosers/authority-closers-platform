@@ -152,6 +152,7 @@ def test_a_tester_applies_is_reviewed_added_emailed_and_seen_in_the_app(
                     "Solar panels",
                 )
                 assert page["counts"]["applied"] == 1 and page["play_needs"] == 12
+                assert page["tester_hours"] == 3 and mine["hours"] in ("trial", "on_sign_in")
                 own = await http.post(
                     f"{ADMIN}/{mine['id']}/decision", json={"decision": "approve"}, headers=WRITE
                 )
@@ -181,6 +182,10 @@ def test_a_tester_applies_is_reviewed_added_emailed_and_seen_in_the_app(
                 )
                 assert approved.status_code == 200, approved.text
                 assert approved.json()["tester"]["stage"] == "approved"
+                # Ravi has no Sales X-Ray workspace yet: the trial's 3 hours come with it.
+                assert approved.json()["hours"] == "on_sign_in"
+                assert approved.json()["tester"]["hours"] == "on_sign_in"
+                assert "3 hours" in approved.json()["hours_words"]
                 not_yet = await http.post(f"{ADMIN}/{ref}/email", headers=WRITE)
                 assert not_yet.status_code == 422 and "Google Group" in not_yet.json()["detail"]
                 added = await http.post(
@@ -312,6 +317,10 @@ def test_a_tester_applies_is_reviewed_added_emailed_and_seen_in_the_app(
                 assert (
                     await http.post(f"{ADMIN}/{uuid4()}/email", headers=WRITE)
                 ).status_code == 404
+                refused_hours = await http.post(f"{ADMIN}/{declined_ref}/hours", headers=WRITE)
+                assert refused_hours.status_code == 422
+                given = await http.post(f"{ADMIN}/{ref}/hours", headers=WRITE)
+                assert given.status_code == 200 and given.json()["hours"] == "on_sign_in"
 
                 # The export: a spreadsheet of the same list.
                 export = await http.get(f"{ADMIN}/export.csv")

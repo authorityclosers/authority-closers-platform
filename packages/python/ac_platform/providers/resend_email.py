@@ -258,8 +258,9 @@ def _tester_welcome(first_name: str, email: str) -> RenderedEmail:
         f'<h1 style="margin:0 0 14px 0;font-size:24px;line-height:1.3;color:{_INK};'
         f'font-weight:700">{heading}</h1>'
         f'<p style="margin:0 0 8px 0;font-size:15px;line-height:1.6;color:{_BODY}">'
-        "You&#39;ve been added to the Sales X-Ray early-access group. Three steps on your "
-        "Android phone and you&#39;re in. It takes about two minutes.</p></td></tr>"
+        "You&#39;ve been added to the Sales X-Ray early-access group, and you have "
+        "<b>3 hours of call analysis</b> to try. Three steps on your Android phone and "
+        "you&#39;re in. It takes about two minutes.</p></td></tr>"
         '<tr><td style="padding:16px 36px 4px 36px">'
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0">{steps}'
         "</table></td></tr>"
@@ -286,8 +287,8 @@ def _tester_welcome(first_name: str, email: str) -> RenderedEmail:
     )
     text = (
         f"{heading}.\n\n"
-        "You've been added to the Sales X-Ray early-access group. Three steps on your Android "
-        "phone:\n\n"
+        "You've been added to the Sales X-Ray early-access group, and you have 3 hours of call "
+        "analysis to try. Three steps on your Android phone:\n\n"
         f"1. Join the test: open {TESTER_OPT_IN_URL} while signed in as {email} and tap "
         '"Become a tester".\n'
         f"2. Install the app: {TESTER_PLAY_URL} (Google Play must use the same Google "

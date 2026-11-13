@@ -46,6 +46,25 @@ export const ROLE_LABEL: Record<string, string> = {
 
 export type EmailStatus = "queued" | "sent" | "failed";
 
+/**
+ * Every tester's 3 hours of call analysis (owner, 13 Nov 2026): granted in
+ * their organisation's workspace, the personal trial, still due (an
+ * organisation member without the grant yet) or with their first sign-in.
+ */
+export type Hours = "granted" | "trial" | "due" | "on_sign_in";
+export const HOURS_LABEL: Record<Hours, string> = {
+  granted: "3 h analysis",
+  trial: "3 h analysis (trial)",
+  due: "3 h due",
+  on_sign_in: "3 h on sign-up",
+};
+export const HOURS_TONE: Record<Hours, Tone> = {
+  granted: "good",
+  trial: "good",
+  due: "warn",
+  on_sign_in: "neutral",
+};
+
 export type Tester = Readonly<{
   id: string;
   email: string;
@@ -69,6 +88,7 @@ export type Tester = Readonly<{
   webLastAt: string | null;
   bugs: number;
   note: string | null;
+  hours: Hours | null;
 }>;
 
 export type TesterPage = Readonly<{
@@ -106,6 +126,7 @@ export function normalizeTester(raw: unknown): Tester | null {
   if (!id || !UUID.test(id) || !email || !isStage(item.stage)) return null;
   const status = item.email_status;
   const via = item.emailed_via;
+  const hours = item.hours;
   return {
     id,
     email,
@@ -135,6 +156,13 @@ export function normalizeTester(raw: unknown): Tester | null {
     webLastAt: text(item.web_last_at, 40),
     bugs: count(item.bugs),
     note: text(item.note, 500),
+    hours:
+      hours === "granted" ||
+      hours === "trial" ||
+      hours === "due" ||
+      hours === "on_sign_in"
+        ? hours
+        : null,
   };
 }
 

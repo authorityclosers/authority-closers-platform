@@ -18,6 +18,10 @@ GET  /v1/admin/testers/export.csv
 POST /v1/admin/testers/{id}/decision   {decision: approve|decline, note?}
 POST /v1/admin/testers/{id}/group      {send_email}   "Added to the group" (+ the email)
 POST /v1/admin/testers/{id}/email      The welcome email (again)
+POST /v1/admin/testers/{id}/hours      Their 3 hours of call analysis (hours.py)
+
+Approving, "Added" and the email also give the tester their 3 hours of call analysis where
+they are due (an organisation member's audited grant, approved by the Admin who acted).
 
 A tester's {id} is their first row's id, never their email, so no address rides in a URL.
 """
@@ -45,7 +49,7 @@ from ac_platform.http.auth import (
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
-from ac_platform.testers import store
+from ac_platform.testers import hours, store
 
 PRIVATE = {"Cache-Control": "private, no-store"}
 
@@ -190,6 +194,12 @@ def install_testers_http(app: FastAPI, ctx: RouteContext) -> None:
 
     async def read(request: Request, auth: AuthenticatedTransaction) -> dict[str, Any]:
         page = await store.listing(auth.database, now=datetime.now(UTC))
+        states = await hours.hours_for(
+            auth.database, settings, [item["email"] for item in page["items"]]
+        )
+        for item in page["items"]:
+            item["hours"] = states.get(item["email"], "on_sign_in")
+        page["tester_hours"] = hours.TESTER_HOURS
         # A staff key (agents) reads stages and counts; addresses and names stay masked.
         if getattr(request.state, "staff_key_row", None) is not None:
             for item in page["items"]:
@@ -229,12 +239,34 @@ def install_testers_http(app: FastAPI, ctx: RouteContext) -> None:
         email = await auth.database.scalar(select(Person.email).where(Person.id == actor.person_id))
         return actor.person_id, email
 
-    async def answer(auth: AuthenticatedTransaction, tester_id: UUID) -> dict[str, Any]:
-        page = await store.listing(auth.database, now=datetime.now(UTC))
+    async def answer(
+        request: Request,
+        auth: AuthenticatedTransaction,
+        tester_id: UUID,
+        given: hours.HoursOutcome | None = None,
+    ) -> dict[str, Any]:
+        page = await read(request, auth)
         for item in page["items"]:
             if item["id"] == str(tester_id):
-                return {"tester": item, "counts": page["counts"]}
+                body: dict[str, Any] = {"tester": item, "counts": page["counts"]}
+                if given is not None:
+                    body["hours"] = given
+                    body["hours_words"] = hours.HOURS_WORDS[given]
+                return body
         raise HTTPException(404, "No tester has that reference.")
+
+    async def give(
+        auth: AuthenticatedTransaction, tester_id: UUID, person_id: UUID
+    ) -> hours.HoursOutcome:
+        standing = await store.standing_for(auth.database, tester_id)
+        return await hours.give_tester_hours(
+            auth.database,
+            settings,
+            email=standing.email,
+            approver_person_id=person_id,
+            session_id=getattr(auth.resolved.actor, "session_id", None),
+            request_id=None,
+        )
 
     def refused(error: Exception) -> HTTPException:
         if isinstance(error, store.TesterNotFound):
@@ -263,7 +295,8 @@ def install_testers_http(app: FastAPI, ctx: RouteContext) -> None:
             )
         except (store.TesterRefused, store.TesterNotFound) as error:
             raise refused(error) from None
-        return await answer(auth, tester_id)
+        given = await give(auth, tester_id, person_id) if command.decision == "approve" else None
+        return await answer(request, auth, tester_id, given)
 
     @admin.post("/{tester_id}/group")
     async def group(
@@ -285,7 +318,7 @@ def install_testers_http(app: FastAPI, ctx: RouteContext) -> None:
             )
         except (store.TesterRefused, store.TesterNotFound) as error:
             raise refused(error) from None
-        return await answer(auth, tester_id)
+        return await answer(request, auth, tester_id, await give(auth, tester_id, person_id))
 
     @admin.post("/{tester_id}/email")
     async def email(
@@ -302,7 +335,26 @@ def install_testers_http(app: FastAPI, ctx: RouteContext) -> None:
             )
         except (store.TesterRefused, store.TesterNotFound) as error:
             raise refused(error) from None
-        return await answer(auth, tester_id)
+        return await answer(request, auth, tester_id, await give(auth, tester_id, person_id))
+
+    @admin.post("/{tester_id}/hours")
+    async def tester_hours(
+        tester_id: UUID,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        await admit(request, response, auth, write=True)
+        person_id, _ = await acting(auth)
+        try:
+            standing = await store.standing_for(auth.database, tester_id)
+        except store.TesterNotFound as error:
+            raise refused(error) from None
+        if standing.decision == "declined":
+            raise HTTPException(422, "They were declined. Approve them first.")
+        if standing.decision != "approved" and standing.listed_at is None:
+            raise HTTPException(422, "Approve them first.")
+        return await answer(request, auth, tester_id, await give(auth, tester_id, person_id))
 
     app.include_router(admin)
 

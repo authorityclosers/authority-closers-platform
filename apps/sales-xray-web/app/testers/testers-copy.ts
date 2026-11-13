@@ -5,7 +5,7 @@
  */
 export const COPY = {
   title: "Test Sales X-Ray before everyone else",
-  lead: "Get our Android app early and help shape what it becomes.",
+  lead: "Use our Android app early, with 3 hours of call analysis to try.",
   cta: "Become a tester",
   ctaNote:
     "Android phones · Sign in with the Google account your Play Store uses",
