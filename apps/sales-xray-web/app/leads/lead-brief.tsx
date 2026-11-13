@@ -70,19 +70,28 @@ function asProspect(detail: LeadDetail): ProspectSummary {
   };
 }
 
-/** The newest call that was a conversation, by the same rule as the lead's
- *  numbers: the phone said connected, it has a recording, or the phone
- *  measured its talk. A dial nobody answered isn't a talk. */
+/** The newest call that was a conversation: the phone said connected, it has
+ *  a recording, or the phone measured its talk; or its seller answered "We
+ *  talked" after it (Redmi QA batch 10, 13 Nov 2026: "No previous
+ *  conversation" above "talked to them: Interested"). That answer is the
+ *  seller's own record, so the briefing goes by it; the numbers still count
+ *  phone evidence only. A dial nobody answered isn't a talk. */
 export function lastTalkOf(events: readonly LeadEvent[]): LeadEvent | null {
-  return (
-    events.find(
-      (event) =>
-        event.kind === "call" &&
-        (event.connected === true ||
-          !!event.submission_id ||
-          (!!event.via && (event.duration_seconds ?? 0) > 0)),
-    ) ?? null
-  );
+  for (const [index, event] of events.entries()) {
+    if (
+      event.kind === "call" &&
+      (event.connected === true ||
+        !!event.submission_id ||
+        (!!event.via && (event.duration_seconds ?? 0) > 0))
+    )
+      return event;
+    // Newest first: the call before a "We talked" is that talk.
+    if (event.kind === "result" && event.connected && !event.answer_undone)
+      return (
+        events.slice(index + 1).find((item) => item.kind === "call") ?? event
+      );
+  }
+  return null;
 }
 
 /** "3 Nov · 12 min": its day, and its length only where the phone or the
