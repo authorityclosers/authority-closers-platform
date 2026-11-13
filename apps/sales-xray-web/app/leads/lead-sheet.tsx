@@ -407,6 +407,26 @@ function useTyping(): boolean {
   return typing;
 }
 
+/** The lead's tries, one count for its page: the call history's "Tried 5
+ *  times" and the after-call question's "Tries: 5" (Redmi QA batch 12, 13 Nov
+ *  2026: the question said 3 under a history that said 5). Its attempts, its
+ *  calls, or the calls the phone logged by itself, whichever is most. */
+export function triesOf(detail: {
+  events: LeadDetail["events"];
+  // Written out: this file's own Pick (the follow-up picker's) hides TypeScript's.
+  lead: { attempts?: number | null; calls?: number | null };
+}): number {
+  const phoneTalks = detail.events.filter(
+    (event) =>
+      event.kind === "call" && event.via === "phone" && event.connected,
+  ).length;
+  return Math.max(
+    detail.lead.attempts ?? 0,
+    detail.lead.calls ?? 0,
+    phoneTalks,
+  );
+}
+
 /**
  * The after-call sheet's two lines of context (competitor teardown 17, 1 Nov
  * 2026; NeoDove's dispose popup, HubSpot's call header): the last answer and
@@ -433,7 +453,7 @@ export function lastWord(
         .filter(Boolean)
         .join(" · ")
     : null;
-  const count = detail.lead.attempts ?? 0;
+  const count = triesOf(detail);
   const tries = count
     ? [
         `Tries: ${count}`,
@@ -1858,7 +1878,7 @@ export function storyLines(
     results.filter((event) => event.connected).length,
     detail.events.filter(talkedCall).length,
   );
-  const tries = Math.max(lead.attempts, lead.calls, phoneTalks.length);
+  const tries = triesOf(detail);
   if (!tries) lines.push("Not called yet.");
   else
     lines.push(
