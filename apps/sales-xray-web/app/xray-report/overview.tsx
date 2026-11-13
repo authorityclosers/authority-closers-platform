@@ -591,33 +591,6 @@ export function OverviewScore({
         : "Not recorded yet";
   return (
     <div className={styles.xr} data-xray-part="overview">
-      <section
-        className={`${styles.card} ${styles.resultFirst}`}
-        aria-label="Call result"
-      >
-        <span className={styles.square} aria-hidden="true">
-          <TargetArrow />
-        </span>
-        <div>
-          <span className={styles.statLabel}>Recorded outcome</span>
-          <strong>{resultLabel}</strong>
-          {state.status === "ready" && state.record.can_edit && !recorded ? (
-            <button
-              type="button"
-              className={styles.save}
-              onClick={() => {
-                const editor = outcomeEditor.current;
-                editor?.scrollIntoView({ block: "center" });
-                editor?.querySelector<HTMLButtonElement>("button")?.focus({
-                  preventScroll: true,
-                });
-              }}
-            >
-              Record outcome
-            </button>
-          ) : null}
-        </div>
-      </section>
       {/* The summary card is the AI notes: Recap, Next step and Copy, each
           rated, with the talk line (competitor teardown 24, 1 Nov 2026). */}
       <AiNotes
@@ -787,6 +760,41 @@ export function OverviewScore({
         </div>
       </section>
 
+      {/* The call's outcome comes after the read (orchestrator, 13 Nov 2026,
+          Flow 2 G6: the report's first job is what happened and what to
+          improve). A filled Record outcome only while the call has none and
+          the viewer may set it; otherwise one quiet line. */}
+      {state.status === "ready" && state.record.can_edit && !recorded ? (
+        <section
+          className={`${styles.card} ${styles.result}`}
+          aria-label="Call result"
+        >
+          <span className={styles.square} aria-hidden="true">
+            <TargetArrow />
+          </span>
+          <div>
+            <span className={styles.statLabel}>Recorded outcome</span>
+            <strong>{resultLabel}</strong>
+            <button
+              type="button"
+              className={styles.save}
+              onClick={() => {
+                const editor = outcomeEditor.current;
+                editor?.scrollIntoView({ block: "center" });
+                editor?.querySelector<HTMLButtonElement>("button")?.focus({
+                  preventScroll: true,
+                });
+              }}
+            >
+              Record outcome
+            </button>
+          </div>
+        </section>
+      ) : (
+        <p className={styles.resultLine}>
+          Recorded outcome · <strong>{resultLabel}</strong>
+        </p>
+      )}
       <div ref={outcomeEditor}>
         <DealOutcomeBar
           example={view.illustrative ? view.outcome.kind : null}

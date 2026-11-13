@@ -400,6 +400,40 @@
   color: var(--xr-text-2);
 }
 
+/* Phones: the mark beside the title only, the words across the card's whole
+   width (Flow 2 walk, 13 Nov 2026, 363 px at 130 %: "Biggest Improvement
+   Area" ran three or four words a line beside its 50 px mark). */
+@media (max-width: 899.98px) {
+  .highlight {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px 12px;
+  }
+
+  .highlight > div {
+    display: contents;
+  }
+
+  .highlight .highlightTitle {
+    margin: 0;
+  }
+
+  .highlight .body {
+    grid-column: 1 / -1;
+  }
+
+  .highlight .disc {
+    width: 40px;
+    height: 40px;
+  }
+
+  .highlight .disc svg {
+    width: 22px;
+    height: 22px;
+  }
+}
+
 .dealBar {
   align-items: center;
   display: flex;
@@ -1802,31 +1836,45 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* The answer comes before statistics and the detailed analysis. */
-.resultFirst {
+/* The call's outcome, after the read: a card with Record outcome while the
+   call has none (Flow 2, G6). */
+.result {
   display: flex;
   align-items: flex-start;
   gap: 12px;
 }
 
-.resultFirst > div {
+.result > div {
   min-width: 0;
   display: grid;
   gap: 4px;
   overflow-wrap: anywhere;
 }
 
-.resultFirst strong {
+.result strong {
   font-size: var(--sx-text-md);
   line-height: var(--sx-leading-24);
 }
 
-.resultFirst .save {
+.result .save {
   background: var(--sx-accent);
   color: var(--sx-accent-ink);
   justify-self: start;
   min-height: 44px;
   margin-top: 4px;
+}
+
+/* Once recorded, or where it can't be set here, one quiet line. */
+.resultLine {
+  margin: 0;
+  color: var(--xr-text-2);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.resultLine strong {
+  color: var(--xr-text);
+  font-weight: 600;
 }
 .showAll {
   display: flex;
