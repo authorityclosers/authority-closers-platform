@@ -39,6 +39,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.broker_router import FixedProviderRouter, ProviderRoute
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
+from ac_platform.conversation_intelligence.limits import TRIAL_SECONDS
 from ac_platform.conversation_intelligence.models import (
     ConversationInferenceTask,
     ConversationProcessingPlan,
@@ -546,10 +547,11 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     assert session_read.status == 200
                     assert (await session_read.json()) == {
                         "state": "account",
+                        # A new account's trial, three hours (owner, 13 Nov 2026).
                         "allowance": {
-                            "allowance_seconds": 3600,
+                            "allowance_seconds": TRIAL_SECONDS,
                             "committed_seconds": 0,
-                            "available_seconds": 3600,
+                            "available_seconds": TRIAL_SECONDS,
                         },
                     }
                     await expect(

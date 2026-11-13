@@ -9,6 +9,7 @@ from ac_platform.billing.catalogue import StaticCatalogue
 from ac_platform.billing.checkout import CheckoutService
 from ac_platform.billing.commands import Caller
 from ac_platform.billing.trial import TrialPolicy, trial_enabled_for_tenant
+from ac_platform.conversation_intelligence.limits import TRIAL_SECONDS
 from ac_platform.payments.registry import PaymentProviderRegistry
 from ac_platform.tenancy.models import Membership, Organisation
 from tests.unit.billing.test_ledger import T0
@@ -16,7 +17,7 @@ from tests.unit.billing.test_ledger import state as state  # noqa: F401
 
 
 @pytest.mark.parametrize("personal", [True, False])
-@pytest.mark.parametrize("version,trial_seconds", [("v1", 3600), ("v2", 6000)])
+@pytest.mark.parametrize("version,trial_seconds", [("v1", TRIAL_SECONDS), ("v2", 6000)])
 async def test_checkout_projection_keeps_grants_and_tenant_trial(
     state, monkeypatch, personal, version, trial_seconds
 ):
