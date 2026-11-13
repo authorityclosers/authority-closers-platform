@@ -899,6 +899,8 @@ export function CallOutcome({
     <section
       ref={ref}
       className={styles.outcome}
+      // The corner's news waits while this is open (notice-center.tsx).
+      data-after-call=""
       data-attention={attention || undefined}
       aria-labelledby={`${id}-q`}
     >
