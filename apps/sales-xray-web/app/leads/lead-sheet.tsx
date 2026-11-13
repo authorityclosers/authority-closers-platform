@@ -1598,6 +1598,11 @@ export function eventText(event: LeadEvent): {
           : text;
       }
       if (event.recording) return { title: `${who} added the call recording` };
+      // A Call-button dial: nothing here says the call went through, and its
+      // seconds were time away from the app (seller Flow 1, F2, 13 Nov 2026:
+      // "called · 7s" for a back-out from the dialler; honest numbers).
+      if (event.estimated && !event.simulated)
+        return { title: `${who} dialled` };
       return {
         title: `${who} ${event.simulated ? "made a sample call" : "called"}${
           event.duration_seconds

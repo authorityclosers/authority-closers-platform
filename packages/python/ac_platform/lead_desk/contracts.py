@@ -476,6 +476,9 @@ class LeadEventView(Model):
     simulated: bool | None = None
     recording: bool | None = None
     duration_seconds: int | None = None
+    # A Call-button dial: its seconds are the time away from the app, never talk time, so
+    # the lead's history says "dialled", not "called · 7s" (seller Flow 1, F2, 13 Nov 2026).
+    estimated: bool | None = None
     changed: tuple[str, ...] | None = None
     channel: str | None = None
     template_label: str | None = None

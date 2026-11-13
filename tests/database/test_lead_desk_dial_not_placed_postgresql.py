@@ -44,6 +44,9 @@ def test_a_dial_never_placed_is_no_call(postgres_harness: Any, tmp_path: Path) -
             )
             assert dialled.status_code == 200, dialled.text
             assert dialled.json()["lead"]["calls"] == 1
+            # The lead's history knows it for a dial, so it never reads as a call's length.
+            [dial] = [event for event in dialled.json()["events"] if event["kind"] == "call"]
+            assert dial["estimated"] is True
             desk = (await here.client.get(BASE)).json()
             assert desk["numbers"]["calls"] == 1
             [waiting] = [row for row in desk["unanswered"] if row["lead_id"] == lead]

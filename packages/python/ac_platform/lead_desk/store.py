@@ -2870,6 +2870,7 @@ class LeadDesk:
             if isinstance(data.get("changed"), list)
             else None,
             simulated=data.get("simulated") if isinstance(data.get("simulated"), bool) else None,
+            estimated=True if event.kind == "call" and data.get("estimated") is True else None,
             recording=True if recording is not None or data.get("recording") is True else None,
             duration_seconds=(call_seconds(call) or None)
             if call is not None
