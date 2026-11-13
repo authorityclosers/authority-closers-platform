@@ -116,6 +116,18 @@
   margin-top: 6px;
 }
 
+/* A tappable tile's chevron, after its number, in muted ink (seller Flow 1,
+   F4, 13 Nov 2026: tiles opened lists and looked static). Sized with the
+   tile's words, not its big number. */
+.go {
+  display: inline-block;
+  width: var(--sx-text-md);
+  height: var(--sx-text-md);
+  margin-left: 4px;
+  color: var(--sx-muted);
+  vertical-align: middle;
+}
+
 /* Press: a 10 % state layer in 90 ms; hover 6 % on a computer. */
 .counter::after,
 .done a::after {

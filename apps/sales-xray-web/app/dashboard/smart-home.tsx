@@ -15,7 +15,7 @@
  *    later on we can add it").
  */
 
-import { Check, Phone } from "lucide-react";
+import { Check, ChevronRight, Phone } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -51,6 +51,10 @@ export function SmartCounter({
   /** Under the caption, e.g. TaskMarks. */
   marks?: ReactNode;
 }) {
+  // A tile that opens its list says so with a chevron after its number (the
+  // 13 Nov 2026 meeting: what is tappable must look tappable; seller Flow 1,
+  // F4), where a name that wraps at 130 % text can't leave it on a line of
+  // its own. One that didn't load opens nothing, and has none.
   const body = (
     <>
       <span className={styles.icon} data-icon="" aria-hidden="true">
@@ -63,6 +67,7 @@ export function SmartCounter({
         data-unknown={unknown || undefined}
       >
         {unknown ? "–" : value == null ? " " : value}
+        {unknown || value == null ? null : <Go />}
       </strong>
       <span className={styles.note}>{note}</span>
       {marks ? <span className={styles.marks}>{marks}</span> : null}
@@ -82,6 +87,11 @@ export function SmartCounter({
       {body}
     </Link>
   );
+}
+
+/** The chevron after a tappable tile's number: it opens something. */
+function Go() {
+  return <ChevronRight className={styles.go} aria-hidden="true" data-go="" />;
 }
 
 /** One box per task due today, the done ones ticked (H3's "task due"). At
