@@ -130,7 +130,7 @@ def activity_window(
 async def summarize(
     desk: LeadDesk, *, days: int = 30, team: bool = False, person: UUID | None = None
 ) -> ActivitySummary:
-    from ac_platform.lead_desk.store import IST, person_name
+    from ac_platform.lead_desk.store import IST, NOT_OUT, person_name
 
     if not 1 <= days <= 90:
         raise DeskError(422, "Choose between 1 and 90 days.")
@@ -143,6 +143,13 @@ async def summarize(
         desk, after, desk.now + timedelta(microseconds=1), person=person, team=team
     )
     local_day = cast(func.timezone(str(IST), LeadEvent.created_at), Date)
+    # Calls out only, as Home's Attempted and Seat use count them (store.call_out): a call
+    # in, missed, rejected or blocked is no call made (Dipak's honest numbers; ux-audit N8,
+    # 8 Nov 2026: Rohan Patil 346 calls here, 316 in Seat use, the 30 his phone's calls in).
+    call_out = and_(
+        LeadEvent.kind == "call",
+        func.coalesce(LeadEvent.data["direction"].as_string(), "").not_in(sorted(NOT_OUT)),
+    )
     connected = or_(
         LeadEvent.data["connected"].as_boolean().is_(True),
         LeadEvent.data["duration_seconds"].as_integer() > 0,
@@ -152,8 +159,8 @@ async def summarize(
             select(
                 LeadEvent.actor_person_id,
                 local_day,
-                func.count().filter(LeadEvent.kind == "call"),
-                func.count().filter(and_(LeadEvent.kind == "call", connected)),
+                func.count().filter(call_out),
+                func.count().filter(and_(call_out, connected)),
                 func.count().filter(LeadEvent.kind == "note"),
                 func.count().filter(LeadEvent.kind == "stage"),
                 func.count(),

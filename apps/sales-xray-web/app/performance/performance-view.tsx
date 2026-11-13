@@ -361,6 +361,10 @@ export function PerformanceView({
         label="Performance for"
         value={period}
         onChange={(key) => {
+          // The period already shown stays: no read follows a tap on it, so
+          // loading would never end (Redmi QA on the owner's production
+          // build, 13 Nov 2026: Growth > Today sat on its skeleton).
+          if (key === period) return;
           // Loading until the new period's read lands.
           setState({ status: "loading" });
           setOpened(null);

@@ -15,13 +15,7 @@
  * Only real numbers: a missing value is a dash, a real zero shows 0.
  */
 
-import {
-  useEffect,
-  useId,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { useEffect, useId, useState, type CSSProperties } from "react";
 
 import { breakLength } from "../dashboard/home-today";
 import { displayName } from "../display-name";
@@ -61,46 +55,6 @@ const share = (part: number, whole: number) =>
 /** A delay so the parts of one card arrive in turn (none when motion is off). */
 const step = (index: number) =>
   ({ "--gv-delay": `${index * 60}ms` }) as CSSProperties;
-
-/** Inbound and Cold side by side in one bar, drawn on one scale. */
-function SplitBar({
-  inbound,
-  cold,
-  label,
-  thick = false,
-}: {
-  inbound: number;
-  cold: number;
-  label: string;
-  thick?: boolean;
-}) {
-  return (
-    <span
-      className={styles.split}
-      data-thick={thick ? "" : undefined}
-      role="img"
-      aria-label={`${label}: Inbound ${n(inbound)}, Cold ${n(cold)}`}
-    >
-      {inbound > 0 ? (
-        <span data-side="inbound" style={{ flexGrow: inbound }} />
-      ) : null}
-      {cold > 0 ? <span data-side="cold" style={{ flexGrow: cold }} /> : null}
-    </span>
-  );
-}
-
-function Legend({ inbound, cold }: { inbound: ReactNode; cold: ReactNode }) {
-  return (
-    <span className={styles.legend}>
-      <span data-side="inbound">
-        Inbound <b>{inbound}</b>
-      </span>
-      <span data-side="cold">
-        Cold <b>{cold}</b>
-      </span>
-    </span>
-  );
-}
 
 /** One share as a ring that draws itself, its percent in the middle. */
 function Ring({
@@ -281,7 +235,7 @@ export function PulseTiles({
           <strong className={styles.figure}>{talkTime(talked)}</strong>
           <span className={styles.meta}>
             {connected
-              ? `${talkTime(talked / connected)} a connected call`
+              ? `About ${talkTime(talked / connected)} per connected call`
               : "No connected calls"}
           </span>
         </div>
@@ -579,6 +533,12 @@ function RhythmBars({ rhythm }: { rhythm: Rhythm }) {
   const { slots } = rhythm;
   const most = Math.max(1, ...slots.map((slot) => slot.calls));
   const every = slots.length > 14 ? 7 : 3;
+  // Each bar's number on it, so the chart reads without a tap (Redmi QA on
+  // the owner's production build, 13 Nov 2026: bars had no counts). Up to 14
+  // bars, every bar with calls; the hours and the month, the busiest only.
+  const peak = busiest(slots);
+  const counted = (slot: Slot) =>
+    slot.calls > 0 && (slots.length <= 14 || slot.key === peak?.key);
   return (
     <div
       className={styles.bars}
@@ -595,7 +555,13 @@ function RhythmBars({ rhythm }: { rhythm: Rhythm }) {
               ...step(index),
               height: `${Math.max(slot.calls ? 4 : 0, (slot.calls / most) * 100)}%`,
             }}
-          />
+          >
+            {counted(slot) ? (
+              <span className={styles.barCount} aria-hidden="true">
+                {n(slot.calls)}
+              </span>
+            ) : null}
+          </span>
           <span className={styles.barLabel} aria-hidden="true">
             {index % every === 0 ? slot.short : ""}
           </span>
@@ -613,7 +579,6 @@ export function DayRhythm({
   effort: Effort;
   period: GrowthPeriod;
 }) {
-  const { inbound, cold } = effort;
   const attempted = both(effort, "attempted");
   const connected = both(effort, "connected");
   const talkers = [...effort.sellers]
@@ -636,16 +601,6 @@ export function DayRhythm({
       <div className={styles.big} style={step(0)}>
         <span className={styles.label}>Calls attempted</span>
         <strong className={styles.bigFigure}>{n(attempted)}</strong>
-        <SplitBar
-          inbound={inbound.attempted}
-          cold={cold.attempted}
-          label="Calls attempted"
-          thick
-        />
-        <Legend
-          inbound={`${n(inbound.attempted)} · ${share(inbound.attempted, attempted)}`}
-          cold={`${n(cold.attempted)} · ${share(cold.attempted, attempted)}`}
-        />
       </div>
       <div className={styles.big} style={step(1)}>
         <span className={styles.label}>Connected</span>
@@ -661,10 +616,6 @@ export function DayRhythm({
             <span className={styles.meta}>of {n(attempted)} attempted</span>
           </span>
         </span>
-        <Legend
-          inbound={`${n(inbound.connected)} · ${share(inbound.connected, inbound.attempted)}`}
-          cold={`${n(cold.connected)} · ${share(cold.connected, cold.attempted)}`}
-        />
       </div>
       <div className={styles.big} style={step(2)}>
         <span className={styles.label}>Talk time</span>
@@ -675,7 +626,7 @@ export function DayRhythm({
           // A seller's own Growth (owner, 10 Nov 2026: no tables in 2026).
           <p className={styles.meta}>
             {connected
-              ? `${talkTime(both(effort, "talk_seconds") / connected)} a connected call`
+              ? `About ${talkTime(both(effort, "talk_seconds") / connected)} per connected call`
               : "No connected calls yet."}
           </p>
         ) : talkers.length ? (

@@ -22,7 +22,7 @@ vi.mock("../acquisition-client", async (importOriginal) => ({
 }));
 
 import { resetBackCloseForTests } from "../ui/back-close";
-import { AskDipakSheet } from "./ask-deepak";
+import { AskDipakSheet, standing } from "./ask-deepak";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -183,6 +183,35 @@ it("says where a lead stands and its last call even when that call has no report
   await settle();
   expect(page()).toMatch(/Interested · last call .+, no answer/);
   expect(calls.report).not.toHaveBeenCalled();
+});
+
+it("joins each call to its own answer, and a dial with nothing saved is no call", () => {
+  // Redmi QA on the owner's production build, 13 Nov 2026: a dial at 3:27 pm
+  // that never became a call (put away with "Didn't call") showed as "last
+  // call today 3:27 pm, talked", the talk being the 10 Nov call's answer.
+  const lead = (events: object[]) =>
+    standing(detail(events) as Parameters<typeof standing>[0]);
+  const talked = [
+    event("result", { at: "2026-11-10T13:25:00+00:00", connected: true }),
+    event("call", { at: "2026-11-10T13:23:00+00:00", outcome: "connected" }),
+  ];
+  const dial = event("call", {
+    at: "2026-11-13T09:57:00+00:00",
+    outcome: "unknown",
+  });
+  expect(lead([dial, ...talked])).toBe(lead(talked));
+  expect(lead(talked)).toMatch(/^Interested · last call .+, talked$/);
+  expect(lead([dial, ...talked])).not.toContain("3:27");
+  // A newer call with no answer yet never borrows the older call's.
+  const rang = event("call", {
+    at: "2026-11-13T09:57:00+00:00",
+    outcome: "not_connected",
+  });
+  expect(lead([rang, ...talked])).toMatch(/, no answer$/);
+  const waiting = event("call", { at: "2026-11-13T09:57:00+00:00" });
+  expect(lead([waiting, ...talked])).toMatch(/last call [^,]+$/);
+  // A dial alone: not called yet.
+  expect(lead([dial])).toBe("Interested · not called yet");
 });
 
 it("opened from a lead without its id, it has already searched its name", async () => {

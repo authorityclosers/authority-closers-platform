@@ -23,6 +23,7 @@ import { Panel, Skeleton } from "../ui/kit";
 import {
   NotifyError,
   noPhoneWords,
+  ALERTS_PHONE_ON,
   readNotify,
   saveNotify,
   testNotify,
@@ -176,6 +177,27 @@ export function NotificationPrefs() {
       },
     );
     return () => controller.abort();
+  }, []);
+  // This phone's alerts start on this page (AlertsCard): read the phones
+  // again, so "This phone isn't getting alerts yet" goes once it gets them
+  // (Redmi QA on the owner's production build, 13 Nov 2026).
+  useEffect(() => {
+    const controller = new AbortController();
+    const again = () =>
+      readNotify(controller.signal).then(
+        (value) => {
+          if (!controller.signal.aborted)
+            setPrefs((was) => (was ? { ...was, phones: value.phones } : was));
+        },
+        () => {
+          // The phones line stays as it was.
+        },
+      );
+    window.addEventListener(ALERTS_PHONE_ON, again);
+    return () => {
+      controller.abort();
+      window.removeEventListener(ALERTS_PHONE_ON, again);
+    };
   }, []);
   if (away) return null;
   if (!prefs) return <Reading />;

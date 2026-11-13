@@ -136,7 +136,9 @@ export function SettingsShell({ children }: { children: ReactNode }) {
       </nav>
       <div className={styles.content} id="settings-content">
         {section ? (
-          <>
+          // The chevron beside the section's name, not on a row of its own
+          // (Redmi QA on the owner's production build, 13 Nov 2026).
+          <div className={styles.titleRow}>
             <Link
               href="/settings"
               className={styles.back}
@@ -149,7 +151,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
               <h1>{section.label}</h1>
               {promised ? <p>{section.hint}</p> : null}
             </header>
-          </>
+          </div>
         ) : null}
         {children}
       </div>

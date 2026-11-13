@@ -67,20 +67,47 @@ export function leadNotes(detail: LeadDetail): LeadEvent[] {
  * report showed only its follow-up.
  */
 export function standing(detail: LeadDetail): string {
-  const call = detail.events.find((event) => event.kind === "call");
-  const answer = detail.events.find(
+  const answers = detail.events.filter(
     (event) => event.kind === "result" && !event.answer_undone,
   );
-  const how = answer
-    ? answer.connected
+  const said = (answer: LeadDetail["events"][number]) =>
+    answer.connected
       ? "talked"
-      : (answer.reason_label ?? "no answer").toLowerCase()
-    : null;
-  const last = call ?? answer;
+      : (answer.reason_label ?? "no answer").toLowerCase();
+  // Each call with its own answer: the newest one saved at or after it and
+  // before the next call. A time from one call never carries another call's
+  // answer (Redmi QA on the owner's production build, 13 Nov 2026: "last call
+  // today 3:27 pm, talked" joined a dial to the 10 Nov call's answer).
+  let last: { at: string; how: string | null } | null = null;
+  let newer = Infinity;
+  for (const call of detail.events.filter((event) => event.kind === "call")) {
+    const at = Date.parse(call.at);
+    const answer = answers.find((item) => {
+      const saved = Date.parse(item.at);
+      return saved >= at && saved < newer;
+    });
+    newer = at;
+    // A dial the phone never saw become a call, with nothing saved for it,
+    // is no call (that 3:27 pm dial was put away with "Didn't call").
+    if (!answer && call.outcome === "unknown") continue;
+    last = {
+      at: call.at,
+      how: answer
+        ? said(answer)
+        : call.outcome === "connected"
+          ? "talked"
+          : call.outcome === "not_connected"
+            ? "no answer"
+            : null,
+    };
+    break;
+  }
+  // An answer saved with no call on record still says when and how.
+  if (!last && answers[0]) last = { at: answers[0].at, how: said(answers[0]) };
   return [
     detail.lead.stage_label,
     last
-      ? `last call ${when(last.at)}${how ? `, ${how}` : ""}`
+      ? `last call ${when(last.at)}${last.how ? `, ${last.how}` : ""}`
       : "not called yet",
   ]
     .filter(Boolean)

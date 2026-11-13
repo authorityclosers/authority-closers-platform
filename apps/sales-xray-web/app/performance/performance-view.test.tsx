@@ -284,6 +284,22 @@ it("shows a seller only their own, and reads 7 days on request", async () => {
   expect(asked).toContain("/v1/lead-desk/revenue/breakdown?days=7");
 });
 
+it("keeps the period shown when it is tapped again, never a skeleton", async () => {
+  // Redmi QA on the owner's production build, 13 Nov 2026: tapping Today on
+  // Growth, which opens on Today, left its skeleton up for good.
+  answer(effort(false));
+  await mount();
+  const reads = asked.length;
+  const today = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent === "Today",
+  );
+  await act(async () => today?.click());
+  await act(async () => Promise.resolve());
+  expect(host.querySelector("[data-loading]")).toBeNull();
+  expect(host.querySelector("details")?.open).toBe(true);
+  expect(asked).toHaveLength(reads);
+});
+
 // Competitor teardown #18 (1 Nov 2026): a column's head sorts the sellers,
 // Export takes them as sorted, and Month reads this month so far.
 it("sorts the sellers by a column, exports them, and reads the month", async () => {
