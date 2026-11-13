@@ -5,7 +5,7 @@ import styles from "./calls-library.module.css";
 
 /** The loaded strip's labels, with a placeholder as long as its usual line. */
 const FIGURES = [
-  ["Calls", "8em"],
+  ["Saved calls", "8em"],
   ["Reports ready", "9em"],
   ["Call time", "8em"],
   ["Next step agreed", "10em"],
@@ -30,7 +30,7 @@ export function CallsBodySkeleton({
             <div className={styles.kpi} key={label}>
               <dt>{label}</dt>
               {/* The number's own line (its <b>), so the tile keeps the
-                  loaded height and the name stays beside it. */}
+                  loaded height. */}
               <dd>
                 <b className={styles.phValue}>
                   <Skeleton width={48} height={16} />

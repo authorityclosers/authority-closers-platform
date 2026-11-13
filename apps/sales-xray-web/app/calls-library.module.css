@@ -189,6 +189,7 @@
 }
 
 .kpi {
+  position: relative;
   display: grid;
   align-content: start;
   gap: 4px;
@@ -257,6 +258,34 @@
 .spark i[data-empty] {
   background: var(--lx-line-strong);
   opacity: 1;
+}
+
+/* The whole tile is its button: it filters or sorts the list below. */
+.kpiTap {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.kpiTap:focus-visible {
+  outline: 2px solid var(--lx-teal);
+  outline-offset: -2px;
+}
+
+.kpi:has(.kpiTap:active) {
+  background: var(--lx-sunken);
+}
+
+@media (hover: hover) {
+  .kpi:has(.kpiTap:hover) {
+    border-color: var(--lx-line-strong);
+  }
 }
 
 /* ---------- List: selected call, toolbar, table ---------- */
@@ -1206,8 +1235,16 @@
     height: 18px;
   }
 
+  /* One row of the four figures, each its number over its name, so the first
+     saved report is on the first screen (the Orchestrator, 13 Nov 2026; the
+     2 x 2 tiles took 170 px). What each counts stays on the wide screen's
+     tiles; a tap filters or sorts the list below. */
   .strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* Next step agreed has the longest name: the most room, so it keeps to
+       two lines at 130% text (Saved calls needs the least). */
+    grid-template-columns:
+      minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1fr)
+      minmax(0, 1.15fr);
     gap: 0;
     overflow: hidden;
     border: 1px solid var(--sx-line);
@@ -1216,62 +1253,65 @@
     box-shadow: var(--lx-shadow-1);
   }
 
-  /* r17 S5: compact figures on phones, each name and number on one line
-     (the number takes its own line when both don't fit) and what it counts
-     below, so the list starts sooner. */
   .kpi {
     display: flex;
-    flex-wrap: wrap;
-    align-content: flex-start;
-    align-items: baseline;
-    column-gap: 8px;
-    row-gap: 2px;
-    padding: 10px 12px;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 4px;
     border: 0;
     border-radius: 0;
     background: none;
     box-shadow: none;
-  }
-
-  .kpi dt {
-    flex: 1 0 auto;
-  }
-
-  .kpi dd:first-of-type {
-    min-height: 0;
+    text-align: center;
   }
 
   .kpi + .kpi {
-    border-left: 0;
-  }
-
-  .kpi:nth-child(even) {
     border-left: 1px solid var(--lx-line);
   }
 
-  .kpi:nth-child(n + 3) {
-    border-top: 1px solid var(--lx-line);
+  /* Every name keeps two lines (a longer one may take a third, never cut)
+     and every value a box of two ("1 h 10 min" wraps), so the row is one
+     height loading, waiting and loaded (owner: no layout shift). */
+  .kpi dt {
+    display: -webkit-box;
+    order: 1;
+    min-height: 2lh;
+    overflow: hidden;
+    line-height: var(--sx-leading-16);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+
+  .kpi dd:first-of-type {
+    align-items: center;
+    justify-content: center;
+    height: 2lh;
+    min-height: 0;
+    font-size: var(--sx-text-md);
+    line-height: 1;
   }
 
   .kpi dd b {
-    font-size: var(--sx-text-md);
+    font-size: inherit;
+    line-height: inherit;
   }
 
-  /* Call time and Next step agreed can say "Reading reports" or "Not known
-     yet" before their number arrives, which does not fit beside the name.
-     Their value always takes its own line, so the tiles are the same height
-     loading, waiting and loaded (owner: no layout shift; 0.15 measured). */
-  .kpi:nth-child(n + 3) dd:first-of-type {
-    flex-basis: 100%;
+  /* "Reading reports", "Not known yet": still the words, in the number's box. */
+  .kpi .unknown {
+    display: -webkit-box;
+    overflow: hidden;
+    padding: 0;
+    font-size: var(--sx-text-xs);
+    line-height: var(--sx-leading-16);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
 
-  /* The first two are counts: their loading bar is the width of a short
-     number, so a narrow phone keeps name and number on one line. */
-  .skeleton .kpi:nth-child(-n + 2) .phValue > span {
-    width: 24px !important;
-  }
-
-  .spark {
+  .spark,
+  .kpiContext {
     display: none;
   }
 
@@ -1447,18 +1487,6 @@
   /* Tapping the row opens it; the trailing control is the preview. */
   .page[data-workspace] .open {
     display: none;
-  }
-
-  /* Two lines kept for every tile, so a tile's height never depends on
-     its words (and the loading outline lands on the same lines). */
-  .kpiContext {
-    display: -webkit-box;
-    flex-basis: 100%;
-    min-height: 2lh;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    white-space: normal;
   }
 
   .renameSlot {

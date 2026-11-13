@@ -1803,6 +1803,8 @@ function CallsLibraryContent({
         </section>
       ) : (
         <>
+          {/* Each figure is a button for the list below it (on phones one
+              row of four, the Orchestrator, 13 Nov 2026). */}
           {stats ? (
             <dl className={styles.strip} aria-label="Calls at a glance">
               <div className={styles.kpi} id="metric-calls">
@@ -1829,6 +1831,12 @@ function CallsLibraryContent({
                       ))}
                     </span>
                   ) : null}
+                  <button
+                    type="button"
+                    className={styles.kpiTap}
+                    aria-label="Show all saved calls"
+                    onClick={() => setFilter("all")}
+                  />
                 </dd>
                 <dd className={styles.kpiContext}>
                   {stats.thisWeek} in the last 7 days
@@ -1838,6 +1846,12 @@ function CallsLibraryContent({
                 <dt>Reports ready</dt>
                 <dd>
                   <b>{counts.ready}</b>
+                  <button
+                    type="button"
+                    className={styles.kpiTap}
+                    aria-label="Show calls with a report ready"
+                    onClick={() => setFilter(counts.ready ? "ready" : "all")}
+                  />
                 </dd>
                 <dd className={styles.kpiContext}>
                   {waiting.length
@@ -1853,6 +1867,12 @@ function CallsLibraryContent({
                   ) : (
                     <span className={styles.unknown}>Not known yet</span>
                   )}
+                  <button
+                    type="button"
+                    className={styles.kpiTap}
+                    aria-label="Sort calls longest first"
+                    onClick={() => setSort("longest")}
+                  />
                 </dd>
                 <dd className={styles.kpiContext}>
                   {time.calls
@@ -1876,6 +1896,12 @@ function CallsLibraryContent({
                             : "No reports yet"}
                     </span>
                   )}
+                  <button
+                    type="button"
+                    className={styles.kpiTap}
+                    aria-label="Show calls with a report ready"
+                    onClick={() => setFilter(counts.ready ? "ready" : "all")}
+                  />
                 </dd>
                 <dd className={styles.kpiContext}>
                   {outcomes.length
