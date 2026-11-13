@@ -3124,6 +3124,21 @@
   scroll-padding-bottom: 96px;
 }
 
+/* Phones: the report's end scrolls clear of the cards over it, the speaker
+   check (--sx-speaker-room) and the corner stack (--sx-corner-h), both
+   measured from the window's bottom, less the tab bar under the report
+   (Flow 2 walk, 13 Nov 2026, 363 px at 130 %: "Did we get the speakers
+   right?" covered "Open full coaching for this call" at the very end). */
+@media (max-width: 899.98px) {
+  .app.app[data-stage="report"] :global(.studio-main) {
+    padding-bottom: max(
+      12px,
+      calc(var(--sx-speaker-room, 0px) - var(--lx-bottom-nav-h, 0px) + 12px),
+      calc(var(--sx-corner-h, 0px) - var(--lx-bottom-nav-h, 0px) + 12px)
+    );
+  }
+}
+
 /* The report's slim rail replaces the native scrollbar on wide screens. */
 @media (min-width: 900px) {
   .app.app[data-stage="report"] :global(.studio-main) {

@@ -203,6 +203,8 @@ export function SpeakerServerProfiles({
   const [laterFor, setLaterFor] = useState<string | null>(null);
   // Phones show the card as one line until Check opens it, for this call.
   const [openFor, setOpenFor] = useState<string | null>(null);
+  // Past the report's first screen the card folds to its pill, for this call.
+  const [foldedFor, setFoldedFor] = useState<string | null>(null);
   // The card's Change mode: the roles and names being edited.
   const [changing, setChanging] = useState<Record<
     string,
@@ -328,6 +330,54 @@ export function SpeakerServerProfiles({
 
   const showCard =
     Boolean(needsConfirmation && completeSuggestion) && laterFor !== callId;
+  // The card's room from the window's bottom (--sx-speaker-room), as the
+  // rail and the corner stack publish theirs, so the report scrolls its last
+  // words clear of it (Flow 2 walk, 13 Nov 2026: at the end of the report the
+  // card covered "Open full coaching for this call").
+  const card = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = card.current;
+    const root = document.documentElement;
+    if (!showCard || !node) {
+      root.style.removeProperty("--sx-speaker-room");
+      return;
+    }
+    const publish = () =>
+      root.style.setProperty(
+        "--sx-speaker-room",
+        `${Math.max(0, Math.ceil(window.innerHeight - node.getBoundingClientRect().top))}px`,
+      );
+    publish();
+    const sized =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(publish);
+    sized?.observe(node);
+    window.addEventListener("resize", publish);
+    return () => {
+      sized?.disconnect();
+      window.removeEventListener("resize", publish);
+      root.style.removeProperty("--sx-speaker-room");
+    };
+  }, [showCard]);
+  // After the first screen it folds to its pill, as the corner cards do, and
+  // a tap opens it (orchestrator, 13 Nov 2026, Flow 2 G8: the one line sat
+  // over the report for the whole read). Never while it is open.
+  const opened = Boolean(changing) || openFor === callId;
+  const folded = showCard && foldedFor === callId && !opened;
+  useEffect(() => {
+    if (!showCard || opened || foldedFor === callId) return;
+    const past = (event: Event) => {
+      const box =
+        event.target instanceof Element
+          ? event.target
+          : document.scrollingElement;
+      if (box && box.scrollTop >= box.clientHeight) setFoldedFor(callId);
+    };
+    document.addEventListener("scroll", past, { capture: true, passive: true });
+    return () =>
+      document.removeEventListener("scroll", past, { capture: true });
+  }, [showCard, opened, foldedFor, callId]);
   const accountName = getShellState().profileName;
   const voiceOf = (id: string) => {
     const at = voices.indexOf(id);
@@ -404,12 +454,24 @@ export function SpeakerServerProfiles({
           2026: the open card covered a third of the report). */}
       {showCard && (
         <div
+          ref={card}
           className={styles.detected}
           role="region"
           aria-label="Detected speakers"
           data-changing={changing ? "" : undefined}
-          data-open={changing || openFor === callId ? "" : undefined}
+          data-open={opened ? "" : undefined}
+          data-folded={folded ? "" : undefined}
         >
+          {folded ? (
+            <button
+              type="button"
+              className={styles.detectedPill}
+              onClick={() => setOpenFor(callId)}
+            >
+              <UsersRound size={16} aria-hidden="true" />
+              Check speakers
+            </button>
+          ) : null}
           <div className={styles.detectedHead}>
             <span className={styles.detectedIcon} aria-hidden="true">
               <UsersRound size={16} />
