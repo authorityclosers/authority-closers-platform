@@ -145,6 +145,10 @@ function DayChart({
 }) {
   if (days.length < 2) return null;
   const values = days.map(pick);
+  // A period of nothing draws no row of zeros on its tile: its 0 and its words
+  // say so (owner, 10 Nov 2026, item 10: with no data it looked "as if no work
+  // was ever done on it"). The tile's detail keeps every day.
+  if (!large && values.every((value) => value === 0)) return null;
   const most = Math.max(1, ...values);
   const summary = `${label} by day: ${days.map((day, index) => `${dayLabel(day.day, true)} ${values[index]}`).join(", ")}`;
   if (days.length <= 7)

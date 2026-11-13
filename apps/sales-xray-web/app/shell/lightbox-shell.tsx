@@ -56,6 +56,7 @@ import { AddSheet } from "./add-sheet";
 import { AskDipakSheet } from "./ask-deepak";
 import { searchTogether, warmLeadsSearch } from "./search-together";
 import { useAppRouter } from "./app-router";
+import { tabAgain } from "./tab-again";
 import { useShellProfile } from "./profile-store";
 import { callHref, type Allowance } from "../acquisition-client";
 import { CALLS_PATH } from "../analysis-routes";
@@ -549,6 +550,8 @@ function LightboxShellFrame({
   // A light tap in the hand when the phone's tab changes, as iOS does.
   const tapTab = (tab: PhoneTab) => () => {
     if (tab !== phoneTab) tick();
+    // Its place is on screen: back to its start (Leads: the list, N1).
+    else tabAgain(tab);
   };
   // Phones call the dashboard Home, as its tab does (owner, 17 Oct).
   const barTitle = place === "dashboard" && !pageName ? "Home" : pageTitle;
@@ -1361,6 +1364,11 @@ function LightboxShellFrame({
       ? "Personal"
       : shownWorkspace.name
     : null;
+  // Phones: the bar's page name keeps one line; its length lets the CSS size
+  // it to the room (Redmi QA, 10 Nov 2026: "New analysis" took two lines).
+  const barFit = {
+    "--sx-bar-chars": Math.max(1, (barTitle ?? workspaceLabel ?? "").length),
+  } as CSSProperties;
   // The organisation's own tile beside its name in the top bars (owner bug
   // #50): its logo, else its initials on its colour, the tapped one at once.
   // Personal needs none: your own face is already on the left.
@@ -1881,7 +1889,7 @@ function LightboxShellFrame({
                       />
                     </small>
                   </span>
-                  <b>{barTitle ?? workspaceLabel}</b>
+                  <b style={barFit}>{barTitle ?? workspaceLabel}</b>
                 </button>
               ) : (
                 <span
@@ -1899,7 +1907,7 @@ function LightboxShellFrame({
                         : "Workspace"}
                     </small>
                   </span>
-                  <b>{barTitle ?? workspaceLabel}</b>
+                  <b style={barFit}>{barTitle ?? workspaceLabel}</b>
                 </span>
               )}
             </div>

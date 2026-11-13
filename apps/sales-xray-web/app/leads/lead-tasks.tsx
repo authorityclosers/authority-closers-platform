@@ -105,7 +105,11 @@ export function LeadTasks({
                   <Icon size={16} />
                 </span>
                 <span className={styles.text}>
-                  <strong>{kind.label}</strong>
+                  {/* The seller's own words ("Send QA brochure"); without
+                      them the server names it by its kind, so the kind shows
+                      then (Redmi QA, 10 Nov 2026: the row read "WhatsApp"
+                      and the words were only in its label). */}
+                  <strong>{task.title || kind.label}</strong>
                   {task.note ? <small>{task.note}</small> : null}
                 </span>
                 <time

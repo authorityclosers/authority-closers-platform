@@ -154,6 +154,7 @@
   display: grid;
   min-width: 0;
   overflow: hidden;
+  container-type: inline-size;
 }
 
 .row {
@@ -341,6 +342,44 @@ a.row:focus-visible {
   .need:active,
   .need:hover {
     transform: none;
+  }
+}
+
+/* A narrow card (a phone, 130 % text): each seller on two lines, the whole
+   name, then its numbers each with its word, never "Priya ..", "Con.." and
+   "0 m.." cut in five columns (owner's phone size, 10 Nov 2026). */
+@container (max-width: 26rem) {
+  .row[data-head] {
+    display: none;
+  }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 14px;
+  }
+
+  .row > span {
+    overflow: visible;
+  }
+
+  .row > .name {
+    flex: 1 0 100%;
+    overflow: hidden;
+  }
+
+  /* No break yet: nothing to say on a narrow card (a wide one keeps its dash
+     in the column). */
+  .row > [data-none] {
+    display: none;
+  }
+
+  .row > [data-label]::before {
+    margin-right: 4px;
+    color: var(--sx-muted);
+    font-size: var(--sx-text-xs);
+    font-weight: 500;
+    content: attr(data-label);
   }
 }
 

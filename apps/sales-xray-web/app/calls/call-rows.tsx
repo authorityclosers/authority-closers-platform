@@ -42,7 +42,54 @@ import styles from "./phone-calls.module.css";
  *  side. Where the seconds came from when the read says, and "outcome
  *  unknown" when the phone never said how a dial went (owner and Dipak, 2 Nov
  *  2026). `caller`: who made a call out. */
-export function callLine(event: LeadEvent, caller = "You"): string {
+/** A call the phone couldn't tell the end of, in its seller's own answer:
+ *  "talked to them: Interested" or "not connected: did not pick", as the lead
+ *  says it. The phone's evidence, when there is some, wins. */
+function answerLine(answer: LeadEvent): string {
+  return answer.connected
+    ? `talked to them${answer.stage_label ? `: ${answer.stage_label}` : ""}`
+    : `not connected${answer.reason_label ? `: ${answer.reason_label.toLowerCase()}` : ""}`;
+}
+
+/**
+ * Each call's own answer: the first one its seller logged on that lead after
+ * it, before the lead's next call (Redmi QA, 10 Nov 2026: a call answered
+ * "We talked · Interested" still read "outcome unknown" on Calls). An undone
+ * answer counts nowhere.
+ */
+export function answersFor(
+  items: readonly ActivityItem[],
+): Map<string, LeadEvent> {
+  const byLead = new Map<string, ActivityItem[]>();
+  for (const item of items) {
+    const kind = item?.event?.kind;
+    if (!item?.lead_id || (kind !== "call" && kind !== "result")) continue;
+    if (item.event.answer_undone) continue;
+    const list = byLead.get(item.lead_id) ?? [];
+    list.push(item);
+    byLead.set(item.lead_id, list);
+  }
+  const answers = new Map<string, LeadEvent>();
+  for (const list of byLead.values()) {
+    let open: ActivityItem | null = null;
+    for (const item of [...list].sort(
+      (a, b) => Date.parse(a.event.at) - Date.parse(b.event.at),
+    )) {
+      if (item.event.kind === "call") open = item;
+      else if (open) {
+        answers.set(open.event_id, item.event);
+        open = null;
+      }
+    }
+  }
+  return answers;
+}
+
+export function callLine(
+  event: LeadEvent,
+  caller = "You",
+  answer: LeadEvent | null = null,
+): string {
   const talk = event.duration_seconds ? clockTime(event.duration_seconds) : "";
   const from =
     event.seconds_from === "recording"
@@ -62,7 +109,9 @@ export function callLine(event: LeadEvent, caller = "You"): string {
     default:
       if (event.simulated) return "Sample call";
       if (event.outcome === "unknown")
-        return `${caller} called · outcome unknown`;
+        return answer
+          ? `${caller} called · ${answerLine(answer)}`
+          : `${caller} called · outcome unknown`;
       if (talk) return `${caller} called · ${talk}${from}`;
       return event.via === "phone" || event.outcome === "not_connected"
         ? `${caller} called · no answer`
@@ -152,13 +201,17 @@ export type CallRow = {
   talked?: boolean;
 };
 
-export function rowFromActivity(item: ActivityItem): CallRow {
+export function rowFromActivity(
+  item: ActivityItem,
+  /** Its seller's answer, when the phone couldn't tell (answersFor). */
+  answer: LeadEvent | null = null,
+): CallRow {
   const direction = item.event.direction;
   return {
     key: item.event_id,
     name: displayName(item.lead_name),
     at: item.event.at,
-    line: callLine(item.event),
+    line: callLine(item.event, "You", answer),
     kind:
       direction === "missed" || direction === "rejected"
         ? "missed"
@@ -175,11 +228,17 @@ export function rowFromActivity(item: ActivityItem): CallRow {
 }
 
 /** A seller's or the team's call: who made it, by their first name. */
-export function rowFromTheirs(item: ActivityItem): CallRow {
+export function rowFromTheirs(
+  item: ActivityItem,
+  answer: LeadEvent | null = null,
+): CallRow {
   const caller = item.event.actor_name
     ? displayName(item.event.actor_name).split(" ")[0]
     : "A seller";
-  return { ...rowFromActivity(item), line: callLine(item.event, caller) };
+  return {
+    ...rowFromActivity(item, answer),
+    line: callLine(item.event, caller, answer),
+  };
 }
 
 /** Calls opened from a number (owner, 2 Nov 2026): one day's calls, the

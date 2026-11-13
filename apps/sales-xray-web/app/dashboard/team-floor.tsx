@@ -384,11 +384,21 @@ function Sellers({
             <span role="cell" className={styles.name}>
               {seller.person_id === me ? "You" : seller.name}
             </span>
-            <span role="cell">{day.attempted}</span>
-            <span role="cell">{day.connected}</span>
-            <span role="cell">{minutes(day.talk_seconds)}</span>
+            {/* data-label: a narrow card's second line names each number
+                (it draws them with CSS, so the cells say only the number). */}
+            <span role="cell" data-label="Tried">
+              {day.attempted}
+            </span>
+            <span role="cell" data-label="Conn.">
+              {day.connected}
+            </span>
+            <span role="cell" data-label="Talk">
+              {minutes(day.talk_seconds)}
+            </span>
             <span
               role="cell"
+              data-label="Break"
+              data-none={gap ? undefined : ""}
               data-red={(gap && !gap.planned && gap.minutes >= 60) || undefined}
               title={
                 gap

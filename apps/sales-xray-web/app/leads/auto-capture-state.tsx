@@ -28,7 +28,8 @@ const labels: Record<string, string> = {
   short_call: "Short call · transcript and lead details",
   missing: "No recording after 30 minutes",
   cancelled: "Upload cancelled",
-  held: "Upload paused · review this call",
+  // The phone couldn't say why: never phone setup, which isn't the cause.
+  held: "Upload paused · add its recording by hand on the lead",
 };
 // Why the phone holds a call (app builds with autoCaptureHealth, 30 Oct 2026); it uploads by itself once fixed.
 const holds: Record<string, { label: string; href: string }> = {
@@ -37,7 +38,8 @@ const holds: Record<string, { label: string; href: string }> = {
     href: "/settings/profile",
   },
   allowance: {
-    label: "Waiting for call minutes",
+    // Who can fix it, never prices (owner's rule); the call waits on the phone.
+    label: "Waiting for analysis minutes · your owner or an admin can add them",
     href: "/settings/privacy#calls-setup",
   },
   signed_out: {
@@ -94,11 +96,12 @@ export function CaptureStateLabel({
         {held?.label ?? labels[state]}
         {attention ? " · Analysis needs attention" : ""}
       </small>
-      {held ? (
+      {held && hold !== "allowance" ? (
         <Link href={held.href}>
           {hold === "profile" ? "Open Profile" : "Fix uploads"}
         </Link>
-      ) : state === "missing" || state === "cancelled" || state === "held" ? (
+      ) : held || state === "held" ? null : state === "missing" ||
+        state === "cancelled" ? (
         <RecordingFix label="Fix recording" />
       ) : null}
     </span>
@@ -257,14 +260,17 @@ export function trackFor(
       label: held?.label ?? labels.held,
       stuck: true,
       recording: arrived,
-      fix: held
-        ? {
-            label: native.hold === "profile" ? "Open Profile" : "Fix uploads",
-            href: held.href,
-            // Privacy's checks open over the call; the profile is its own page.
-            sheet: held.href.startsWith("/settings/privacy#"),
-          }
-        : setupFix,
+      // Minutes are the owner's to add, and a hold the phone can't explain
+      // isn't fixed in phone setup: no Fix for either (Redmi QA, 10 Nov 2026).
+      fix:
+        held && native.hold !== "allowance"
+          ? {
+              label: native.hold === "profile" ? "Open Profile" : "Fix uploads",
+              href: held.href,
+              // Privacy's checks open over the call; the profile is its own page.
+              sheet: held.href.startsWith("/settings/privacy#"),
+            }
+          : undefined,
     };
   }
   if (native?.state === "cancelled")

@@ -21,6 +21,11 @@ function endOf(): End | null {
   const flow = getComputedStyle(box).overflowY;
   if (flow === "auto" || flow === "scroll")
     return { box, scroller: box, target: box };
+  // A fitted frame, whose own panels scroll: no page end to hold, and nothing
+  // would ever scroll it back to let go (Redmi QA on production, 10 Nov 2026:
+  // on New analysis the first-call guide's room stayed after its X, and
+  // Choose a file sat out of reach in a 118 px box).
+  if (flow === "hidden" || flow === "clip") return null;
   return {
     box,
     scroller: document.scrollingElement ?? document.documentElement,

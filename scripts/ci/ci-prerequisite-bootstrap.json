@@ -10,13 +10,13 @@
     "review": "Orchestrator 28 Oct 2026 (v1.3.0 cut): producer run 40724365608 (workbench-checks.yml, push, success, wb-ci --full) on request 5a168c24, whose only parent is the v1.3.0 hold 77b745d3b and which changes only .wb-ci/request.json. Same identity 4db81fe7 (no lockfile change); artifact digest from the API. Replaces the 2e9f74de pin, which passed its 36-hour reuse window at 15:51Z and left e2e unable to admit a new bundle."
   },
   {
-    "artifact_id": 13718553136,
-    "digest": "fec15bf7caf613afc41fe2fd27d3e6ee6a3c3f461aef04d847f65576fd8059e8",
+    "artifact_id": 14025987287,
+    "digest": "ad3ab9cc0ce8cba24681df676af4cd36a7d4d37dc3c573bb8171683a93f4906e",
     "identity": "8fed5c6dc9d51ab364d8a09a7d5f66c7d58d9ba10f20f36f5113d2bee337c733",
     "repository": "authorityclosers/authority-closers-platform",
-    "run_id": 42718101331,
-    "source_sha": "d6301594e257123b9fe359e180009e98fab14d52",
-    "reviewed_source_sha": "e60a29b33ef25d239a0e1b7bbc0a146c9751c120",
-    "review": "Re-pin 10 Nov 2026 (ux-audit for the orchestrator, at a quiet hour ahead of the 07:33Z window end): producer run 42718101331 (workbench-checks.yml, push, success) on a request whose only parent is workbench e60a29b33 (dev/live HEAD; its lockfiles, packages, workflows and scripts/ci match main except .github/workflows/sales-xray-native-image.yml, checked by diff), and which changes only .wb-ci/request.json. Same identity 8fed5c6d; artifact digest from the API. The 13631600631 pin (made 19:33Z on 8 Nov) was deleted first so a fresh bundle could publish."
+    "run_id": 43402793658,
+    "source_sha": "02e5a45bd8371c466be3392661d2d0d3e6772f23",
+    "reviewed_source_sha": "6a6cceccd63ab202a4f591d4716e119a3d220410",
+    "review": "Re-pin 13 Nov 2026 (ux-audit for the orchestrator, at a quiet hour; the 13718553136 pin passed its 36-hour window at about 11:13Z on 11 Nov, so no cut could pass wb-ci): producer run 43402793658 (workbench-checks.yml, push, success) on a request whose only parent is workbench 6a6cceccd (dev/live HEAD; its lockfiles, packages, workflows and scripts/ci match main except .github/workflows/sales-xray-native-image.yml, checked by diff), and which changes only .wb-ci/request.json. Same identity 8fed5c6d; artifact digest from the API. The unpinned 13896274754 bundle (run 43113315064, made 22:41Z on 11 Nov, its window ending about 10:41Z on 13 Nov) was deleted first so a fresh bundle could publish."
   }
 ]

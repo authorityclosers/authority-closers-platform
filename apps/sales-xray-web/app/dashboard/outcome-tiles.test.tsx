@@ -168,6 +168,18 @@ it("draws a week's days as seven bars, a true zero kept as a mark", async () => 
   ).toEqual(["0", "0", "1", "0", "1", "1", "3"]);
 });
 
+// The owner (10 Nov 2026, item 10): with no data, a row of "0 0 0 0 0 0 0"
+// under the 0 looked as if nothing was ever built there. A tile whose days are
+// all zero draws none; the others keep theirs.
+it("draws no row of zeros on a tile whose days are all zero", async () => {
+  await draw({
+    ...week,
+    daily: (week.daily ?? []).map((item) => ({ ...item, won: 0 })),
+  });
+  expect(tile("won").querySelector('[role="img"]')).toBeNull();
+  expect(tile("interested").querySelector('[role="img"]')).not.toBeNull();
+});
+
 it("opens a tile's detail: the days, who did it, and the leads behind it", async () => {
   await draw(week);
   await act(async () => tile("won").click());

@@ -6278,8 +6278,11 @@ class LeadDesk:
                     .where(
                         LeadTask.tenant_id == self.tenant_id,
                         LeadTask.status == "open",
-                        # As Tasks' Overdue counts them: a minute past due.
+                        # As Tasks' Overdue counts them: a minute past due, and never a
+                        # call back, which is the lead's own late follow-up (Redmi QA on
+                        # production, 10 Nov 2026: Growth said 4 tasks overdue, Tasks 2).
                         LeadTask.starts_at <= self.now - TASK_OVERDUE_FROM,
+                        LeadTask.kind.not_in(task_book.CALLING_KINDS),
                         *(() if team else (LeadTask.owner_person_id == me,)),
                     )
                     .group_by(LeadTask.owner_person_id)

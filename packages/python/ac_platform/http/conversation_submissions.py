@@ -181,16 +181,23 @@ def out_of_minutes(allowance: dict[str, Any], *, organisation: bool) -> str:
 
     A workspace that was never given minutes hasn't used any (simulation lab,
     1 Nov 2026: every sandbox seller at 0 s was told the allowance "has been used").
+
+    Every answer names the allowance: the phone app's automatic upload reads a 409
+    that says "allowance" as waiting for minutes, holds the call and sends it by
+    itself once minutes exist (sales-xray-apps CaptureRules.refusal). Without the
+    word an organisation's seller saw "Upload paused · review this call" and a fix
+    that opened phone setup (Redmi QA on production, 10 Nov 2026).
     """
 
     if not allowance.get("allowance_seconds"):
         return (
-            "Call analysis isn't on for this organisation yet. Ask your owner."
+            "Call analysis isn't on for this organisation yet: it has no analysis "
+            "allowance. Ask your owner."
             if organisation
-            else "Call analysis isn't on for your account yet."
+            else "Call analysis isn't on for your account yet: it has no analysis allowance."
         )
     return (
-        "This organisation's call minutes are used up. Ask your owner."
+        "This organisation's analysis allowance is used up. Ask your owner for more call minutes."
         if organisation
         else "Your current free call allowance has been used."
     )

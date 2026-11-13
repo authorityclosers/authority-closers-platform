@@ -15,7 +15,13 @@
  * Only real numbers: a missing value is a dash, a real zero shows 0.
  */
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 import { breakLength } from "../dashboard/home-today";
 import { displayName } from "../display-name";
@@ -196,14 +202,32 @@ export function attention(effort: Effort) {
 
 const sellerCalls = (seller: SellerEffort) => both(seller, "attempted");
 
+/** One seller's numbers as G1's tiles read them, for their day's sheet. */
+export function sellerEffort(seller: SellerEffort): Effort {
+  return {
+    days: 1,
+    start: "",
+    end: "",
+    team: false,
+    sellers: [seller],
+    inbound: seller.inbound,
+    cold: seller.cold,
+    missing_recordings: seller.missing_recordings,
+  };
+}
+
 /** G1: four equal tiles, what needs attention, and each seller's calls. */
 export function PulseTiles({
   effort,
   onOpen,
+  title,
 }: {
   effort: Effort;
   onOpen?: (seller: SellerEffort) => void;
+  /** The heading: Team, Your work, or a seller's own in their day's sheet. */
+  title?: string;
 }) {
+  const headingId = useId();
   const attempted = both(effort, "attempted");
   const connected = both(effort, "connected");
   const talked = both(effort, "talk_seconds");
@@ -218,10 +242,10 @@ export function PulseTiles({
     <section
       className={styles.view}
       data-growth-view="tiles"
-      aria-labelledby="growth-tiles-title"
+      aria-labelledby={headingId}
     >
-      <h2 id="growth-tiles-title" className={styles.heading}>
-        {effort.team ? "Team" : "Your work"}
+      <h2 id={headingId} className={styles.heading}>
+        {title ?? (effort.team ? "Team" : "Your work")}
       </h2>
       {/* One total a tile, no Inbound | Cold split (owner, 10 Nov 2026: "we
           don't have to focus on inbound and cold leads"), each with one

@@ -545,6 +545,10 @@ it("brings a task from Tasks' Overdue into Today's list, Late, and ticks it done
   expect(first?.textContent).toContain("Call the bank about the loan papers");
   expect(first?.textContent).toContain("Late");
   expect(first?.querySelector("[data-late-time]")).not.toBeNull();
+  // See all opens Tasks on Overdue, where this late task is (Redmi QA).
+  expect(
+    tasksBlock()?.querySelector('a[href="/leads?tab=tasks&tasks=overdue"]'),
+  ).not.toBeNull();
   const box = first?.querySelector<HTMLInputElement>('input[type="checkbox"]');
   await act(async () => box?.click());
   await act(async () => Promise.resolve());

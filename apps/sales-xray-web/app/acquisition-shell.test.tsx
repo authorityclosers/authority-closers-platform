@@ -172,6 +172,18 @@ it("uses compact, truthful page headings with no greeting or estimated duration"
   expect(ready.querySelector('[data-hero-stage="ready"] h1')?.textContent).toBe(
     "Ready to analyse",
   );
+  // The phone bar's name carries its length, so the CSS keeps it on one line
+  // in the bar's room (Redmi QA, 10 Nov 2026: "New analysis" took two lines).
+  for (const [page, name] of [
+    [welcome, "New analysis"],
+    [ready, "Ready to analyse"],
+  ] as const) {
+    const bar = page.querySelector<HTMLElement>("header[data-pull-bar] b");
+    expect(bar?.textContent).toBe(name);
+    expect(bar?.style.getPropertyValue("--sx-bar-chars")).toBe(
+      String(name.length),
+    );
+  }
   expect(ready.textContent).not.toContain("Analysing");
 
   const preview = heading({

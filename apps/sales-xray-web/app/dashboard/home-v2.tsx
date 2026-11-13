@@ -125,7 +125,7 @@ export function HomeRecentCalls({
   const rows =
     week.status === "ready"
       ? mergeCalls(
-          weekCalls(week.items).map(rowFromActivity),
+          weekCalls(week.items).map((item) => rowFromActivity(item)),
           (saved ?? []).map(rowFromSaved),
         ).slice(0, RECENT_CALLS)
       : [];

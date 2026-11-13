@@ -26,6 +26,7 @@ import {
   DayRhythm,
   GROWTH_VIEWS,
   PulseTiles,
+  sellerEffort,
   SpeedTile,
 } from "./growth-visual";
 import { RevenueSplit } from "./revenue-split";
@@ -202,10 +203,13 @@ function SellerCard({
   seller,
   own,
   open = own,
+  visual = false,
 }: {
   seller: SellerEffort;
   own: boolean;
   open?: boolean;
+  /** Growth's look: the seller's tiles, not tables (owner, 10 Nov 2026). */
+  visual?: boolean;
 }) {
   const red = flags(seller);
   const name = own ? "Your" : `${seller.name}'s`;
@@ -226,27 +230,36 @@ function SellerCard({
       {/* The day's headline numbers; the rest one tap away. Overdue tasks and
           calls without a recording are the chips above, said once (simplify
           pass, owner approved 2 Nov 2026). */}
-      <section className={styles.part}>
-        <h3>Work done</h3>
-        <MeasureTable
-          rows={work.filter((item) => HEADLINE.has(item.label))}
-          label={`${name} work, Inbound and Cold`}
-        />
-        <details className={styles.more}>
-          <summary>More numbers</summary>
+      {visual ? (
+        // A seller's day on Growth: their own tiles and what needs attention,
+        // no tables (owner, 10 Nov 2026: "In 2026 we don't work with tables").
+        <PulseTiles effort={sellerEffort(seller)} title="Work done" />
+      ) : null}
+      {visual ? null : (
+        <section className={styles.part}>
+          <h3>Work done</h3>
           <MeasureTable
-            rows={work.filter((item) => !HEADLINE.has(item.label))}
-            label={`${name} other numbers, Inbound and Cold`}
+            rows={work.filter((item) => HEADLINE.has(item.label))}
+            label={`${name} work, Inbound and Cold`}
           />
-        </details>
-      </section>
-      <section className={styles.part}>
-        <h3>Missed</h3>
-        <MeasureTable
-          rows={missed(seller.inbound, seller.cold)}
-          label={`${name} missed work, Inbound and Cold`}
-        />
-      </section>
+          <details className={styles.more}>
+            <summary>More numbers</summary>
+            <MeasureTable
+              rows={work.filter((item) => !HEADLINE.has(item.label))}
+              label={`${name} other numbers, Inbound and Cold`}
+            />
+          </details>
+        </section>
+      )}
+      {visual ? null : (
+        <section className={styles.part}>
+          <h3>Missed</h3>
+          <MeasureTable
+            rows={missed(seller.inbound, seller.cold)}
+            label={`${name} missed work, Inbound and Cold`}
+          />
+        </section>
+      )}
       <section className={styles.part}>
         <h3>Breaks</h3>
         {seller.first_call_at && seller.last_call_at ? (
@@ -423,7 +436,12 @@ export function PerformanceView({
                   onClose={() => setOpened(null)}
                 >
                   {opened ? (
-                    <SellerCard seller={opened} own={false} open />
+                    <SellerCard
+                      seller={opened}
+                      own={false}
+                      open
+                      visual={visual}
+                    />
                   ) : null}
                 </SellerDay>
               </>
