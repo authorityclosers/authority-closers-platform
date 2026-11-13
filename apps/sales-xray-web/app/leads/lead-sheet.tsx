@@ -1975,6 +1975,7 @@ export function History({
   label = "History",
   upcoming = null,
   onGenerate,
+  shown,
 }: {
   events: LeadEvent[];
   onChanged?: (next: LeadDetail) => void;
@@ -1990,8 +1991,13 @@ export function History({
   upcoming?: { at: string; note: string | null } | null;
   /** The newest call's recording is in but not analysed: make its Report. */
   onGenerate?: () => void;
+  /** How many lines show before See more (the lead page: Dipak's bug 198,
+   *  10 Nov 2026, "this should not look full": the three newest, then See
+   *  more for all of them). The follow-up to come is pinned and not counted. */
+  shown?: number;
 }) {
   const list = useRef<HTMLOListElement>(null);
+  const [all, setAll] = useState(false);
   useEffect(() => {
     if (!focusAt) return;
     const line = [
@@ -2017,152 +2023,173 @@ export function History({
       (a, b) => Date.parse(b.at) - Date.parse(a.at) || a.index - b.index,
     );
   const days = items.length > 5;
+  // Opened at an older line (My work): all of it, so that line can show.
+  const asked = focusAt ? items.findIndex((item) => item.at === focusAt) : -1;
+  const folded =
+    shown !== undefined && items.length > shown && !all && asked < shown;
+  const lines = folded ? items.slice(0, shown) : items;
   const newestCall = events.findIndex((event) => event.kind === "call");
   // Under a day header the time alone; without headers, the day too.
   const stamp = (at: string) =>
     days ? clockTime(at) : `${dayLabel(at)}, ${clockTime(at)}`;
   return (
-    <ol className={page.timeline} aria-label={label} ref={list}>
-      {upcoming ? (
-        <li className={page.tlRow} data-kind="upcoming">
-          <span className={page.disc} data-tone="now" aria-hidden="true">
-            <CalendarClock size={14} />
-          </span>
-          <span className={page.tlBody}>
-            <span className={page.tlTitle}>
-              Follow-up
-              <span className={page.upcoming}>Upcoming</span>
+    <>
+      <ol className={page.timeline} aria-label={label} ref={list}>
+        {upcoming ? (
+          <li className={page.tlRow} data-kind="upcoming">
+            <span className={page.disc} data-tone="now" aria-hidden="true">
+              <CalendarClock size={14} />
             </span>
-            <span className={page.tlDetail}>
-              {[upperFirst(when(upcoming.at)), upcoming.note]
-                .filter(Boolean)
-                .join(" · ")}
+            <span className={page.tlBody}>
+              <span className={page.tlTitle}>
+                Follow-up
+                <span className={page.upcoming}>Upcoming</span>
+              </span>
+              <span className={page.tlDetail}>
+                {[upperFirst(when(upcoming.at)), upcoming.note]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
             </span>
-          </span>
-        </li>
-      ) : null}
-      {items.map((item, position) => {
-        const day = dayLabel(item.at);
-        const header =
-          days &&
-          (position === 0 || dayLabel(items[position - 1].at) !== day) ? (
-            <li className={page.tlDay} aria-hidden="true">
-              {day}
-            </li>
-          ) : null;
-        if (item.chat)
+          </li>
+        ) : null}
+        {lines.map((item, position) => {
+          const day = dayLabel(item.at);
+          const header =
+            days &&
+            (position === 0 || dayLabel(lines[position - 1].at) !== day) ? (
+              <li className={page.tlDay} aria-hidden="true">
+                {day}
+              </li>
+            ) : null;
+          if (item.chat)
+            return (
+              <Fragment key={item.chat.key}>
+                {header}
+                <li className={page.tlRow} data-kind="chat" data-opens="">
+                  <span
+                    className={page.disc}
+                    data-tone="good"
+                    aria-hidden="true"
+                  >
+                    <MessageCircle size={14} />
+                  </span>
+                  <span className={page.tlBody}>
+                    <span className={page.tlTitle}>
+                      {chatDayTitle(item.chat)}
+                    </span>
+                    <span className={page.tlDetail}>
+                      {item.chat.last
+                        ? `${item.chat.last.mine ? "You: " : ""}${item.chat.last.text}`
+                        : stamp(item.at)}
+                    </span>
+                  </span>
+                  <Link
+                    className={page.tlAction}
+                    href={item.chat.href}
+                    prefetch={false}
+                  >
+                    Open chat
+                  </Link>
+                </li>
+              </Fragment>
+            );
+          const event = events[item.index];
+          const index = item.index;
+          const text = eventText(event);
+          const disc = historyDisc(event);
+          const report = event.kind === "call" ? event.submission_id : null;
+          const generate =
+            event.kind === "call" &&
+            index === newestCall &&
+            !!event.recording &&
+            !event.submission_id &&
+            !!onGenerate;
+          const words = event.private
+            ? "Only you see this call. It isn't counted."
+            : text.detail;
           return (
-            <Fragment key={item.chat.key}>
+            <Fragment key={`${event.at}-${index}`}>
               {header}
-              <li className={page.tlRow} data-kind="chat" data-opens="">
-                <span className={page.disc} data-tone="good" aria-hidden="true">
-                  <MessageCircle size={14} />
+              <li
+                className={page.tlRow}
+                data-kind={event.kind}
+                data-at={event.at}
+                data-report={report ? "" : undefined}
+                data-opens={report ? "" : undefined}
+                data-missed={
+                  event.direction === "missed" || event.direction === "rejected"
+                    ? true
+                    : undefined
+                }
+              >
+                <span
+                  className={page.disc}
+                  data-tone={disc.tone}
+                  aria-hidden="true"
+                >
+                  {disc.icon}
                 </span>
                 <span className={page.tlBody}>
                   <span className={page.tlTitle}>
-                    {chatDayTitle(item.chat)}
+                    {text.title}
+                    {event.private ? (
+                      <span className={styles.privateTag}>Private</span>
+                    ) : null}
+                    {sourceBadge(event) ? (
+                      <span className={pipe.badge}>{sourceBadge(event)}</span>
+                    ) : null}
+                    {event.app_label ? (
+                      <span className={pipe.badge}>via {event.app_label}</span>
+                    ) : null}
                   </span>
                   <span className={page.tlDetail}>
-                    {item.chat.last
-                      ? `${item.chat.last.mine ? "You: " : ""}${item.chat.last.text}`
-                      : stamp(item.at)}
+                    {words ? `${words} · ` : null}
+                    <time dateTime={event.at}>{stamp(event.at)}</time>
                   </span>
+                  {event.kind === "call" ? (
+                    <AutoCaptureState eventId={event.event_id} />
+                  ) : null}
+                  {onChanged ? (
+                    <PrivacyButton event={event} onChanged={onChanged} />
+                  ) : null}
+                  {onChanged && leadId ? (
+                    <UndoAppButton
+                      event={event}
+                      leadId={leadId}
+                      onChanged={onChanged}
+                    />
+                  ) : null}
                 </span>
-                <Link
-                  className={page.tlAction}
-                  href={item.chat.href}
-                  prefetch={false}
-                >
-                  Open chat
-                </Link>
+                {report ? (
+                  <Link className={page.tlAction} href={callHref(report)}>
+                    View report
+                  </Link>
+                ) : generate ? (
+                  <button
+                    type="button"
+                    className={page.tlAction}
+                    onClick={onGenerate}
+                  >
+                    Generate report
+                  </button>
+                ) : null}
               </li>
             </Fragment>
           );
-        const event = events[item.index];
-        const index = item.index;
-        const text = eventText(event);
-        const disc = historyDisc(event);
-        const report = event.kind === "call" ? event.submission_id : null;
-        const generate =
-          event.kind === "call" &&
-          index === newestCall &&
-          !!event.recording &&
-          !event.submission_id &&
-          !!onGenerate;
-        const words = event.private
-          ? "Only you see this call. It isn't counted."
-          : text.detail;
-        return (
-          <Fragment key={`${event.at}-${index}`}>
-            {header}
-            <li
-              className={page.tlRow}
-              data-kind={event.kind}
-              data-at={event.at}
-              data-report={report ? "" : undefined}
-              data-opens={report ? "" : undefined}
-              data-missed={
-                event.direction === "missed" || event.direction === "rejected"
-                  ? true
-                  : undefined
-              }
-            >
-              <span
-                className={page.disc}
-                data-tone={disc.tone}
-                aria-hidden="true"
-              >
-                {disc.icon}
-              </span>
-              <span className={page.tlBody}>
-                <span className={page.tlTitle}>
-                  {text.title}
-                  {event.private ? (
-                    <span className={styles.privateTag}>Private</span>
-                  ) : null}
-                  {sourceBadge(event) ? (
-                    <span className={pipe.badge}>{sourceBadge(event)}</span>
-                  ) : null}
-                  {event.app_label ? (
-                    <span className={pipe.badge}>via {event.app_label}</span>
-                  ) : null}
-                </span>
-                <span className={page.tlDetail}>
-                  {words ? `${words} · ` : null}
-                  <time dateTime={event.at}>{stamp(event.at)}</time>
-                </span>
-                {event.kind === "call" ? (
-                  <AutoCaptureState eventId={event.event_id} />
-                ) : null}
-                {onChanged ? (
-                  <PrivacyButton event={event} onChanged={onChanged} />
-                ) : null}
-                {onChanged && leadId ? (
-                  <UndoAppButton
-                    event={event}
-                    leadId={leadId}
-                    onChanged={onChanged}
-                  />
-                ) : null}
-              </span>
-              {report ? (
-                <Link className={page.tlAction} href={callHref(report)}>
-                  View report
-                </Link>
-              ) : generate ? (
-                <button
-                  type="button"
-                  className={page.tlAction}
-                  onClick={onGenerate}
-                >
-                  Generate report
-                </button>
-              ) : null}
-            </li>
-          </Fragment>
-        );
-      })}
-    </ol>
+        })}
+      </ol>
+      {shown !== undefined && items.length > shown && (all || folded) ? (
+        <button
+          type="button"
+          className={page.textAction}
+          aria-expanded={!folded}
+          onClick={() => setAll((now) => !now)}
+        >
+          {folded ? "See more" : "See less"}
+        </button>
+      ) : null}
+    </>
   );
 }
 
@@ -4210,6 +4237,7 @@ export function LeadCard({
               : null
           }
           onGenerate={recording && !recordingNow ? toRecording : undefined}
+          shown={3}
         />
       </section>
       {latestNote ? (
