@@ -1508,7 +1508,10 @@ export function TodayPerformance({
     },
     {
       key: "follow_ups",
-      label: "Follow-ups done",
+      // Under "Done today", "Follow-ups" says it, and leaves room for the
+      // chevron that says it opens (the Orchestrator for the owner, 13 Nov
+      // 2026; seller Flow 1, F4).
+      label: "Follow-ups",
       value: numbers?.follow_ups_done,
       href: leadsHref(side, { view: "follow_ups", when: "today" }),
       icon: <CalendarCheck />,
