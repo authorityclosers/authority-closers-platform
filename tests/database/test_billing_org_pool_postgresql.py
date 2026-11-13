@@ -16,6 +16,7 @@ from ac_platform.application.settings import Settings
 from ac_platform.audit.service import AuditRepository
 from ac_platform.billing.ledger import LEGACY_GRANT_PREFIX, BillingError
 from ac_platform.billing.models import BillingAccount
+from ac_platform.conversation_intelligence import minute_grants as grants_module
 from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
 from ac_platform.conversation_intelligence.acquisition_models import ConversationAcquisitionUsage
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
@@ -30,7 +31,6 @@ from ac_platform.conversation_intelligence.minute_account_admin import (
     append_minute_grant,
 )
 from ac_platform.conversation_intelligence.sales_xray_tenants import SALES_XRAY_MEMBER_ROLES
-from ac_platform.http import operations as operations_module
 from ac_platform.http.auth import AuthenticatedTransaction
 from ac_platform.http.conversation_acquisition import install_acquisition_http
 from ac_platform.http.operations import install_operations_http
@@ -492,14 +492,16 @@ def test_admin_grant_composes_trial_for_target_tenant(
                     )
 
             composed = []
-            original = operations_module.BillingLedger
+            # The grant's ledger is composed where every grant is written
+            # (minute_grants.write_audited_grant, shared with grant-minutes).
+            original = grants_module.BillingLedger
 
             def capture(*args, **kwargs):
                 ledger = original(*args, **kwargs)
                 composed.append(ledger)
                 return ledger
 
-            monkeypatch.setattr(operations_module, "BillingLedger", capture)
+            monkeypatch.setattr(grants_module, "BillingLedger", capture)
             app = FastAPI()
             register_problem_handlers(app)
             install_operations_http(

@@ -15,7 +15,7 @@ import re
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Annotated, Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Path, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
@@ -27,22 +27,18 @@ from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository, build_audit_tenant_lock_statement
 from ac_platform.authorization.platform import platform_projection
 from ac_platform.authorization.policy import CapabilityDenied
-from ac_platform.billing.ledger import LEGACY_GRANT_PREFIX, BillingLedger
-from ac_platform.billing.trial import trial_enabled_for_tenant
+from ac_platform.billing.ledger import BillingLedger
 from ac_platform.conversation_intelligence.acquisition_usage import (
     ALLOWANCE_SECONDS,
     shared_account_committed_seconds,
 )
-from ac_platform.conversation_intelligence.entitlements import MinuteGrant
 from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
 from ac_platform.conversation_intelligence.minute_account_admin import (
     MINUTE_GRANT_ACTION,
-    MINUTE_GRANT_RESOURCE_TYPE,
     EligibleLearnerBusy,
     EligibleLearnerUnavailable,
     InvalidMinuteAccountSnapshot,
     MinuteAccountState,
-    append_minute_grant,
     load_minute_account,
     require_eligible_learner,
 )
@@ -50,6 +46,10 @@ from ac_platform.conversation_intelligence.minute_account_targets import (
     MAX_MINUTE_ACCOUNT_LOOKUP_LENGTH,
     MinuteAccountLookupInvalid,
     resolve_public_learner_target,
+)
+from ac_platform.conversation_intelligence.minute_grants import (
+    GrantBeyondRange,
+    write_audited_grant,
 )
 from ac_platform.conversation_intelligence.sales_xray_tenants import (
     LEARNER_ROLES,
@@ -916,24 +916,22 @@ def install_operations_http(
                     "The learner minute ledger cannot be read safely."
                 ) from error
         else:
-            grant_id = uuid4()
-            audit_event_id = uuid4()
-            grant = MinuteGrant(
-                tenant_id=str(tenant_id),
-                account_id=str(person_id),
-                grant_id=str(grant_id),
-                seconds=body.minutes * 60,
-                authorization_ref=f"audit-event:{audit_event_id}",
-                granted_by=str(actor.person_id),
-                reason=reason,
-            )
+            # The grant, its audit event and its ledger lot, as the grant-minutes
+            # command writes them too (minute_grants.write_audited_grant).
             try:
-                state = await append_minute_grant(
+                written = await write_audited_grant(
                     auth.database,
                     tenant_id=tenant_id,
                     person_id=person_id,
+                    minutes=body.minutes,
+                    reason=reason,
+                    approver_person_id=actor.person_id,
+                    session_id=actor.session_id,
+                    request_id=_request_id(request),
+                    idempotency_key=key,
+                    request_digest=digest,
                     operations_tenant_id=operations_tenant_id,
-                    grant=grant,
+                    public_learner_tenant_id=settings.public_learner_tenant_id,
                     roles=roles,
                 )
             except EligibleLearnerUnavailable as error:
@@ -949,57 +947,12 @@ def install_operations_http(
                 raise MinuteAccountUnavailable(
                     "The learner minute ledger cannot be changed safely."
                 ) from error
-            if sum(grant.seconds for grant in state.account.grants) > (
-                MAX_SAFE_JSON_INTEGER - ALLOWANCE_SECONDS
-            ):
+            except GrantBeyondRange as error:
                 raise InvalidOperationsRequest(
                     "The resulting allowance exceeds the exact JSON integer range."
-                )
-            event = await AuditRepository(auth.database).append(
-                event_id=audit_event_id,
-                tenant_id=operations_tenant_id,
-                actor_person_id=actor.person_id,
-                session_id=actor.session_id,
-                action=MINUTE_GRANT_ACTION,
-                resource_type=MINUTE_GRANT_RESOURCE_TYPE,
-                resource_id=grant_id,
-                payload={
-                    "idempotency_key": key,
-                    "request_digest": digest,
-                    "grant_id": str(grant_id),
-                    "tenant_id": str(tenant_id),
-                    "person_id": str(person_id),
-                    "minutes": body.minutes,
-                    "seconds": body.minutes * 60,
-                },
-                reason=reason,
-                request_id=_request_id(request),
-            )
-            # The ledger lot is written with its audit event (ADR 0052): the
-            # same source reference the legacy mirror uses, so neither path
-            # can count this grant twice.
-            ledger = BillingLedger(
-                auth.database,
-                operations_tenant_id=operations_tenant_id,
-                trial_enabled=trial_enabled_for_tenant(
-                    tenant_id, settings.public_learner_tenant_id
-                ),
-            )
-            billing_account = await ledger.personal_account(
-                tenant_id=tenant_id, person_id=person_id, create=True
-            )
-            assert billing_account is not None  # created above
-            await ledger.write_lot(
-                account=billing_account,
-                kind="grant",
-                seconds=body.minutes * 60,
-                valid_from=event.occurred_at,
-                source_ref=f"{LEGACY_GRANT_PREFIX}{event.id}",
-                actor_type="person",
-                actor_person_id=actor.person_id,
-                reason=reason,
-                audit_event_id=event.id,
-            )
+                ) from error
+            grant_id = written.grant_id
+            state = written.state
 
         effective_unlimited = (
             tester_policy is not None
