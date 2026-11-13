@@ -3,12 +3,14 @@
  * from Calls, and the lead's Back landed on Leads). That page handed the lead
  * over and moved to Leads, so the step before Leads is that page. Once the
  * lead's own step has gone (the arrow pops it; the phone's Back already has),
- * and Leads shows no lead, one more step back.
+ * and Leads shows no lead, one more step back. `onStay`: told when it doesn't
+ * step (the seller is somewhere else by then).
  */
 export function backToOpener(
   leadsPath = "/leads",
   // Long enough for a slow phone's own step back to land first.
   wait = 1_500,
+  onStay?: () => void,
 ) {
   let done = false;
   const onLeads = () =>
@@ -20,6 +22,7 @@ export function backToOpener(
     window.removeEventListener("popstate", popped);
     window.clearTimeout(timer);
     if (onLeads()) window.history.back();
+    else onStay?.();
   };
   // Back from the lead by the arrow: its step goes, then this.
   const popped = () => window.setTimeout(finish, 0);

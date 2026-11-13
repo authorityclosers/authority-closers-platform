@@ -64,6 +64,7 @@ import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { ActionSheet } from "./action-sheet";
 import { useTabAgain } from "../shell/tab-again";
 import { backToOpener } from "./back-to-opener";
+import { openerAt, setLeadOpener, type LeadOpener } from "./lead-opener";
 import { IN_APP_CALL, InAppCallHint, useInPhoneApp } from "./call-hint";
 import { deskWithMoves, useLeadMoves } from "./lead-moves";
 import { preloadFirstLeads } from "./list-cache";
@@ -539,6 +540,11 @@ export function LeadsRoute({
   const [openLead, setOpenLead] = useState<string | null>(null);
   // A lead handed over from another page that its Back returns to (R2).
   const [returnTo, setReturnTo] = useState<string | null>(null);
+  // ...and that page, lit in the tab bar and named on the lead's Back until
+  // the Back has stepped there (Redmi QA batch 6, 13 Nov 2026).
+  const [opener, setOpener] = useState<LeadOpener | null>(null);
+  useEffect(() => setLeadOpener(opener), [opener]);
+  useEffect(() => () => setLeadOpener(null), []);
   const [intent, setIntent] = useState<LeadIntent | null>(null);
   // Opened from My work: the history line to show.
   const [focusAt, setFocusAt] = useState<string | null>(null);
@@ -699,6 +705,7 @@ export function LeadsRoute({
       setFocusAt(handed.at ?? null);
       setOpenLead(handed.leadId);
       setReturnTo(handed.back ? handed.leadId : null);
+      setOpener(handed.back ? openerAt(handed.from) : null);
       refresh();
     };
     show(takeHandedLead());
@@ -1225,6 +1232,7 @@ export function LeadsRoute({
   useTabAgain("leads", () => {
     if (!openLead) return;
     setReturnTo(null);
+    setOpener(null);
     setBook(NO_ROUND);
     setOpenLead(null);
     setIntent(null);
@@ -1482,6 +1490,7 @@ export function LeadsRoute({
   ) => {
     setLinkDone(hash);
     setHolding(null);
+    setOpener(null);
     arrival.know(leadId);
     setIntent(next);
     setFocusAt(at);
@@ -1490,7 +1499,9 @@ export function LeadsRoute({
   const closeLead = (pause: unknown = true) => {
     // A call opened from Calls goes back to Calls once it closes, by the arrow
     // or the phone's Back (Redmi QA R2, 10 Nov 2026: it landed on Leads).
-    if (returnTo && returnTo === openLead) backToOpener();
+    if (returnTo && returnTo === openLead)
+      backToOpener(undefined, undefined, () => setOpener(null));
+    else setOpener(null);
     setReturnTo(null);
     // A round closed before its end pauses: the next start offers Continue.
     if (pause && book.on && queue && desk)
