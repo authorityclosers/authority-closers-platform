@@ -1731,10 +1731,14 @@ class PhoneReport(Command):
 
 
 class CallPrivacy(Command):
-    """The seller hides a call their phone logged from everyone else, or shows it again."""
+    """The seller hides a call their phone logged from everyone else, or shows it again; or
+    says a Call-button dial of theirs was never placed ("Didn't call")."""
 
     command_id: UUID
     private: bool
+    # "not_placed": the seller backed out of the dialler, so it was never a call (Redmi QA,
+    # 13 Nov 2026: a back-out counted as Attempted on a phone without call history).
+    reason: Literal["not_placed"] | None = None
 
 
 class TakingLeads(Command):

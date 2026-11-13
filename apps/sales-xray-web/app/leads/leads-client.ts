@@ -1639,6 +1639,16 @@ export function setCallPrivacy(
   );
 }
 
+/** "Didn't call": the seller's own Call-button dial was never placed (they backed out of
+ *  the dialler), so it leaves every count, list and Finish line (Redmi QA, 13 Nov 2026:
+ *  on a phone without call history it counted as Attempted). Nothing is deleted. */
+export function markDialNotPlaced(eventId: string, command = commandId()) {
+  return request<LeadDetail>(
+    `/calls/${encodeURIComponent(eventId)}/private`,
+    json("POST", { command_id: command, private: true, reason: "not_placed" }),
+  );
+}
+
 /** Calls by seller by day, India time (managers). */
 export function readCallReport(
   start: string,

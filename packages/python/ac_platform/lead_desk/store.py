@@ -5906,10 +5906,13 @@ class LeadDesk:
         return frozenset(call for call, private in state.items() if private)
 
     async def set_call_privacy(self, event_id: UUID, command: CallPrivacy) -> LeadDetail:
-        """The seller hides a call their phone logged from everyone else, or shows it again.
+        """The seller hides a call their phone logged from everyone else, or shows it again;
+        or says their own Call-button dial was never placed (``reason`` "not_placed": a
+        back-out from the dialler, on a phone whose call history can't say so).
 
         Nothing is removed: a marker is added, the call stays on the lead's history
-        for its seller, and it leaves every count and report while private.
+        for its seller, and it leaves every count, report and Finish line while marked,
+        so Attempted counts calls only (the orchestrator's honest numbers, 3 Nov 2026).
         """
         seen = await self._command_seen(command.command_id)
         if seen is not None:
@@ -5921,18 +5924,23 @@ class LeadDesk:
                 LeadEvent.kind == "call",
             )
         )
-        if (
-            event is None
-            or event.data.get("via") not in {"phone", "dialler_recording"}
-            or event.actor_person_id != self.viewer.person_id
-        ):
+        if event is None or event.actor_person_id != self.viewer.person_id:
+            raise DeskError(404, "Only your own calls from your phone can be made private.")
+        if command.reason == "not_placed":
+            # Only a Call-button dial the phone's call history hasn't timed: a call the
+            # phone logged was placed, whatever the seller taps (honest numbers).
+            if not is_dial(event.data) or PHONE_SECONDS in event.data:
+                raise DeskError(409, "Your phone logged this call, so it was placed.")
+        elif event.data.get("via") not in {"phone", "dialler_recording"}:
             raise DeskError(404, "Only your own calls from your phone can be made private.")
         lead = await self._lead(event.lead_id, lock=True)
         private_now = str(event.id) in await self._private_calls(
             event.created_at, lead_id=event.lead_id
         )
         if private_now != command.private:
-            if counted_phone_call(event.data):
+            # A dial counted on the lead when it was logged (record_call), so it gives
+            # its count back as it leaves, and takes it again if shown.
+            if counted_phone_call(event.data) or is_dial(event.data):
                 lead.calls = max(0, lead.calls + (-1 if command.private else 1))
             lead.updated_at = self.now
             self._event(
@@ -5942,6 +5950,7 @@ class LeadDesk:
                     "changed": [PRIVATE_CALL],
                     PRIVATE_CALL: str(event.id),
                     "private": command.private,
+                    **({"reason": command.reason} if command.reason else {}),
                 },
                 actor=self.viewer.person_id,
                 command_id=command.command_id,

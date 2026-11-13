@@ -3,6 +3,15 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+const placed = vi.hoisted(() => ({ marked: [] as string[] }));
+vi.mock("./leads-client", async (original) => ({
+  ...(await original<typeof import("./leads-client")>()),
+  markDialNotPlaced: async (eventId: string) => {
+    placed.marked.push(eventId);
+    return {};
+  },
+}));
+
 import { FinishRow } from "./finish-row";
 
 (
@@ -61,6 +70,8 @@ it("pins the newest unanswered call until it is finished or put away", async () 
   expect(away.getAttribute("aria-label")).toBe("Didn't call Fictional Asha");
   await act(async () => away.click());
   expect(host.textContent).toContain("Finish: Fictional Ravi");
+  // Never placed, for the server too (Redmi QA, 13 Nov 2026).
+  expect(placed.marked).toEqual(["call-1"]);
   // Put away stays put away on this phone.
   act(() => root.unmount());
   root = createRoot(host);
