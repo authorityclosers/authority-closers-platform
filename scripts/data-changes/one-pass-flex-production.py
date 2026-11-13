@@ -495,7 +495,9 @@ def _governance_draft(state: dict[str, Any], bundle: Any) -> dict[str, Any]:
         return {"refused": "the_pinned_approval_does_not_approve_the_classic_configuration"}
     draft = drafts[0]
     return {
-        "governance": draft,
+        # The Gemini stages' wording of a Luna profile is Root's and the owner's to write
+        # (the classic notice names ElevenLabs): left empty, the seal refuses it.
+        "governance": {**draft, c2_route.LUNA_GEMINI_NOTICE_FIELD: None},
         "notice_names_openai": "openai" in str(draft["privacy_notice"]).casefold(),
         "same_in_every_policy": all(item == draft for item in drafts),
         "policies": len(drafts),

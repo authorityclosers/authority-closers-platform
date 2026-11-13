@@ -281,6 +281,7 @@ GOVERNANCE = {
     "privacy_notice": "Synthetic test notice: OpenAI processes this call under a signed DPA.",
     "retention_ref": "ref:retention/openai-zero",
     "professional_gate_ref": "ref:professional/openai-1",
+    "gemini_privacy_notice": "Synthetic test notice: Google Gemini transcribes this call.",
 }
 
 
@@ -333,12 +334,29 @@ def test_the_luna_configuration_and_profile() -> None:
     luna = c2_route.derive_configuration(with_openai, flex=True, one_pass=True, luna=True)
     with pytest.raises(c2_route.SealError, match="openai_governance"):
         c2_route.seal(with_bundle, with_openai, luna, flex=True, one_pass=True, luna={})
+    # Without the Gemini stages' own wording, a Luna C2 would copy the classic notice
+    # ("Your audio goes to ElevenLabs"), untrue for Flash-Lite (13 Nov 2026): refused.
+    without = {k: v for k, v in GOVERNANCE.items() if k != "gemini_privacy_notice"}
+    for governance, code in (
+        (without, "openai_governance"),
+        ({**GOVERNANCE, "gemini_privacy_notice": " "}, "gemini_stages_wording"),
+        ({**GOVERNANCE, "gemini_privacy_notice": None}, "gemini_stages_wording"),
+    ):
+        with pytest.raises(c2_route.SealError, match=code):
+            c2_route.seal(with_bundle, with_openai, luna, flex=True, one_pass=True, luna=governance)
     sealed = c2_route.seal(
         with_bundle, with_openai, luna, flex=True, one_pass=True, luna=GOVERNANCE
     )
     (profile,) = sealed.acquisition_policy.profiles
     assert profile.profile_id == c2_route.LUNA_FLEX_PROFILE_ID
-    _, c4, c5 = profile.stages
+    heard, c4, c5 = profile.stages
+    assert (heard.provider_id, heard.privacy_notice) == (
+        "gemini",
+        GOVERNANCE["gemini_privacy_notice"],
+    )
+    # One privacy revision for the whole profile; the classic wording reaches no stage.
+    assert {stage.privacy_revision for stage in profile.stages} == {GOVERNANCE["privacy_revision"]}
+    assert not any("ElevenLabs" in stage.privacy_notice for stage in profile.stages)
     assert (c4.provider_id, c4.model_id, c4.recipe_revision) == (
         "openai",
         "gpt-6-luna:flex",
@@ -426,7 +444,10 @@ def test_the_hybrid_keeps_c5_on_gemini_and_takes_the_openai_entry_from_records()
         assert c4.privacy_notice == GOVERNANCE["privacy_notice"]
         assert c4.credential_ref == entry.credential_ref
         assert (c5.provider_id, c5.model_id) == ("gemini", text_model)
-        assert c5.privacy_notice == before.stages[2].privacy_notice  # Gemini's own
+        # The profile's Gemini stages (C2 and this C5) carry Root's Gemini wording.
+        for stage in (profile.stages[0], c5):
+            assert stage.privacy_notice == GOVERNANCE["gemini_privacy_notice"]
+            assert stage.privacy_revision == GOVERNANCE["privacy_revision"]
         dispatches = ConversationProviderAdmin._approved_configuration(_row(hybrid), sealed)
         assert [(d.provider_id, d.model_id) for d in dispatches][1:] == [
             ("openai", luna_model),
