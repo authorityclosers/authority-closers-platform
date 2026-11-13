@@ -3,8 +3,9 @@
 /**
  * Review alerts on the phone (owner, 19 Oct): inside the Sales Xray Android
  * app, a one-time card on /review asks to turn on an alert for each new Report
- * to review. No Leads or workspace is needed. Once on, the phone's alert
- * address is re-sent quietly each visit, so a renewed address keeps working.
+ * to review. No Leads or workspace is needed. Once the phone allows
+ * notifications, alerts start without that card and the phone's alert address
+ * is re-sent quietly each visit, so a renewed address keeps working.
  * Nothing shows in a browser, in an older app, to someone who is not a gold
  * reviewer, or while alerts aren't set up on this server.
  */
@@ -57,13 +58,19 @@ export function ReviewAlertsCard() {
       ]);
       const settings = ready(config);
       if (!alive || !phone?.supported || !settings) return;
-      if (phone.allowed && phone.token) {
-        // Already on: this phone gets review alerts, at its current address.
-        const app = await phoneStatus();
-        void registerReviewPhone(phone.token, app?.version).catch(
-          () => undefined,
-        );
-        return;
+      if (phone.allowed) {
+        // Notifications allowed: start alerts if this phone has no address
+        // yet (no second ask), then keep the address current. Only this
+        // card's button used to start them (Redmi QA on the owner's
+        // production build, 13 Nov 2026: production held one alert phone).
+        const token =
+          phone.token ?? (await pushEnable(settings))?.token ?? null;
+        if (!alive) return;
+        if (token) {
+          const app = await phoneStatus();
+          void registerReviewPhone(token, app?.version).catch(() => undefined);
+          return;
+        }
       }
       let hidden = false;
       try {

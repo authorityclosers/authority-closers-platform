@@ -93,7 +93,7 @@ afterEach(() => {
 
 async function settle() {
   await act(async () => {
-    for (let i = 0; i < 8; i += 1) await Promise.resolve();
+    for (let i = 0; i < 16; i += 1) await Promise.resolve();
   });
 }
 
@@ -153,6 +153,26 @@ it("keeps an alerting phone's address current without a card", async () => {
   expect(posts.map((p) => p.body.token)).toEqual([
     "fictional-phone-address-0002",
   ]);
+});
+
+it("starts review alerts without a card once the phone allows notifications", async () => {
+  // Redmi QA on the owner's production build, 13 Nov 2026: phone setup allows
+  // notifications, but only this card's button started alerts.
+  phone.status = { supported: true, allowed: true, token: null };
+  await show();
+  expect(host.textContent).toBe("");
+  expect(phone.enable).toHaveBeenCalledTimes(1);
+  expect(posts.map((p) => p.body.token)).toEqual([
+    "fictional-phone-address-0001",
+  ]);
+});
+
+it("offers the card when allowed notifications still give no address", async () => {
+  phone.status = { supported: true, allowed: true, token: null };
+  phone.enabled = { supported: true, allowed: true, token: null };
+  await show();
+  expect(host.textContent).toContain("Know when a new Report is ready.");
+  expect(posts).toEqual([]);
 });
 
 it("shows nothing in a browser", async () => {

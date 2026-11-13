@@ -3,9 +3,10 @@
 /**
  * Lead alerts on the phone (UX study item 4): inside the Sales Xray Android
  * app, a one-time card asks to turn on alerts for a new lead or a call that is
- * due. After that the phone's alert address is re-sent quietly each visit, so
- * a renewed address keeps working. Nothing shows in a browser, in an older app
- * or while alerts aren't set up on this server.
+ * due. Once the phone allows notifications (phone setup asks for them), alerts
+ * start without that card and the phone's alert address is re-sent quietly
+ * each visit, so a renewed address keeps working. Nothing shows in a browser,
+ * in an older app or while alerts aren't set up on this server.
  */
 
 import { BellRing, X } from "lucide-react";
@@ -24,9 +25,21 @@ import {
   pushEnable,
   pushStatus,
 } from "./native-phone";
+import { ALERTS_PHONE_ON } from "../settings/notifications-client";
 import styles from "./leads.module.css";
 
 const HIDE_KEY = "sx-leads-alerts-card";
+
+async function keep(token: string): Promise<boolean> {
+  const app = await phoneStatus();
+  try {
+    await registerDevice(token, app?.version);
+  } catch {
+    return false;
+  }
+  window.dispatchEvent(new Event(ALERTS_PHONE_ON));
+  return true;
+}
 
 type Ready = {
   project_id: string;
@@ -57,11 +70,20 @@ export function AlertsCard() {
       ]);
       const settings = ready(config);
       if (!alive || !phone?.supported || !settings) return;
-      if (phone.allowed && phone.token) {
-        // Already on: keep this phone's address current on the server.
-        const app = await phoneStatus();
-        void registerDevice(phone.token, app?.version).catch(() => undefined);
-        return;
+      if (phone.allowed) {
+        // Notifications allowed: start alerts if this phone has no address
+        // yet (no second ask), then keep the address current on the server.
+        // Only this card's button used to start them, so a seller who allowed
+        // notifications in phone setup never got an alert (Redmi QA on the
+        // owner's production build, 13 Nov 2026: one alert phone in all of
+        // production, and Phone & alerts said this phone gets none).
+        const token =
+          phone.token ?? (await pushEnable(settings))?.token ?? null;
+        if (!alive) return;
+        if (token) {
+          void keep(token);
+          return;
+        }
       }
       let hidden = false;
       try {
@@ -85,12 +107,10 @@ export function AlertsCard() {
       setState("off");
       return;
     }
-    const app = await phoneStatus();
-    try {
-      await registerDevice(phone.token, app?.version);
+    if (await keep(phone.token)) {
       buzz("done");
       setState("on");
-    } catch {
+    } else {
       setState("off");
     }
   };

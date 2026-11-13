@@ -76,6 +76,10 @@ export const saveNotify = (
 
 export const testNotify = () => call<NotifyTest>("/test", { method: "POST" });
 
+/** Sent once this phone's alert address reaches Sales X-Ray (AlertsCard), so
+ *  Settings' Phone & alerts reads its phones again. */
+export const ALERTS_PHONE_ON = "sx-alerts-phone-on";
+
 /**
  * What to do when no phone of this person gets alerts yet. Inside the phone
  * app that means this phone's notifications, never "sign in on your phone"
