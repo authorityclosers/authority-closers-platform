@@ -8,7 +8,12 @@ vi.mock("../app-session", () => ({
   isShellRoute: (pathname: string | null) => pathname === "/dashboard",
 }));
 
-import { ASKED_KEY, GetAppSheet, SNOOZE_KEY } from "./get-app-sheet";
+import {
+  GetAppSheet,
+  SETTLED_KEY,
+  SNOOZE_KEY,
+  forgetTesterRead,
+} from "./get-app-sheet";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -30,6 +35,7 @@ function as(userAgent: string) {
 }
 
 beforeEach(() => {
+  forgetTesterRead();
   localStorage.clear();
   sessionStorage.clear();
   path.value = "/dashboard";
@@ -71,7 +77,8 @@ it("opens Play's two steps for a ready tester on an Android browser, and Not now
     "https://play.google.com/apps/testing/com.authorityclosers.salesxray",
     "https://play.google.com/store/apps/details?id=com.authorityclosers.salesxray",
   ]);
-  expect(sessionStorage.getItem(ASKED_KEY)).toBe("1");
+  // A ready tester isn't settled: the sheet may come back after its snooze.
+  expect(sessionStorage.getItem(SETTLED_KEY)).toBeNull();
   await act(async () => {
     [...document.querySelectorAll("button")]
       .find((button) => button.textContent === "Not now")!
@@ -103,4 +110,25 @@ it("stays away inside the app, while snoozed, off the app's pages and for anyone
   await act(async () => root.render(<GetAppSheet key="waiting" />));
   expect(waiting).toHaveBeenCalledTimes(1);
   expect(sheetLinks()).toEqual([]);
+  // Not ready: this tab doesn't ask again on the next page load.
+  expect(sessionStorage.getItem(SETTLED_KEY)).toBe("1");
+  forgetTesterRead();
+  await act(async () => root.render(<GetAppSheet key="again" />));
+  expect(waiting).toHaveBeenCalledTimes(1);
+});
+
+it("asks once when React runs the effect twice, and still opens", async () => {
+  as(ANDROID);
+  const fetcher = answer("ready");
+  vi.stubGlobal("fetch", fetcher);
+  const { StrictMode } = await import("react");
+  await act(async () =>
+    root.render(
+      <StrictMode>
+        <GetAppSheet />
+      </StrictMode>,
+    ),
+  );
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(document.body.textContent).toContain("Get the Sales X-Ray app");
 });

@@ -202,7 +202,7 @@ export function PlaySteps({ email }: { email: string }) {
     },
   ];
   return (
-    <>
+    <div className={styles.playSteps}>
       <ol className={styles.steps}>
         {steps.map((step) => (
           <li key={step.n} className={styles.step}>
@@ -230,7 +230,7 @@ export function PlaySteps({ email }: { email: string }) {
         <summary>{COPY.notFoundTitle}</summary>
         <p>{withEmail(COPY.notFoundText, email)}</p>
       </details>
-    </>
+    </div>
   );
 }
 

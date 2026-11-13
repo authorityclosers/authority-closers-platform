@@ -271,6 +271,11 @@
   color: var(--sx-bad);
 }
 
+.playSteps {
+  display: grid;
+  gap: 16px;
+}
+
 .steps {
   display: grid;
   gap: 12px;

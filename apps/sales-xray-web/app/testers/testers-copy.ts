@@ -30,6 +30,7 @@ export const COPY = {
     "We're adding {email} to the tester group. You'll get an email shortly, then it's two taps.",
   readyTitle: "You're in",
   readyText: "Two steps on your Android phone, signed in as {email}:",
+  sheetText: "You're in the tester group. Two steps on this phone:",
   stepOneTitle: "Become a tester",
   stepOneText: "Open Play's test page and tap Become a tester.",
   stepOneButton: "Become a tester",
