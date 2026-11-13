@@ -1,5 +1,6 @@
 "use client";
 
+import { CALLS_PAGE_NAME } from "../calls-page-name";
 import {
   AudioLines,
   Building2,
@@ -1099,7 +1100,7 @@ function CallsTable({
           <span className={styles.count}>{total}</span>
         </h2>
         <Link className={styles.textLink} href="/calls" prefetch={false}>
-          Open Calls
+          Open {CALLS_PAGE_NAME}
         </Link>
       </div>
       {calls.length === 0 ? (

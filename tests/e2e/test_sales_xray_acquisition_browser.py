@@ -885,12 +885,13 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         library_page.get_by_role(
                             "complementary", name="Sales Xray navigation", exact=True
                         )
-                        .get_by_role("link", name="Calls", exact=True)
+                        .get_by_role("link", name="Reports", exact=True)
                         .click()
                     )
-                    # The Calls page has one page heading, "Calls".
+                    # The calls page has one page heading, its name (calls-page-name.ts,
+                    # "Reports" since 13 Nov 2026), whichever link opened it.
                     await expect(
-                        library_page.get_by_role("heading", name="Calls", exact=True, level=1)
+                        library_page.get_by_role("heading", name="Reports", exact=True, level=1)
                     ).to_be_visible()
                     # While the Calls link re-renders the page, the row the server
                     # streamed can still sit in React's hidden container for a few

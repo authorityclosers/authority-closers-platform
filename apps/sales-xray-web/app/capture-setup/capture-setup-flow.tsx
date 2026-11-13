@@ -18,6 +18,7 @@
  * phone"'s (phone-onboarding.module.css): a full screen, buttons in thumb reach.
  */
 
+import { CALLS_PAGE_NAME } from "../calls-page-name";
 import {
   BatteryCharging,
   CheckCircle2,
@@ -277,7 +278,7 @@ const CAPTURES = [
   "Sales X-Ray checks the recordings folder you choose, also when the app is closed.",
   "It uploads only calls with your leads: the lead's number and the call's time must match. Other calls and files stay on your phone.",
   "You get 60 seconds to Undo each upload.",
-  "Each call is analysed for its report, at your organisation's AI setting. Audio is encrypted and can be deleted from Calls.",
+  `Each call is analysed for its report, at your organisation's AI setting. Audio is encrypted and can be deleted from ${CALLS_PAGE_NAME}.`,
 ];
 
 /** Step 2: the disclosure, then agreeing (the standing consent) or not now. */

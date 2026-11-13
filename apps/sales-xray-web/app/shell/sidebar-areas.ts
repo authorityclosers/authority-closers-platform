@@ -1,3 +1,4 @@
+import { CALLS_PAGE_NAME } from "../calls-page-name";
 import {
   AudioLines,
   Contact,
@@ -157,7 +158,7 @@ export function sidebarAreas({
         { key: "chats", label: "Chats", href: "/chats", icon: MessagesSquare },
         {
           key: "calls",
-          label: "Calls",
+          label: CALLS_PAGE_NAME,
           href: "/analysis/calls",
           icon: AudioLines,
         },

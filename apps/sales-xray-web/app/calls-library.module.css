@@ -1564,7 +1564,7 @@
   }
 }
 
-/* The shell's top bar already reads "Calls" (r17); screen readers keep the h1. */
+/* The shell's top bar already names the page (r17); screen readers keep the h1. */
 .page[data-variant="standalone"] .headerCopy h1 {
   position: absolute;
   width: 1px;

@@ -1,5 +1,6 @@
 "use client";
 
+import { CALLS_PAGE_NAME } from "./calls-page-name";
 import { ArrowRight, LogOut } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
@@ -18,8 +19,7 @@ import { forgetLeadData } from "./leads/list-cache-slot";
 import { confirmLogOutWithUnsent } from "./sync/write-queue";
 
 const SIGN_OUT_ERROR = "We couldn’t confirm sign out. Try again.";
-const SIGN_OUT_UPLOAD_WARNING =
-  "The upload is still in progress or unconfirmed. Signing out will stop it and clear this tab’s recovery state. If the server already received it, you can find it in Calls. Continue?";
+const SIGN_OUT_UPLOAD_WARNING = `The upload is still in progress or unconfirmed. Signing out will stop it and clear this tab’s recovery state. If the server already received it, you can find it in ${CALLS_PAGE_NAME}. Continue?`;
 
 export class UploadNeedsSignOutConfirmationError extends Error {
   constructor() {

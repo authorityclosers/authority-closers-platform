@@ -1,5 +1,6 @@
 "use client";
 
+import { CALLS_PAGE_NAME } from "../calls-page-name";
 import { X } from "lucide-react";
 import Link from "next/link";
 import type { MouseEvent } from "react";
@@ -52,7 +53,7 @@ export function UploadIndicator({
         </div>
         <div className={styles.actions}>
           <Link className={styles.action} href="/analysis/calls">
-            Open Calls
+            Open {CALLS_PAGE_NAME}
           </Link>
         </div>
       </aside>
@@ -118,7 +119,7 @@ export function UploadIndicator({
                 : analysis?.state === "starting"
                   ? "Saved. Starting the analysis you approved."
                   : analysis?.state === "accepted"
-                    ? "Your report will appear in Calls when it’s ready."
+                    ? `Your report will appear in ${CALLS_PAGE_NAME} when it’s ready.`
                     : analysis?.state === "needs_action"
                       ? analysis.message
                       : upload.phase === "saved"

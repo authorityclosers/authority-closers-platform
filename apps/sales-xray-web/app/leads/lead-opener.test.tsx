@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
+import { CALLS_PAGE_NAME } from "../calls-page-name";
 import { LeadPageFrame } from "./lead-page-frame";
 import { openerAt, setLeadOpener } from "./lead-opener";
 
@@ -24,10 +25,10 @@ afterEach(() => {
 
 // Redmi QA batch 6 (13 Nov 2026): a call opened from Calls, and the lead's
 // Back read "Back to Leads". It names the page it goes back to.
-it("names Calls as the lead's Back while Calls opened it", async () => {
+it("names the calls page as the lead's Back while it opened it", async () => {
   expect(openerAt("/analysis/calls")).toEqual({
     path: "/analysis/calls",
-    name: "Calls",
+    name: CALLS_PAGE_NAME,
   });
   expect(openerAt("/leads")).toBeNull();
   expect(openerAt(null)).toBeNull();
@@ -44,7 +45,7 @@ it("names Calls as the lead's Back while Calls opened it", async () => {
       ?.getAttribute("aria-label");
   expect(back()).toBe("Back to Leads");
   await act(async () => setLeadOpener(openerAt("/analysis/calls")));
-  expect(back()).toBe("Back to Calls");
+  expect(back()).toBe(`Back to ${CALLS_PAGE_NAME}`);
   await act(async () => setLeadOpener(null));
   expect(back()).toBe("Back to Leads");
 });

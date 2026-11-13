@@ -1,3 +1,4 @@
+import { CALLS_PAGE_NAME } from "../calls-page-name";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -118,7 +119,9 @@ it("names the leads, says it can't be undone, and deletes on one confirm", async
   for (const name of NAMES.slice(0, 5)) expect(text).toContain(name);
   expect(text).not.toContain("Test Lead One");
   expect(text).toContain("and 2 more");
-  expect(text).toContain("Calls recorded with them stay in Calls.");
+  expect(text).toContain(
+    `Calls recorded with them stay in ${CALLS_PAGE_NAME}.`,
+  );
 
   // A problem is a corner card; the sheet stays, and Delete again sends the same command.
   await act(async () => button("Delete 7 leads")!.click());

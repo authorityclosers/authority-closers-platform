@@ -1,5 +1,6 @@
 "use client";
 
+import { CALLS_PAGE_NAME } from "./calls-page-name";
 import { trackOnce, waitBand } from "./telemetry";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -596,7 +597,7 @@ export function AcquisitionProcessingPanel({
       {phase === "working" && (
         <p className={styles.note}>
           {signedIn
-            ? "You can leave this page. Your report will appear in Calls when it’s ready."
+            ? `You can leave this page. Your report will appear in ${CALLS_PAGE_NAME} when it’s ready.`
             : "You can leave this page. Keep this call’s link to come back while your session and call remain available."}
         </p>
       )}

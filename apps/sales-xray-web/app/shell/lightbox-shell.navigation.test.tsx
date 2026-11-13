@@ -121,7 +121,7 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
   expect(ask?.getAttribute("aria-haspopup")).toBe("dialog");
   expect(
     desktopNav?.querySelector(
-      'a[aria-label="Calls"][href="/analysis/calls"][data-next-client-link="true"]',
+      `a[aria-label="${CALLS_PAGE_NAME}"][href="/analysis/calls"][data-next-client-link="true"]`,
     ),
   ).not.toBeNull();
   expect(
@@ -142,7 +142,7 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
     [
       ["Leads", "/leads", null],
       ["Chats", "/chats", null],
-      ["Calls", "/analysis/calls", null],
+      [CALLS_PAGE_NAME, "/analysis/calls", null],
       ["Prospects", "/prospects", null],
     ],
   ]);
@@ -369,7 +369,7 @@ it("names the current workspace in the phone header and the desktop top bar", ()
   expect(
     aside?.querySelector('[data-area-panel] [aria-current="page"]')
       ?.textContent,
-  ).toBe("Calls");
+  ).toBe(CALLS_PAGE_NAME);
 });
 
 it("lists every hub section under Team, Insights and Plan & billing included", () => {

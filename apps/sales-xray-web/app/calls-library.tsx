@@ -87,6 +87,7 @@ import { CallsDrawer } from "./calls-drawer";
 import { useCallInsights, type CallInsight } from "./calls-insights";
 import { insightFromSummary, needsOwnRead } from "./call-summary";
 import { useRowsInView } from "./rows-in-view";
+import { CALLS_PAGE_NAME } from "./calls-page-name";
 import { csvRows } from "./csv-export";
 import { Panel } from "./ui/kit";
 import { RecentCallsList, RecentCallsSkeleton } from "./dashboard/recent-calls";
@@ -1677,7 +1678,8 @@ function CallsLibraryContent({
         style={phoneWaiting ? { display: "none" } : undefined}
       >
         <div className={styles.headerCopy}>
-          <h1 id="calls-library-title">Calls</h1>
+          {/* For screen readers: the shell's bar shows the page's name. */}
+          <h1 id="calls-library-title">{CALLS_PAGE_NAME}</h1>
           <p className="calls-library-summary">
             {access?.authenticated === true && submissions.length > 0 ? (
               <>

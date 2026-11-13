@@ -1,5 +1,6 @@
 "use client";
 
+import { CALLS_PAGE_NAME } from "./calls-page-name";
 import { Skeleton } from "./ui/kit";
 import styles from "./calls-library.module.css";
 
@@ -84,7 +85,7 @@ export function CallsBodySkeleton({
 export function CallsSkeleton() {
   return (
     // The standalone page's frame: its h1 is for screen readers only (the
-    // shell's bar says "Calls"), so the loading outline must not show one.
+    // shell's bar names the page), so the loading outline must not show one.
     <div
       className={styles.page}
       data-variant="standalone"
@@ -92,7 +93,7 @@ export function CallsSkeleton() {
     >
       <header className={styles.header}>
         <div className={styles.headerCopy}>
-          <h1>Calls</h1>
+          <h1>{CALLS_PAGE_NAME}</h1>
           <p>Private to your account and workspace</p>
         </div>
       </header>

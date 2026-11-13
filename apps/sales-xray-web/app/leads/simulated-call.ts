@@ -9,6 +9,7 @@
  *   owner's call. Nobody is dialled.
  */
 
+import { CALLS_PAGE_NAME } from "../calls-page-name";
 import {
   AcquisitionError,
   acquisition,
@@ -389,7 +390,7 @@ async function drive({
       ["failed", "expired", "unavailable", "needs_member"].includes(item.state)
     )
       throw new LeadsError(
-        "The recording was saved but its analysis needs attention. Open Calls to review it.",
+        `The recording was saved but its analysis needs attention. Open ${CALLS_PAGE_NAME} to review it.`,
         0,
       );
     if (item.submissionId) {
@@ -423,7 +424,7 @@ async function drive({
   throw new LeadsError(
     linked
       ? "The call is on the lead, but its file checks are slow today. Open the call later to start its analysis."
-      : "The recording is still being checked. It will appear under Calls; try the lead again shortly.",
+      : `The recording is still being checked. It will appear under ${CALLS_PAGE_NAME}; try the lead again shortly.`,
     0,
   );
 }

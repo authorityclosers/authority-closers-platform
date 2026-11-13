@@ -1,5 +1,6 @@
 "use client";
 
+import { CALLS_PAGE_NAME } from "../../calls-page-name";
 import { AudioLines, ChevronDown, GraduationCap, Pencil } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
@@ -579,7 +580,9 @@ export function PersonCalls({
       title="Calls"
       sub={`${data.listed.length} in the last ${PERSON_WEEKS} weeks`}
       action={
-        callsHref ? { href: callsHref, label: "Open in Calls" } : undefined
+        callsHref
+          ? { href: callsHref, label: `Open in ${CALLS_PAGE_NAME}` }
+          : undefined
       }
       foot={
         !data.complete ? (

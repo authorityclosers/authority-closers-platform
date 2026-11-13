@@ -1157,7 +1157,12 @@ function LightboxShellFrame({
       place("Home", "/dashboard", <LayoutGrid size={17} />, "dashboard sales"),
       place("Leads", "/leads", <Contact size={17} />, "pipeline stages"),
       place("Chats", "/chats", <MessagesSquare size={17} />, "whatsapp inbox"),
-      place("Calls", "/analysis/calls", <AudioLines size={17} />, "reports"),
+      place(
+        CALLS_PAGE_NAME,
+        "/analysis/calls",
+        <AudioLines size={17} />,
+        "calls recordings",
+      ),
       place("Coaching", "/coaching", <GraduationCap size={17} />),
       place(
         "Reports",

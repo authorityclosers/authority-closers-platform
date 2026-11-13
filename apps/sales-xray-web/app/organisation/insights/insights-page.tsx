@@ -1,5 +1,6 @@
 "use client";
 
+import { CALLS_PAGE_NAME } from "../../calls-page-name";
 import { Lock } from "lucide-react";
 import { useState } from "react";
 
@@ -68,7 +69,7 @@ export function InsightsPage({
           <Empty
             icon={Lock}
             title="Only owners and managers can see Insights"
-            text="Your own calls and coaching stay in Calls and Coaching."
+            text={`Your own calls and coaching stay in ${CALLS_PAGE_NAME} and Coaching.`}
             action={{ label: "Back to Organisation", href: "/organisation" }}
           />
         ) : tenantId ? (

@@ -1,5 +1,6 @@
 "use client";
 
+import { CALLS_PAGE_NAME } from "./calls-page-name";
 import { usePurchasesAllowed } from "./purchase-policy";
 import {
   ArrowUpRight,
@@ -43,8 +44,7 @@ import { AccountAvatarImage } from "./speaker-avatar";
 import styles from "./profile-menu.module.css";
 import { useBackClose } from "./ui/back-close";
 
-const SIGN_OUT_UPLOAD_WARNING =
-  "The upload is still in progress or unconfirmed. Signing out will stop it and clear this tab’s recovery state. If the server already received it, you can find it in Calls. Continue?";
+const SIGN_OUT_UPLOAD_WARNING = `The upload is still in progress or unconfirmed. Signing out will stop it and clear this tab’s recovery state. If the server already received it, you can find it in ${CALLS_PAGE_NAME}. Continue?`;
 
 export { PROFILE_UPDATED_EVENT } from "./shell/profile-store";
 
@@ -411,7 +411,7 @@ export function ProfileMenu({
               onClick={() => setOpen(false)}
             >
               <FolderOpen size={16} aria-hidden="true" />
-              <span>Calls</span>
+              <span>{CALLS_PAGE_NAME}</span>
             </Link>
             <ThemeRow />
           </div>

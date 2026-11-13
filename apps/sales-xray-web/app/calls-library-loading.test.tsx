@@ -22,6 +22,7 @@ vi.mock("./capture-setup/recording-check", () => ({
 }));
 
 import { CallsLibrary } from "./calls-library";
+import { CALLS_PAGE_NAME } from "./calls-page-name";
 import { UploadSessionProvider } from "./hooks/upload-session";
 import {
   WorkspaceAccessProvider,
@@ -212,6 +213,8 @@ it("opens the Reports tab on the saved calls, the phone's calls after them", asy
   await act(async () => render(team, true));
   await flush();
   const title = host.querySelector("h1#calls-library-title");
+  // The page's heading is its tab's name (calls-page-name.ts).
+  expect(title?.textContent).toBe(CALLS_PAGE_NAME);
   const header = title?.parentElement?.parentElement as HTMLElement;
   expect(header.style.display).toBe("");
   expect(host.querySelector("h2#calls-library-empty")?.textContent).toBe(
