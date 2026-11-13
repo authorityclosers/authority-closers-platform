@@ -879,7 +879,15 @@ REVENUE_PARITY_TABLES = BUG_REPORTER_PARITY_TABLES + (
     "lead_desk_deal_amounts",
     "lead_desk_revenue_targets",
 )
+# 0151 adds the Sales X-Ray tester list (one append-only table).
+TESTERS_PARITY_MIGRATION_HEAD = "20261113_0151"
+TESTERS_PARITY_CONTRACT = "ac-postgres-parity-v117"
+TESTERS_PARITY_TABLES = REVENUE_PARITY_TABLES + ("sales_xray_tester_events",)
 VERSIONED_PARITY_CONTRACTS = {
+    TESTERS_PARITY_MIGRATION_HEAD: (
+        TESTERS_PARITY_CONTRACT,
+        TESTERS_PARITY_TABLES,
+    ),
     REVENUE_PARITY_MIGRATION_HEAD: (
         REVENUE_PARITY_CONTRACT,
         REVENUE_PARITY_TABLES,

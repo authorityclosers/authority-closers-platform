@@ -80,6 +80,7 @@ from ac_platform.providers import models as provider_models
 from ac_platform.pulse import models as pulse_models
 from ac_platform.tenancy import models as tenancy_models
 from ac_platform.tenancy import seat_grant_models as tenancy_seat_grant_models
+from ac_platform.testers import models as tester_models
 from ac_platform.usage_people import models as usage_people_models
 
 MODEL_MODULES = (
@@ -123,6 +124,7 @@ MODEL_MODULES = (
     brain4_models,
     call_ai_models,
     bug_report_models,
+    tester_models,
     feedback_models,
     fx_models,
     usage_people_models,

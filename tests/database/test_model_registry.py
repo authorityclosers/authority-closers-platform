@@ -219,6 +219,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "bug_reporter_access",
         "lead_desk_deal_amounts",
         "lead_desk_revenue_targets",
+        "sales_xray_tester_events",
         "bug_issues",
         "bug_issue_reports",
         "bug_issue_events",
