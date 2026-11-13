@@ -142,12 +142,13 @@ export function SortPick({
   );
 }
 
-/** The sort as a filter's words. */
+/** The sort as its chip's words, said as a sort, never like a filter (Redmi
+ *  QA batch 8, 13 Nov 2026: "By name ×" read as one). */
 function sortLabel(more: ListMore): string {
   if (!more.sort) return "";
   if (more.sort === "created")
-    return more.order === "asc" ? "Oldest first" : "Newest first";
-  return `By ${SORT_WORDS[more.sort].toLowerCase()}${more.order === "desc" ? ", reversed" : ""}`;
+    return `Sort: ${more.order === "asc" ? "Oldest first" : "Newest first"}`;
+  return `Sort: ${SORT_WORDS[more.sort]}${more.order === "desc" ? ", reversed" : ""}`;
 }
 /** Where leads come from, in the page's words (the lead's source key). */
 export const SOURCE_WORDS: Record<string, string> = {
@@ -319,7 +320,11 @@ export function ActiveFilters({
           <button
             type="button"
             className={styles.activeFilter}
-            aria-label={`Remove filter ${chip.label}`}
+            aria-label={
+              chip.key === "sort"
+                ? `Back to the list's own order (${chip.label})`
+                : `Remove filter ${chip.label}`
+            }
             onClick={() => onChange(chip.clear)}
           >
             <span>{chip.label}</span>

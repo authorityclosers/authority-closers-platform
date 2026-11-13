@@ -86,6 +86,29 @@
   content: "›";
 }
 
+/* Phones: the three steps as three columns, each number over its name, so
+   none wraps alone behind a stray "›" at large text (Redmi QA on the owner's
+   production build, 13 Nov 2026, 363 px at 130 %). The numbers keep the
+   order. */
+@media (max-width: 719.98px) {
+  .trail {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+  }
+
+  .trail li {
+    flex-direction: column;
+    gap: 4px;
+    text-align: center;
+  }
+
+  .trail li + li::before {
+    display: none;
+  }
+}
+
 .number {
   display: inline-grid;
   place-items: center;

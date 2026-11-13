@@ -175,6 +175,16 @@
   }
 }
 
+/* Why no file can be chosen now, under the button that is off. */
+.blocked {
+  max-width: 34ch;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  text-align: center;
+}
+
 .browse:hover {
   text-decoration: underline;
   text-underline-offset: 3px;

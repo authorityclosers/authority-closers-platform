@@ -8,13 +8,13 @@
  * How did it go?", until it is answered or put away with "Didn't call" (Leads
  * L1, 8 Nov 2026: as Home's Pending action, it scrolls away with the list).
  * The server says which calls wait (the desk's `unanswered`); "Didn't call" is
- * kept on this device.
+ * kept on this device and tells the server the dial was never placed.
  */
 
 import { useState, useSyncExternalStore } from "react";
 
 import { displayName } from "../display-name";
-import { ago, type Unanswered } from "./leads-client";
+import { ago, markDialNotPlaced, type Unanswered } from "./leads-client";
 import styles from "./leads.module.css";
 
 const GONE = "sx-finish-put-away";
@@ -99,6 +99,9 @@ export function FinishRow({
           const next = [...(gone ?? []), call.event_id];
           setGone(next);
           keepGone(next);
+          // Not a call at all: it leaves the counts, Calls and Home's Pending
+          // action everywhere, not only on this phone (Redmi QA, 13 Nov 2026).
+          void markDialNotPlaced(call.event_id).catch(() => undefined);
         }}
       >
         Didn&rsquo;t call

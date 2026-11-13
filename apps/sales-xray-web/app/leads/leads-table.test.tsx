@@ -318,6 +318,16 @@ it("scrolls the whole table sideways on a phone, every column in its row", async
       );
       expect(host.querySelector("[data-fit]")).toBeNull();
       expect(host.querySelector("[data-scroll]")).not.toBeNull();
+      // Its columns snap at the pinned name's edge, measured (Redmi QA batch
+      // 8, 13 Nov 2026: "ast call", "ot called" half under the name).
+      expect(
+        host
+          .querySelector<HTMLElement>("[data-scroll]")
+          ?.style.getPropertyValue("--pinned-w"),
+      ).toMatch(/^\d+px$/);
+      expect(
+        host.querySelector("[data-scroll]")?.hasAttribute("data-snap"),
+      ).toBe(true);
       expect(host.textContent).not.toContain("under each row");
       expect(headers()).not.toContain("More");
       expect(headers().length).toBeGreaterThan(3);

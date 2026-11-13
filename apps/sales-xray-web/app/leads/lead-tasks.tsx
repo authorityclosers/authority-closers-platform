@@ -23,6 +23,9 @@ import {
 import { dueWords, kindOf, SNOOZES } from "./task-words";
 import styles from "./tasks.module.css";
 
+/** How long a ticked task stays on the lead before it leaves the list. */
+const TICK_HOLD_MS = 600;
+
 export function LeadTasks({
   detail,
   onChanged,
@@ -34,6 +37,8 @@ export function LeadTasks({
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [later, setLater] = useState<TaskView | null>(null);
+  // Ticked here and not yet gone: struck through, its check filled.
+  const [ticked, setTicked] = useState<string[]>([]);
   const tasks = detail.tasks ?? [];
   if (tasks.length === 0) return null;
 
@@ -67,12 +72,50 @@ export function LeadTasks({
     (choice) => choice.key !== "evening" || now().getHours() < 17,
   );
 
+  // Back on the list from the Done card's Undo.
+  const undo = async (task: TaskView) => {
+    try {
+      await taskAction(task, "undo");
+      setTicked((ids) => ids.filter((id) => id !== task.task_id));
+      notify({
+        id: `lead-task-${task.task_id}`,
+        tone: "success",
+        title: "Back on your list",
+        message: task.title,
+        timeout: 3000,
+      });
+      onChanged(await readLead(detail.lead.lead_id));
+    } catch {
+      notify({
+        id: `lead-task-${task.task_id}`,
+        tone: "error",
+        title: "Not undone",
+        message: "Try again.",
+      });
+    }
+  };
+
+  // Done ticks at once and holds a moment before the task leaves, with Undo in
+  // its card (Redmi QA, 10 Nov 2026: the row just vanished 2-3 s later, with
+  // no tick and no Undo).
   const done = async (task: TaskView) => {
     setBusy(task.task_id);
+    setTicked((ids) => [...ids, task.task_id]);
     try {
-      await taskAction(task, "done");
+      const saved = await taskAction(task, "done");
+      notify({
+        id: `lead-task-${task.task_id}`,
+        tone: "success",
+        title: "Done",
+        message: task.title,
+        timeout: 5000,
+        action: { label: "Undo", run: () => void undo(saved) },
+      });
+      await new Promise((resolve) => window.setTimeout(resolve, TICK_HOLD_MS));
       onChanged(await readLead(detail.lead.lead_id));
+      setTicked((ids) => ids.filter((id) => id !== task.task_id));
     } catch (reason) {
+      setTicked((ids) => ids.filter((id) => id !== task.task_id));
       const kept = reason instanceof LeadsError && reason.kept;
       notify({
         id: `lead-task-${task.task_id}`,
@@ -95,7 +138,11 @@ export function LeadTasks({
           const kind = kindOf(task.kind);
           const Icon = kind.icon;
           return (
-            <li key={task.task_id} className={styles.item}>
+            <li
+              key={task.task_id}
+              className={styles.item}
+              data-ticked={ticked.includes(task.task_id) || undefined}
+            >
               <span className={styles.row} data-static="">
                 <span
                   className={styles.icon}

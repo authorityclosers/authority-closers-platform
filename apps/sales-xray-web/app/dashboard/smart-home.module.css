@@ -116,6 +116,18 @@
   margin-top: 6px;
 }
 
+/* A tappable tile's chevron, after its number, in muted ink (seller Flow 1,
+   F4, 13 Nov 2026: tiles opened lists and looked static). Sized with the
+   tile's words, not its big number. */
+.go {
+  display: inline-block;
+  width: var(--sx-text-md);
+  height: var(--sx-text-md);
+  margin-left: 4px;
+  color: var(--sx-muted);
+  vertical-align: middle;
+}
+
 /* Press: a 10 % state layer in 90 ms; hover 6 % on a computer. */
 .counter::after,
 .done a::after {
@@ -238,6 +250,7 @@ a.counter:active::after,
    the words; the time column is sized in the row's text, so it grows with it
    and every title starts at one edge. */
 .row {
+  position: relative;
   display: grid;
   flex: 1 1 auto;
   grid-template-columns: 22px auto minmax(0, 1fr);
@@ -249,7 +262,18 @@ a.counter:active::after,
   line-height: var(--sx-leading-20);
 }
 
+/* The whole row opens its lead, not only its words (seller Flow 1, F3,
+   13 Nov 2026: a tap on the time, the chips or the lead's name did nothing).
+   The tick and the call mark stay their own taps, above it. */
+.row .title a::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
 .mark {
+  position: relative;
+  z-index: 1;
   display: grid;
   place-items: center;
   width: 22px;

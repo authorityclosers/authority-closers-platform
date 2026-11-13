@@ -44,7 +44,10 @@ it("waits for the arrow's own step back, then steps back once more", () => {
 
 it("stays when the lead's step never went", () => {
   window.history.replaceState(null, "", "/leads?lead=lead-1");
-  backToOpener();
+  const stay = vi.fn();
+  backToOpener(undefined, undefined, stay);
   vi.advanceTimersByTime(2_000);
   expect(back).not.toHaveBeenCalled();
+  // Calls is no longer lit over Leads (batch 6, 13 Nov 2026).
+  expect(stay).toHaveBeenCalledTimes(1);
 });

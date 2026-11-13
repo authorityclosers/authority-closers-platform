@@ -184,6 +184,25 @@ it("takes the newest real talk, not a dial nobody answered", () => {
   expect(lastTalkOf([logged])).toBe(logged);
 });
 
+// Redmi QA batch 10 (13 Nov 2026): "Last talk: No previous conversation" while
+// the story said "talked to them: Interested". The seller's "We talked" counts.
+it("takes a call its seller answered We talked as a talk", () => {
+  const dial = event({ kind: "call", at: "2026-11-10T09:00:00Z" });
+  const talked = event({
+    kind: "result",
+    at: "2026-11-10T09:05:00Z",
+    connected: true,
+    note: "Interested in the 2 BHK",
+  });
+  expect(lastTalkOf([talked, dial])).toBe(dial);
+  expect(sellerWords([talked, dial], dial)).toBe("Interested in the 2 BHK");
+  // An answer taken back isn't a talk; an answer with no call is its own.
+  expect(lastTalkOf([{ ...talked, answer_undone: true }, dial])).toBeNull();
+  expect(lastTalkOf([talked])).toBe(talked);
+  // Not connected ("No answer") is no talk.
+  expect(lastTalkOf([{ ...talked, connected: false }, dial])).toBeNull();
+});
+
 it("shows a call's length only where it was measured", () => {
   const at = "2026-11-03T10:00:00Z";
   expect(talkNote(event({ kind: "call", at, duration_seconds: 300 }))).toBe(

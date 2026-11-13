@@ -18,7 +18,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { Fragment, useCallback, useEffect, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 
 import { callHref, type LibrarySubmission } from "../acquisition-client";
 import { callTitle } from "../call-label";
@@ -422,6 +429,97 @@ const ICONS: Record<CallRow["kind"], LucideIcon> = {
 /**
  * `days`: a heading per day (Calls); without, each row says when (Home).
  */
+/** The row a seller opened, and where it sat on screen, so Back puts it there
+ *  again once the list is back (Redmi QA batch 6, 13 Nov 2026: Back from a
+ *  lead opened on Calls landed at the top of the list). In memory only. */
+let opened: {
+  key: string;
+  top: number;
+  path: string;
+  // When Back first put it there: the list may come twice as it loads.
+  since?: number;
+} | null = null;
+// How long the row is held in place as the page fills in.
+const HOLD_MS = 3_000;
+
+function keepPlace(key: string, row: HTMLElement) {
+  opened = {
+    key,
+    top: row.getBoundingClientRect().top,
+    path: window.location.pathname,
+  };
+}
+
+/** The box that scrolls the row: the nearest that scrolls, else the page. */
+function scrollRow(row: HTMLElement, by: number) {
+  for (let box = row.parentElement; box; box = box.parentElement) {
+    const { overflowY } = getComputedStyle(box);
+    if (
+      (overflowY === "auto" || overflowY === "scroll") &&
+      box.scrollHeight > box.clientHeight
+    ) {
+      box.scrollTop += by;
+      return;
+    }
+  }
+  window.scrollBy(0, by);
+}
+
+/** Back on the list, the opened row sits where it was; again as the page
+ *  fills in, until the seller scrolls or taps themself. */
+function useOpenedPlace(list: RefObject<HTMLOListElement | null>) {
+  useEffect(() => {
+    const kept = opened;
+    if (!kept || kept.path !== window.location.pathname) return;
+    if (kept.since !== undefined && Date.now() - kept.since > HOLD_MS) {
+      opened = null;
+      return;
+    }
+    const find = () =>
+      [
+        ...(list.current?.querySelectorAll<HTMLElement>("[data-call-key]") ??
+          []),
+      ].find((row) => row.dataset.callKey === kept.key);
+    if (!find()) return;
+    kept.since ??= Date.now();
+    const place = () => {
+      const row = find();
+      if (row) {
+        const by = row.getBoundingClientRect().top - kept.top;
+        if (Math.abs(by) >= 1) scrollRow(row, by);
+      }
+    };
+    place();
+    // The page under and above the list fills in after it: each time it
+    // grows, and on a few beats, for three seconds. A list that comes again
+    // in that time (it loads twice) carries on.
+    const grows =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
+    grows?.observe(document.documentElement);
+    grows?.observe(document.body);
+    const timers = [250, 800, 1600].map((ms) => window.setTimeout(place, ms));
+    const stop = () => {
+      grows?.disconnect();
+      timers.forEach((timer) => window.clearTimeout(timer));
+      window.removeEventListener("touchstart", done);
+      window.removeEventListener("wheel", done);
+      window.removeEventListener("keydown", done);
+    };
+    // Held long enough, or the seller moves the page: theirs from now on.
+    const done = () => {
+      if (opened === kept) opened = null;
+      stop();
+    };
+    timers.push(
+      window.setTimeout(done, Math.max(0, kept.since + HOLD_MS - Date.now())),
+    );
+    window.addEventListener("touchstart", done, { passive: true });
+    window.addEventListener("wheel", done, { passive: true });
+    window.addEventListener("keydown", done);
+    return stop;
+  }, [list]);
+}
+
 export function CallRows({
   rows,
   now,
@@ -434,8 +532,10 @@ export function CallRows({
   days?: boolean;
 }) {
   const go = useGo();
+  const list = useRef<HTMLOListElement>(null);
+  useOpenedPlace(list);
   return (
-    <ol className={styles.list} aria-label={label}>
+    <ol ref={list} className={styles.list} aria-label={label}>
       {rows.map((row, index) => {
         const Icon = ICONS[row.kind];
         const day = dayLabel(row.at, now);
@@ -455,7 +555,9 @@ export function CallRows({
                 href={row.report ? callHref(row.report) : "/leads"}
                 data-sx-action={row.report ? "report_open" : "lead_open"}
                 data-missed={row.kind === "missed" ? "" : undefined}
+                data-call-key={row.key}
                 onClick={(click) => {
+                  keepPlace(row.key, click.currentTarget);
                   if (row.report || !leadId) return;
                   click.preventDefault();
                   // Its Back comes back here (Redmi QA R2, 10 Nov 2026).

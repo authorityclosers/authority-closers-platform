@@ -727,15 +727,17 @@ export function CallOutcome({
     notify({
       id: `outcome-${saved.lead.lead_id}`,
       tone: "success",
-      title: [
-        `${moved ? "Moved to" : "Still"} ${saved.lead.stage_label}`,
+      // Where it is, as the title: over the Call bar the card folds to its
+      // title alone (Redmi QA batch 10, 13 Nov 2026: "Still Interested · n…").
+      title: `${moved ? "Moved to" : "Still"} ${saved.lead.stage_label}`,
+      message: [
         saved.lead.next_action_at
-          ? `next call ${when(saved.lead.next_action_at)}`
+          ? `Next call ${when(saved.lead.next_action_at)}`
           : null,
+        saved.lead.name,
       ]
         .filter(Boolean)
         .join(" · "),
-      message: saved.lead.name,
       timeout: saved.undo_result ? 10000 : 6000,
       // A moment to take it back (the server's undo supersedes; 5 minutes, its seller).
       action: saved.undo_result
@@ -897,6 +899,8 @@ export function CallOutcome({
     <section
       ref={ref}
       className={styles.outcome}
+      // The corner's news waits while this is open (notice-center.tsx).
+      data-after-call=""
       data-attention={attention || undefined}
       aria-labelledby={`${id}-q`}
     >
@@ -1598,6 +1602,11 @@ export function eventText(event: LeadEvent): {
           : text;
       }
       if (event.recording) return { title: `${who} added the call recording` };
+      // A Call-button dial: nothing here says the call went through, and its
+      // seconds were time away from the app (seller Flow 1, F2, 13 Nov 2026:
+      // "called · 7s" for a back-out from the dialler; honest numbers).
+      if (event.estimated && !event.simulated)
+        return { title: `${who} dialled` };
       return {
         title: `${who} ${event.simulated ? "made a sample call" : "called"}${
           event.duration_seconds

@@ -19,6 +19,7 @@ import { AppSession } from "./app-session";
 import {
   AcquisitionStudio,
   analysisMinutesOut,
+  minutesBlockedReason,
   minutesOutNotice,
   remainingAllowanceLabel,
 } from "./acquisition-studio";
@@ -2110,6 +2111,27 @@ it("says minutes ran out in New analysis's dock on a phone, never a corner card 
   });
   expect(play.action).toBeUndefined();
   expect(`${play.title} ${play.message}`).not.toMatch(/plan|₹|price|buy/i);
+});
+
+it("says why under Choose a file where no minutes can be bought here, never as a card too", () => {
+  // Redmi QA on the owner's production build, 13 Nov 2026: a member out of
+  // minutes could still choose a file, and the corner card covered the button.
+  expect(minutesBlockedReason(true, false, null)).toBe(
+    "Analysis minutes used up. Ask your workspace owner for more minutes.",
+  );
+  expect(
+    minutesBlockedReason(
+      true,
+      false,
+      "Call analysis isn't on for this organisation yet. Ask your owner.",
+    ),
+  ).toBe("Call analysis isn't on for this organisation yet. Ask your owner.");
+  // Someone who can get more here keeps Choose a file and See plans.
+  expect(minutesBlockedReason(true, true, null)).toBeNull();
+  expect(minutesBlockedReason(false, false, null)).toBeNull();
+  expect(minutesBlockedReason(true, false, null)).not.toMatch(
+    /plan|₹|price|buy/i,
+  );
 });
 
 it("does not present a legacy tester flag as a plan or finite balance", () => {

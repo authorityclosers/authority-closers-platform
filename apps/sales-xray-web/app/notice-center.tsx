@@ -654,6 +654,29 @@ function subscribeOverBar(listener: () => void) {
 const isOverBar = () => overBar;
 const notOverBar = () => false;
 
+/** Cards that can wait while a lead's after-call question is open: news,
+ *  never a problem, a due follow-up or a work alert. */
+const WAITS_FOR_ANSWER = new Set<NoticeTone>(["info", "lead", "success"]);
+
+/**
+ * A lead's "How did it go?" is open (data-after-call): the corner's news waits
+ * until it is answered, as it waits under a sheet, and comes after it with its
+ * full time (Home studio, 13 Nov 2026: "… is your lead now", lifted over Save &
+ * Close, covered "Pick a time instead").
+ */
+function watchAsking(changed: () => void) {
+  const watch = new MutationObserver(changed);
+  watch.observe(document.body, {
+    attributes: true,
+    attributeFilter: ["data-after-call"],
+    childList: true,
+    subtree: true,
+  });
+  return () => watch.disconnect();
+}
+const askingNow = () => document.querySelector("[data-after-call]") !== null;
+const notAsking = () => false;
+
 /** The room kept between the corner stack and a bar under it. */
 const BAR_GAP = 8;
 
@@ -857,6 +880,7 @@ export function NoticeCenter() {
     () => notices,
     () => EMPTY,
   );
+  const asking = useSyncExternalStore(watchAsking, askingNow, notAsking);
   const [expanded, setExpanded] = useState(false);
   const [stack, setStack] = useState<HTMLDivElement | null>(null);
   // The stack's place for a page's own card (InCorner).
@@ -1081,9 +1105,9 @@ export function NoticeCenter() {
   const docked = docking
     ? list.filter((item) => docks(item) && inDock(item))
     : [];
-  const corner = docking
-    ? list.filter((item) => !docks(item) || !inDock(item))
-    : list;
+  const corner = (
+    docking ? list.filter((item) => !docks(item) || !inDock(item)) : list
+  ).filter((item) => !asking || !WAITS_FOR_ANSWER.has(item.tone));
   const workDocked = !!docking && !!workCard && inDock(workCard);
   const cornerWork = workDocked ? null : workCard;
   const dockWork = workDocked ? workCard : null;

@@ -69,10 +69,16 @@ export function CallRowsSkeleton({
 export function PhoneCalls({
   onSettled,
   filter = null,
+  query = "",
 }: {
   /** Opened from a number on Home or Team (owner, 2 Nov 2026): that day's
    *  calls with that outcome, all of them, and nothing else. */
   filter?: CallsFilter | null;
+  /** Words to find (header search's "Search calls for …", the page's box):
+   *  this week's calls whose lead's name has them, all of them (Redmi QA
+   *  batch 8, 13 Nov 2026: only the saved calls far below kept the words, so
+   *  the search looked dropped). */
+  query?: string;
   /** Told once the week's calls answered (or failed): the Calls page then
    *  shows what follows, so nothing below moves as the list fills in. */
   onSettled?: () => void;
@@ -87,18 +93,24 @@ export function PhoneCalls({
   const [now] = useState(() => new Date());
 
   if (week.status === "off") return null;
+  const words = query.trim();
+  const needle = words.toLocaleLowerCase();
   const calls =
     week.status === "ready"
       ? weekCalls(week.items).filter(
-          (item) => !filter || inFilter(item, filter),
+          (item) =>
+            (!filter || inFilter(item, filter)) &&
+            (!needle || item.lead_name.toLocaleLowerCase().includes(needle)),
         )
       : [];
-  const items = filter ? calls : calls.slice(0, SHOWN_CALLS);
+  // Narrowed by a number or by words: every one, and only what's asked.
+  const narrowed = Boolean(filter || needle);
+  const items = narrowed ? calls : calls.slice(0, SHOWN_CALLS);
   // A call the phone couldn't tell the end of reads as its seller answered it.
   const answers: ReturnType<typeof answersFor> =
     week.status === "ready" ? answersFor(week.items) : new Map();
   const more =
-    !filter &&
+    !narrowed &&
     week.status === "ready" &&
     (calls.length > SHOWN_CALLS || week.more);
   const theirs = Boolean(filter?.person || filter?.team);
@@ -107,9 +119,13 @@ export function PhoneCalls({
     <section className={styles.calls} aria-labelledby="your-calls-title">
       <div className={styles.head}>
         <h2 id="your-calls-title">
-          {filter ? filterTitle(filter) : "Your calls"}
+          {filter
+            ? filterTitle(filter)
+            : needle
+              ? `Your calls with “${words}”`
+              : "Your calls"}
         </h2>
-        {filter ? (
+        {narrowed ? (
           <Link className={styles.more} href="/analysis/calls">
             All calls
             <ChevronRight size={16} aria-hidden="true" />
@@ -121,7 +137,7 @@ export function PhoneCalls({
           </Link>
         ) : null}
       </div>
-      {filter ? null : (
+      {narrowed ? null : (
         <>
           <PhoneLogCard as="offer" />
           <RecordedCallsCard />
@@ -136,9 +152,13 @@ export function PhoneCalls({
             Try again
           </button>
         </div>
-      ) : items.length === 0 && filter ? (
+      ) : items.length === 0 && narrowed ? (
         <div className={styles.quiet}>
-          <span>No calls here.</span>
+          <span>
+            {needle && !filter
+              ? `No calls this week with “${words}”.`
+              : "No calls here."}
+          </span>
         </div>
       ) : items.length === 0 ? (
         <div className={styles.quiet}>
@@ -166,7 +186,7 @@ export function PhoneCalls({
           See all in My work
         </Link>
       ) : null}
-      {filter ? null : <UnknownCallsCard onSave={setUnknown} />}
+      {narrowed ? null : <UnknownCallsCard onSave={setUnknown} />}
       {unknown ? (
         <AddLeadDialog
           key={`unknown-${unknown}`}

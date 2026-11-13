@@ -272,6 +272,25 @@ export function minutesOutNotice(
 }
 
 /**
+ * Why New analysis can't take a file now, said under Choose a file, or null.
+ * Out of minutes where none can be bought here (a member, or the Google Play
+ * app), the button is off and this says who can help; said there, it isn't a
+ * corner card over the button too (Redmi QA on the owner's production build,
+ * 13 Nov 2026). Never minutes or prices.
+ */
+export function minutesBlockedReason(
+  minutesOut: boolean,
+  purchasesAllowed: boolean,
+  allowanceLine: string | null,
+): string | null {
+  if (!minutesOut || purchasesAllowed) return null;
+  return (
+    allowanceLine ??
+    "Analysis minutes used up. Ask your workspace owner for more minutes."
+  );
+}
+
+/**
  * Whose minutes these are: Personal's, an organisation's for someone who
  * pays there, or for a member, who can only ask the owner.
  */
@@ -585,7 +604,9 @@ export function AcquisitionStudio({
     error,
   );
   useEffect(() => {
-    if (!minutesOut) return;
+    // Where no minutes can be bought here, the reason sits under Choose a
+    // file instead (minutesBlockedReason), never a card over it.
+    if (!minutesOut || !purchasesAllowed) return;
     const notice = minutesOutNotice(purchasesAllowed, () =>
       router.push("/plans"),
     );
@@ -3193,6 +3214,11 @@ export function AcquisitionStudio({
                         : undefined
                     }
                     disabled={!policy || !!busy || reviewSelectionActive}
+                    blocked={minutesBlockedReason(
+                      minutesOut,
+                      purchasesAllowed,
+                      allowanceLine,
+                    )}
                   />
                 ) : !displayFileSelected && !submission ? (
                   <div className={styles.dropZone} data-upload-dropzone>
@@ -3856,7 +3882,9 @@ export function AcquisitionStudio({
               </section>
               {studioStage === "upload" && !embedded ? (
                 <NewAnalysisFooter
-                  allowanceLabel={allowanceLine}
+                  allowanceLabel={
+                    minutesOut && !purchasesAllowed ? null : allowanceLine
+                  }
                   moreMinutesHref={
                     minutesOut && purchasesAllowed ? "/plans" : undefined
                   }

@@ -199,6 +199,9 @@ export type LeadEvent = {
   simulated: boolean | null;
   recording?: boolean | null;
   duration_seconds: number | null;
+  /** A Call-button dial: its seconds are time away from the app, never talk
+   *  time (seller Flow 1, F2, 13 Nov 2026). */
+  estimated?: boolean | null;
   /** A call on My work and Calls, as Home counts it (owner and Dipak, 2 Nov
    *  2026): its outcome, and where its seconds came from. */
   outcome?: "connected" | "not_connected" | "unknown" | null;
@@ -1636,6 +1639,16 @@ export function setCallPrivacy(
   return request<LeadDetail>(
     `/calls/${encodeURIComponent(eventId)}/private`,
     json("POST", { command_id: command, private: hidden }),
+  );
+}
+
+/** "Didn't call": the seller's own Call-button dial was never placed (they backed out of
+ *  the dialler), so it leaves every count, list and Finish line (Redmi QA, 13 Nov 2026:
+ *  on a phone without call history it counted as Attempted). Nothing is deleted. */
+export function markDialNotPlaced(eventId: string, command = commandId()) {
+  return request<LeadDetail>(
+    `/calls/${encodeURIComponent(eventId)}/private`,
+    json("POST", { command_id: command, private: true, reason: "not_placed" }),
   );
 }
 

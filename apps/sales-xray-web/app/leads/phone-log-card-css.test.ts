@@ -18,3 +18,13 @@ it("puts the work-calls card's title on its own line", () => {
     css.match(/\.compactStack \.phoneLogCard > span\s*\{([^}]*)\}/)?.[1] ?? "";
   expect(compact).not.toMatch(/display/);
 });
+
+// Redmi QA (13 Nov 2026): on Calls the title came out smaller than its line.
+it("sets the work-calls card's title a step above its line", () => {
+  const title =
+    css.match(/\n\.phoneLogCard > span > strong\s*\{([^}]*)\}/)?.[1] ?? "";
+  const line =
+    css.match(/\n\.phoneLogCard > span > small\s*\{([^}]*)\}/)?.[1] ?? "";
+  expect(title).toMatch(/font-size:\s*var\(--sx-text-sm\)/);
+  expect(line).toMatch(/font-size:\s*var\(--sx-text-xs\)/);
+});

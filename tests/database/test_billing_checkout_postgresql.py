@@ -56,7 +56,7 @@ from ac_platform.billing.periods import add_months
 from ac_platform.billing.projection import LotKind
 from ac_platform.billing.views import CheckoutView, MoneyView, PeriodView, SubscriptionView
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
-from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS
+from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS, TRIAL_SECONDS
 from ac_platform.payments.fake import FakePaymentProvider
 from ac_platform.payments.ports import Money
 from ac_platform.payments.recurring import SubscriptionState
@@ -69,7 +69,6 @@ from tests.integration.test_operations_http_postgresql import _seed as seed_oper
 T0 = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
 RETURN_URL_BASE = "https://salesxray.example.test"
 SIGNING_KEY = "fictional-fake-signing-key"
-TRIAL_SECONDS = 3_600
 
 PERSONAL_MONTHLY_PAISE = 249_900
 PERSONAL_YEARLY_PAISE = 2_699_000

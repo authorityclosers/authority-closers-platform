@@ -476,6 +476,9 @@ class LeadEventView(Model):
     simulated: bool | None = None
     recording: bool | None = None
     duration_seconds: int | None = None
+    # A Call-button dial: its seconds are the time away from the app, never talk time, so
+    # the lead's history says "dialled", not "called · 7s" (seller Flow 1, F2, 13 Nov 2026).
+    estimated: bool | None = None
     changed: tuple[str, ...] | None = None
     channel: str | None = None
     template_label: str | None = None
@@ -1731,10 +1734,14 @@ class PhoneReport(Command):
 
 
 class CallPrivacy(Command):
-    """The seller hides a call their phone logged from everyone else, or shows it again."""
+    """The seller hides a call their phone logged from everyone else, or shows it again; or
+    says a Call-button dial of theirs was never placed ("Didn't call")."""
 
     command_id: UUID
     private: bool
+    # "not_placed": the seller backed out of the dialler, so it was never a call (Redmi QA,
+    # 13 Nov 2026: a back-out counted as Attempted on a phone without call history).
+    reason: Literal["not_placed"] | None = None
 
 
 class TakingLeads(Command):

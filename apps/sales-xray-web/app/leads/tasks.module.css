@@ -247,6 +247,31 @@
   background: var(--sx-fill-soft);
 }
 
+/* Done, tapped: the check fills in teal with a small pop and the words are
+   struck through, until the task leaves the lead (Redmi QA, 10 Nov 2026). */
+.item[data-ticked] .act[data-done] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent);
+  color: var(--lx-on-teal);
+}
+
+.item[data-ticked] .text strong {
+  color: var(--sx-muted);
+  text-decoration: line-through;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .item[data-ticked] .act[data-done] {
+    animation: tick-pop var(--sx-dur-base) var(--sx-ease-out);
+  }
+}
+
+@keyframes tick-pop {
+  50% {
+    transform: scale(1.12);
+  }
+}
+
 .skeleton {
   display: flex;
   align-items: center;

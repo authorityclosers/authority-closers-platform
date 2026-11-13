@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# grant-minutes: give one person analysis minutes through Admin's audited grant path
+# (owner, 13 Nov 2026: "Keep one simple way to give minutes straight away: a command
+# line, by user name / email id, so when someone's minutes run out we give them another
+# hour or two quickly").
+#
+#   grant-minutes <staging|production> --email <email> --hours <1-24> --approver <email> \
+#       [--workspace <slug>] [--reason "<why>"] [--apply [--allow-production]]
+#
+# A dry run unless --apply; a production write also needs --allow-production. It runs
+# the checked-in command (ac_platform.conversation_intelligence.grant_minutes_cli) inside
+# that environment's API container, which holds its database settings, so nothing is
+# typed into a database shell. The approver must hold platform access management; the
+# grant, its audit event naming the approver and its ledger lot are written together.
+# Output shows masked emails only, never a price.
+set -euo pipefail
+
+environment="${1:-}"
+case "$environment" in
+  staging | production) shift ;;
+  *)
+    echo "usage: grant-minutes <staging|production> --email <email> --hours <n>" \
+      "--approver <email> [--workspace <slug>] [--apply [--allow-production]]" >&2
+    exit 2
+    ;;
+esac
+
+exec sudo -n docker exec -i "ac-application-${environment}-api-1" \
+  python -m ac_platform.conversation_intelligence.grant_minutes_cli \
+  --environment "$environment" "$@"

@@ -205,6 +205,50 @@ function usePhone(): boolean {
   );
 }
 
+/** Where a phone's sideways table snaps its columns: the pinned tick and name's
+ *  right edge, measured into --pinned-w, so a swipe stops on a whole column
+ *  there, never half under the name (Redmi QA batch 8, 13 Nov 2026: "ast
+ *  call", "ot called" beside it). */
+function usePinnedEdge(pane: RefObject<HTMLElement | null>, on: boolean) {
+  useLayoutEffect(() => {
+    const wrap = pane.current;
+    if (!wrap || !on) return;
+    const measure = () => {
+      const name = wrap.querySelector<HTMLElement>(
+        'thead [data-column="name"]',
+      );
+      if (!name) return;
+      const edge =
+        name.getBoundingClientRect().right -
+        wrap.getBoundingClientRect().left -
+        wrap.clientLeft;
+      wrap.style.setProperty(
+        "--pinned-w",
+        `${Math.max(0, Math.round(edge))}px`,
+      );
+      // Snapping starts once the edge is known, so the table opens at its
+      // start, not snapped to a guess.
+      if (!wrap.hasAttribute("data-snap")) {
+        wrap.scrollTo({ left: 0 });
+        wrap.setAttribute("data-snap", "");
+      }
+    };
+    measure();
+    const sized =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(measure);
+    sized?.observe(wrap);
+    const name = wrap.querySelector('thead [data-column="name"]');
+    if (name) sized?.observe(name);
+    return () => {
+      sized?.disconnect();
+      wrap.style.removeProperty("--pinned-w");
+      wrap.removeAttribute("data-snap");
+    };
+  }, [pane, on]);
+}
+
 function usePaneWidth(pane: RefObject<HTMLElement | null>): number {
   const [width, setWidth] = useState(0);
   // Measured before the first paint, so a phone never sees the wide table.
@@ -367,6 +411,7 @@ export function LeadsTable({
   // format the table should scroll sideways", no drop-down); a computer still
   // fits a narrow pane.
   const phone = usePhone();
+  usePinnedEdge(pane, phone);
   // Narrow rows opened to show the columns that don't fit.
   const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
   // A stage that asks for something (a reason, a follow-up, the meeting).
