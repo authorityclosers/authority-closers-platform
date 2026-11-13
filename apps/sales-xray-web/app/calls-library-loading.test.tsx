@@ -124,11 +124,12 @@ it("holds the skeleton until the first answer, never a false No calls yet", asyn
   expect(host.querySelector(SKELETON)).toBeNull();
 });
 
-// Robot f543ab73 (1 Nov 2026): in a workspace, Your calls (the phone's) comes
-// first; the saved calls follow once it has answered, so nothing below it
-// moves as it fills in, and their empty card never says "No calls yet" under
-// a list of calls.
+// Robot f543ab73 (1 Nov 2026): opened from a number on Home (a day's calls),
+// Your calls (the phone's) comes first; the saved calls follow once it has
+// answered, so nothing below it moves as it fills in, and their empty card
+// never says "No calls yet" under a list of calls.
 it("shows the saved calls once Your calls has answered, so nothing below it moves", async () => {
+  address.search = new URLSearchParams("day=today");
   const week: ((answer: Response) => void)[] = [];
   const json = (body: unknown) =>
     new Response(JSON.stringify(body), {
@@ -173,6 +174,62 @@ it("shows the saved calls once Your calls has answered, so nothing below it move
   expect(host.querySelector("h2#calls-library-empty")?.textContent).toBe(
     "No call reports yet",
   );
+  address.search = new URLSearchParams();
+});
+
+// Flow 2, G1 (13 Nov 2026): the Reports tab opens on the reports, at once; the
+// phone's own calls follow under them, a tap away from the top.
+it("opens the Reports tab on the saved calls, the phone's calls after them", async () => {
+  address.search = new URLSearchParams();
+  const json = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo) => {
+      const url = String(input);
+      // The phone's calls still reading: the reports don't wait for them.
+      if (url.includes("/lead-desk/activity"))
+        return new Promise<Response>(() => undefined);
+      if (url.includes("/acquisition/submissions?"))
+        return Promise.resolve(json({ submissions: [], next_cursor: null }));
+      return Promise.resolve(new Response("{}", { status: 404 }));
+    }),
+  );
+  const team = access({
+    workspaces: [
+      {
+        tenant_id: context.tenantId,
+        kind: "organisation",
+        name: "Fictional Team",
+        role: "member",
+        sales_xray_enabled: true,
+      },
+    ],
+  });
+  await act(async () => render(team, true));
+  await flush();
+  const title = host.querySelector("h1#calls-library-title");
+  const header = title?.parentElement?.parentElement as HTMLElement;
+  expect(header.style.display).toBe("");
+  expect(host.querySelector("h2#calls-library-empty")?.textContent).toBe(
+    "No call reports yet",
+  );
+  const yours = host.querySelector("#your-calls-title");
+  expect(yours).not.toBeNull();
+  expect(
+    title!.compareDocumentPosition(yours!) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  const scrolled = vi.fn();
+  (yours as HTMLElement).scrollIntoView = scrolled;
+  const jump = host.querySelector<HTMLButtonElement>(
+    '[data-jump="your-calls"]',
+  );
+  expect(jump?.textContent).toBe("Your calls");
+  await act(async () => jump?.click());
+  expect(scrolled).toHaveBeenCalled();
 });
 
 // Robot 4bd92bb9 and f02eecc0 (1 Nov 2026): previewing a call with no report

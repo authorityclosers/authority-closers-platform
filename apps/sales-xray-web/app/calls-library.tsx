@@ -14,6 +14,7 @@ import {
   ArrowUpDown,
   AudioLines,
   ChevronRight,
+  ArrowDown,
   Download,
   Eye,
   FolderOpen,
@@ -448,11 +449,17 @@ function CallsLibraryContent({
   const [query, setQuery] = useState(urlQuery);
   const [seenUrlQuery, setSeenUrlQuery] = useState(urlQuery);
   const [boxWrites, setBoxWrites] = useState<string[]>([]);
+  // The words a search sent here (never the box's own typing): they put the
+  // phone's calls first (reportsFirst, below).
+  const [askedQuery, setAskedQuery] = useState(urlQuery);
   if (urlQuery !== seenUrlQuery) {
     setSeenUrlQuery(urlQuery);
     const acknowledged = boxWrites.indexOf(urlQuery);
     if (acknowledged >= 0) setBoxWrites(boxWrites.slice(acknowledged + 1));
-    else setQuery(urlQuery);
+    else {
+      setQuery(urlQuery);
+      setAskedQuery(urlQuery);
+    }
   }
   // A rep from the address stays only if the loaded calls include them.
   const [selectedRep, setSelectedRep] = useState(addressView.rep);
@@ -1057,7 +1064,14 @@ function CallsLibraryContent({
     insights &&
     access?.authenticated === true &&
     currentWorkspace?.kind === "organisation";
-  const phoneWaiting = phoneShown && !phoneSettled;
+  // The Reports tab opens on reports: the saved calls, Reports first and
+  // newest first, then the phone's own calls a tap away (Flow 2, G1, the
+  // Orchestrator 13 Nov 2026: "Report ready" started two screens down, under
+  // the dials). Opened from a number on Home, or with a search, the phone's
+  // calls stay first: they are what was asked for.
+  const reportsFirst = !callsFilter(searchParams) && !askedQuery.trim();
+  // The saved calls wait for the phone's only under them (robot f543ab73).
+  const phoneWaiting = phoneShown && !phoneSettled && !reportsFirst;
   const personalWorkspace = access?.workspaces?.find(
     (item) => item.kind === "personal" && item.sales_xray_enabled,
   );
@@ -1631,6 +1645,16 @@ function CallsLibraryContent({
     workspace &&
     visibleSubmissions.some((submission) => rowStatus(submission) === "error");
 
+  const phoneCalls = phoneShown ? (
+    <SectionBoundary name="Your calls" resetKey={identityKey}>
+      <PhoneCalls
+        key={identityKey}
+        onSettled={settlePhone}
+        filter={callsFilter(searchParams)}
+        query={query}
+      />
+    </SectionBoundary>
+  ) : null;
   const content = (
     <div
       className={styles.page}
@@ -1643,20 +1667,10 @@ function CallsLibraryContent({
           calls, never a card over a call (teardown #13; on dev it sat under
           "Your calls", a screen down). */}
       {preview ? null : <RecordingLine />}
-      {/* The phone's calls come first, then saved calls (owner, 27 Oct 2026:
-          call logs and recordings were "hidden somewhere"). */}
-      {insights &&
-      access?.authenticated === true &&
-      currentWorkspace?.kind === "organisation" ? (
-        <SectionBoundary name="Your calls" resetKey={identityKey}>
-          <PhoneCalls
-            key={identityKey}
-            onSettled={settlePhone}
-            filter={callsFilter(searchParams)}
-            query={query}
-          />
-        </SectionBoundary>
-      ) : null}
+      {/* The phone's calls (owner, 27 Oct 2026: call logs and recordings were
+          "hidden somewhere"): first when a number or a search asked for them,
+          else after the reports. */}
+      {reportsFirst ? null : phoneCalls}
       {/* One page heading; New analysis lives in the shell, not here too. */}
       <header
         className={styles.header}
@@ -1682,6 +1696,21 @@ function CallsLibraryContent({
           </p>
         </div>
         <div className={styles.headerTools}>
+          {reportsFirst && phoneShown ? (
+            <button
+              type="button"
+              className={styles.tool}
+              data-jump="your-calls"
+              onClick={() =>
+                document
+                  .getElementById("your-calls-title")
+                  ?.scrollIntoView?.({ block: "start", behavior: "smooth" })
+              }
+            >
+              <ArrowDown size={14} aria-hidden="true" />
+              Your calls
+            </button>
+          ) : null}
           {insightErrors ? (
             <button
               type="button"
@@ -2145,6 +2174,7 @@ function CallsLibraryContent({
           </section>
         </>
       )}
+      {reportsFirst ? phoneCalls : null}
       {workspace && shownPreview ? (
         <SectionBoundary name="The call preview" resetKey={shownPreview.id}>
           <CallsDrawer
