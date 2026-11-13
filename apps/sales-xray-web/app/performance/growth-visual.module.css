@@ -100,65 +100,9 @@
   gap: 6px;
 }
 
-/* Inbound and Cold in one bar, grown from the left. */
-.split {
-  display: flex;
-  align-self: center;
-  gap: 2px;
-  height: 8px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--sx-line);
-}
-
-.split[data-thick] {
-  height: 12px;
-}
-
-.split > span {
-  flex-basis: 0;
-  min-width: 4px;
-}
-
-.split > [data-side="inbound"],
-.legend [data-side="inbound"]::before {
-  background: var(--sx-accent);
-}
-
-.split > [data-side="cold"],
-.legend [data-side="cold"]::before {
-  background: var(--lx-closing, var(--sx-muted));
-}
-
-.legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 12px;
-  color: var(--sx-muted);
-  font: var(--sx-text-meta);
-}
-
 /* A tile's last line sits on its floor, level with its neighbour's. */
 .tile > :last-child {
   align-self: end;
-}
-
-.legend > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.legend > span::before {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  content: "";
-}
-
-.legend b {
-  color: var(--sx-ink);
-  font-weight: 500;
 }
 
 /* The connect ring draws itself round. */
@@ -376,6 +320,8 @@
   align-items: end;
   gap: 3px;
   height: 120px;
+  /* Room for the tallest bar's count. */
+  padding-top: 20px;
 }
 
 .bars[data-empty] {
@@ -394,10 +340,22 @@
 }
 
 .bar {
+  position: relative;
   display: block;
   width: 100%;
   border-radius: 4px 4px 1px 1px;
   background: var(--sx-accent);
+}
+
+/* A bar's count, just above it. */
+.barCount {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  translate: -50% -2px;
+  color: var(--sx-ink);
+  font: var(--sx-text-meta);
+  white-space: nowrap;
 }
 
 .barLabel {
@@ -417,7 +375,6 @@
     animation-delay: var(--gv-delay, 0ms);
   }
 
-  .split,
   .sellerTried,
   .talkBar {
     transform-origin: left center;
