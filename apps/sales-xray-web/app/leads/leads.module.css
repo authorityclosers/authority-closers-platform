@@ -4284,10 +4284,19 @@ a.repName {
   min-width: 0;
 }
 
+/* The title a step above the line under it, whatever the page's own size
+   (Redmi QA, 13 Nov 2026: on Calls the title came out smaller than its line). */
+.phoneLogCard > span > strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  line-height: var(--sx-leading-20);
+}
+
 .phoneLogCard > span > small {
   color: var(--sx-muted);
-  font-size: var(--sx-text-sm);
-  line-height: var(--sx-leading-20);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
 }
 
 .phoneLogSims {
