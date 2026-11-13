@@ -3,6 +3,7 @@ import type { ActivityItem } from "../leads/leads-client";
 import {
   activityCsv,
   activitySummary,
+  countsToward,
   dayNumber,
   readAnalytics,
   type AnalyticsHistory,
@@ -52,6 +53,28 @@ it("counts Lead Desk work by actor, with no report requirement, and no duplicate
   expect(result.people[0].daily[29]).toMatchObject(result.current);
   expect(result.people[0].daily[29]?.work).toBe(5);
   expect(result.currentComplete).toBe(true);
+});
+it("counts calls out only, as Seat use does: a call in, missed or rejected is no call", () => {
+  // ux-audit N8, 8 Nov 2026: 346 calls here beside 316 in Seat use for one
+  // fictional seller, the 30 his phone's calls in. Fictional events throughout.
+  const items = [
+    event("out", "call", now, { duration_seconds: 30 }),
+    event("in", "call", now, { direction: "incoming", duration_seconds: 40 }),
+    event("missed", "call", now, { direction: "missed" }),
+    event("rejected", "call", now, { direction: "rejected" }),
+  ];
+  const result = activitySummary(history(items));
+  expect(result.current).toMatchObject({ calls: 1, conversations: 1 });
+  expect(
+    items
+      .filter((item) => countsToward("calls", item.event))
+      .map((item) => item.event_id),
+  ).toEqual(["out"]);
+  expect(
+    items
+      .filter((item) => countsToward("conversations", item.event))
+      .map((item) => item.event_id),
+  ).toEqual(["out"]);
 });
 it("uses organisation calendar days at both 30-day boundaries and excludes future events", () => {
   const result = activitySummary(

@@ -2175,11 +2175,13 @@ function LightboxShellFrame({
             <span>Growth</span>
           </ScreenLink>
         )}
-        {/* Signed out shows Sign in (the phone app has its own sign-in
-            screen, so it hides this). */}
+        {/* Signed out shows Sign in, in the phone app too: a cold start
+            signed out opens Home, whose own Sign in sits below the fold
+            (Redmi QA on the owner's production build, 10 Nov 2026, W1/S3:
+            the app's bar had only Home and New). */}
         {guest ? (
           <ScreenLink
-            className={`${styles.bottomLink} sx-web-only`}
+            className={styles.bottomLink}
             href={accountHref}
             onClick={openAccount}
           >

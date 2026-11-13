@@ -129,7 +129,7 @@ it("draws G1's four tiles from the real totals, with no table", () => {
   expect(tiles.map((tile) => tile.textContent)).toEqual([
     "Attempted228190 leads called",
     "Connected7834%55 leads reached",
-    "Talk time5 h 17 min4 min a connected call",
+    "Talk time5 h 17 minAbout 4 min per connected call",
     "Interested151 meeting booked",
   ]);
   expect(
@@ -283,5 +283,18 @@ it("draws a seller's own Growth the same way, with no list of sellers", async ()
     expect.anything(),
   );
   expect(host.querySelector('[aria-label="Talk time by seller"]')).toBeNull();
-  expect(host.textContent).toContain("4 min a connected call");
+  expect(host.textContent).toContain("About 4 min per connected call");
+});
+
+it("shows no Inbound | Cold split on Day rhythm either", async () => {
+  // Owner, 10 Nov 2026, picking G1 + G4: "we don't have to focus on inbound
+  // and cold leads" (Redmi QA, 13 Nov 2026: Day rhythm still split them).
+  vi.mocked(readDayCalls).mockResolvedValue({
+    items: [],
+    next_before: null,
+    counts: {},
+  } as never);
+  await act(async () => root.render(<DayRhythm effort={effort} period="1" />));
+  expect(host.textContent).not.toMatch(/Inbound|Cold/);
+  expect(host.querySelector("[data-side]")).toBeNull();
 });

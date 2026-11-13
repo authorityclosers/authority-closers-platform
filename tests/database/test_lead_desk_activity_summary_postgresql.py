@@ -250,3 +250,48 @@ def test_summary_api_contract_and_query_guards(postgres_harness: Any, tmp_path: 
             assert (await here.client.get(f"{BASE}/activity/summary")).status_code == 401
 
     run(exercise())
+
+
+def test_summary_counts_calls_out_as_seat_use_does(postgres_harness: Any, tmp_path: Path) -> None:
+    """ux-audit N8 (8 Nov 2026): one fictional seller had 346 calls in Analytics beside 316 in
+    Seat use (Performance's Attempted); the 30 were his phone's calls in, missed and
+    rejected. Both now count the calls he made."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            lead = UUID(await here.add("Fictional Directions", "98760 81004"))
+            seller = here.seller.person_id
+            async with here.setup.sessions() as db, db.begin():
+                for data in (
+                    {"via": "phone", "duration_seconds": 30},
+                    {"via": "phone", "direction": "incoming", "duration_seconds": 40},
+                    {"via": "phone", "direction": "missed"},
+                    {"via": "phone", "direction": "rejected"},
+                ):
+                    db.add(
+                        LeadEvent(
+                            id=uuid4(),
+                            tenant_id=here.tenant_id,
+                            lead_id=lead,
+                            kind="call",
+                            actor_person_id=seller,
+                            data=data,
+                            created_at=NOW - timedelta(hours=1),
+                        )
+                    )
+                await db.flush()
+                admin = Viewer(
+                    here.setup.state.person_id, here.tenant_id, "admin", "Fictional Admin"
+                )
+                desk = LeadDesk(db, admin, now=NOW)
+                summary = await summarize(desk, team=True)
+                effort = await desk.effort(30)
+            mine = next(p for p in summary.people if p.id == seller)
+            seat = next(s for s in effort.sellers if s.person_id == seller)
+            assert (mine.current.calls, mine.current.conversations) == (1, 1)
+            assert seat.inbound.attempted + seat.cold.attempted == mine.current.calls
+            # Growth's Calls by day draws these daily rows beside its Calls attempted tile
+            # (Redmi QA on production, 13 Nov 2026: the bars said 9 where the tile said 7).
+            assert sum(day.calls for day in mine.daily) == mine.current.calls
+
+    run(exercise())

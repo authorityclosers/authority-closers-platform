@@ -130,13 +130,18 @@ export async function readAnalytics({
   };
 }
 
-/** Whether a feed item is one the summary counts for this number. */
+/** Calls in, missed, rejected or blocked: no call made (the server's NOT_OUT). */
+const NOT_OUT = new Set(["incoming", "missed", "rejected", "blocked"]);
+
+/** Whether a feed item is one the summary counts for this number: calls out
+ *  only, as Home's Attempted and Seat use count them (ux-audit N8, 8 Nov 2026:
+ *  346 calls here beside 316 in Seat use, the 30 a phone's calls in). */
 export function countsToward(metric: Metric, event: LeadEvent): boolean {
-  if (metric === "calls") return event.kind === "call";
+  const callOut = event.kind === "call" && !NOT_OUT.has(event.direction ?? "");
+  if (metric === "calls") return callOut;
   if (metric === "conversations")
     return (
-      event.kind === "call" &&
-      (event.connected === true || (event.duration_seconds ?? 0) > 0)
+      callOut && (event.connected === true || (event.duration_seconds ?? 0) > 0)
     );
   return event.kind === (metric === "notes" ? "note" : "stage");
 }
@@ -260,19 +265,10 @@ export function activitySummary(history: AnalyticsHistory) {
       continue;
     const day = dayNumber(event.at, history.timezone);
     if (day < prior || day > today) continue;
-    const metrics: Metric[] =
-      event.kind === "call"
-        ? [
-            "calls",
-            ...(event.connected === true || (event.duration_seconds ?? 0) > 0
-              ? ["conversations" as const]
-              : []),
-          ]
-        : event.kind === "note"
-          ? ["notes"]
-          : event.kind === "stage"
-            ? ["moves"]
-            : [];
+    // The same rule as the server's summary and the list behind each number.
+    const metrics: Metric[] = METRICS.map(({ key }) => key).filter((metric) =>
+      countsToward(metric, event),
+    );
     // The shared feed defines recorded work (WORK_KINDS in Lead Desk).
     // Team mode also returns incoming leads; those aren't a person's work.
     if (event.kind === "captured") continue;

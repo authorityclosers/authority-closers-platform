@@ -26,6 +26,7 @@ import {
   notify,
   useNoticeShown,
 } from "./notice-center";
+import { SCREEN_SETTLED_EVENT } from "./shell/screen-transition";
 import { clearAlert, raiseAlert } from "./ui/alerts";
 
 (
@@ -730,6 +731,60 @@ it("keeps the dock's room while a sheet holds its lines, so the page never jumps
     vi.useRealTimers();
   }
 });
+it("lifts over a bar that reaches its place as the screen's motion ends", async () => {
+  // Redmi QA on the owner's production build, 13 Nov 2026: "Finish setting
+  // up", raised on Home, sat over Leads' Call Next Lead. Leads slid in; while
+  // it moved, its fixed Call band wasn't under the corner yet, and its arrival
+  // moved no element, so nothing measured the stack again.
+  vi.useFakeTimers();
+  const boxes = new Map<Element, Box>();
+  const restore = phone(boxes);
+  const band = document.createElement("div");
+  band.style.position = "fixed";
+  band.style.bottom = "66px";
+  const call = document.createElement("button");
+  call.type = "button";
+  call.textContent = "Call Next Lead";
+  band.append(call);
+  document.body.append(band);
+  try {
+    await act(async () =>
+      notify({
+        id: "fictional",
+        tone: "info",
+        title: "Fictional finish setting up",
+        timeout: 0,
+      }),
+    );
+    await frames();
+    // The screen still moving: the band isn't under the corner yet.
+    expect(liftOf()).toBe("");
+    // Its motion ends with the band in place, 138 px up. Nothing in the page
+    // changed, yet the stack measures again and stands 8 px above it.
+    boxes.set(band, {
+      left: 0,
+      top: view() - 138,
+      right: 384,
+      bottom: view() - 66,
+    });
+    boxes.set(call, {
+      left: 16,
+      top: view() - 130,
+      right: 368,
+      bottom: view() - 74,
+    });
+    await act(async () =>
+      window.dispatchEvent(new Event(SCREEN_SETTLED_EVENT)),
+    );
+    await frames();
+    expect(liftOf()).toBe("146px");
+  } finally {
+    restore();
+    band.remove();
+    vi.useRealTimers();
+  }
+});
+
 it("keeps a short-lived card's Undo in its folded pill", async () => {
   // Phone personas ph2-36 (1 Nov 2026): the after-call card folded, its Undo
   // vanished, and a second tap opened the lead underneath.
