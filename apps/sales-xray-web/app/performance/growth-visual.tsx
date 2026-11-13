@@ -8,9 +8,10 @@
  *   Interested), one total each with a line of what is behind it (owner, 10
  *   Nov: "we don't have to focus on inbound and cold leads"), what needs
  *   attention, and each seller's calls.
- * - DayRhythm (G4): four larger cards, each with its own small animation: the
- *   attempted bar, the connect ring, talk time by seller, and when calls happen
- *   (by hour today, by day over 7 days or the month).
+ * - DayRhythm (G4): only what the tiles don't say (owner, 13 Nov 2026: "drop
+ *   the repeats"): talk time by seller on the team's Growth, and when calls
+ *   happen (by hour today, by day over 7 days or the month). Attempted,
+ *   connected and talk time are the tiles' numbers, so they aren't here again.
  * - SpeedTile (G2's one number, small): how soon new Inbound leads are called.
  * Only real numbers: a missing value is a dash, a real zero shows 0.
  */
@@ -61,12 +62,10 @@ function Ring({
   part,
   whole,
   label,
-  big = false,
 }: {
   part: number;
   whole: number;
   label: string;
-  big?: boolean;
 }) {
   const radius = 18;
   const around = 2 * Math.PI * radius;
@@ -74,7 +73,6 @@ function Ring({
   return (
     <span
       className={styles.ring}
-      data-big={big ? "" : undefined}
       role="img"
       aria-label={`${label}: ${share(part, whole)}`}
     >
@@ -579,8 +577,6 @@ export function DayRhythm({
   effort: Effort;
   period: GrowthPeriod;
 }) {
-  const attempted = both(effort, "attempted");
-  const connected = both(effort, "connected");
   const talkers = [...effort.sellers]
     .map((seller) => ({ seller, seconds: both(seller, "talk_seconds") }))
     .filter((row) => row.seconds > 0)
@@ -598,38 +594,11 @@ export function DayRhythm({
       <h2 id="growth-rhythm-title" className={styles.heading}>
         Day rhythm
       </h2>
-      <div className={styles.big} style={step(0)}>
-        <span className={styles.label}>Calls attempted</span>
-        <strong className={styles.bigFigure}>{n(attempted)}</strong>
-      </div>
-      <div className={styles.big} style={step(1)}>
-        <span className={styles.label}>Connected</span>
-        <span className={styles.bigRow}>
-          <Ring
-            part={connected}
-            whole={attempted}
-            label="Connected of attempted"
-            big
-          />
-          <span className={styles.bigWords}>
-            <strong className={styles.bigFigure}>{n(connected)}</strong>
-            <span className={styles.meta}>of {n(attempted)} attempted</span>
-          </span>
-        </span>
-      </div>
-      <div className={styles.big} style={step(2)}>
-        <span className={styles.label}>Talk time</span>
-        <strong className={styles.bigFigure}>
-          {talkTime(both(effort, "talk_seconds"))}
-        </strong>
-        {!effort.team ? (
-          // A seller's own Growth (owner, 10 Nov 2026: no tables in 2026).
-          <p className={styles.meta}>
-            {connected
-              ? `About ${talkTime(both(effort, "talk_seconds") / connected)} per connected call`
-              : "No connected calls yet."}
-          </p>
-        ) : talkers.length ? (
+      {/* Each seller's share of the talk time: the team's Growth only, and
+          only once someone has talked (a seller's own total is a tile). */}
+      {effort.team && talkers.length ? (
+        <div className={styles.big} style={step(0)}>
+          <span className={styles.label}>Talk time by seller</span>
           <ul className={styles.talkers} aria-label="Talk time by seller">
             {talkers.map(({ seller, seconds }, index) => (
               <li key={seller.person_id}>
@@ -651,11 +620,9 @@ export function DayRhythm({
               </li>
             ))}
           </ul>
-        ) : (
-          <p className={styles.meta}>No talk time yet.</p>
-        )}
-      </div>
-      <div className={styles.big} style={step(3)}>
+        </div>
+      ) : null}
+      <div className={styles.big} style={step(1)}>
         <span className={styles.label}>
           {period === "1" ? "Calls by hour" : "Calls by day"}
         </span>

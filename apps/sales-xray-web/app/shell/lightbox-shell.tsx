@@ -60,6 +60,7 @@ import { tabAgain } from "./tab-again";
 import { useShellProfile } from "./profile-store";
 import { callHref, type Allowance } from "../acquisition-client";
 import { CALLS_PATH } from "../analysis-routes";
+import { CALLS_PAGE_NAME } from "../calls-page-name";
 import { callDate, callTone, submissionState } from "../call-status";
 import { CALL_LABEL_EVENT, type CallLabelChange } from "../call-label-client";
 import {
@@ -234,7 +235,8 @@ function resolvePageTitle(
   if (pageName) return pageName;
   if (active === "dashboard") return "Home";
   if (heading) return heading.title;
-  if (active === "calls") return "Calls";
+  // The page says what its tab says (calls-page-name.ts).
+  if (active === "calls") return CALLS_PAGE_NAME;
   if (active === "leads") return "Leads";
   if (active === "chats") return "Chats";
   if (active === "prospects") return "Prospects";
@@ -2168,7 +2170,7 @@ function LightboxShellFrame({
           >
             <ChartColumn size={20} aria-hidden="true" />
             <span className={styles.tabPill} aria-hidden="true" />
-            <span>Reports</span>
+            <span>{CALLS_PAGE_NAME}</span>
           </ScreenLink>
         )}
         {/* My Growth: Analytics now, Coaching later as a tab inside it. */}

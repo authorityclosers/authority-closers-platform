@@ -254,7 +254,8 @@ it("names today's busiest hour on G4's fourth card, from the team's calls", asyn
     expect.anything(),
   );
   expect(host.textContent).toContain("Busiest at 11 am");
-  expect(host.textContent).toContain("78of 228 attempted");
+  // No repeat of the tiles' numbers (owner, 13 Nov 2026: "drop the repeats").
+  expect(host.textContent).not.toMatch(/attempted|Connected|Talk time\d/);
   // Talk time by seller, longest first.
   expect(
     [...host.querySelectorAll('[aria-label="Talk time by seller"] li')].map(
@@ -283,7 +284,11 @@ it("draws a seller's own Growth the same way, with no list of sellers", async ()
     expect.anything(),
   );
   expect(host.querySelector('[aria-label="Talk time by seller"]')).toBeNull();
-  expect(host.textContent).toContain("About 4 min per connected call");
+  // The seller's talk time is a tile; Day rhythm says only when calls happen.
+  expect(host.textContent).not.toMatch(
+    /Talk time|per connected call|attempted/,
+  );
+  expect(host.textContent).toContain("Calls by hour");
 });
 
 it("shows no Inbound | Cold split on Day rhythm either", async () => {

@@ -253,7 +253,12 @@ export function SelectBar({
 }) {
   const most = Math.min(total, DELETE_LIMIT);
   return (
-    <div className={styles.bar} role="group" aria-label="Selected leads">
+    <div
+      className={styles.bar}
+      role="group"
+      aria-label="Selected leads"
+      data-select-bar=""
+    >
       <span className={styles.count} aria-live="polite">
         {count
           ? `${count} selected`

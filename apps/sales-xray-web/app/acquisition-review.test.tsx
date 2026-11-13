@@ -231,8 +231,9 @@ it("keeps the previous valid file in a validation-error observation", async () =
   expect(container.textContent).toContain("Previously valid call.wav");
   await select("invalid replacement.pdf");
   expect(container.textContent).toContain("Previously valid call.wav");
+  // It says what New analysis takes (Dipak, bug 201, 13 Nov 2026).
   expect(container.textContent).toContain(
-    "Choose an audio or video recording within the displayed size limit.",
+    "That file can't be analysed. Choose a call recording up to 100 MB: MP3, WAV, M4A, AAC or another audio or video file.",
   );
   expect(observations.at(-1)).toEqual({
     phase: "upload.validation.error",

@@ -280,6 +280,12 @@
     margin-bottom: calc(
       var(--sx-bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 10px
     );
+    /* Solid on a phone, so the rows going under it don't show through and
+       it reads as the bar it is (owner bug 197, 10 Nov 2026: "the entire
+       thing is being hidden behind" it). */
+    background: var(--sx-elevated);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 }
 

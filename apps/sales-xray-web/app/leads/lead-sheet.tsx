@@ -407,6 +407,26 @@ function useTyping(): boolean {
   return typing;
 }
 
+/** The lead's tries, one count for its page: the call history's "Tried 5
+ *  times" and the after-call question's "Tries: 5" (Redmi QA batch 12, 13 Nov
+ *  2026: the question said 3 under a history that said 5). Its attempts, its
+ *  calls, or the calls the phone logged by itself, whichever is most. */
+export function triesOf(detail: {
+  events: LeadDetail["events"];
+  // Written out: this file's own Pick (the follow-up picker's) hides TypeScript's.
+  lead: { attempts?: number | null; calls?: number | null };
+}): number {
+  const phoneTalks = detail.events.filter(
+    (event) =>
+      event.kind === "call" && event.via === "phone" && event.connected,
+  ).length;
+  return Math.max(
+    detail.lead.attempts ?? 0,
+    detail.lead.calls ?? 0,
+    phoneTalks,
+  );
+}
+
 /**
  * The after-call sheet's two lines of context (competitor teardown 17, 1 Nov
  * 2026; NeoDove's dispose popup, HubSpot's call header): the last answer and
@@ -433,7 +453,7 @@ export function lastWord(
         .filter(Boolean)
         .join(" · ")
     : null;
-  const count = detail.lead.attempts ?? 0;
+  const count = triesOf(detail);
   const tries = count
     ? [
         `Tries: ${count}`,
@@ -1368,7 +1388,7 @@ export function forgetAppCall(leadId: string) {
  * page after tapping Call for this lead (the dialer hid the page). It also
  * runs once on open, for a phone that reloaded the page while calling.
  */
-function useCallReturn(
+export function useCallReturn(
   leadId: string | null,
   onReturn: (seconds: number) => void,
 ) {
@@ -1390,10 +1410,17 @@ function useCallReturn(
     const timer = window.setTimeout(check, 0);
     document.addEventListener("visibilitychange", check);
     window.addEventListener("focus", check);
+    // The phone app's own "back in front": its WebView may never say it was
+    // hidden and shown again (Redmi QA batch 12, 13 Nov 2026, production:
+    // back from a real call, nothing followed and the lead didn't refresh).
+    const stopResume = onPhoneSignal((event) => {
+      if (event === "resume") check();
+    });
     return () => {
       window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", check);
       window.removeEventListener("focus", check);
+      stopResume();
     };
   }, [leadId]);
 }
@@ -1438,7 +1465,7 @@ export function askAboutCall(
 }
 
 /** The phone app's call, once it has ended, for the open lead. */
-function usePhoneAppCall(
+export function usePhoneAppCall(
   leadId: string | null,
   onCall: (call: NativeCall) => void,
   /** Back from the app's call with no end from the phone (C2). */
@@ -1473,9 +1500,14 @@ function usePhoneAppCall(
     });
     check();
     document.addEventListener("visibilitychange", check);
+    // And on the app's own "back in front" (batch 12): see useCallReturn.
+    const stopResume = onPhoneSignal((event) => {
+      if (event === "resume") check();
+    });
     return () => {
       stop();
       document.removeEventListener("visibilitychange", check);
+      stopResume();
     };
   }, [leadId]);
 }
@@ -1846,7 +1878,7 @@ export function storyLines(
     results.filter((event) => event.connected).length,
     detail.events.filter(talkedCall).length,
   );
-  const tries = Math.max(lead.attempts, lead.calls, phoneTalks.length);
+  const tries = triesOf(detail);
   if (!tries) lines.push("Not called yet.");
   else
     lines.push(
@@ -1975,6 +2007,7 @@ export function History({
   label = "History",
   upcoming = null,
   onGenerate,
+  shown,
 }: {
   events: LeadEvent[];
   onChanged?: (next: LeadDetail) => void;
@@ -1990,8 +2023,13 @@ export function History({
   upcoming?: { at: string; note: string | null } | null;
   /** The newest call's recording is in but not analysed: make its Report. */
   onGenerate?: () => void;
+  /** How many lines show before See more (the lead page: Dipak's bug 198,
+   *  10 Nov 2026, "this should not look full": the three newest, then See
+   *  more for all of them). The follow-up to come is pinned and not counted. */
+  shown?: number;
 }) {
   const list = useRef<HTMLOListElement>(null);
+  const [all, setAll] = useState(false);
   useEffect(() => {
     if (!focusAt) return;
     const line = [
@@ -2017,152 +2055,173 @@ export function History({
       (a, b) => Date.parse(b.at) - Date.parse(a.at) || a.index - b.index,
     );
   const days = items.length > 5;
+  // Opened at an older line (My work): all of it, so that line can show.
+  const asked = focusAt ? items.findIndex((item) => item.at === focusAt) : -1;
+  const folded =
+    shown !== undefined && items.length > shown && !all && asked < shown;
+  const lines = folded ? items.slice(0, shown) : items;
   const newestCall = events.findIndex((event) => event.kind === "call");
   // Under a day header the time alone; without headers, the day too.
   const stamp = (at: string) =>
     days ? clockTime(at) : `${dayLabel(at)}, ${clockTime(at)}`;
   return (
-    <ol className={page.timeline} aria-label={label} ref={list}>
-      {upcoming ? (
-        <li className={page.tlRow} data-kind="upcoming">
-          <span className={page.disc} data-tone="now" aria-hidden="true">
-            <CalendarClock size={14} />
-          </span>
-          <span className={page.tlBody}>
-            <span className={page.tlTitle}>
-              Follow-up
-              <span className={page.upcoming}>Upcoming</span>
+    <>
+      <ol className={page.timeline} aria-label={label} ref={list}>
+        {upcoming ? (
+          <li className={page.tlRow} data-kind="upcoming">
+            <span className={page.disc} data-tone="now" aria-hidden="true">
+              <CalendarClock size={14} />
             </span>
-            <span className={page.tlDetail}>
-              {[upperFirst(when(upcoming.at)), upcoming.note]
-                .filter(Boolean)
-                .join(" · ")}
+            <span className={page.tlBody}>
+              <span className={page.tlTitle}>
+                Follow-up
+                <span className={page.upcoming}>Upcoming</span>
+              </span>
+              <span className={page.tlDetail}>
+                {[upperFirst(when(upcoming.at)), upcoming.note]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
             </span>
-          </span>
-        </li>
-      ) : null}
-      {items.map((item, position) => {
-        const day = dayLabel(item.at);
-        const header =
-          days &&
-          (position === 0 || dayLabel(items[position - 1].at) !== day) ? (
-            <li className={page.tlDay} aria-hidden="true">
-              {day}
-            </li>
-          ) : null;
-        if (item.chat)
+          </li>
+        ) : null}
+        {lines.map((item, position) => {
+          const day = dayLabel(item.at);
+          const header =
+            days &&
+            (position === 0 || dayLabel(lines[position - 1].at) !== day) ? (
+              <li className={page.tlDay} aria-hidden="true">
+                {day}
+              </li>
+            ) : null;
+          if (item.chat)
+            return (
+              <Fragment key={item.chat.key}>
+                {header}
+                <li className={page.tlRow} data-kind="chat" data-opens="">
+                  <span
+                    className={page.disc}
+                    data-tone="good"
+                    aria-hidden="true"
+                  >
+                    <MessageCircle size={14} />
+                  </span>
+                  <span className={page.tlBody}>
+                    <span className={page.tlTitle}>
+                      {chatDayTitle(item.chat)}
+                    </span>
+                    <span className={page.tlDetail}>
+                      {item.chat.last
+                        ? `${item.chat.last.mine ? "You: " : ""}${item.chat.last.text}`
+                        : stamp(item.at)}
+                    </span>
+                  </span>
+                  <Link
+                    className={page.tlAction}
+                    href={item.chat.href}
+                    prefetch={false}
+                  >
+                    Open chat
+                  </Link>
+                </li>
+              </Fragment>
+            );
+          const event = events[item.index];
+          const index = item.index;
+          const text = eventText(event);
+          const disc = historyDisc(event);
+          const report = event.kind === "call" ? event.submission_id : null;
+          const generate =
+            event.kind === "call" &&
+            index === newestCall &&
+            !!event.recording &&
+            !event.submission_id &&
+            !!onGenerate;
+          const words = event.private
+            ? "Only you see this call. It isn't counted."
+            : text.detail;
           return (
-            <Fragment key={item.chat.key}>
+            <Fragment key={`${event.at}-${index}`}>
               {header}
-              <li className={page.tlRow} data-kind="chat" data-opens="">
-                <span className={page.disc} data-tone="good" aria-hidden="true">
-                  <MessageCircle size={14} />
+              <li
+                className={page.tlRow}
+                data-kind={event.kind}
+                data-at={event.at}
+                data-report={report ? "" : undefined}
+                data-opens={report ? "" : undefined}
+                data-missed={
+                  event.direction === "missed" || event.direction === "rejected"
+                    ? true
+                    : undefined
+                }
+              >
+                <span
+                  className={page.disc}
+                  data-tone={disc.tone}
+                  aria-hidden="true"
+                >
+                  {disc.icon}
                 </span>
                 <span className={page.tlBody}>
                   <span className={page.tlTitle}>
-                    {chatDayTitle(item.chat)}
+                    {text.title}
+                    {event.private ? (
+                      <span className={styles.privateTag}>Private</span>
+                    ) : null}
+                    {sourceBadge(event) ? (
+                      <span className={pipe.badge}>{sourceBadge(event)}</span>
+                    ) : null}
+                    {event.app_label ? (
+                      <span className={pipe.badge}>via {event.app_label}</span>
+                    ) : null}
                   </span>
                   <span className={page.tlDetail}>
-                    {item.chat.last
-                      ? `${item.chat.last.mine ? "You: " : ""}${item.chat.last.text}`
-                      : stamp(item.at)}
+                    {words ? `${words} · ` : null}
+                    <time dateTime={event.at}>{stamp(event.at)}</time>
                   </span>
+                  {event.kind === "call" ? (
+                    <AutoCaptureState eventId={event.event_id} />
+                  ) : null}
+                  {onChanged ? (
+                    <PrivacyButton event={event} onChanged={onChanged} />
+                  ) : null}
+                  {onChanged && leadId ? (
+                    <UndoAppButton
+                      event={event}
+                      leadId={leadId}
+                      onChanged={onChanged}
+                    />
+                  ) : null}
                 </span>
-                <Link
-                  className={page.tlAction}
-                  href={item.chat.href}
-                  prefetch={false}
-                >
-                  Open chat
-                </Link>
+                {report ? (
+                  <Link className={page.tlAction} href={callHref(report)}>
+                    View report
+                  </Link>
+                ) : generate ? (
+                  <button
+                    type="button"
+                    className={page.tlAction}
+                    onClick={onGenerate}
+                  >
+                    Generate report
+                  </button>
+                ) : null}
               </li>
             </Fragment>
           );
-        const event = events[item.index];
-        const index = item.index;
-        const text = eventText(event);
-        const disc = historyDisc(event);
-        const report = event.kind === "call" ? event.submission_id : null;
-        const generate =
-          event.kind === "call" &&
-          index === newestCall &&
-          !!event.recording &&
-          !event.submission_id &&
-          !!onGenerate;
-        const words = event.private
-          ? "Only you see this call. It isn't counted."
-          : text.detail;
-        return (
-          <Fragment key={`${event.at}-${index}`}>
-            {header}
-            <li
-              className={page.tlRow}
-              data-kind={event.kind}
-              data-at={event.at}
-              data-report={report ? "" : undefined}
-              data-opens={report ? "" : undefined}
-              data-missed={
-                event.direction === "missed" || event.direction === "rejected"
-                  ? true
-                  : undefined
-              }
-            >
-              <span
-                className={page.disc}
-                data-tone={disc.tone}
-                aria-hidden="true"
-              >
-                {disc.icon}
-              </span>
-              <span className={page.tlBody}>
-                <span className={page.tlTitle}>
-                  {text.title}
-                  {event.private ? (
-                    <span className={styles.privateTag}>Private</span>
-                  ) : null}
-                  {sourceBadge(event) ? (
-                    <span className={pipe.badge}>{sourceBadge(event)}</span>
-                  ) : null}
-                  {event.app_label ? (
-                    <span className={pipe.badge}>via {event.app_label}</span>
-                  ) : null}
-                </span>
-                <span className={page.tlDetail}>
-                  {words ? `${words} · ` : null}
-                  <time dateTime={event.at}>{stamp(event.at)}</time>
-                </span>
-                {event.kind === "call" ? (
-                  <AutoCaptureState eventId={event.event_id} />
-                ) : null}
-                {onChanged ? (
-                  <PrivacyButton event={event} onChanged={onChanged} />
-                ) : null}
-                {onChanged && leadId ? (
-                  <UndoAppButton
-                    event={event}
-                    leadId={leadId}
-                    onChanged={onChanged}
-                  />
-                ) : null}
-              </span>
-              {report ? (
-                <Link className={page.tlAction} href={callHref(report)}>
-                  View report
-                </Link>
-              ) : generate ? (
-                <button
-                  type="button"
-                  className={page.tlAction}
-                  onClick={onGenerate}
-                >
-                  Generate report
-                </button>
-              ) : null}
-            </li>
-          </Fragment>
-        );
-      })}
-    </ol>
+        })}
+      </ol>
+      {shown !== undefined && items.length > shown && (all || folded) ? (
+        <button
+          type="button"
+          className={page.textAction}
+          aria-expanded={!folded}
+          onClick={() => setAll((now) => !now)}
+        >
+          {folded ? "See more" : "See less"}
+        </button>
+      ) : null}
+    </>
   );
 }
 
@@ -4210,6 +4269,7 @@ export function LeadCard({
               : null
           }
           onGenerate={recording && !recordingNow ? toRecording : undefined}
+          shown={3}
         />
       </section>
       {latestNote ? (

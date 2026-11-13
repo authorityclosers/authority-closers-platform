@@ -931,3 +931,17 @@ a.nextName:active::after,
 .sideWait [role="radio"] {
   visibility: hidden;
 }
+
+/* Home's Call band (the owner's pick, 13 Nov 2026: "Call band above tab
+   bar"): Leads' own band, on a phone only; a computer has Next action's Call
+   in sight. Its room at the page's end, as Leads' list keeps. */
+.bandRoom {
+  height: 80px;
+}
+
+@media (min-width: 900px) {
+  .homeBand[class],
+  .bandRoom {
+    display: none;
+  }
+}

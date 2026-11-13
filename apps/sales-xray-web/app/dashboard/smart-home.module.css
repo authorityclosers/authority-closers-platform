@@ -128,6 +128,14 @@
   vertical-align: middle;
 }
 
+/* Done today's: after the figure's name, at its size. */
+.doneLabel .go {
+  width: 1em;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.14em;
+}
+
 /* Press: a 10 % state layer in 90 ms; hover 6 % on a computer. */
 .counter::after,
 .done a::after {

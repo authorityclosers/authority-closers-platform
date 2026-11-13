@@ -373,6 +373,7 @@ export function DoneToday({
             <Link href={figure.href} data-done={figure.key}>
               <span className={styles.doneLabel}>
                 <Words text={figure.label} />
+                <Go />
               </span>
               <DoneRing icon={figure.icon} share={figure.share} />
               <strong className={styles.doneValue}>

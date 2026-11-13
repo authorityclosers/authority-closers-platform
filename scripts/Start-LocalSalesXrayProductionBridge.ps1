@@ -5,7 +5,15 @@ param(
     [ValidateRange(1024, 65535)]
     [int]$BrowserPort = 3016,
     [ValidateRange(1024, 65535)]
-    [int]$InnerPort = 3116
+    [int]$InnerPort = 3116,
+    # Where the browser opens the app. salesxray.localhost by default; a phone
+    # linked with adb reverse can't resolve *.localhost, so live phone design
+    # passes -BrowserOrigin http://localhost:3016 (13 Nov 2026).
+    [ValidatePattern('^http://(localhost|127\.0\.0\.1|[a-z0-9-]+\.localhost):\d+$')]
+    [string]$BrowserOrigin,
+    # Next's webpack dev bundler, as before. Turbopack by default, as pnpm dev
+    # runs it and main's next.config expects.
+    [switch]$Webpack
 )
 
 Set-StrictMode -Version Latest
@@ -14,7 +22,13 @@ $ErrorActionPreference = "Stop"
 $RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $RuntimeDirectory = Join-Path $RepositoryRoot ".tmp\local-sales-xray-production-bridge"
 $PidFile = Join-Path $RuntimeDirectory "processes.json"
-$BrowserOrigin = "http://salesxray.localhost:$BrowserPort"
+if (-not $BrowserOrigin) {
+    $BrowserOrigin = "http://salesxray.localhost:$BrowserPort"
+}
+elseif (([uri]$BrowserOrigin).Port -ne $BrowserPort) {
+    throw "BrowserOrigin must use BrowserPort ($BrowserPort)."
+}
+$Bundler = if ($Webpack) { "--webpack" } else { "--turbopack" }
 $InnerOrigin = "http://127.0.0.1:$InnerPort"
 $ProductionOrigin = "https://salesxray.authorityclosers.com"
 
@@ -165,7 +179,7 @@ try {
     }
 
     $InnerProcess = Start-Process -FilePath $PnpmPath `
-        -ArgumentList @("--filter", "@ac/sales-xray-web", "exec", "next", "dev", "--webpack", "--hostname", "127.0.0.1", "--port", "$InnerPort") `
+        -ArgumentList @("--filter", "@ac/sales-xray-web", "exec", "next", "dev", $Bundler, "--hostname", "127.0.0.1", "--port", "$InnerPort") `
         -WorkingDirectory $RepositoryRoot `
         -WindowStyle Hidden `
         -RedirectStandardOutput (Join-Path $RuntimeDirectory "sales-xray.out.log") `
