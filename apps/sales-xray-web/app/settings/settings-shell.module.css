@@ -145,10 +145,33 @@
   font-size: var(--sx-text-sm);
 }
 
+/* The section's name with the way back beside it, on phones: the chevron
+   centred on the name, the line under it starting under the name. */
+.titleRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  min-width: 0;
+}
+
+.titleRow > .header {
+  display: contents;
+}
+
+.titleRow > .header > h1,
+.titleRow > .header > p {
+  grid-column: 2;
+}
+
+.titleRow > .header > h1 {
+  grid-row: 1;
+}
+
 /* The way back, a chevron alone with a full tap target: the top bar already
    says Settings (Redmi QA on production, 10 Nov 2026). */
 .back {
   display: none;
+  grid-row: 1;
   min-width: 44px;
   min-height: 44px;
   margin-inline-start: -12px;
