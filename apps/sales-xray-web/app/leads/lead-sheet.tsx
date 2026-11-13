@@ -1368,7 +1368,7 @@ export function forgetAppCall(leadId: string) {
  * page after tapping Call for this lead (the dialer hid the page). It also
  * runs once on open, for a phone that reloaded the page while calling.
  */
-function useCallReturn(
+export function useCallReturn(
   leadId: string | null,
   onReturn: (seconds: number) => void,
 ) {
@@ -1390,10 +1390,17 @@ function useCallReturn(
     const timer = window.setTimeout(check, 0);
     document.addEventListener("visibilitychange", check);
     window.addEventListener("focus", check);
+    // The phone app's own "back in front": its WebView may never say it was
+    // hidden and shown again (Redmi QA batch 12, 13 Nov 2026, production:
+    // back from a real call, nothing followed and the lead didn't refresh).
+    const stopResume = onPhoneSignal((event) => {
+      if (event === "resume") check();
+    });
     return () => {
       window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", check);
       window.removeEventListener("focus", check);
+      stopResume();
     };
   }, [leadId]);
 }
@@ -1438,7 +1445,7 @@ export function askAboutCall(
 }
 
 /** The phone app's call, once it has ended, for the open lead. */
-function usePhoneAppCall(
+export function usePhoneAppCall(
   leadId: string | null,
   onCall: (call: NativeCall) => void,
   /** Back from the app's call with no end from the phone (C2). */
@@ -1473,9 +1480,14 @@ function usePhoneAppCall(
     });
     check();
     document.addEventListener("visibilitychange", check);
+    // And on the app's own "back in front" (batch 12): see useCallReturn.
+    const stopResume = onPhoneSignal((event) => {
+      if (event === "resume") check();
+    });
     return () => {
       stop();
       document.removeEventListener("visibilitychange", check);
+      stopResume();
     };
   }, [leadId]);
 }
