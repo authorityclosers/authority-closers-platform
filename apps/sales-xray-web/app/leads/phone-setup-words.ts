@@ -48,10 +48,11 @@ export const CHECK_TODO: Record<PhoneCheck, string> = {
   calls: "Call a lead in one tap and log the call by itself.",
   recordings: "Find the recording of a call to analyse it.",
   notifications: "Hear about a new lead or a call that is due.",
-  recorder: "Your phone's dialer saves every call.",
+  recorder: "Turn on call recording in your phone's dialer.",
   folder: "Ticks when your phone's first call recording appears.",
-  battery: "Your phone lets Sales X-Ray run in the background.",
-  autostart: "Your phone lets Sales X-Ray start by itself.",
+  battery:
+    "Set Sales X-Ray's battery use to Unrestricted, so it runs in the background.",
+  autostart: "Allow Sales X-Ray to start by itself.",
   testCall:
     "Call any lead from Sales X-Ray and talk for a few seconds. Ticks when the recording is found.",
   callLog: "Calls with your leads from the phone dialer show on the lead.",

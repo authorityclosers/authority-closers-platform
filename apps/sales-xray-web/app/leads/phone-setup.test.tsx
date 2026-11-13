@@ -4,8 +4,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PhoneHealth, RepView } from "./leads-client";
 import { parseSetup } from "./native-phone";
-import { PhoneSetupBar, reportedChecks, setupProgress } from "./phone-setup";
-import { phoneDot, recorderSteps } from "./phone-setup-words";
+import {
+  lineTodo,
+  PhoneSetupBar,
+  reportedChecks,
+  setupProgress,
+} from "./phone-setup";
+import {
+  CHECK_TODO,
+  FOLDER_TODO,
+  phoneDot,
+  recorderSteps,
+} from "./phone-setup-words";
 import { PhoneCell } from "./team-view";
 
 (
@@ -254,6 +264,29 @@ describe("a seller's phone on Team", () => {
     expect(cell.getAttribute("data-tone")).toBe("warn");
     expect(cell.getAttribute("title")).toContain("To do: Call recorder on");
   });
+});
+
+it("counts Call recordings done once a folder is picked, as phone setup says", () => {
+  // Redmi QA on the owner's production build, 13 Nov 2026: setup said
+  // "Recordings folder chosen" while this list said "Choose their folder".
+  const picker = { needsAllFiles: true, folderPickSupported: true };
+  const picked = parseSetup(
+    setup({ ...CHECKS, recordings: false }, { ...picker, folderPicked: true }),
+  )!;
+  const waiting = parseSetup(
+    setup({ ...CHECKS, recordings: false }, { ...picker, folderPicked: false }),
+  )!;
+  expect(setupProgress(picked).done).toBe(setupProgress(waiting).done + 1);
+  expect(lineTodo("recordings", waiting)).toBe(FOLDER_TODO);
+  expect(lineTodo("recordings", picked)).not.toBe(FOLDER_TODO);
+  expect(reportedChecks(picked)).toMatchObject({ recordings: true });
+  expect(reportedChecks(waiting)).toMatchObject({ recordings: false });
+});
+
+it("says what to do on a line that isn't done, never what reads as done", () => {
+  for (const key of ["recorder", "battery", "autostart"] as const)
+    expect(CHECK_TODO[key]).not.toMatch(/^Your phone/);
+  expect(CHECK_TODO.battery).toContain("Unrestricted");
 });
 
 it("never reports call logging from a build that can't log calls", () => {

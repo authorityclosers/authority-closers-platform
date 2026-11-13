@@ -50,8 +50,21 @@ export function needsFolderPick(status: SetupStatus): boolean {
   return (
     status.needsAllFiles &&
     !status.allFilesSupported &&
-    status.folderPickSupported
+    status.folderPickSupported &&
+    !status.folderPicked
   );
+}
+
+/**
+ * Whether a line is done. Where the seller picks the recordings folder, Call
+ * recordings is done once a folder is picked, as phone setup's own step says
+ * (Redmi QA on the owner's production build, 13 Nov 2026: setup said
+ * "Recordings folder chosen" while this list said "Choose their folder").
+ */
+export function lineDone(key: PhoneCheck, status: SetupStatus): boolean {
+  if (key === "recordings" && status.folderPickSupported && status.folderPicked)
+    return true;
+  return status.checks[key] === true;
 }
 
 /** What a line says while it is not done yet, for this phone. */
@@ -79,7 +92,7 @@ export function setupProgress(status: SetupStatus): {
 } {
   const lines = setupLines(status);
   return {
-    done: lines.filter((key) => status.checks[key] === true).length,
+    done: lines.filter((key) => lineDone(key, status)).length,
     total: lines.length,
   };
 }
@@ -90,9 +103,14 @@ export function setupProgress(status: SetupStatus): {
  * 1 Nov 2026: Connections called such a phone a problem nobody could fix).
  */
 export function reportedChecks(status: SetupStatus): Record<string, boolean> {
-  if (status.callLogSupported) return status.checks;
+  // Team sees Call recordings as this list does.
+  const checks = {
+    ...status.checks,
+    ...(lineDone("recordings", status) ? { recordings: true } : {}),
+  };
+  if (status.callLogSupported) return checks;
   return Object.fromEntries(
-    Object.entries(status.checks).filter(([name]) => name !== "callLog"),
+    Object.entries(checks).filter(([name]) => name !== "callLog"),
   );
 }
 
@@ -283,7 +301,7 @@ export function PhoneSetupSheet({
           </header>
           <ol className={styles.setupList} aria-label="Phone setup">
             {setupLines(status).map((key) => {
-              const ok = status.checks[key] === true;
+              const ok = lineDone(key, status);
               return (
                 <li key={key} data-done={ok || undefined}>
                   {ok ? (
