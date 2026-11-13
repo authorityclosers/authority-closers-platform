@@ -34,6 +34,7 @@ import { ClarityGate } from "./clarity";
 import { TapReach } from "./ui/tap-reach";
 import { PressFeedback } from "./press-feedback";
 import { WebReady } from "./web-ready";
+import { GetAppSheet } from "./testers/get-app-sheet";
 import { PrePaintScript } from "./pre-paint-script";
 export const metadata: Metadata = {
   title: "Sales X-Ray · Authority Closers",
@@ -133,6 +134,8 @@ export default async function Layout({
               {/* Inside the phone app: this page is up, so a new live web
                 update is kept rather than rolled back (web-ready.tsx). */}
               <WebReady />
+              {/* A Play tester on an Android browser: Play's two steps (13 Nov 2026). */}
+              <GetAppSheet />
             </UploadSessionProvider>
           </AppCompatibilityProvider>
         </ThemeProvider>

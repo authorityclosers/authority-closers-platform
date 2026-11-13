@@ -1,254 +1,314 @@
 "use client";
 
 /**
- * /testers: three steps to join the Play closed test (owner, 26 Oct 2026:
- * testers start tomorrow; tester programme kit note 01). Public, no sign-in,
- * phone first, in English, Hindi and Marathi. The links come from
- * testers-config.ts; a step's "Done" tick is only a reminder kept on this
- * device.
+ * /testers (owner, 13 Nov 2026): testers couldn't install because nobody told
+ * them, cleanly, to tap "Become a tester" with the same Google account. One
+ * headline, one line, one button: sign in with Google, give the phone, role
+ * and business, and wait for the team. Once the team has added the account to
+ * the Play group, the same page shows Play's two steps at once. Public, phone
+ * first; the first screen fits one phone view.
  */
 
-import { Check } from "lucide-react";
+import { Check, Clock, ExternalLink } from "lucide-react";
 import Link from "next/link";
-import {
-  useEffect,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { BrandMark } from "../shell/brand-lockup";
-import { TESTERS, whatsappLink, type TestersConfig } from "./testers-config";
-import { COPY, LANGS, type Lang } from "./testers-copy";
+import { COPY, withEmail } from "./testers-copy";
+import {
+  PLAY_STEPS,
+  ROLES,
+  SIGN_IN,
+  joinTesters,
+  phoneModelHint,
+  readTesterMe,
+  switchAccount,
+  type TesterMe,
+  type TesterRead,
+  type TesterRole,
+} from "./testers-client";
 import styles from "./testers.module.css";
 
-const LANG_KEY = "sx.testers.lang";
-const DONE_KEY = "sx.testers.done";
-const quiet = () => () => undefined;
+type Read = TesterRead | "checking";
 
-function isLang(value: string | null | undefined): value is Lang {
-  return value === "en" || value === "hi" || value === "mr";
-}
-
-/** ?lang= first (a shared link), then this device's choice, then the phone's language. */
-function preferredLang(): Lang {
-  try {
-    const asked = new URLSearchParams(window.location.search).get("lang");
-    if (isLang(asked)) return asked;
-    const kept = localStorage.getItem(LANG_KEY);
-    if (isLang(kept)) return kept;
-  } catch {
-    // Storage blocked: the phone's language decides.
-  }
-  const phone = navigator.language?.slice(0, 2);
-  return isLang(phone) ? phone : "en";
-}
-
-/** The product's name never breaks at its hyphen ("Sales X-" / "Ray" at 320 px). */
-function keepName(text: string): ReactNode {
-  const parts = text.split("Sales X-Ray");
-  return parts.flatMap((part, index) =>
-    index
-      ? [
-          <span key={index} className={styles.name}>
-            Sales X-Ray
-          </span>,
-          part,
-        ]
-      : [part],
+function Begin() {
+  return (
+    <section className={styles.begin}>
+      <a className={styles.cta} href={SIGN_IN} data-testers-cta="">
+        {COPY.cta}
+      </a>
+      <p className={styles.note}>{COPY.ctaNote}</p>
+    </section>
   );
 }
 
-function readDone(): number[] {
-  try {
-    const kept: unknown = JSON.parse(localStorage.getItem(DONE_KEY) ?? "[]");
-    return Array.isArray(kept)
-      ? kept.filter((n): n is number => n === 1 || n === 2 || n === 3)
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-export function TestersPage({ config = TESTERS }: { config?: TestersConfig }) {
-  // The server draws English; the phone's language follows once it is here.
-  const here = useSyncExternalStore(
-    quiet,
-    () => true,
-    () => false,
-  );
-  const [chosen, setChosen] = useState<Lang | null>(null);
-  const [ticked, setTicked] = useState<number[] | null>(null);
-  const lang: Lang = chosen ?? (here ? preferredLang() : "en");
-  const done = ticked ?? (here ? readDone() : []);
-  const t = COPY[lang];
+function JoinForm({
+  me,
+  onJoined,
+}: {
+  me: TesterMe;
+  onJoined: (me: TesterMe) => void;
+}) {
+  const [phone, setPhone] = useState("");
+  const [role, setRole] = useState<TesterRole | null>(null);
+  const [business, setBusiness] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
-    document.documentElement.lang = lang;
-    // The rest of the app is in English.
+    let live = true;
+    void phoneModelHint().then((model) => {
+      if (live && model) setPhone((typed) => typed || model);
+    });
     return () => {
-      document.documentElement.lang = "en";
+      live = false;
     };
-  }, [lang]);
+  }, []);
 
-  const choose = (next: Lang) => {
-    setChosen(next);
-    try {
-      localStorage.setItem(LANG_KEY, next);
-      const url = new URL(window.location.href);
-      url.searchParams.set("lang", next);
-      window.history.replaceState(window.history.state, "", url);
-    } catch {
-      // A choice that isn't kept still shows.
-    }
+  const ready =
+    phone.trim().length >= 2 && role !== null && business.trim().length >= 2;
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!ready || busy || role === null) return;
+    setBusy(true);
+    setProblem(null);
+    const result = await joinTesters({
+      phone_model: phone.trim(),
+      role,
+      business: business.trim(),
+    });
+    setBusy(false);
+    if (result.ok) onJoined(result.me);
+    else setProblem(result.message);
   };
-
-  const toggle = (step: number) => {
-    const next = done.includes(step)
-      ? done.filter((n) => n !== step)
-      : [...done, step].sort((a, b) => a - b);
-    setTicked(next);
-    try {
-      localStorage.setItem(DONE_KEY, JSON.stringify(next));
-    } catch {
-      // Only a reminder.
-    }
-  };
-
-  // Until the group is set up, step 1 can ask for the Gmail on WhatsApp.
-  const whatsapp = config.route === "whatsapp" ? config.whatsappNumber : null;
-  const steps = [
-    whatsapp
-      ? {
-          n: 1,
-          title: t.gmailTitle,
-          line: t.gmailLine,
-          button: t.gmailButton,
-          href: whatsappLink(whatsapp, t.gmailMessage),
-        }
-      : {
-          n: 1,
-          title: t.groupTitle,
-          line: t.groupLine,
-          button: t.groupButton,
-          href: config.groupUrl,
-        },
-    {
-      n: 2,
-      title: t.optInTitle,
-      line: t.optInLine,
-      button: t.optInButton,
-      href: config.optInUrl,
-    },
-    {
-      n: 3,
-      title: t.installTitle,
-      line: t.installLine,
-      button: t.installButton,
-      href: config.playUrl,
-    },
-  ];
 
   return (
-    <main className={styles.page} lang={lang}>
+    <form className={styles.card} onSubmit={(event) => void submit(event)}>
+      <div className={styles.account}>
+        <span>
+          {COPY.joiningAs} <strong>{me.email}</strong>
+        </span>
+        <button
+          type="button"
+          className={styles.link}
+          onClick={() => void switchAccount()}
+        >
+          {COPY.notYou}
+        </button>
+      </div>
+      <p className={styles.hint}>{COPY.playAccount}</p>
+      <label className={styles.field}>
+        <span>{COPY.phone}</span>
+        <input
+          name="phone_model"
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
+          placeholder={COPY.phoneHint}
+          maxLength={80}
+          autoComplete="off"
+          required
+        />
+      </label>
+      <fieldset className={styles.roles}>
+        <legend>{COPY.role}</legend>
+        <div className={styles.chips}>
+          {ROLES.map((item) => (
+            <label
+              key={item.key}
+              className={styles.chip}
+              data-on={role === item.key ? "" : undefined}
+            >
+              <input
+                type="radio"
+                name="role"
+                value={item.key}
+                checked={role === item.key}
+                onChange={() => setRole(item.key)}
+              />
+              {item.label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <label className={styles.field}>
+        <span>{COPY.business}</span>
+        <input
+          name="business"
+          value={business}
+          onChange={(event) => setBusiness(event.target.value)}
+          placeholder={COPY.businessHint}
+          maxLength={120}
+          autoComplete="organization"
+          required
+        />
+      </label>
+      {problem ? (
+        <p className={styles.problem} role="alert">
+          {problem}
+        </p>
+      ) : null}
+      <button
+        type="submit"
+        className={styles.cta}
+        disabled={!ready || busy}
+        aria-busy={busy || undefined}
+      >
+        {busy ? COPY.joining : COPY.join}
+      </button>
+    </form>
+  );
+}
+
+function Status({
+  icon,
+  title,
+  text,
+}: {
+  icon: "wait" | "done";
+  title: string;
+  text: string;
+}) {
+  return (
+    <section className={styles.card} role="status">
+      <span className={styles.badge} data-tone={icon} aria-hidden="true">
+        {icon === "done" ? (
+          <Check size={20} strokeWidth={2.5} />
+        ) : (
+          <Clock size={20} strokeWidth={2.25} />
+        )}
+      </span>
+      <h2>{title}</h2>
+      <p>{text}</p>
+    </section>
+  );
+}
+
+export function PlaySteps({ email }: { email: string }) {
+  const steps = [
+    {
+      n: 1,
+      title: COPY.stepOneTitle,
+      text: COPY.stepOneText,
+      button: COPY.stepOneButton,
+      href: PLAY_STEPS.optIn,
+    },
+    {
+      n: 2,
+      title: COPY.stepTwoTitle,
+      text: COPY.stepTwoText,
+      button: COPY.stepTwoButton,
+      href: PLAY_STEPS.play,
+    },
+  ];
+  return (
+    <>
+      <ol className={styles.steps}>
+        {steps.map((step) => (
+          <li key={step.n} className={styles.step}>
+            <span className={styles.number} aria-hidden="true">
+              {step.n}
+            </span>
+            <div className={styles.stepBody}>
+              <h3>{step.title}</h3>
+              <p>{step.text}</p>
+              <a
+                className={step.n === 1 ? styles.cta : styles.secondary}
+                href={step.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-step={step.n}
+              >
+                {step.button}
+                <ExternalLink size={16} aria-hidden="true" />
+              </a>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <details className={styles.help}>
+        <summary>{COPY.notFoundTitle}</summary>
+        <p>{withEmail(COPY.notFoundText, email)}</p>
+      </details>
+    </>
+  );
+}
+
+function Body({
+  read,
+  onJoined,
+}: {
+  read: Read;
+  onJoined: (me: TesterMe) => void;
+}) {
+  if (read === "checking" || read === "signed_out" || read === "unavailable")
+    return <Begin />;
+  if (read.state === "none") return <JoinForm me={read} onJoined={onJoined} />;
+  if (read.state === "waiting")
+    return (
+      <Status
+        icon="wait"
+        title={COPY.waitingTitle}
+        text={withEmail(COPY.waitingText, read.email)}
+      />
+    );
+  if (read.state === "approved")
+    return (
+      <Status
+        icon="done"
+        title={COPY.approvedTitle}
+        text={withEmail(COPY.approvedText, read.email)}
+      />
+    );
+  if (read.state === "declined")
+    return (
+      <Status
+        icon="wait"
+        title={COPY.declinedTitle}
+        text={withEmail(COPY.declinedText, read.email)}
+      />
+    );
+  return (
+    <section className={styles.card}>
+      <h2>{COPY.readyTitle}</h2>
+      <p>{withEmail(COPY.readyText, read.email)}</p>
+      <PlaySteps email={read.email} />
+    </section>
+  );
+}
+
+export function TestersPage({ initial = "checking" }: { initial?: Read }) {
+  const [read, setRead] = useState<Read>(initial);
+
+  useEffect(() => {
+    if (initial !== "checking") return;
+    const controller = new AbortController();
+    void readTesterMe(controller.signal).then((answer) => {
+      if (!controller.signal.aborted) setRead(answer);
+    });
+    return () => controller.abort();
+  }, [initial]);
+
+  return (
+    <main className={styles.page}>
       <header className={styles.top}>
         <span className={styles.brand}>
           <BrandMark markOnly />
           Sales X-Ray
         </span>
-        <div className={styles.langs} role="group" aria-label={t.language}>
-          {LANGS.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              lang={item.key}
-              aria-pressed={item.key === lang}
-              onClick={() => choose(item.key)}
-            >
-              {item.name}
-            </button>
-          ))}
-        </div>
       </header>
-
-      <section className={styles.hero}>
-        <h1>{keepName(t.title)}</h1>
-        <p>{t.lead}</p>
-      </section>
-
-      <ol className={styles.steps}>
-        {steps.map((step) => {
-          const isDone = done.includes(step.n);
-          return (
-            <li
-              key={step.n}
-              className={styles.step}
-              data-done={isDone ? "" : undefined}
-            >
-              <span className={styles.number} aria-hidden="true">
-                {isDone ? <Check size={18} strokeWidth={2.5} /> : step.n}
-              </span>
-              <div className={styles.stepBody}>
-                <h2>{step.title}</h2>
-                <p>{keepName(step.line)}</p>
-                <div className={styles.stepActions}>
-                  <a
-                    className={styles.primary}
-                    href={step.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-step={step.n}
-                  >
-                    {step.button}
-                  </a>
-                  <button
-                    type="button"
-                    className={styles.doneButton}
-                    aria-pressed={isDone}
-                    onClick={() => toggle(step.n)}
-                  >
-                    <Check size={16} strokeWidth={2.25} aria-hidden="true" />
-                    {t.done}
-                  </button>
-                </div>
-              </div>
-            </li>
-          );
-        })}
-      </ol>
-
-      <section className={styles.box}>
-        <h2>{t.stayTitle}</h2>
-        <p>{t.stayText}</p>
-      </section>
-
-      <section className={styles.box}>
-        <h2>{t.rewardsTitle}</h2>
-        <p>{t.rewardsText}</p>
-      </section>
-
-      <section className={styles.stuck}>
-        <h2>{t.stuckTitle}</h2>
-        {t.stuck.map((item) => (
-          <details key={item.q}>
-            <summary>{item.q}</summary>
-            <p>{item.a}</p>
-          </details>
-        ))}
-        {config.helpUrl ? (
-          <p className={styles.still}>
-            {t.stillStuck}{" "}
-            <a href={config.helpUrl} target="_blank" rel="noopener noreferrer">
-              {t.askButton}
-            </a>
-          </p>
-        ) : null}
-      </section>
-
+      <div className={styles.middle}>
+        <section className={styles.hero}>
+          <span className={styles.eyebrow}>Early access · Android</span>
+          <h1>{COPY.title}</h1>
+          <p>{COPY.lead}</p>
+        </section>
+        <Body read={read} onJoined={setRead} />
+      </div>
       <footer className={styles.footer}>
-        <p>{t.footer}</p>
+        <span>{COPY.footer}</span>
         <Link href="/privacy" prefetch={false}>
-          {t.privacy}
+          {COPY.privacy}
         </Link>
       </footer>
     </main>

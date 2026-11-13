@@ -4,7 +4,8 @@ import { TestersPage } from "./testers-page";
 
 export const metadata: Metadata = {
   title: "Test Sales X-Ray",
-  description: "Help us test Sales X-Ray: three steps, five minutes.",
+  description:
+    "Join the Sales X-Ray early-access group for Android and help shape the app.",
 };
 
 export default function Page() {
