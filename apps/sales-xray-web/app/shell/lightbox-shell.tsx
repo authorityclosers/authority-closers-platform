@@ -1165,7 +1165,7 @@ function LightboxShellFrame({
       ),
       place("Coaching", "/coaching", <GraduationCap size={17} />),
       place(
-        "Reports",
+        "Results",
         "/reports",
         <LineChart size={17} />,
         "call reports pipeline numbers lost first response",

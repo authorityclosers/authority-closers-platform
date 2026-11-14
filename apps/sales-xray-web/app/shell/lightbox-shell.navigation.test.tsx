@@ -234,7 +234,7 @@ it("lists Results' pages on Coaching", () => {
   expect(panelPages(aside)).toEqual([
     "Results",
     [
-      ["Reports", "/reports", null],
+      ["Results", "/reports", null],
       ["Coaching", "/coaching", "page"],
     ],
   ]);

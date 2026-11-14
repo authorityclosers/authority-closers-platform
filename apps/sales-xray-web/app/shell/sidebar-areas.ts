@@ -185,7 +185,7 @@ export function sidebarAreas({
     href: "/reports",
     icon: LineChart,
     pages: [
-      { key: "reports", label: "Reports", href: "/reports", icon: LineChart },
+      { key: "reports", label: "Results", href: "/reports", icon: LineChart },
       {
         key: "coaching",
         label: "Coaching",

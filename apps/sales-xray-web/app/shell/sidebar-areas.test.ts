@@ -20,7 +20,7 @@ it("draws a personal workspace's areas: Home, Work and Results", () => {
   ).toEqual([
     ["Home", [["Home"]]],
     ["Work", [["Leads"], ["Chats"], [CALLS_PAGE_NAME], ["Prospects"]]],
-    ["Results", [["Reports"], ["Coaching"]]],
+    ["Results", [["Results"], ["Coaching"]]],
   ]);
 });
 
@@ -52,7 +52,7 @@ it("adds Team for an organisation, with every hub section by role", () => {
         ["Plan & billing"],
       ],
     ],
-    ["Results", [["Reports"], ["Coaching"]]],
+    ["Results", [["Results"], ["Coaching"]]],
   ]);
   const team = owner[2].pages;
   expect(team.map((page) => [page.href, page.hubTab ?? null])).toEqual([
