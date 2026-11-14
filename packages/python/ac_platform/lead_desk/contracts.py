@@ -267,6 +267,9 @@ class SellerEffort(Model):
     # leads were worth in whole rupees, as revenue credits them (teardown #18).
     follow_ups_done: int = 0
     won_amount: int = 0
+    # Their photo; None means initials (owner, 15 Nov 2026: Home's team faces show
+    # each seller's own photo, so he can see at a glance who has worked).
+    photo_url: str | None = None
 
 
 class Effort(Model):

@@ -788,6 +788,10 @@ UNDO_OF = "undo_of"
 CALL_FILL = "call_data"
 
 
+# How far back Home's date can look (owner, 15 Nov 2026).
+EFFORT_DAYS_BACK = 90
+
+
 class LeadDesk:
     def __init__(
         self,
@@ -6054,7 +6058,7 @@ class LeadDesk:
         if not self.viewer.can_manage:
             raise DeskError(403, "Only owners and admins manage the team's lead rules.")
 
-    async def effort(self, days: int, *, month: bool = False) -> Effort:
+    async def effort(self, days: int, *, month: bool = False, chosen: date | None = None) -> Effort:
         """The Performance engine (Leads redesign section 6; owner and Dipak, 30 Oct 2026):
         for each seller, the work done, what was missed and the breaks taken, with Inbound
         and Cold leads measured apart (Dipak's table).
@@ -6069,6 +6073,10 @@ class LeadDesk:
         call. Owners and admins see every seller; a seller sees their own. Read from the
         calls Recent Calls lists, so it agrees with Home; a lead's side is its pipeline
         (migration 0146, empty is Inbound).
+
+        `chosen` reads one day, India time, for Home's date (owner, 15 Nov 2026):
+        that day's calls, moves, breaks and first and last call; what is "now" (late
+        follow-ups, open leads, overdue tasks) stays now. Up to 90 days back.
         """
         from ac_platform.call_ai import missing_recordings
         from ac_platform.lead_desk.models import LeadTask
@@ -6080,10 +6088,21 @@ class LeadDesk:
             raise DeskError(422, "Pick today, 7 days or 30 days.")
         team = self.viewer.can_see_team
         me = self.viewer.person_id
-        last = self.now.astimezone(IST).date()
+        this_day = self.now.astimezone(IST).date()
+        if chosen is not None:
+            if days != 1 or month:
+                raise DeskError(422, "A chosen day reads one day.")
+            if chosen > this_day or chosen < this_day - timedelta(days=EFFORT_DAYS_BACK):
+                raise DeskError(422, "Pick a day in the last 90 days.")
+        last = chosen or this_day
         begin = datetime.combine(last - timedelta(days=days - 1), time.min, tzinfo=IST)
         begin = begin.astimezone(UTC)
-        until = self.now + timedelta(seconds=1)
+        # A past day ends at its midnight; today, now.
+        until = (
+            self.now + timedelta(seconds=1)
+            if last == this_day
+            else datetime.combine(last + timedelta(days=1), time.min, tzinfo=IST).astimezone(UTC)
+        )
         rows = await self._call_rows(begin, until, team=team)
         acted = () if team else (LeadEvent.actor_person_id == me,)
         owned = () if team else (Lead.owner_person_id == me,)
@@ -6337,6 +6356,8 @@ class LeadDesk:
         for row in rows:
             if row.actor is not None:
                 their_calls.setdefault(row.actor, []).append(row)
+        # Every seller's photo in one look-up, as the lead page's reps get theirs.
+        photos = await person_photos.photo_urls(self.db, people)
         sellers = []
         for person, name in people.items():
             follow_ups = (
@@ -6379,6 +6400,7 @@ class LeadDesk:
                     missing_recordings=missing.by_person.get(person, 0),
                     follow_ups_done=follow_ups,
                     won_amount=int(won_amount.get(person, 0)),
+                    photo_url=photos.get(person),
                 )
             )
         sellers.sort(
@@ -6390,7 +6412,7 @@ class LeadDesk:
         return Effort(
             days=days,
             start=begin,
-            end=self.now,
+            end=min(self.now, until),
             team=team,
             sellers=tuple(sellers),
             inbound=side_view(

@@ -1096,13 +1096,18 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
 
     @router.get("/performance/sellers", response_model=Effort, response_model_by_alias=True)
     async def effort(
-        request: Request, response: Response, days: int = 1, month: bool = False
+        request: Request,
+        response: Response,
+        days: int = 1,
+        month: bool = False,
+        on: date | None = None,
     ) -> Effort:
         """The Performance page: each seller's effort with Inbound and Cold apart (owners and
-        admins see every seller; a seller their own); month=1 is this month so far."""
-        no_query(request, frozenset({"days", "month"}))
+        admins see every seller; a seller their own); month=1 is this month so far; on is
+        one chosen day for Home's date (India time, up to 90 days back)."""
+        no_query(request, frozenset({"days", "month", "on"}))
         async with desk_for(request, response) as lead_desk:
-            return await lead_desk.effort(days, month=month)
+            return await lead_desk.effort(days, month=month, chosen=on)
 
     @router.get("/me", response_model=Me, response_model_by_alias=True)
     async def me(request: Request, response: Response) -> Me:
