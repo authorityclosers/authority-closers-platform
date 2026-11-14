@@ -199,7 +199,7 @@ it("keeps speed to a new lead small, and says Not yet when there is none", () =>
   );
 });
 
-it("counts today's calls by India hour, from 9 am to 7 pm at least", () => {
+it("counts today's calls by India hour, centred on the day's calls", () => {
   const call = (at: string) => ({
     event_id: at,
     lead_id: "l",
@@ -215,12 +215,28 @@ it("counts today's calls by India hour, from 9 am to 7 pm at least", () => {
     ] as never,
     "Asia/Kolkata",
   );
-  expect(slots[0].label).toBe("9 am");
-  expect(slots.at(-1)?.label).toBe("7 pm");
-  expect(slots.find((slot) => slot.label === "11 am")?.calls).toBe(2);
-  expect(slots.find((slot) => slot.label === "2 pm")?.calls).toBe(1);
-  expect(busiest(slots)?.label).toBe("11 am");
-  expect(busiest(hourSlots([]))).toBeNull();
+  // 11 AM to 2 PM, padded to six hours: never half empty (owner, 13 Nov 2026).
+  expect(slots.map((slot) => slot.short)).toEqual([
+    "10 AM",
+    "11 AM",
+    "12 PM",
+    "1 PM",
+    "2 PM",
+    "3 PM",
+  ]);
+  expect(slots.find((slot) => slot.label === "11 AM")?.calls).toBe(2);
+  expect(slots.find((slot) => slot.label === "2 PM")?.calls).toBe(1);
+  expect(busiest(slots)?.label).toBe("11 AM");
+  // Before any call: 9 AM to 7 PM.
+  const quiet = hourSlots([]);
+  expect([quiet[0].short, quiet.at(-1)?.short]).toEqual(["9 AM", "7 PM"]);
+  expect(busiest(quiet)).toBeNull();
+  // A late call keeps six hours, inside the day.
+  expect(
+    hourSlots([call("2026-11-10T17:20:00Z")] as never, "Asia/Kolkata").map(
+      (slot) => slot.short,
+    ),
+  ).toEqual(["6 PM", "7 PM", "8 PM", "9 PM", "10 PM", "11 PM"]);
 });
 
 it("adds the team's calls by day over the period's own days only", () => {
@@ -281,7 +297,7 @@ it("names today's busiest hour on G4's fourth card, from the team's calls", asyn
     null,
     expect.anything(),
   );
-  expect(host.textContent).toContain("Busiest at 11 am");
+  expect(host.textContent).toContain("Busiest at 11 AM");
   // No repeat of the tiles' numbers (owner, 13 Nov 2026: "drop the repeats").
   expect(host.textContent).not.toMatch(/attempted|Connected|Talk time\d/);
   // Talk time by seller, longest first.

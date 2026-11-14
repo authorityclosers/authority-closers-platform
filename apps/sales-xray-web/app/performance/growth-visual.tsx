@@ -362,10 +362,19 @@ const HOUR = (timezone: string) =>
     hourCycle: "h23",
     timeZone: timezone,
   });
+// "9 AM", "12 PM", "3 PM" (owner, 13 Nov 2026, Growth on the Redmi: the bars
+// read "9A 12P 3A 6P").
 const hourWords = (hour: number) =>
-  `${hour % 12 || 12} ${hour < 12 ? "am" : "pm"}`;
+  `${hour % 12 || 12} ${hour < 12 ? "AM" : "PM"}`;
+/** The fewest hours the chart shows, so a short day still fills it. */
+const MIN_HOURS = 6;
 
-/** Today's calls by hour, from first light to evening (9 am to 7 pm at least). */
+/**
+ * Today's calls by hour, India time. The chart covers the hours with calls,
+ * at least six of them and centred on the calls, so it is never half empty
+ * (owner, 13 Nov 2026: calls at 4 and 5 PM sat at the right of 9 AM to 7 PM);
+ * before any call, 9 AM to 7 PM.
+ */
 export function hourSlots(
   items: ActivityPage["items"],
   timezone = "Asia/Kolkata",
@@ -378,14 +387,22 @@ export function hourSlots(
     counts.set(hour, (counts.get(hour) ?? 0) + 1);
   }
   const hours = [...counts.keys()];
-  const first = Math.min(9, ...hours);
-  const last = Math.max(19, ...hours);
+  let first = 9;
+  let last = 19;
+  if (hours.length) {
+    const low = Math.min(...hours);
+    const high = Math.max(...hours);
+    const pad = Math.max(0, MIN_HOURS - (high - low + 1));
+    first = Math.max(0, low - Math.floor(pad / 2));
+    last = Math.min(23, Math.max(high, first + MIN_HOURS - 1));
+    first = Math.max(0, Math.min(first, last - MIN_HOURS + 1));
+  }
   const slots: Slot[] = [];
   for (let hour = first; hour <= last; hour++)
     slots.push({
       key: String(hour),
       label: hourWords(hour),
-      short: `${hour % 12 || 12}${hour < 12 ? "a" : "p"}`,
+      short: hourWords(hour),
       calls: counts.get(hour) ?? 0,
     });
   return slots;
@@ -545,7 +562,17 @@ export function RhythmBars({ rhythm }: { rhythm: Rhythm }) {
     );
   const { slots } = rhythm;
   const most = Math.max(1, ...slots.map((slot) => slot.calls));
-  const every = slots.length > 14 ? 7 : 3;
+  // Every hour's name where they fit, else every second or third: "9 AM,
+  // 12 PM, 3 PM, 6 PM" across a whole day. Days: every third, or weekly.
+  const every = rhythm.byHour
+    ? slots.length <= 7
+      ? 1
+      : slots.length <= 10
+        ? 2
+        : 3
+    : slots.length > 14
+      ? 7
+      : 3;
   // Each bar's number on it, so the chart reads without a tap (Redmi QA on
   // the owner's production build, 13 Nov 2026: bars had no counts). Up to 14
   // bars, every bar with calls; the hours and the month, the busiest only.
