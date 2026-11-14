@@ -8,13 +8,23 @@
  * How did it go?", until it is answered or put away with "Didn't call" (Leads
  * L1, 8 Nov 2026: as Home's Pending action, it scrolls away with the list).
  * The server says which calls wait (the desk's `unanswered`); "Didn't call" is
- * kept on this device and tells the server the dial was never placed.
+ * kept on this device and tells the server the dial was never placed. A corner
+ * card says so, with Undo, as Done does (Redmi QA on production 1.57, 13 Nov
+ * 2026: it said nothing and couldn't be taken back); Undo reverses it on the
+ * server too, and the call counts and waits again.
  */
 
 import { useState, useSyncExternalStore } from "react";
 
 import { displayName } from "../display-name";
-import { ago, markDialNotPlaced, type Unanswered } from "./leads-client";
+import { notify } from "../notice-center";
+import {
+  ago,
+  LeadsError,
+  markDialNotPlaced,
+  undoDialNotPlaced,
+  type Unanswered,
+} from "./leads-client";
 import styles from "./leads.module.css";
 
 const GONE = "sx-finish-put-away";
@@ -38,6 +48,13 @@ function keepGone(ids: string[]) {
   } catch {
     // Private mode: put away for this page only.
   }
+}
+
+/** A call taken back from "Didn't call": off this phone's put-away list. */
+function bringBack(eventId: string): string[] {
+  const next = readGone().filter((id) => id !== eventId);
+  keepGone(next);
+  return next;
 }
 
 const never = () => () => undefined;
@@ -67,6 +84,66 @@ export function FinishRow({
     (call) => !(gone ?? []).includes(call.event_id),
   );
   const call = waiting[0];
+
+  // Undo: the server reverses the marking, so the call counts and waits again.
+  const undo = async (eventId: string) => {
+    try {
+      await undoDialNotPlaced(eventId);
+    } catch (reason) {
+      if (!(reason instanceof LeadsError && reason.kept)) {
+        notify({
+          id: `dial-undo-${eventId}`,
+          tone: "error",
+          title: "Not undone",
+          message: reason instanceof LeadsError ? reason.message : "Try again.",
+        });
+        return;
+      }
+    }
+    setGone(bringBack(eventId));
+  };
+
+  const putAway = async (away: Unanswered) => {
+    const next = [...(gone ?? []), away.event_id];
+    setGone(next);
+    keepGone(next);
+    const title = `Didn't call: ${displayName(away.name)}`;
+    try {
+      // Not a call at all: it leaves the counts, Calls and Home's Pending
+      // action everywhere, not only on this phone (Redmi QA, 13 Nov 2026).
+      await markDialNotPlaced(away.event_id);
+    } catch (reason) {
+      if (reason instanceof LeadsError && reason.kept) {
+        // Kept on this phone and sent when it is back online.
+        notify({
+          id: `dial-away-${away.event_id}`,
+          tone: "info",
+          title,
+          message: reason.message,
+        });
+        return;
+      }
+      // Refused (the phone logged it, so it was placed) or failed: the call
+      // waits for its answer again.
+      setGone(bringBack(away.event_id));
+      notify({
+        id: `dial-away-failed-${away.event_id}`,
+        tone: "error",
+        title: "Not put away",
+        message: reason instanceof LeadsError ? reason.message : "Try again.",
+      });
+      return;
+    }
+    notify({
+      id: `dial-away-${away.event_id}`,
+      tone: "success",
+      title,
+      message: "Not counted as a call.",
+      action: { label: "Undo", run: () => void undo(away.event_id) },
+      timeout: 6000,
+    });
+  };
+
   if (!hydrated || !call) return null;
   const more = waiting.length - 1;
   return (
@@ -95,14 +172,7 @@ export function FinishRow({
         type="button"
         className={styles.finishAway}
         aria-label={`Didn't call ${displayName(call.name)}`}
-        onClick={() => {
-          const next = [...(gone ?? []), call.event_id];
-          setGone(next);
-          keepGone(next);
-          // Not a call at all: it leaves the counts, Calls and Home's Pending
-          // action everywhere, not only on this phone (Redmi QA, 13 Nov 2026).
-          void markDialNotPlaced(call.event_id).catch(() => undefined);
-        }}
+        onClick={() => void putAway(call)}
       >
         Didn&rsquo;t call
       </button>

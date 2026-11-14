@@ -3,16 +3,37 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const placed = vi.hoisted(() => ({ marked: [] as string[] }));
+const placed = vi.hoisted(() => ({
+  marked: [] as string[],
+  undone: [] as string[],
+  refuse: null as Error | null,
+}));
 vi.mock("./leads-client", async (original) => ({
   ...(await original<typeof import("./leads-client")>()),
   markDialNotPlaced: async (eventId: string) => {
+    if (placed.refuse) throw placed.refuse;
     placed.marked.push(eventId);
     return {};
   },
+  undoDialNotPlaced: async (eventId: string) => {
+    placed.undone.push(eventId);
+    return {};
+  },
+}));
+const cards = vi.hoisted(() => ({
+  shown: [] as {
+    tone: string;
+    title: string;
+    message?: string;
+    action?: { label: string; run: () => void };
+  }[],
+}));
+vi.mock("../notice-center", () => ({
+  notify: (card: (typeof cards.shown)[number]) => cards.shown.push(card),
 }));
 
-import { FinishRow } from "./finish-row";
+import { FinishRow, readGone } from "./finish-row";
+import { LeadsError } from "./leads-client";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -28,6 +49,10 @@ afterEach(() => {
   act(() => root.unmount());
   host.remove();
   localStorage.clear();
+  placed.marked = [];
+  placed.undone = [];
+  placed.refuse = null;
+  cards.shown = [];
 });
 
 const NOW = new Date("2026-11-01T10:00:00Z");
@@ -101,6 +126,59 @@ it("says dialled, not called, when the phone saw no call", async () => {
   );
   expect(host.textContent).toContain("Dialled just now · Did you call?");
   expect(host.textContent).not.toContain("Called");
+});
+
+const flush = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+// Redmi QA on production 1.57 (13 Nov 2026): "Didn't call" said nothing and
+// couldn't be taken back. A corner card says so, as Done does, and its Undo
+// brings the call back, for the server too.
+it("confirms Didn't call in a corner card whose Undo brings the call back", async () => {
+  await act(async () =>
+    root.render(<FinishRow calls={calls} onFinish={vi.fn()} now={NOW} />),
+  );
+  await act(async () => host.querySelectorAll("button")[1].click());
+  await flush();
+  expect(host.textContent).toContain("Finish: Fictional Ravi");
+  const [card] = cards.shown;
+  expect(card).toMatchObject({
+    tone: "success",
+    title: "Didn't call: Fictional Asha",
+    message: "Not counted as a call.",
+  });
+  expect(card.action?.label).toBe("Undo");
+  await act(async () => card.action?.run());
+  await flush();
+  expect(placed.undone).toEqual(["call-1"]);
+  expect(host.textContent).toContain("Finish: Fictional Asha");
+  // Taken back on this phone too, so Home's Pending action counts it again.
+  expect(readGone()).toEqual([]);
+});
+
+// A dial the phone logged was placed: the server refuses, and the call waits
+// for its answer again, with the server's reason in an error card.
+it("brings the call back when the server refuses Didn't call", async () => {
+  placed.refuse = new LeadsError(
+    "Your phone logged this call, so it was placed.",
+    409,
+  );
+  await act(async () =>
+    root.render(<FinishRow calls={calls} onFinish={vi.fn()} now={NOW} />),
+  );
+  await act(async () => host.querySelectorAll("button")[1].click());
+  await flush();
+  expect(host.textContent).toContain("Finish: Fictional Asha");
+  expect(cards.shown).toEqual([
+    expect.objectContaining({
+      tone: "error",
+      title: "Not put away",
+      message: "Your phone logged this call, so it was placed.",
+    }),
+  ]);
+  expect(readGone()).toEqual([]);
 });
 
 // QA robot 95abddab (3 Nov 2026): the line left the page while a lead was open
