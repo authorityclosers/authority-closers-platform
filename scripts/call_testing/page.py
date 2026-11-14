@@ -56,6 +56,10 @@ def render(run: Mapping[str, Any]) -> str:
             f'<td>{link}<div class="p">{_e(notes)}</div></td>'
             "</tr>"
         )
+    steps = "".join(
+        f'<div>{_e(s["label"])}<b>{_badge(s["state"])}</b><span class="p">{_e(s["detail"])}</span></div>'
+        for s in run.get("steps") or []
+    )
     crash = verdict.get("crashes") or []
     spend = run.get("spend") or {}
     spend_line = (
@@ -77,10 +81,11 @@ h1{{font-size:22px;margin:0 0 4px}} .m{{color:var(--mute);margin:0 0 16px}}
 th{{font-size:13px;color:var(--mute);font-weight:600}} .t{{font-weight:600}} .p,.f{{color:var(--mute);font-size:13px}}
 .b{{display:inline-block;border-radius:999px;padding:2px 10px;font-size:13px;font-weight:600}}
 .pass{{color:var(--ok);background:var(--okb)}} .fail{{color:var(--bad);background:var(--badb)}} .pending,.na{{color:var(--wait);background:var(--waitb)}}
-.wrap{{overflow-x:auto}} a{{color:inherit}}
+.wrap{{overflow-x:auto}} a{{color:inherit}} .s div{{flex:1 1 150px;max-width:200px}} .s span{{display:block;margin-top:4px}}
 </style></head><body><main>
 <h1>{_e(headline)}: release call check {_e(run.get("run_id"))}</h1>
 <p class="m">{_e(run.get("environment"))} · Play app {_e(app.get("versionName"))} ({_e(app.get("versionCode"))}) · web {_e((run.get("web") or {}).get("version"))} · phone {_e(run.get("serial"))} · set {_e(run.get("set"))} · started {_e(run.get("started_at"))}</p>
+<div class="k s">{steps}</div>
 <div class="k">
 <div>Pipeline gates<b>{gate_n} of {len(rows)}</b></div>
 <div>Sales or not, right<b>{det_n} of {len(det_rows)}</b></div>

@@ -193,6 +193,23 @@ def test_each_run_gets_unique_bytes_with_the_same_audio() -> None:
         phone.unique_bytes(audio, "bad id; rm", "R01")
 
 
+def test_the_apps_background_jobs_are_found_on_android_16_and_older() -> None:
+    package = "com.authorityclosers.salesxray"
+    service = f"{package}/androidx.work.impl.background.systemjob.SystemJobService"
+    namespace = "androidx.work.systemjobscheduler"
+    dump = "\n".join(
+        [
+            "Registered 516 jobs:",
+            f"  JOB {namespace}:u0a354/363: 5f2a131 @{namespace}@{service}",
+            f"  JOB #u0a354/12: 1a2b3c {service}",
+            "  JOB #u0a99/7: 9f9f9f com.other.app/x.Service",
+            "Recently completed jobs:",
+            f"  34fef9 {{{namespace}}} #u0a354/365 @{namespace}@{service}",
+        ]
+    )
+    assert phone.registered_jobs(dump, package) == [("", "12"), (namespace, "363")]
+
+
 def test_the_owners_design_phone_is_never_driven() -> None:
     with pytest.raises(phone.AdbError):
         phone.Adb("192.168.1.5:5555")
@@ -281,6 +298,17 @@ def test_a_personal_call_coached_as_sales_passes_the_gate_but_fails_detection() 
     coached = check.judge(_scenario("R10"), _report(), final=False)
     assert coached["gate"] == "pass" and coached["detect"] == "fail"
     assert "coached as a sales call" in coached["detected"]
+    # Production, 13 Nov 2026: the personal call came back with no coaching at all.
+    empty = _report(strengths=0, improvements=0, focus=None)
+    left_empty = check.judge(_scenario("R10"), empty, final=False)
+    assert left_empty["gate"] == "pass" and left_empty["detect"] == "pass"
+    assert "coaching came back empty" in left_empty["detected"]
+    # A sales call that comes back with no coaching fails both.
+    uncoached_sale = check.judge(_scenario("R01"), empty, final=False)
+    assert uncoached_sale["gate"] == "fail" and uncoached_sale["detect"] == "fail"
+    # Dead air that got a report instead of the hold fails the gate, even with no coaching.
+    dead_air = check.judge(_scenario("R14"), empty, final=False)
+    assert dead_air["gate"] == "fail" and dead_air["detect"] == "pass"
     recognised = check.judge(_scenario("R10"), _report(purpose="personal"), final=False)
     assert recognised["detect"] == "pass"
     wrong_kind = check.judge(_scenario("R10"), _report(purpose="internal"), final=False)
@@ -297,6 +325,43 @@ def test_unfinished_calls_wait_then_fail_and_web_uploads_dont_count() -> None:
     assert check.judge(_scenario("R01"), waiting, final=True)["notes"] == ["still analysing"]
     web = check.judge(_scenario("R01"), _report(capture_source="web_upload"), final=False)
     assert web["gate"] == "fail"
+
+
+def _judged(sid: str, row):  # type: ignore[no-untyped-def]
+    call = _scenario(sid)
+    return {"id": sid, "expect": call["expect"], "row": row, **check.judge(call, row, final=True)}
+
+
+def test_each_step_of_a_sellers_call_is_reported() -> None:
+    empty = _report(strengths=0, improvements=0, focus=None)
+    results = [_judged("R01", _report()), _judged("R10", empty)]
+    live = {"call_log_seconds": 48, "name": "18008899999(18008899999)_20261113220910.mp3"}
+    steps = {s["step"]: s for s in check.step_summary(results, live)}
+    assert list(steps) == ["dial", "record", "capture", "upload", "report", "coaching"]
+    assert all(s["state"] == "pass" for s in steps.values()), steps
+    assert "48 s" in steps["dial"]["detail"]
+    assert steps["coaching"]["detail"].startswith("1 of 1")
+
+    no_live = {s["step"]: s["state"] for s in check.step_summary(results, None)}
+    assert no_live["dial"] == no_live["record"] == "n/a"
+    silent = check.step_summary(results, {"call_log_seconds": 0, "name": None})
+    assert [s["state"] for s in silent[:2]] == ["fail", "fail"]
+
+    missing = [_judged("R01", None), _judged("R06", _report(focus=None))]
+    states = {s["step"]: s["state"] for s in check.step_summary(missing, None)}
+    assert states["capture"] == states["upload"] == states["report"] == "fail"
+    assert states["coaching"] == "fail"
+
+
+def test_call_history_rows_give_the_calls_length() -> None:
+    rows = (
+        "Row: 0 number=18008899999, duration=13, date=1794570694385\n"
+        "Row: 1 number=18008899999, duration=48, date=1794587948947\n"
+    )
+    assert phone.call_log_seconds(rows) == 48
+    assert phone.call_log_seconds("No result found.") is None
+    with pytest.raises(phone.AdbError):
+        phone.Adb("7505cec").call_seconds("1800' OR 1=1", 0)
 
 
 def test_the_run_passes_only_on_gates_and_a_live_app() -> None:

@@ -121,8 +121,54 @@ Every run logs its spend from the usage export (`/srv/authority-closers/metrics/
 - **The Redmi is shared** with redmi-fresh-qa: the runner asks for the phone lock through the orchestrator and
   refuses to start while another app (e.g. Sales X-Ray Live) is in front.
 
-## Proposed follow-up (not in phase 1)
+## Proposal: detect calls that aren't sales (for the owner's and Dipak's word; nothing built)
 
-Make detection real: have the live facts stage return `call_purpose` (the model already exists), show "Not a
-sales call" instead of coaching for personal, internal, support and wrong-number calls, and skip the paid
-coaching stage for them. The harness's seven non-sales scenarios are its acceptance test.
+### Where in the pipeline
+
+| Step | What decides | Cost | Status |
+|---|---|---|---|
+| 1. The short-call rule, on C2's transcript | Under 20 s, or the quieter side under 8 s: "no conversation". Under 60 s: "short call" | Free | Live today. It catches dead air, the network's messages and most wrong numbers |
+| 2. **The call purpose, inside the merged C4 + C5 request** (luna-pipeline's new recipe) | The model's first answer field: `call_purpose` = sales, support, onboarding, internal, personal or unclear, with one transcript segment as evidence. It's the same closed list as `call_map.py`'s `CallPurpose`; `call_type.py` already turns the non-sales kinds into `not_sales` | About 20 output tokens; no extra request | **To build** |
+| 3. A short answer when it isn't sales | In the same request: when `call_purpose` isn't sales (or unclear), the model returns only the purpose, a one-line summary and any tasks spoken on the call, and no coaching sections | Saves most of the per-call cost (output is about 5 times the input price): roughly Rs 2.5–3 of a call's Rs 3.3 | **To build** |
+
+- **Why inside the merged request, not a new stage:** no third AI pipeline (Dipak, 13 Nov), and the model
+  reads the whole transcript anyway. A separate classifier before C4 would add a request and its latency to
+  every call.
+- **Where it's stored:** the report draft's `call_map.call_purpose` (the field already exists and is optional).
+  Admin, Coaching and this check read it from there.
+- **Not automatic anywhere else:** the purpose never changes the lead's stage. For a wrong number the app may
+  *offer* "Mark as wrong number" (Junk), which the seller taps.
+
+### What the seller sees (copy for Dipak to approve)
+
+- **The report screen:** "Not a sales call · Personal" (or Internal, or Support), a one-line summary, the
+  transcript and the lead details. No strengths, improvement areas or next-call mission. One button: "This was
+  a sales call", which asks for a full analysis of the same recording.
+- **The lead's call row:** "called · 2m · not a sales call (personal)".
+- **Coaching and Growth:** the call isn't counted as a coached call, so it can't drag a seller's coaching
+  numbers. It still counts as a call made (the honest-numbers rule counts calls from phone evidence).
+
+### How we measure it
+
+- **This check, on staging before it ships:** `run.py release --set full --strict --env staging`.
+  - All 7 non-sales scenarios caught: R09, R14 and R15 by the hold, R10–R13 by the purpose.
+  - All 8 sales scenarios still get complete reports. Losing coaching on a real sales call is the costly
+    mistake, so a single sales call marked "not sales" fails it.
+- **Five borderline scenarios added first**, because precision is at risk there:
+  - a sales call that opens with family small talk;
+  - a support call that turns into an upsell;
+  - a call with a colleague about a client's deal;
+  - a lead calling back to complain about the price;
+  - a channel-partner call.
+- **After every Play release:** the smoke set includes the personal call (R10).
+- **On production, weekly (read-only, counts only):**
+  - reports by purpose;
+  - taps on "This was a sales call", as the miss signal. Over 5% of not-sales verdicts means the prompt goes
+    back to Dipak.
+
+### Decisions needed
+
+1. Dipak: the screen copy above, and whether the seller may ask for a full analysis anyway.
+2. The owner: whether a not-sales call uses the seller's analysis minutes. Today every analysed minute counts.
+3. Dipak: whether internal calls (a manager coaching a seller) should get their own coaching later. Not in
+   this change.

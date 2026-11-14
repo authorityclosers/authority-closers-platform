@@ -167,6 +167,22 @@ def unique_bytes(audio: bytes, run_id: str, scenario_id: str) -> bytes:
     return audio + tag
 
 
+def registered_jobs(dumpsys: str, package: str) -> list[tuple[str, str]]:
+    """(namespace, job id) of ``package``'s registered jobs in ``dumpsys jobscheduler``.
+    Android 16 names WorkManager's jobs with a namespace
+    (``JOB androidx.work.systemjobscheduler:u0a354/363: 5f2a131 @…@<package>/…``);
+    older Android has none (``JOB #u0a354/363: 5f2a131 <package>/…``)."""
+    head = dumpsys.split("Recently completed jobs:")[0]
+    pattern = rf"JOB (?:#|([\w.]+):)u\d+a?\d*/(\d+): \S+ (?:@[\w.]+@)?{re.escape(package)}/"
+    return sorted(set(re.findall(pattern, head)), key=lambda job: int(job[1]))
+
+
+def call_log_seconds(content_query: str) -> int | None:
+    """The longest ``duration=`` in ``content query`` rows of the call log, or None."""
+    found = [int(v) for v in re.findall(r"\bduration=(\d+)", content_query)]
+    return max(found) if found else None
+
+
 class AdbError(RuntimeError):
     pass
 
@@ -274,6 +290,18 @@ class Adb:
                 lines.append(line.strip()[:300])
         return lines
 
+    def call_seconds(self, number: str, since_epoch: int) -> int | None:
+        """How long the phone's call history says the call to ``number`` lasted, for calls
+        since ``since_epoch``. Only rows for that one test number are read."""
+        if not re.fullmatch(r"\d{6,15}", number):
+            raise AdbError("number")
+        text = self.sh(
+            "content query --uri content://call_log/calls --projection number:duration:date "
+            f"--where \"number='{number}' AND date>={int(since_epoch) * 1000}\"",
+            check=False,
+        )
+        return call_log_seconds(text)
+
     def bring_forward(self, package: str = PACKAGE) -> None:
         self.sh(f"monkey -p {package} -c android.intent.category.LAUNCHER 1", check=False)
 
@@ -281,10 +309,11 @@ class Adb:
         """Run the app's scheduled background jobs now (WorkManager's), so the capture scan
         doesn't wait up to 15 minutes. Returns the job ids that were run."""
         text = self.sh(f"dumpsys jobscheduler {package}", check=False, timeout=30)
-        ids = sorted(set(re.findall(rf"JOB #u\d+a?\d*/(\d+): \S+ {re.escape(package)}/", text)))
-        for job in ids:
-            self.sh(f"cmd jobscheduler run -f {package} {job}", check=False)
-        return ids
+        jobs = registered_jobs(text, package)
+        for namespace, job in jobs:
+            flag = f"-n {namespace} " if namespace else ""
+            self.sh(f"cmd jobscheduler run -f {flag}{package} {job}", check=False)
+        return [f"{namespace}:{job}" if namespace else job for namespace, job in jobs]
 
     def our_notifications(self, package: str = PACKAGE) -> list[str]:
         """Titles and texts of this app's notifications only."""

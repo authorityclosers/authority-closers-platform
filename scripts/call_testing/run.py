@@ -106,13 +106,21 @@ def web_version() -> dict[str, Any]:
     """The live web bundle the app loads (version and sha), from the public manifest."""
     import urllib.request
 
+    # The edge refuses Python's default client name (403), so name ours.
+    request = urllib.request.Request(  # noqa: S310 - a fixed https URL of our own
+        MANIFEST_URL, headers={"User-Agent": "ac-call-testing/1"}
+    )
     try:
-        with urllib.request.urlopen(MANIFEST_URL, timeout=20) as response:  # noqa: S310 - our own https URL
+        with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310 - our own https URL
             body = json.loads(response.read().decode("utf-8"))
         payload = body.get("payload")
         if isinstance(payload, str):
-            padded = payload + "=" * (-len(payload) % 4)
-            payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+            # A signed JSON text (sx-web-bundle/1); older manifests carried base64.
+            try:
+                payload = json.loads(payload)
+            except ValueError:
+                padded = payload + "=" * (-len(payload) % 4)
+                payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
         payload = payload if isinstance(payload, dict) else body
         return {"version": payload.get("version"), "sha": payload.get("sha")}
     except Exception as error:  # noqa: BLE001 - the page just says unknown
@@ -194,7 +202,7 @@ def measured_spend(recording_ids: list[str], first: bool, host: str = "ac") -> d
         return {"error": done.stderr.decode("utf-8", "replace")[:200]}
 
 
-def live_ivr_call(adb: Any, seconds: int, folder: str) -> dict[str, Any] | None:
+def live_ivr_call(adb: Any, seconds: int, folder: str) -> dict[str, Any]:
     """One real call from the phone's SIM to the Jio IVR, hung up on the phone itself after
     ``seconds``; its recording (the dialler's own file for that number, nothing else) is copied
     into the QA folder for the app to pick up."""
@@ -208,19 +216,19 @@ def live_ivr_call(adb: Any, seconds: int, folder: str) -> dict[str, Any] | None:
     for _ in range(3):
         adb.sh("input keyevent KEYCODE_BACK", check=False)
         time.sleep(1)
-    files = [f for f in adb.listing(phone.DIALLER_FOLDER, IVR_NUMBER) if f[2] >= start]
-    if not files:
-        return None
-    name, size, mtime = sorted(files, key=lambda f: f[2])[-1]
-    adb.sh(f"cp -p '{phone.DIALLER_FOLDER}/{name}' '{folder}/{name}'")
-    return {
-        "name": name,
-        "bytes": size,
-        "saved_epoch": mtime,
-        "sha256": adb.sha256(f"{folder}/{name}"),
+    live: dict[str, Any] = {
+        "number": IVR_NUMBER,
         "seconds": seconds,
         "called_epoch": start,
+        "call_log_seconds": adb.call_seconds(IVR_NUMBER, start - 5),
+        "name": None,
     }
+    files = [f for f in adb.listing(phone.DIALLER_FOLDER, IVR_NUMBER) if f[2] >= start]
+    if files:
+        name, size, mtime = sorted(files, key=lambda f: f[2])[-1]
+        adb.sh(f"cp -p '{phone.DIALLER_FOLDER}/{name}' '{folder}/{name}'")
+        live.update(name=name, bytes=size, saved_epoch=mtime, sha256=adb.sha256(f"{folder}/{name}"))
+    return live
 
 
 def poll(run: dict[str, Any], run_dir: Path, *, wait_minutes: float, adb: Any | None) -> None:
@@ -409,7 +417,8 @@ def release(args: argparse.Namespace) -> int:
             run["note"] = "Live IVR call skipped: outside work hours."
         else:
             live = live_ivr_call(adb, args.live_ivr, folder)
-            if live is None:
+            run["live"] = live
+            if not live.get("name"):
                 say("live IVR call: no recording found")
                 run["note"] = "Live IVR call made, but the phone saved no recording for it."
             else:
@@ -453,14 +462,16 @@ def finish(
             f"{spend.get('generated_at', '')[:16]}Z"
         )
         run["spend"] = spend
+    run["steps"] = check.step_summary(run["results"], run.get("live"))
     run["verdict"] = check.run_verdict(
         run["results"], crashes=crashes, app_alive=alive, strict=strict
     )
     run["finished_at"] = datetime.now(UTC).isoformat(timespec="seconds")
     if adb and all(r.get("row") for r in run["results"]):
         for r in run["results"]:
-            if r["id"].startswith("R"):
-                adb.remove(f"{run.get('folder', phone.QA_FOLDER)}/{r['file']}")
+            # Our pushed files, and the copy of the live call's recording (its original stays
+            # in the dialler's own folder).
+            adb.remove(f"{run.get('folder', phone.QA_FOLDER)}/{r['file']}")
         run["cleaned"] = True
     save(run, run_dir)
     v = run["verdict"]

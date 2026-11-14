@@ -163,24 +163,30 @@ def is_terminal(outcome: str) -> bool:
     return outcome.startswith(TERMINAL_PREFIXES)
 
 
-def report_gaps(row: Mapping[str, Any]) -> list[str]:
-    """What a complete report lacks (empty when complete)."""
+def report_gaps(row: Mapping[str, Any], *, coaching: bool = True) -> list[str]:
+    """What a complete report lacks (empty when complete). ``coaching``: a sales call also
+    needs a strength, an improvement and a next-call focus; a call that isn't sales is
+    right to leave them empty."""
     gaps = []
     if not row.get("summary"):
         gaps.append("no summary")
     if not row.get("verdict"):
         gaps.append("no verdict")
-    if not (row.get("strengths") or 0) >= 1:
+    if coaching and not (row.get("strengths") or 0) >= 1:
         gaps.append("no strength")
-    if not (row.get("improvements") or 0) >= 1:
+    if coaching and not (row.get("improvements") or 0) >= 1:
         gaps.append("no improvement")
     if row.get("dimensions") != 8:
         gaps.append(f"dimensions {row.get('dimensions')} of 8")
     if row.get("sections") != 9:
         gaps.append(f"sections {row.get('sections')} of 9")
-    if not row.get("focus"):
+    if coaching and not row.get("focus"):
         gaps.append("no next-call focus (coaching mission)")
     return gaps
+
+
+def coaching_empty(row: Mapping[str, Any]) -> bool:
+    return not row.get("strengths") and not row.get("improvements") and not row.get("focus")
 
 
 def detected_sales(row: Mapping[str, Any] | None) -> tuple[bool | None, str]:
@@ -193,6 +199,10 @@ def detected_sales(row: Mapping[str, Any] | None) -> tuple[bool | None, str]:
     purpose = row.get("purpose")
     if purpose:
         return purpose == "sales", f"stored call purpose: {purpose}"
+    if coaching_empty(row):
+        # Seen on production, 13 Nov 2026: a personal call's report said "no commercial
+        # engagement" and coached nothing. The model noticed; nothing structured says so.
+        return False, "no call purpose stored, but the coaching came back empty"
     return True, "no call purpose stored: coached as a sales call"
 
 
@@ -210,7 +220,7 @@ def judge(
         notes.append(f"captured as {row.get('capture_source')}, not the dialler pickup")
     if is_terminal(got):
         if got == "report":
-            gaps = report_gaps(row or {})
+            gaps = report_gaps(row or {}, coaching=bool(expect["sales"]))
             notes.extend(gaps)
             fits = want in {"report", "any"} and not gaps
             if want in {"short_call", "no_conversation", "held"}:
@@ -258,6 +268,74 @@ def judge(
 
 def _parse(value: str) -> datetime:
     return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+
+
+STEPS = (
+    ("dial", "Dial"),
+    ("record", "Record"),
+    ("capture", "Capture"),
+    ("upload", "Upload"),
+    ("report", "Report"),
+    ("coaching", "Coaching"),
+)
+
+
+def step_summary(
+    results: list[Mapping[str, Any]], live: Mapping[str, Any] | None
+) -> list[dict[str, Any]]:
+    """Dial -> record -> capture -> upload -> report -> coaching, each pass/fail/n/a with a
+    reason. Dial and record are proved only by the live call; the pushed calls start at the
+    app's capture."""
+    out: dict[str, tuple[str, str]] = {}
+    if not live:
+        out["dial"] = out["record"] = ("n/a", "no live call in this run (add --live-ivr)")
+    else:
+        seconds = live.get("call_log_seconds")
+        out["dial"] = (
+            ("pass", f"call history: outgoing, {seconds} s")
+            if seconds
+            else ("fail", "no connected call in the phone's call history")
+        )
+        out["record"] = (
+            ("pass", f"the phone's recorder saved {live['name']}")
+            if live.get("name")
+            else ("fail", "the phone saved no recording of the live call")
+        )
+    rows = [r.get("row") or {} for r in results]
+    total = len(results)
+    picked = sum(1 for row in rows if row.get("capture_source") == "android_dialer_pickup")
+    out["capture"] = (
+        "pass" if total and picked == total else "fail",
+        f"{picked} of {total} picked up by the app from the recordings folder",
+    )
+    uploaded = sum(1 for row in rows if row.get("submission_id"))
+    out["upload"] = (
+        "pass" if total and uploaded == total else "fail",
+        f"{uploaded} of {total} reached the server",
+    )
+    finished = sum(1 for r in results if r.get("gate") == "pass")
+    out["report"] = (
+        "pass" if total and finished == total else "fail",
+        f"{finished} of {total} finished as expected (a complete report or the right hold)",
+    )
+    sales = [r for r in results if r["expect"]["sales"] and r.get("outcome") == "report"]
+    coached = sum(
+        1
+        for r in sales
+        if not coaching_empty(r.get("row") or {}) and (r.get("row") or {}).get("focus")
+    )
+    out["coaching"] = (
+        ("n/a", "no sales call reached a report")
+        if not sales
+        else (
+            "pass" if coached == len(sales) else "fail",
+            f"{coached} of {len(sales)} sales reports have strengths, an improvement and a next-call focus",
+        )
+    )
+    return [
+        {"step": key, "label": label, "state": out[key][0], "detail": out[key][1]}
+        for key, label in STEPS
+    ]
 
 
 def run_verdict(
