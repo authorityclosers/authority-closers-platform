@@ -141,11 +141,16 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "list_duplicates",
         "get_duplicate",
         "add_lead",
+        "import_leads",
+        "get_lead_import",
         "add_note",
         "add_task",
         "list_my_changes",
         "undo_change",
     }
+    # Many leads at once (14 Nov 2026) come with leads:write, beside add_lead.
+    importing = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:write"}))}
+    assert importing == {"whoami", "add_lead", "import_leads", "get_lead_import"}
     reading = {tool["name"] for tool in mcp_http.listed(frozenset({"calls:read"}))}
     assert reading == {"search", "fetch", "whoami", "list_calls", "get_call"}
     leads = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:read"}))}
@@ -165,7 +170,7 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
     assert notes == {"whoami", "add_note", "list_my_changes", "undo_change"}
     tasks = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:tasks"}))}
     assert tasks == {"whoami", "add_task", "list_my_changes", "undo_change"}
-    writes = {"add_lead", "add_note", "add_task", "undo_change"}
+    writes = {"add_lead", "import_leads", "add_note", "add_task", "undo_change"}
     for tool in mcp_http.listed(frozenset(scopes.SCOPES)):
         assert "scope" not in tool and tool["inputSchema"]["type"] == "object"
         assert tool["annotations"]["readOnlyHint"] is (tool["name"] not in writes)

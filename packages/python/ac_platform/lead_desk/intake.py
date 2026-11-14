@@ -435,7 +435,16 @@ class Intake:
             history_mapping=suggest_history(sheet.headers, mapping),
         )
 
-    async def commit(self, command: ImportCommand) -> ImportResult:
+    async def commit(
+        self,
+        command: ImportCommand,
+        *,
+        report: list[tuple[str, UUID | None]] | None = None,
+    ) -> ImportResult:
+        """File the rows as leads. ``report``, when given, gets each row's outcome and lead
+        (or None), in order: what the API's import jobs tell their caller row by row."""
+        if command.refs and len(command.refs) != len(command.rows):
+            raise DeskError(422, "Send one id per row, or none.")
         mapping = {
             name: header for name, header in command.mapping.items() if name in FIELDS and header
         }
@@ -544,7 +553,13 @@ class Intake:
                     record,
                     source="csv",
                     source_label=listed[:120] if listed else label,
-                    source_ref=content_ref(record),
+                    # The caller's own id for the row, when it sent one: the same id
+                    # again is the same lead. Else the row's words, as before.
+                    source_ref=(
+                        f"ref:{command.refs[index]}"
+                        if command.refs and command.refs[index]
+                        else content_ref(record)
+                    ),
                     mapping=mapping,
                     assign=way,
                     person_id=person,
@@ -575,7 +590,7 @@ class Intake:
             if outcome != "created":
                 if command.duplicates == "skip":
                     skips.append(ImportSkip(row=index, reason="Already a lead"))
-                elif await self._refresh(lead, found, command, index):
+                elif await self._refresh(lead, found, command, command.start_row + index):
                     updated += 1
                 else:
                     skips.append(ImportSkip(row=index, reason="Already a lead with these details"))
@@ -621,13 +636,20 @@ class Intake:
                     journey,
                     stage,
                     note=None,
-                    command_id=uuid5(command.command_id, f"import-stage:{index}"),
+                    command_id=uuid5(
+                        command.command_id, f"import-stage:{command.start_row + index}"
+                    ),
                     source="import",
                     via="api",
                     # An old lead's stage is where it already stood: nobody's move today.
                     actor=None if history else "viewer",
                 )
         await self.db.flush()
+        if report is not None:
+            report.extend(
+                (outcome, None if lead is None else lead.id)
+                for outcome, lead in zip(outcomes, leads, strict=True)
+            )
         given = {
             lead.owner_person_id
             for lead, outcome in zip(leads, outcomes, strict=True)

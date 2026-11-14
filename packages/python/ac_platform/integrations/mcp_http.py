@@ -31,7 +31,7 @@ from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
 from ac_platform.http.routes import RouteContext
-from ac_platform.integrations import tiers
+from ac_platform.integrations import lead_imports, tiers
 from ac_platform.integrations.api_http import (
     ApiError,
     NewLeadBody,
@@ -238,6 +238,88 @@ TOOLS: tuple[dict[str, Any], ...] = (
             },
         },
         "annotations": {**_READS, "readOnlyHint": False, "idempotentHint": True},
+        "scope": "leads:write",
+    },
+    {
+        "name": "import_leads",
+        "title": "Import many leads",
+        "description": (
+            "Imports up to 250 leads per call into Lead Desk, filed in the background exactly "
+            "like a file uploaded in the app: duplicates (same phone, or same email without "
+            "one) are not new leads, and the import can be undone in the app for 48 hours. "
+            "Answers at once with an import id; get_lead_import says when it is done. For "
+            "thousands of leads, call it again with the next 250 and a new request_id; the "
+            "same request_id with the same leads changes nothing. external_id is the lead's "
+            "id in your system: the same id again is the same lead."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "leads": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 250,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            name: {"type": "string"}
+                            for name in (
+                                "name",
+                                "phone",
+                                "email",
+                                "company",
+                                "city",
+                                "language",
+                                "interest",
+                                "stage",
+                                "owner",
+                                "source",
+                                "external_id",
+                            )
+                        },
+                    },
+                    "description": "Each lead: at least a name, phone or email. stage is a "
+                    "stage's name; owner a teammate's email or name; source the list it "
+                    "came from.",
+                },
+                "name": {"type": "string", "description": "The import's name in the app."},
+                "side": {"type": "string", "enum": ["inbound", "cold"]},
+                "assign": {
+                    "type": "string",
+                    "enum": ["rules", "none"],
+                    "description": "rules: the workspace's lead rules give new leads out; "
+                    "none: nobody gets them yet. A lead's owner field wins either way.",
+                },
+                "duplicates": {
+                    "type": "string",
+                    "enum": ["skip", "fill", "replace"],
+                    "description": "A lead already here: left as it is (skip), its empty "
+                    "details filled, or its details replaced.",
+                },
+                "request_id": _REQUEST,
+            },
+            "required": ["leads"],
+        },
+        "annotations": _WRITES,
+        "scope": "leads:write",
+    },
+    {
+        "name": "get_lead_import",
+        "title": "See where an import stands",
+        "description": (
+            "Where an import from import_leads stands: queued, running, done or "
+            "partly_failed, with how many leads were created, updated and skipped. "
+            "problem_rows true also lists the rows that were skipped or failed, and why."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "import_id": _ID,
+                "problem_rows": {"type": "boolean"},
+            },
+            "required": ["import_id"],
+        },
+        "annotations": _READS,
         "scope": "leads:write",
     },
     {
@@ -542,6 +624,45 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
         except ValueError:
             raise ApiError(422, "argument", "Lead fields must be short text.") from None
         answer, _ = await reader.add_lead(body)
+        return answer
+    if name == "import_leads":
+        import_fields = ("leads", "name", "side", "assign", "duplicates")
+        request_id = args.get("request_id")
+        body = _body(
+            lead_imports.ImportBody,
+            {key: value for key, value in args.items() if key != "request_id"},
+            import_fields,
+        )
+        if len(body.leads) > 250:
+            raise ApiError(422, "argument", "Send up to 250 leads per call.")
+        door = await reader.import_door()
+        try:
+            answer, _ = await lead_imports.create(
+                reader.session,
+                door,
+                body,
+                idempotency_key=request_id if isinstance(request_id, str) else None,
+            )
+        except lead_imports.ImportRefused as refusal:
+            raise ApiError(refusal.status, refusal.code, refusal.message) from None
+        return answer
+    if name == "get_lead_import":
+        door = await reader.import_door()
+        job = await lead_imports.find(
+            reader.session,
+            door,
+            _uuid(args, "import_id"),
+            every_door=reader.caller.sees_team,
+        )
+        if job is None:
+            raise ApiError(404, "import_missing", "No such import here.")
+        answer = await lead_imports.view(reader.session, job)
+        if args.get("problem_rows") is True:
+            problems = []
+            for outcome in ("skipped", "failed"):
+                page = await lead_imports.rows(reader.session, job, outcome=outcome, limit=100)
+                problems += page["rows"]
+            answer["problem_rows"] = sorted(problems, key=lambda item: item["row"])[:200]
         return answer
     if name == "add_note":
         note = _body(NoteBody, args, ("note", "request_id", "preview"))

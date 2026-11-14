@@ -16,6 +16,11 @@ Base address: ``https://<sales x-ray host>/v1/api``.
                             Sales X-Ray, with a person.
 - POST /leads               add a lead; the same ``external_id`` again changes nothing
                             (leads:write). An app's lead shows the app's name as its source.
+- POST /leads/imports       up to 10,000 leads at once, filed in the background through the
+                            app's own file import; ``Idempotency-Key`` (leads:write;
+                            integrations/lead_imports.py)
+- GET  /leads/imports       recent imports; /leads/imports/{id} where one stands;
+                            /leads/imports/{id}/rows each row's outcome (leads:write)
 - PATCH /leads/{id}         change a lead's name, company, city, interest or language, as
                             an AI write with Undo (leads:update; the owner's switch decides)
 - POST /calls               a recording for the connected person to add to their calls;
@@ -58,7 +63,7 @@ from ac_platform.call_data import facts as call_facts
 from ac_platform.call_data.models import CallObject
 from ac_platform.http.rate_limits import InMemoryTokenBucketLimiter, RateLimitRule
 from ac_platform.http.routes import RouteContext
-from ac_platform.integrations import app_uploads, keys, oauth, tiers
+from ac_platform.integrations import app_uploads, keys, lead_imports, oauth, tiers
 from ac_platform.integrations.ai_writes import AiWriteError, AiWrites, Door
 from ac_platform.integrations.models import IntegrationOAuthClient
 from ac_platform.kernel.authz import ActorContext
@@ -557,6 +562,21 @@ class Reader:
         answer, _ = await self._write(writes.undo(change_id, request_id=body.request_id))
         return answer
 
+    async def import_door(self) -> lead_imports.Door:
+        """Who an import is from: this key or app connection, acting as its person, with the
+        Lead Desk role it reaches (an organisation's key acts as its owner)."""
+        self.require("leads:write")
+        self._desk()  # leads are kept in organisations, not Personal
+        name = await self.app_name()
+        return lead_imports.Door(
+            via="connection" if name is not None else "key",
+            door_id=self.key.key_id,
+            tenant_id=self.key.tenant_id,
+            acting_person_id=self.key.acting_person_id,
+            role="owner" if self.caller.reach == "organisation" else (self.caller.role or "member"),
+            label=name or f"API key {self.key.prefix}",
+        )
+
     async def add_lead(self, body: NewLeadBody) -> tuple[dict[str, Any], int]:
         self.require("leads:write")
         record = {
@@ -717,6 +737,69 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
         async with open_reader(request) as reader:
             return done(await reader.leads(stage, offset, limit))
 
+    # Many leads at once (integrations/lead_imports.py). Before /leads/{lead_id}, which
+    # would take "imports" for an id.
+    def refused(refusal: lead_imports.ImportRefused) -> ApiError:
+        return ApiError(refusal.status, refusal.code, refusal.message)
+
+    @router.post("/leads/imports")
+    async def import_leads(body: lead_imports.ImportBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            door = await reader.import_door()
+            try:
+                answer, status = await lead_imports.create(
+                    reader.session,
+                    door,
+                    body,
+                    idempotency_key=request.headers.get("idempotency-key"),
+                )
+            except lead_imports.ImportRefused as refusal:
+                raise refused(refusal) from None
+            return done(answer, status)
+
+    @router.get("/leads/imports")
+    async def lead_import_list(request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            door = await reader.import_door()
+            return done(
+                await lead_imports.recent(reader.session, door, every_door=reader.caller.sees_team)
+            )
+
+    async def one_import(reader: Reader, import_id: UUID) -> Any:
+        door = await reader.import_door()
+        job = await lead_imports.find(
+            reader.session, door, import_id, every_door=reader.caller.sees_team
+        )
+        if job is None:
+            raise ApiError(404, "import_missing", "No such import here.")
+        return job
+
+    @router.get("/leads/imports/{import_id}")
+    async def lead_import(import_id: UUID, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            job = await one_import(reader, import_id)
+            return done(await lead_imports.view(reader.session, job))
+
+    @router.get("/leads/imports/{import_id}/rows")
+    async def lead_import_rows(
+        import_id: UUID,
+        request: Request,
+        outcome: str | None = Query(default=None, max_length=16),
+        after: int = Query(default=-1, ge=-1, le=lead_imports.MAX_ROWS),
+        limit: int = Query(default=lead_imports.ROWS_PAGE, ge=1, le=lead_imports.ROWS_PAGE),
+    ) -> JSONResponse:
+        """Each row's outcome, ``limit`` at a time; ``after`` is the last row seen."""
+        async with open_reader(request) as reader:
+            job = await one_import(reader, import_id)
+            try:
+                return done(
+                    await lead_imports.rows(
+                        reader.session, job, outcome=outcome, after=after, limit=limit
+                    )
+                )
+            except lead_imports.ImportRefused as refusal:
+                raise refused(refusal) from None
+
     @router.get("/leads/{lead_id}")
     async def lead(lead_id: UUID, request: Request) -> JSONResponse:
         async with open_reader(request) as reader:
@@ -838,3 +921,10 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
             return done(await reader.undo_change(change_id, body or UndoBody()))
 
     application.include_router(router)
+    # The importer files waiting chunks in the background (servers only).
+    lead_imports.attach(
+        application,
+        ctx.sessions,
+        ctx.settings.environment,
+        app_url=str(ctx.settings.sales_xray_app_url or "").rstrip("/"),
+    )

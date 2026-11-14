@@ -14,7 +14,7 @@ export const API = `${API_HOST}/v1/api`;
 
 export type Param = {
   name: string;
-  where: "path" | "query" | "body";
+  where: "path" | "query" | "body" | "header";
   type: string;
   text: string;
 };
@@ -328,6 +328,117 @@ const { id, outcome } = await response.json(); // 201 created, or 200`,
     answer: `{ "id": "c7d2…", "outcome": "created" }`,
     notes:
       "outcome is created (201), or 200 with known (this external_id was sent before) or repeat (a lead with this phone exists; it is marked as asking again).",
+  },
+  {
+    id: "api-import-leads",
+    method: "POST",
+    path: "/leads/imports",
+    scope: "leads:write",
+    summary:
+      "Import up to 10,000 leads at once. Answers at once with an import; the leads are filed in the background exactly like a file uploaded in Sales X-Ray: duplicates are not new leads, and an owner can undo the import in the app for 48 hours.",
+    params: [
+      {
+        name: "Idempotency-Key",
+        where: "header",
+        type: "string",
+        text: "8 to 120 characters. The same key with the same leads answers with the same import (200); with other leads, 409.",
+      },
+      {
+        name: "leads",
+        where: "body",
+        type: "array",
+        text: "Each lead: name, phone, email, company, city, language, interest, stage (a stage's name), owner (a teammate's email or name), source (its list) and external_id (your id: the same id again is the same lead). At least a name, phone or email.",
+      },
+      {
+        name: "name",
+        where: "body",
+        type: "string",
+        text: "The import's name in the app's Import history.",
+      },
+      {
+        name: "side",
+        where: "body",
+        type: "string",
+        text: "inbound (default) or cold.",
+      },
+      {
+        name: "assign",
+        where: "body",
+        type: "string",
+        text: "rules (default): the workspace's lead rules give new leads out; none: nobody gets them yet. A lead's owner wins either way.",
+      },
+      {
+        name: "duplicates",
+        where: "body",
+        type: "string",
+        text: "A lead already here: skip (default), fill its empty details, or replace them.",
+      },
+    ],
+    curl: `curl ${API}/leads/imports \\\n  ${AUTH} \\\n  -H "Content-Type: application/json" \\\n  -H "Idempotency-Key: crm-export-2026-11-14" \\\n  -d '{"name": "CRM export", "side": "cold", "leads": [{"name": "Asha Rao", "phone": "+919800000000", "external_id": "crm-42"}]}'`,
+    js: `const response = await fetch("${API}/leads/imports", {
+  method: "POST",
+  headers: {
+    ...${HEADERS},
+    "Content-Type": "application/json",
+    "Idempotency-Key": "crm-export-2026-11-14",
+  },
+  body: JSON.stringify({ name: "CRM export", side: "cold", leads }),
+});
+const { id, status } = await response.json(); // 202 queued, or 200 for a retry`,
+    answer: `{ "id": "5b1e…", "name": "CRM export", "status": "queued", "total": 5000, "processed": 0, "created": 0, "updated": 0, "skipped": 0, "failed": 0, "…": "…" }`,
+    notes:
+      "Up to 10,000 leads an import (a 4 MB body), 5 imports waiting and 50,000 leads a day per workspace (429 imports_busy or import_daily_limit). Each lead's details are kept only until it is filed.",
+  },
+  {
+    id: "api-lead-import",
+    method: "GET",
+    path: "/leads/imports/{import_id}",
+    scope: "leads:write",
+    summary:
+      "Where an import stands: queued, running, done, partly_failed or failed, with how many leads were created, updated, skipped and failed. GET /leads/imports lists the last 50.",
+    params: [],
+    curl: `curl ${API}/leads/imports/5b1e… \\\n  ${AUTH}`,
+    js: `const job = await (
+  await fetch(\`${API}/leads/imports/\${id}\`, { headers: ${HEADERS} })
+).json();`,
+    answer: `{ "id": "5b1e…", "status": "done", "total": 5000, "processed": 5000, "created": 4987, "updated": 0, "skipped": 13, "failed": 0, "assigned": 4987, "undo_until": "2026-11-16T10:00:00+00:00", "…": "…" }`,
+    notes:
+      "Poll every few seconds; 250 leads are filed at a time. undo_until says until when an owner can undo it in the app.",
+  },
+  {
+    id: "api-lead-import-rows",
+    method: "GET",
+    path: "/leads/imports/{import_id}/rows",
+    scope: "leads:write",
+    summary:
+      "Each lead's outcome, in the order sent: created, updated, skipped (with why), failed or waiting, and its lead.",
+    params: [
+      {
+        name: "outcome",
+        where: "query",
+        type: "string",
+        text: "Only rows with this outcome.",
+      },
+      {
+        name: "after",
+        where: "query",
+        type: "integer",
+        text: "The last row seen (next_after); rows are numbered from 0.",
+      },
+      {
+        name: "limit",
+        where: "query",
+        type: "integer",
+        text: "1 to 1,000 (default 1,000).",
+      },
+    ],
+    curl: `curl "${API}/leads/imports/5b1e…/rows?outcome=skipped" \\\n  ${AUTH}`,
+    js: `const { rows, next_after } = await (
+  await fetch(\`${API}/leads/imports/\${id}/rows?outcome=skipped\`, { headers: ${HEADERS} })
+).json();`,
+    answer: `{ "rows": [{ "row": 10, "external_id": "crm-52", "outcome": "skipped", "reason": "Already a lead", "lead_id": null }], "next_after": null }`,
+    notes:
+      "Reasons are the app's own: Already a lead, Repeated in the file, Number can't be read, No name, phone or email.",
   },
   {
     id: "api-add-note",

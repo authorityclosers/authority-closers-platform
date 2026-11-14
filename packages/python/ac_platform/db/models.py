@@ -63,6 +63,7 @@ from ac_platform.feedback import models as feedback_models
 from ac_platform.fx import models as fx_models
 from ac_platform.identity import google_profile_models, sales_xray_profile_models
 from ac_platform.identity import models as identity_models
+from ac_platform.integrations import import_models as integration_import_models
 from ac_platform.integrations import models as integration_models
 from ac_platform.knowledge import models as knowledge_models
 from ac_platform.lead_desk import models as lead_desk_models
@@ -133,6 +134,7 @@ MODEL_MODULES = (
     fx_models,
     usage_people_models,
     integration_models,
+    integration_import_models,
     pulse_models,
     admin_settings_models,
     authorization_models,

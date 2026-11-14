@@ -21,6 +21,13 @@ command-line argument, so it stays out of shell history and process lists).
     sx task LEAD_ID --kind call_back|whatsapp|email|send_file|meeting|other
             --due 2026-10-27T10:00:00+05:30 [--title T] [--note N] [--ends AT]
             [--remind MINUTES] [--request-id ID] [--preview]  # needs leads:tasks
+    sx import-leads FILE.csv|FILE.json [--name NAME] [--side inbound|cold]
+            [--assign rules|none] [--duplicates skip|fill|replace]
+            [--per-import N] [--wait] [--failures OUT.csv]
+                                              # many leads at once (needs leads:write):
+                                              # filed in the background like a file
+                                              # uploaded in the app, undone there in 48 h
+    sx import LEAD_IMPORT_ID [--rows skipped|failed|created|updated]
     sx changes [--lead LEAD_ID]               # notes and tasks this key added (30 days)
     sx undo CHANGE_ID                         # within 7 days: a note stops showing,
                                               # an open task is cancelled
@@ -29,6 +36,13 @@ command-line argument, so it stays out of shell history and process lists).
 A change sent again with the same --request-id changes nothing; without one, sx makes
 a new one each time. Every change shows "via API key sxk_..." in the lead's history.
 
+import-leads reads a CSV whose header names the fields (name, phone, email, company, city,
+language, interest, stage, owner, source, external_id; other columns are left out) or a
+JSON list of such objects. It sends up to --per-import rows (default 5,000) per import,
+each with an Idempotency-Key made from the file, so running it again on the same file
+creates nothing twice. --wait follows each import to the end and prints the totals;
+--failures writes the rows that were skipped or failed, with why, to a CSV.
+
 Output is JSON. Exit status 0 on success, 1 when the API refused (its error code and
 message are printed), 2 on a usage or connection problem.
 """
@@ -36,9 +50,12 @@ message are printed), 2 on a usage or connection problem.
 from __future__ import annotations
 
 import argparse
+import csv
+import hashlib
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -84,6 +101,7 @@ class Client:
         path: str,
         query: dict[str, Any] | None = None,
         body: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> Any:
         clean = {k: v for k, v in (query or {}).items() if v is not None}
         url = self.base + path + ("?" + urllib.parse.urlencode(clean) if clean else "")
@@ -94,6 +112,8 @@ class Client:
         request.add_header("User-Agent", f"sx/{VERSION}")
         if data is not None:
             request.add_header("Content-Type", "application/json")
+        for name, value in (headers or {}).items():
+            request.add_header(name, value)
         status, raw = self.transport(request)
         try:
             payload = json.loads(raw or b"null")
@@ -132,6 +152,19 @@ class Client:
 
     def changes(self, lead_id: str | None = None) -> Any:
         return self.call("GET", "/changes", {"lead_id": lead_id})
+
+    def import_leads(self, body: dict[str, Any], idempotency_key: str | None = None) -> Any:
+        headers = {"Idempotency-Key": idempotency_key} if idempotency_key else None
+        return self.call("POST", "/leads/imports", body=body, headers=headers)
+
+    def lead_import(self, import_id: str) -> Any:
+        return self.call("GET", f"/leads/imports/{urllib.parse.quote(import_id, safe='')}")
+
+    def lead_import_rows(
+        self, import_id: str, outcome: str | None = None, after: int | None = None
+    ) -> Any:
+        path = f"/leads/imports/{urllib.parse.quote(import_id, safe='')}/rows"
+        return self.call("GET", path, {"outcome": outcome, "after": after})
 
     def undo(self, change_id: str, request_id: str | None = None) -> Any:
         body = {"request_id": request_id} if request_id else {}
@@ -275,6 +308,163 @@ TOOLS: list[dict[str, Any]] = [
 ]
 
 
+IMPORT_FIELDS = (
+    "name",
+    "phone",
+    "email",
+    "company",
+    "city",
+    "language",
+    "interest",
+    "stage",
+    "owner",
+    "source",
+    "external_id",
+)
+TOOLS += [
+    {
+        "name": "import_leads",
+        "description": (
+            "Imports up to 250 leads per call, filed in the background like a file uploaded "
+            "in Sales X-Ray: duplicates (same phone, or same email without one) are not new "
+            "leads, and the import can be undone in the app for 48 hours. Answers with an "
+            "import id for get_lead_import. For thousands, call again with the next 250 and "
+            "a new request_id; the same request_id with the same leads changes nothing."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "leads": {
+                    "type": "array",
+                    "maxItems": 250,
+                    "items": {
+                        "type": "object",
+                        "properties": {name: {"type": "string"} for name in IMPORT_FIELDS},
+                    },
+                },
+                "name": {"type": "string"},
+                "side": {"type": "string", "enum": ["inbound", "cold"]},
+                "assign": {"type": "string", "enum": ["rules", "none"]},
+                "duplicates": {"type": "string", "enum": ["skip", "fill", "replace"]},
+                "request_id": {"type": "string"},
+            },
+            "required": ["leads"],
+        },
+    },
+    {
+        "name": "get_lead_import",
+        "description": "Where an import stands, with the rows skipped or failed and why "
+        "when problem_rows is true.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"import_id": {"type": "string"}, "problem_rows": {"type": "boolean"}},
+            "required": ["import_id"],
+        },
+    },
+]
+
+
+def read_leads(path: str) -> list[dict[str, str]]:
+    """The leads in a CSV (a header row naming the fields) or a JSON list of objects; only
+    the fields an import takes, as text, empty cells left out."""
+    with open(path, encoding="utf-8-sig", newline="") as handle:
+        if path.lower().endswith(".json"):
+            loaded = json.load(handle)
+            items = loaded.get("leads") if isinstance(loaded, dict) else loaded
+            if not isinstance(items, list):
+                raise ValueError("The JSON file holds a list of leads.")
+        else:
+            items = list(csv.DictReader(handle))
+    leads = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise ValueError("Each lead is an object of fields.")
+        lead = {}
+        for key, value in item.items():
+            field = str(key or "").strip().lower().replace(" ", "_")
+            field = "external_id" if field in ("id", "external_id", "externalid") else field
+            text = "" if value is None else str(value).strip()
+            if field in IMPORT_FIELDS and text:
+                lead[field] = text
+        leads.append(lead)
+    if not leads:
+        raise ValueError("The file has no leads.")
+    return leads
+
+
+def import_file(
+    client: Client,
+    path: str,
+    *,
+    name: str | None = None,
+    side: str = "inbound",
+    assign: str = "rules",
+    duplicates: str = "skip",
+    per_import: int = 5000,
+    wait: bool = False,
+    failures: str | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+) -> dict[str, Any]:
+    """Send a file's leads as one or more imports and, with wait, follow them to the end."""
+    leads = read_leads(path)
+    per_import = max(1, min(per_import, 10_000))
+    with open(path, "rb") as handle:
+        digest = hashlib.sha256(handle.read()).hexdigest()
+    title = name or os.path.basename(path)[:200]
+    sent = []
+    for part, first in enumerate(range(0, len(leads), per_import)):
+        body = {
+            "name": title,
+            "leads": leads[first : first + per_import],
+            "side": side,
+            "assign": assign,
+            "duplicates": duplicates,
+        }
+        key = f"sx-{digest[:40]}-{part}"
+        for attempt in range(8):
+            try:
+                answer = client.import_leads(body, key)
+                break
+            except ApiError as error:
+                # Five imports already waiting here, or a busy minute: wait and try again.
+                if error.status != 429 or attempt == 7:
+                    raise
+                sleep(min(60, 5 * 2**attempt))
+        sent.append({"first_row": first, **answer})
+    if wait:
+        for index, item in enumerate(sent):
+            while item.get("status") in ("queued", "running"):
+                sleep(2)
+                item = {"first_row": item["first_row"], **client.lead_import(item["id"])}
+            sent[index] = item
+    totals = {
+        key: sum(int(item.get(key, 0)) for item in sent)
+        for key in ("total", "created", "updated", "skipped", "failed")
+    }
+    if wait and failures:
+        with open(failures, "w", encoding="utf-8", newline="") as out:
+            writer = csv.writer(out)
+            writer.writerow(["row", "external_id", "outcome", "reason"])
+            for item in sent:
+                for outcome in ("skipped", "failed"):
+                    after = None
+                    while True:
+                        page = client.lead_import_rows(item["id"], outcome, after)
+                        for row in page["rows"]:
+                            writer.writerow(
+                                [
+                                    item["first_row"] + row["row"] + 1,
+                                    row.get("external_id") or "",
+                                    row["outcome"],
+                                    row.get("reason") or "",
+                                ]
+                            )
+                        after = page.get("next_after")
+                        if after is None:
+                            break
+    return {"imports": sent, "totals": totals}
+
+
 def _tool(client: Client, name: str, args: dict[str, Any]) -> Any:
     if name == "whoami":
         return client.me()
@@ -304,6 +494,21 @@ def _tool(client: Client, name: str, args: dict[str, Any]) -> Any:
             preview=bool(args.get("preview", False)),
             **{key: args.get(key) for key in fields},
         )
+    if name == "import_leads":
+        body = {
+            key: args[key]
+            for key in ("leads", "name", "side", "assign", "duplicates")
+            if key in args
+        }
+        return client.import_leads(body, args.get("request_id") or _request_id())
+    if name == "get_lead_import":
+        answer = client.lead_import(str(args["import_id"]))
+        if args.get("problem_rows") is True:
+            problems = []
+            for outcome in ("skipped", "failed"):
+                problems += client.lead_import_rows(str(args["import_id"]), outcome)["rows"]
+            answer["problem_rows"] = sorted(problems, key=lambda row: row["row"])[:200]
+        return answer
     if name == "list_my_changes":
         return client.changes(args.get("lead_id"))
     if name == "undo_change":
@@ -412,6 +617,20 @@ def _parser() -> argparse.ArgumentParser:
         task.add_argument(f"--{name}")
     task.add_argument("--remind", type=int)
     task.add_argument("--preview", action="store_true")
+    imports = commands.add_parser("import-leads")
+    imports.add_argument("file")
+    imports.add_argument("--name")
+    imports.add_argument("--side", choices=["inbound", "cold"], default="inbound")
+    imports.add_argument("--assign", choices=["rules", "none"], default="rules")
+    imports.add_argument("--duplicates", choices=["skip", "fill", "replace"], default="skip")
+    imports.add_argument("--per-import", type=int, default=5000)
+    imports.add_argument("--wait", action="store_true")
+    imports.add_argument("--failures")
+    one_import = commands.add_parser("import")
+    one_import.add_argument("import_id")
+    one_import.add_argument(
+        "--rows", choices=["created", "updated", "skipped", "failed", "waiting"]
+    )
     changes = commands.add_parser("changes")
     changes.add_argument("--lead")
     undo = commands.add_parser("undo")
@@ -425,6 +644,7 @@ def main(
     argv: list[str] | None = None,
     environ: dict[str, str] | None = None,
     transport: Transport = _urlopen,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> int:
     args = _parser().parse_args(argv)
     env = os.environ if environ is None else environ
@@ -463,6 +683,25 @@ def main(
                 request_id=args.request_id or _request_id(),
                 preview=args.preview,
             )
+        elif args.command == "import-leads":
+            out = import_file(
+                client,
+                args.file,
+                name=args.name,
+                side=args.side,
+                assign=args.assign,
+                duplicates=args.duplicates,
+                per_import=args.per_import,
+                wait=args.wait or bool(args.failures),
+                failures=args.failures,
+                sleep=sleep,
+            )
+        elif args.command == "import":
+            out = (
+                client.lead_import_rows(args.import_id, args.rows)
+                if args.rows
+                else client.lead_import(args.import_id)
+            )
         elif args.command == "changes":
             out = client.changes(args.lead)
         elif args.command == "undo":
@@ -486,6 +725,9 @@ def main(
             file=sys.stderr,
         )
         return 1
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 2
     except OSError as error:
         print(f"Could not reach Sales X-Ray: {type(error).__name__}", file=sys.stderr)
         return 2
