@@ -1081,11 +1081,19 @@ def test_hosted_validator_rejects_untrusted_activation_files(
 
 def test_installer_compose_for_uses_target_release_overlay_and_clears_ambient_inputs(
     activation_root: Path,
+    tmp_path: Path,
 ) -> None:
     release, paths = _make_release(activation_root)
-    fake_bin = activation_root / "bin"
+    # The fakes live in pytest's own folder, not under /run: only the activation files
+    # need the root trust boundary. Some runner images mount /run without exec (v1.60's
+    # release PR, 14 Nov 2026: both validate-python-gates runs on ubuntu-24.04 image
+    # 20261111.127.1 failed, none of 29 on 20261111.370.1 or 20261101.360.1). There
+    # the fake docker could not run, env's PATH search moved on to the real docker, and
+    # it refused the fixture's empty release-images.env ("required variable
+    # AC_API_IMAGE is missing a value").
+    fake_bin = tmp_path / "fake-bin"
     fake_bin.mkdir()
-    capture = activation_root / "compose-args"
+    capture = tmp_path / "compose-args"
     fake_docker = fake_bin / "docker"
     fake_docker.write_text(
         "#!/usr/bin/env bash\n"
@@ -1102,6 +1110,8 @@ def test_installer_compose_for_uses_target_release_overlay_and_clears_ambient_in
         newline="\n",
     )
     fake_python.chmod(0o755)
+    # Never let the real docker answer for the fake: it must be runnable where it is.
+    assert os.access(fake_docker, os.X_OK), f"the fake docker can't run from {fake_bin}"
     installer = INSTALLER.read_text(encoding="utf-8")
     start = installer.index("sales_xray_hosted_inputs=()")
     end = installer.index('\n\ncompose_for "$release_dir" config --quiet', start)
