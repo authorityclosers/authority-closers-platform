@@ -105,9 +105,15 @@ export function SpeedTile({ effort }: { effort: Effort }) {
         <span className={styles.label}>Speed to new lead</span>
         <span className={styles.meta}>Inbound, median to the first call</span>
       </span>
-      <strong className={styles.speedFigure}>
-        {minutes === null ? "–" : breakLength(Math.round(minutes))}
-      </strong>
+      {minutes === null ? (
+        // No new Inbound lead called yet: words, never a lone dash (owner,
+        // 13 Nov 2026, Growth on the Redmi: "a stray small dash").
+        <span className={styles.speedNone}>Not yet</span>
+      ) : (
+        <strong className={styles.speedFigure}>
+          {breakLength(Math.round(minutes))}
+        </strong>
+      )}
     </section>
   );
 }

@@ -69,6 +69,12 @@
   font: var(--sx-text-headline);
 }
 
+.speedNone {
+  flex: none;
+  color: var(--sx-muted);
+  font: var(--sx-text-label);
+}
+
 /* G1: two columns of equal tiles; a tile's figure shrinks with its width. */
 .tiles {
   display: grid;

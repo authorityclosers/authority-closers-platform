@@ -180,7 +180,7 @@ it("keeps the tiles whole with nothing yet: no dash, no squeezed total", () => {
   ]);
 });
 
-it("keeps speed to a new lead small, and a dash when there is none", () => {
+it("keeps speed to a new lead small, and says Not yet when there is none", () => {
   act(() => root.render(<SpeedTile effort={effort} />));
   expect(host.textContent).toBe(
     "Speed to new leadInbound, median to the first call12 min",
@@ -192,7 +192,11 @@ it("keeps speed to a new lead small, and a dash when there is none", () => {
       />,
     ),
   );
-  expect(host.querySelector("strong")?.textContent).toBe("–");
+  // Words, never a lone dash (owner, 13 Nov 2026).
+  expect(host.querySelector("strong")).toBeNull();
+  expect(host.textContent).toBe(
+    "Speed to new leadInbound, median to the first callNot yet",
+  );
 });
 
 it("counts today's calls by India hour, from 9 am to 7 pm at least", () => {
