@@ -1385,6 +1385,11 @@ function LightboxShellFrame({
   const barFit = {
     "--sx-bar-chars": Math.max(1, (barTitle ?? workspaceLabel ?? "").length),
   } as CSSProperties;
+  // The workspace's name over it is never cut either: its length sizes it to
+  // its line (owner, 13 Nov 2026, Growth on the Redmi: "Authority Closers…").
+  const nameFit = {
+    "--sx-ws-chars": Math.max(1, (workspaceLabel ?? "").length),
+  } as CSSProperties;
   // The organisation's own tile beside its name in the top bars (owner bug
   // #50): its logo, else its initials on its colour, the tapped one at once.
   // Personal needs none: your own face is already on the left.
@@ -1894,7 +1899,7 @@ function LightboxShellFrame({
                 >
                   <span className={styles.contextRow}>
                     {workspaceMark}
-                    <small className={styles.mobileContext}>
+                    <small className={styles.mobileContext} style={nameFit}>
                       <span className={styles.contextName}>
                         {workspaceLabel}
                       </span>
@@ -1917,7 +1922,7 @@ function LightboxShellFrame({
                       placeholder while it loads, so the title never drops. */}
                   <span className={styles.contextRow}>
                     {pageTitle && workspaceLabel ? workspaceMark : null}
-                    <small className={styles.mobileContext}>
+                    <small className={styles.mobileContext} style={nameFit}>
                       {pageTitle
                         ? (workspaceLabel ?? "Sales X-Ray")
                         : "Workspace"}

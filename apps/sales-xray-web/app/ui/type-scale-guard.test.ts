@@ -30,6 +30,8 @@ const ALLOWED = new Set([
   // (Redmi QA, 10 Nov 2026: "New analysis" took two lines at 130 % text).
   "app/shell/lightbox-shell.module.css | font-size: min(var(--sx-text-xl), 22px, var(--sx-bar-fit))",
   "app/shell/lightbox-shell.module.css | font-size: min(var(--sx-text-md), var(--sx-bar-fit))",
+  // The workspace's name fits its line on a phone, never cut (owner, 13 Nov 2026).
+  "app/shell/lightbox-shell.module.css | font-size: max(11px, min(var(--sx-text-2xs), var(--sx-ws-fit)))",
 ]);
 /** The call Report's printable document keeps its own document scale (owner, 3 Nov 2026). */
 const ALLOWED_FILES = new Set(["app/report-document.module.css"]);
