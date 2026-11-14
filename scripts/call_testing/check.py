@@ -12,9 +12,10 @@ Two kinds of result per scenario:
   verdict, strengths, an improvement, 8 dimensions, 9 sections, a next-call focus) or the
   expected hold (``ai_short_call`` / ``ai_no_conversation``).
 - **detect** (sales or not): what the server decided against the scenario's ``sales``. A
-  hold means "not a conversation". A report counts as a sales verdict unless it stores a call
-  purpose (``call_map.call_purpose.kind``); on 13 Nov 2026 production stored none, so every
-  report is coached as a sales call. That is a known gap, reported but not gating by default.
+  short-call hold means "not a conversation", and the ``ai_not_sales`` hold (luna-pipeline,
+  14 Nov 2026: C5 held when C4's own review finds no sales stage) means "not a sales call". A
+  report counts as a sales verdict unless it stores a call purpose
+  (``call_map.call_purpose.kind``) or its coaching came back empty.
 """
 
 from __future__ import annotations
@@ -27,7 +28,9 @@ from datetime import datetime
 from typing import Any
 
 APP_HOST = "https://salesxray.authorityclosers.com"
-HOLDS = {"ai_short_call": "short_call", "ai_no_conversation": "no_conversation"}
+SHORT_HOLDS = {"ai_short_call": "short_call", "ai_no_conversation": "no_conversation"}
+# The plan is held before coaching because the call isn't sales (luna-pipeline's first step).
+HOLDS = {**SHORT_HOLDS, "ai_not_sales": "not_sales"}
 SAFE_PURPOSE = re.compile(r"[^A-Za-z0-9 ,.;:()/_+=-]")
 UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 SHA = re.compile(r"[0-9a-f]{64}")
@@ -156,7 +159,7 @@ def outcome_of(row: Mapping[str, Any] | None) -> str:
     return "analysing"
 
 
-TERMINAL_PREFIXES = ("report", "short_call", "no_conversation", "held:", "failed:")
+TERMINAL_PREFIXES = ("report", "short_call", "no_conversation", "not_sales", "held:", "failed:")
 
 
 def is_terminal(outcome: str) -> bool:
@@ -194,6 +197,8 @@ def detected_sales(row: Mapping[str, Any] | None) -> tuple[bool | None, str]:
     outcome = outcome_of(row)
     if outcome in {"short_call", "no_conversation"}:
         return False, f"held as {outcome.replace('_', ' ')}: not analysed as a sales conversation"
+    if outcome == "not_sales":
+        return False, "held as not a sales call (ai_not_sales): no coaching"
     if outcome != "report" or row is None:
         return None, "no decision yet"
     purpose = row.get("purpose")
@@ -229,6 +234,12 @@ def judge(
             fits = want in {got, "held", "any"}
             if not fits:
                 notes.append(f"expected {want}, held as {got}")
+        elif got == "not_sales":
+            # Right for a call that isn't sales and may get a report or a hold; wrong for a
+            # sales call (it lost its coaching) and for dead air (that's no conversation).
+            fits = not expect["sales"] and want in {"held", "any"}
+            if not fits:
+                notes.append(f"expected {want}, held as not a sales call")
         else:
             fits = False
             notes.append(got)

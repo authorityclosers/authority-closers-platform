@@ -109,7 +109,8 @@ def test_expectations_follow_the_servers_short_call_rule() -> None:
     assert "NO_CONVERSATION_MS: Final = 20_000" in policy
     assert '"short_call": "ai_short_call"' in policy
     assert '"no_conversation": "ai_no_conversation"' in policy
-    assert set(check.HOLDS) == {"ai_short_call", "ai_no_conversation"}
+    assert set(check.SHORT_HOLDS) == {"ai_short_call", "ai_no_conversation"}
+    assert set(check.HOLDS) == {*check.SHORT_HOLDS, "ai_not_sales"}
 
 
 # ---- the phone side ---------------------------------------------------------------------------
@@ -292,6 +293,24 @@ def test_holds_are_judged_against_the_expected_hold() -> None:
     other = check.judge(_scenario("R14"), {**held, "failure_code": "stage_uncertain"}, final=False)
     assert other["gate"] == "fail" and "held:stage_uncertain" in other["notes"]
     assert check.judge(_scenario("R14"), _report(), final=False)["gate"] == "fail"
+
+
+def test_the_not_sales_hold_is_caught_for_non_sales_calls_only() -> None:
+    held = {
+        "sha": SHA,
+        "plan_state": "held",
+        "failure_code": "ai_not_sales",
+        "report": False,
+        "capture_source": "android_dialer_pickup",
+    }
+    for sid in ("R10", "R11", "R12", "R13", "R09"):
+        caught = check.judge(_scenario(sid), held, final=False)
+        assert caught["outcome"] == "not_sales"
+        assert caught["gate"] == "pass" and caught["detect"] == "pass", sid
+        assert "ai_not_sales" in caught["detected"]
+    lost_coaching = check.judge(_scenario("R03"), held, final=False)
+    assert lost_coaching["gate"] == "fail" and lost_coaching["detect"] == "fail"
+    assert check.judge(_scenario("R14"), held, final=False)["gate"] == "fail"
 
 
 def test_a_personal_call_coached_as_sales_passes_the_gate_but_fails_detection() -> None:
