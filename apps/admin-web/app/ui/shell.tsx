@@ -37,6 +37,7 @@ import {
   Settings,
   ShieldCheck,
   SlidersHorizontal,
+  Smartphone,
   Sparkles,
   Star,
   Timer,
@@ -96,6 +97,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   bugs: Bug,
   feedback: MessageSquareHeart,
   sellers: UserSearch,
+  testers: Smartphone,
 };
 
 export function AcMark({ size = 20 }: { size?: number }) {

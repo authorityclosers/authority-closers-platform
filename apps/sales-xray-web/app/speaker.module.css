@@ -679,3 +679,42 @@
     animation: none;
   }
 }
+
+/* Past the report's first screen the card folds to its pill, and a tap
+   opens it (Flow 2, G8: the one line sat over the report for the whole
+   read). */
+.detected[data-folded] {
+  left: auto;
+  width: auto;
+  gap: 0;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.detected[data-folded]::before,
+.detected[data-folded] > :not(.detectedPill) {
+  display: none;
+}
+
+.detectedPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--lx-ink);
+  font: 650 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  cursor: pointer;
+}
+
+.detectedPill svg {
+  color: var(--lx-teal);
+}
+
+.detectedPill:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--lx-ring-focus);
+}

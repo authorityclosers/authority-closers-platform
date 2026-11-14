@@ -44,6 +44,7 @@ from ac_platform.conversation_intelligence import (
     prospect_call_outcome_models,
     prospect_models,
     recovery_models,
+    report_save_models,
     report_settings_models,
     review_label_models,
     review_models,
@@ -80,6 +81,7 @@ from ac_platform.providers import models as provider_models
 from ac_platform.pulse import models as pulse_models
 from ac_platform.tenancy import models as tenancy_models
 from ac_platform.tenancy import seat_grant_models as tenancy_seat_grant_models
+from ac_platform.testers import models as tester_models
 from ac_platform.usage_people import models as usage_people_models
 
 MODEL_MODULES = (
@@ -103,6 +105,7 @@ MODEL_MODULES = (
     prospect_models,
     submission_label_models,
     speaker_map_models,
+    report_save_models,
     execution_control_models,
     recovery_models,
     report_settings_models,
@@ -123,6 +126,7 @@ MODEL_MODULES = (
     brain4_models,
     call_ai_models,
     bug_report_models,
+    tester_models,
     feedback_models,
     fx_models,
     usage_people_models,

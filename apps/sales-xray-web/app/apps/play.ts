@@ -10,9 +10,13 @@
  * the card and their words move to it together.
  */
 
-/** Play's testing opt-in: testers only. */
+/**
+ * Play's testing opt-in: testers only. The closed test ("Closed testing -
+ * Alpha", the one that counts for production), never internal testing's link,
+ * which shows "Item not found" to anyone off its email list (13 Nov 2026).
+ */
 export const PLAY_OPT_IN_URL =
-  "https://play.google.com/apps/internaltest/4701571889733710337";
+  "https://play.google.com/apps/testing/com.authorityclosers.salesxray";
 
 /** Play's public store page: null until the listing is public. */
 export const PLAY_STORE_URL: string | null = null;

@@ -1,0 +1,81 @@
+/* Testers: the Sales X-Ray Play tester list (owner, 13 Nov 2026). Tokens only. */
+
+.headerActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.headerActions a {
+  gap: 6px;
+  text-decoration: none;
+}
+
+.who {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  max-width: 420px;
+}
+
+.who strong {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.who small {
+  color: var(--sx-muted);
+  overflow-wrap: anywhere;
+}
+
+.marks {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.queue {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.queueRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 0;
+  border-top: 1px solid var(--sx-line);
+}
+
+.queueRow:first-child {
+  border-top: 0;
+}
+
+.actions {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+
+.actionRow {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.actionRow button {
+  gap: 6px;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .queueRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+}
