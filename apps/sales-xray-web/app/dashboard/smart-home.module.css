@@ -260,16 +260,15 @@ a.counter:active::after,
   border-top: 1px solid var(--sx-line);
 }
 
-/* One row: the box or the call, the time in its own column, a hairline, then
-   the words; the time column is sized in the row's text, so it grows with it
-   and every title starts at one edge. */
+/* One row: the box or the call in a 44 px column, then the words with the
+   time under them; every title starts at one edge. */
 .row {
   position: relative;
   display: grid;
   flex: 1 1 auto;
-  grid-template-columns: 22px auto minmax(0, 1fr);
+  grid-template-columns: 44px minmax(0, 1fr);
   align-items: center;
-  column-gap: 10px;
+  column-gap: 8px;
   min-width: 0;
   padding: 10px 0;
   font-size: var(--sx-text-sm);
@@ -290,13 +289,11 @@ a.counter:active::after,
   z-index: 1;
   display: grid;
   place-items: center;
-  width: 22px;
+  width: 44px;
 }
 
-/* One width for every time, in its own text, so every title starts at one
-   edge (H5). */
+/* The time first under the title. */
 .time {
-  width: 4.5em;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
   font-weight: 500;
@@ -314,8 +311,6 @@ a.counter:active::after,
   display: grid;
   gap: 4px;
   min-width: 0;
-  padding-left: 10px;
-  border-left: 1px solid var(--sx-line);
 }
 
 .title {
@@ -388,8 +383,9 @@ a.counter:active::after,
   text-decoration: none;
 }
 
-/* The box (a task) and the call (a follow-up): 44 px targets around 22 px
-   marks; a late one's ring is red (H2). */
+/* The box (a task) and the call (a follow-up): 44 px targets that look like
+   ones, a ring with its tick showing faintly and a tinted round call button;
+   a late one's is red (H2). */
 .tick,
 .call {
   position: relative;
@@ -398,11 +394,16 @@ a.counter:active::after,
   place-items: center;
   width: 44px;
   height: 44px;
-  margin: -11px;
   border-radius: 50%;
   color: var(--sx-accent);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+.call {
+  width: 40px;
+  height: 40px;
+  background: color-mix(in oklab, var(--sx-accent) 12%, var(--sx-surface));
 }
 
 .tick input {
@@ -419,23 +420,25 @@ a.counter:active::after,
   display: grid;
   place-items: center;
   box-sizing: border-box;
-  width: 22px;
-  height: 22px;
-  border: 2px solid color-mix(in oklab, var(--sx-ink) 32%, transparent);
+  width: 26px;
+  height: 26px;
+  border: 2px solid currentColor;
   border-radius: 50%;
-  color: var(--lx-on-teal);
+  color: var(--sx-accent);
   transition:
     background var(--sx-dur-fast) var(--sx-ease-out),
     border-color var(--sx-dur-fast) var(--sx-ease-out);
 }
 
+/* The tick shows faintly in an open ring: a box to tick. */
 .tick > span svg {
-  opacity: 0;
+  opacity: 0.35;
 }
 
 .tick input:checked + span {
   border-color: var(--sx-accent);
   background: var(--sx-accent);
+  color: var(--lx-on-teal);
 }
 
 .tick input:checked + span svg {
@@ -447,10 +450,11 @@ a.counter:active::after,
 }
 
 .row[data-late] .tick > span {
-  border-color: var(--sx-bad);
+  color: var(--sx-bad);
 }
 
 .row[data-late] .call {
+  background: color-mix(in oklab, var(--sx-bad) 12%, var(--sx-surface));
   color: var(--sx-bad);
 }
 

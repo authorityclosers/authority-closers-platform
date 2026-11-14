@@ -241,9 +241,11 @@ export function CallMark({
   );
 }
 
-/** One row: the tap target on the left (a box or a call), the time in its own
- *  column (red when late, H1), then the words, and under them the kind and
- *  Late, so colour never carries it alone (H1, H4). */
+/** One row: the tap target on the left (a box to tick or a call), then the
+ *  words, and under them the time (red when late, H1), the kind and Late, so
+ *  colour never carries it alone (H1, H4). The time left its own column (the
+ *  owner on a Redmi 13, 13 Nov 2026: the date beside the ring read as a
+ *  label, not a tap, and the column left the titles little room). */
 export function TodayRow({
   mark,
   kind,
@@ -276,16 +278,16 @@ export function TodayRow({
       <span className={styles.mark} data-col="mark">
         {mark}
       </span>
-      <span
-        className={styles.time}
-        data-col="time"
-        data-late-time={late || undefined}
-      >
-        {listTime(at, now)}
-      </span>
       <span className={styles.words} data-col="title">
         <span className={styles.title}>{title}</span>
         <span className={styles.chips}>
+          <span
+            className={styles.time}
+            data-col="time"
+            data-late-time={late || undefined}
+          >
+            {listTime(at, now)}
+          </span>
           <span className={styles.kind} data-kind={kind}>
             {KIND_WORDS[kind]}
           </span>
