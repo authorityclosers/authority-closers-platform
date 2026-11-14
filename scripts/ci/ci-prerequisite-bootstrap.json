@@ -10,13 +10,13 @@
     "review": "Orchestrator 28 Oct 2026 (v1.3.0 cut): producer run 40724365608 (workbench-checks.yml, push, success, wb-ci --full) on request 5a168c24, whose only parent is the v1.3.0 hold 77b745d3b and which changes only .wb-ci/request.json. Same identity 4db81fe7 (no lockfile change); artifact digest from the API. Replaces the 2e9f74de pin, which passed its 36-hour reuse window at 15:51Z and left e2e unable to admit a new bundle."
   },
   {
-    "artifact_id": 14025987287,
-    "digest": "ad3ab9cc0ce8cba24681df676af4cd36a7d4d37dc3c573bb8171683a93f4906e",
+    "artifact_id": 14123972796,
+    "digest": "115d1581ad2cec7d27a912e3ab7959802f646bd348c76598ba887f7145fd6259",
     "identity": "8fed5c6dc9d51ab364d8a09a7d5f66c7d58d9ba10f20f36f5113d2bee337c733",
     "repository": "authorityclosers/authority-closers-platform",
-    "run_id": 43402793658,
-    "source_sha": "02e5a45bd8371c466be3392661d2d0d3e6772f23",
-    "reviewed_source_sha": "6a6cceccd63ab202a4f591d4716e119a3d220410",
-    "review": "Re-pin 13 Nov 2026 (ux-audit for the orchestrator, at a quiet hour; the 13718553136 pin passed its 36-hour window at about 11:13Z on 11 Nov, so no cut could pass wb-ci): producer run 43402793658 (workbench-checks.yml, push, success) on a request whose only parent is workbench 6a6cceccd (dev/live HEAD; its lockfiles, packages, workflows and scripts/ci match main except .github/workflows/sales-xray-native-image.yml, checked by diff), and which changes only .wb-ci/request.json. Same identity 8fed5c6d; artifact digest from the API. The unpinned 13896274754 bundle (run 43113315064, made 22:41Z on 11 Nov, its window ending about 10:41Z on 13 Nov) was deleted first so a fresh bundle could publish."
+    "run_id": 43619970592,
+    "source_sha": "f795da5c8450ddd3188fbaaf24308ab0127b3d64",
+    "reviewed_source_sha": "0f33427e831002813ea2f38eee9088cf28fc1c6f",
+    "review": "Re-pin 14 Nov 2026 (ux-audit for the orchestrator, during the v1.60 hold while the CI queue was quiet; the 14025987287 pin from run 43402793658, made 09:40Z on 13 Nov, would pass its 36-hour window at about 21:40Z on 14 Nov): producer run 43619970592 (workbench-checks.yml, push, success) on a request whose only parent is workbench 0f33427e8 (dev/live HEAD; its lockfiles, packages, workflows and scripts/ci match main except .github/workflows/sales-xray-native-image.yml, checked by diff), and which changes only .wb-ci/request.json. Same identity 8fed5c6d; artifact digest from the API. The pinned 14025987287 bundle was deleted first so a fresh bundle could publish."
   }
 ]
