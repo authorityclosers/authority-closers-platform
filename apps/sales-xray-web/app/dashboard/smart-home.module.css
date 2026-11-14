@@ -4,9 +4,11 @@
    14 tiles and 16 cards. Colour marks a kind; words always say it too. */
 
 /* A tile: the icon top left, the number top right, then the label and its
-   caption; the words wrap rather than end in "…" at 130 % and 200 % text. */
+   caption; the words wrap rather than end in "…" at 130 % and 200 % text.
+   It is its caption's container (below). */
 .counter {
   position: relative;
+  container-type: inline-size;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   grid-template-areas:
@@ -101,12 +103,16 @@
   overflow-wrap: anywhere;
 }
 
-/* The caption a step under the label, as H5: one line at 130 % text. */
+/* The caption a step under the label, as H5: one line at 130 % text. On a
+   narrow phone it gives up a little size to its tile's width rather than
+   break, so "First call pending" stays one line beside an empty right side
+   no more (the owner on a Redmi 13, production 1.57, 13 Nov 2026); a wide
+   enough tile keeps the full step. */
 .note {
   grid-area: note;
   min-width: 0;
   color: var(--sx-muted);
-  font-size: var(--sx-text-xs);
+  font-size: min(var(--sx-text-xs), 11cqi);
   line-height: var(--sx-leading-16);
   overflow-wrap: anywhere;
 }
