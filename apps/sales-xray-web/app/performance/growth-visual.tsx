@@ -16,11 +16,20 @@
  * Only real numbers: a missing value is a dash, a real zero shows 0.
  */
 
-import { useEffect, useId, useState, type CSSProperties } from "react";
+import { ChevronRight } from "lucide-react";
+import Link from "next/link";
+import {
+  useEffect,
+  useId,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 import { breakLength } from "../dashboard/home-today";
 import { displayName } from "../display-name";
 import { readDayCalls, type ActivityPage } from "../leads/leads-client";
+import { tick } from "../ui/haptics";
 import type { Effort, SellerEffort, SideEffort } from "./performance-client";
 import styles from "./growth-visual.module.css";
 
@@ -186,6 +195,62 @@ function Side({ value, words }: { value: string; words: string }) {
   );
 }
 
+/**
+ * Where each tile opens (orchestrator, 13 Nov 2026, the owner's "clickable
+ * must look clickable", as Home's tiles): today's calls, the team's or one
+ * seller's, connected or all; the calls longest first; the leads at
+ * Interested, where meetings are booked. Calls' address takes one day, so a
+ * 7-day or month Growth opens the calls list.
+ */
+export function tileLinks(effort: Effort, person: string | null) {
+  const calls = (outcome?: "connected") => {
+    if (effort.days !== 1) return "/analysis/calls";
+    const params = new URLSearchParams({ day: "today" });
+    if (effort.team) params.set("team", "1");
+    else if (person) params.set("person", person);
+    if (outcome) params.set("outcome", outcome);
+    return `/analysis/calls?${params}`;
+  };
+  return {
+    attempted: calls(),
+    connected: calls("connected"),
+    talk: "/analysis/calls?sort=longest",
+    interested: "/leads?tab=all&stage=interested",
+  };
+}
+
+/** One tile: a link that looks like one, with a light tick on the phone. */
+function Tile({
+  href,
+  label,
+  index,
+  children,
+}: {
+  href: string;
+  label: string;
+  index: number;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={styles.tile}
+      style={step(index)}
+      onClick={() => tick()}
+    >
+      <span className={styles.label}>
+        {label}
+        <ChevronRight
+          size={14}
+          className={styles.tileChevron}
+          aria-hidden="true"
+        />
+      </span>
+      {children}
+    </Link>
+  );
+}
+
 /** G1: four equal tiles, what needs attention, and each seller's calls. */
 export function PulseTiles({
   effort,
@@ -204,6 +269,11 @@ export function PulseTiles({
   const leadsCalled = both(effort, "leads_attempted");
   const reached = both(effort, "reached");
   const meetings = both(effort, "meetings");
+  // A seller's own tiles in their day's sheet (titled) open that seller's calls.
+  const links = tileLinks(
+    effort,
+    !effort.team && title ? (effort.sellers[0]?.person_id ?? null) : null,
+  );
   const needs = attention(effort);
   const sellers = [...effort.sellers].sort(
     (a, b) => sellerCalls(b) - sellerCalls(a),
@@ -226,16 +296,14 @@ export function PulseTiles({
       <div className={styles.tiles}>
         {/* Each tile is two halves (owner, 13 Nov 2026): its name and total
             on the left, one more thing in colour on the right. */}
-        <div className={styles.tile} style={step(0)}>
-          <span className={styles.label}>Attempted</span>
+        <Tile href={links.attempted} label="Attempted" index={0}>
           <strong className={styles.figure}>{n(attempted)}</strong>
           <Side
             value={n(leadsCalled)}
             words={leadsCalled === 1 ? "lead called" : "leads called"}
           />
-        </div>
-        <div className={styles.tile} style={step(1)}>
-          <span className={styles.label}>Connected</span>
+        </Tile>
+        <Tile href={links.connected} label="Connected" index={1}>
           <strong className={styles.figure}>{n(connected)}</strong>
           <span className={styles.side}>
             <Ring
@@ -245,18 +313,16 @@ export function PulseTiles({
             />
             <span className={styles.sideWords}>{n(reached)} reached</span>
           </span>
-        </div>
-        <div className={styles.tile} style={step(2)}>
-          <span className={styles.label}>Talk time</span>
+        </Tile>
+        <Tile href={links.talk} label="Talk time" index={2}>
           <strong className={styles.figure}>{talkTime(talked)}</strong>
           {connected ? (
             <Side value={talkTime(talked / connected)} words="a call" />
           ) : (
             <Side value="0" words="calls" />
           )}
-        </div>
-        <div className={styles.tile} style={step(3)}>
-          <span className={styles.label}>Interested</span>
+        </Tile>
+        <Tile href={links.interested} label="Interested" index={3}>
           <strong className={styles.figure}>
             {n(both(effort, "interested"))}
           </strong>
@@ -264,7 +330,7 @@ export function PulseTiles({
             value={n(meetings)}
             words={meetings === 1 ? "meeting" : "meetings"}
           />
-        </div>
+        </Tile>
       </div>
 
       <div className={styles.card}>

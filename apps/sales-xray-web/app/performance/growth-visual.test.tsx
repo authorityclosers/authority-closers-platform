@@ -1,4 +1,4 @@
-import { act } from "react";
+import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
@@ -13,6 +13,20 @@ import {
 } from "./growth-visual";
 import type { Effort, SellerEffort, SideEffort } from "./performance-client";
 
+vi.mock("next/link", () => ({
+  default: ({
+    href,
+    children,
+    ...rest
+  }: {
+    href: string;
+    children: ReactNode;
+  }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 vi.mock("../leads/leads-client", async (original) => ({
   ...(await original<typeof import("../leads/leads-client")>()),
   readDayCalls: vi.fn(),
@@ -122,7 +136,7 @@ it("draws G1's four tiles from the real totals, with no table", () => {
   expect(host.querySelector("table")).toBeNull();
   const tiles = [
     ...host.querySelectorAll(
-      '[data-growth-view="tiles"] > div:first-of-type > div',
+      '[data-growth-view="tiles"] > div:first-of-type > a',
     ),
   ];
   // One total a tile, no Inbound | Cold split (owner, 10 Nov 2026).
@@ -131,6 +145,15 @@ it("draws G1's four tiles from the real totals, with no table", () => {
     "Connected7834%55 reached",
     "Talk time5 h 17 min4 mina call",
     "Interested151meeting",
+  ]);
+  // Each tile opens its list (orchestrator, 13 Nov 2026: "clickable must
+  // look clickable"): today's team calls, the connected ones, the longest
+  // first, the leads at Interested.
+  expect(tiles.map((tile) => tile.getAttribute("href"))).toEqual([
+    "/analysis/calls?day=today&team=1",
+    "/analysis/calls?day=today&team=1&outcome=connected",
+    "/analysis/calls?sort=longest",
+    "/leads?tab=all&stage=interested",
   ]);
   // Every tile has its right half (owner, 13 Nov 2026: "symmetric").
   expect(tiles.every((tile) => tile.querySelector("[class*=side]"))).toBe(true);
@@ -169,7 +192,7 @@ it("keeps the tiles whole with nothing yet: no dash, no squeezed total", () => {
   act(() => root.render(<PulseTiles effort={none} />));
   const tiles = [
     ...host.querySelectorAll(
-      '[data-growth-view="tiles"] > div:first-of-type > div',
+      '[data-growth-view="tiles"] > div:first-of-type > a',
     ),
   ];
   expect(tiles.map((tile) => tile.textContent)).toEqual([
