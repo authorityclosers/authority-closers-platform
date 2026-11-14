@@ -53,8 +53,33 @@ export type ModelLine = {
   audioMinutes: number;
 };
 
+/**
+ * The prepaid AI credit's runway (owner, 13 Nov 2026): the same numbers and
+ * words as the email the owner gets under 7 days or ₹300 left. Null where this
+ * Admin has no usage store.
+ */
+export type Credit = {
+  provider: string;
+  account: string;
+  topupInr: number;
+  topupOn: string;
+  spentInr: number;
+  balanceInr: number;
+  burnInrPerDay: number;
+  daysLeft: number | null;
+  addInr: number;
+  alert: boolean;
+  reason: string;
+  payUrl: string;
+  payPath: string;
+  alertDays: number;
+  alertBalanceInr: number;
+  note: string;
+};
+
 export type AiSpend = {
   environment: string;
+  credit: Credit | null;
   generatedAt: string | null;
   days: number;
   revision: number | null;
@@ -77,6 +102,30 @@ export type AiSpend = {
 
 const level = (value: unknown): Cap["level"] =>
   value === 50 || value === 80 || value === 100 ? value : null;
+
+function credit(raw: unknown): Credit | null {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw))
+    return null;
+  const item = read.object(raw);
+  return {
+    provider: read.string(item.provider),
+    account: read.string(item.account),
+    topupInr: read.number(item.topup_inr),
+    topupOn: read.string(item.topup_on),
+    spentInr: read.number(item.spent_inr),
+    balanceInr: read.number(item.balance_inr),
+    burnInrPerDay: read.number(item.burn_inr_per_day),
+    daysLeft: read.optionalNumber(item.days_left),
+    addInr: read.number(item.add_inr),
+    alert: read.boolean(item.alert),
+    reason: read.string(item.reason),
+    payUrl: read.string(item.pay_url),
+    payPath: read.string(item.pay_path),
+    alertDays: read.number(item.alert_days, 7),
+    alertBalanceInr: read.number(item.alert_balance_inr, 300),
+    note: read.string(item.note),
+  };
+}
 
 function cap(raw: unknown): Cap {
   const item = read.object(raw);
@@ -147,6 +196,7 @@ export function normalizeAiSpend(raw: unknown): AiSpend {
 
   return {
     environment: read.string(body.environment, "unknown"),
+    credit: credit(body.credit),
     generatedAt: read.optionalString(body.generated_at),
     days: read.number(body.days, 14),
     revision: read.optionalNumber(settings.revision),
