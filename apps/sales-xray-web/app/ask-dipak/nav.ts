@@ -21,7 +21,9 @@ export type AskView =
   | Readonly<{ kind: "category"; id: string }>
   | Readonly<{ kind: "lesson"; id: string }>
   | Readonly<{ kind: "search" }>
-  | Readonly<{ kind: "saved" }>;
+  | Readonly<{ kind: "saved" }>
+  /** The coaching loop's minimal screen (13 Nov 2026 meeting, section 5). */
+  | Readonly<{ kind: "missions" }>;
 
 export const HOME: AskView = { kind: "home" };
 
@@ -43,7 +45,12 @@ export function parseView(
   const topic = id("topic");
   if (topic) return { kind: "topic", id: topic };
   const view = params.get("view");
-  if (view === "topics" || view === "search" || view === "saved")
+  if (
+    view === "topics" ||
+    view === "search" ||
+    view === "saved" ||
+    view === "missions"
+  )
     return { kind: view };
   return HOME;
 }
@@ -55,6 +62,7 @@ export function viewHref(view: AskView): string {
     case "topics":
     case "search":
     case "saved":
+    case "missions":
       return `${ASK_PATH}?view=${view.kind}`;
     case "topic":
     case "category":

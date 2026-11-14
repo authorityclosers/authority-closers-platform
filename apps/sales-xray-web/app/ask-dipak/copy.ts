@@ -55,6 +55,9 @@ export const COPY = {
   savedTool: "Saved questions",
   backToQuestions: "Back to questions",
   notFound: "Lesson not found.",
+  // The coaching loop's way in (13 Nov 2026 meeting); words to redesign.
+  myMissions: "My Next-call missions",
+  myMissionsMeta: "Your active missions and calls to answer",
   notReadyChip: "Lesson not ready yet",
   notReady: "यह lesson अभी तैयार नहीं है। आप दूसरा सवाल खोल सकते हैं।",
 } as const;
