@@ -1,0 +1,17 @@
+{
+  "note": "Internal coaching notes from Dipak's sample (sampleLessons[*].coach). Never shown on the learner's screen (spec section 26).",
+  "notes": {
+    "CF01": "Uncertain result पर guaranteed performance promise किया गया हो तभी यह coaching दिखे। Inner fear को transcript से fact न बनाएं।",
+    "RP01": "Customer ने real problem बताई और seller ने unrelated pitch या personal questions लगा दीं तो ही suggest करें।",
+    "TP03": "Seller ने अपने important question का जवाब खुद दिया या buyer के सोचते समय unrelated next question डाल दिया।",
+    "PG01": "Broad sales problem पर बिना stage clarification hiring/training/ads solution directly recommend हुआ।",
+    "IM01": "Buyer की complaint से बिना proof बड़ा revenue loss या time-saving guarantee infer की गई।",
+    "DM01": "Evaluator को final paid authority मान लिया गया या title से उसकी वास्तविक role dismiss हुई।",
+    "EX02": "Feature बताया लेकिन buyer-specific helpful change नहीं, या direct guaranteed sales claim किया।",
+    "PB03": "Buyer ने expensive कहा और seller ने reason समझे बिना immediate concession या guaranteed ROI दिया।",
+    "NX02": "Seller ने buyer के actual co-founder discussion से पहले random, unagreed follow-up schedule किया।",
+    "NEW-035": "Repeated accepted call evidence से high-impact practice चुनें; transcript or score alone को final verdict नहीं।",
+    "DM02": "Buyer ने partner से discuss करना बताया, लेकिन seller ने immediate payment push की। Next call में shared-decision role clarify करें।",
+    "OB03": "Buyer ने processing time माँगा और seller ने बार-बार immediate yes push किया। One clarification के बाद genuine space दें।"
+  }
+}

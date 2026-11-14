@@ -53,7 +53,7 @@ import {
 
 import { useBranding } from "./branding-store";
 import { AddSheet } from "./add-sheet";
-import { AskDipakSheet } from "./ask-deepak";
+import { AskBarTools } from "../ask-dipak/ask-bar-tools";
 import { searchTogether, warmLeadsSearch } from "./search-together";
 import { useAppRouter } from "./app-router";
 import { tabAgain } from "./tab-again";
@@ -425,8 +425,6 @@ function LightboxShellFrame({
     window.addEventListener(OPEN_ADD_EVENT, open);
     return () => window.removeEventListener(OPEN_ADD_EVENT, open);
   }, []);
-  // Ask Dipak (28 Oct 2026 meeting): the tab bar's middle slot.
-  const [askOpen, setAskOpen] = useState(false);
   const [leadForm, setLeadForm] = useState({ open: false, round: 0 });
   // The + sheet's Add task (owner order, 30 Oct 2026, fix 4): a new form each time.
   const [taskForm, setTaskForm] = useState({ open: false, round: 0 });
@@ -1968,7 +1966,11 @@ function LightboxShellFrame({
                 <Plus size={18} strokeWidth={2.5} aria-hidden="true" />
               </button>
             )}
-            {guest ? null : (
+            {/* On Ask Dipak the bar's search is his: Search and Saved
+                lessons (Dipak's spec, 13 Nov 2026, section 2). */}
+            {guest ? null : phoneTab === "ask" ? (
+              <AskBarTools className={styles.barSearch} />
+            ) : (
               <button
                 type="button"
                 className={styles.barSearch}
@@ -2153,21 +2155,18 @@ function LightboxShellFrame({
             <span>New</span>
           </ScreenLink>
         ) : (
-          <button
-            type="button"
+          // His library is the tab's own page (Dipak's spec, 13 Nov 2026);
+          // asking about one lead stays on the lead page.
+          <ScreenLink
             className={`${styles.bottomLink} ${styles.bottomAsk}`}
-            onClick={() => {
-              tick();
-              setAskOpen(true);
-            }}
-            aria-label="Ask Dipak"
-            aria-haspopup="dialog"
-            aria-expanded={askOpen}
+            href="/ask-dipak"
+            onClick={tapTab("ask")}
+            aria-current={litTab === "ask" ? "page" : undefined}
           >
             <span className={styles.askFace} aria-hidden="true" />
             <span className={styles.tabPill} aria-hidden="true" />
             <span>Ask Dipak</span>
-          </button>
+          </ScreenLink>
         )}
         {/* Reports opens on All Calls; a call's report and the Reports
             summaries light it (Dipak's handoff, 31 Oct 2026). */}
@@ -2310,9 +2309,6 @@ function LightboxShellFrame({
       )}
       {guest || !(quiet || reportWaiting) ? null : <BugReportHost />}
       {guest || !quiet ? null : <FeedbackHost />}
-      {guest ? null : (
-        <AskDipakSheet open={askOpen} onClose={() => setAskOpen(false)} />
-      )}
       {guest ? null : (
         <AddSheet
           open={addOpen}

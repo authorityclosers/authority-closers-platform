@@ -111,14 +111,15 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
   );
   expect(desktopNewAnalysis?.getAttribute("href")).toBe("/sales-xray?new=1");
   // Phones (28 Oct 2026 meeting): the + is in the top bar and asks what to
-  // add; the tab bar's middle slot is Ask Dipak.
+  // add; the tab bar's middle slot is Ask Dipak, his library's own page
+  // (Dipak's spec, 13 Nov 2026).
   const mobileAdd = host.querySelector(
     'header button[aria-label="Add a lead, a call or a task"]',
   );
   expect(mobileAdd?.getAttribute("aria-haspopup")).toBe("dialog");
-  const ask = mobileNav?.querySelector('button[aria-label="Ask Dipak"]');
+  const ask = mobileNav?.querySelector('a[href="/ask-dipak"]');
   expect(ask?.textContent?.trim()).toBe("Ask Dipak");
-  expect(ask?.getAttribute("aria-haspopup")).toBe("dialog");
+  expect(ask?.getAttribute("aria-haspopup")).toBeNull();
   expect(
     desktopNav?.querySelector(
       `a[aria-label="${CALLS_PAGE_NAME}"][href="/analysis/calls"][data-next-client-link="true"]`,
@@ -268,13 +269,14 @@ it("keeps the phone tab bar to its five tabs, plus a dev settings control", () =
     // Chats is an icon in the Leads header, not a tab.
     expect(nav.querySelector('a[href="/chats"]')).toBeNull();
     expect(nav.querySelector('a[href="/growth"]')).not.toBeNull();
-    // Ask Dipak is the only tab that is a button: it opens his sheet (the
-    // dev settings control is the other button, and only with live data).
+    // Every tab is a link, Ask Dipak to his library (Dipak's spec, 13 Nov
+    // 2026); the dev settings control is the only button, with live data.
+    expect(nav.querySelector('a[href="/ask-dipak"]')).not.toBeNull();
     expect(
       Array.from(nav.querySelectorAll("button"), (button) =>
         button.textContent?.trim(),
       ),
-    ).toEqual(liveData ? ["Ask Dipak", "Settings"] : ["Ask Dipak"]);
+    ).toEqual(liveData ? ["Settings"] : []);
     expect(
       nav.querySelector('[aria-current="page"]')?.getAttribute("href"),
     ).toBe("/dashboard");

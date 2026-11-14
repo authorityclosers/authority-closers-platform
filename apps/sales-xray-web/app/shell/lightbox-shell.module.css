@@ -2601,7 +2601,7 @@
     no-repeat;
   box-shadow: 0 0 0 2px var(--sx-accent);
 }
-.bottomAsk[aria-expanded="true"] .askFace {
+.bottomAsk[aria-current="page"] .askFace {
   box-shadow:
     0 0 0 2px var(--sx-accent),
     0 0 0 5px var(--sx-accent-soft);
@@ -2732,7 +2732,7 @@
   }
 
   .askFace,
-  .bottomAsk[aria-expanded="true"] .askFace {
+  .bottomAsk[aria-current="page"] .askFace {
     width: 24px;
     height: 24px;
     border-radius: 0;
