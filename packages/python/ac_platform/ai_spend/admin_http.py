@@ -18,10 +18,11 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Literal
 
+from anyio.to_thread import run_sync
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from ac_platform.ai_spend import ledger, policy, store
+from ac_platform.ai_spend import credit_runway, ledger, policy, store
 from ac_platform.audit.service import AuditRepository
 from ac_platform.call_data import engine as call_data
 from ac_platform.conversation_intelligence.application import (
@@ -270,9 +271,12 @@ def install_ai_spend_admin_http(application: FastAPI, ctx: RouteContext) -> None
             now=now,
             elsewhere=await elsewhere(auth, now),
         )
+        # The prepaid credit's runway (owner, 13 Nov 2026), from the metrics store.
+        credit = await run_sync(credit_runway.read, settings.metrics_store_root, now)
         return {
             "environment": environment,
             "generated_at": now.isoformat(),
+            "credit": None if credit is None else credit.view(now),
             "settings": {
                 "revision": revision,
                 "config": config,
@@ -392,3 +396,4 @@ def install_ai_spend_admin_http(application: FastAPI, ctx: RouteContext) -> None
         )
 
     application.include_router(router)
+    credit_runway.attach(application, ctx.sessions, environment, settings.metrics_store_root)

@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { CALLS_PAGE_NAME } from "../../calls-page-name";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -248,7 +249,7 @@ it("shows a teammate's profile to an owner: who, figures, weekly charts, reports
   // The existing Calls view filters its loaded rows to this person.
   expect(
     host.querySelector(`a[href="/analysis/calls?rep=${ashaId}"]`)?.textContent,
-  ).toContain("Open in Calls");
+  ).toContain(`Open in ${CALLS_PAGE_NAME}`);
   // The existing shared reader decides whether their focus can be shown.
   expect(host.textContent).toContain("This coaching is not shared with you.");
   expect(

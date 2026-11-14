@@ -16,11 +16,20 @@
  * Only real numbers: a missing value is a dash, a real zero shows 0.
  */
 
-import { useEffect, useId, useState, type CSSProperties } from "react";
+import { ChevronRight } from "lucide-react";
+import Link from "next/link";
+import {
+  useEffect,
+  useId,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 import { breakLength } from "../dashboard/home-today";
 import { displayName } from "../display-name";
 import { readDayCalls, type ActivityPage } from "../leads/leads-client";
+import { tick } from "../ui/haptics";
 import type { Effort, SellerEffort, SideEffort } from "./performance-client";
 import styles from "./growth-visual.module.css";
 
@@ -47,9 +56,6 @@ export const talkTime = (seconds: number) =>
   breakLength(Math.round(seconds / 60));
 const number = new Intl.NumberFormat("en-IN");
 const n = (value: number) => number.format(value);
-/** "1 lead called", "12 leads called". */
-const count = (value: number, one: string, many: string) =>
-  `${n(value)} ${value === 1 ? one : many}`;
 /** "34%", or a dash when there is nothing to divide. */
 const share = (part: number, whole: number) =>
   whole > 0 ? `${Math.round((part / whole) * 100)}%` : "–";
@@ -92,7 +98,8 @@ function Ring({
         ) : null}
       </svg>
       <span className={styles.ringWords} aria-hidden="true">
-        {share(part, whole)}
+        {/* No calls yet reads 0%, never a lone dash (owner, 13 Nov 2026). */}
+        {whole > 0 ? share(part, whole) : "0%"}
       </span>
     </span>
   );
@@ -107,9 +114,15 @@ export function SpeedTile({ effort }: { effort: Effort }) {
         <span className={styles.label}>Speed to new lead</span>
         <span className={styles.meta}>Inbound, median to the first call</span>
       </span>
-      <strong className={styles.speedFigure}>
-        {minutes === null ? "–" : breakLength(Math.round(minutes))}
-      </strong>
+      {minutes === null ? (
+        // No new Inbound lead called yet: words, never a lone dash (owner,
+        // 13 Nov 2026, Growth on the Redmi: "a stray small dash").
+        <span className={styles.speedNone}>Not yet</span>
+      ) : (
+        <strong className={styles.speedFigure}>
+          {breakLength(Math.round(minutes))}
+        </strong>
+      )}
     </section>
   );
 }
@@ -168,6 +181,76 @@ export function sellerEffort(seller: SellerEffort): Effort {
   };
 }
 
+/**
+ * A tile's right half, so no tile has an empty side (owner, 13 Nov 2026,
+ * Growth on the Redmi: "every tile must be symmetric"): one more number in
+ * colour, with its words under it.
+ */
+function Side({ value, words }: { value: string; words: string }) {
+  return (
+    <span className={styles.side}>
+      <b className={styles.sideFigure}>{value}</b>
+      <span className={styles.sideWords}>{words}</span>
+    </span>
+  );
+}
+
+/**
+ * Where each tile opens (orchestrator, 13 Nov 2026, the owner's "clickable
+ * must look clickable", as Home's tiles): today's calls, the team's or one
+ * seller's, connected or all; the calls longest first; the leads at
+ * Interested, where meetings are booked. Calls' address takes one day, so a
+ * 7-day or month Growth opens the calls list.
+ */
+export function tileLinks(effort: Effort, person: string | null) {
+  const calls = (outcome?: "connected") => {
+    if (effort.days !== 1) return "/analysis/calls";
+    const params = new URLSearchParams({ day: "today" });
+    if (effort.team) params.set("team", "1");
+    else if (person) params.set("person", person);
+    if (outcome) params.set("outcome", outcome);
+    return `/analysis/calls?${params}`;
+  };
+  return {
+    attempted: calls(),
+    connected: calls("connected"),
+    talk: "/analysis/calls?sort=longest",
+    interested: "/leads?tab=all&stage=interested",
+  };
+}
+
+/** One tile: a link that looks like one, with a light tick on the phone. */
+function Tile({
+  href,
+  label,
+  index,
+  children,
+}: {
+  href: string;
+  label: string;
+  index: number;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={styles.tile}
+      style={step(index)}
+      onClick={() => tick()}
+    >
+      <span className={styles.label}>
+        {label}
+        <ChevronRight
+          size={14}
+          className={styles.tileChevron}
+          aria-hidden="true"
+        />
+      </span>
+      {children}
+    </Link>
+  );
+}
+
 /** G1: four equal tiles, what needs attention, and each seller's calls. */
 export function PulseTiles({
   effort,
@@ -183,6 +266,14 @@ export function PulseTiles({
   const attempted = both(effort, "attempted");
   const connected = both(effort, "connected");
   const talked = both(effort, "talk_seconds");
+  const leadsCalled = both(effort, "leads_attempted");
+  const reached = both(effort, "reached");
+  const meetings = both(effort, "meetings");
+  // A seller's own tiles in their day's sheet (titled) open that seller's calls.
+  const links = tileLinks(
+    effort,
+    !effort.team && title ? (effort.sellers[0]?.person_id ?? null) : null,
+  );
   const needs = attention(effort);
   const sellers = [...effort.sellers].sort(
     (a, b) => sellerCalls(b) - sellerCalls(a),
@@ -203,53 +294,43 @@ export function PulseTiles({
           don't have to focus on inbound and cold leads"), each with one
           line of what is behind it. */}
       <div className={styles.tiles}>
-        <div className={styles.tile} style={step(0)}>
-          <span className={styles.label}>Attempted</span>
+        {/* Each tile is two halves (owner, 13 Nov 2026): its name and total
+            on the left, one more thing in colour on the right. */}
+        <Tile href={links.attempted} label="Attempted" index={0}>
           <strong className={styles.figure}>{n(attempted)}</strong>
-          <span className={styles.meta}>
-            {count(
-              both(effort, "leads_attempted"),
-              "lead called",
-              "leads called",
-            )}
-          </span>
-        </div>
-        <div className={styles.tile} style={step(1)}>
-          <span className={styles.label}>Connected</span>
-          <span className={styles.figureRow}>
-            <strong className={styles.figure}>{n(connected)}</strong>
+          <Side
+            value={n(leadsCalled)}
+            words={leadsCalled === 1 ? "lead called" : "leads called"}
+          />
+        </Tile>
+        <Tile href={links.connected} label="Connected" index={1}>
+          <strong className={styles.figure}>{n(connected)}</strong>
+          <span className={styles.side}>
             <Ring
               part={connected}
               whole={attempted}
               label="Connected of attempted"
             />
+            <span className={styles.sideWords}>{n(reached)} reached</span>
           </span>
-          <span className={styles.meta}>
-            {count(both(effort, "reached"), "lead reached", "leads reached")}
-          </span>
-        </div>
-        <div className={styles.tile} style={step(2)}>
-          <span className={styles.label}>Talk time</span>
+        </Tile>
+        <Tile href={links.talk} label="Talk time" index={2}>
           <strong className={styles.figure}>{talkTime(talked)}</strong>
-          <span className={styles.meta}>
-            {connected
-              ? `About ${talkTime(talked / connected)} per connected call`
-              : "No connected calls"}
-          </span>
-        </div>
-        <div className={styles.tile} style={step(3)}>
-          <span className={styles.label}>Interested</span>
+          {connected ? (
+            <Side value={talkTime(talked / connected)} words="a call" />
+          ) : (
+            <Side value="0" words="calls" />
+          )}
+        </Tile>
+        <Tile href={links.interested} label="Interested" index={3}>
           <strong className={styles.figure}>
             {n(both(effort, "interested"))}
           </strong>
-          <span className={styles.meta}>
-            {count(
-              both(effort, "meetings"),
-              "meeting booked",
-              "meetings booked",
-            )}
-          </span>
-        </div>
+          <Side
+            value={n(meetings)}
+            words={meetings === 1 ? "meeting" : "meetings"}
+          />
+        </Tile>
       </div>
 
       <div className={styles.card}>
@@ -347,10 +428,19 @@ const HOUR = (timezone: string) =>
     hourCycle: "h23",
     timeZone: timezone,
   });
+// "9 AM", "12 PM", "3 PM" (owner, 13 Nov 2026, Growth on the Redmi: the bars
+// read "9A 12P 3A 6P").
 const hourWords = (hour: number) =>
-  `${hour % 12 || 12} ${hour < 12 ? "am" : "pm"}`;
+  `${hour % 12 || 12} ${hour < 12 ? "AM" : "PM"}`;
+/** The fewest hours the chart shows, so a short day still fills it. */
+const MIN_HOURS = 6;
 
-/** Today's calls by hour, from first light to evening (9 am to 7 pm at least). */
+/**
+ * Today's calls by hour, India time. The chart covers the hours with calls,
+ * at least six of them and centred on the calls, so it is never half empty
+ * (owner, 13 Nov 2026: calls at 4 and 5 PM sat at the right of 9 AM to 7 PM);
+ * before any call, 9 AM to 7 PM.
+ */
 export function hourSlots(
   items: ActivityPage["items"],
   timezone = "Asia/Kolkata",
@@ -363,14 +453,22 @@ export function hourSlots(
     counts.set(hour, (counts.get(hour) ?? 0) + 1);
   }
   const hours = [...counts.keys()];
-  const first = Math.min(9, ...hours);
-  const last = Math.max(19, ...hours);
+  let first = 9;
+  let last = 19;
+  if (hours.length) {
+    const low = Math.min(...hours);
+    const high = Math.max(...hours);
+    const pad = Math.max(0, MIN_HOURS - (high - low + 1));
+    first = Math.max(0, low - Math.floor(pad / 2));
+    last = Math.min(23, Math.max(high, first + MIN_HOURS - 1));
+    first = Math.max(0, Math.min(first, last - MIN_HOURS + 1));
+  }
   const slots: Slot[] = [];
   for (let hour = first; hour <= last; hour++)
     slots.push({
       key: String(hour),
       label: hourWords(hour),
-      short: `${hour % 12 || 12}${hour < 12 ? "a" : "p"}`,
+      short: hourWords(hour),
       calls: counts.get(hour) ?? 0,
     });
   return slots;
@@ -418,7 +516,7 @@ export function daySlots(
 /** Today's calls are read page by page; this many pages at most. */
 const PAGES = 12;
 
-type Rhythm =
+export type Rhythm =
   | { status: "loading" }
   | { status: "error" }
   | { status: "ready"; slots: Slot[]; byHour: boolean; partial: boolean };
@@ -517,7 +615,7 @@ export function busiest(slots: Slot[]): Slot | null {
   return top;
 }
 
-function RhythmBars({ rhythm }: { rhythm: Rhythm }) {
+export function RhythmBars({ rhythm }: { rhythm: Rhythm }) {
   if (rhythm.status !== "ready")
     return (
       <div className={styles.bars} data-empty="">
@@ -530,7 +628,17 @@ function RhythmBars({ rhythm }: { rhythm: Rhythm }) {
     );
   const { slots } = rhythm;
   const most = Math.max(1, ...slots.map((slot) => slot.calls));
-  const every = slots.length > 14 ? 7 : 3;
+  // Every hour's name where they fit, else every second or third: "9 AM,
+  // 12 PM, 3 PM, 6 PM" across a whole day. Days: every third, or weekly.
+  const every = rhythm.byHour
+    ? slots.length <= 7
+      ? 1
+      : slots.length <= 10
+        ? 2
+        : 3
+    : slots.length > 14
+      ? 7
+      : 3;
   // Each bar's number on it, so the chart reads without a tap (Redmi QA on
   // the owner's production build, 13 Nov 2026: bars had no counts). Up to 14
   // bars, every bar with calls; the hours and the month, the busiest only.

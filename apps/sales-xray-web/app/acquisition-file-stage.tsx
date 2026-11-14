@@ -34,6 +34,9 @@ export type AcquisitionFileStageProps = Readonly<{
    *  button, which is off (Redmi QA on the owner's production build, 13 Nov
    *  2026: Choose a file stayed on for a call that couldn't be analysed). */
   blocked?: string | null;
+  /** How much analysis is left, said over Choose a file (orchestrator, 13
+   *  Nov 2026): "2 h 41 min of analysis left", "3 hours to try". */
+  timeLeft?: string | null;
 }>;
 
 function fileSize(bytes: number): string {
@@ -52,6 +55,7 @@ export function AcquisitionFileStage({
   maxMinutes,
   disabled,
   blocked = null,
+  timeLeft = null,
 }: AcquisitionFileStageProps) {
   const input = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -147,6 +151,9 @@ export function AcquisitionFileStage({
               {limits.join(" · ")}
             </span>
           )}
+          {timeLeft && !blocked && !hasFiles ? (
+            <span className={styles.timeLeft}>{timeLeft}</span>
+          ) : null}
           <button
             className={styles.browse}
             type="button"

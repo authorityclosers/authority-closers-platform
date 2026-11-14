@@ -5,6 +5,8 @@ import { adminRead } from "@/app/lib/server-api";
 import { TesterActions } from "@/app/testers/tester-actions";
 import {
   EXPORT_PATH,
+  HOURS_LABEL,
+  HOURS_TONE,
   STAGE_LABEL,
   STAGE_TONE,
   aboutLine,
@@ -50,6 +52,11 @@ function Stage({ tester }: { tester: Tester }) {
         <Badge tone="bad">Email failed</Badge>
       ) : null}
       {tester.emailStatus === "queued" ? <Badge>Email sending</Badge> : null}
+      {tester.hours ? (
+        <Badge tone={HOURS_TONE[tester.hours]}>
+          {HOURS_LABEL[tester.hours]}
+        </Badge>
+      ) : null}
       {tester.bugs ? (
         <Badge tone="accent">
           {tester.bugs === 1 ? "1 bug report" : `${tester.bugs} bug reports`}
@@ -122,7 +129,6 @@ export default async function TestersPage({
     : [];
   const shown = data ? inView(data.items, view) : [];
   const total = data?.items.length ?? 0;
-  const enough = data ? data.active >= data.playNeeds : false;
   return (
     <Page wide>
       <PageHeader
@@ -130,7 +136,7 @@ export default async function TestersPage({
         context={[
           "Sales X-Ray Play testers",
           data
-            ? `${data.active} active of the ${data.playNeeds} Play needs`
+            ? `${data.active} active in the last ${data.activeDays} days`
             : null,
         ]}
         actions={
@@ -141,7 +147,7 @@ export default async function TestersPage({
                 Export CSV
               </a>
             ) : null}
-            <Why detail="People join at app.salesxray.in/testers with the Google account their Play Store uses. Approve them here, add that account to the salesxray-testers Google Group, then send the welcome email: Play's opt-in link works only for group members. Installed is their first Sales X-Ray app session; active is an app session in the last 7 days. Play needs 12 testers opted in for 14 days in a row. Every step adds to the tester's history; nothing is overwritten." />
+            <Why detail="People join at app.salesxray.in/testers with the Google account their Play Store uses. Approve them here, add that account to the salesxray-testers Google Group, then send the welcome email: Play's opt-in link works only for group members. Installed is their first Sales X-Ray app session; active is an app session in the last 7 days. Play's own requirement is different: 12 testers opted in for 14 days in a row, which only Play Console counts, so activity here never says it is met. Every step adds to the tester's history; nothing is overwritten." />
           </span>
         }
       />
@@ -157,12 +163,14 @@ export default async function TestersPage({
               href="/testers?stage=applied"
             />
             <Kpi
+              label="Approved, to add to the group"
+              value={data.counts.approved}
+              tone={data.counts.approved ? "warn" : undefined}
+              href="/testers?stage=approved"
+            />
+            <Kpi
               label="In the group, not installed"
-              value={
-                data.counts.approved +
-                data.counts.in_group +
-                data.counts.emailed
-              }
+              value={data.counts.in_group + data.counts.emailed}
               href="/testers?stage=emailed"
             />
             <Kpi
@@ -173,8 +181,7 @@ export default async function TestersPage({
             <Kpi
               label={`Active, last ${data.activeDays} days`}
               value={data.active}
-              note={`Play needs ${data.playNeeds}`}
-              tone={enough ? "good" : "warn"}
+              note={`Play counts ${data.playNeeds} opted in for 14 days in a row, in Play Console`}
               href="/testers?stage=active"
             />
             <Kpi

@@ -2,7 +2,8 @@
 PostgreSQL (Redmi QA, 13 Nov 2026: on a phone without call history, a back-out from the
 dialler counted as Attempted, stayed on Calls as "outcome unknown" and kept its Finish line).
 Marked not placed, it leaves the numbers, the Finish line, Calls and the lead's call count, and
-marking it again changes nothing; nothing is deleted. Made-up people only."""
+marking it again changes nothing; nothing is deleted. Its Undo reverses the marking (the newest
+marker wins), so it counts and waits again. Made-up people only."""
 
 from __future__ import annotations
 
@@ -75,6 +76,28 @@ def test_a_dial_never_placed_is_no_call(postgres_harness: Any, tmp_path: Path) -
             # Nor on the lead's own history, for its seller.
             history = (await here.client.get(f"{BASE}/leads/{lead}")).json()["events"]
             assert not [event for event in history if event["kind"] == "call"]
+
+            # Its Undo (13 Nov 2026): the marking reversed, it is the dial it was again.
+            undo = {"command_id": str(uuid4()), "private": False, "reason": "not_placed"}
+            undone = await here.client.post(
+                f"{BASE}/calls/{waiting['event_id']}/private", json=undo, headers=WRITE
+            )
+            assert undone.status_code == 200, undone.text
+            assert undone.json()["lead"]["calls"] == 1
+            desk = (await here.client.get(BASE)).json()
+            assert desk["numbers"]["calls"] == 1
+            assert [row for row in desk["unanswered"] if row["lead_id"] == lead]
+            history = (await here.client.get(f"{BASE}/leads/{lead}")).json()["events"]
+            assert [event for event in history if event["kind"] == "call"]
+            # Put away again, it leaves again.
+            remarked = await here.client.post(
+                f"{BASE}/calls/{waiting['event_id']}/private",
+                json={**mark, "command_id": str(uuid4())},
+                headers=WRITE,
+            )
+            assert remarked.status_code == 200, remarked.text
+            assert remarked.json()["lead"]["calls"] == 0
+            assert (await here.client.get(BASE)).json()["numbers"]["calls"] == 0
 
             # A dial the phone's call history timed was placed: it can't be marked.
             timed = await here.add("Fictional Real Call", "98760 69202")

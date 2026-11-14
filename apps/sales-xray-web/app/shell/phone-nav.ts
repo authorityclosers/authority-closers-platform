@@ -8,7 +8,13 @@ import { CALLS_PATH, NEW_ANALYSIS_PATH } from "../analysis-routes";
  * Calls), Coaching under Growth, the organisation's pages under Home.
  * Settings lights none.
  */
-export type PhoneTab = "dashboard" | "leads" | "reports" | "growth" | "new";
+export type PhoneTab =
+  | "dashboard"
+  | "leads"
+  | "ask"
+  | "reports"
+  | "growth"
+  | "new";
 
 export type ShellActive =
   | "dashboard"
@@ -52,6 +58,8 @@ export function phoneTabFor(
   if (pathname) {
     if (under(pathname, "/dashboard")) return "dashboard";
     if (under(pathname, "/leads")) return "leads";
+    // Dipak's library (his spec, 13 Nov 2026): the middle tab's own page.
+    if (under(pathname, "/ask-dipak")) return "ask";
     if (under(pathname, "/chats")) return "leads";
     if (under(pathname, CALLS_PATH) || under(pathname, "/calls"))
       return "reports";

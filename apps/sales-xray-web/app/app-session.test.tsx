@@ -391,3 +391,11 @@ it("counts the alert list and the day's summary as app pages", () => {
   expect(isShellRoute("/leads/alerts")).toBe(true);
   expect(isShellRoute("/leads/summary/")).toBe(true);
 });
+
+// Ask Dipak (Dipak's spec, 13 Nov 2026): the middle tab's page reads your saved
+// lessons and missions, so it is an app page; its screens are in the query.
+it("counts Ask Dipak as an app page", () => {
+  expect(isShellRoute("/ask-dipak")).toBe(true);
+  expect(isShellRoute("/ask-dipak/")).toBe(true);
+  expect(isShellRoute("/ask-dipaks")).toBe(false);
+});

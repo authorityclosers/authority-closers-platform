@@ -100,7 +100,8 @@ def database(monkeypatch: pytest.MonkeyPatch) -> Any:
     PersonPulseProfile.__table__.create(engine)
     # The profile-only fixture has no conversation schema. The account-deletion
     # hook still executes its label, speaker-history and Coaching-note purges in
-    # this transaction, and so does the saved-report purge (Reports V4).
+    # this transaction, and so do the saved-report purge (Reports V4) and Ask
+    # Dipak's saved lessons and missions.
     label_revisions = Table(
         "conversation_submission_label_revisions",
         MetaData(),
@@ -119,6 +120,12 @@ def database(monkeypatch: pytest.MonkeyPatch) -> Any:
         Column("person_id", Uuid, nullable=False),
     )
     report_saves.create(engine)
+    ask_dipak = Table(
+        "sales_xray_ask_dipak_events",
+        MetaData(),
+        Column("person_id", Uuid, nullable=False),
+    )
+    ask_dipak.create(engine)
     coaching_context = Table(
         "coaching_learner_context",
         MetaData(),
@@ -155,6 +162,7 @@ def database(monkeypatch: pytest.MonkeyPatch) -> Any:
         coaching_context.drop(engine)
         speaker_map_revisions.drop(engine)
         report_saves.drop(engine)
+        ask_dipak.drop(engine)
         label_revisions.drop(engine)
         PersonProfileDetails.__table__.drop(engine)
         PersonPhoto.__table__.drop(engine)

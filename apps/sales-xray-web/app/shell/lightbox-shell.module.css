@@ -2601,7 +2601,7 @@
     no-repeat;
   box-shadow: 0 0 0 2px var(--sx-accent);
 }
-.bottomAsk[aria-expanded="true"] .askFace {
+.bottomAsk[aria-current="page"] .askFace {
   box-shadow:
     0 0 0 2px var(--sx-accent),
     0 0 0 5px var(--sx-accent-soft);
@@ -2732,7 +2732,7 @@
   }
 
   .askFace,
-  .bottomAsk[aria-expanded="true"] .askFace {
+  .bottomAsk[aria-current="page"] .askFace {
     width: 24px;
     height: 24px;
     border-radius: 0;
@@ -2763,5 +2763,30 @@
 
   .shell[data-scrolled] .mobileWorkspace b {
     font-size: min(var(--sx-text-md), var(--sx-bar-fit));
+  }
+}
+
+/* Phones: the workspace's name over the page's is never cut short (owner,
+   13 Nov 2026, Growth on the Redmi: "Authority Closers…"). Its length
+   (--sx-ws-chars, from the shell) sizes it down to its line, past its tile
+   and the switch's chevron, at about 0.74 em a letter in these spaced
+   capitals; short names keep their size, and a long one wraps to a second
+   line at 11 px rather than getting smaller. */
+@media (max-width: 899.98px) {
+  .mobileWorkspace small,
+  .mobileContext {
+    --sx-ws-fit: calc((100cqi - 40px) / (var(--sx-ws-chars, 1) * 0.74));
+    overflow: visible;
+    font-size: max(11px, min(var(--sx-text-2xs), var(--sx-ws-fit)));
+    line-height: var(--sx-leading-16);
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .mobileContext .contextName {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
   }
 }

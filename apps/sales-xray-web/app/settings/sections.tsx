@@ -29,6 +29,7 @@ import { PulsePanel } from "../organisation/pulse/pulse-panel";
 import { BILLING_WITH_OWNER, useApkLinksAllowed } from "../purchase-policy";
 import { Panel } from "../ui/kit";
 import { AiAppsSection } from "./ai-apps";
+import { AnalysisTimeSection } from "./analysis-time";
 import { ConnectedApps } from "./connected-apps";
 import { DevelopersSection } from "./developers";
 import { NotificationPrefs } from "./notification-prefs";
@@ -191,6 +192,8 @@ export function SettingsSectionView({
       return <AiAppsSection />;
     case "plan":
       return <PlanSection billing={billing} />;
+    case "analysis-time":
+      return <AnalysisTimeSection />;
     case "privacy":
       return <PrivacySettings />;
     case "help":

@@ -53,7 +53,7 @@ import {
 
 import { useBranding } from "./branding-store";
 import { AddSheet } from "./add-sheet";
-import { AskDipakSheet } from "./ask-deepak";
+import { AskBarTools } from "../ask-dipak/ask-bar-tools";
 import { searchTogether, warmLeadsSearch } from "./search-together";
 import { useAppRouter } from "./app-router";
 import { tabAgain } from "./tab-again";
@@ -425,8 +425,6 @@ function LightboxShellFrame({
     window.addEventListener(OPEN_ADD_EVENT, open);
     return () => window.removeEventListener(OPEN_ADD_EVENT, open);
   }, []);
-  // Ask Dipak (28 Oct 2026 meeting): the tab bar's middle slot.
-  const [askOpen, setAskOpen] = useState(false);
   const [leadForm, setLeadForm] = useState({ open: false, round: 0 });
   // The + sheet's Add task (owner order, 30 Oct 2026, fix 4): a new form each time.
   const [taskForm, setTaskForm] = useState({ open: false, round: 0 });
@@ -1157,10 +1155,15 @@ function LightboxShellFrame({
       place("Home", "/dashboard", <LayoutGrid size={17} />, "dashboard sales"),
       place("Leads", "/leads", <Contact size={17} />, "pipeline stages"),
       place("Chats", "/chats", <MessagesSquare size={17} />, "whatsapp inbox"),
-      place("Calls", "/analysis/calls", <AudioLines size={17} />, "reports"),
+      place(
+        CALLS_PAGE_NAME,
+        "/analysis/calls",
+        <AudioLines size={17} />,
+        "calls recordings",
+      ),
       place("Coaching", "/coaching", <GraduationCap size={17} />),
       place(
-        "Reports",
+        "Results",
         "/reports",
         <LineChart size={17} />,
         "call reports pipeline numbers lost first response",
@@ -1379,6 +1382,11 @@ function LightboxShellFrame({
   // it to the room (Redmi QA, 10 Nov 2026: "New analysis" took two lines).
   const barFit = {
     "--sx-bar-chars": Math.max(1, (barTitle ?? workspaceLabel ?? "").length),
+  } as CSSProperties;
+  // The workspace's name over it is never cut either: its length sizes it to
+  // its line (owner, 13 Nov 2026, Growth on the Redmi: "Authority Closers…").
+  const nameFit = {
+    "--sx-ws-chars": Math.max(1, (workspaceLabel ?? "").length),
   } as CSSProperties;
   // The organisation's own tile beside its name in the top bars (owner bug
   // #50): its logo, else its initials on its colour, the tapped one at once.
@@ -1889,7 +1897,7 @@ function LightboxShellFrame({
                 >
                   <span className={styles.contextRow}>
                     {workspaceMark}
-                    <small className={styles.mobileContext}>
+                    <small className={styles.mobileContext} style={nameFit}>
                       <span className={styles.contextName}>
                         {workspaceLabel}
                       </span>
@@ -1912,7 +1920,7 @@ function LightboxShellFrame({
                       placeholder while it loads, so the title never drops. */}
                   <span className={styles.contextRow}>
                     {pageTitle && workspaceLabel ? workspaceMark : null}
-                    <small className={styles.mobileContext}>
+                    <small className={styles.mobileContext} style={nameFit}>
                       {pageTitle
                         ? (workspaceLabel ?? "Sales X-Ray")
                         : "Workspace"}
@@ -1958,7 +1966,11 @@ function LightboxShellFrame({
                 <Plus size={18} strokeWidth={2.5} aria-hidden="true" />
               </button>
             )}
-            {guest ? null : (
+            {/* On Ask Dipak the bar's search is his: Search and Saved
+                lessons (Dipak's spec, 13 Nov 2026, section 2). */}
+            {guest ? null : phoneTab === "ask" ? (
+              <AskBarTools className={styles.barSearch} />
+            ) : (
               <button
                 type="button"
                 className={styles.barSearch}
@@ -2143,21 +2155,18 @@ function LightboxShellFrame({
             <span>New</span>
           </ScreenLink>
         ) : (
-          <button
-            type="button"
+          // His library is the tab's own page (Dipak's spec, 13 Nov 2026);
+          // asking about one lead stays on the lead page.
+          <ScreenLink
             className={`${styles.bottomLink} ${styles.bottomAsk}`}
-            onClick={() => {
-              tick();
-              setAskOpen(true);
-            }}
-            aria-label="Ask Dipak"
-            aria-haspopup="dialog"
-            aria-expanded={askOpen}
+            href="/ask-dipak"
+            onClick={tapTab("ask")}
+            aria-current={litTab === "ask" ? "page" : undefined}
           >
             <span className={styles.askFace} aria-hidden="true" />
             <span className={styles.tabPill} aria-hidden="true" />
             <span>Ask Dipak</span>
-          </button>
+          </ScreenLink>
         )}
         {/* Reports opens on All Calls; a call's report and the Reports
             summaries light it (Dipak's handoff, 31 Oct 2026). */}
@@ -2300,9 +2309,6 @@ function LightboxShellFrame({
       )}
       {guest || !(quiet || reportWaiting) ? null : <BugReportHost />}
       {guest || !quiet ? null : <FeedbackHost />}
-      {guest ? null : (
-        <AskDipakSheet open={askOpen} onClose={() => setAskOpen(false)} />
-      )}
       {guest ? null : (
         <AddSheet
           open={addOpen}

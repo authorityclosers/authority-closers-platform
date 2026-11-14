@@ -62,6 +62,7 @@ def test_the_welcome_reads_like_the_owners_email() -> None:
         assert OPT_IN in page and PLAY in page
         assert "asha.tester@example.test" in page
         assert "Item not found" in page
+        assert "3 hours of call analysis" in page
     assert "Your access is ready, Asha" in rendered.html
     assert "1. Join the test" in rendered.html and "3. Sign in" in rendered.html
     assert "https://app.salesxray.in/icons/icon-192.png" in rendered.html

@@ -7,6 +7,7 @@ import {
   rupees,
   windowLabel,
   type AiSpend,
+  type Credit,
 } from "@/app/ai-spend/spend-data";
 import styles from "@/app/ai-spend/spend.module.css";
 import { adminRead } from "@/app/lib/server-api";
@@ -35,6 +36,73 @@ const tone = (level: 50 | 80 | 100 | null) =>
       : level === 50
         ? "info"
         : "good";
+
+/** "2026-11-13" → "13 Nov 2026". */
+const shortDay = (iso: string) => {
+  const day = new Date(`${iso}T00:00:00Z`);
+  return Number.isNaN(day.getTime())
+    ? iso
+    : day.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      });
+};
+
+/**
+ * The prepaid AI credit (owner, 13 Nov 2026): what is left, how long it lasts
+ * and what to add, the same numbers as the email under 7 days or ₹300 left.
+ */
+function AiCredit({ credit }: { credit: Credit }) {
+  const left = Math.max(credit.balanceInr, 0);
+  return (
+    <Panel
+      title="AI credit"
+      sub={`${credit.provider} prepaid, billing account ${credit.account}`}
+    >
+      <div className={styles.capRow}>
+        <div>
+          <div className={styles.capText}>
+            <span>
+              {rupees(left)} left of {rupees(credit.topupInr)} added on{" "}
+              {shortDay(credit.topupOn)}{" "}
+              <Badge tone={credit.alert ? "bad" : "good"}>
+                {credit.alert ? "Add credit" : "Enough"}
+              </Badge>
+            </span>
+            <span className={styles.num}>
+              {credit.daysLeft === null
+                ? "Nothing spent in 7 days"
+                : `About ${credit.daysLeft} ${credit.daysLeft === 1 ? "day" : "days"} left`}
+            </span>
+          </div>
+          <Meter
+            value={left}
+            max={Math.max(credit.topupInr, left, 1)}
+            label={`${rupees(left)} left of ${rupees(credit.topupInr)}`}
+          />
+        </div>
+      </div>
+      <span className={styles.note}>
+        {rupees(credit.spentInr)} spent since, about{" "}
+        {rupees(credit.burnInrPerDay)} a day over the last 7 days.
+      </span>
+      <span className={styles.note}>
+        To add: {rupees(credit.addInr)}. {credit.reason}
+      </span>
+      <span className={styles.note}>
+        Pay in {credit.payPath}:{" "}
+        <a href={credit.payUrl} target="_blank" rel="noreferrer">
+          {credit.payUrl}
+        </a>
+        . The owner gets an email when fewer than {credit.alertDays} days or{" "}
+        {rupees(credit.alertBalanceInr)} are left.
+      </span>
+      <span className={styles.note}>{credit.note}</span>
+    </Panel>
+  );
+}
 
 function Caps({ data }: { data: AiSpend }) {
   return (
@@ -312,6 +380,7 @@ export default async function AiSpendPage({
               value={rupees(result.data.projectedMonthInr)}
             />
           </Tiles>
+          {result.data.credit ? <AiCredit credit={result.data.credit} /> : null}
           {result.data.alerts.length ? (
             <Panel title="Alerts" sub="50, 80 and 100% of a cap">
               {result.data.alerts.map((alert) => (

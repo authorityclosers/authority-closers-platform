@@ -2,6 +2,8 @@
 
 import { useSyncExternalStore } from "react";
 
+import { CALLS_PAGE_NAME } from "../calls-page-name";
+
 /**
  * The page that opened the lead showing on Leads, while it shows and until its
  * Back has stepped there (Redmi QA batch 6, 13 Nov 2026: a call opened from
@@ -10,10 +12,11 @@ import { useSyncExternalStore } from "react";
  */
 export type LeadOpener = { path: string; name: string };
 
-// The pages whose Back returns there, by the name their page shows.
+// The pages whose Back returns there, by the name their page shows (the
+// calls page's own name, "Reports" since the owner's 13 Nov 2026 word).
 const NAMES: readonly (readonly [string, string])[] = [
-  ["/analysis/calls", "Calls"],
-  ["/calls", "Calls"],
+  ["/analysis/calls", CALLS_PAGE_NAME],
+  ["/calls", CALLS_PAGE_NAME],
 ];
 
 /** The opener for a page's path, or null for a page Back doesn't return to. */

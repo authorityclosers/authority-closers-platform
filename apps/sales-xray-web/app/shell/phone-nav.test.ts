@@ -31,6 +31,14 @@ it("keeps the calls and a call's report under Reports", () => {
   expect(phoneTabFor("/reports", undefined)).toBe("reports");
 });
 
+it("lights Ask Dipak on his library, whatever the page says (Dipak's spec, 13 Nov 2026)", () => {
+  expect(phoneTabFor("/ask-dipak", "coaching")).toBe("ask");
+  expect(phoneTabFor("/ask-dipak/", undefined)).toBe("ask");
+  expect(phoneTabFor("/ask-dipaks", undefined)).toBeNull();
+  // Its page keeps Coaching lit on a computer's rail.
+  expect(shellActiveFor("/ask-dipak", "coaching")).toBe("coaching");
+});
+
 it("lights Growth for My Growth and Coaching (Dipak's handoff, 31 Oct 2026)", () => {
   expect(phoneTabFor("/growth", undefined)).toBe("growth");
   expect(phoneTabFor("/growth/analytics", "analyse")).toBe("growth");

@@ -4,9 +4,11 @@
    14 tiles and 16 cards. Colour marks a kind; words always say it too. */
 
 /* A tile: the icon top left, the number top right, then the label and its
-   caption; the words wrap rather than end in "…" at 130 % and 200 % text. */
+   caption; the words wrap rather than end in "…" at 130 % and 200 % text.
+   It is its caption's container (below). */
 .counter {
   position: relative;
+  container-type: inline-size;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   grid-template-areas:
@@ -101,12 +103,16 @@
   overflow-wrap: anywhere;
 }
 
-/* The caption a step under the label, as H5: one line at 130 % text. */
+/* The caption a step under the label, as H5: one line at 130 % text. On a
+   narrow phone it gives up a little size to its tile's width rather than
+   break, so "First call pending" stays one line beside an empty right side
+   no more (the owner on a Redmi 13, production 1.57, 13 Nov 2026); a wide
+   enough tile keeps the full step. */
 .note {
   grid-area: note;
   min-width: 0;
   color: var(--sx-muted);
-  font-size: var(--sx-text-xs);
+  font-size: min(var(--sx-text-xs), 11cqi);
   line-height: var(--sx-leading-16);
   overflow-wrap: anywhere;
 }
@@ -254,16 +260,15 @@ a.counter:active::after,
   border-top: 1px solid var(--sx-line);
 }
 
-/* One row: the box or the call, the time in its own column, a hairline, then
-   the words; the time column is sized in the row's text, so it grows with it
-   and every title starts at one edge. */
+/* One row: the box or the call in a 44 px column, then the words with the
+   time under them; every title starts at one edge. */
 .row {
   position: relative;
   display: grid;
   flex: 1 1 auto;
-  grid-template-columns: 22px auto minmax(0, 1fr);
+  grid-template-columns: 44px minmax(0, 1fr);
   align-items: center;
-  column-gap: 10px;
+  column-gap: 8px;
   min-width: 0;
   padding: 10px 0;
   font-size: var(--sx-text-sm);
@@ -284,13 +289,11 @@ a.counter:active::after,
   z-index: 1;
   display: grid;
   place-items: center;
-  width: 22px;
+  width: 44px;
 }
 
-/* One width for every time, in its own text, so every title starts at one
-   edge (H5). */
+/* The time first under the title. */
 .time {
-  width: 4.5em;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
   font-weight: 500;
@@ -308,8 +311,6 @@ a.counter:active::after,
   display: grid;
   gap: 4px;
   min-width: 0;
-  padding-left: 10px;
-  border-left: 1px solid var(--sx-line);
 }
 
 .title {
@@ -382,8 +383,9 @@ a.counter:active::after,
   text-decoration: none;
 }
 
-/* The box (a task) and the call (a follow-up): 44 px targets around 22 px
-   marks; a late one's ring is red (H2). */
+/* The box (a task) and the call (a follow-up): 44 px targets that look like
+   ones, a ring with its tick showing faintly and a tinted round call button;
+   a late one's is red (H2). */
 .tick,
 .call {
   position: relative;
@@ -392,11 +394,16 @@ a.counter:active::after,
   place-items: center;
   width: 44px;
   height: 44px;
-  margin: -11px;
   border-radius: 50%;
   color: var(--sx-accent);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+.call {
+  width: 40px;
+  height: 40px;
+  background: color-mix(in oklab, var(--sx-accent) 12%, var(--sx-surface));
 }
 
 .tick input {
@@ -413,23 +420,25 @@ a.counter:active::after,
   display: grid;
   place-items: center;
   box-sizing: border-box;
-  width: 22px;
-  height: 22px;
-  border: 2px solid color-mix(in oklab, var(--sx-ink) 32%, transparent);
+  width: 26px;
+  height: 26px;
+  border: 2px solid currentColor;
   border-radius: 50%;
-  color: var(--lx-on-teal);
+  color: var(--sx-accent);
   transition:
     background var(--sx-dur-fast) var(--sx-ease-out),
     border-color var(--sx-dur-fast) var(--sx-ease-out);
 }
 
+/* The tick shows faintly in an open ring: a box to tick. */
 .tick > span svg {
-  opacity: 0;
+  opacity: 0.35;
 }
 
 .tick input:checked + span {
   border-color: var(--sx-accent);
   background: var(--sx-accent);
+  color: var(--lx-on-teal);
 }
 
 .tick input:checked + span svg {
@@ -441,10 +450,11 @@ a.counter:active::after,
 }
 
 .row[data-late] .tick > span {
-  border-color: var(--sx-bad);
+  color: var(--sx-bad);
 }
 
 .row[data-late] .call {
+  background: color-mix(in oklab, var(--sx-bad) 12%, var(--sx-surface));
   color: var(--sx-bad);
 }
 
@@ -477,21 +487,23 @@ a.counter:active::after,
   min-width: 0;
 }
 
-/* The label over its ring and number, the cell's whole width, so it keeps to
-   one line at 130 % text (orchestrator, 10 Nov 2026: "Talk · recordings" and
-   "Follow-ups done" still wrapped beside the ring). */
+/* One shape for every figure: its ring, then its number with its name under
+   it, all from the top, so a row's rings and numbers line up whichever name
+   wraps (the owner on a Redmi 13, 13 Nov 2026). The name reads first for a
+   screen reader. */
 .done a {
   position: relative;
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
   grid-template-areas:
-    "label label"
-    "ring value";
-  align-items: center;
-  gap: 2px 10px;
+    "ring value"
+    "ring label";
+  align-items: start;
+  gap: 0 10px;
   min-width: 0;
   min-height: 56px;
-  padding: 6px 0;
+  padding: 8px 0;
   border-radius: var(--sx-radius-sm);
   color: var(--sx-ink);
   text-decoration: none;
@@ -524,6 +536,13 @@ a.counter:active::after,
   line-height: var(--sx-leading-28);
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
+}
+
+/* "min", "of 36": a step smaller and quieter than the number. */
+.doneUnit {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
 }
 
 /* H2's ring: a quiet track, a teal arc only for a real share, the icon in it. */

@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { CALLS_PAGE_NAME } from "./calls-page-name";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -446,7 +447,7 @@ it("reads as one full-width Calls page with estimated lengths and per-row openin
 
   // One page heading; no stacked "Saved calls" / "Your calls" titles.
   expect([...host.querySelectorAll("h1")].map((h) => h.textContent)).toEqual([
-    "Calls",
+    CALLS_PAGE_NAME,
   ]);
   const calls = host.querySelector("[data-variant]")!;
   expect(calls.querySelectorAll("h2")).toHaveLength(0);
@@ -694,7 +695,7 @@ it("loads every server listed state without auto claiming or processing", async 
   // The rail's icon link is named by its label, not by visible text.
   const current = host.querySelector('[aria-current="page"]');
   expect(current?.getAttribute("aria-label") ?? current?.textContent).toContain(
-    "Calls",
+    CALLS_PAGE_NAME,
   );
   expect(host.textContent).toContain("Analysis in progress");
   expect(host.textContent).toContain("Report ready");
@@ -1587,6 +1588,32 @@ it("posts logout once while pending, preserves the selector on failure, and clea
   expect(navigate).toHaveBeenCalledWith("/");
 });
 
+// The Orchestrator (13 Nov 2026): on a phone the four figures are one row,
+// and a tap on one filters or sorts the list below it.
+it("filters or sorts the list from a tap on a figure", async () => {
+  routeFetch({
+    [LIST]: () => ok(page([row(firstId, true), row(secondId)])),
+    [insightPath(firstId, "report")]: () => ok({ verdict: "Measured report" }),
+  });
+  await act(async () => renderLibrary({ insights: true }));
+  await flush();
+  const tap = (id: string) =>
+    host.querySelector<HTMLButtonElement>(`#${id} button`)!;
+  const pressed = () =>
+    host.querySelector('.calls-library-filters button[aria-pressed="true"]')
+      ?.textContent;
+  expect(pressed()).toBe("All2");
+  await act(async () => tap("metric-reports-ready").click());
+  expect(pressed()).toBe("Report ready1");
+  expect(host.querySelectorAll(".calls-library-item")).toHaveLength(1);
+  await act(async () => tap("metric-calls").click());
+  expect(pressed()).toBe("All2");
+  await act(async () => tap("metric-next-step").click());
+  expect(pressed()).toBe("Report ready1");
+  await act(async () => tap("metric-duration").click());
+  expect(sortPicker()?.dataset.value).toBe("longest");
+});
+
 it("shows four figures from the loaded calls and one labelled list", async () => {
   routeFetch({
     [LIST]: () => ok(page([row(firstId, true), row(secondId, true)])),
@@ -1603,6 +1630,18 @@ it("shows four figures from the loaded calls and one labelled list", async () =>
   );
   expect(strip.querySelector("#metric-calls dd b")?.textContent).toBe("2");
   expect(host.querySelector("#metric-commitments")).toBeNull();
+  // Each figure is a button for the list below, adding no words to it.
+  expect(
+    [...strip.querySelectorAll("button")].map((button) =>
+      button.getAttribute("aria-label"),
+    ),
+  ).toEqual([
+    "Show all saved calls",
+    "Show calls with a report ready",
+    "Sort calls longest first",
+    "Show calls with a report ready",
+  ]);
+  expect(strip.textContent).not.toContain("Show");
 
   const list = host.querySelector("section#calls-library-list")!;
   expect(list.getAttribute("aria-labelledby")).toBe("calls-library-title");

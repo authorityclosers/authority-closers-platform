@@ -1,6 +1,10 @@
 "use client";
 
-/** Reports, /reports: every kind of report in one place (reports-hub.tsx). */
+/**
+ * Results, /reports: every kind of report in one place (reports-hub.tsx).
+ * Named Results so the app has one "Reports", the Reports tab's page
+ * (Orchestrator, 14 Nov 2026: the palette listed two).
+ */
 
 import { AcquisitionShell } from "../acquisition-shell";
 import { useSalesRole } from "../dashboard/dashboard-body";
@@ -16,9 +20,9 @@ export function ReportsSkeleton() {
       authenticated={false}
       loading
       active="dashboard"
-      pageName="Reports"
+      pageName="Results"
     >
-      <PageHeader title="Reports" titleInBar />
+      <PageHeader title="Results" titleInBar />
       {Array.from({ length: 6 }, (_, index) => (
         <SkeletonRow key={index} />
       ))}
@@ -47,7 +51,7 @@ export function ReportsRoute() {
       <AcquisitionShell
         authenticated={access?.authenticated === true}
         active="dashboard"
-        pageName="Reports"
+        pageName="Results"
       >
         <SignedOutWelcome
           title="Sign in to see your reports"
@@ -57,8 +61,8 @@ export function ReportsRoute() {
     );
   }
   return (
-    <AcquisitionShell authenticated active="dashboard" pageName="Reports">
-      <PageHeader title="Reports" titleInBar />
+    <AcquisitionShell authenticated active="dashboard" pageName="Results">
+      <PageHeader title="Results" titleInBar />
       <RecordingLine
         key={`line:${access.context?.personId}:${access.context?.tenantId}`}
       />

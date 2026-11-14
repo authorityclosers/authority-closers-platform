@@ -23,6 +23,12 @@ talk from the quieter of its two main speakers). A call over a minute whose tran
 has one speaker label counts as a conversation: speaker separation can miss the split
 (2 of 45 real dev transcripts on 21 Oct, the same 8-minute call twice), and a real
 conversation must never lose its report to that. Get full report runs it in full.
+
+Dead air (owner via the orchestrator, 14 Nov 2026, test calls' R14): under 20 seconds of
+speech in all is no conversation, whatever the call's length or speaker labels, and is
+checked first. A line that connects and stays silent for a minute while one side says
+"Hello? Can you hear me?" got a full sales report before; a real conversation has far
+more than 20 seconds of speech.
 """
 
 from __future__ import annotations
@@ -53,6 +59,8 @@ FAILURE_CODES: Final[frozenset[str]] = frozenset((*SKIP_CODES.values(), *SHORT_C
 # The short-call rule's limits, on the call's own transcript.
 SHORT_CALL_MS: Final = 60_000
 NO_CONVERSATION_MS: Final = 20_000
+# Dead air: all the speech in the call, every speaker together (R14, 14 Nov 2026).
+DEAD_AIR_SPEECH_MS: Final = 20_000
 TWO_SIDED_TALK_MS: Final = 8_000
 # Environments whose full-pipeline proofs use seconds-long fixture audio: the rule is
 # off there (its own tests turn it on).
@@ -138,10 +146,13 @@ def short_rule_applies(environment: object) -> bool:
 def short_call_reason(transcript: Mapping[str, Any]) -> str | None:
     """``no_conversation``, ``short_call`` or None for one saved C2 transcript.
 
+    Dead air first: under ``DEAD_AIR_SPEECH_MS`` of speech in all (timed segments, every
+    speaker) is no conversation, also over a minute and under one speaker label.
+
     Length is the transcript's ``duration_ms`` (else its last segment's end). Two-sided
     talk is the speaking time of the quieter of the two speakers who talk most, so a call
     where the other side barely speaks is no conversation. One speaker label over a
-    minute is left alone (it may be a missed speaker split, not a monologue)."""
+    minute with real speech is left alone (it may be a missed speaker split)."""
     segments = [item for item in transcript.get("segments") or [] if isinstance(item, Mapping)]
     talk: dict[str, int] = {}
     last_end = 0
@@ -160,6 +171,8 @@ def short_call_reason(transcript: Mapping[str, Any]) -> str | None:
     except (TypeError, ValueError):
         duration = last_end
     spoken = sorted(talk.values(), reverse=True)
+    if sum(spoken) < DEAD_AIR_SPEECH_MS:
+        return "no_conversation"
     if duration < NO_CONVERSATION_MS:
         return "no_conversation"
     if duration < SHORT_CALL_MS:

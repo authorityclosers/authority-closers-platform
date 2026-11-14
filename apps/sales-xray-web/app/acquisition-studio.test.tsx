@@ -1,3 +1,4 @@
+import { CALLS_PAGE_NAME } from "./calls-page-name";
 import { act, Fragment, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -3534,7 +3535,7 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     container.querySelector(
       '[aria-label="Sales Xray navigation"] [aria-current="page"]',
     )?.textContent,
-  ).toBe("Calls");
+  ).toBe(CALLS_PAGE_NAME);
   // The bar names the page: a report, not "New analysis" or "Calls".
   expect(container.querySelector("header b")?.textContent).toBe("Report");
   const savedAudio = container.querySelector(

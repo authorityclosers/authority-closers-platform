@@ -1,11 +1,12 @@
 "use client";
 
+import { CALLS_PAGE_NAME } from "./calls-page-name";
 import { Skeleton } from "./ui/kit";
 import styles from "./calls-library.module.css";
 
 /** The loaded strip's labels, with a placeholder as long as its usual line. */
 const FIGURES = [
-  ["Calls", "8em"],
+  ["Saved calls", "8em"],
   ["Reports ready", "9em"],
   ["Call time", "8em"],
   ["Next step agreed", "10em"],
@@ -30,7 +31,7 @@ export function CallsBodySkeleton({
             <div className={styles.kpi} key={label}>
               <dt>{label}</dt>
               {/* The number's own line (its <b>), so the tile keeps the
-                  loaded height and the name stays beside it. */}
+                  loaded height. */}
               <dd>
                 <b className={styles.phValue}>
                   <Skeleton width={48} height={16} />
@@ -84,7 +85,7 @@ export function CallsBodySkeleton({
 export function CallsSkeleton() {
   return (
     // The standalone page's frame: its h1 is for screen readers only (the
-    // shell's bar says "Calls"), so the loading outline must not show one.
+    // shell's bar names the page), so the loading outline must not show one.
     <div
       className={styles.page}
       data-variant="standalone"
@@ -92,7 +93,7 @@ export function CallsSkeleton() {
     >
       <header className={styles.header}>
         <div className={styles.headerCopy}>
-          <h1>Calls</h1>
+          <h1>{CALLS_PAGE_NAME}</h1>
           <p>Private to your account and workspace</p>
         </div>
       </header>

@@ -7,6 +7,7 @@
  * skills are moving. One read brings every aggregate (the server sums them),
  * so the page arrives whole; filters live in the address.
  */
+import { CALLS_PAGE_NAME } from "../../calls-page-name";
 import {
   ArrowUpRight,
   BarChart3,
@@ -300,7 +301,7 @@ export function InsightsView({
           <Empty
             icon={Lock}
             title="Only owners and admins of this organisation can see Insights"
-            text="Ask an owner of the organisation if you need the team’s figures. Your own calls and Coaching stay in Calls and Coaching."
+            text={`Ask an owner of the organisation if you need the team’s figures. Your own calls and Coaching stay in ${CALLS_PAGE_NAME} and Coaching.`}
           />
         </Panel>
       </div>

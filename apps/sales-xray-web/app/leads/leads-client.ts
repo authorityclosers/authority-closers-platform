@@ -1652,6 +1652,15 @@ export function markDialNotPlaced(eventId: string, command = commandId()) {
   );
 }
 
+/** "Didn't call" taken back (its Undo): the newest marking wins, so the dial
+ *  counts, lists and waits for its answer again (Redmi QA, 13 Nov 2026). */
+export function undoDialNotPlaced(eventId: string, command = commandId()) {
+  return request<LeadDetail>(
+    `/calls/${encodeURIComponent(eventId)}/private`,
+    json("POST", { command_id: command, private: false, reason: "not_placed" }),
+  );
+}
+
 /** Calls by seller by day, India time (managers). */
 export function readCallReport(
   start: string,
