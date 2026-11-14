@@ -35,6 +35,7 @@ from ac_platform.conversation_intelligence.sales_xray_tenants import (
     WORKSPACE_UNAVAILABLE_MESSAGE,
     sales_xray_workspace_served,
 )
+from ac_platform.conversation_intelligence.team_analysis_time import manages, members_used
 from ac_platform.http.auth import (
     AuthenticatedTransaction,
     RequireActor,
@@ -326,6 +327,20 @@ def install_acquisition_http(
                 auth.database, tenant_id=app.tenant_id, person_id=actor.person_id, now=app.clock()
             )
         return {"allowance": allowance, **usage}
+
+    @me_router.get("/analysis-time/team")
+    async def read_team_analysis_time(request: Request, response: Response) -> Any:
+        """The organisation's shared analysis time and what each member used of it, for
+        its owner and admins (orchestrator, 13 Nov 2026). Time only, never a price."""
+        admit(request, response)
+        async with learner_read_account(request) as auth:
+            actor = auth.resolved.actor
+            app = service(auth.database, await workspace(auth.database, actor))
+            if app.trial_enabled or not await manages(auth.database, actor, app.tenant_id):
+                raise fail(403, "Your organisation's owner or admin sees its team's analysis time.")
+            allowance = await result(app.allowance(actor=actor, shared_identity_locks=True))
+            people = await members_used(auth.database, app.ledger, tenant_id=app.tenant_id)
+        return {"allowance": allowance, "people": people}
 
     application.include_router(router)
     application.include_router(me_router)

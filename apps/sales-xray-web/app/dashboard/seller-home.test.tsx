@@ -423,7 +423,12 @@ it("is the owner's Smart lists Home: the work in five blocks, each opening its e
       performance?.querySelectorAll("li") ?? [],
       (item) => item.textContent,
     ),
-  ).toEqual(["Attempted12", "Connected7", "Talk time34 min", "Follow-ups3"]);
+  ).toEqual([
+    "Attempted12",
+    "Connected7 of 12",
+    "Talk time34 min",
+    "Follow-ups3",
+  ]);
   expect(performance?.textContent).toContain("Inbound calls only · Today");
   // Not in the picture: the longest breaks and the Taking new leads pill.
   expect(host.textContent).not.toContain("Your longest breaks");
@@ -667,13 +672,16 @@ it("puts a call waiting for its answer first, as Pending action that opens its q
     expect(first?.getAttribute("data-area")).toBe("finish");
     expect(first?.textContent).toContain("Pending action");
     expect(first?.textContent).toContain("1 reminder");
-    expect(first?.textContent).toContain(
-      "Meera Fictional · Last dialled 4 min ago",
-    );
+    // Two rows (the owner, 13 Nov 2026): who and when beside Complete.
+    expect(first?.querySelector("b")?.textContent).toBe("Meera Fictional");
+    expect(first?.textContent).toContain("Last dialled 4 min ago");
     takeHandedLead();
     const open = [...first!.querySelectorAll("button")].find(
-      (button) => button.textContent === "Complete call activity",
+      (button) =>
+        button.getAttribute("aria-label") ===
+        "Complete call activity: Meera Fictional",
     );
+    expect(open?.textContent).toContain("Complete");
     await act(async () => open?.click());
     expect(takeHandedLead()).toEqual({
       leadId: "00000000-0000-4000-8000-000000000041",
@@ -741,7 +749,11 @@ it("never counts a call whose outcome the phone never said, and each number open
   ]);
   const calls = "/analysis/calls?day=today&side=cold";
   expect(figures[0]).toEqual(["Attempted36", calls]);
-  expect(figures[1]).toEqual(["Outcome known1", `${calls}&outcome=known`]);
+  // Out of the calls attempted, said (the owner, 13 Nov 2026).
+  expect(figures[1]).toEqual([
+    "Outcome known1 of 36",
+    `${calls}&outcome=known`,
+  ]);
   expect(figures[2]?.[0]).toContain("Talk · recordings");
   expect(figures[2]?.[1]).toBe(`${calls}&outcome=connected`);
   expect(host.textContent).not.toContain("Connected");

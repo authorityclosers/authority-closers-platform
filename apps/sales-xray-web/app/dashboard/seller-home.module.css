@@ -133,12 +133,33 @@
   line-height: var(--sx-leading-24);
 }
 
+/* Who, then when, a line each, never a ragged wrap of one sentence. */
 .pending .pendingLine {
-  margin: 0;
+  display: grid;
+  min-width: 0;
   color: var(--sx-muted);
-  font-size: var(--sx-text-sm);
-  line-height: var(--sx-leading-20);
+  font-size: var(--sx-text-xs);
+  font-weight: 400;
+  line-height: var(--sx-leading-16);
   overflow-wrap: anywhere;
+}
+
+.pendingLine b {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
+}
+
+/* What a tap does, across from who: the chip's edge above it. */
+.pendingDo {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
 }
 
 .pendingGo {
@@ -146,10 +167,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  min-height: 44px;
+  gap: 12px;
+  min-height: 52px;
   margin: 0 -16px;
-  padding: 0 16px;
+  padding: 4px 16px 8px;
   border: 0;
   border-radius: 0 0 var(--sx-radius-md) var(--sx-radius-md);
   background: none;

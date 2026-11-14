@@ -87,6 +87,7 @@ import { CallsDrawer } from "./calls-drawer";
 import { useCallInsights, type CallInsight } from "./calls-insights";
 import { insightFromSummary, needsOwnRead } from "./call-summary";
 import { useRowsInView } from "./rows-in-view";
+import { CALLS_PAGE_NAME } from "./calls-page-name";
 import { csvRows } from "./csv-export";
 import { Panel } from "./ui/kit";
 import { RecentCallsList, RecentCallsSkeleton } from "./dashboard/recent-calls";
@@ -1677,7 +1678,8 @@ function CallsLibraryContent({
         style={phoneWaiting ? { display: "none" } : undefined}
       >
         <div className={styles.headerCopy}>
-          <h1 id="calls-library-title">Calls</h1>
+          {/* For screen readers: the shell's bar shows the page's name. */}
+          <h1 id="calls-library-title">{CALLS_PAGE_NAME}</h1>
           <p className="calls-library-summary">
             {access?.authenticated === true && submissions.length > 0 ? (
               <>
@@ -1803,6 +1805,8 @@ function CallsLibraryContent({
         </section>
       ) : (
         <>
+          {/* Each figure is a button for the list below it (on phones one
+              row of four, the Orchestrator, 13 Nov 2026). */}
           {stats ? (
             <dl className={styles.strip} aria-label="Calls at a glance">
               <div className={styles.kpi} id="metric-calls">
@@ -1829,6 +1833,12 @@ function CallsLibraryContent({
                       ))}
                     </span>
                   ) : null}
+                  <button
+                    type="button"
+                    className={styles.kpiTap}
+                    aria-label="Show all saved calls"
+                    onClick={() => setFilter("all")}
+                  />
                 </dd>
                 <dd className={styles.kpiContext}>
                   {stats.thisWeek} in the last 7 days
@@ -1838,6 +1848,12 @@ function CallsLibraryContent({
                 <dt>Reports ready</dt>
                 <dd>
                   <b>{counts.ready}</b>
+                  <button
+                    type="button"
+                    className={styles.kpiTap}
+                    aria-label="Show calls with a report ready"
+                    onClick={() => setFilter(counts.ready ? "ready" : "all")}
+                  />
                 </dd>
                 <dd className={styles.kpiContext}>
                   {waiting.length
@@ -1853,6 +1869,12 @@ function CallsLibraryContent({
                   ) : (
                     <span className={styles.unknown}>Not known yet</span>
                   )}
+                  <button
+                    type="button"
+                    className={styles.kpiTap}
+                    aria-label="Sort calls longest first"
+                    onClick={() => setSort("longest")}
+                  />
                 </dd>
                 <dd className={styles.kpiContext}>
                   {time.calls
@@ -1876,6 +1898,12 @@ function CallsLibraryContent({
                             : "No reports yet"}
                     </span>
                   )}
+                  <button
+                    type="button"
+                    className={styles.kpiTap}
+                    aria-label="Show calls with a report ready"
+                    onClick={() => setFilter(counts.ready ? "ready" : "all")}
+                  />
                 </dd>
                 <dd className={styles.kpiContext}>
                   {outcomes.length

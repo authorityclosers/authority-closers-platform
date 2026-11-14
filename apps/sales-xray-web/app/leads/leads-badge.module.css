@@ -5,22 +5,27 @@
   display: inline-flex;
 }
 
+/* The pill is as tall as its own number, so larger text never cuts it (the
+   owner on a Redmi 13, production 1.57, 13 Nov 2026: the count beside Leads
+   was cut off; a fixed 19 px held a 22 px line at 130 % text). */
 .tabBadge {
   position: absolute;
   top: -7px;
   left: calc(100% - 9px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   box-sizing: border-box;
-  min-width: 19px;
-  height: 19px;
-  padding: 0 5px;
+  min-width: calc(1em + 8px);
+  height: calc(1em + 8px);
+  padding: 0 4px;
   border: 2px solid var(--sx-surface);
   border-radius: 999px;
   background: var(--lx-danger);
   color: var(--lx-surface);
   font-size: var(--sx-text-xs);
   font-weight: 750;
-  line-height: var(--sx-leading-16);
-  text-align: center;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 

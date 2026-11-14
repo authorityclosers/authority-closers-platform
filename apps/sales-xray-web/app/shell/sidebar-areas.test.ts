@@ -1,3 +1,4 @@
+import { CALLS_PAGE_NAME } from "../calls-page-name";
 import { expect, it } from "vitest";
 
 import { HUB_TABS } from "../organisation/hub-tabs";
@@ -18,8 +19,8 @@ it("draws a personal workspace's areas: Home, Work and Results", () => {
     outline(sidebarAreas({ organisation: false, team: false, manager: false })),
   ).toEqual([
     ["Home", [["Home"]]],
-    ["Work", [["Leads"], ["Chats"], ["Calls"], ["Prospects"]]],
-    ["Results", [["Reports"], ["Coaching"]]],
+    ["Work", [["Leads"], ["Chats"], [CALLS_PAGE_NAME], ["Prospects"]]],
+    ["Results", [["Results"], ["Coaching"]]],
   ]);
 });
 
@@ -33,7 +34,10 @@ it("adds Team for an organisation, with every hub section by role", () => {
   });
   expect(outline(owner)).toEqual([
     ["Home", [["Home"]]],
-    ["Work", [["Leads", "All leads"], ["Chats"], ["Calls"], ["Prospects"]]],
+    [
+      "Work",
+      [["Leads", "All leads"], ["Chats"], [CALLS_PAGE_NAME], ["Prospects"]],
+    ],
     [
       "Team",
       [
@@ -48,7 +52,7 @@ it("adds Team for an organisation, with every hub section by role", () => {
         ["Plan & billing"],
       ],
     ],
-    ["Results", [["Reports"], ["Coaching"]]],
+    ["Results", [["Results"], ["Coaching"]]],
   ]);
   const team = owner[2].pages;
   expect(team.map((page) => [page.href, page.hubTab ?? null])).toEqual([

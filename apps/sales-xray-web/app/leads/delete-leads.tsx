@@ -10,6 +10,7 @@
  * stays open: Delete again sends the same command, so nothing goes twice.
  */
 
+import { CALLS_PAGE_NAME } from "../calls-page-name";
 import { Check, Trash2 } from "lucide-react";
 import { useState } from "react";
 
@@ -152,7 +153,8 @@ export function DeleteLeadsSheet({
         {one ? "its" : "their"} history, notes, follow-ups and chat messages.
       </p>
       <p className={styles.keep}>
-        Calls recorded with {one ? "this lead" : "them"} stay in Calls.
+        Calls recorded with {one ? "this lead" : "them"} stay in{" "}
+        {CALLS_PAGE_NAME}.
       </p>
     </Sheet>
   );

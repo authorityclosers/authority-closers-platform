@@ -372,16 +372,23 @@ export function PendingAction({
           {`${waiting.length} ${waiting.length === 1 ? "reminder" : "reminders"}`}
         </span>
       </div>
-      <p className={styles.pendingLine}>
-        {`${displayName(call.name)} · Last dialled ${ago(call.called_at, now)}`}
-      </p>
+      {/* Two rows that mirror each other (the owner on a Redmi 13, 13 Nov
+          2026: "1 reminder" and one name took three rows): the title and its
+          count, then who and when beside what a tap does. */}
       <button
         type="button"
         className={styles.pendingGo}
+        aria-label={`Complete call activity: ${displayName(call.name)}`}
         onClick={() => onFinish(call.lead_id)}
       >
-        Complete call activity
-        <ChevronRight size={18} aria-hidden="true" />
+        <span className={styles.pendingLine}>
+          <b>{displayName(call.name)}</b>
+          <span>{`Last dialled ${ago(call.called_at, now)}`}</span>
+        </span>
+        <span className={styles.pendingDo}>
+          Complete
+          <ChevronRight size={18} aria-hidden="true" />
+        </span>
       </button>
     </section>
   );
@@ -1472,6 +1479,7 @@ export function TodayPerformance({
           key: "known",
           label: "Outcome known",
           value: numbers.calls - unknown,
+          of: numbers.calls,
           href: `${calls}&outcome=known`,
           icon: <PhoneCall />,
           share: numbers.calls
@@ -1482,6 +1490,7 @@ export function TodayPerformance({
           key: "connected",
           label: "Connected",
           value: numbers?.connected,
+          of: numbers?.calls,
           href: `${calls}&outcome=connected`,
           icon: <PhoneCall />,
           share: numbers?.calls ? numbers.connected / numbers.calls : null,

@@ -94,6 +94,43 @@ describe("AI spend view", () => {
     expect(data.history[0].reason).toBe("Raised daily from ₹50 to ₹100");
   });
 
+  it("reads the AI credit's runway, or none without a usage store", () => {
+    // Owner, 13 Nov 2026: the same numbers as the email before the credit ends.
+    const data = normalizeAiSpend({
+      ...VIEW,
+      credit: {
+        provider: "Gemini",
+        account: "0146E3-722EE0-47B3D5",
+        topup_inr: 2000,
+        topup_on: "2026-11-13",
+        spent_inr: 1200,
+        balance_inr: 800,
+        burn_inr_per_day: 300,
+        days_left: 2,
+        add_inr: 3500,
+        alert: true,
+        reason: "About Rs 300 a day over the last 7 days.",
+        pay_url: "https://aistudio.google.com/",
+        pay_path: "AI Studio → Billing → Buy credits",
+        alert_days: 7,
+        alert_balance_inr: 300,
+        note: "Google's figure is the truth.",
+      },
+    });
+    expect(data.credit).toMatchObject({
+      balanceInr: 800,
+      daysLeft: 2,
+      addInr: 3500,
+      alert: true,
+      payPath: "AI Studio → Billing → Buy credits",
+    });
+    expect(normalizeAiSpend(VIEW).credit).toBeNull();
+    expect(
+      normalizeAiSpend({ ...VIEW, credit: { days_left: null } }).credit
+        ?.daysLeft,
+    ).toBeNull();
+  });
+
   it("never crashes on an empty or odd body", () => {
     const data = normalizeAiSpend({ caps: [{ level: 70 }], series: "x" });
     expect(data.caps[0].level).toBeNull();

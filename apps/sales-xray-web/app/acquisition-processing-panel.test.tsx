@@ -1,3 +1,4 @@
+import { CALLS_PAGE_NAME } from "./calls-page-name";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -256,7 +257,7 @@ it("keeps the call's link and other actions in a ⋯ menu while it works", async
   expect(host.textContent).toContain("My call.m4a");
   expect(host.textContent).toContain("12.4 MB");
   expect(host.textContent).toContain(
-    "You can leave this page. Your report will appear in Calls when it’s ready.",
+    `You can leave this page. Your report will appear in ${CALLS_PAGE_NAME} when it’s ready.`,
   );
 });
 
@@ -293,7 +294,7 @@ it("tells a guest to keep the call's link instead of promising Calls", async () 
   expect(host.textContent).toContain(
     "Keep this call’s link to come back while your session and call remain available.",
   );
-  expect(host.textContent).not.toContain("appear in Calls");
+  expect(host.textContent).not.toContain(`appear in ${CALLS_PAGE_NAME}`);
 });
 
 it("pauses calmly: saved work, the reason and the recovery actions in view", async () => {

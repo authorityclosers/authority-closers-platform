@@ -1,3 +1,4 @@
+import { CALLS_PAGE_NAME } from "./calls-page-name";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -88,7 +89,7 @@ it("keeps navigation, one main landmark and help, without placeholder chrome", a
   expect(shell.textContent).not.toContain("Account & saved calls");
   expect(
     navigation.querySelectorAll(
-      'a[aria-label="Calls"][href="/analysis/calls"]',
+      `a[aria-label="${CALLS_PAGE_NAME}"][href="/analysis/calls"]`,
     ),
   ).toHaveLength(1);
   expect(shell.querySelectorAll("main")).toHaveLength(1);

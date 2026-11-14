@@ -55,6 +55,8 @@ from ac_platform.providers import (
 )
 from ac_platform.telemetry import InMemoryTelemetrySink, TelemetryRecorder
 from ac_platform.worker import (
+    AI_CREDIT_RUNWAY_EVENT,
+    AI_CREDIT_RUNWAY_JOB,
     EMAIL_LOGIN_REQUEST_EVENT,
     EMAIL_LOGIN_REQUEST_JOB,
     ENROLLMENT_WELCOME_EVENT,
@@ -232,6 +234,7 @@ def test_outbox_route_is_exact_and_contains_no_unsafe_default_email_kind() -> No
         REVIEWER_AUTH_EVENT,
         PASSWORD_EMAIL_RESET_EVENT_V3,
         SALES_XRAY_TESTER_WELCOME_EVENT,
+        AI_CREDIT_RUNWAY_EVENT,
     }
     assert OUTBOX_JOB_ROUTES[ENROLLMENT_WELCOME_EVENT].job_kind == ENROLLMENT_WELCOME_JOB
     assert OUTBOX_JOB_ROUTES[EMAIL_LOGIN_REQUEST_EVENT].job_kind == EMAIL_LOGIN_REQUEST_JOB
@@ -885,6 +888,7 @@ def test_default_worker_provider_is_fake_and_unconfigured_resend_is_rejected() -
             REVIEWER_AUTH_JOB,
             PASSWORD_EMAIL_RESET_JOB_V3,
             SALES_XRAY_TESTER_WELCOME_JOB,
+            AI_CREDIT_RUNWAY_JOB,
         }
     )
     with pytest.raises(PermanentProviderError, match="injected API key"):

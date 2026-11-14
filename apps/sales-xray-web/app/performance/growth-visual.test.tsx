@@ -1,4 +1,4 @@
-import { act } from "react";
+import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
@@ -13,6 +13,20 @@ import {
 } from "./growth-visual";
 import type { Effort, SellerEffort, SideEffort } from "./performance-client";
 
+vi.mock("next/link", () => ({
+  default: ({
+    href,
+    children,
+    ...rest
+  }: {
+    href: string;
+    children: ReactNode;
+  }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 vi.mock("../leads/leads-client", async (original) => ({
   ...(await original<typeof import("../leads/leads-client")>()),
   readDayCalls: vi.fn(),
@@ -122,16 +136,27 @@ it("draws G1's four tiles from the real totals, with no table", () => {
   expect(host.querySelector("table")).toBeNull();
   const tiles = [
     ...host.querySelectorAll(
-      '[data-growth-view="tiles"] > div:first-of-type > div',
+      '[data-growth-view="tiles"] > div:first-of-type > a',
     ),
   ];
   // One total a tile, no Inbound | Cold split (owner, 10 Nov 2026).
   expect(tiles.map((tile) => tile.textContent)).toEqual([
-    "Attempted228190 leads called",
-    "Connected7834%55 leads reached",
-    "Talk time5 h 17 minAbout 4 min per connected call",
-    "Interested151 meeting booked",
+    "Attempted228190leads called",
+    "Connected7834%55 reached",
+    "Talk time5 h 17 min4 mina call",
+    "Interested151meeting",
   ]);
+  // Each tile opens its list (orchestrator, 13 Nov 2026: "clickable must
+  // look clickable"): today's team calls, the connected ones, the longest
+  // first, the leads at Interested.
+  expect(tiles.map((tile) => tile.getAttribute("href"))).toEqual([
+    "/analysis/calls?day=today&team=1",
+    "/analysis/calls?day=today&team=1&outcome=connected",
+    "/analysis/calls?sort=longest",
+    "/leads?tab=all&stage=interested",
+  ]);
+  // Every tile has its right half (owner, 13 Nov 2026: "symmetric").
+  expect(tiles.every((tile) => tile.querySelector("[class*=side]"))).toBe(true);
   expect(
     host.querySelector('[data-growth-view="tiles"]')?.textContent,
   ).not.toMatch(/Inbound|Cold/);
@@ -156,7 +181,29 @@ it("draws G1's four tiles from the real totals, with no table", () => {
   expect(opened).toHaveBeenCalledWith(effort.sellers[0]);
 });
 
-it("keeps speed to a new lead small, and a dash when there is none", () => {
+it("keeps the tiles whole with nothing yet: no dash, no squeezed total", () => {
+  const none: Effort = {
+    ...effort,
+    team: false,
+    sellers: [],
+    inbound: side(),
+    cold: side(),
+  };
+  act(() => root.render(<PulseTiles effort={none} />));
+  const tiles = [
+    ...host.querySelectorAll(
+      '[data-growth-view="tiles"] > div:first-of-type > a',
+    ),
+  ];
+  expect(tiles.map((tile) => tile.textContent)).toEqual([
+    "Attempted00leads called",
+    "Connected00%0 reached",
+    "Talk time0 min0calls",
+    "Interested00meetings",
+  ]);
+});
+
+it("keeps speed to a new lead small, and says Not yet when there is none", () => {
   act(() => root.render(<SpeedTile effort={effort} />));
   expect(host.textContent).toBe(
     "Speed to new leadInbound, median to the first call12 min",
@@ -168,10 +215,14 @@ it("keeps speed to a new lead small, and a dash when there is none", () => {
       />,
     ),
   );
-  expect(host.querySelector("strong")?.textContent).toBe("–");
+  // Words, never a lone dash (owner, 13 Nov 2026).
+  expect(host.querySelector("strong")).toBeNull();
+  expect(host.textContent).toBe(
+    "Speed to new leadInbound, median to the first callNot yet",
+  );
 });
 
-it("counts today's calls by India hour, from 9 am to 7 pm at least", () => {
+it("counts today's calls by India hour, centred on the day's calls", () => {
   const call = (at: string) => ({
     event_id: at,
     lead_id: "l",
@@ -187,12 +238,28 @@ it("counts today's calls by India hour, from 9 am to 7 pm at least", () => {
     ] as never,
     "Asia/Kolkata",
   );
-  expect(slots[0].label).toBe("9 am");
-  expect(slots.at(-1)?.label).toBe("7 pm");
-  expect(slots.find((slot) => slot.label === "11 am")?.calls).toBe(2);
-  expect(slots.find((slot) => slot.label === "2 pm")?.calls).toBe(1);
-  expect(busiest(slots)?.label).toBe("11 am");
-  expect(busiest(hourSlots([]))).toBeNull();
+  // 11 AM to 2 PM, padded to six hours: never half empty (owner, 13 Nov 2026).
+  expect(slots.map((slot) => slot.short)).toEqual([
+    "10 AM",
+    "11 AM",
+    "12 PM",
+    "1 PM",
+    "2 PM",
+    "3 PM",
+  ]);
+  expect(slots.find((slot) => slot.label === "11 AM")?.calls).toBe(2);
+  expect(slots.find((slot) => slot.label === "2 PM")?.calls).toBe(1);
+  expect(busiest(slots)?.label).toBe("11 AM");
+  // Before any call: 9 AM to 7 PM.
+  const quiet = hourSlots([]);
+  expect([quiet[0].short, quiet.at(-1)?.short]).toEqual(["9 AM", "7 PM"]);
+  expect(busiest(quiet)).toBeNull();
+  // A late call keeps six hours, inside the day.
+  expect(
+    hourSlots([call("2026-11-10T17:20:00Z")] as never, "Asia/Kolkata").map(
+      (slot) => slot.short,
+    ),
+  ).toEqual(["6 PM", "7 PM", "8 PM", "9 PM", "10 PM", "11 PM"]);
 });
 
 it("adds the team's calls by day over the period's own days only", () => {
@@ -253,7 +320,7 @@ it("names today's busiest hour on G4's fourth card, from the team's calls", asyn
     null,
     expect.anything(),
   );
-  expect(host.textContent).toContain("Busiest at 11 am");
+  expect(host.textContent).toContain("Busiest at 11 AM");
   // No repeat of the tiles' numbers (owner, 13 Nov 2026: "drop the repeats").
   expect(host.textContent).not.toMatch(/attempted|Connected|Talk time\d/);
   // Talk time by seller, longest first.

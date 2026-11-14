@@ -302,6 +302,9 @@ async def erase_sales_xray_profile(
     from ac_platform.conversation_intelligence.report_saves import erase_report_saves_for_person
 
     await erase_report_saves_for_person(session, person_id=person_id)
+    from ac_platform.ask_dipak.store import erase_ask_dipak_for_person
+
+    await erase_ask_dipak_for_person(session, person_id=person_id)
     from ac_platform.conversation_intelligence.speaker_map_store import (
         erase_speaker_maps_for_person,
     )
