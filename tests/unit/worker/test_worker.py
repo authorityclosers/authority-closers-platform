@@ -76,6 +76,8 @@ from ac_platform.worker import (
     PASSWORD_EMAIL_VERIFICATION_JOB_V3,
     REVIEW_INVITATION_EVENT,
     REVIEW_INVITATION_JOB,
+    SALES_XRAY_TESTER_WELCOME_EVENT,
+    SALES_XRAY_TESTER_WELCOME_JOB,
     AllowlistedDispatcher,
     AmbiguousProviderReceiptError,
     DurableWorker,
@@ -229,6 +231,7 @@ def test_outbox_route_is_exact_and_contains_no_unsafe_default_email_kind() -> No
         REVIEW_INVITATION_EVENT,
         REVIEWER_AUTH_EVENT,
         PASSWORD_EMAIL_RESET_EVENT_V3,
+        SALES_XRAY_TESTER_WELCOME_EVENT,
     }
     assert OUTBOX_JOB_ROUTES[ENROLLMENT_WELCOME_EVENT].job_kind == ENROLLMENT_WELCOME_JOB
     assert OUTBOX_JOB_ROUTES[EMAIL_LOGIN_REQUEST_EVENT].job_kind == EMAIL_LOGIN_REQUEST_JOB
@@ -881,6 +884,7 @@ def test_default_worker_provider_is_fake_and_unconfigured_resend_is_rejected() -
             REVIEW_INVITATION_JOB,
             REVIEWER_AUTH_JOB,
             PASSWORD_EMAIL_RESET_JOB_V3,
+            SALES_XRAY_TESTER_WELCOME_JOB,
         }
     )
     with pytest.raises(PermanentProviderError, match="injected API key"):

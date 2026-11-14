@@ -105,6 +105,20 @@
   border-radius: 0 9px 9px 0;
 }
 
+/* A finger-sized target on touch screens, the look kept slim: the 40 px
+   view buttons take the bar's padding and gap above and below (the test
+   robot, c9091f68, 2 Nov 2026). */
+@media (pointer: coarse) {
+  .toolbar > button {
+    position: relative;
+  }
+  .toolbar > button::after {
+    position: absolute;
+    inset: -8px 0;
+    content: "";
+  }
+}
+
 .toolbar > button[aria-pressed="true"] {
   position: relative;
   z-index: 1;

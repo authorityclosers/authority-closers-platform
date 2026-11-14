@@ -8,22 +8,25 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-import { TESTERS, whatsappLink } from "./testers-config";
-import { COPY, LANGS } from "./testers-copy";
+import { TESTERS } from "./testers-config";
+import {
+  isAndroidBrowser,
+  parseTesterMe,
+  SIGN_IN,
+  type TesterMe,
+} from "./testers-client";
 import { TestersPage } from "./testers-page";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-// Tester programme (26 Oct 2026): three steps, the links from one config,
-// English, Hindi and Marathi, nothing kept but reminders on this device.
+// Tester programme v2 (owner, 13 Nov 2026): one button to sign in, three
+// fields to join, then Play's two steps once the team has added the account.
 let root: Root;
 let host: HTMLDivElement;
 
 beforeEach(() => {
-  localStorage.clear();
-  window.history.replaceState(null, "", "/testers");
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -32,97 +35,137 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.unstubAllGlobals();
 });
 
-const steps = () =>
-  [...host.querySelectorAll<HTMLAnchorElement>("a[data-step]")].map((link) => ({
-    step: link.dataset.step,
-    href: link.getAttribute("href"),
-    text: link.textContent,
-    blank: link.target === "_blank",
-  }));
-
-it("points the three buttons at the configured links", async () => {
-  await act(async () => root.render(<TestersPage />));
-  expect(steps()).toEqual([
-    { step: "1", href: TESTERS.groupUrl, text: "Join the group", blank: true },
-    { step: "2", href: TESTERS.optInUrl, text: "Become a tester", blank: true },
-    {
-      step: "3",
-      href: TESTERS.playUrl,
-      text: "Open in Google Play",
-      blank: true,
-    },
-  ]);
-  // No help group configured yet: no "Still stuck?" line.
-  expect(host.textContent).not.toContain("Still stuck?");
-  // No prices on this page.
-  expect(host.textContent).not.toMatch(/₹|Rs\.?\s?\d/);
+const me = (state: TesterMe["state"]): TesterMe => ({
+  state,
+  email: "ravi.tester@gmail.com",
+  phoneModel: null,
+  listed: false,
 });
 
-it("sends the Gmail on WhatsApp on the WhatsApp route, and offers help when configured", async () => {
-  await act(async () =>
-    root.render(
-      <TestersPage
-        config={{
-          ...TESTERS,
-          route: "whatsapp",
-          whatsappNumber: "910000000000",
-          helpUrl: "https://chat.whatsapp.com/example",
-        }}
-      />,
-    ),
-  );
-  expect(steps()[0]).toEqual({
-    step: "1",
-    href: whatsappLink("910000000000", COPY.en.gmailMessage),
-    text: "Send my Gmail on WhatsApp",
-    blank: true,
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
   });
-  expect(
-    host.querySelector('a[href="https://chat.whatsapp.com/example"]')
-      ?.textContent,
-  ).toBe("Ask on WhatsApp");
+
+it("shows one headline, one line and one button that signs in and comes back", async () => {
+  await act(async () => root.render(<TestersPage initial="signed_out" />));
+  expect(host.querySelectorAll("h1")).toHaveLength(1);
+  const cta = host.querySelector<HTMLAnchorElement>("a[data-testers-cta]");
+  expect(cta?.textContent).toBe("Become a tester");
+  expect(cta?.getAttribute("href")).toBe(SIGN_IN);
+  expect(SIGN_IN).toBe("/login?next=%2Ftesters");
+  expect(host.querySelector("form")).toBeNull();
+  // Never a price.
+  expect(host.textContent).not.toMatch(/₹|price|\bfree trial\b/i);
 });
 
-it("changes every line when the language changes, and keeps the choice", async () => {
+it("asks the server who is signed in, then offers the three fields", async () => {
+  const fetcher = vi.fn(async () =>
+    json({ state: "none", email: "ravi.tester@gmail.com" }),
+  );
+  vi.stubGlobal("fetch", fetcher);
   await act(async () => root.render(<TestersPage />));
-  expect(host.querySelector("h1")?.textContent).toBe(COPY.en.title);
-  const english = host.textContent;
-  const marathi = [
-    ...host.querySelectorAll<HTMLButtonElement>("button[lang]"),
-  ].find((button) => button.textContent === "मराठी")!;
-  await act(async () => marathi.click());
-  expect(host.querySelector("h1")?.textContent).toBe(COPY.mr.title);
-  expect(marathi.getAttribute("aria-pressed")).toBe("true");
-  expect(localStorage.getItem("sx.testers.lang")).toBe("mr");
-  expect(new URLSearchParams(window.location.search).get("lang")).toBe("mr");
-  // Every step and every "Stuck?" line follows.
-  for (const line of [
-    COPY.mr.groupTitle,
-    COPY.mr.optInTitle,
-    COPY.mr.installTitle,
-    COPY.mr.stayText,
-    ...COPY.mr.stuck.map((item) => item.q),
-  ])
-    expect(host.textContent).toContain(line);
-  expect(host.textContent).not.toBe(english);
-  // Each language has the same lines.
-  for (const { key } of LANGS) {
-    expect(Object.keys(COPY[key]).sort()).toEqual(Object.keys(COPY.en).sort());
-    expect(COPY[key].stuck).toHaveLength(COPY.en.stuck.length);
+  expect(fetcher).toHaveBeenCalledWith(
+    "/v1/sales-xray/testers/me",
+    expect.objectContaining({ method: "GET", credentials: "same-origin" }),
+  );
+  expect(host.textContent).toContain("Joining as ravi.tester@gmail.com");
+  expect(host.querySelector('input[name="phone_model"]')).not.toBeNull();
+  expect(host.querySelectorAll('input[name="role"]')).toHaveLength(4);
+  expect(host.querySelector('input[name="business"]')).not.toBeNull();
+  const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]');
+  expect(submit?.disabled).toBe(true);
+});
+
+function type(input: HTMLInputElement, value: string) {
+  Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )!.set!.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+it("joins the waitlist once and says what happens next", async () => {
+  const fetcher = vi.fn(async (_url: string, init?: RequestInit) =>
+    init?.method === "POST"
+      ? json({
+          state: "waiting",
+          email: "ravi.tester@gmail.com",
+          phone_model: "Redmi 13",
+        })
+      : json({ state: "none", email: "ravi.tester@gmail.com" }),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  await act(async () => root.render(<TestersPage initial={me("none")} />));
+  await act(async () => {
+    type(host.querySelector('input[name="phone_model"]')!, "Redmi 13");
+    type(host.querySelector('input[name="business"]')!, "Solar panels");
+    host.querySelector<HTMLInputElement>('input[value="seller"]')!.click();
+  });
+  await act(async () => {
+    host
+      .querySelector("form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  const post = fetcher.mock.calls.find(([, init]) => init?.method === "POST");
+  expect(JSON.parse(String(post?.[1]?.body))).toEqual({
+    phone_model: "Redmi 13",
+    role: "seller",
+    business: "Solar panels",
+  });
+  expect(host.textContent).toContain("You're on the list");
+  expect(host.textContent).toContain("ravi.tester@gmail.com");
+});
+
+it("shows Play's two steps at once to a tester the team has added", async () => {
+  await act(async () => root.render(<TestersPage initial={me("ready")} />));
+  const steps = [
+    ...host.querySelectorAll<HTMLAnchorElement>("a[data-step]"),
+  ].map((link) => [link.dataset.step, link.getAttribute("href"), link.target]);
+  expect(steps).toEqual([
+    ["1", TESTERS.optInUrl, "_blank"],
+    ["2", TESTERS.playUrl, "_blank"],
+  ]);
+  expect(TESTERS.optInUrl).toBe(
+    "https://play.google.com/apps/testing/com.authorityclosers.salesxray",
+  );
+  expect(host.textContent).toContain("Item not found");
+  expect(host.textContent).toContain("signed in as ravi.tester@gmail.com");
+});
+
+it("tells an approved, a waiting and a declined person where they stand", async () => {
+  for (const [state, words] of [
+    ["approved", "You're approved"],
+    ["waiting", "You're on the list"],
+    ["declined", "Thanks for applying"],
+  ] as const) {
+    await act(async () =>
+      root.render(<TestersPage key={state} initial={me(state)} />),
+    );
+    expect(host.textContent).toContain(words);
+    expect(host.querySelector("a[data-step]")).toBeNull();
   }
 });
 
-it("ticks a step as done, as a reminder on this device", async () => {
-  await act(async () => root.render(<TestersPage />));
-  const done = host.querySelectorAll<HTMLButtonElement>(
-    "button[aria-pressed]:not([lang])",
+it("reads the server's answer defensively and knows an Android browser from the app", () => {
+  expect(parseTesterMe({ state: "ready", email: "a@b.test" })).toMatchObject({
+    state: "ready",
+  });
+  expect(parseTesterMe({ state: "maybe", email: "a@b.test" })).toBeNull();
+  expect(parseTesterMe({ state: "ready" })).toBeNull();
+  expect(
+    isAndroidBrowser("Mozilla/5.0 (Linux; Android 14; K) Chrome/130 Mobile"),
+  ).toBe(true);
+  expect(
+    isAndroidBrowser(
+      "Mozilla/5.0 (Linux; Android 14; K) Chrome/130 Mobile SalesXrayApp/1.0.99",
+    ),
+  ).toBe(false);
+  expect(isAndroidBrowser("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)")).toBe(
+    false,
   );
-  expect(done).toHaveLength(3);
-  await act(async () => done[1].click());
-  expect(done[1].getAttribute("aria-pressed")).toBe("true");
-  expect(JSON.parse(localStorage.getItem("sx.testers.done") ?? "[]")).toEqual([
-    2,
-  ]);
 });

@@ -59,11 +59,12 @@ _SETTINGS = text(
     "SELECT revision, config FROM call_ai_settings WHERE tenant_id = :tenant"
     " ORDER BY revision DESC LIMIT 1"
 )
+# A release check's environment, or none (staging's stops after the transcript).
 _CANARY = text(
-    "SELECT EXISTS (SELECT 1 FROM conversation_canary_submissions k"
+    "SELECT k.environment FROM conversation_canary_submissions k"
     " JOIN conversation_guest_submissions s"
     " ON s.tenant_id = k.tenant_id AND s.submission_id = k.submission_id"
-    " WHERE s.tenant_id = :tenant AND s.recording_id = :recording)"
+    " WHERE s.tenant_id = :tenant AND s.recording_id = :recording LIMIT 1"
 )
 _UPGRADED = text(
     "SELECT EXISTS (SELECT 1 FROM call_ai_decisions"
@@ -96,10 +97,18 @@ def _settings(row: Any) -> Settings:
 
 
 def _decide(
-    settings: Settings, person_id: UUID | None, *, canary: bool, upgraded: bool
+    settings: Settings,
+    person_id: UUID | None,
+    *,
+    canary: bool,
+    upgraded: bool,
+    transcript_only: bool = False,
 ) -> CallLevel:
     if canary:
-        return CallLevel("full", "canary", person_id, settings.revision)
+        # Release checks run in full, except where they stop after the transcript
+        # (policy.TRANSCRIPT_ONLY_CANARIES).
+        level = "data_only" if transcript_only else "full"
+        return CallLevel(level, "canary", person_id, settings.revision)
     if upgraded:
         return CallLevel("full", "upgrade", person_id, settings.revision)
     level, source = policy.resolve(settings.config, person_id)
@@ -159,11 +168,13 @@ async def level_for_call(db: AsyncSession, tenant_id: UUID, recording_id: UUID) 
     person_id = await seller(db, tenant_id, recording_id)
     if not await db.scalar(text(_TABLE)):
         return CallLevel(policy.DEFAULT_LEVEL, "organisation", person_id, None)
+    canary = await db.scalar(_CANARY, params)
     return _decide(
         await read(db, tenant_id),
         person_id,
-        canary=bool(await db.scalar(_CANARY, params)),
+        canary=canary is not None,
         upgraded=bool(await db.scalar(_UPGRADED, params)),
+        transcript_only=canary in policy.TRANSCRIPT_ONLY_CANARIES,
     )
 
 
@@ -238,11 +249,13 @@ def level_for_call_sync(connection: Any, tenant_id: UUID, recording_id: UUID) ->
     person_id = None if row is None else cast(UUID | None, row.person_id)
     if not connection.scalar(text(_TABLE)):
         return CallLevel(policy.DEFAULT_LEVEL, "organisation", person_id, None)
+    canary = connection.scalar(_CANARY, params)
     return _decide(
         _settings(connection.execute(_SETTINGS, {"tenant": tenant_id}).first()),
         person_id,
-        canary=bool(connection.scalar(_CANARY, params)),
+        canary=canary is not None,
         upgraded=bool(connection.scalar(_UPGRADED, params)),
+        transcript_only=canary in policy.TRANSCRIPT_ONLY_CANARIES,
     )
 
 

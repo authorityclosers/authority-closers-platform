@@ -62,6 +62,9 @@ def test_refusal_is_generic(monkeypatch, capsys, args) -> None:
         ("bad_config", 2, None, None),
         ("cleanup", 1, "C6", "canary_failed"),
         ("route_mismatch", 1, "C5", "c2_route_mismatch"),
+        # Staging stops after the transcript and checks C4/C5 offline.
+        ("transcript", 0, "C2", None),
+        ("transcript_no_fixture", 1, "C2", "c5_fixture_unavailable"),
     ],
 )
 def test_scripted_pipeline(monkeypatch, capsys, tmp_path, scenario, exit_code, stage, failure):
@@ -94,7 +97,9 @@ def test_scripted_pipeline(monkeypatch, capsys, tmp_path, scenario, exit_code, s
     )
     cleanup_error = RuntimeError("accidental-sensitive-value") if scenario == "cleanup" else None
     engine = SimpleNamespace(dispose=AsyncMock(side_effect=cleanup_error))
+    environment = "staging" if scenario.startswith("transcript") else "development"
     settings = SimpleNamespace(
+        release_id="a" * 40,
         public_learner_tenant_id=uuid4(),
         sales_xray_enabled=True,
         sales_xray_acquisition_enabled=True,
@@ -107,6 +112,9 @@ def test_scripted_pipeline(monkeypatch, capsys, tmp_path, scenario, exit_code, s
         "plan_fingerprint": "a" * 64,
         "privacy_revision": "sales-xray-processing-plan-v1",
         "max_cost_paise": 45_001 if scenario == "over_cap" else 45_000,
+        "coaching_prompt_revision": "coaching-v8"
+        if scenario == "transcript_no_fixture"
+        else "coaching-v5",
     }
     plans = SimpleNamespace(quote=AsyncMock(return_value=quote), accept=AsyncMock())
 
@@ -118,6 +126,18 @@ def test_scripted_pipeline(monkeypatch, capsys, tmp_path, scenario, exit_code, s
         if tick == 2 and scenario in {"unexpected", "bad_config"}:
             error = RuntimeError if scenario == "unexpected" else ValueError
             raise error("accidental-sensitive-value")
+        if tick >= 1 and scenario.startswith("transcript"):
+            # Held after C2: the release check's data-only level.
+            return {
+                "recording_id": str(identifier),
+                "local_state": "completed",
+                "state": "held",
+                "execution_hold": None,
+                "failure_code": "ai_data_only",
+                "has_report": False,
+                "stages": [{"stage": "C2", "state": "completed"}],
+                "ai_skip": {"level": "data_only", "reason": "level", "stopped_before": "C4"},
+            }
         return {
             "recording_id": str(identifier),
             "local_state": "completed",
@@ -146,9 +166,10 @@ def test_scripted_pipeline(monkeypatch, capsys, tmp_path, scenario, exit_code, s
         report=AsyncMock(return_value={"report": {"content": content}}),
     )
     db.run = AsyncMock(return_value=object())  # native preflight executes no external process
-    monkeypatch.setenv("AC_ENVIRONMENT", "development")
+    monkeypatch.setenv("AC_ENVIRONMENT", environment)
     monkeypatch.setenv("AC_DATABASE_URL", "unused-sensitive-connection")
     for name, replacement in {
+        "require_baked_release_id": lambda release_id: None,
         "Settings": lambda **kw: settings,
         "load_pinned_approval": lambda s: SimpleNamespace(
             acquisition_policy_for=lambda tenant_id: object()
@@ -165,9 +186,7 @@ def test_scripted_pipeline(monkeypatch, capsys, tmp_path, scenario, exit_code, s
     }.items():
         monkeypatch.setattr(cli, name, replacement)
     monkeypatch.setattr(cli.asyncio, "sleep", AsyncMock())
-    assert (
-        cli.main(["--environment", "development", "--timeout-seconds", "1", "--json"]) == exit_code
-    )
+    assert cli.main(["--environment", environment, "--timeout-seconds", "1", "--json"]) == exit_code
     output = capsys.readouterr()
     assert "sensitive" not in output.out + output.err
     assert "visitor-token" not in output.out + output.err
@@ -192,9 +211,19 @@ def test_scripted_pipeline(monkeypatch, capsys, tmp_path, scenario, exit_code, s
         "transcription_route",
         "analysis_pipeline",
         "one_pass",
+        "depth",
+        "stage_contracts",
     }
     assert result["retention_ref"] == "ref:retention:standard"
-    assert result["ok"] == (scenario == "success")
+    assert result["ok"] == (scenario in {"success", "transcript"})
+    assert result["depth"] == ("transcript" if environment == "staging" else "full")
+    if scenario == "transcript":
+        # The real C2 receipt, and C4/C5 read offline by this release's validators.
+        assert result["transcription_route"] == "elevenlabs/scribe_v2"
+        assert result["stage_contracts"] == {"C4": "ok", "C5": "ok", "c5_revision": "coaching-v5"}
+        assert result["one_pass"] is None
+    else:
+        assert result["stage_contracts"] is None
     assert (result["stage_reached"], result["failure_code"]) == (stage, failure)
     assert result["report_present"] == (
         scenario in {"success", "invalid_report", "missing_coaching", "cleanup", "route_mismatch"}

@@ -411,6 +411,67 @@ it("shows source-resolved seller and prospect suggestions with one-tap confirmat
   );
 });
 
+it("publishes the card's room while it shows, so the report scrolls clear of it", async () => {
+  // Flow 2 walk (13 Nov 2026): at the end of a report the card covered "Open
+  // full coaching for this call".
+  data = {
+    ...initial(),
+    status: "predicted",
+    user_revision: 0,
+    speakers: initial().speakers.map((row, i) => ({
+      ...row,
+      role: i ? "prospect" : "salesperson",
+      role_source: "predicted",
+    })),
+  };
+  await render();
+  const room = () =>
+    document.documentElement.style.getPropertyValue("--sx-speaker-room");
+  expect(host.querySelector('[aria-label="Detected speakers"]')).not.toBeNull();
+  expect(room()).toMatch(/^\d+px$/);
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('[aria-label="Not now"]')!.click(),
+  );
+  expect(room()).toBe("");
+});
+
+it("folds the card to its pill after the first screen, and a tap opens it", async () => {
+  // Orchestrator (13 Nov 2026, Flow 2 G8): the one-line card sat over the
+  // report for the whole read.
+  data = {
+    ...initial(),
+    status: "predicted",
+    user_revision: 0,
+    speakers: initial().speakers.map((row, i) => ({
+      ...row,
+      role: i ? "prospect" : "salesperson",
+      role_source: "predicted",
+    })),
+  };
+  await render();
+  const card = () => host.querySelector('[aria-label="Detected speakers"]');
+  const panel = document.createElement("div");
+  Object.defineProperty(panel, "clientHeight", { value: 700 });
+  Object.defineProperty(panel, "scrollTop", { value: 300, writable: true });
+  document.body.append(panel);
+  try {
+    // Still on the first screen: the card stays.
+    await act(async () => panel.dispatchEvent(new Event("scroll")));
+    expect(card()?.hasAttribute("data-folded")).toBe(false);
+    panel.scrollTop = 720;
+    await act(async () => panel.dispatchEvent(new Event("scroll")));
+    expect(card()?.hasAttribute("data-folded")).toBe(true);
+    const pill = [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "Check speakers",
+    );
+    await act(async () => pill!.click());
+    expect(card()?.hasAttribute("data-folded")).toBe(false);
+    expect(card()?.hasAttribute("data-open")).toBe(true);
+  } finally {
+    panel.remove();
+  }
+});
+
 it("lets the detected-speakers card wait without writing anything", async () => {
   data = {
     ...initial(),

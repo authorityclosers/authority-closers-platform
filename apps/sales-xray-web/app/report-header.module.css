@@ -68,3 +68,16 @@ small.fileType.fileType.fileType.fileType.fileType {
   font-weight: 600;
   text-decoration: none;
 }
+
+/* A finger-sized target on touch screens, the look kept slim: the 20 px
+   name reaches 44 px (the test robot, c9091f68, 2 Nov 2026). */
+@media (pointer: coarse) {
+  .lead {
+    position: relative;
+  }
+  .lead::after {
+    position: absolute;
+    inset: -12px 0;
+    content: "";
+  }
+}

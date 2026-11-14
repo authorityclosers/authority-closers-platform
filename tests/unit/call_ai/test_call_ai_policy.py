@@ -55,6 +55,10 @@ def test_release_checks_and_upgraded_calls_always_run_in_full() -> None:
     assert store._decide(saved, seller, canary=False, upgraded=False).skipped_from == "C2"
     canary = store._decide(saved, seller, canary=True, upgraded=False)
     assert (canary.level, canary.source, canary.skipped_from) == ("full", "canary", None)
+    # Staging's release check stops after the transcript (orchestrator, 13 Nov 2026).
+    assert {"staging"} == policy.TRANSCRIPT_ONLY_CANARIES
+    staging = store._decide(saved, seller, canary=True, upgraded=False, transcript_only=True)
+    assert (staging.level, staging.source, staging.skipped_from) == ("data_only", "canary", "C4")
     upgraded = store._decide(saved, seller, canary=False, upgraded=True)
     assert (upgraded.level, upgraded.source, upgraded.settings_revision) == ("full", "upgrade", 4)
 

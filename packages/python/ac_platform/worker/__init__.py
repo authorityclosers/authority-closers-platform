@@ -145,10 +145,20 @@ ORGANISATION_INVITATION_ROUTE = OutboxJobRoute(
     required_payload_keys=frozenset({"invite_id"}),
     uuid_payload_keys=frozenset({"invite_id"}),
 )
+# Sales X-Ray Play testers (owner, 13 Nov 2026): the welcome email from Admin -> Testers
+# (testers/email.py resolves it; the same names as testers/store.py).
+SALES_XRAY_TESTER_WELCOME_EVENT = "sales_xray.tester.welcome.requested.v1"
+SALES_XRAY_TESTER_WELCOME_JOB = "email.sales_xray_tester_welcome.v1"
+SALES_XRAY_TESTER_WELCOME_ROUTE = OutboxJobRoute(
+    job_kind=SALES_XRAY_TESTER_WELCOME_JOB,
+    required_payload_keys=frozenset({"tester_event_id"}),
+    uuid_payload_keys=frozenset({"tester_event_id"}),
+)
 OUTBOX_JOB_ROUTES: Mapping[str, OutboxJobRoute] = MappingProxyType(
     {
         ENROLLMENT_WELCOME_EVENT: ENROLLMENT_WELCOME_ROUTE,
         ORGANISATION_INVITATION_EVENT: ORGANISATION_INVITATION_ROUTE,
+        SALES_XRAY_TESTER_WELCOME_EVENT: SALES_XRAY_TESTER_WELCOME_ROUTE,
         OWNERSHIP_EVENT: OWNERSHIP_ROUTE,
         STAFF_KEY_CREATED_EVENT: STAFF_KEY_CREATED_ROUTE,
         PROVIDER_LINKED_EVENT: PROVIDER_LINKED_ROUTE,
@@ -554,6 +564,7 @@ def build_default_dispatcher(
         {
             ENROLLMENT_WELCOME_JOB: handler,
             ORGANISATION_INVITATION_JOB: handler,
+            SALES_XRAY_TESTER_WELCOME_JOB: handler,
             OWNERSHIP_JOB: handler,
             STAFF_KEY_CREATED_JOB: handler,
             PROVIDER_LINKED_JOB: handler,
@@ -727,6 +738,7 @@ class DurableWorker:
             if job.kind not in {
                 ENROLLMENT_WELCOME_JOB,
                 ORGANISATION_INVITATION_JOB,
+                SALES_XRAY_TESTER_WELCOME_JOB,
                 OWNERSHIP_JOB,
                 STAFF_KEY_CREATED_JOB,
                 PROVIDER_LINKED_JOB,
@@ -851,6 +863,12 @@ class DurableWorker:
             from ac_platform.organisations.ownership_email import resolve_ownership_message
 
             return await resolve_ownership_message(
+                session, self._settings, job, provider_key=provider_key
+            )
+        if job.kind == SALES_XRAY_TESTER_WELCOME_JOB:
+            from ac_platform.testers.email import resolve_tester_welcome_message
+
+            return await resolve_tester_welcome_message(
                 session, self._settings, job, provider_key=provider_key
             )
         if job.kind == ORGANISATION_INVITATION_JOB:
@@ -1312,6 +1330,9 @@ __all__ = [
     "ENROLLMENT_WELCOME_JOB",
     "REVIEW_INVITATION_EVENT",
     "REVIEW_INVITATION_JOB",
+    "SALES_XRAY_TESTER_WELCOME_EVENT",
+    "SALES_XRAY_TESTER_WELCOME_JOB",
+    "SALES_XRAY_TESTER_WELCOME_ROUTE",
     "ENROLLMENT_WELCOME_ROUTE",
     "PASSWORD_EMAIL_RESET_EVENT",
     "PASSWORD_EMAIL_RESET_JOB",

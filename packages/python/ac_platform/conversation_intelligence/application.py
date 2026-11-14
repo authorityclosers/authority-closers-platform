@@ -1137,6 +1137,13 @@ class ConversationApplication:
         await erase_submission_labels_for_recording(
             self.database, tenant_id=recording.tenant_id, recording_id=recording.id
         )
+        from ac_platform.conversation_intelligence.report_saves import (
+            erase_report_saves_for_recording,
+        )
+
+        await erase_report_saves_for_recording(
+            self.database, tenant_id=recording.tenant_id, recording_id=recording.id
+        )
         from ac_platform.conversation_intelligence.speaker_map_store import (
             erase_speaker_maps_for_recording,
         )

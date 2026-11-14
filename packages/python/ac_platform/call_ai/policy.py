@@ -59,6 +59,11 @@ TWO_SIDED_TALK_MS: Final = 8_000
 SHORT_RULE_OFF: frozenset[str] = frozenset({"test"})
 # The first stage each level leaves out (Off: transcription; Data only: facts).
 FIRST_SKIPPED: Final[dict[str, str]] = {"off": "C2", "data_only": "C4"}
+# Release checks that stop after the transcript (orchestrator, 13 Nov 2026): staging's
+# canary proves intake and transcription and checks the C4/C5 contracts offline
+# (conversation_intelligence/canary_contracts.py), with no paid facts or coaching call.
+# Production's canary runs every stage.
+TRANSCRIPT_ONLY_CANARIES: Final[frozenset[str]] = frozenset({"staging"})
 # A settings document stays small: one line per person.
 MAX_PEOPLE: Final = 2_000
 

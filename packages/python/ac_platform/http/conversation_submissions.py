@@ -19,7 +19,7 @@ from typing import Any, Literal, cast
 from uuid import UUID
 
 import anyio
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
@@ -41,6 +41,9 @@ from ac_platform.conversation_intelligence.acquisition_c5_benchmark import (
     build_benchmark_request,
     record_owner_benchmark_receipt,
     validate_benchmark_scope,
+)
+from ac_platform.conversation_intelligence.acquisition_library import (
+    MAX_PAGE_SIZE as LIBRARY_MAX_PAGE_SIZE,
 )
 from ac_platform.conversation_intelligence.acquisition_library import (
     account_library,
@@ -82,6 +85,7 @@ from ac_platform.conversation_intelligence.processing_plan import (
 )
 from ac_platform.conversation_intelligence.qualitative_pack import ReportLanguage
 from ac_platform.conversation_intelligence.report_export import report_docx_bytes
+from ac_platform.conversation_intelligence.report_saves import set_report_saved
 from ac_platform.conversation_intelligence.report_structure_service import enrich_report_structure
 from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline
 from ac_platform.conversation_intelligence.sales_xray_tenants import (
@@ -151,6 +155,14 @@ class AcquisitionC5BenchmarkAcceptance(QuoteAcceptance):
     """Owner accepts one server-issued, exact-source benchmark quote."""
 
     quote_id: UUID
+
+
+class ReportSavedUpdate(BaseModel):
+    """Strict request body for saving or unsaving a call's report (Reports V4)."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    saved: bool
 
 
 class SubmissionLabelUpdate(BaseModel):
@@ -288,7 +300,16 @@ def install_submission_http(
             raise fail(404, "Upload entry not found.")
         queries = request.query_params.multi_items()
         keys = (
-            {"before", "include_owners", "order", "include_summary", "include_leads"}
+            {
+                "before",
+                "include_owners",
+                "order",
+                "include_summary",
+                "include_leads",
+                "include_kind",
+                "include_saved",
+                "limit",
+            }
             if library
             else allowed
         )
@@ -613,6 +634,9 @@ def install_submission_http(
         order: Literal["newest", "reports_first"] = "newest",
         include_summary: bool = False,
         include_leads: bool = False,
+        include_kind: bool = False,
+        include_saved: bool = False,
+        limit: int | None = Query(default=None, ge=1, le=LIBRARY_MAX_PAGE_SIZE),
     ) -> dict[str, Any]:
         host = guard(request, response, library=True)
         try:
@@ -633,6 +657,9 @@ def install_submission_http(
                     order=order,
                     include_summary=include_summary,
                     include_leads=include_leads,
+                    include_kind=include_kind,
+                    include_saved=include_saved,
+                    limit=limit,
                 )
         except ConversationError as error:
             raise fail(error.status, str(error)) from None
@@ -1006,6 +1033,49 @@ def install_submission_http(
             raise fail(error.status, str(error)) from None
         response.headers["ETag"] = format_revision_etag(label.revision)
         return {"display_name": label.display_name, "display_name_revision": label.revision}
+
+    @router.put("/submissions/{submission_id}/saved")
+    async def save_report(
+        submission_id: UUID,
+        request: Request,
+        response: Response,
+        owner: _Owner = dependency,
+    ) -> dict[str, bool]:
+        """Save or unsave the call's report for the signed-in person (Reports V4)."""
+        guard(request, response, write=True)
+        content_types = request.headers.getlist("content-type")
+        if (
+            len(content_types) != 1
+            or content_types[0].split(";", 1)[0].strip().lower() != "application/json"
+        ):
+            raise fail(415, "Save a report using JSON.")
+        raw = bytearray()
+        try:
+            async with asyncio.timeout(5):
+                async for block in request.stream():
+                    if len(raw) + len(block) > 64:
+                        raise fail(413, "That request is too large.")
+                    raw.extend(block)
+            payload = ReportSavedUpdate.model_validate_json(bytes(raw))
+        except (ValidationError, ValueError):
+            raise fail(422, "Say whether the report is saved.") from None
+        except (TimeoutError, ClientDisconnect):
+            raise fail(408, "Saving the report was interrupted. Try again.") from None
+        if owner.actor is None:
+            raise fail(401, "Sign in to save reports.")
+        try:
+            saved = await set_report_saved(
+                owner.ownership,
+                submission_id,
+                actor=owner.actor,
+                saved=payload.saved,
+                shared_identity_locks=owner.shared_identity_locks,
+            )
+        except ConversationError as error:
+            if error.status in (403, 404):
+                raise fail(404, "This saved call is unavailable.") from None
+            raise fail(error.status, str(error)) from None
+        return {"saved": saved}
 
     def speaker_map_failure(error: ConversationError) -> HTTPException:
         if error.status in (403, 404):

@@ -36,6 +36,8 @@ class RenderedEmail:
     subject: str
     text: str
     html: str
+    # Where a reply goes, for a message that invites one (the tester welcome).
+    reply_to: str | None = None
 
 
 def _required_text(
@@ -158,6 +160,147 @@ def _email_layout(
         "Sent only for account security or learner access. No marketing subscription was added."
         "</td></tr></table></td></tr></table></body></html>"
     )
+
+
+# The Sales X-Ray tester welcome (owner, 13 Nov 2026): the owner's own email of that day, as
+# a template. Every link is fixed here; only the first name and the address vary.
+TESTER_OPT_IN_URL = "https://play.google.com/apps/testing/com.authorityclosers.salesxray"
+TESTER_PLAY_URL = "https://play.google.com/store/apps/details?id=com.authorityclosers.salesxray"
+TESTER_LOGO_URL = "https://app.salesxray.in/icons/icon-192.png"
+TESTER_SITE_URL = "https://salesxray.in"
+TESTER_REPLY_TO = "Suyash Kulkarni <admin@authorityclosers.com>"
+_TESTER_EMAIL = re.compile(r"[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]{1,253}\.[A-Za-z]{2,63}")
+_INK, _BODY, _MUTED, _GREEN, _LINE = "#10201b", "#3b4a45", "#55635e", "#1f7a63", "#eef2f0"
+_FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+
+
+def _tester_step(number: int, title: str, words: str, button: str, link: str, solid: bool) -> str:
+    action, gap = "", "0"
+    if button:
+        look = (
+            f"background:{_GREEN};color:#ffffff;padding:11px 20px;"
+            if solid
+            else f"color:{_GREEN};padding:10px 19px;border:1px solid {_GREEN};"
+        )
+        action = (
+            f'<a href="{link}" style="display:inline-block;{look}text-decoration:none;'
+            f'font-size:14px;font-weight:600;border-radius:10px">{button}</a>'
+        )
+        gap = "12px"
+    return (
+        f'<tr><td style="padding:14px 0;border-top:1px solid {_LINE}">'
+        f'<p style="margin:0 0 4px 0;font-size:15px;font-weight:600;color:{_INK}">'
+        f"{number}. {title}</p>"
+        f'<p style="margin:0 0 {gap} 0;font-size:14px;line-height:1.55;color:{_MUTED}">'
+        f"{words}</p>{action}</td></tr>"
+    )
+
+
+def _tester_welcome(first_name: str, email: str) -> RenderedEmail:
+    if _TESTER_EMAIL.fullmatch(email) is None:
+        raise PermanentProviderError("tester welcome needs the tester's address")
+    named = first_name if first_name.lower() != "there" else ""
+    name = html.escape(named)
+    address = html.escape(email, quote=True)
+    mail = f'<a href="mailto:{address}" style="color:{_GREEN};text-decoration:none">{address}</a>'
+    steps = "".join(
+        (
+            _tester_step(
+                1,
+                "Join the test",
+                f"Open this while signed in as <b>{mail}</b>, then tap <b>Become a tester</b>.",
+                "Become a tester",
+                TESTER_OPT_IN_URL,
+                True,
+            ),
+            _tester_step(
+                2,
+                "Install the app",
+                "Open Google Play on your phone and install Sales X-Ray. Play must use the "
+                "same Google account (tap your photo in Play to switch).",
+                "Open in Google Play",
+                TESTER_PLAY_URL,
+                False,
+            ),
+            _tester_step(
+                3,
+                "Sign in",
+                "Open the app and continue with Google using the same account.",
+                "",
+                "",
+                False,
+            ),
+        )
+    )
+    heading = f"Your access is ready, {name}" if name else "Your access is ready"
+    subject = (
+        f"{named}, your Sales X-Ray access is ready"
+        if named
+        else "Your Sales X-Ray access is ready"
+    )
+    page = (
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        f"<title>{html.escape(subject)}</title></head>"
+        f'<body style="margin:0;padding:0;background:#f6f8f7;font-family:{_FONT}">'
+        '<div style="display:none;max-height:0;overflow:hidden">'
+        "Three steps on your Android phone and you&#39;re in.</div>"
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'style="padding:32px 12px;background:#f6f8f7;font-family:{_FONT}">'
+        '<tr><td align="center">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        'style="max-width:560px;background:#ffffff;border-radius:16px;border:1px solid #e3e8e6">'
+        '<tr><td style="padding:36px 36px 8px 36px">'
+        f'<img src="{TESTER_LOGO_URL}" width="56" height="56" alt="Sales X-Ray" '
+        'style="display:block;border-radius:14px">'
+        '<p style="margin:24px 0 6px 0;font-size:13px;letter-spacing:0.04em;'
+        f'text-transform:uppercase;color:{_GREEN};font-weight:600">Sales X-Ray</p>'
+        f'<h1 style="margin:0 0 14px 0;font-size:24px;line-height:1.3;color:{_INK};'
+        f'font-weight:700">{heading}</h1>'
+        f'<p style="margin:0 0 8px 0;font-size:15px;line-height:1.6;color:{_BODY}">'
+        "You&#39;ve been added to the Sales X-Ray early-access group. Three steps on your "
+        "Android phone and you&#39;re in. It takes about two minutes.</p></td></tr>"
+        '<tr><td style="padding:16px 36px 4px 36px">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0">{steps}'
+        "</table></td></tr>"
+        '<tr><td style="padding:12px 36px 28px 36px">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        'style="border-radius:12px;background:#f1f7f4">'
+        '<tr><td style="padding:16px 18px">'
+        f'<p style="margin:0 0 6px 0;font-size:14px;font-weight:600;color:{_INK}">'
+        "If Play says &quot;Item not found&quot;</p>"
+        f'<p style="margin:0;font-size:13px;line-height:1.6;color:{_MUTED}">'
+        f"Google can take a few minutes to recognise a new tester. Check that Play is on {mail}, "
+        "wait five minutes, then try step 2 again. If it still shows, clear Google Play&#39;s "
+        "cache (Settings, Apps, Google Play Store, Storage, Clear cache) and retry.</p>"
+        "</td></tr></table>"
+        f'<p style="margin:22px 0 0 0;font-size:14px;line-height:1.6;color:{_BODY}">'
+        "Stuck at any step? Just reply to this email and we&#39;ll sort it out with you.</p>"
+        f'<p style="margin:18px 0 0 0;font-size:14px;line-height:1.5;color:{_INK}">'
+        f'Suyash Kulkarni<br><span style="color:{_MUTED}">Authority Closers</span></p>'
+        "</td></tr></table>"
+        '<p style="margin:18px 0 0 0;font-size:12px;color:#8a9893">'
+        f'Sales X-Ray by Authority Closers · <a href="{TESTER_SITE_URL}" '
+        'style="color:#8a9893">salesxray.in</a></p>'
+        "</td></tr></table></body></html>"
+    )
+    text = (
+        f"{heading}.\n\n"
+        "You've been added to the Sales X-Ray early-access group. Three steps on your Android "
+        "phone:\n\n"
+        f"1. Join the test: open {TESTER_OPT_IN_URL} while signed in as {email} and tap "
+        '"Become a tester".\n'
+        f"2. Install the app: {TESTER_PLAY_URL} (Google Play must use the same Google "
+        "account).\n"
+        "3. Sign in: open the app and continue with Google using the same account.\n\n"
+        'If Play says "Item not found": Google can take a few minutes to recognise a new '
+        f"tester. Check that Play is on {email}, wait five minutes and try step 2 again. If it "
+        "still shows, clear Google Play's cache (Settings, Apps, Google Play Store, Storage, "
+        "Clear cache) and retry.\n\n"
+        "Stuck at any step? Just reply to this email.\n\n"
+        "Suyash Kulkarni\nAuthority Closers"
+    )
+    return RenderedEmail(subject=subject, text=text, html=page, reply_to=TESTER_REPLY_TO)
 
 
 def render_email(message: EmailMessage) -> RenderedEmail:
@@ -652,6 +795,14 @@ def render_email(message: EmailMessage) -> RenderedEmail:
             ),
         )
 
+    if message.template == "sales-xray-tester-welcome":
+        if message.communication_class != "enrollment_welcome_next_action":
+            raise PermanentProviderError("tester welcome has the wrong communication class")
+        address = _required_text(message.variables, "email", maximum=320)
+        if address.lower() != message.to.lower():
+            raise PermanentProviderError("tester welcome names another address")
+        return _tester_welcome(first_name, address)
+
     raise PermanentProviderError("email template is not implemented by the Resend adapter")
 
 
@@ -698,6 +849,8 @@ class ResendEmailAdapter:
             "text": rendered.text,
             "html": rendered.html,
         }
+        if rendered.reply_to:
+            payload["reply_to"] = rendered.reply_to
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Idempotency-Key": message.idempotency_key,
