@@ -304,6 +304,110 @@ def _tester_welcome(first_name: str, email: str) -> RenderedEmail:
     return RenderedEmail(subject=subject, text=text, html=page, reply_to=TESTER_REPLY_TO)
 
 
+def _credit_runway(variables: Mapping[str, Any]) -> RenderedEmail:
+    """The AI credit runway alert (owner, 13 Nov 2026), in the tester welcome's style:
+    where to pay, how much and why. Every number is checked; none of them carries markup."""
+    from datetime import date
+
+    from ac_platform.ai_spend import credit_email
+
+    values = credit_email.checked(variables)
+    rupees = credit_email.rupees
+    subject = credit_email.subject(values)
+    provider = html.escape(values["provider"])
+    account = html.escape(values["account"])
+    add = rupees(values["add_inr"])
+    topped = date.fromisoformat(values["topup_on"])
+    days = values["days_left"]
+    lasts = (
+        "nothing was spent on it in the last 7 days"
+        if days is None
+        else f"that lasts <b>about {days} {'day' if days == 1 else 'days'}</b>"
+    )
+    summary = (
+        f"Our ledger estimates <b>{rupees(max(values['balance_inr'], 0))} left</b> of the "
+        f"{rupees(values['topup_inr'])} added on {topped.day} {topped:%b %Y}: "
+        f"{rupees(values['spent_inr'])} spent since. At about "
+        f"{rupees(values['burn_inr_per_day'])} a day over the last 7 days, {lasts}."
+    )
+    why = html.escape(credit_email.reason(values))
+    truth = html.escape(credit_email.GOOGLE_IS_THE_TRUTH)
+    steps = "".join(
+        (
+            _tester_step(
+                1,
+                "Open Google AI Studio",
+                "Signed in with the Google account that owns the billing.",
+                "Open AI Studio",
+                credit_email.PAY_URL,
+                True,
+            ),
+            _tester_step(
+                2,
+                "Billing, then Buy credits",
+                f"Choose the billing account <b>{account}</b>.",
+                "",
+                "",
+                False,
+            ),
+            _tester_step(3, f"Add {add}", why, "", "", False),
+        )
+    )
+    page = (
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        f"<title>{html.escape(subject)}</title></head>"
+        f'<body style="margin:0;padding:0;background:#f6f8f7;font-family:{_FONT}">'
+        '<div style="display:none;max-height:0;overflow:hidden">'
+        f"{html.escape(subject)}.</div>"
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'style="padding:32px 12px;background:#f6f8f7;font-family:{_FONT}">'
+        '<tr><td align="center">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        'style="max-width:560px;background:#ffffff;border-radius:16px;border:1px solid #e3e8e6">'
+        '<tr><td style="padding:36px 36px 8px 36px">'
+        f'<img src="{TESTER_LOGO_URL}" width="56" height="56" alt="Sales X-Ray" '
+        'style="display:block;border-radius:14px">'
+        '<p style="margin:24px 0 6px 0;font-size:13px;letter-spacing:0.04em;'
+        f'text-transform:uppercase;color:{_GREEN};font-weight:600">AI credit</p>'
+        f'<h1 style="margin:0 0 14px 0;font-size:24px;line-height:1.3;color:{_INK};'
+        f'font-weight:700">Add {add} of {provider} credit</h1>'
+        f'<p style="margin:0 0 8px 0;font-size:15px;line-height:1.6;color:{_BODY}">'
+        f"{summary}</p></td></tr>"
+        '<tr><td style="padding:16px 36px 4px 36px">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0">{steps}'
+        "</table></td></tr>"
+        '<tr><td style="padding:12px 36px 28px 36px">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        'style="border-radius:12px;background:#f1f7f4">'
+        '<tr><td style="padding:16px 18px">'
+        f'<p style="margin:0 0 6px 0;font-size:14px;font-weight:600;color:{_INK}">'
+        "Google&#39;s figure is the truth</p>"
+        f'<p style="margin:0;font-size:13px;line-height:1.6;color:{_MUTED}">{truth}</p>'
+        "</td></tr></table>"
+        f'<p style="margin:22px 0 0 0;font-size:14px;line-height:1.6;color:{_BODY}">'
+        "Once it&#39;s paid, tell the team the amount, so the next estimate starts from it.</p>"
+        "</td></tr></table>"
+        '<p style="margin:18px 0 0 0;font-size:12px;color:#8a9893">'
+        f'Sales X-Ray by Authority Closers · <a href="{TESTER_SITE_URL}" '
+        'style="color:#8a9893">salesxray.in</a></p>'
+        "</td></tr></table></body></html>"
+    )
+    text = (
+        f"Add {values['provider']} credit: {add}.\n\n"
+        f"Our ledger estimates {rupees(max(values['balance_inr'], 0))} left of the "
+        f"{rupees(values['topup_inr'])} added on {topped.day} {topped:%b %Y}: "
+        f"{rupees(values['spent_inr'])} spent since, about "
+        f"{rupees(values['burn_inr_per_day'])} a day over the last 7 days.\n\n"
+        f"1. Open Google AI Studio: {credit_email.PAY_URL}\n"
+        f"2. Billing, then Buy credits, on the billing account {values['account']}.\n"
+        f"3. Add {add}. {credit_email.reason(values)}\n\n"
+        f"{credit_email.GOOGLE_IS_THE_TRUTH}\n\n"
+        "Once it's paid, tell the team the amount, so the next estimate starts from it."
+    )
+    return RenderedEmail(subject=subject, text=text, html=page)
+
+
 def render_email(message: EmailMessage) -> RenderedEmail:
     """Render one exact approved template without accepting arbitrary markup."""
 
@@ -803,6 +907,13 @@ def render_email(message: EmailMessage) -> RenderedEmail:
         if address.lower() != message.to.lower():
             raise PermanentProviderError("tester welcome names another address")
         return _tester_welcome(first_name, address)
+
+    if message.template == "ai-credit-runway":
+        if message.communication_class != "verification_security":
+            raise PermanentProviderError("credit runway has the wrong communication class")
+        if message.to.lower() != "admin@authorityclosers.com":
+            raise PermanentProviderError("credit runway goes to the owner only")
+        return _credit_runway(message.variables)
 
     raise PermanentProviderError("email template is not implemented by the Resend adapter")
 

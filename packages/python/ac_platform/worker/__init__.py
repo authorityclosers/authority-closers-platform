@@ -24,6 +24,7 @@ from ac_platform.admin_settings.staff_key_email import (
     STAFF_KEY_CREATED_JOB,
     STAFF_KEY_CREATED_ROUTE,
 )
+from ac_platform.ai_spend import credit_email
 from ac_platform.application.asyncio_runtime import run_async
 from ac_platform.application.settings import Settings, get_settings
 from ac_platform.billing.expiry_jobs import ExpirySignal, MinuteExpiryWorker
@@ -156,11 +157,16 @@ SALES_XRAY_TESTER_WELCOME_ROUTE = OutboxJobRoute(
     required_payload_keys=frozenset({"tester_event_id"}),
     uuid_payload_keys=frozenset({"tester_event_id"}),
 )
+# AI credit runway (owner, 13 Nov 2026): the owner's email before the Gemini credit ends
+# (ai_spend/credit_runway.py queues it, ai_spend/credit_email.py resolves it).
+AI_CREDIT_RUNWAY_EVENT = credit_email.EVENT
+AI_CREDIT_RUNWAY_JOB = credit_email.JOB
 OUTBOX_JOB_ROUTES: Mapping[str, OutboxJobRoute] = MappingProxyType(
     {
         ENROLLMENT_WELCOME_EVENT: ENROLLMENT_WELCOME_ROUTE,
         ORGANISATION_INVITATION_EVENT: ORGANISATION_INVITATION_ROUTE,
         SALES_XRAY_TESTER_WELCOME_EVENT: SALES_XRAY_TESTER_WELCOME_ROUTE,
+        AI_CREDIT_RUNWAY_EVENT: credit_email.ROUTE,
         OWNERSHIP_EVENT: OWNERSHIP_ROUTE,
         STAFF_KEY_CREATED_EVENT: STAFF_KEY_CREATED_ROUTE,
         PROVIDER_LINKED_EVENT: PROVIDER_LINKED_ROUTE,
@@ -567,6 +573,7 @@ def build_default_dispatcher(
             ENROLLMENT_WELCOME_JOB: handler,
             ORGANISATION_INVITATION_JOB: handler,
             SALES_XRAY_TESTER_WELCOME_JOB: handler,
+            AI_CREDIT_RUNWAY_JOB: handler,
             OWNERSHIP_JOB: handler,
             STAFF_KEY_CREATED_JOB: handler,
             PROVIDER_LINKED_JOB: handler,
@@ -754,6 +761,7 @@ class DurableWorker:
                 ENROLLMENT_WELCOME_JOB,
                 ORGANISATION_INVITATION_JOB,
                 SALES_XRAY_TESTER_WELCOME_JOB,
+                AI_CREDIT_RUNWAY_JOB,
                 OWNERSHIP_JOB,
                 STAFF_KEY_CREATED_JOB,
                 PROVIDER_LINKED_JOB,
@@ -884,6 +892,10 @@ class DurableWorker:
             from ac_platform.testers.email import resolve_tester_welcome_message
 
             return await resolve_tester_welcome_message(
+                session, self._settings, job, provider_key=provider_key
+            )
+        if job.kind == AI_CREDIT_RUNWAY_JOB:
+            return await credit_email.resolve_runway_message(
                 session, self._settings, job, provider_key=provider_key
             )
         if job.kind == ORGANISATION_INVITATION_JOB:
@@ -1338,6 +1350,8 @@ def main() -> None:
 
 
 __all__ = [
+    "AI_CREDIT_RUNWAY_EVENT",
+    "AI_CREDIT_RUNWAY_JOB",
     "AmbiguousProviderReceiptError",
     "AllowlistedDispatcher",
     "DurableWorker",
