@@ -1,0 +1,10 @@
+#!/bin/sh
+# Writes the dev-live API's interpreter path (its active build slot) to $1 for uid 10001.
+set -eu
+slot=$(cat /var/lib/ac-dev-live-backend/active-slot)
+case "$slot" in a|b) ;; *) echo "unknown slot" >&2; exit 1 ;; esac
+python=/srv/authority-closers/development/live-backend/$slot/.venv/bin/python
+[ -x "$python" ]
+printf '%s' "$python" > "$1"
+chown 10001:10001 "$1"
+chmod 0400 "$1"
