@@ -10,6 +10,7 @@ migration rolls back only while it is empty. Disposable loopback PostgreSQL, fic
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -348,6 +349,84 @@ def test_a_tester_applies_is_reviewed_added_emailed_and_seen_in_the_app(
                     )
                 )
                 assert applied == 1
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_two_admins_sending_at_once_send_one_welcome(postgres_harness: Any, tmp_path: Path) -> None:
+    """The repeat guard is serialised: the second Admin waits for the first's commit, then
+    sees its email (Codex review on the v1.59 release PR, 14 Nov 2026)."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            actor = (await _person(setup, "Owner"))[0]
+            email = f"pair-{uuid4().hex[:8]}@example.test"
+            listed_id = uuid4()
+            async with setup.sessions() as db, db.begin():
+                when = datetime.now(UTC)
+                db.add_all(
+                    [
+                        SalesXrayTesterEvent(
+                            id=listed_id,
+                            email=email,
+                            kind="listed",
+                            actor_person_id=actor,
+                            created_at=when,
+                        ),
+                        SalesXrayTesterEvent(
+                            id=uuid4(),
+                            email=email,
+                            kind="added_to_group",
+                            via="seed",
+                            actor_person_id=actor,
+                            created_at=when + timedelta(microseconds=1),
+                        ),
+                    ]
+                )
+            first_inside = asyncio.Event()
+
+            async def first() -> None:
+                async with setup.sessions() as db, db.begin():
+                    await store.request_welcome(
+                        db, listed_id, actor_person_id=actor, now=datetime.now(UTC)
+                    )
+                    first_inside.set()
+                    # The second Admin's request arrives while this one is still open.
+                    await asyncio.sleep(0.5)
+
+            async def second() -> None:
+                await first_inside.wait()
+                async with setup.sessions() as db, db.begin():
+                    await store.request_welcome(
+                        db, listed_id, actor_person_id=actor, now=datetime.now(UTC)
+                    )
+
+            await asyncio.gather(first(), second())
+            async with setup.sessions() as db:
+                emailed = await db.scalar(
+                    select(func.count()).where(
+                        SalesXrayTesterEvent.email == email,
+                        SalesXrayTesterEvent.kind == "emailed",
+                    )
+                )
+                sent_ids = (
+                    await db.scalars(
+                        select(SalesXrayTesterEvent.id).where(
+                            SalesXrayTesterEvent.email == email,
+                            SalesXrayTesterEvent.kind == "emailed",
+                        )
+                    )
+                ).all()
+                intents = await db.scalar(
+                    select(func.count()).where(
+                        OutboxEvent.dedupe_key.in_([store.welcome_key(i) for i in sent_ids])
+                    )
+                )
+            assert emailed == 1
+            assert intents == 1
         finally:
             await setup.engine.dispose()
 

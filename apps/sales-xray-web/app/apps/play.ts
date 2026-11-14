@@ -39,9 +39,9 @@ export type PlayWords = Readonly<{
 
 export function playWords(storeUrl: string | null): PlayWords {
   // A recording the downloaded app hasn't sent yet goes with it when it is
-  // uninstalled: check Calls first (orchestrator, 24 Oct 2026).
+  // uninstalled: check Reports first (orchestrator, 24 Oct 2026).
   const switching =
-    "Switching from the downloaded app? Open Calls there and make sure every recording shows as sent, then uninstall it; your calls and leads stay in your account.";
+    "Switching from the downloaded app? Open Reports there and make sure every recording shows as sent, then uninstall it; your calls and leads stay in your account.";
   return storeUrl
     ? {
         url: storeUrl,
@@ -51,7 +51,7 @@ export function playWords(storeUrl: string | null): PlayWords {
         file: "No Play Store on this phone? Download the app",
         cardTitle: "Sales X-Ray is now on Google Play",
         cardMessage:
-          "Switch now. Before you uninstall, open Calls and make sure every recording shows as sent. Then uninstall this app and install it from Google Play; your calls and leads stay in your account.",
+          "Switch now. Before you uninstall, open Reports and make sure every recording shows as sent. Then uninstall this app and install it from Google Play; your calls and leads stay in your account.",
       }
     : {
         url: PLAY_OPT_IN_URL,
@@ -61,7 +61,7 @@ export function playWords(storeUrl: string | null): PlayWords {
         file: "No Play invite? Download the app",
         cardTitle: "Sales X-Ray is moving to Google Play",
         cardMessage:
-          "Got a Play testing invite? Switch now. Before you uninstall, open Calls and make sure every recording shows as sent. Then uninstall this app and install from Play; your calls and leads stay in your account. No invite yet? Keep using this app; we'll tell you when Play is open for everyone.",
+          "Got a Play testing invite? Switch now. Before you uninstall, open Reports and make sure every recording shows as sent. Then uninstall this app and install from Play; your calls and leads stay in your account. No invite yet? Keep using this app; we'll tell you when Play is open for everyone.",
       };
 }
 

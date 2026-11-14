@@ -183,6 +183,21 @@ async def _email_of(db: AsyncSession, tester_id: UUID) -> str:
     return email
 
 
+async def _locked_rows(db: AsyncSession, tester_id: UUID) -> list[SalesXrayTesterEvent]:
+    """The tester's rows, read after taking their row locks for this transaction.
+
+    Two Admins acting on one tester at once take turns: the second waits here until the
+    first commits, then reads again in a new statement, so it sees the first one's step
+    (its welcome email, within the repeat guard) instead of repeating it.
+    """
+
+    email = await _email_of(db, tester_id)
+    await db.execute(
+        select(SalesXrayTesterEvent.id).where(SalesXrayTesterEvent.email == email).with_for_update()
+    )
+    return await _rows_for(db, email)
+
+
 async def standing_for_email(db: AsyncSession, email: str) -> Standing | None:
     rows = await _rows_for(db, email)
     return fold(rows) if rows else None
@@ -254,7 +269,7 @@ async def decide(
     note: str | None,
     now: datetime,
 ) -> Standing:
-    rows = await _rows_for(db, await _email_of(db, tester_id))
+    rows = await _locked_rows(db, tester_id)
     standing = fold(rows)
     if actor_email and actor_email.strip().lower() == standing.email:
         raise TesterRefused("Someone else decides for you.")
@@ -284,7 +299,7 @@ async def mark_added(
 ) -> Standing:
     """The team added the account to the Google Group; the welcome email can follow at once."""
 
-    rows = await _rows_for(db, await _email_of(db, tester_id))
+    rows = await _locked_rows(db, tester_id)
     standing = fold(rows)
     if standing.decision == "declined":
         raise TesterRefused("They were declined. Approve them first.")
@@ -312,7 +327,7 @@ async def request_welcome(
 ) -> Standing:
     """Queues the branded welcome email (outbox), only for a tester in the Google Group."""
 
-    rows = await _rows_for(db, await _email_of(db, tester_id))
+    rows = await _locked_rows(db, tester_id)
     standing = fold(rows)
     if standing.decision == "declined":
         raise TesterRefused("They were declined. Approve them first.")
