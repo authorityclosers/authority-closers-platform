@@ -84,22 +84,56 @@ it("starts afresh when another person signs in on the same screen", async () => 
   expect(fetch).toHaveBeenCalledTimes(2);
 });
 
-it("keeps the newest tap when an older answer arrives late", async () => {
-  const replies: ((response: Response) => void)[] = [];
+it("sends taps one after another, so the last answer holds them all", async () => {
+  // Dev, 14 Nov 2026: a mission and a bookmark tapped together crossed, and
+  // the bookmark's answer unticked the mission on screen.
+  const server = { saved: [] as string[], missions: [] as string[] };
+  let open = 0;
+  let most = 0;
   vi.stubGlobal(
     "fetch",
-    vi.fn(
-      () =>
-        new Promise<Response>((resolve) => {
-          replies.push(resolve);
-        }),
-    ),
+    vi.fn(async (url: string, init: RequestInit) => {
+      open += 1;
+      most = Math.max(most, open);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const id = url.split("/").pop() ?? "";
+      const body = JSON.parse(String(init.body)) as {
+        item: string;
+        on: boolean;
+      };
+      const list = body.item === "saved" ? server.saved : server.missions;
+      if (body.on && !list.includes(id)) list.push(id);
+      open -= 1;
+      return answer([...server.saved], [...server.missions]);
+    }),
   );
-  const first = setItem("CF01", "saved", true);
-  const second = setItem("CF01", "saved", false);
-  replies[1](answer([], []));
-  await second;
-  replies[0](answer(["CF01"], []));
-  await first;
-  expect([...progressNow().saved]).toEqual([]);
+  const both = Promise.all([
+    setItem("PB03", "mission", true),
+    setItem("PB03", "saved", true),
+  ]);
+  expect([...progressNow().missions]).toEqual(["PB03"]);
+  expect([...progressNow().saved]).toEqual(["PB03"]);
+  expect(await both).toEqual([true, true]);
+  expect(most).toBe(1);
+  expect([...progressNow().missions]).toEqual(["PB03"]);
+  expect([...progressNow().saved]).toEqual(["PB03"]);
+});
+
+it("takes back only the failed tap, not a later one", async () => {
+  let calls = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response("{}", { status: 500 })
+        : answer(["OB03"], []);
+    }),
+  );
+  const failed = setItem("DM02", "mission", true);
+  const saved = setItem("OB03", "saved", true);
+  expect(await failed).toBe(false);
+  expect(await saved).toBe(true);
+  expect([...progressNow().missions]).toEqual([]);
+  expect([...progressNow().saved]).toEqual(["OB03"]);
 });

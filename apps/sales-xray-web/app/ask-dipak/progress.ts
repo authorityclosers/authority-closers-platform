@@ -100,41 +100,53 @@ export function loadProgress(): Promise<void> {
 }
 
 /**
- * Saves or clears one item. The screen changes at once; the account's answer
- * then stands, and if the write fails the change is taken back.
+ * Writes go one after another, so each answer already holds every earlier
+ * tap (dev, 14 Nov 2026: a mission and a bookmark tapped together crossed on
+ * the way, and the bookmark's answer, written first, unticked the mission).
  */
-export async function setItem(
+let queue: Promise<unknown> = Promise.resolve();
+
+/**
+ * Saves or clears one item. The screen changes at once; the account's answer
+ * stands once no later tap is waiting, and if the write fails that one change
+ * is taken back.
+ */
+export function setItem(
   questionId: string,
   item: ProgressItem,
   on: boolean,
 ): Promise<boolean> {
   const key = item === "saved" ? "saved" : "missions";
-  const before = state[key];
-  const next = new Set(before);
+  const next = new Set(state[key]);
   if (on) next.add(questionId);
   else next.delete(questionId);
   set({ ...state, [key]: next });
   const mine = ++writes;
-  try {
-    const answer = await request(
-      `${PROGRESS_PATH}/${encodeURIComponent(questionId)}`,
-      {
-        method: "PUT",
-        body: JSON.stringify({ item, on }),
-        headers: { "content-type": "application/json" },
-      },
-    );
-    if (mine === writes) set({ status: "ready", ...answer });
-    return true;
-  } catch {
-    if (mine === writes) {
-      const back = new Set(state[key]);
-      if (before.has(questionId)) back.add(questionId);
-      else back.delete(questionId);
-      set({ ...state, [key]: back });
+  const write = queue.then(async () => {
+    try {
+      const answer = await request(
+        `${PROGRESS_PATH}/${encodeURIComponent(questionId)}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ item, on }),
+          headers: { "content-type": "application/json" },
+        },
+      );
+      if (mine === writes) set({ status: "ready", ...answer });
+      return true;
+    } catch {
+      // Only this item goes back, and only if no later tap changed it.
+      if (state[key].has(questionId) === on) {
+        const back = new Set(state[key]);
+        if (on) back.delete(questionId);
+        else back.add(questionId);
+        set({ ...state, [key]: back });
+      }
+      return false;
     }
-    return false;
-  }
+  });
+  queue = write;
+  return write;
 }
 
 function subscribe(listener: () => void) {
@@ -158,6 +170,7 @@ export function resetProgress() {
   state = EMPTY;
   reading = null;
   writes = 0;
+  queue = Promise.resolve();
   person = null;
   listeners.forEach((listener) => listener());
 }
