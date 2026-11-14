@@ -4340,10 +4340,12 @@ class LeadDesk:
         from ac_platform.product_updates.models import Notification
 
         name = " ".join(word[:1].upper() + word[1:] for word in lead.name.split()) or "A lead"
+        # Where it came from in a person's words: its own label, else its source's
+        # (Redmi QA on production, 14 Nov 2026: a website lead's card had only the
+        # rules' shorthand).
+        source = lead.source_label or SOURCE_LABELS.get(lead.source or "", "")
         why = [
-            f"New from {lead.source_label}."
-            if lead.source_label and event.kind == "assigned"
-            else "",
+            f"New from {source}." if source and event.kind == "assigned" else "",
             # Why, in plain words to the seller: never the rules' "(fewest)".
             owner_words.note(lead.owner_reason, you=True) or "",
         ]
