@@ -1,4 +1,10 @@
-/* Analysis time in Settings: what is left, big, and who adds more under it. */
+/* Analysis time in Settings: what is left, big, and who adds more under it;
+   for an organisation's owner or admin, what each seller used. */
+.stack {
+  display: grid;
+  gap: 12px;
+}
+
 .card {
   display: grid;
   gap: 4px;
@@ -14,6 +20,12 @@
   font: var(--sx-text-panel);
 }
 
+.title {
+  margin: 0;
+  color: var(--sx-ink);
+  font: var(--sx-text-label);
+}
+
 .who {
   margin: 0;
   color: var(--sx-muted);
@@ -22,4 +34,35 @@
 
 .link {
   color: var(--sx-accent);
+}
+
+.people {
+  display: grid;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.people li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  align-content: center;
+  border-top: 1px solid var(--sx-line);
+  padding-block: 10px;
+}
+
+.name {
+  min-width: 0;
+  color: var(--sx-ink);
+  font: var(--sx-text-label);
+  overflow-wrap: anywhere;
+}
+
+.used {
+  flex: none;
+  color: var(--sx-accent);
+  font: var(--sx-text-meta);
 }
