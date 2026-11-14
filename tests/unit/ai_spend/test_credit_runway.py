@@ -146,6 +146,11 @@ def test_the_email_says_where_to_pay_how_much_and_that_google_is_the_truth() -> 
         credit_email.PAY_URL,
     ):
         assert words in rendered.html
+    # The billing page of the prepaid account itself, with Buy credits on it.
+    assert credit_email.PAY_URL == (
+        "https://aistudio.google.com/billing?billing=0146E3-722EE0-47B3D5"
+    )
+    assert f'href="{credit_email.PAY_URL}"' in rendered.html
     assert "Rs 800 left" in rendered.text and credit_email.GOOGLE_IS_THE_TRUTH in rendered.text
     # The owner's address only.
     with pytest.raises(PermanentProviderError):

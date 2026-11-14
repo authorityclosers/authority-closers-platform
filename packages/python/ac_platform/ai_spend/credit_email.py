@@ -24,8 +24,9 @@ EVENT = "ai_spend.credit_runway.alert.v1"
 JOB = "email.ai_credit_runway.v1"
 # The owner's own address (his order): the alert never goes anywhere else.
 EMAIL_TO = "admin@authorityclosers.com"
-# Where Gemini credit is bought: Google AI Studio, then Billing, then Buy credits.
-PAY_URL = "https://aistudio.google.com/"
+# Where Gemini credit is bought: AI Studio's billing page for the prepaid
+# account, with Buy credits on it (the orchestrator's confirmed link, 14 Nov 2026).
+PAY_URL = "https://aistudio.google.com/billing?billing=0146E3-722EE0-47B3D5"
 PAY_PATH = "AI Studio → Billing → Buy credits"
 GOOGLE_IS_THE_TRUTH = (
     "These numbers are our own estimate from the cost ledger. If Google's billing page "
