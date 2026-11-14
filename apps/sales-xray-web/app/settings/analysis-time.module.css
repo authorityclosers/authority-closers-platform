@@ -1,0 +1,25 @@
+/* Analysis time in Settings: what is left, big, and who adds more under it. */
+.card {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.left {
+  margin: 0;
+  color: var(--sx-ink);
+  font: var(--sx-text-panel);
+}
+
+.who {
+  margin: 0;
+  color: var(--sx-muted);
+  font: var(--sx-text-meta);
+}
+
+.link {
+  color: var(--sx-accent);
+}

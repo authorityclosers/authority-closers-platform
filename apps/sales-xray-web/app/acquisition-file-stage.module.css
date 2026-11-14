@@ -176,6 +176,12 @@
 }
 
 /* Why no file can be chosen now, under the button that is off. */
+/* The time left, over Choose a file (orchestrator, 13 Nov 2026). */
+.timeLeft {
+  color: var(--sx-accent);
+  font: var(--sx-text-label);
+}
+
 .blocked {
   max-width: 34ch;
   margin: 0;

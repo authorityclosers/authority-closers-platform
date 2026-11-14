@@ -162,6 +162,7 @@ import {
   type Notice,
 } from "./notice-center";
 import { usePurchasesAllowed } from "./purchase-policy";
+import { analysisTimeLeft } from "./analysis-time";
 import { Picker } from "./ui/picker";
 import styles from "./acquisition-studio.module.css";
 import type { ScopedSavedReport } from "./report-preload";
@@ -3229,6 +3230,7 @@ export function AcquisitionStudio({
                         : undefined
                     }
                     disabled={!policy || !!busy || reviewSelectionActive}
+                    timeLeft={analysisTimeLeft(allowance, minutesScope)}
                     blocked={minutesBlockedReason(
                       minutesOut,
                       purchasesAllowed,

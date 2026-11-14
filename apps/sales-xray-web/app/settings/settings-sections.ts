@@ -11,6 +11,7 @@ import {
   Building2,
   CircleUserRound,
   ClipboardList,
+  Clock,
   Plug,
   CreditCard,
   Code,
@@ -33,6 +34,7 @@ export type SettingsSectionId =
   | "security"
   | "ai-apps"
   | "plan"
+  | "analysis-time"
   | "privacy"
   | "organisation"
   | "team"
@@ -105,6 +107,15 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     // Billing belongs to whoever pays: the person in a personal workspace,
     // in an organisation the roles that see billing (workspace-role.ts).
     needs: "billing.view",
+  },
+  {
+    // Everyone, members too: how much analysis is left and who adds more
+    // (orchestrator, 13 Nov 2026). Time only, never a price.
+    id: "analysis-time",
+    label: "Analysis time",
+    hint: "How much call analysis you have left",
+    icon: Clock,
+    group: "Account",
   },
   {
     // Owner, 24 Oct 2026: usage analytics on by default, each person can turn it off.
