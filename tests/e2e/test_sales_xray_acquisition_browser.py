@@ -893,13 +893,13 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await expect(
                         library_page.get_by_role("heading", name="Reports", exact=True, level=1)
                     ).to_be_visible()
-                    # While the Calls link re-renders the page, the row the server
-                    # streamed can still sit in React's hidden container for a few
-                    # frames beside the new one. A CSS locator counts both (a
-                    # strict-mode error that fails at once, not a timeout; wb-ci
-                    # 39543912132), so match the visible row, as role locators do.
+                    # Reports V4 (Dipak's spec, 13 Nov 2026): the page opens on Main,
+                    # whose recent reports hold this call's card; the card's link opens
+                    # its report. Match the visible link only: while the link re-renders
+                    # the page, an earlier copy can sit in React's hidden container for
+                    # a few frames (a strict-mode error otherwise; wb-ci 39543912132).
                     saved_call = library_page.locator(
-                        f'button[data-submission-id="{submission_id}"]'
+                        f'[data-report-card="{submission_id}"] a'
                     ).filter(visible=True)
                     await expect(saved_call).to_be_visible(timeout=20000)
                     await library_page.screenshot(

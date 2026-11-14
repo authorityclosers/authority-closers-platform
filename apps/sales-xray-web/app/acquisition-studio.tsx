@@ -144,6 +144,7 @@ import { NewAnalysisFooter, NewAnalysisHero } from "./new-analysis-hero";
 import { CallAudioDock } from "./call-audio-dock";
 import { SourceWaveformProvider, clipPressAction } from "./source-waveform";
 import { ReportHeader } from "./report-header";
+import { takeHandedRecording } from "./report-library/upload-handoff";
 import { callTitle, type CallLabel } from "./call-label";
 import { rememberOpened } from "./pick-up";
 import { readCallLabel, renameCall } from "./call-label-client";
@@ -1652,6 +1653,19 @@ export function AcquisitionStudio({
     if (pending) pending.removeFile(removed);
     else setLocalStagedFiles(remaining);
   }
+
+  // A recording chosen on Reports' "Make your next call better." screen
+  // (Reports V4, 13 Nov 2026) joins this selection once the limits are known,
+  // exactly as one chosen here: the same checks, consent and Analyse.
+  const addHanded = useRef<(file: File) => void>(() => {});
+  useEffect(() => {
+    addHanded.current = (handed) => addFiles([handed]);
+  });
+  useEffect(() => {
+    if (!policy || embedded) return;
+    const handed = takeHandedRecording();
+    if (handed) addHanded.current(handed);
+  }, [policy, embedded]);
 
   async function operation(
     label: string,

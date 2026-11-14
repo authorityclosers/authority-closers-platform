@@ -1,0 +1,877 @@
+/*
+ * Reports V4 (Dipak's spec, 13 Nov 2026): Main, All Reports, the Filters
+ * sheet and the upload screen. Colours are the app's tokens only (the sheet
+ * sits in the top layer, so --sx-* throughout); text is in rem so it follows
+ * the phone's font size; every control is at least 44 px to tap.
+ */
+
+.page {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  width: 100%;
+  max-width: 720px;
+  min-width: 0;
+  margin-inline: auto;
+  color: var(--sx-ink);
+  font-family: var(--lx-font-ui);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.page h1,
+.page h2,
+.page h3,
+.page p {
+  margin: 0;
+}
+
+/* The bar names the page; its heading is for screen readers. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.subtitle {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+/* ---------- Main / All Reports ---------- */
+
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-fill);
+}
+
+.tab {
+  min-height: 44px;
+  padding: 8px 6px;
+  border: 0;
+  border-radius: calc(var(--sx-radius-md) - 4px);
+  background: transparent;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] {
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.tab:focus-visible,
+.primary:focus-visible,
+.secondary:focus-visible,
+.textButton:focus-visible,
+.filters:focus-visible,
+.save:focus-visible,
+.chip button:focus-visible,
+.day:focus-visible,
+.calendarMove:focus-visible,
+.slot:focus-visible,
+.quiet:focus-visible,
+.back:focus-visible,
+.callLog:focus-visible,
+.cardLink:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.panel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* ---------- The waveform and Analyse a call ---------- */
+
+.analyse {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.waveform {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  height: 87px;
+  overflow: hidden;
+}
+
+.waveform svg {
+  width: 100%;
+  max-width: 340px;
+  height: 78px;
+  align-self: center;
+  fill: var(--sx-accent);
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 10px 16px;
+  border-radius: var(--sx-radius-sm);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  line-height: var(--sx-leading-20);
+  text-align: center;
+  cursor: pointer;
+  transition: transform var(--sx-dur-fast, 120ms) var(--sx-ease-out, ease-out);
+}
+
+.primary {
+  border: 1px solid var(--sx-call-fill);
+  background: var(--sx-call-fill);
+  color: var(--sx-call-ink);
+}
+
+.secondary {
+  border: 1px solid var(--sx-line);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+}
+
+.primary:active,
+.secondary:active,
+.card:active {
+  transform: scale(var(--sx-press-scale, 0.98));
+}
+
+.primary[aria-disabled="true"] {
+  opacity: 0.55;
+}
+
+.analyseButton {
+  width: 100%;
+  min-height: 52px;
+  font-size: var(--sx-text-md);
+}
+
+/* ---------- Section heads ---------- */
+
+.sectionLine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sectionLine h2 {
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+  line-height: var(--sx-leading-24);
+}
+
+.textButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  margin-inline-end: -8px;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: var(--sx-accent);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+/* ---------- Search, Filters, count ---------- */
+
+.tools {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.search {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-muted);
+}
+
+.search:focus-within {
+  border-color: var(--sx-accent);
+}
+
+.search input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.search input::placeholder {
+  color: var(--sx-muted);
+}
+
+.filters {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 0 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.filters[data-active] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.filterCount {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  font-size: var(--sx-text-2xs);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.resultRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+}
+
+.resultRow [data-report-count] {
+  color: var(--sx-ink);
+  font-weight: 600;
+}
+
+.sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  min-height: 44px;
+  padding-inline-start: 12px;
+  border: 1px solid color-mix(in oklab, var(--sx-accent) 30%, transparent);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  line-height: var(--sx-leading-16);
+}
+
+.chip button {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.more,
+.firstTime p {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  text-align: center;
+}
+
+.firstTime {
+  padding: 20px 16px;
+  border: 1px dashed var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+/* ---------- Report cards ---------- */
+
+.list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px 14px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+  transition: transform var(--sx-dur-fast, 120ms) var(--sx-ease-out, ease-out);
+}
+
+.cardTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  line-height: var(--sx-leading-16);
+}
+
+.pill[data-source="inbound_auto"] {
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.pill[data-source="manual"] {
+  border: 1px solid var(--sx-line);
+  background: transparent;
+}
+
+.when {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+  white-space: nowrap;
+}
+
+.cardTitle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: start;
+  gap: 4px;
+}
+
+.cardTitle h3 {
+  padding-block-start: 2px;
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+  line-height: var(--sx-leading-24);
+  overflow-wrap: anywhere;
+}
+
+.cardLink {
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--sx-radius-sm);
+}
+
+/* The whole card opens the report; the Save button sits above it. */
+.cardLink::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--sx-radius-md);
+}
+
+.save {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -8px -8px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-muted);
+  cursor: pointer;
+}
+
+.save[aria-pressed="true"] {
+  color: var(--sx-accent);
+}
+
+.save[aria-pressed="true"] svg {
+  fill: currentColor;
+}
+
+.summary {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  overflow-wrap: anywhere;
+}
+
+.cardFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding-block-start: 10px;
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.meta {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+}
+
+.open {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-inline-start: auto;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  line-height: var(--sx-leading-20);
+}
+
+.cardSkeleton {
+  display: grid;
+  gap: 10px;
+  padding: 16px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+/* ---------- No matching reports ---------- */
+
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 28px 16px;
+  border: 1px dashed var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  text-align: center;
+}
+
+.empty h3 {
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+  line-height: var(--sx-leading-24);
+}
+
+.empty p {
+  max-width: 34ch;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.empty .secondary {
+  margin-block-start: 6px;
+}
+
+.emptyIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+/* ---------- The phone's own calls, a tap from Main ---------- */
+
+.callLog {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  text-decoration: none;
+}
+
+.callLog span {
+  display: grid;
+  min-width: 0;
+}
+
+.callLog b {
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.callLog small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 4px;
+  min-height: 44px;
+  margin-inline-start: -8px;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: var(--sx-accent);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* ---------- Analyse a call: the upload screen ---------- */
+
+.uploadTitle {
+  font-size: var(--sx-text-xl);
+  font-weight: 700;
+  line-height: var(--sx-leading-28);
+}
+
+/* The drop area takes the screen's free height, so the page has no empty
+   half under it on a tall phone. */
+.upload {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 12px;
+  min-height: clamp(240px, 40vh, 360px);
+  padding: 28px 16px;
+  border: 1px dashed var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  text-align: center;
+}
+
+.uploadIcon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.uploadButton {
+  min-width: 220px;
+}
+
+.chosen {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.formats {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+}
+
+/* ---------- Filter reports: the sheet ---------- */
+
+.sheetBody {
+  display: grid;
+  min-width: 0;
+  color: var(--sx-ink);
+  font-family: var(--lx-font-ui);
+}
+
+.sheetScroll {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding-block-end: 12px;
+}
+
+.sheetScroll p {
+  margin: 0;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.fieldLabel {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  line-height: var(--sx-leading-20);
+}
+
+.picker {
+  width: 100%;
+}
+
+.dateHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-block-start: 4px;
+  color: var(--sx-accent);
+}
+
+.rangeSlots {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.slot {
+  display: grid;
+  gap: 2px;
+  min-height: 60px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.slot[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+}
+
+.slotName {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  line-height: var(--sx-leading-16);
+}
+
+.slotValue {
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  line-height: var(--sx-leading-20);
+}
+
+.slotValue[data-empty] {
+  color: var(--sx-muted);
+  font-weight: 400;
+}
+
+.calendar {
+  padding: 6px 0 4px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.calendarHead {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  text-align: center;
+}
+
+.calendarHead strong {
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.calendarMove {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink);
+  cursor: pointer;
+}
+
+.calendarGrid {
+  display: grid;
+}
+
+.calendarRow {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.weekday {
+  padding: 6px 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  line-height: var(--sx-leading-16);
+  text-align: center;
+}
+
+.day {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.day[data-today]:not([data-edge]) {
+  box-shadow: inset 0 0 0 1px var(--sx-line-strong);
+}
+
+.day[data-between] {
+  border-radius: 0;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.day[data-edge] {
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  font-weight: 700;
+}
+
+.calendarFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.hint,
+.helper {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+}
+
+.quiet {
+  min-height: 44px;
+  margin-inline-start: auto;
+  padding: 8px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* The two buttons stay in reach while the sheet scrolls (section 22). */
+.sheetActions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr);
+  gap: 8px;
+  padding-block: 12px;
+  background: var(--sx-elevated, var(--sx-surface));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .primary,
+  .secondary,
+  .card {
+    transition: none;
+  }
+
+  .primary:active,
+  .secondary:active,
+  .card:active {
+    transform: none;
+  }
+}
