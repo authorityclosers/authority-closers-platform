@@ -127,11 +127,13 @@ it("draws G1's four tiles from the real totals, with no table", () => {
   ];
   // One total a tile, no Inbound | Cold split (owner, 10 Nov 2026).
   expect(tiles.map((tile) => tile.textContent)).toEqual([
-    "Attempted228190 leads called",
-    "Connected7834%55 leads reached",
-    "Talk time5 h 17 minAbout 4 min per connected call",
-    "Interested151 meeting booked",
+    "Attempted228190leads called",
+    "Connected7834%55 reached",
+    "Talk time5 h 17 min4 mina call",
+    "Interested151meeting",
   ]);
+  // Every tile has its right half (owner, 13 Nov 2026: "symmetric").
+  expect(tiles.every((tile) => tile.querySelector("[class*=side]"))).toBe(true);
   expect(
     host.querySelector('[data-growth-view="tiles"]')?.textContent,
   ).not.toMatch(/Inbound|Cold/);
@@ -154,6 +156,28 @@ it("draws G1's four tiles from the real totals, with no table", () => {
   expect(rows[0].textContent).toContain("52 attempted · 18 connected");
   act(() => (rows[1] as HTMLButtonElement).click());
   expect(opened).toHaveBeenCalledWith(effort.sellers[0]);
+});
+
+it("keeps the tiles whole with nothing yet: no dash, no squeezed total", () => {
+  const none: Effort = {
+    ...effort,
+    team: false,
+    sellers: [],
+    inbound: side(),
+    cold: side(),
+  };
+  act(() => root.render(<PulseTiles effort={none} />));
+  const tiles = [
+    ...host.querySelectorAll(
+      '[data-growth-view="tiles"] > div:first-of-type > div',
+    ),
+  ];
+  expect(tiles.map((tile) => tile.textContent)).toEqual([
+    "Attempted00leads called",
+    "Connected00%0 reached",
+    "Talk time0 min0calls",
+    "Interested00meetings",
+  ]);
 });
 
 it("keeps speed to a new lead small, and a dash when there is none", () => {

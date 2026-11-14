@@ -47,9 +47,6 @@ export const talkTime = (seconds: number) =>
   breakLength(Math.round(seconds / 60));
 const number = new Intl.NumberFormat("en-IN");
 const n = (value: number) => number.format(value);
-/** "1 lead called", "12 leads called". */
-const count = (value: number, one: string, many: string) =>
-  `${n(value)} ${value === 1 ? one : many}`;
 /** "34%", or a dash when there is nothing to divide. */
 const share = (part: number, whole: number) =>
   whole > 0 ? `${Math.round((part / whole) * 100)}%` : "–";
@@ -92,7 +89,8 @@ function Ring({
         ) : null}
       </svg>
       <span className={styles.ringWords} aria-hidden="true">
-        {share(part, whole)}
+        {/* No calls yet reads 0%, never a lone dash (owner, 13 Nov 2026). */}
+        {whole > 0 ? share(part, whole) : "0%"}
       </span>
     </span>
   );
@@ -168,6 +166,20 @@ export function sellerEffort(seller: SellerEffort): Effort {
   };
 }
 
+/**
+ * A tile's right half, so no tile has an empty side (owner, 13 Nov 2026,
+ * Growth on the Redmi: "every tile must be symmetric"): one more number in
+ * colour, with its words under it.
+ */
+function Side({ value, words }: { value: string; words: string }) {
+  return (
+    <span className={styles.side}>
+      <b className={styles.sideFigure}>{value}</b>
+      <span className={styles.sideWords}>{words}</span>
+    </span>
+  );
+}
+
 /** G1: four equal tiles, what needs attention, and each seller's calls. */
 export function PulseTiles({
   effort,
@@ -183,6 +195,9 @@ export function PulseTiles({
   const attempted = both(effort, "attempted");
   const connected = both(effort, "connected");
   const talked = both(effort, "talk_seconds");
+  const leadsCalled = both(effort, "leads_attempted");
+  const reached = both(effort, "reached");
+  const meetings = both(effort, "meetings");
   const needs = attention(effort);
   const sellers = [...effort.sellers].sort(
     (a, b) => sellerCalls(b) - sellerCalls(a),
@@ -203,52 +218,46 @@ export function PulseTiles({
           don't have to focus on inbound and cold leads"), each with one
           line of what is behind it. */}
       <div className={styles.tiles}>
+        {/* Each tile is two halves (owner, 13 Nov 2026): its name and total
+            on the left, one more thing in colour on the right. */}
         <div className={styles.tile} style={step(0)}>
           <span className={styles.label}>Attempted</span>
           <strong className={styles.figure}>{n(attempted)}</strong>
-          <span className={styles.meta}>
-            {count(
-              both(effort, "leads_attempted"),
-              "lead called",
-              "leads called",
-            )}
-          </span>
+          <Side
+            value={n(leadsCalled)}
+            words={leadsCalled === 1 ? "lead called" : "leads called"}
+          />
         </div>
         <div className={styles.tile} style={step(1)}>
           <span className={styles.label}>Connected</span>
-          <span className={styles.figureRow}>
-            <strong className={styles.figure}>{n(connected)}</strong>
+          <strong className={styles.figure}>{n(connected)}</strong>
+          <span className={styles.side}>
             <Ring
               part={connected}
               whole={attempted}
               label="Connected of attempted"
             />
-          </span>
-          <span className={styles.meta}>
-            {count(both(effort, "reached"), "lead reached", "leads reached")}
+            <span className={styles.sideWords}>{n(reached)} reached</span>
           </span>
         </div>
         <div className={styles.tile} style={step(2)}>
           <span className={styles.label}>Talk time</span>
           <strong className={styles.figure}>{talkTime(talked)}</strong>
-          <span className={styles.meta}>
-            {connected
-              ? `About ${talkTime(talked / connected)} per connected call`
-              : "No connected calls"}
-          </span>
+          {connected ? (
+            <Side value={talkTime(talked / connected)} words="a call" />
+          ) : (
+            <Side value="0" words="calls" />
+          )}
         </div>
         <div className={styles.tile} style={step(3)}>
           <span className={styles.label}>Interested</span>
           <strong className={styles.figure}>
             {n(both(effort, "interested"))}
           </strong>
-          <span className={styles.meta}>
-            {count(
-              both(effort, "meetings"),
-              "meeting booked",
-              "meetings booked",
-            )}
-          </span>
+          <Side
+            value={n(meetings)}
+            words={meetings === 1 ? "meeting" : "meetings"}
+          />
         </div>
       </div>
 

@@ -77,13 +77,57 @@
   gap: 10px;
 }
 
+/* Two halves (owner, 13 Nov 2026: "every tile must be symmetric"): the name
+   across the top, then the total on the left and one more thing in colour on
+   the right, both centred in the room under it, so no part of a tile is empty. */
 .tile {
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
-  align-content: start;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto 1fr;
+  gap: 6px 8px;
   padding: 12px;
   container-type: inline-size;
+}
+
+.tile > .label {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+
+.tile > .figure {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: center;
+  /* Between words only: "0 min" never goes a letter a line. */
+  overflow-wrap: normal;
+}
+
+.side {
+  display: grid;
+  grid-column: 2;
+  grid-row: 2;
+  align-self: center;
+  justify-items: end;
+  gap: 2px;
+  min-width: 0;
+  text-align: end;
+}
+
+.sideFigure {
+  color: var(--sx-accent);
+  font: var(--sx-text-panel);
+}
+
+.sideWords {
+  color: var(--sx-accent);
+  font: var(--sx-text-meta);
+}
+
+/* The tile's ring grows with the text, so its percent keeps clear of the
+   stroke at any size (the owner's Redmi at 130 %: "40%" touched it). */
+.tile .ring {
+  width: 2.5rem;
+  height: 2.5rem;
 }
 
 .figure {
@@ -91,18 +135,6 @@
   color: var(--sx-ink);
   font: var(--sx-text-kpi);
   font-size: min(var(--sx-text-2xl), 17cqi);
-}
-
-.figureRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-}
-
-/* A tile's last line sits on its floor, level with its neighbour's. */
-.tile > :last-child {
-  align-self: end;
 }
 
 /* The connect ring draws itself round. */
