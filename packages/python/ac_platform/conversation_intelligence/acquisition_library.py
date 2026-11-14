@@ -16,6 +16,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.application import ConversationNotFound
 from ac_platform.conversation_intelligence.canary import recording_is_canary
+from ac_platform.conversation_intelligence.capture_source import upload_kind
 from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.models import (
@@ -26,6 +27,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRun,
 )
 from ac_platform.conversation_intelligence.recovery_models import ConversationRetainedC5Version
+from ac_platform.conversation_intelligence.report_saves import saved_submissions
 from ac_platform.conversation_intelligence.sensitive_segment_models import (
     ConversationSensitiveSegmentMark,
 )
@@ -38,6 +40,9 @@ from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
 
 PAGE_SIZE = 20
+# The largest page a caller may ask for (Reports V4, 13 Nov 2026: the whole report library
+# for search and filters in a few reads, never one read per 20 calls).
+MAX_PAGE_SIZE = 100
 # The lead each listed call belongs to, read as plain SQL so the call library does not
 # depend on the Lead Desk's models (slice 7, 22 Oct 2026). First the lead history's call
 # events (index ix_lead_desk_event_call_submission, migration 0122), then each lead's
@@ -45,14 +50,14 @@ PAGE_SIZE = 20
 _CALL_LEADS = text(
     """
     SELECT e.data ->> 'submission_id' AS submission_id, l.id, l.name, l.stage, l.step,
-           l.pipeline_key, e.created_at AS named_at, 0 AS fallback
+           l.pipeline_key, l.pipeline, e.created_at AS named_at, 0 AS fallback
     FROM lead_desk_events e
     JOIN lead_desk_leads l ON l.tenant_id = e.tenant_id AND l.id = e.lead_id
     WHERE e.tenant_id = :tenant AND e.kind = 'call'
       AND e.data ->> 'submission_id' IN :submissions
     UNION ALL
     SELECT CAST(l.last_submission_id AS text), l.id, l.name, l.stage, l.step,
-           l.pipeline_key, l.updated_at, 1
+           l.pipeline_key, l.pipeline, l.updated_at, 1
     FROM lead_desk_leads l
     WHERE l.tenant_id = :tenant AND l.last_submission_id IN :ids
     """
@@ -208,6 +213,9 @@ async def account_library(
     order: Literal["newest", "reports_first"] = "newest",
     include_summary: bool = False,
     include_leads: bool = False,
+    include_kind: bool = False,
+    include_saved: bool = False,
+    limit: int | None = None,
 ) -> dict[str, Any]:
     """Read retained direct/claimed uploads without renewing or assigning ownership.
 
@@ -228,7 +236,22 @@ async def account_library(
 
     ``include_leads`` adds ``lead`` to each call a lead names (``call_leads``,
     one more statement for the page); a call no lead names has no ``lead``.
+
+    ``include_kind`` adds each row's ``upload`` ("auto": the phone or desktop app
+    captured and uploaded it; "manual": someone chose the file, ``upload_kind``) and
+    ``lead_side``: "inbound" or "cold" for a call a lead names (the lead's side, as
+    Lead Desk reads it: only Cold and history leads are not Inbound), else null.
+    Reports V4 files each report under them (Dipak's spec, 13 Nov 2026).
+
+    ``include_saved`` adds ``saved``: whether the signed-in person saved the call's
+    report (``report_saves``; Saved Reports in the Reports filter).
+
+    ``limit`` is the page size, from 1 to ``MAX_PAGE_SIZE`` (none: ``PAGE_SIZE``).
     """
+    if limit is None:
+        limit = PAGE_SIZE
+    if not 1 <= limit <= MAX_PAGE_SIZE:
+        raise ValueError("limit must be between 1 and MAX_PAGE_SIZE")
     now = await ownership.sessions._admit()
     await ownership.sessions._owner(
         None,
@@ -265,8 +288,8 @@ async def account_library(
     ordering: tuple[Any, ...] = (usage.created_at.desc(), usage.submission_id.desc())
     if started is not None:
         ordering = (started.desc(), *ordering)
-    rows = (await ownership.database.scalars(query.order_by(*ordering).limit(PAGE_SIZE + 1))).all()
-    page = rows[:PAGE_SIZE]
+    rows = (await ownership.database.scalars(query.order_by(*ordering).limit(limit + 1))).all()
+    page = rows[:limit]
     current = await _page_rows(
         ownership, actor, now, every_owner=every_owner, receipt_ids=[row.id for row in page]
     )
@@ -276,10 +299,22 @@ async def account_library(
     summaries = (
         await _row_summaries(ownership.database, list(current.values())) if include_summary else {}
     )
-    leads = (
-        await call_leads(ownership.database, actor.tenant_id, [row.submission_id for row in page])
-        if include_leads
+    lead_rows = (
+        await _call_lead_rows(
+            ownership.database, actor.tenant_id, [row.submission_id for row in page]
+        )
+        if include_leads or include_kind
         else {}
+    )
+    saved = (
+        await saved_submissions(
+            ownership.database,
+            tenant_id=actor.tenant_id,
+            person_id=actor.person_id,
+            submission_ids=[row.submission_id for row in page],
+        )
+        if include_saved and actor.tenant_id is not None
+        else set()
     )
     entries = []
     for row in page:
@@ -311,13 +346,18 @@ async def account_library(
         }
         if include_summary:
             entry["summary"] = summaries.get(found.recording_id) if found.has_report else None
-        lead = leads.get(row.submission_id)
-        if lead is not None:
-            entry["lead"] = lead
+        named = lead_rows.get(row.submission_id)
+        if named is not None and include_leads:
+            entry["lead"] = _public_lead(named)
+        if include_kind:
+            entry["upload"] = upload_kind(found.capture_source)
+            entry["lead_side"] = None if named is None else _lead_side(named.pipeline)
+        if include_saved:
+            entry["saved"] = row.submission_id in saved
         entries.append(entry)
     return {
         "submissions": entries,
-        "next_cursor": str(rows[PAGE_SIZE - 1].submission_id) if len(rows) > PAGE_SIZE else None,
+        "next_cursor": str(rows[limit - 1].submission_id) if len(rows) > limit else None,
     }
 
 
@@ -333,6 +373,14 @@ async def call_leads(
     now: its stage, the business's own step and its pipeline. A call no lead names has
     none. Only the actor's tenant is read, so another organisation's lead never shows.
     """
+    rows = await _call_lead_rows(database, tenant_id, submission_ids)
+    return {submission_id: _public_lead(row) for submission_id, row in rows.items()}
+
+
+async def _call_lead_rows(
+    database: AsyncSession, tenant_id: UUID | None, submission_ids: list[UUID]
+) -> dict[UUID, Any]:
+    """The row of the lead each call belongs to (``call_leads``), in one statement."""
     if tenant_id is None or not submission_ids:
         return {}
     rows = (
@@ -348,16 +396,26 @@ async def call_leads(
     found: dict[str, Any] = {}
     for row in sorted(rows, key=lambda row: (row.fallback, -row.named_at.timestamp())):
         found.setdefault(row.submission_id, row)
+    return {UUID(submission_id): row for submission_id, row in found.items()}
+
+
+def _public_lead(row: Any) -> dict[str, Any]:
+    """A call's lead as the list and the Report send it: exactly these five fields."""
     return {
-        UUID(submission_id): {
-            "lead_id": str(row.id),
-            "name": row.name,
-            "stage": row.stage,
-            "step": row.step,
-            "pipeline": row.pipeline_key or "main",
-        }
-        for submission_id, row in found.items()
+        "lead_id": str(row.id),
+        "name": row.name,
+        "stage": row.stage,
+        "step": row.step,
+        "pipeline": row.pipeline_key or "main",
     }
+
+
+def _lead_side(pipeline: str | None) -> str:
+    """Inbound or Cold, as Lead Desk reads a lead (lead_desk.history: only Cold and
+    history leads are not Inbound; an empty side reads Inbound)."""
+    from ac_platform.lead_desk.history import NOT_INBOUND
+
+    return "cold" if pipeline in NOT_INBOUND else "inbound"
 
 
 async def _page_rows(
@@ -406,6 +464,7 @@ async def _page_rows(
             latest_plan.label("plan_state"),
             recording.state.label("recording_state"),
             recording.id.label("recording_id"),
+            ConversationGuestSubmission.capture_source.label("capture_source"),
             recording.tenant_id.label("recording_tenant_id"),
             recording.person_id.label("recording_person_id"),
             recording.generation.label("generation"),
