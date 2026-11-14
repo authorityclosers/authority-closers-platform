@@ -5,7 +5,8 @@
  */
 export const COPY = {
   title: "Test Sales X-Ray before everyone else",
-  lead: "Use our Android app early, with 3 hours of call analysis to try.",
+  // A no-break space keeps "3" with "hours" at the end of a line.
+  lead: "Use our Android app early, with 3\u00a0hours of call analysis to try.",
   cta: "Become a tester",
   ctaNote:
     "Android phones · Sign in with the Google account your Play Store uses",

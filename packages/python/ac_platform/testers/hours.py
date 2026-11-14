@@ -6,7 +6,9 @@
 - A member of an organisation's workspace gets one audited 3-hour grant there, through the
   same path as Admin's grant route and the grant-minutes command
   (``minute_grants.write_audited_grant``), with the Admin who acted as the approver. Once
-  per tester and workspace: the grant's audit reason marks it as the tester grant.
+  per tester and workspace: the grant's audit reason marks it as the tester grant, and any
+  earlier audited grant of at least 3 hours there (the owner's 13 Nov grants to every
+  organisation member, grant-minutes) already counts, so nobody gets them twice.
 - Someone with no Sales X-Ray workspace yet gets theirs when they start one (the trial).
 
 ``give_tester_hours`` runs when the team approves a tester, marks them added to the group
@@ -87,23 +89,26 @@ async def _workspaces(
 
 
 async def _granted(db: AsyncSession, person_ids: Iterable[UUID]) -> set[tuple[UUID, UUID]]:
-    """(person, workspace) pairs that already have the tester grant."""
+    """(person, workspace) pairs that have the tester grant, or an admin grant of 3+ hours."""
 
     wanted = {str(person_id) for person_id in person_ids}
     if not wanted:
         return set()
-    payloads = (
-        await db.scalars(
-            select(AuditEvent.payload).where(
-                AuditEvent.action == MINUTE_GRANT_ACTION,
-                AuditEvent.reason == TESTER_GRANT_REASON,
+    rows = (
+        await db.execute(
+            select(AuditEvent.payload, AuditEvent.reason).where(
+                AuditEvent.action == MINUTE_GRANT_ACTION
             )
         )
     ).all()
     pairs: set[tuple[UUID, UUID]] = set()
-    for payload in payloads:
+    for payload, reason in rows:
         person, tenant = payload.get("person_id"), payload.get("tenant_id")
-        if person in wanted and isinstance(tenant, str):
+        minutes = payload.get("minutes")
+        enough = reason == TESTER_GRANT_REASON or (
+            isinstance(minutes, int) and minutes >= TESTER_MINUTES
+        )
+        if enough and person in wanted and isinstance(tenant, str):
             pairs.add((UUID(person), UUID(tenant)))
     return pairs
 

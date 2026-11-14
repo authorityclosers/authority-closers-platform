@@ -55,7 +55,7 @@ it("shows one headline, one line and one button that signs in and comes back", a
   await act(async () => root.render(<TestersPage initial="signed_out" />));
   expect(host.querySelectorAll("h1")).toHaveLength(1);
   // Every tester gets 3 hours of call analysis (owner, 13 Nov 2026).
-  expect(host.textContent).toContain("3 hours of call analysis");
+  expect(host.textContent).toContain("3\u00a0hours of call analysis");
   const cta = host.querySelector<HTMLAnchorElement>("a[data-testers-cta]");
   expect(cta?.textContent).toBe("Become a tester");
   expect(cta?.getAttribute("href")).toBe(SIGN_IN);
