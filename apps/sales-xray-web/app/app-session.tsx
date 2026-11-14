@@ -53,6 +53,9 @@ const SHELL_ROUTES = new Set([
   "/performance",
   // My Growth: Analytics, then Coaching (Dipak's tab bar, 31 Oct 2026).
   "/growth",
+  // Ask Dipak: his library, with your saved lessons and Next-call missions
+  // (Dipak's spec, 13 Nov 2026); without it the page stayed its outline.
+  "/ask-dipak",
 ]);
 
 export function isShellRoute(pathname: string | null) {
