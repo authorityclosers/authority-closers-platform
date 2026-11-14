@@ -69,7 +69,7 @@ def _run(
     _fake(tmp_path / "gh", GH)
     _fake(
         tmp_path / "notify",
-        "import sys\nopen(sys.argv[0] + '.log', 'a').write(sys.argv[1] + '\\n')\n",
+        "import sys\nopen(sys.argv[0] + '.log', 'a').write(' '.join(sys.argv[1:]) + '\\n')\n",
     )
     (tmp_path / "ac-ship.log").write_text(ship_log)
     (tmp_path / "conf").write_text(f"AUTO_APPROVE={auto}\n{conf}")
@@ -137,6 +137,7 @@ def test_a_new_release_dispatches_alpha_with_its_full_main_commit_and_waits_for_
     assert not any("-X" in c for c in _calls(tmp_path)), "no approval without AUTO_APPROVE=1"
     assert (tmp_path / "state" / "last").read_text().strip() == "v1.2.0"
     told = (tmp_path / "notify.log").read_text()
+    assert all(line.startswith("step ") for line in told.splitlines()), "never the owner's chat"
     assert (
         "Approve it here: https://github.com/authorityclosers/sales-xray-apps/actions/runs/101"
         in told
@@ -167,7 +168,9 @@ def test_auto_approve_approves_only_its_own_run_in_android_release(tmp_path: Pat
     assert call[call.index("-X") + 1] == "POST"
     assert any(a.endswith("/actions/runs/101/pending_deployments") for a in call)
     assert "environment_ids[]=777" in call and "state=approved" in call
-    assert "building for Play closed testing" in (tmp_path / "notify.log").read_text()
+    told = (tmp_path / "notify.log").read_text().splitlines()
+    assert len(told) == 1 and told[0].startswith("step ")
+    assert "building for Play closed testing" in told[0]
 
 
 def test_a_refused_dispatch_keeps_the_release_pending_for_the_next_tick(tmp_path: Path) -> None:

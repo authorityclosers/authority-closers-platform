@@ -114,7 +114,7 @@ def _run(
     _fake(tmp_path / "tool", run_tool)
     _fake(
         tmp_path / "notify",
-        "import sys\nopen(sys.argv[0] + '.log', 'a').write(sys.argv[1] + '\\n')\n",
+        "import sys\nopen(sys.argv[0] + '.log', 'a').write(' '.join(sys.argv[1:]) + '\\n')\n",
     )
     (tmp_path / "ac-ship.log").write_text(SHIP_LOG)
     published = tmp_path / "app-web"
@@ -195,7 +195,9 @@ def test_a_new_release_builds_its_exact_commit_signs_and_publishes(tmp_path: Pat
     assert (tmp_path / "app-web" / payload["bundle"]).is_file()
     assert (tmp_path / "state" / "last").read_text().strip() == "v1.2.0"
     assert not (tmp_path / "state" / "run").exists()
-    assert "pick up v1.2.0's web app by themselves" in (tmp_path / "notify.log").read_text()
+    assert "pick up v1.2.0's web app by themselves" in (tmp_path / "hook.log").read_text()
+    # Owner, 15 Nov 2026: no message of its own; one line added to v1.2.0's live note, in place.
+    assert (tmp_path / "notify.log").read_text().splitlines() == ["phones --version v1.2.0"]
     assert SEED not in (tmp_path / "hook.log").read_text() + result.stdout + result.stderr
     assert not list((tmp_path / "state").glob("work.*")), "the work folder is removed"
 
@@ -213,7 +215,8 @@ def test_a_failed_build_is_reported_once_and_nothing_is_published(tmp_path: Path
     assert result.returncode == 1
     assert not (tmp_path / "app-web").exists()
     assert (tmp_path / "state" / "last").read_text().strip() == "v1.2.0"
-    assert "did not build" in (tmp_path / "notify.log").read_text()
+    told = (tmp_path / "notify.log").read_text().splitlines()
+    assert len(told) == 1 and told[0].startswith("step ") and "did not build" in told[0]
 
 
 def test_a_build_already_started_for_the_release_is_waited_on_not_repeated(tmp_path: Path) -> None:

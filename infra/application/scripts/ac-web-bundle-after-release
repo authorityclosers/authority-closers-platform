@@ -16,7 +16,7 @@ SHIPLOG=${AC_WEB_BUNDLE_SHIP_LOG:-/var/log/ac-ship.log}
 LOG=${AC_WEB_BUNDLE_LOG:-/var/log/ac-web-bundle-after-release.log}
 STATE_DIR=${AC_WEB_BUNDLE_STATE:-/var/lib/ac-web-bundle-after-release}
 CONF=${AC_WEB_BUNDLE_CONF:-/etc/ac-web-bundle-after-release.conf}
-NOTIFY=${AC_WEB_BUNDLE_NOTIFY:-/usr/local/sbin/ac-notify-owner}
+NOTIFY=${AC_WEB_BUNDLE_NOTIFY:-/usr/local/sbin/ac-release-notice}
 TOOL=${AC_WEB_BUNDLE_TOOL:-/usr/local/sbin/sx-web-bundle}
 SECRETS=${AC_WEB_BUNDLE_SECRETS:-/usr/local/sbin/ac-infisical-run}
 CURL=${AC_WEB_BUNDLE_CURL:-curl}
@@ -34,7 +34,10 @@ PUBLIC_KEY=""
 [ -f "$CONF" ] && . "$CONF"
 [ "$ENABLED" = 1 ] || exit 0
 say() { echo "$(date -u +%FT%TZ) $*" >> "$LOG"; }
-tell() { say "$*"; "$NOTIFY" "$*" >/dev/null 2>&1 || true; }
+# Owner, 15 Nov 2026 ("the notifications I get are just misleading"): his Telegram carries only the release's
+# "is live" note. A problem here is a step for the log and the dev route; success adds one line to that live
+# note (edited in place), never a message of its own. infra/release/ac_release_notice.py.
+tell() { say "$*"; "$NOTIFY" step "$*" >/dev/null 2>&1 || true; }
 gh() {
   if [ -n "${AC_WEB_BUNDLE_GH:-}" ]; then "$AC_WEB_BUNDLE_GH" "$@"; else sudo -u acdev -H /home/acdev/.local/bin/gh "$@"; fi
 }
@@ -113,4 +116,5 @@ if ! "$CURL" --fail --silent --show-error --max-time 20 "https://$HOST/v1/app-we
 fi
 echo "$VER" > "$STATE_DIR/last"
 rm -f "$STATE_DIR/run"
-tell "Phones pick up $VER's web app by themselves now (live web update, no Play build; bundle ${DIGEST:0:12})"
+say "Phones pick up $VER's web app by themselves now (live web update, no Play build; bundle ${DIGEST:0:12})"
+"$NOTIFY" phones --version "$VER" >/dev/null 2>&1 || say "$VER: the phones line did not reach the live note"

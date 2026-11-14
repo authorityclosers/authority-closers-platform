@@ -13,7 +13,7 @@ SHIPLOG=${AC_PLAY_SHIP_LOG:-/var/log/ac-ship.log}
 LOG=${AC_PLAY_LOG:-/var/log/ac-play-after-release.log}
 STATE=${AC_PLAY_STATE:-/var/lib/ac-play-after-release/last}
 CONF=${AC_PLAY_CONF:-/etc/ac-play-after-release.conf}
-NOTIFY=${AC_PLAY_NOTIFY:-/usr/local/sbin/ac-notify-owner}
+NOTIFY=${AC_PLAY_NOTIFY:-/usr/local/sbin/ac-release-notice}
 PAUSE=${AC_PLAY_PAUSE:-10}
 NOTES_DIR=${AC_PLAY_NOTES_DIR:-/etc/authority-closers/play-notes}
 REPO=authorityclosers/sales-xray-apps
@@ -26,7 +26,9 @@ PLAY_PRIORITY_UNTIL=""
 # shellcheck source=/dev/null
 [ -f "$CONF" ] && . "$CONF"
 say() { echo "$(date -u +%FT%TZ) $*" >> "$LOG"; }
-tell() { say "$*"; "$NOTIFY" "$*" >/dev/null 2>&1 || true; }
+# Owner, 15 Nov 2026: Play build progress is not his news; it goes to the log and the dev route only (a step),
+# never his Telegram. The orchestrator approves a waiting run itself. infra/release/ac_release_notice.py.
+tell() { say "$*"; "$NOTIFY" step "$*" >/dev/null 2>&1 || true; }
 gh() {
   if [ -n "${AC_PLAY_GH:-}" ]; then "$AC_PLAY_GH" "$@"; else sudo -u acdev -H /home/acdev/.local/bin/gh "$@"; fi
 }
