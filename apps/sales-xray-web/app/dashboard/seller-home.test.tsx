@@ -423,7 +423,12 @@ it("is the owner's Smart lists Home: the work in five blocks, each opening its e
       performance?.querySelectorAll("li") ?? [],
       (item) => item.textContent,
     ),
-  ).toEqual(["Attempted12", "Connected7", "Talk time34 min", "Follow-ups3"]);
+  ).toEqual([
+    "Attempted12",
+    "Connected7 of 12",
+    "Talk time34 min",
+    "Follow-ups3",
+  ]);
   expect(performance?.textContent).toContain("Inbound calls only · Today");
   // Not in the picture: the longest breaks and the Taking new leads pill.
   expect(host.textContent).not.toContain("Your longest breaks");
@@ -744,7 +749,11 @@ it("never counts a call whose outcome the phone never said, and each number open
   ]);
   const calls = "/analysis/calls?day=today&side=cold";
   expect(figures[0]).toEqual(["Attempted36", calls]);
-  expect(figures[1]).toEqual(["Outcome known1", `${calls}&outcome=known`]);
+  // Out of the calls attempted, said (the owner, 13 Nov 2026).
+  expect(figures[1]).toEqual([
+    "Outcome known1 of 36",
+    `${calls}&outcome=known`,
+  ]);
   expect(figures[2]?.[0]).toContain("Talk · recordings");
   expect(figures[2]?.[1]).toBe(`${calls}&outcome=connected`);
   expect(host.textContent).not.toContain("Connected");

@@ -338,13 +338,38 @@ export type DoneFigure = {
   key: string;
   label: string;
   value: ReactNode;
+  /** What the value is out of, said after it: "1 of 36" (the owner, 13 Nov
+   *  2026: Attempted 4 beside a bare second number read unclear). */
+  of?: number | null;
   href: string;
   icon: ReactNode;
   share?: number | null;
 };
 
+/** A figure's words: its numbers at the figure's size, its units ("min",
+ *  "h") a step smaller, so "4 min" and "4" stand alike. */
+function FigureWords({ value }: { value: ReactNode }) {
+  if (typeof value !== "string") return <>{value}</>;
+  return (
+    <>
+      {value.split(/(\d[\d,.]*)/).map((part, index) =>
+        !part ? null : /^\d/.test(part) ? (
+          <span key={index}>{part}</span>
+        ) : (
+          <span key={index} className={styles.doneUnit}>
+            {part}
+          </span>
+        ),
+      )}
+    </>
+  );
+}
+
 /** Done today (H5): two by two on a phone, one row where there is room; each
- *  number opens what it counts. */
+ *  number opens what it counts. Each figure is one shape (the owner on a
+ *  Redmi 13, 13 Nov 2026: the figures lacked symmetry): its ring, then its
+ *  number with its name under it, so the numbers of a row line up however a
+ *  name wraps. */
 export function DoneToday({
   id,
   title = "Done today",
@@ -374,12 +399,18 @@ export function DoneToday({
           <li key={figure.key}>
             <Link href={figure.href} data-done={figure.key}>
               <span className={styles.doneLabel}>
-                <Words text={figure.label} />
-                <Go />
+                <Words text={figure.label} end={<Go />} />
               </span>
               <DoneRing icon={figure.icon} share={figure.share} />
               <strong className={styles.doneValue}>
-                {figure.value ?? " "}
+                {figure.value == null ? (
+                  " "
+                ) : (
+                  <FigureWords value={figure.value} />
+                )}
+                {figure.value != null && figure.of != null ? (
+                  <span className={styles.doneUnit}>{` of ${figure.of}`}</span>
+                ) : null}
               </strong>
             </Link>
           </li>
@@ -391,14 +422,16 @@ export function DoneToday({
 }
 
 /** Words that wrap between them, never at a hyphen ("Follow-" over "ups
- *  done" at 130 % text). */
-function Words({ text }: { text: string }) {
+ *  done" at 130 % text); `end`, the chevron, keeps to the last word, never a
+ *  line of its own. */
+function Words({ text, end }: { text: string; end?: ReactNode }) {
   const words = text.split(" ");
   return (
     <>
       {words.map((word, index) => (
         <span key={index} className={styles.word}>
           {index ? ` ${word}` : word}
+          {index === words.length - 1 ? end : null}
         </span>
       ))}
     </>

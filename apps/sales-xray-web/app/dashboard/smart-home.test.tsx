@@ -209,6 +209,7 @@ it("draws a ring's arc only for a real share", async () => {
           key: "connected",
           label: "Connected",
           value: 9,
+          of: 23,
           href: "/c",
           icon: <Layers />,
           share: 9 / 23,
@@ -220,7 +221,7 @@ it("draws a ring's arc only for a real share", async () => {
   const links = host.querySelectorAll("a[data-done]");
   expect(Array.from(links, (link) => link.textContent)).toEqual([
     "Attempted23",
-    "Connected9",
+    "Connected9 of 23",
   ]);
   expect(links[0].querySelectorAll("circle")).toHaveLength(1);
   expect(links[1].querySelectorAll("circle")).toHaveLength(2);

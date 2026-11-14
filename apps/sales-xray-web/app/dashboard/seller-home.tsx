@@ -1479,6 +1479,7 @@ export function TodayPerformance({
           key: "known",
           label: "Outcome known",
           value: numbers.calls - unknown,
+          of: numbers.calls,
           href: `${calls}&outcome=known`,
           icon: <PhoneCall />,
           share: numbers.calls
@@ -1489,6 +1490,7 @@ export function TodayPerformance({
           key: "connected",
           label: "Connected",
           value: numbers?.connected,
+          of: numbers?.calls,
           href: `${calls}&outcome=connected`,
           icon: <PhoneCall />,
           share: numbers?.calls ? numbers.connected / numbers.calls : null,
