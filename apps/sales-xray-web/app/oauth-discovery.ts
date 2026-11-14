@@ -18,6 +18,7 @@ export const SCOPES = [
   "leads:notes",
   "leads:tasks",
   "leads:update",
+  "coaching:read",
   "webhooks:manage",
 ] as const;
 
@@ -29,6 +30,8 @@ export const MCP_SCOPES = [
   "leads:write",
   "leads:notes",
   "leads:tasks",
+  "coaching:read",
+  "coaching:write",
 ] as const;
 
 const AUTH_METHODS = ["none", "client_secret_basic", "client_secret_post"];

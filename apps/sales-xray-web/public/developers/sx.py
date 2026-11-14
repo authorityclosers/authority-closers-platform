@@ -31,6 +31,14 @@ command-line argument, so it stays out of shell history and process lists).
     sx changes [--lead LEAD_ID]               # notes and tasks this key added (30 days)
     sx undo CHANGE_ID                         # within 7 days: a note stops showing,
                                               # an open task is cancelled
+    sx dipak search [WORDS]                   # Ask Dipak: his 150 sales questions
+    sx dipak lesson QUESTION_ID               # one lesson in Dipak's words (e.g. PB03)
+    sx dipak improve [--skills a,b] [--objections c]   # his questions for a report's
+                                              # weaknesses
+    sx dipak missions | calls                 # needs coaching:read, as a person
+    sx dipak team                             # every seller's missions (org key)
+    sx dipak save|tick|active QUESTION_ID [--off]      # needs coaching:write
+    sx dipak answer CALL_ID QUESTION_ID yes|no         # after a call
     sx mcp                                    # an MCP server on stdio (for AI assistants)
 
 A change sent again with the same --request-id changes nothing; without one, sx makes
@@ -171,6 +179,39 @@ class Client:
         return self.call(
             "POST", f"/changes/{urllib.parse.quote(change_id, safe='')}/undo", body=body
         )
+
+    # Ask Dipak (/v1/api/ask-dipak): lessons with any key; missions with coaching:read
+    # and coaching:write, which act as a person (a connected app's sxa_ token).
+    def dipak_search(self, words: str = "") -> Any:
+        return self.call("GET", "/ask-dipak/lessons", {"q": words or None})
+
+    def dipak_lesson(self, question_id: str) -> Any:
+        return self.call("GET", f"/ask-dipak/lessons/{_part(question_id)}")
+
+    def dipak_improve(self, skills: str | None = None, objections: str | None = None) -> Any:
+        query = {"skills": skills, "objections": objections}
+        return self.call("GET", "/ask-dipak/how-to-improve", query)
+
+    def dipak_missions(self) -> Any:
+        return self.call("GET", "/ask-dipak/missions")
+
+    def dipak_team(self) -> Any:
+        return self.call("GET", "/ask-dipak/team")
+
+    def dipak_calls(self) -> Any:
+        return self.call("GET", "/ask-dipak/calls")
+
+    def dipak_switch(self, what: str, question_id: str, on: bool) -> Any:
+        # what: saved, ticked or active.
+        return self.call("PUT", f"/ask-dipak/{what}/{_part(question_id)}", body={"on": on})
+
+    def dipak_answer(self, call_id: str, question_id: str, done: bool) -> Any:
+        body = {"answers": [{"question_id": question_id, "done": done}]}
+        return self.call("PUT", f"/ask-dipak/calls/{_part(call_id)}/check", body=body)
+
+
+def _part(value: str) -> str:
+    return urllib.parse.quote(value, safe="")
 
 
 # ----- MCP (Model Context Protocol) over stdio ------------------------------------
@@ -636,8 +677,45 @@ def _parser() -> argparse.ArgumentParser:
     undo = commands.add_parser("undo")
     undo.add_argument("change_id")
     undo.add_argument("--request-id")
+    dipak = commands.add_parser("dipak", help="Ask Dipak: lessons and Next-call missions")
+    asks = dipak.add_subparsers(dest="ask", required=True)
+    search = asks.add_parser("search")
+    search.add_argument("words", nargs="*")
+    asks.add_parser("lesson").add_argument("question_id")
+    improve = asks.add_parser("improve")
+    improve.add_argument("--skills")
+    improve.add_argument("--objections")
+    for name in ("missions", "team", "calls"):
+        asks.add_parser(name)
+    for name in ("save", "tick", "active"):
+        switch = asks.add_parser(name)
+        switch.add_argument("question_id")
+        switch.add_argument("--off", action="store_true")
+    answer = asks.add_parser("answer")
+    answer.add_argument("call_id")
+    answer.add_argument("question_id")
+    answer.add_argument("done", choices=("yes", "no"))
     commands.add_parser("mcp")
     return parser
+
+
+def _dipak(client: Client, args: argparse.Namespace) -> Any:
+    if args.ask == "search":
+        return client.dipak_search(" ".join(args.words))
+    if args.ask == "lesson":
+        return client.dipak_lesson(args.question_id)
+    if args.ask == "improve":
+        return client.dipak_improve(args.skills, args.objections)
+    if args.ask == "missions":
+        return client.dipak_missions()
+    if args.ask == "team":
+        return client.dipak_team()
+    if args.ask == "calls":
+        return client.dipak_calls()
+    if args.ask == "answer":
+        return client.dipak_answer(args.call_id, args.question_id, args.done == "yes")
+    what = {"save": "saved", "tick": "ticked", "active": "active"}[args.ask]
+    return client.dipak_switch(what, args.question_id, not args.off)
 
 
 def main(
@@ -706,6 +784,8 @@ def main(
             out = client.changes(args.lead)
         elif args.command == "undo":
             out = client.undo(args.change_id, args.request_id)
+        elif args.command == "dipak":
+            out = _dipak(client, args)
         else:
             out = client.add_lead(
                 name=args.name,

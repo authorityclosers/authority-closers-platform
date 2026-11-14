@@ -51,6 +51,60 @@ Writes need the app's own origin. Every answer is `private, no-store`.
 
 `{call}` is the lead's call event ID or the analysed call's ID. Another person's call answers 404.
 
+## For Claude and other apps: API keys, connected apps, MCP and the CLI
+
+Everything above is also served through the integrations `Reader` (`ask_dipak/integration.py`). The same key scopes, plan tiers, rate limits and role rules apply as for calls.
+
+### Scopes
+
+The orchestrator set these on 14 Nov 2026, mirroring the call scopes. No plan or price changed.
+
+| Scope            | Who can hold it                                            | What it allows                                                                                                   | Plans                                       |
+| ---------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| (none)           | any key or connection                                      | Lessons, search, "how to improve"                                                                                | all                                         |
+| `coaching:read`  | API keys and connected apps                                | My missions and counts, my latest calls. The team's counts for an organisation key or a role that sees the team. | the same as `calls:read` (trial and up)     |
+| `coaching:write` | connected apps only (`APP_SCOPES`), acting as their person | Save lessons, tick missions, keep up to three active, answer after a call                                        | the same as `calls:write` (Personal and up) |
+
+Missions belong to a person. An organisation's API key gets `person_only` for them and can read only the team's counts.
+
+> **Note:** the scope lists for each tier are code defaults (`tier_policy.DEFAULTS`). A workspace whose platform settings were saved before the coaching scopes existed keeps its saved lists until they are saved again.
+
+### API routes, under `/v1/api/ask-dipak`
+
+| Method and path                                               | Scope                                           |
+| ------------------------------------------------------------- | ----------------------------------------------- |
+| `GET lessons?q=` and `GET lessons/{id}`                       | none                                            |
+| `GET how-to-improve?skills=a,b&objections=c`                  | none                                            |
+| `GET missions`, `GET calls`, `GET calls/{call}/check`         | `coaching:read`                                 |
+| `GET team`                                                    | `coaching:read` (organisation key or team role) |
+| `PUT saved/{id}`, `PUT ticked/{id}`, `PUT active/{id}` `{on}` | `coaching:write`                                |
+| `PUT calls/{call}/check` `{answers: [{question_id, done}]}`   | `coaching:write`                                |
+
+### MCP tools, on the remote server `/v1/mcp`
+
+| Tools                                                                                              | Scope            |
+| -------------------------------------------------------------------------------------------------- | ---------------- |
+| `ask_dipak_search`, `ask_dipak_lesson`, `ask_dipak_how_to_improve`                                 | none             |
+| `ask_dipak_my_missions`, `ask_dipak_recent_calls`, `ask_dipak_team_missions`                       | `coaching:read`  |
+| `ask_dipak_save_lesson`, `ask_dipak_tick_mission`, `ask_dipak_set_active`, `ask_dipak_answer_call` | `coaching:write` |
+
+Every write is idempotent: the same change twice changes nothing. The MCP resource metadata offers both coaching scopes (`oauth_http.MCP_SCOPES`). A connector that asks for no scope still gets only `calls:read reports:read leads:read`, so it sees just the lesson tools.
+
+### CLI: `sx dipak` (`/developers/sx.py`)
+
+```
+sx dipak search [WORDS]          sx dipak lesson PB03
+sx dipak improve --skills closing_decision_management --objections stall
+sx dipak missions | calls | team
+sx dipak save|tick|active QUESTION_ID [--off]
+sx dipak answer CALL_ID QUESTION_ID yes|no
+```
+
+`SX_API_KEY` can be:
+
+- an organisation key (`sxk_`), for lessons and the team's counts;
+- a connected app's token (`sxa_`), to act as that person.
+
 ## Report → "How to improve"
 
 A report's weaknesses are:

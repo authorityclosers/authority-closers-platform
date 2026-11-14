@@ -49,7 +49,7 @@ Every number marked *proposed* is a default for the owner to change. Prices neve
 | ChatGPT / Claude / MCP: read (calls, facts, leads) | yes | yes (calls only: Personal has no leads) | yes | yes |
 | ChatGPT / Claude / MCP: writes (add lead, note, task) | no | no (no leads) | yes, inside `write_policy` caps | yes, owner-set caps |
 | API keys | no | yes, a personal key (person reach): **new** | yes (owner/admin) | yes |
-| API scopes ceiling | — | `calls:read reports:read calls:write` | every scope | every scope |
+| API scopes ceiling | — | `calls:read reports:read calls:write coaching:read coaching:write` | every scope | every scope |
 | CLI `sx` | no | yes (personal key) | yes | yes |
 | Webhooks | no | no | 1 | up to 5 |
 | Requests a minute (per key or connection) | 30 | 60 | 120 | 300 |
@@ -183,3 +183,5 @@ Later slices:
 - plugin 1.1.0 submission;
 - Ask Sales X-Ray (after the governance gate);
 - the Connect page moments.
+
+Ask Dipak's coaching scopes (14 Nov 2026) ride with the call scopes: `coaching:read` wherever `calls:read` is (the trial included), `coaching:write` (connected apps only) wherever `calls:write` is. See docs/product/ask-dipak.md.

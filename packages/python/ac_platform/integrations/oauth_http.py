@@ -85,6 +85,8 @@ MCP_SCOPES = (
     "leads:write",
     "leads:notes",
     "leads:tasks",
+    "coaching:read",
+    "coaching:write",
 )
 RESOURCES = ("/v1/mcp", "/v1/api")
 DISCOVERY = {"Cache-Control": "public, max-age=300", "Access-Control-Allow-Origin": "*"}

@@ -41,6 +41,8 @@ export const SCOPES: [string, string][] = [
   ["leads:write", "Add leads"],
   ["leads:notes", "Add notes to leads"],
   ["leads:tasks", "Add tasks and reminders to leads"],
+  ["coaching:read", "Read Next-call missions and their counts"],
+  ["coaching:write", "Save lessons and answer missions (connected apps only)"],
   ["webhooks:manage", "Manage the webhook (coming to the API)"],
 ];
 
