@@ -4,6 +4,7 @@ import pytest
 
 from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.openai_tasks import (
+    LUNA_COACHING_FRAME,
     OPENAI_REASONING_EFFORTS,
     OpenAITaskError,
     decode_openai_object,
@@ -155,3 +156,31 @@ def test_each_supported_model_preserves_its_reported_identity(model: str) -> Non
     # A Flex route (gpt-6-luna:flex) is answered by its model, which reports its own id.
     response["model"] = model.removesuffix(":flex")
     assert decode_openai_object(response, expected_model=model) == {"ok": True}
+
+
+def test_lunas_coaching_request_carries_dipaks_frame_and_reads_back_without_it() -> None:
+    """Owner, 15 Nov 2026 ("coaching only ... whatever Dipak has said to work"): Luna's C5
+    request ends with the strengths-as-well-as-gaps lines; the prompt view returns the C5
+    prompt's own instructions, for Luna and Luna Flex, and other models are unchanged."""
+    system = _prompt()["messages"][0]["content"]
+    for model in ("gpt-6-luna", "gpt-6-luna:flex"):
+        body = prepare_openai_body(_prompt(model), task="coaching")
+        assert body["instructions"] == system + "\n\n" + LUNA_COACHING_FRAME
+        view = openai_prompt_view(body, model=model, maximum=8_000, task="coaching")
+        assert view["messages"][0]["content"] == system
+    sol = prepare_openai_body(_prompt("gpt-6-sol"), task="coaching")
+    assert sol["instructions"] == system
+    assert (
+        openai_prompt_view(sol, model="gpt-6-sol", maximum=8_000, task="coaching")["messages"][0][
+            "content"
+        ]
+        == system
+    )
+    # A Luna request saved before the frame still reads, as itself.
+    saved = {**prepare_openai_body(_prompt(), task="coaching"), "instructions": system}
+    assert (
+        openai_prompt_view(saved, model="gpt-6-luna", maximum=8_000, task="coaching")["messages"][
+            0
+        ]["content"]
+        == system
+    )
