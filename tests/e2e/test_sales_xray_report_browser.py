@@ -563,6 +563,14 @@ def test_real_browser_waits_out_a_release_hold(live_backend: BrowserBackend) -> 
     waits behind one calm notice and loads when the release ends, with no error shown."""
     held: list[str] = []
     errors: list[str] = []
+    # The edge holds like a real release: every API request, and the app's own probe,
+    # for the release's few seconds from the saved calls read (release-hold.ts: any
+    # normal answer means the release has ended). Holding the recordings read alone let
+    # the page's other API answers end the hold at once, so the card showed only from the
+    # read's 2-second retry, and on a slow runner that fell outside the 5-second wait
+    # (v1.60's release PR, 14 Nov 2026).
+    release_seconds = 7.0
+    hold_began: list[float] = []
     with sync_playwright() as playwright, ExitStack() as cleanup:
         browser = playwright.chromium.launch(headless=True)
         cleanup.callback(browser.close)
@@ -582,12 +590,21 @@ def test_real_browser_waits_out_a_release_hold(live_backend: BrowserBackend) -> 
             ]
         )
 
+        def holding(path: str) -> bool:
+            if path == "/v1/conversation/recordings" and not hold_began:
+                hold_began.append(time.monotonic())
+            return (
+                (path.startswith("/v1/") or path == "/favicon.ico")
+                and bool(hold_began)
+                and time.monotonic() - hold_began[0] < release_seconds
+            )
+
         def edge(route: Any) -> None:
             url = route.request.url
             if not url.startswith(live_backend.origin + "/"):
                 route.abort()
-            elif urlsplit(url).path == "/v1/conversation/recordings" and len(held) < 3:
-                held.append(url)
+            elif holding(urlsplit(url).path):
+                held.append(urlsplit(url).path)
                 route.fulfill(
                     status=503,
                     headers={
@@ -613,5 +630,5 @@ def test_real_browser_waits_out_a_release_hold(live_backend: BrowserBackend) -> 
         expect(page.get_by_role("heading", name="Saved calls")).to_be_visible(timeout=30_000)
         expect(page.locator(".recording-history-item").first).to_be_visible(timeout=30_000)
         expect(page.get_by_text("Sales X-Ray is updating")).to_have_count(0)
-        assert len(held) == 3
+        assert "/v1/conversation/recordings" in held
         assert not errors, errors

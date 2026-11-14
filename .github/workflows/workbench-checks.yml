@@ -112,10 +112,17 @@ jobs:
         run: python3 scripts/ci/wb_checks.py web --task ${{ matrix.task }}
 
   ci-prerequisites:
-    # Shared by release and workbench jobs, independent of branch/identity.
+    # Workbench runs queue among themselves (orchestrator, 14 Nov 2026): GitHub
+    # keeps one pending job per group and a newer one supersedes it, so in the
+    # shared group a workbench run kept cancelling main's pending prerequisites
+    # (v1.59, three attempts). Main and release keep ci-prerequisite-publication-v3
+    # to themselves; the owner below is unchanged, so a workbench producer (the
+    # 36-hour re-pin) still publishes, and admit_publication still checks it.
+    # One producer per group can now admit at once, so the storage and per-identity
+    # bounds can be overshot by one bundle at most; a pinned bundle publishes nothing.
     # prepare rechecks availability only after this publication lock is acquired.
     concurrency:
-      group: ci-prerequisite-publication-v3
+      group: ci-prerequisite-publication-v3-workbench
       cancel-in-progress: false
     env:
       PREREQ_PUBLICATION_OWNER: ci-prerequisite-publication-v3
