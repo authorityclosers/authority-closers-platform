@@ -121,21 +121,65 @@ Every run logs its spend from the usage export (`/srv/authority-closers/metrics/
 - **The Redmi is shared** with redmi-fresh-qa: the runner asks for the phone lock through the orchestrator and
   refuses to start while another app (e.g. Sales X-Ray Live) is in front.
 
+## Our own silent call server (owner, 14 Nov 2026)
+
+The owner: "I want everything to be silent… our own calling system… very detailed and extremely powerful… I'm
+sleeping beside it, so it goes on silently and just works." No speaker, no microphone, no phone ringing in the
+room: the calls happen inside a server.
+
+### What it is
+
+| Part | What | Where | Cost |
+|---|---|---|---|
+| PBX | Two Asterisk 20.6 instances in Docker (`ubuntu:24.04` with Ubuntu's own `asterisk` package, as on ac): one is the seller's office, one is the other party's phone, joined by a SIP trunk on a private Docker network | ac, inside `ac-strikes.slice`; each container `--cpus 0.5`, `--memory 256m` | Free |
+| The line | G.711 (8 kHz, as on a mobile call) or AMR-WB between the two; `tc netem` on the trunk's network adds jitter and 0.5–2% packet loss per call | Same network | Free |
+| The voices | Each call's script (written by `claude -p`, at most 20 new a day, cached; the fixed library as fallback) rendered turn by turn with piper, the offline voices the lab already uses (English, Hindi, Marathi) | ac, at nice 15 | Free |
+| Turn-taking | Each side's dialplan plays its next line when the other side has finished, with natural gaps (0.3–1.5 s), the odd interruption (overlapping playback), hold music, a DTMF menu for IVR calls, and dead air when the script says so | Asterisk dialplan, driven by a small Python controller over AMI | Free |
+| Recording | `MixMonitor` records the bridged call on the seller's side, the way a phone recorder hears it, then encodes MP3 or M4A | ac | About 0.25 MB a minute |
+| Upload | The recording goes in through the app's own phone-capture API as that TEST workspace's seller (`scripts/simulation/inject.py`): the lead's call, then the upload, then analysis, report and coaching | dev first, then production TEST workspaces | Analysis only (about Rs 3.5 a report) |
+| Check | The release checker reads each call back by its file hash: report, coaching, sales or not | ac's logged read-only path | Free |
+
+### Why scripted turns and not a live AI on each side
+
+A model answering live on every turn (speech to text, then a model, then text to speech) needs one model request
+per turn: about 30 for a 3-minute call. Under the 20-a-day cap for `claude -p` that would be under one call a
+day, and the turn delay (5–10 s per answer) would sound unnatural. One request writes the whole conversation
+from the lead's story; the PBX then plays it with real timing, real codec and real line damage. A reactive mode
+(whisper.cpp for speech to text, CPU only) can follow for IVR and objection drills once the cap allows it.
+
+### CPU on ac
+
+- ac has 4 cores and also serves dev, staging and production. Piper renders at about 3× real time on one core,
+  and Asterisk with G.711 uses about 1% of a core per call.
+- One call at a time, at nice 15, paused while the 1-minute load is above 4 (the lab's guard): about 15 calls an
+  hour at most.
+- The daily world needs about 9 analysed calls (3 per company).
+
+### Later, optional: a phone number on our PBX (c)
+
+A DID number from Plivo (Rs 200 a month, Rs 0.38 a minute inbound; the owner's KYC) on the seller-office PBX would
+let the Redmi's real dial reach the AI buyer silently: the phone stays muted, and its recorder captures the
+downlink. Not until the owner says yes.
+
 ## Proposal: detect calls that aren't sales (for the owner's and Dipak's word; nothing built)
 
 ### Where in the pipeline
 
 | Step | What decides | Cost | Status |
 |---|---|---|---|
-| 1. The short-call rule, on C2's transcript | Under 20 s, or the quieter side under 8 s: "no conversation". Under 60 s: "short call" | Free | Live today. It catches dead air, the network's messages and most wrong numbers |
-| 2. **The call purpose, inside the merged C4 + C5 request** (luna-pipeline's new recipe) | The model's first answer field: `call_purpose` = sales, support, onboarding, internal, personal or unclear, with one transcript segment as evidence. It's the same closed list as `call_map.py`'s `CallPurpose`; `call_type.py` already turns the non-sales kinds into `not_sales` | About 20 output tokens; no extra request | **To build** |
-| 3. A short answer when it isn't sales | In the same request: when `call_purpose` isn't sales (or unclear), the model returns only the purpose, a one-line summary and any tasks spoken on the call, and no coaching sections | Saves most of the per-call cost (output is about 5 times the input price): roughly Rs 2.5–3 of a call's Rs 3.3 | **To build** |
+| 1. The short-call rule, on C2's transcript | Under 20 s of speech in all (luna-pipeline 4db94016f, 14 Nov: dead air), or the quieter side under 8 s: "no conversation". Under 60 s: "short call" | Free | Live on the next cut. It catches dead air, the network's messages and most wrong numbers |
+| 2. **The call purpose, in the C4 facts request** (recipe `one-pass-facts`, `one_pass/analysis.py` system prompt and schema, decoded by `analysis.map_publish`) | A new answer field: `call_purpose` = sales, support, onboarding, internal, personal or unclear, with one transcript segment as evidence. It's the same closed list as `call_map.py`'s `CallPurpose`; `call_type.py` already turns the non-sales kinds into `not_sales` | About 20 output tokens; no extra request | **To build**: a new recipe version (like v2 in `markers.py`), its own profiles and a Root seal; the v1 bytes stay pinned |
+| 3. C5 held when it isn't sales | C4 runs before C5, so a non-sales purpose holds the plan before the coaching request, the way the short-call rule holds it after C2 | Saves C5: about Rs 1.3–1.9 a call | **To build**, with step 2 |
 
-- **Why inside the merged request, not a new stage:** no third AI pipeline (Dipak, 13 Nov), and the model
-  reads the whole transcript anyway. A separate classifier before C4 would add a request and its latency to
-  every call.
-- **Where it's stored:** the report draft's `call_map.call_purpose` (the field already exists and is optional).
-  Admin, Coaching and this check read it from there.
+- **Why in C4, not a merged request or a new stage:** luna-pipeline's 13 Nov shadow test found a merged
+  facts-and-coaching request the weakest option (42% of Dipak's gold notes against 54% for today's report, a
+  saving of only Rs 0.006 a minute), so none is being built. There is no third AI pipeline (Dipak, 13 Nov), and
+  C4 already reads the whole transcript.
+- **Where it's stored:** production's coaching (coaching-v3) writes no `call_map`, so the purpose comes from C4 and
+  is copied into the report draft's `call_map.call_purpose` (an existing optional field). Admin, Coaching and this
+  check read it from there.
+- **Who builds it:** a seal-level change; luna-pipeline will do it if the orchestrator assigns it. The prompt
+  wording waits for Dipak.
 - **Not automatic anywhere else:** the purpose never changes the lead's stage. For a wrong number the app may
   *offer* "Mark as wrong number" (Junk), which the seller taps.
 
