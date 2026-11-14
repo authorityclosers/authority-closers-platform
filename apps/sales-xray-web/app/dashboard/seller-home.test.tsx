@@ -667,13 +667,16 @@ it("puts a call waiting for its answer first, as Pending action that opens its q
     expect(first?.getAttribute("data-area")).toBe("finish");
     expect(first?.textContent).toContain("Pending action");
     expect(first?.textContent).toContain("1 reminder");
-    expect(first?.textContent).toContain(
-      "Meera Fictional · Last dialled 4 min ago",
-    );
+    // Two rows (the owner, 13 Nov 2026): who and when beside Complete.
+    expect(first?.querySelector("b")?.textContent).toBe("Meera Fictional");
+    expect(first?.textContent).toContain("Last dialled 4 min ago");
     takeHandedLead();
     const open = [...first!.querySelectorAll("button")].find(
-      (button) => button.textContent === "Complete call activity",
+      (button) =>
+        button.getAttribute("aria-label") ===
+        "Complete call activity: Meera Fictional",
     );
+    expect(open?.textContent).toContain("Complete");
     await act(async () => open?.click());
     expect(takeHandedLead()).toEqual({
       leadId: "00000000-0000-4000-8000-000000000041",
