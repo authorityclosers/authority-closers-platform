@@ -418,7 +418,7 @@ export function daySlots(
 /** Today's calls are read page by page; this many pages at most. */
 const PAGES = 12;
 
-type Rhythm =
+export type Rhythm =
   | { status: "loading" }
   | { status: "error" }
   | { status: "ready"; slots: Slot[]; byHour: boolean; partial: boolean };
@@ -517,7 +517,7 @@ export function busiest(slots: Slot[]): Slot | null {
   return top;
 }
 
-function RhythmBars({ rhythm }: { rhythm: Rhythm }) {
+export function RhythmBars({ rhythm }: { rhythm: Rhythm }) {
   if (rhythm.status !== "ready")
     return (
       <div className={styles.bars} data-empty="">
