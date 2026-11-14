@@ -122,6 +122,14 @@ summary.
 - **summary** downloads every shard's manifest. It runs `python_test_shard.py verify` per family (every file in
   exactly one shard, every shard reported) and fails on any failed job.
 - **No `PG*` variables in the jobs.** The local sandbox guard in `development/seed.py` refuses to run when one is set.
+- **ci-prerequisites queues in its own group, `ci-prerequisite-publication-v3-workbench`** (14 Nov 2026).
+  - GitHub keeps one pending job per concurrency group, and a newer one cancels it. In the group main and release
+    use, `ci-prerequisite-publication-v3`, workbench runs kept cancelling main's pending job: v1.59 took three
+    attempts.
+  - `PREREQ_PUBLICATION_OWNER` is unchanged, so a workbench producer (the 36-hour re-pin) still publishes the shared
+    bundle. One producer per group can admit at once, so the storage and per-identity bounds can be overshot by one
+    bundle at most.
+  - A workbench "cancelled" now means only that a newer workbench run queued behind it: run it again.
 
 **Refreshing the shard durations.** Do this after test files are added or grow:
 1. Run `wb-ci --refresh-durations <run-id>,<run-id>,...` with two or three recent full runs. Each file's cost is its

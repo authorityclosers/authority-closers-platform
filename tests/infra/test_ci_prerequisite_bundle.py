@@ -607,14 +607,19 @@ def test_oversize_bundle_is_declined_before_upload(tmp_path, monkeypatch):
 
 
 def test_publication_lock_spans_prepare_admission_upload_and_reference_in_both_workflows():
-    for filename in ("application.yml", "workbench-checks.yml"):
+    # Main and release keep the publication group to themselves; workbench runs queue
+    # in their own, so a newer workbench run never supersedes main's pending job
+    # (orchestrator, 14 Nov 2026). Both publish under the same owner.
+    groups = {
+        "application.yml": bundle.PUBLICATION_OWNER,
+        "workbench-checks.yml": f"{bundle.PUBLICATION_OWNER}-workbench",
+    }
+    assert bundle.PUBLICATION_OWNER == "ci-prerequisite-publication-v3"
+    for filename, group in groups.items():
         job = yaml.safe_load((ROOT / ".github/workflows" / filename).read_text())["jobs"][
             "ci-prerequisites"
         ]
-        assert job["concurrency"] == {
-            "group": bundle.PUBLICATION_OWNER,
-            "cancel-in-progress": False,
-        }
+        assert job["concurrency"] == {"group": group, "cancel-in-progress": False}
         assert job["env"]["PREREQ_PUBLICATION_OWNER"] == bundle.PUBLICATION_OWNER
         assert any(
             s.get("uses") == "./.github/actions/ci-prerequisite-bundle" for s in job["steps"]
