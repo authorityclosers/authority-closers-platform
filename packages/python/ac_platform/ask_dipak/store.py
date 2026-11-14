@@ -9,11 +9,11 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Literal
+from datetime import datetime, timedelta
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.ask_dipak.catalogue import LESSON_IDS, QUESTION_IDS
@@ -74,6 +74,13 @@ async def _rows(db: AsyncSession, person_id: UUID) -> list[tuple[str, str]]:
     return [(question_id, kind) for question_id, kind in result.all()]
 
 
+async def after_latest(db: AsyncSession, model: Any, person_id: UUID, now: datetime) -> datetime:
+    """``now``, or just after the person's newest row in this table when that is not
+    earlier: one person's rows always sort in the order they were written."""
+    latest = await db.scalar(select(func.max(model.created_at)).where(model.person_id == person_id))
+    return now if latest is None or latest < now else latest + timedelta(microseconds=1)
+
+
 async def progress_for(db: AsyncSession, person_id: UUID) -> Progress:
     return fold(await _rows(db, person_id))
 
@@ -105,10 +112,22 @@ async def set_item(
             tenant_id=tenant_id,
             question_id=question_id,
             kind=on_kind if on else off_kind,
-            created_at=now,
+            created_at=await after_latest(db, SalesXrayAskDipakEvent, person_id, now),
         )
     )
     await db.flush()
+    if item == "mission" and not on:
+        # An unticked mission is no longer one of the seller's active three.
+        from ac_platform.ask_dipak.coaching import set_active
+
+        await set_active(
+            db,
+            person_id=person_id,
+            tenant_id=tenant_id,
+            question_id=question_id,
+            on=False,
+            now=now,
+        )
     return await progress_for(db, person_id)
 
 
@@ -124,7 +143,8 @@ async def missions_marked(db: AsyncSession, person_id: UUID) -> Counter[str]:
 
 
 async def erase_ask_dipak_for_person(db: AsyncSession, *, person_id: UUID) -> int:
-    """Remove a person's Ask Dipak progress in the canonical account-deletion transaction."""
+    """Remove a person's Ask Dipak progress in the canonical account-deletion transaction
+    (their saved lessons and ticks here; coaching.erase_coaching_for_person the rest)."""
     result = await db.execute(
         delete(SalesXrayAskDipakEvent).where(SalesXrayAskDipakEvent.person_id == person_id)
     )

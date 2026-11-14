@@ -16,6 +16,7 @@ from sqlalchemy import MetaData
 from ac_platform.admin_settings import models as admin_settings_models
 from ac_platform.ai_spend import models as ai_spend_models
 from ac_platform.app_updates import models as app_update_models
+from ac_platform.ask_dipak import coaching_models as ask_dipak_coaching_models
 from ac_platform.ask_dipak import models as ask_dipak_models
 from ac_platform.audit import models as audit_models
 from ac_platform.authorization import models as authorization_models
@@ -130,6 +131,7 @@ MODEL_MODULES = (
     bug_report_models,
     tester_models,
     ask_dipak_models,
+    ask_dipak_coaching_models,
     feedback_models,
     fx_models,
     usage_people_models,

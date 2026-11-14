@@ -821,7 +821,19 @@ LEAD_IMPORTS_PARITY_TABLES = ASK_DIPAK_PARITY_TABLES + (
     "integration_lead_imports",
     "integration_lead_import_chunks",
 )
+# 0155 adds Ask Dipak's coaching loop: active missions and after-call answers (two
+# append-only tables).
+ASK_DIPAK_COACHING_PARITY_MIGRATION_HEAD = "20261115_0155"
+ASK_DIPAK_COACHING_PARITY_CONTRACT = "ac-postgres-parity-v121"
+ASK_DIPAK_COACHING_PARITY_TABLES = LEAD_IMPORTS_PARITY_TABLES + (
+    "sales_xray_ask_dipak_focus_events",
+    "sales_xray_ask_dipak_call_checks",
+)
 VERSIONED_PARITY_CONTRACTS = {
+    ASK_DIPAK_COACHING_PARITY_MIGRATION_HEAD: (
+        ASK_DIPAK_COACHING_PARITY_CONTRACT,
+        ASK_DIPAK_COACHING_PARITY_TABLES,
+    ),
     LEAD_IMPORTS_PARITY_MIGRATION_HEAD: (
         LEAD_IMPORTS_PARITY_CONTRACT,
         LEAD_IMPORTS_PARITY_TABLES,
