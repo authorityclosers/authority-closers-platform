@@ -19,11 +19,17 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from ac_platform.audit.models import AuditEvent
 from ac_platform.call_ai import auto_consent
 from ac_platform.call_ai.http import install_call_ai_http
+from ac_platform.conversation_intelligence import auto_start
+from ac_platform.conversation_intelligence.acquisition_sessions import MeasuredSource
+from ac_platform.conversation_intelligence.models import (
+    ConversationProcessingPlan,
+    ConversationRun,
+)
 from ac_platform.http.routes import RouteContext
 from tests.database.test_conversation_account_library_postgresql import _session
 from tests.database.test_conversation_failure_observation_postgresql import seed_measured_fixture
@@ -378,6 +384,213 @@ def test_the_analysis_starts_by_itself_only_on_ones_own_call_with_a_current_cons
                 assert [event.payload for event in starts] == [
                     {"standing_consent_event_id": str(consent.id), "plan_id": plan["id"]}
                 ]
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+async def _standing_call(setup: Any, client: httpx.AsyncClient) -> tuple[str, UUID]:
+    """The signed-in seller uploads one call marked "standing"; its audio check (C1) is then
+    done, as the worker leaves it: C0/C1 checkpoints saved and the local run completed."""
+    data, submission = _wav_one_second_48k(), uuid4()
+    path = f"{PREFIX}/submissions/{submission}"
+    headers = {**await _headers(client, data), "X-Upload-Consent": "standing"}
+    uploaded = await client.put(path + "/source", content=data, headers=headers)
+    assert uploaded.status_code == 202, uploaded.text
+    await _reconcile(setup.sessions, setup.state)
+    recording_id = UUID((await client.get(path)).json()["recording_id"])
+    await seed_measured_fixture(
+        setup.sessions,
+        SimpleNamespace(recording_id=recording_id),
+        signal_payload=_signal(source_sha256=hashlib.sha256(data).hexdigest()),
+    )
+    async with setup.sessions() as db, db.begin():
+        await db.execute(
+            update(ConversationRun)
+            .where(ConversationRun.recording_id == recording_id)
+            .values(state="completed", completed_at=setup.clock[0])
+        )
+    return path, recording_id
+
+
+async def _plans(setup: Any, recording_id: UUID) -> list[ConversationProcessingPlan]:
+    async with setup.sessions() as db:
+        rows = await db.scalars(
+            select(ConversationProcessingPlan).where(
+                ConversationProcessingPlan.recording_id == recording_id
+            )
+        )
+        return list(rows.all())
+
+
+async def _seller_with_consent(setup: Any, client: httpx.AsyncClient) -> Any:
+    seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+    client.cookies.clear()
+    client.cookies.set(setup.settings.session_cookie_name, await _session(setup, seller))
+    terms = (await client.get(PREFIX + "/upload-policy")).json()["policy_sha256"]
+    assert (await _turn_on(client, terms)).status_code == 200
+    return seller
+
+
+def _starter(setup: Any) -> auto_start.AutoStart:
+    return auto_start.AutoStart(
+        sessions=setup.sessions, runtime=setup.runtime, factory=setup.factory
+    )
+
+
+def test_the_server_starts_a_standing_call_once_its_audio_check_is_done(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Orchestrator, 14 Nov 2026: reports waited for the phone's background worker to come
+    back and accept the plan (70-270 s and more). The server now quotes and accepts the plan
+    of a call its seller's standing consent covers as soon as C1 is done, names the consent,
+    and the phone's own start afterwards changes nothing."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path, gemini=True)
+        setup.native.validate_source = ValidationFixtureRuntime().validate_source
+        try:
+            await _organisation(setup)
+            _install(setup)
+            starter = _starter(setup)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                seller = await _seller_with_consent(setup, client)
+                path, recording_id = await _standing_call(setup, client)
+
+                assert await starter.tick(now=setup.clock[0]) == ["started"]
+                (plan,) = await _plans(setup, recording_id)
+                assert plan.acceptance_command_id is not None
+                consent = (await _events(setup, seller.person_id, auto_consent.ACTION))[-1]
+                starts = await _events(setup, seller.person_id, auto_start.STARTED)
+                assert [event.payload for event in starts] == [
+                    {
+                        "standing_consent_event_id": str(consent.id),
+                        "plan_id": str(plan.id),
+                        "started_by": "server",
+                    }
+                ]
+                # The session that uploaded the call is the one that started it.
+                (uploaded,) = await _events(setup, seller.person_id, auto_start.UPLOADED)
+                assert uploaded.session_id is not None
+                assert starts[0].session_id == uploaded.session_id
+                # Nothing left to start: a second sweep is a no-op.
+                assert await starter.tick(now=setup.clock[0]) == []
+
+                # The phone comes back late while the plan runs: its quote shows the same
+                # accepted plan, and accepting it again starts nothing and records no start.
+                if plan.state == "active":
+                    quoted = await client.post(
+                        path + "/plan/quote",
+                        headers={"Origin": ORIGIN, "Idempotency-Key": "late"},
+                    )
+                    assert quoted.status_code in {200, 201}, quoted.text
+                    shown = quoted.json()
+                    assert (shown["id"], shown["accepted"]) == (str(plan.id), True)
+                    again = await client.post(
+                        path + "/plan",
+                        json={
+                            "plan_id": shown["id"],
+                            "plan_fingerprint": shown["plan_fingerprint"],
+                            "privacy_revision": shown["privacy_revision"],
+                            "accepted": True,
+                        },
+                        headers={
+                            "Origin": ORIGIN,
+                            "Idempotency-Key": "late:accept",
+                            "X-Upload-Consent": "standing",
+                        },
+                    )
+                    assert again.status_code == 202, again.text
+                    assert again.json()["id"] == str(plan.id)
+                    assert len(await _plans(setup, recording_id)) == 1
+                assert len(await _events(setup, seller.person_id, auto_start.STARTED)) == 1
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_without_a_current_consent_the_call_keeps_its_tap(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Consent turned off after the upload: the server starts nothing, marks the call
+    waiting once, and the seller's own tap still quotes the plan."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path, gemini=True)
+        setup.native.validate_source = ValidationFixtureRuntime().validate_source
+        try:
+            await _organisation(setup)
+            _install(setup)
+            starter = _starter(setup)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                seller = await _seller_with_consent(setup, client)
+                path, recording_id = await _standing_call(setup, client)
+                withdrawn = await client.post(AUTO, json={"decision": "withdrawn"}, headers=WRITE)
+                assert withdrawn.status_code == 200, withdrawn.text
+
+                assert await starter.tick(now=setup.clock[0]) == ["waiting:consent"]
+                assert await _plans(setup, recording_id) == []
+                assert await starter.tick(now=setup.clock[0]) == []  # marked once
+                waits = await _events(setup, seller.person_id, auto_start.WAITING)
+                assert [event.payload["reason"] for event in waits] == ["consent"]
+                assert await _events(setup, seller.person_id, auto_start.STARTED) == []
+
+                # The tap stays: the seller's own quote still works.
+                quoted = await client.post(
+                    path + "/plan/quote", headers={"Origin": ORIGIN, "Idempotency-Key": "tap"}
+                )
+                assert quoted.status_code == 201, quoted.text
+                assert quoted.json()["accepted"] is False
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_out_of_minutes_nothing_is_uploaded_or_started(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """The minutes are taken when the call is uploaded, before its audio check: with none
+    left the upload is refused, so there is no call for the server to start."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path, gemini=True)
+        setup.native.validate_source = ValidationFixtureRuntime().validate_source
+        try:
+            await _organisation(setup)
+            _install(setup)
+            starter = _starter(setup)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                seller = await _seller_with_consent(setup, client)
+                # Use up the seller's minutes, one call under the 60-minute limit at a time.
+                for _ in range(64):
+                    async with setup.sessions() as db, db.begin():
+                        sessions = setup.factory(db, setup.state.tenant_id)
+                        left = await sessions.allowance(actor=seller.actor)
+                        assert not left.get("unlimited"), left
+                        seconds = min(int(left["available_seconds"] or 0), 3599)
+                        if seconds <= 0:
+                            break
+                        await sessions.reserve(
+                            MeasuredSource(uuid4(), "a" * 64, seconds * 1000, "b" * 64),
+                            actor=seller.actor,
+                        )
+                data = _wav_one_second_48k()
+                headers = {**await _headers(client, data), "X-Upload-Consent": "standing"}
+                refused = await client.put(
+                    f"{PREFIX}/submissions/{uuid4()}/source", content=data, headers=headers
+                )
+                assert refused.status_code in {402, 409}, refused.text
+                assert await _events(setup, seller.person_id, auto_start.UPLOADED) == []
+                assert await starter.tick(now=setup.clock[0]) == []
         finally:
             await setup.engine.dispose()
 

@@ -274,3 +274,13 @@ def install_acquisition_runtime(
         lambda: providers.provider_from_env(environment=settings.environment),
         base_url=str(settings.sales_xray_app_url) if settings.sales_xray_app_url else None,
     )
+
+    # A standing-consent call's analysis starts on the server once its audio check is done,
+    # not when the phone's background worker comes back (orchestrator, 14 Nov 2026).
+    from ac_platform.conversation_intelligence import auto_start
+
+    auto_start.attach(
+        application,
+        auto_start.AutoStart(sessions=sessions, runtime=runtime.intake, factory=factory),
+        environment=settings.environment,
+    )
