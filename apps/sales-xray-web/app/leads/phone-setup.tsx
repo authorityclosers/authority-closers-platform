@@ -26,6 +26,7 @@ import {
   type SetupStatus,
 } from "./native-phone";
 import { PhoneSetupFlow, type FlowStep } from "./phone-setup-flow";
+import { folderChosen } from "./phone-setup-steps";
 import {
   FOLDER_TODO,
   CHECK_ORDER,
@@ -60,9 +61,13 @@ export function needsFolderPick(status: SetupStatus): boolean {
  * recordings is done once a folder is picked, as phone setup's own step says
  * (Redmi QA on the owner's production build, 13 Nov 2026: setup said
  * "Recordings folder chosen" while this list said "Choose their folder").
+ * So is Recordings folder found: the phone's own check looks only in its Phone
+ * app's folders, never in the picked one (Redmi QA on production, 14 Nov 2026:
+ * setup said "Recordings folder chosen" while Settings left the line unticked).
+ * Test call recorded still proves a recording arrives.
  */
 export function lineDone(key: PhoneCheck, status: SetupStatus): boolean {
-  if (key === "recordings" && status.folderPickSupported && status.folderPicked)
+  if ((key === "recordings" || key === "folder") && folderChosen(status))
     return true;
   return status.checks[key] === true;
 }
@@ -103,10 +108,11 @@ export function setupProgress(status: SetupStatus): {
  * 1 Nov 2026: Connections called such a phone a problem nobody could fix).
  */
 export function reportedChecks(status: SetupStatus): Record<string, boolean> {
-  // Team sees Call recordings as this list does.
+  // Team sees Call recordings and the folder as this list does.
   const checks = {
     ...status.checks,
     ...(lineDone("recordings", status) ? { recordings: true } : {}),
+    ...(lineDone("folder", status) ? { folder: true } : {}),
   };
   if (status.callLogSupported) return checks;
   return Object.fromEntries(
