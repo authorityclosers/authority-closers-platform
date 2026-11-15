@@ -511,6 +511,7 @@ export function TodayCards({
   taskMarks = null,
   lateTasks = null,
   failed = false,
+  me = null,
 }: {
   side: Side;
   own: HomeSide | null;
@@ -522,6 +523,8 @@ export function TodayCards({
   /** The leads didn't load: every card keeps its place and says "–", never
    *  a 0 it doesn't know (honest numbers, 3 Nov 2026). */
   failed?: boolean;
+  /** The signed-in person, whose past days the Past days sheet shows. */
+  me?: string | null;
 }) {
   const cold = side === "cold";
   const counts = own?.counts;
@@ -587,7 +590,7 @@ export function TodayCards({
     <section className={styles.block} aria-labelledby="today-title">
       <div className={styles.overview}>
         <h2 id="today-title">Today&apos;s overview</h2>
-        {own ? <PastDayButton side={side} /> : null}
+        {own ? <PastDayButton side={side} me={me} /> : null}
         <p>{cold ? "Your cold lead activity" : "Your inbound lead activity"}</p>
       </div>
       <ul className={styles.cards} key={side} data-side={side}>
@@ -1740,6 +1743,7 @@ export function SellerBlocks({
               <TodayCards
                 side={shown}
                 own={own}
+                me={desk?.me?.person_id ?? null}
                 failed={state === "error"}
                 tasks={
                   ready && tasks
