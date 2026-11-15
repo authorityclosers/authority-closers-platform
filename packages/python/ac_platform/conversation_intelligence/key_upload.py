@@ -216,6 +216,9 @@ async def terms(
                 AuditEvent.tenant_id == tenant_id,
                 AuditEvent.resource_type == TERMS_RESOURCE,
                 AuditEvent.resource_id == str(tenant_id),
+                # Only the choices themselves: a note on the same workspace (a data change's
+                # approval) never reads as one.
+                AuditEvent.action == TERMS_ACTION,
             )
             .order_by(AuditEvent.occurred_at.desc(), AuditEvent.sequence_no.desc())
             .limit(1)
@@ -240,7 +243,7 @@ async def record_terms(
     *,
     tenant_id: UUID,
     person_id: UUID,
-    session_id: UUID,
+    session_id: UUID | None,
     role: str | None,
     decision: Decision,
     environment: str,

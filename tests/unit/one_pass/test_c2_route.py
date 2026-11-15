@@ -689,3 +689,41 @@ def test_the_host_script_regoverns_in_place(tmp_path, capsys) -> None:
     plain = ["--bundle", str(tmp_path / "bundle.json"), "--out", str(out)]
     assert one_pass_c2_seal.main(plain) == 2
     assert one_pass_c2_seal.main([*plain, "--profile", c2_route.ONE_PASS_PROFILE_ID]) == 2
+
+
+def test_the_host_script_takes_the_data_changes_export_as_it_comes(tmp_path, capsys) -> None:
+    """Luna on staging (15 Nov 2026): one-pass-flex-production.py export prints
+    {"export": name, "configuration": ...}; the seal reads that file as its configuration
+    and seals exactly what the bare files seal."""
+    import json
+
+    from scripts.ops import one_pass_c2_seal
+
+    classic, bundle = _classic()
+    derived = c2_route.derive_configuration(classic)
+    (tmp_path / "bundle.json").write_bytes(bundle.to_json())
+    digests = []
+    for wrapped in (False, True):
+        names = ("classic", "standard") if wrapped else (None, None)
+        for name, value, file in (
+            (names[0], classic, "classic.json"),
+            (names[1], derived, "gemini.json"),
+        ):
+            body = value.as_dict()
+            (tmp_path / file).write_text(
+                json.dumps({"export": name, "configuration": body} if wrapped else body)
+            )
+        out = tmp_path / f"out-{wrapped}"
+        arguments = [
+            "--bundle",
+            str(tmp_path / "bundle.json"),
+            "--classic",
+            str(tmp_path / "classic.json"),
+            "--configuration",
+            str(tmp_path / "gemini.json"),
+            "--out",
+            str(out),
+        ]
+        assert one_pass_c2_seal.main(arguments) == 0
+        digests.append(json.loads(capsys.readouterr().out)["bundle_after"])
+    assert digests[0] == digests[1]
