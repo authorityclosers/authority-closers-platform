@@ -492,7 +492,11 @@ function LessonScreen({
   const lesson = lessonFor(id);
   const head = (
     <Breadcrumb onBack={back}>
-      <span className={styles.chip}>{lessonChip(question)}</span>
+      <span
+        className={`${styles.chip} ${styles[toneOfCategory(question.categoryId)]}`}
+      >
+        {lessonChip(question)}
+      </span>
     </Breadcrumb>
   );
   if (!lesson)
