@@ -1607,3 +1607,65 @@ a.rowTitle:focus-visible::after {
   background: var(--lx-danger);
   color: white;
 }
+
+/* Home's finish (owner, 15 Nov 2026: Home's styling on every page). The inset
+   card is a Home tile; an icon is a 36 px soft badge (Home green for the accent);
+   titles 15 px; a row tints when pressed and never scales. */
+.actionList {
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+}
+
+.actionList .actionRow {
+  background: transparent;
+}
+
+.actionList .actionRow:active:not(:disabled) {
+  transform: none;
+  background: color-mix(in oklab, var(--lx-ink) 6%, transparent);
+}
+
+.actionList .actionIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--lx-home-emerald-soft);
+  color: var(--lx-home-emerald);
+}
+
+.actionList .actionIcon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.actionList .actionIcon[data-tone="neutral"] {
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+}
+
+.actionList .actionIcon[data-tone="good"] {
+  background: var(--lx-home-emerald-soft);
+  color: var(--lx-home-emerald);
+}
+
+.actionList .actionIcon[data-tone="warn"] {
+  background: var(--lx-home-orange-soft);
+  color: var(--lx-home-orange);
+}
+
+.actionList .actionIcon[data-tone="bad"] {
+  background: var(--lx-home-rose-soft);
+  color: var(--lx-home-rose);
+}
+
+.actionList .actionWords strong {
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.actionList .actionItem + .actionItem::before {
+  left: 60px;
+  background: var(--sx-hairline);
+}

@@ -39,7 +39,13 @@ import { MyTasks, SellerBlocks, useSidesAccess } from "./seller-home";
 import type { Side } from "../ui/side-selector";
 import { SetupStart } from "./home-v2";
 import { TeamFloor, type StageKeys } from "./team-floor";
-import { HomeLoadWatch, retryHome, useHomeRead, useOnline } from "./home-load";
+import {
+  HomeLoadWatch,
+  retryHome,
+  useHomeAutoRefresh,
+  useHomeRead,
+  useOnline,
+} from "./home-load";
 import { PullMark, usePullToRefresh } from "../shell/pull-refresh";
 import { RevenueBar } from "./revenue-bar";
 import { TeamControls } from "./team-controls";
@@ -426,6 +432,7 @@ export function SalesHome({
   // Pull Home down at its top, or pull the top bar, to read everything again
   // (owner, 10 Nov 2026, his OnePlus: "Refresh isn't well done").
   const { area, spinner } = usePullToRefresh(retryHome);
+  useHomeAutoRefresh();
   const [view, setView] = useHomeView();
   const online = useOnline();
   // Team | Me: Team every visit for those who manage, Me only once chosen in

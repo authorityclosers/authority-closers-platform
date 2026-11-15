@@ -45,8 +45,14 @@ export const PERIODS: { key: "1" | "7" | "30"; label: string }[] = [
   { key: "30", label: "30 days" },
 ];
 
-const percent = (part: number, whole: number) =>
-  whole ? `${Math.round((part / whole) * 100)}%` : "–";
+/** A share; under 10 % with one decimal, so 2 of 729 reads 0.3 %, never 0 %. */
+const percent = (part: number, whole: number) => {
+  if (!whole) return "–";
+  const share = (part / whole) * 100;
+  return share > 0 && share < 10
+    ? `${share.toFixed(1)}%`
+    : `${Math.round(share)}%`;
+};
 
 export function minutesWords(minutes: number): string {
   if (minutes < 60) return `${minutes} min`;
@@ -60,7 +66,7 @@ export const windowWords = (period: Period) =>
 
 /** "the previous 7 days", or "yesterday" for today. */
 export const beforeWords = (period: Period) =>
-  period === 1 ? "yesterday" : `the previous ${period} days`;
+  period === 1 ? "all of yesterday" : `the previous ${period} days`;
 
 const reduced = () =>
   typeof window.matchMedia !== "function" ||
@@ -109,22 +115,32 @@ function Change({
   value,
   previous,
   before = true,
+  unit,
+  neutral = false,
 }: {
   value: number;
   previous: number;
   /** "than before" after it; off where the period is named next to it. */
   before?: boolean;
+  /** The change as a signed count with this unit ("+2 won"), piece 06. */
+  unit?: string;
+  /** A count beside a rate: no good or bad colour. */
+  neutral?: boolean;
 }) {
   const diff = value - previous;
   const Icon = diff > 0 ? ArrowUpRight : diff < 0 ? ArrowDownRight : Minus;
   return (
     <span
       className={styles.change}
-      data-trend={diff > 0 ? "up" : diff < 0 ? "down" : "flat"}
+      data-trend={neutral || !diff ? "flat" : diff > 0 ? "up" : "down"}
     >
       <Icon size={13} aria-hidden="true" />
-      {/* More than what? The period before, as the footnote says (QA, 31 Oct). */}
-      {`${changeWords(value, previous)}${diff && before ? " than before" : ""}`}
+      {/* More than what? The period before, as the line above says (QA, 31 Oct). */}
+      {unit
+        ? diff
+          ? `${diff > 0 ? "+" : "−"}${Math.abs(diff)} ${unit}`
+          : "No change"
+        : `${changeWords(value, previous)}${diff && before ? " than before" : ""}`}
     </span>
   );
 }
@@ -254,6 +270,14 @@ export type TileSpec = {
 
 const count = (value: number) => <Count value={value} />;
 
+/** Each tile's change says its own unit (piece 06): "+2 won", "−1 interested". */
+const UNITS: Partial<Record<string, string>> = {
+  won: "won",
+  interested: "interested",
+  new_leads: "new",
+  connected: "connected",
+};
+
 export const TILES = {
   won: {
     label: "Won",
@@ -276,7 +300,10 @@ export const TILES = {
     tone: "violet",
     shown: ({ now }) => count(now.interested),
     compare: (outcomes) => outcomes.interested,
-    note: () => "Leads who said they want it",
+    note: ({ now }) =>
+      now.leads_called
+        ? `${percent(now.interested, now.leads_called)} of ${now.leads_called} leads called`
+        : "No leads called yet",
     bars: true,
     day: (day) => day.interested,
     seller: (seller) => seller.interested,
@@ -457,7 +484,7 @@ export function OutcomeTiles({
           tiles (07_Sales_Period). */}
       {data && compared ? (
         <p className={styles.window}>
-          {`${windowWords(period)} · compared with ${beforeWords(period)}`}
+          {`${windowWords(period)} · All leads · vs ${beforeWords(period)}`}
         </p>
       ) : null}
       {data ? (
@@ -491,7 +518,6 @@ export function OutcomeTiles({
                     {/* The window, said on the tile (ph1-20, 1 Nov 2026:
                         "Connected 86%" read as today's beside today's 0). */}
                     <span>{tile.note(data)}</span>
-                    {tile.compare ? <span>{windowWords(period)}</span> : null}
                   </span>
                 )}
                 <span className={styles.tileFoot}>
@@ -499,6 +525,8 @@ export function OutcomeTiles({
                     <Change
                       value={tile.compare(data.now)}
                       previous={tile.compare(data.before)}
+                      unit={UNITS[key]}
+                      neutral={key === "connected"}
                     />
                   ) : (
                     <span className={styles.change} data-trend="flat">

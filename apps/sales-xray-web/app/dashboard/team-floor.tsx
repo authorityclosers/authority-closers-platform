@@ -323,10 +323,10 @@ function pages(
       },
       unknown && day
         ? {
-            key: "connected",
+            key: "known",
             label: "Outcome known",
             value: String(day.attempted - unknown),
-            note: `${day.connected} connected`,
+            note: `${day.connected} connected · ${day.attempted - unknown - day.connected} not`,
             href: `${calls}&outcome=known`,
             help: "Calls whose outcome the phone told us today, and how many connected",
           }

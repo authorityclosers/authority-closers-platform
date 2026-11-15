@@ -138,18 +138,23 @@ const tile = (key: string) =>
 it("shows the four outcomes, each with its change and its words", async () => {
   await draw(week);
   expect(tile("won").textContent).toContain("6");
-  expect(tile("won").textContent).toContain("2 more");
+  expect(tile("won").textContent).toContain("+2 won");
   // The tile names its window (ph1-20, 1 Nov 2026: "86%" read as today's).
   expect(tile("won").textContent).toContain("20% of 30 leads called");
-  expect(tile("won").textContent).toContain("Last 7 days");
-  expect(tile("interested").textContent).toContain("4 more");
-  expect(tile("new_leads").textContent).toContain("Same as before");
+  expect(tile("interested").textContent).toContain("+4 interested");
+  expect(tile("new_leads").textContent).toContain("No change");
   expect(tile("new_leads").textContent).toContain("First call in 18 min");
   // Connected is the share; its change compares connected calls.
   expect(tile("connected").textContent).toContain("32%");
-  expect(tile("connected").textContent).toContain("2 fewer");
+  expect(tile("connected").textContent).toContain("−2 connected");
+  // A count beside a rate: no good or bad colour (piece 06).
+  expect(
+    tile("connected").querySelector("[data-trend]")?.getAttribute("data-trend"),
+  ).toBe("flat");
   expect(tile("connected").textContent).toContain("13 of 41 calls");
-  expect(host.textContent).toContain("compared with the previous 7 days");
+  expect(host.textContent).toContain(
+    "Last 7 days · All leads · vs the previous 7 days",
+  );
 });
 
 // Home v2 (owner, 15 Nov 2026): a tile is its number, its note and its change;
@@ -203,7 +208,7 @@ it("draws no days for today, and a dash when nobody called", async () => {
   expect(tile("won").querySelector('[role="img"]')).toBeNull();
   expect(tile("won").textContent).toContain("No leads called yet");
   expect(tile("connected").textContent).toContain("–");
-  expect(host.textContent).toContain("compared with yesterday");
+  expect(host.textContent).toContain("vs all of yesterday");
 });
 
 // QA robot 49a966dd (9 Nov 2026): while loading, each placeholder tile held

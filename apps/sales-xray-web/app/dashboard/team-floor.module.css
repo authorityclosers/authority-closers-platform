@@ -2577,3 +2577,11 @@ button.chip {
 .explainKit .explainRows > div {
   animation: personIn 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+/* A long name takes two lines, never an ellipsis (design-research check of 03). */
+.rowName strong {
+  display: -webkit-box;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}

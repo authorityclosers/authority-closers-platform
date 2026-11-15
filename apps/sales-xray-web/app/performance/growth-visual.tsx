@@ -106,6 +106,26 @@ function Ring({
 }
 
 /** G2's speed to a new lead, small: the median minutes to the first call. */
+
+/** A duration as Home writes it (owner, 15 Nov 2026): the digits big, the units
+ *  small beside them, the spaces kept as text so it reads as words. */
+function Units({ value }: { value: string }) {
+  const parts = value.match(/\d+|\s+|[^\d\s]+/g) ?? [value];
+  return (
+    <>
+      {parts.map((part, index) =>
+        /^\s+$/.test(part) ? (
+          " "
+        ) : /^\d+$/.test(part) ? (
+          <span key={index}>{part}</span>
+        ) : (
+          <small key={index}>{part}</small>
+        ),
+      )}
+    </>
+  );
+}
+
 export function SpeedTile({ effort }: { effort: Effort }) {
   const minutes = effort.inbound.first_call_minutes;
   return (
@@ -315,7 +335,9 @@ export function PulseTiles({
           </span>
         </Tile>
         <Tile href={links.talk} label="Talk time" index={2}>
-          <strong className={styles.figure}>{talkTime(talked)}</strong>
+          <strong className={styles.figure}>
+            <Units value={talkTime(talked)} />
+          </strong>
           {connected ? (
             <Side value={talkTime(talked / connected)} words="a call" />
           ) : (

@@ -247,6 +247,13 @@ const LOOK: Record<
     meaning: "Measured call time",
     action: "View call duration",
   },
+  // Its note says what it counts ("11 connected · 21 not"), so no meaning of its own.
+  known: {
+    tone: "violet",
+    Icon: PhoneCall,
+    meaning: "",
+    action: "View calls",
+  },
   first_call: { tone: "emerald", Icon: Timer, meaning: "Median response time" },
   coverage: {
     tone: "emerald",

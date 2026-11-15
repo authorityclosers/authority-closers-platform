@@ -50,6 +50,31 @@ export function retryHome() {
   emit();
 }
 
+/** Home keeps itself fresh (design-research part 1, 15 Nov 2026): it reads
+ *  again every 2 minutes while it is on screen, and on coming back to it after
+ *  a minute away. The numbers shown stay until the new ones land. */
+export function useHomeAutoRefresh(every = 120_000) {
+  useEffect(() => {
+    let last = Date.now();
+    const again = () => {
+      last = Date.now();
+      retryHome();
+    };
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") again();
+    }, every);
+    const back = () => {
+      if (document.visibilityState === "visible" && Date.now() - last > 60_000)
+        again();
+    };
+    document.addEventListener("visibilitychange", back);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", back);
+    };
+  }, [every]);
+}
+
 /** Tests: start from nothing. */
 export function resetHomeReads() {
   kept.clear();

@@ -150,3 +150,53 @@
     transition: none;
   }
 }
+
+/* Home's finish on Organisation (owner, 15 Nov 2026): the tabs as a scrolling
+   row of pills; the current one Home's glossy green. */
+.tabs {
+  gap: 8px;
+  padding: 4px 0 8px;
+  border-bottom: 0;
+}
+
+.tab {
+  min-height: 40px;
+  padding: 0 14px;
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-tile-fill);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--lx-film) 6%, transparent);
+  color: var(--sx-ink-2);
+  font-size: min(var(--sx-text-sm), 15px);
+  font-weight: 650;
+  white-space: nowrap;
+  transition: transform 140ms ease-out;
+}
+
+.tab[aria-current="page"] {
+  border-color: transparent;
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+  font-weight: 750;
+}
+
+.tab[aria-current="page"]::after {
+  display: none;
+}
+
+.tab:active {
+  transform: var(--sx-press-sink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab {
+    transition: none;
+  }
+}
+
+/* The tab row keeps the page's 16 px edge. */
+.tabs {
+  padding-inline: 16px;
+  scroll-padding-inline: 16px;
+}

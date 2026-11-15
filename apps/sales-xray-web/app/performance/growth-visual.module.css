@@ -468,3 +468,39 @@ a.tile:focus-visible {
     transform: scaleY(0);
   }
 }
+
+/* Home's finish on Growth (owner, 15 Nov 2026): the shared tile, pressing in;
+   a duration's units small beside its digits, on one line. */
+.card,
+.tile,
+.big,
+.speed {
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+}
+
+.tile {
+  transition: transform 140ms ease-out;
+}
+
+.tile:active {
+  transform: var(--sx-press-sink);
+}
+
+.figure {
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
+.figure small {
+  font-size: min(var(--sx-text-md), 16px);
+  font-weight: 650;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile {
+    transition: none;
+  }
+}
