@@ -12,6 +12,7 @@ and the synthetic local providers only.
 from __future__ import annotations
 
 import hashlib
+from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -390,12 +391,14 @@ def test_the_analysis_starts_by_itself_only_on_ones_own_call_with_a_current_cons
     run(exercise())
 
 
-async def _standing_call(setup: Any, client: httpx.AsyncClient) -> tuple[str, UUID]:
+async def _standing_call(
+    setup: Any, client: httpx.AsyncClient, consent: str = "standing", done_at: Any = None
+) -> tuple[str, UUID]:
     """The signed-in seller uploads one call marked "standing"; its audio check (C1) is then
     done, as the worker leaves it: C0/C1 checkpoints saved and the local run completed."""
     data, submission = _wav_one_second_48k(), uuid4()
     path = f"{PREFIX}/submissions/{submission}"
-    headers = {**await _headers(client, data), "X-Upload-Consent": "standing"}
+    headers = {**await _headers(client, data), "X-Upload-Consent": consent}
     uploaded = await client.put(path + "/source", content=data, headers=headers)
     assert uploaded.status_code == 202, uploaded.text
     await _reconcile(setup.sessions, setup.state)
@@ -409,7 +412,7 @@ async def _standing_call(setup: Any, client: httpx.AsyncClient) -> tuple[str, UU
         await db.execute(
             update(ConversationRun)
             .where(ConversationRun.recording_id == recording_id)
-            .values(state="completed", completed_at=setup.clock[0])
+            .values(state="completed", completed_at=done_at or setup.clock[0])
         )
     return path, recording_id
 
@@ -590,6 +593,40 @@ def test_out_of_minutes_nothing_is_uploaded_or_started(
                 )
                 assert refused.status_code in {402, 409}, refused.text
                 assert await _events(setup, seller.person_id, auto_start.UPLOADED) == []
+                assert await starter.tick(now=setup.clock[0]) == []
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_calls_waiting_for_a_tap_never_hide_one_that_starts_here(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The sweep fetches only calls it can start (an upload under standing consent or by an
+    organisation's key): an older call waiting for its seller's tap doesn't take the batch.
+    Before, it fetched the oldest no-plan calls first and looked for the upload afterwards,
+    so more than a batch of tap calls in two hours hid every standing call behind them."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path, gemini=True)
+        setup.native.validate_source = ValidationFixtureRuntime().validate_source
+        try:
+            await _organisation(setup)
+            _install(setup)
+            monkeypatch.setattr(auto_start, "BATCH", 1)
+            starter = _starter(setup)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                await _seller_with_consent(setup, client)
+                earlier = setup.clock[0] - timedelta(minutes=5)
+                _, tapped = await _standing_call(setup, client, "accepted", earlier)
+                _, standing = await _standing_call(setup, client)
+
+                assert await starter.tick(now=setup.clock[0]) == ["started"]
+                assert len(await _plans(setup, standing)) == 1
+                assert await _plans(setup, tapped) == []  # still waits for its tap
                 assert await starter.tick(now=setup.clock[0]) == []
         finally:
             await setup.engine.dispose()

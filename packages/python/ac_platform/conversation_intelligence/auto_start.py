@@ -45,7 +45,7 @@ from typing import Any, Final, cast
 from uuid import UUID
 
 from fastapi import FastAPI
-from sqlalchemy import select, text
+from sqlalchemy import String, and_, or_, select, text
 
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository
@@ -114,8 +114,50 @@ class AutoStart:
 
     async def candidates(self, now: datetime) -> list[Candidate]:
         """Calls whose audio check finished in the last ``FRESH``, with no plan yet, uploaded
-        under a standing consent by a recorded session, and not already marked waiting."""
+        under a standing consent by a recorded session (or by an organisation's key), and not
+        already marked waiting. Only such calls are fetched: calls waiting for their seller's
+        tap never fill the batch and hide one that can start here."""
         found: list[Candidate] = []
+        recording = ConversationRun.recording_id.cast(String)
+
+        def marked(action: str) -> Any:
+            return (
+                select(AuditEvent.id)
+                .where(
+                    AuditEvent.tenant_id == ConversationRun.tenant_id,
+                    AuditEvent.resource_type == "conversation_recording",
+                    AuditEvent.resource_id == recording,
+                    AuditEvent.action == action,
+                    *(
+                        (
+                            AuditEvent.actor_person_id.is_not(None),
+                            AuditEvent.session_id.is_not(None),
+                        )
+                        if action == UPLOADED
+                        else ()
+                    ),
+                )
+                .exists()
+            )
+
+        keyed = (
+            select(ConversationGuestSubmission.submission_id)
+            .join(
+                AuditEvent,
+                and_(
+                    AuditEvent.tenant_id == ConversationGuestSubmission.tenant_id,
+                    AuditEvent.resource_type == key_upload.UPLOAD_RESOURCE,
+                    AuditEvent.resource_id
+                    == ConversationGuestSubmission.submission_id.cast(String),
+                    AuditEvent.action == key_upload.UPLOADED,
+                ),
+            )
+            .where(
+                ConversationGuestSubmission.tenant_id == ConversationRun.tenant_id,
+                ConversationGuestSubmission.recording_id == ConversationRun.recording_id,
+            )
+            .exists()
+        )
         async with self.sessions() as db:
             runs = (
                 await db.execute(
@@ -136,6 +178,8 @@ class AutoStart:
                             ConversationProcessingPlan.recording_id == ConversationRun.recording_id
                         )
                         .exists(),
+                        or_(marked(UPLOADED), keyed),
+                        ~marked(WAITING),
                     )
                     .order_by(ConversationRun.completed_at)
                     .limit(BATCH)
