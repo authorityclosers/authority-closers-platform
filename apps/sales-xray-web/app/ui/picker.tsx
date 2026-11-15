@@ -151,6 +151,8 @@ function Options({
           aria-selected={row.key === value}
           tabIndex={index === active ? 0 : -1}
           className={styles.option}
+          // Nothing in it: listed, tappable, muted (Leads part 03).
+          data-empty={row.count === 0 ? "" : undefined}
           onFocus={() => setActive(index)}
           onClick={() => onPick(row.key)}
         >
