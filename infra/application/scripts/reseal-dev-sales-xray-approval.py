@@ -26,7 +26,7 @@ from pathlib import Path
 
 HELPER_SHA256 = {
     "refresh-dev-sales-xray-backend.py": "951c82dcb3390ba1e0ffe836d2032deb9aee86c1232d2d8452674da5a6b8feb3",  # noqa: E501 - immutable helper pin
-    "prepare-sales-xray-native-activation.py": "d026c11d2fee8671bf6418c46571d4c9209704f78a89cb5f11ecdcb6652728df",  # noqa: E501 - immutable helper pin
+    "prepare-sales-xray-native-activation.py": "51a92dc2c20785fd5123f7a1e1a7ca463e1caffc55da1e44534fe4b258c2a560",  # noqa: E501 - immutable helper pin
 }
 CODE_NAME = "reseal-dev-sales-xray-approval.py"
 CODE_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
