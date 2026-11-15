@@ -46,6 +46,13 @@ command-line argument, so it stays out of shell history and process lists).
     sx changes [--lead LEAD_ID]               # notes and tasks this key added (30 days)
     sx undo CHANGE_ID                         # within 7 days: a note stops showing,
                                               # an open task is cancelled
+    sx assign LEAD_ID [--to PERSON_ID]        # give a lead to a teammate (none: the lead
+                                              # rules); an owner's or admin's org key
+    sx bulk (--ids FILE | --where-stage KEY) (--stage STEP --reason WHY | --assign
+            PERSON_ID|rules) [--reason-code C] [--next AT] [--amount N] [--yes]
+                                              # up to 1,000 leads; previews, applies with
+                                              # --yes; an owner's or admin's org key
+    sx undo-request REQUEST_ID                # undo every change one bulk request made
     sx dipak search [WORDS]                   # Ask Dipak: his 150 sales questions
     sx dipak lesson QUESTION_ID               # one lesson in Dipak's words (e.g. PB03)
     sx dipak improve [--skills a,b] [--objections c]   # his questions for a report's
@@ -259,6 +266,18 @@ class Client:
         return self.call(
             "POST", f"/changes/{urllib.parse.quote(change_id, safe='')}/undo", body=body
         )
+
+    def assign(self, lead_id: str, **fields: Any) -> Any:
+        body = {k: v for k, v in fields.items() if v is not None}
+        return self.call("POST", f"/leads/{urllib.parse.quote(lead_id, safe='')}/assign", body=body)
+
+    def bulk(self, body: dict[str, Any]) -> Any:
+        return self.call(
+            "POST", "/leads/bulk", body={k: v for k, v in body.items() if v is not None}
+        )
+
+    def undo_request(self, request_id: str) -> Any:
+        return self.call("POST", "/changes/undo-request", body={"request_id": request_id})
 
     # Ask Dipak (/v1/api/ask-dipak): lessons with any key; missions with coaching:read
     # and coaching:write, which act as a person (a connected app's sxa_ token).
@@ -573,6 +592,39 @@ TOOLS += [
             "required": ["task_id", "choice", "request_id"],
         },
     },
+    {
+        "name": "assign_lead",
+        "description": "Gives one lead to a teammate (person_id), or with none to whom the "
+        "lead rules pick. An owner's or admin's organisation key with leads:assign.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "lead_id": {"type": "string"},
+                "person_id": {"type": "string"},
+                "request_id": {"type": "string", "minLength": 8, "maxLength": 80},
+                "preview": {"type": "boolean"},
+            },
+            "required": ["lead_id", "request_id"],
+        },
+    },
+    {
+        "name": "update_leads",
+        "description": "One stage move (step, reason) or one assign (person_id) for up to "
+        "1,000 leads: lead_ids or a filter {stage}. Above 5 leads, preview first and send "
+        "its preview_sha. An owner's or admin's organisation key.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "lead_ids": {"type": "array", "items": {"type": "string"}},
+                "filter": {"type": "object"},
+                "change": {"type": "object"},
+                "request_id": {"type": "string", "minLength": 8, "maxLength": 80},
+                "preview": {"type": "boolean"},
+                "preview_sha": {"type": "string"},
+            },
+            "required": ["change", "request_id"],
+        },
+    },
 ]
 
 
@@ -782,6 +834,16 @@ def _tool(client: Client, name: str, args: dict[str, Any]) -> Any:
         return client.analysis_time(args.get("team") is True)
     if name == "list_tasks":
         return client.tasks(args.get("view"), args.get("person"))
+    if name == "assign_lead":
+        return client.assign(
+            str(args["lead_id"]),
+            person_id=args.get("person_id"),
+            request_id=str(args["request_id"]),
+            preview=bool(args.get("preview", False)),
+        )
+    if name == "update_leads":
+        keys = ("lead_ids", "filter", "change", "request_id", "preview", "preview_sha")
+        return client.bulk({key: args.get(key) for key in keys})
     if name in ("complete_task", "snooze_task"):
         return client.task_action(
             str(args["task_id"]),
@@ -923,6 +985,32 @@ def _request_id() -> str:
     return f"sx-{uuid.uuid4().hex}"
 
 
+def bulk_change(client: Client, args: Any) -> Any:
+    """`sx bulk`: preview the change, then (with --yes, or 5 leads or fewer) apply exactly
+    what the preview showed. Without --yes above 5 leads, it prints the preview only."""
+    body: dict[str, Any] = {"request_id": args.request_id or _request_id()}
+    if args.ids:
+        with open(args.ids, encoding="utf-8") as handle:
+            body["lead_ids"] = [line.strip() for line in handle if line.strip()]
+    else:
+        body["filter"] = {"stage": args.where_stage}
+    if args.stage:
+        stage = {
+            "step": args.stage,
+            "reason": args.reason,
+            "reason_code": args.reason_code,
+            "next_action_at": args.next,
+            "amount": args.amount,
+        }
+        body["change"] = {"stage": {k: v for k, v in stage.items() if v is not None}}
+    else:
+        body["change"] = {"assign": {} if args.assign == "rules" else {"person_id": args.assign}}
+    shown = client.bulk({**body, "preview": True})
+    if shown.get("leads", 0) > 5 and not args.yes:
+        return {**shown, "next": "Check the preview, then run again with --yes."}
+    return client.bulk({**body, "preview_sha": shown.get("preview_sha")})
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sx", description="Sales X-Ray from the command line.")
     parser.add_argument("--version", action="version", version=f"sx {VERSION}")
@@ -1005,6 +1093,26 @@ def _parser() -> argparse.ArgumentParser:
     undo = commands.add_parser("undo")
     undo.add_argument("change_id")
     undo.add_argument("--request-id")
+    undo_all = commands.add_parser("undo-request")
+    undo_all.add_argument("request_id")
+    give = commands.add_parser("assign")
+    give.add_argument("lead_id")
+    give.add_argument("--to", help="a person_id from `sx team`; leave out for the lead rules")
+    give.add_argument("--request-id")
+    give.add_argument("--preview", action="store_true")
+    many = commands.add_parser("bulk")
+    which = many.add_mutually_exclusive_group(required=True)
+    which.add_argument("--ids", help="a file of lead ids, one a line")
+    which.add_argument("--where-stage", help="every lead at this stage key (or open)")
+    what = many.add_mutually_exclusive_group(required=True)
+    what.add_argument("--stage", help="move them to this stage key")
+    what.add_argument("--assign", help="give them to this person_id, or `rules`")
+    many.add_argument("--reason")
+    many.add_argument("--reason-code")
+    many.add_argument("--next")
+    many.add_argument("--amount", type=int)
+    many.add_argument("--request-id")
+    many.add_argument("--yes", action="store_true", help="apply after the preview")
     dipak = commands.add_parser("dipak", help="Ask Dipak: lessons and Next-call missions")
     asks = dipak.add_subparsers(dest="ask", required=True)
     search = asks.add_parser("search")
@@ -1159,6 +1267,17 @@ def main(
             out = client.changes(args.lead)
         elif args.command == "undo":
             out = client.undo(args.change_id, args.request_id)
+        elif args.command == "undo-request":
+            out = client.undo_request(args.request_id)
+        elif args.command == "assign":
+            out = client.assign(
+                args.lead_id,
+                person_id=args.to,
+                request_id=args.request_id or _request_id(),
+                preview=args.preview,
+            )
+        elif args.command == "bulk":
+            out = bulk_change(client, args)
         elif args.command == "dipak":
             out = _dipak(client, args)
         elif args.command == "upload":

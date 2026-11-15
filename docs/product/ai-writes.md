@@ -356,3 +356,43 @@ imports, the review queue and confirm tokens.
    Junk move. Are these right?
 3. **Undo window:** 7 days, open to the acting person, the lead's owner and
    managers?
+
+## Amended 15 Nov (orchestrator, per owner 14 Nov)
+
+The owner's 14 Nov order asked for the API to be "ten times stronger" and for "admin-level
+strongness". The orchestrator chose option 2: an organisation's own key may act as its owner.
+Connected AI apps keep everything above unchanged.
+
+**An organisation's API key held by an owner or admin** acts as the owner. The key must be
+made in Organisation → Integrations, not a connected app, and its person must be an active
+owner or admin at the moment of each request.
+
+- **Assign:** it may give a lead to a teammate, or let the lead rules pick
+  (`POST /v1/api/leads/{id}/assign`, MCP `assign_lead`, `sx assign`). The lead's open tasks go
+  with it.
+  - It uses its own scope, `leads:assign`, which only such a key can use.
+  - Undo gives the lead back, unless the lead moved to someone else since.
+- **Bulk:** it may make one stage move or one assign on up to **1,000 leads**
+  (`POST /v1/api/leads/bulk`, MCP `update_leads`, `sx bulk`). The leads are given by id or by a
+  stage filter.
+  - Above **5 leads**, the change must be previewed first. It then applies only with that
+    preview's `preview_sha`, so it changes exactly the leads that were shown.
+  - Every lead becomes its own change in the ledger, with the request's own idempotency per
+    lead. Each can be undone for 7 days, one at a time or the whole request at once
+    (`POST /v1/api/changes/undo-request`).
+  - A lead that can't change is listed with the reason. It is never silently skipped.
+- **Won, Lost and Junk** are allowed with a reason. The stage list's own rules still apply:
+  Lost and Junk need their reason code, and Won needs its amount.
+- **Switches and caps:** the owner's pause and per-action switches still apply. A stage move
+  still needs "stage" on, by such a key as by any other. Assign has no switch of its own,
+  because only such a key can assign. A bulk change doesn't count against the caps, since a
+  1,000-lead change would hit every one; its preview is the safeguard instead. One-lead
+  changes keep their caps.
+- **Ledger:** assigns are recorded as `assign` (migration 0156). Marking a task done and
+  snoozing it are `task` writes; the field each change touched tells them apart.
+
+**Everyone else keeps the 25 Oct design:**
+
+- Claude.ai and ChatGPT connectors, and other connected apps, can't assign or change leads in
+  bulk. Their moves to Won, Lost or Junk still need review.
+- Keys held by sellers change one lead at a time. They can't assign or change leads in bulk.

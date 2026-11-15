@@ -157,6 +157,8 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "add_note",
         "add_task",
         "move_stage",
+        "assign_lead",
+        "update_leads",
         "list_tasks",
         "complete_task",
         "snooze_task",
@@ -218,13 +220,32 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
     }
     # Stage moves (15 Nov 2026): their own scope.
     stages = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:stage"}))}
-    assert stages == {"whoami", "move_stage", "list_my_changes", "undo_change", *LESSONS}
+    assert stages == {
+        "whoami",
+        "move_stage",
+        "update_leads",
+        "list_my_changes",
+        "undo_change",
+        *LESSONS,
+    }
+    # Assigns (15 Nov 2026): an owner's or admin's organisation key, its own scope.
+    assigning = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:assign"}))}
+    assert assigning == {
+        "whoami",
+        "assign_lead",
+        "update_leads",
+        "list_my_changes",
+        "undo_change",
+        *LESSONS,
+    }
     writes = {
         "add_lead",
         "import_leads",
         "add_note",
         "add_task",
         "move_stage",
+        "assign_lead",
+        "update_leads",
         "complete_task",
         "snooze_task",
         "undo_change",

@@ -25,7 +25,15 @@ Base address: ``https://<sales x-ray host>/v1/api``.
                             an AI write with Undo (leads:update; the owner's switch decides)
 - POST /leads/{id}/stage    move a lead to another stage with the reason, as an AI write
                             with Undo; Won, Lost and Junk wait for a person (leads:stage;
-                            the owner's switch decides)
+                            the owner's switch decides), except from an owner's or admin's
+                            organisation key, which closes with the reason (and Won's amount)
+- POST /leads/{id}/assign   give a lead to a teammate, or to whom the lead rules pick, with
+                            Undo (leads:assign; an owner's or admin's organisation key only)
+- POST /leads/bulk          one stage move or assign for up to 1,000 leads (ids, or a stage
+                            filter), each lead its own change with Undo; above 5 leads,
+                            preview first and send its preview_sha (an owner's or admin's
+                            organisation key only; ai-writes.md, "Amended 15 Nov")
+- POST /changes/undo-request  undo every change one bulk request made
 - POST /calls               a recording for the connected person to add to their calls;
                             it waits for them, nothing is analysed (calls:write; see
                             integrations/app_uploads.py)
@@ -163,6 +171,64 @@ class StageBody(BaseModel):
     expected_revision: int | None = Field(default=None, ge=1)
     request_id: str = Field(min_length=8, max_length=80)
     preview: bool = False
+    # Whole rupees, for a move to Won (an owner's or admin's organisation key).
+    amount: int | None = Field(default=None, ge=1)
+
+
+class AssignBody(BaseModel):
+    """An owner's or admin's organisation key gives a lead to a teammate (person_id from
+    GET /team), or, with none, to whom the lead rules pick."""
+
+    model_config = ConfigDict(extra="forbid")
+    person_id: UUID | None = None
+    expected_revision: int | None = Field(default=None, ge=1)
+    request_id: str = Field(min_length=8, max_length=80)
+    preview: bool = False
+
+
+class BulkStage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    step: str = Field(min_length=1, max_length=40)
+    reason: str = Field(min_length=1, max_length=500)
+    reason_code: str | None = Field(default=None, min_length=1, max_length=40)
+    next_action_at: AwareDatetime | None = None
+    amount: int | None = Field(default=None, ge=1)
+
+
+class BulkAssign(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    person_id: UUID | None = None
+
+
+class BulkChange(BaseModel):
+    """Exactly one: a stage move or an assign."""
+
+    model_config = ConfigDict(extra="forbid")
+    stage: BulkStage | None = None
+    assign: BulkAssign | None = None
+
+
+class BulkFilter(BaseModel):
+    """The leads a bulk change takes, by stage (a key from GET /leads's stages, or open)."""
+
+    model_config = ConfigDict(extra="forbid")
+    stage: str = Field(min_length=1, max_length=40)
+    search: str | None = Field(default=None, max_length=120)
+
+
+class BulkBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    lead_ids: list[UUID] | None = Field(default=None, min_length=1, max_length=1000)
+    filter: BulkFilter | None = None
+    change: BulkChange
+    request_id: str = Field(min_length=8, max_length=80)
+    preview: bool = False
+    preview_sha: str | None = Field(default=None, min_length=64, max_length=64)
+
+
+class UndoRequestBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_id: str = Field(min_length=8, max_length=80)
 
 
 class TaskDoneBody(BaseModel):
@@ -541,6 +607,21 @@ class Reader:
         )
         return (name or "An AI app")[:80]
 
+    async def _manager_key(self) -> bool:
+        """An organisation's API key (not a connected app) whose person is, right now, one
+        of the organisation's owners or admins (ai-writes.md, "Amended 15 Nov")."""
+        if self.caller.reach != "organisation" or self.key.prefix.startswith("app "):
+            return False
+        role = await self.session.scalar(
+            select(Membership.role).where(
+                Membership.tenant_id == self.key.tenant_id,
+                Membership.person_id == self.key.acting_person_id,
+                Membership.status == "active",
+                Membership.ended_at.is_(None),
+            )
+        )
+        return role in {"owner", "admin"}
+
     async def _writes(self) -> AiWrites:
         """Changes from this caller, behind the AI-write guardrails (ai-writes.md)."""
         self._refuse_read_only()
@@ -559,6 +640,7 @@ class Reader:
                 door_id=self.key.key_id,
                 label=f"API key {self.key.prefix}",
                 scopes=self.key.scopes,
+                manager_key=await self._manager_key(),
             )
         return AiWrites(desk, door)
 
@@ -656,8 +738,65 @@ class Reader:
                 expected_revision=body.expected_revision,
                 request_id=body.request_id,
                 preview=body.preview,
+                amount=body.amount,
             )
         )
+
+    async def assign_lead(self, lead_id: UUID, body: AssignBody) -> tuple[dict[str, Any], int]:
+        writes = await self._writes()
+        return await self._write(
+            writes.assign(
+                lead_id,
+                body.person_id,
+                request_id=body.request_id,
+                expected_revision=body.expected_revision,
+                preview=body.preview,
+            )
+        )
+
+    async def _filtered(self, chosen: BulkFilter) -> list[UUID]:
+        """The leads a stage filter takes, newest change first, up to the bulk limit."""
+        found: list[UUID] = []
+        offset: int | None = 0
+        while offset is not None and len(found) < 1000:
+            page = await self.leads(stage=chosen.stage, offset=offset, search=chosen.search)
+            found.extend(UUID(str(row["lead_id"])) for row in page["leads"])
+            offset = page.get("next_offset")
+        return found[:1000]
+
+    async def bulk(self, body: BulkBody) -> tuple[dict[str, Any], int]:
+        """One change to many leads (ai-writes.md, "Amended 15 Nov")."""
+        if (body.lead_ids is None) == (body.filter is None):
+            raise ApiError(422, "leads", "Send lead_ids or a filter, one of them.")
+        change = body.change
+        if (change.stage is None) == (change.assign is None):
+            raise ApiError(422, "change", "The change is one stage move or one assign.")
+        writes = await self._writes()
+        ids = list(body.lead_ids) if body.lead_ids is not None else []
+        if body.filter is not None:
+            ids = await self._filtered(body.filter)
+            if not ids:
+                raise ApiError(404, "no_leads", "No leads match that filter.")
+        # As JSON (ids and times as text): the preview answers it and hashes it.
+        spec = (
+            {"stage": change.stage.model_dump(mode="json", exclude_none=True)}
+            if change.stage is not None
+            else {"assign": change.assign.model_dump(mode="json") if change.assign else {}}
+        )
+        return await self._write(
+            writes.bulk(
+                ids,
+                spec,
+                request_id=body.request_id,
+                preview=body.preview,
+                preview_sha=body.preview_sha,
+            )
+        )
+
+    async def undo_request(self, body: UndoRequestBody) -> dict[str, Any]:
+        writes = await self._writes()
+        answer, _ = await self._write(writes.undo_request(body.request_id))
+        return answer
 
     async def changes(self, lead_id: UUID | None = None) -> dict[str, Any]:
         writes = await self._writes()
@@ -1002,6 +1141,23 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
         async with open_reader(request) as reader:
             answer, status = await reader.move_stage(lead_id, body)
             return done(answer, 200 if status == 201 else status)
+
+    @router.post("/leads/{lead_id}/assign")
+    async def assign_lead(lead_id: UUID, body: AssignBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            answer, status = await reader.assign_lead(lead_id, body)
+            return done(answer, 200 if status == 201 else status)
+
+    @router.post("/leads/bulk")
+    async def bulk_leads(body: BulkBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            answer, _ = await reader.bulk(body)
+            return done(answer)
+
+    @router.post("/changes/undo-request")
+    async def undo_request(body: UndoRequestBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.undo_request(body))
 
     # Recordings an app sends for its person (integrations/app_uploads.py).
     upload_root = app_uploads.inbox_root(ctx.settings.sales_xray_storage_root)

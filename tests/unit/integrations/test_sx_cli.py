@@ -113,6 +113,8 @@ def test_the_mcp_server_lists_and_calls_tools() -> None:
         "list_tasks",
         "complete_task",
         "snooze_task",
+        "assign_lead",
+        "update_leads",
     }
     facts = sx.handle(
         api,
@@ -264,6 +266,29 @@ def test_tasks_done_and_snooze_from_the_command_line_and_the_mcp_tools() -> None
     )
     assert json.loads(called["result"]["content"][0]["text"])["status"] == "applied"
     assert json.loads(fake.seen[3][3])["choice"] == "1h"
+
+
+def test_bulk_previews_first_and_applies_only_with_yes() -> None:
+    env = {"SX_API_KEY": KEY, "SX_API_BASE": "https://salesxray.example.test/v1/api"}
+    fake = Fake(
+        {("POST", "/leads/bulk"): (200, {"leads": 7, "preview_sha": "a" * 64, "applied": 7})}
+    )
+    move = ["bulk", "--where-stage", "open", "--stage", "follow_up", "--reason", "Batch"]
+    assert sx.main([*move, "--request-id", "req-cli-0006"], env, fake) == 0
+    assert len(fake.seen) == 1  # seven leads: the preview only, without --yes
+    shown = json.loads(fake.seen[0][3])
+    assert shown["preview"] is True and shown["filter"] == {"stage": "open"}
+    assert shown["change"] == {"stage": {"step": "follow_up", "reason": "Batch"}}
+    assert sx.main([*move, "--request-id", "req-cli-0006", "--yes"], env, fake) == 0
+    applied = json.loads(fake.seen[2][3])
+    assert applied["preview_sha"] == "a" * 64 and "preview" not in applied
+    assert applied["request_id"] == shown["request_id"]
+    assert sx.main(["assign", "l1", "--to", "p2", "--request-id", "req-cli-0007"], env, fake) != 0
+    assert json.loads(fake.seen[3][3]) == {
+        "person_id": "p2",
+        "request_id": "req-cli-0007",
+        "preview": False,
+    }
 
 
 def test_sx_list_leads_takes_the_organisations_own_stage_keys() -> None:
