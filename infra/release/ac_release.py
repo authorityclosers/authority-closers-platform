@@ -3986,6 +3986,16 @@ class Engine:
                 str(self.paths.mirror),
             ]
         argv += additions["argv"]
+        if additions["approval"]:
+            checked = self.check_replacement_approval(
+                environment, sha, current, descriptor, additions, source, stage, log
+            )
+            argv += [
+                "--approval-checked-sha256",
+                checked["approval_sha256"],
+                "--approval-checked-service-sha256",
+                checked["service_sha256"],
+            ]
         completed = self.run(argv, log=log, check=False, timeout=900)
         if completed.returncode != 0:
             lines = completed.stderr.strip().splitlines()
@@ -4048,6 +4058,113 @@ class Engine:
         if replace:
             argv += ["--approval-file", str(approval), "--approval-sha256", _sha256_file(approval)]
         return {"argv": argv, "openai": openai, "approval": replace}
+
+    def approval_check_packages(self, sha: str, stage: Path) -> Path:
+        """The target release's own packages/python, from the mirror (the staged source
+        holds infra/application only)."""
+
+        archive, _ = self.source_archive(sha, stage, "packages/python")
+        target = stage / "approval-check"
+        self.extract_source(archive, target, "packages/python")
+        return target / "packages" / "python"
+
+    def check_replacement_approval(
+        self,
+        environment: str,
+        sha: str,
+        current: str,
+        descriptor: Mapping[str, Any],
+        additions: Mapping[str, Any],
+        source: Path,
+        stage: Path,
+        log: Path,
+    ) -> dict[str, Any]:
+        """Validate Root's replacement approval with the release's own approval contract
+        before the host prepare run, whose python3 has neither pydantic nor the application
+        package (v1.67's staging deploy, 16 Nov 2026: "hosted approval contract validator is
+        unavailable"). A disposable container of the running release's API image (the
+        target's images load later, in the installer), no network, read-only, with the
+        target's packages/python ahead of the image's own, runs the target's prepare tool in
+        --check-replacement-approval against the service the new activation will have."""
+
+        images: dict[str, str] = {}
+        listed = self.paths.application / "releases" / current / "release-images.env"
+        for line in listed.read_text(encoding="utf-8").splitlines():
+            key, _, value = line.partition("=")
+            images[key] = value
+        image = images.get("AC_API_IMAGE")
+        if not image:
+            raise ReleaseError("the running release names no API image to check the approval")
+        service = descriptor.get("service_config_file")
+        if not isinstance(service, str) or not service:
+            raise ReleaseError("the running activation names no service file to check against")
+        packages = self.approval_check_packages(sha, stage)
+        tool = "/src/infra/application/scripts/prepare-sales-xray-native-activation.py"
+        given = list(additions["argv"])
+        approval = given[given.index("--approval-file") + 1]
+        digest = given[given.index("--approval-sha256") + 1]
+        mounts = [
+            "-v",
+            f"{packages}:/src/packages/python:ro",
+            "-v",
+            f"{source / 'infra/application/scripts/prepare-sales-xray-native-activation.py'}"
+            f":{tool}:ro",
+            "-v",
+            f"{approval}:/check/approval.json:ro",
+            "-v",
+            f"{service}:/check/service.json:ro",
+        ]
+        arguments = [
+            "--check-replacement-approval",
+            "--approval-file",
+            "/check/approval.json",
+            "--approval-sha256",
+            digest,
+            "--check-service",
+            "/check/service.json",
+        ]
+        if additions["openai"]:
+            provider = given[given.index("--add-openai-provider") + 1]
+            mounts += ["-v", f"{provider}:/check/openai-provider.json:ro"]
+            arguments += ["--add-openai-provider", "/check/openai-provider.json"]
+        completed = self.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "--network",
+                "none",
+                "--read-only",
+                "--user",
+                "0:0",
+                "-e",
+                "PYTHONDONTWRITEBYTECODE=1",
+                "--entrypoint",
+                "python",
+                *mounts,
+                image,
+                tool,
+                *arguments,
+            ],
+            log=log,
+            check=False,
+            timeout=300,
+        )
+        if completed.returncode != 0:
+            lines = completed.stderr.strip().splitlines()
+            detail = lines[-1][:300] if lines else f"exit {completed.returncode}"
+            raise ReleaseError(f"the {environment} replacement approval was refused: {detail}")
+        try:
+            result = json.loads(completed.stdout)
+        except ValueError:
+            raise ReleaseError("the replacement approval check answered no JSON") from None
+        if (
+            result.get("replacement_approval") != "valid"
+            or result.get("approval_sha256") != digest
+            or not isinstance(result.get("service_sha256"), str)
+        ):
+            raise ReleaseError("the replacement approval check returned an unexpected result")
+        return dict(result)
 
     def native_reuse_proof(self, native_sha: str, sha: str, directory: Path) -> Path:
         stored = self.store_native(native_sha)
