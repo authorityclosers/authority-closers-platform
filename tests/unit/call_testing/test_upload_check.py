@@ -85,3 +85,48 @@ def test_labelled_nodes_keep_their_centres() -> None:
     assert (230, 813, "1 file added") in nodes
     assert all(label for _, _, label in nodes)  # the unlabelled checkbox isn't listed
     assert upload.HEADER_BOTTOM < 400 < upload.SAFE_BOTTOM
+
+
+class _Reads:
+    """A screen whose accessibility tree lags: it reads "unchecked" ``stale`` times first."""
+
+    def __init__(self, stale: int, ticks: bool = True) -> None:
+        self.stale, self.ticks, self.reads = stale, ticks, 0
+
+    def full(self):  # type: ignore[no-untyped-def]
+        self.reads += 1
+        checked = self.ticks and self.reads > self.stale
+        return upload.parse_full(
+            _screen(
+                "[154,888][211,945]", "[238,885][481,954]", "[148,1040][931,1177]", checked=checked
+            )
+        )
+
+
+def _clock():  # type: ignore[no-untyped-def]
+    now = [0.0]
+    return now, (lambda: now[0]), (lambda seconds: now.__setitem__(0, now[0] + seconds))
+
+
+def test_a_lagging_tree_is_waited_out_never_tapped_again() -> None:
+    # 15 Nov 2026: a second tap on a stale "unchecked" read unticked the box again.
+    screen = _Reads(stale=3)
+    _, clock, sleep = _clock()
+    found = upload.tick_seen(screen, seconds=8, sleep=sleep, clock=clock)
+    assert found is not None and found[0]["checked"] is True
+    assert screen.reads == 4
+
+
+def test_a_box_that_never_ticks_is_given_up_after_the_wait() -> None:
+    screen = _Reads(stale=0, ticks=False)
+    now, clock, sleep = _clock()
+    found = upload.tick_seen(screen, seconds=8, sleep=sleep, clock=clock)
+    assert found is not None and found[0]["checked"] is False
+    assert now[0] >= 8
+
+
+def test_the_terms_box_is_tapped_once() -> None:
+    source = (ROOT / "scripts/call_testing/upload_check.py").read_text("utf-8")
+    agree = source[source.index("def agree()") : source.index('step("tick the Terms"')]
+    assert agree.count("input tap") == 1
+    assert "for _ in range" not in agree

@@ -23,6 +23,7 @@ import hashlib
 import importlib.util
 import json
 import re
+import subprocess
 import sys
 import time
 from datetime import UTC, datetime
@@ -85,6 +86,7 @@ def parse_full(xml: str) -> list[dict[str, Any]]:
                 "label": (attr("text") or attr("content-desc")).strip(),
                 "cls": attr("class"),
                 "checked": attr("checked") == "true",
+                "enabled": attr("enabled") != "false",
             }
         )
     return found
@@ -105,6 +107,26 @@ def terms_controls(nodes: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[st
     if box and button and 250 < box["y"] < SAFE_BOTTOM - 150 and button["bottom"] < SAFE_BOTTOM:
         return box, button
     return None
+
+
+TICK_SECONDS = 8.0
+
+
+def tick_seen(
+    screen: Any,
+    *,
+    seconds: float,
+    sleep: Any = time.sleep,
+    clock: Any = time.monotonic,
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    """Re-read the screen until the Terms box reads ticked or ``seconds`` pass; never taps.
+    Returns the last controls seen (or None when they weren't on screen)."""
+    deadline = clock() + seconds
+    found = terms_controls(screen.full())
+    while not (found and found[0]["checked"]) and clock() < deadline:
+        sleep(1)
+        found = terms_controls(screen.full())
+    return found
 
 
 class Screen:
@@ -258,8 +280,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 current = screen.wait("Switch workspace", seconds=10)[2]
                 if args.workspace.lower() in current.lower():
                     return current
-                screen.tap_text("Switch workspace")
-                time.sleep(1.5)
+                for attempt in range(2):
+                    screen.tap_text("Switch workspace")
+                    time.sleep(2)
+                    if screen.find("Where your calls, leads and reports live"):
+                        break
+                    if attempt:
+                        raise TimeoutError("the workspace sheet didn't open")
                 screen.tap_text(args.workspace, seconds=10)
                 time.sleep(1.5)
                 # The row asks "Switch to <workspace>?"; a second tap confirms.
@@ -271,7 +298,19 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
             step("workspace", switch)
             time.sleep(3)
-        step("open +", lambda: screen.tap_text("Add a lead, a call or a task"))
+
+        def fresh() -> str:
+            # A cold start opens New analysis fresh in the chosen workspace, as a seller's
+            # would, with nothing left from the switch.
+            adb.sh(f"am force-stop {phone.PACKAGE}")
+            time.sleep(1.5)
+            adb.bring_forward()
+            time.sleep(4)
+            return screen.header()
+
+        step("fresh start", fresh)
+        # After a cold start the app can still be loading its web copy for a while.
+        step("open +", lambda: screen.tap_text("Add a lead, a call or a task", seconds=60))
         step(
             "Add a call",
             lambda: screen.tap_text("Record or upload a call for analysis", "Add a call"),
@@ -315,24 +354,44 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         )
         result["terms_at"] = {
             "checkbox": [box["x"], box["y"]],
+            "checkbox_enabled": box["enabled"],
             "analyse": [button["x"], button["y"]],
+            "analyse_enabled": button["enabled"],
         }
         if not args.agree:
             result["stopped"] = "before the Terms tick (rehearsal, nothing ticked or uploaded)"
             return result
 
         def agree() -> str:
-            for _ in range(2):
-                found = terms_controls(screen.full())
-                if found and found[0]["checked"]:
-                    return "ticked"
-                target = found[0] if found else box
-                adb.sh(f"input tap {target['x']} {target['y']}")
-                time.sleep(1)
+            # One tap only. The WebView's accessibility tree lags the page (15 Nov 2026: it
+            # put the box ~25 px below where it was drawn, and read "unchecked" a second after
+            # a tap), so a second tap on a stale "unchecked" unticks the box again. The box
+            # sits inside its label, so a tap a little off the drawn box still ticks it.
             found = terms_controls(screen.full())
             if found and found[0]["checked"]:
+                return "already ticked"
+            target = found[0] if found else box
+            adb.sh(f"input tap {target['x']} {target['y']}")
+            found = tick_seen(screen, seconds=TICK_SECONDS)
+            if found and found[0]["checked"]:
                 return "ticked"
-            raise TimeoutError("the Terms checkbox didn't tick")
+            # Evidence for why: the box's own state and the screen.
+            shot = Path(args.out) / f"terms-{datetime.now(UTC):%Y%m%dT%H%M%SZ}.png"
+            shot.parent.mkdir(parents=True, exist_ok=True)
+            shot.write_bytes(
+                subprocess.run(  # noqa: S603 - adb with a fixed verb
+                    [adb.adb, "-s", adb.serial, "exec-out", "screencap", "-p"],
+                    capture_output=True,
+                    timeout=30,
+                    check=False,
+                ).stdout
+            )
+            state = found[0] if found else box
+            raise TimeoutError(
+                "the Terms checkbox didn't tick "
+                f"(enabled={state.get('enabled')}, checked={state.get('checked')}, "
+                f"tapped ({state['x']},{state['y']}); screen {shot.name})"
+            )
 
         step("tick the Terms", agree)
 
