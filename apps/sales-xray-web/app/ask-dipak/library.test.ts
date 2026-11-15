@@ -2,18 +2,21 @@ import { describe, expect, it } from "vitest";
 
 import coach from "./coach-notes.json";
 import { hasIcon } from "./icons";
+import drafts from "./drafts.json";
 import data from "./library.json";
 import {
   ALIASES,
   CATEGORIES,
   CATEGORY_ICONS,
   CATEGORY_LABELS,
+  DRAFTS,
   FEATURED,
   LESSONS,
   QUESTIONS,
   REAL_SITUATIONS,
   SUGGESTIONS,
   featuredQuestions,
+  isDraft,
   lessonFor,
   questionById,
   questionLabel,
@@ -114,10 +117,57 @@ describe("the topic library (spec sections 8, 24, 26, 27, 33)", () => {
     }
   });
 
-  it("invents no lesson for the other 138 questions", () => {
-    const without = QUESTIONS.filter((question) => !lessonFor(question.id));
-    expect(without).toHaveLength(138);
+  it("answers every question: Dipak's twelve as written, the other 138 as drafts for him (owner, 16 Nov 2026)", () => {
+    expect(QUESTIONS.filter((question) => !lessonFor(question.id))).toEqual([]);
+    const drafted = QUESTIONS.filter((question) => isDraft(question.id));
+    expect(drafted).toHaveLength(138);
+    expect(Object.keys(DRAFTS)).toHaveLength(138);
+    for (const id of SPEC_LESSONS) {
+      expect(isDraft(id), id).toBe(false);
+      expect(id in DRAFTS, id).toBe(false);
+      expect(lessonFor(id)).toBe(LESSONS[id]);
+    }
+    for (const question of drafted) {
+      const id = question.id;
+      const lesson = DRAFTS[id];
+      expect(lesson.draft_for_dipak, id).toBe(true);
+      expect(lessonFor(id), id).toBe(lesson);
+      for (const field of [
+        lesson.quick,
+        lesson.scenario,
+        lesson.cue,
+        lesson.mission,
+      ])
+        expect(field.trim(), id).not.toBe("");
+      expect(lesson.options, id).toHaveLength(3);
+      for (const option of lesson.options)
+        expect(
+          option.length === 3 && option.every((part) => part.trim().length > 0),
+          id,
+        ).toBe(true);
+      expect(new Set(lesson.options.map((option) => option[1])).size, id).toBe(
+        3,
+      );
+      expect(lesson.deep.length, id).toBeGreaterThan(0);
+      expect(lesson.next.length, id).toBeGreaterThan(0);
+      for (const next of lesson.next) {
+        expect(next, id).not.toBe(id);
+        expect(questionById(next), `${id} → ${next}`).not.toBeNull();
+      }
+    }
+    // Dipak's own lessons carry no draft flag; his file holds no draft.
+    expect(JSON.stringify(data.lessons)).not.toContain("draft_for_dipak");
+    expect(drafts.note).toMatch(/Dipak to confirm/);
     expect(lessonFor("toString")).toBeNull();
+    expect(isDraft("toString")).toBe(false);
+  });
+
+  it("lists every question under its category, all 150", () => {
+    const listed = CATEGORIES.flatMap((category) =>
+      category.questions.map((question) => question.id),
+    );
+    expect(listed).toHaveLength(150);
+    expect(new Set(listed).size).toBe(150);
   });
 
   it("keeps the coaching notes apart from the learner's lessons", () => {

@@ -999,6 +999,122 @@
 .mark:active,
 .mcq:active,
 .fold:active,
-.tool:active {
+.tool:active,
+.heroSaved:active {
   transform: var(--sx-press-sink);
+}
+
+/* ---------- The compact greeting (owner, 16 Nov 2026) ----------
+   "It is taking lot of space … nobody seeing explore topics": Dipak's hello
+   and his question in one short Home tile, so Explore topics and its tiles
+   show on the first screen at 363 x 735. His three intro lines fold behind
+   "Dipak के बारे में" and slide open (fade and lift, 220 ms); the greeting
+   arrives the same way. Reduced motion: no movement at all. */
+.hero {
+  margin-bottom: 14px;
+  padding: 12px 12px 4px 16px;
+}
+
+.heroTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.heroSaved {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -4px -2px -4px 0;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: none;
+  color: var(--sx-muted);
+}
+
+.hero .hello {
+  margin: 2px 0 2px;
+}
+
+.hero .heroAsk {
+  margin: 0;
+  padding-right: 4px;
+  font-size: var(--sx-text-sm);
+  line-height: var(--lx-leading-devanagari);
+}
+
+.introMore {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.introMore > div {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.introMore p {
+  margin: 0;
+  padding-top: 10px;
+  font-size: var(--sx-text-sm);
+  line-height: var(--lx-leading-devanagari);
+}
+
+.hero[data-more] .introMore {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: none;
+}
+
+.introToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  margin-left: -2px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--xr-green);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .introMore {
+    transition:
+      grid-template-rows 220ms ease,
+      opacity 220ms ease,
+      transform 220ms ease;
+  }
+
+  .hero {
+    animation: greet 240ms ease both;
+  }
+
+  @keyframes greet {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+}
+
+/* A lesson drafted for Dipak to confirm (owner, 16 Nov 2026): a small tag
+   under its title, so nothing written for him passes as his teaching. */
+.draftTag {
+  display: inline-flex;
+  margin: 8px 0 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sx-tone-action-soft);
+  color: var(--sx-tone-action);
+  font-size: var(--sx-text-2xs);
+  font-weight: 650;
+  line-height: var(--sx-leading-16);
 }
