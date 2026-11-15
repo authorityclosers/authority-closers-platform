@@ -30,6 +30,13 @@ Base address: ``https://<sales x-ray host>/v1/api``.
                             it waits for them, nothing is analysed (calls:write; see
                             integrations/app_uploads.py)
 - GET  /calls/uploads/{id}  what became of one (calls:write)
+- GET  /tasks               open tasks, as the app's Tasks list shows them: overdue, today
+                            or upcoming, and how many of each; ``person`` for an owner or
+                            admin (leads:read)
+- POST /tasks/{id}/done     mark a task on a lead done, as an AI write with Undo (reopens it)
+- POST /tasks/{id}/snooze   snooze a task on a lead (15m, 1h, evening, tomorrow, week), as
+                            an AI write with Undo (puts its due back) (leads:tasks; the
+                            owner's switch for tasks decides both)
 - GET  /analysis-time       the workspace's analysis time: given, used and left, and the
                             longest call (calls:read; time only, never a price;
                             integrations/analysis_time.py)
@@ -76,10 +83,17 @@ from ac_platform.integrations.ai_writes import AiWriteError, AiWrites, Door
 from ac_platform.integrations.models import IntegrationOAuthClient
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.lead_desk import duplicate_queue
-from ac_platform.lead_desk.contracts import LeadPage, LeadRow, TaskKind
+from ac_platform.lead_desk.contracts import (
+    LeadPage,
+    LeadRow,
+    TaskBucket,
+    TaskKind,
+    TaskSnoozeChoice,
+)
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.journey import pipelines
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer
+from ac_platform.lead_desk.tasks import TaskBook
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
 from ac_platform.tenancy.roles import ORG_ROLES, READ_ONLY_ROLES, can
 
@@ -149,6 +163,21 @@ class StageBody(BaseModel):
     expected_revision: int | None = Field(default=None, ge=1)
     request_id: str = Field(min_length=8, max_length=80)
     preview: bool = False
+
+
+class TaskDoneBody(BaseModel):
+    """An app marks a task on a lead done (ai-writes.md: leads:tasks)."""
+
+    model_config = ConfigDict(extra="forbid")
+    expected_revision: int | None = Field(default=None, ge=1)
+    request_id: str = Field(min_length=8, max_length=80)
+    preview: bool = False
+
+
+class TaskSnoozeBody(TaskDoneBody):
+    """An app snoozes a task on a lead, by one of the app's own choices."""
+
+    choice: TaskSnoozeChoice
 
 
 class UndoBody(BaseModel):
@@ -577,6 +606,44 @@ class Reader:
             )
         )
 
+    async def tasks(self, view: str = "today", person: UUID | None = None) -> dict[str, Any]:
+        """Open tasks as the app's Tasks list shows them (call-backs live in To Call):
+        overdue, today or upcoming, with how many of each. ``person``: an owner's or
+        admin's look at a seller's list (the desk's own check)."""
+        self.require("leads:read")
+        if view not in ("overdue", "today", "upcoming"):
+            raise ApiError(422, "view", "view is overdue, today or upcoming.")
+        bucket: TaskBucket = view  # type: ignore[assignment]
+        try:
+            listing = await TaskBook(self._desk()).listing(bucket, person)
+        except DeskError as error:
+            raise ApiError(error.status, "lead_desk", str(error)) from None
+        result: dict[str, Any] = listing.model_dump(mode="json", by_alias=True)
+        return result
+
+    async def task_done(self, task_id: UUID, body: TaskDoneBody) -> tuple[dict[str, Any], int]:
+        writes = await self._writes()
+        return await self._write(
+            writes.task_done(
+                task_id,
+                request_id=body.request_id,
+                expected_revision=body.expected_revision,
+                preview=body.preview,
+            )
+        )
+
+    async def task_snooze(self, task_id: UUID, body: TaskSnoozeBody) -> tuple[dict[str, Any], int]:
+        writes = await self._writes()
+        return await self._write(
+            writes.task_snooze(
+                task_id,
+                body.choice,
+                request_id=body.request_id,
+                expected_revision=body.expected_revision,
+                preview=body.preview,
+            )
+        )
+
     async def move_stage(self, lead_id: UUID, body: StageBody) -> tuple[dict[str, Any], int]:
         writes = await self._writes()
         return await self._write(
@@ -909,6 +976,25 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
     async def update_lead(lead_id: UUID, body: LeadUpdateBody, request: Request) -> JSONResponse:
         async with open_reader(request) as reader:
             answer, status = await reader.update_lead(lead_id, body)
+            return done(answer, 200 if status == 201 else status)
+
+    @router.get("/tasks")
+    async def tasks(
+        request: Request, view: str = "today", person: UUID | None = None
+    ) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.tasks(view, person))
+
+    @router.post("/tasks/{task_id}/done")
+    async def task_done(task_id: UUID, body: TaskDoneBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            answer, status = await reader.task_done(task_id, body)
+            return done(answer, 200 if status == 201 else status)
+
+    @router.post("/tasks/{task_id}/snooze")
+    async def task_snooze(task_id: UUID, body: TaskSnoozeBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            answer, status = await reader.task_snooze(task_id, body)
             return done(answer, 200 if status == 201 else status)
 
     @router.post("/leads/{lead_id}/stage")

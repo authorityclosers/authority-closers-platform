@@ -104,6 +104,9 @@ def test_the_mcp_server_lists_and_calls_tools() -> None:
         "import_leads",
         "get_lead_import",
         "analysis_time",
+        "list_tasks",
+        "complete_task",
+        "snooze_task",
     }
     facts = sx.handle(
         api,
@@ -224,6 +227,37 @@ def test_analysis_time_from_the_command_line_and_the_mcp_tool() -> None:
         },
     )
     assert json.loads(called["result"]["content"][0]["text"])["people"] == []
+
+
+def test_tasks_done_and_snooze_from_the_command_line_and_the_mcp_tools() -> None:
+    env = {"SX_API_KEY": KEY, "SX_API_BASE": "https://salesxray.example.test/v1/api"}
+    fake = Fake(
+        {
+            ("GET", "/tasks"): (200, {"tasks": [], "counts": {"today": 0}}),
+            ("POST", "/tasks/t1/done"): (200, {"change_id": "c4", "status": "applied"}),
+            ("POST", "/tasks/t1/snooze"): (200, {"change_id": "c5", "status": "applied"}),
+        }
+    )
+    assert sx.main(["tasks", "--view", "overdue"], env, fake) == 0
+    assert fake.seen[0][1].endswith("/tasks?view=overdue")
+    assert sx.main(["done", "t1", "--request-id", "req-cli-0005"], env, fake) == 0
+    assert json.loads(fake.seen[1][3]) == {"request_id": "req-cli-0005", "preview": False}
+    assert sx.main(["snooze", "t1", "tomorrow"], env, fake) == 0
+    sent = json.loads(fake.seen[2][3])
+    assert sent["choice"] == "tomorrow" and sent["request_id"].startswith("sx-")
+    called = sx.handle(
+        client(fake),
+        {
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "snooze_task",
+                "arguments": {"task_id": "t1", "choice": "1h", "request_id": "req-mcp-0005"},
+            },
+        },
+    )
+    assert json.loads(called["result"]["content"][0]["text"])["status"] == "applied"
+    assert json.loads(fake.seen[3][3])["choice"] == "1h"
 
 
 def test_sx_list_leads_takes_the_organisations_own_stage_keys() -> None:

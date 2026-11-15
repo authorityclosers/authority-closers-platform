@@ -27,6 +27,10 @@ command-line argument, so it stays out of shell history and process lists).
             [--request-id ID] [--preview]     # needs leads:stage; STEP: a stage key
                                               # from `sx leads`; Won, Lost and Junk
                                               # need a person; undone with `sx undo`
+    sx tasks [--view overdue|today|upcoming] [--person PERSON_ID]   # open tasks
+    sx done TASK_ID [--request-id ID] [--preview]                   # needs leads:tasks
+    sx snooze TASK_ID 15m|1h|evening|tomorrow|week [--request-id ID] [--preview]
+                                              # both undone with `sx undo`
     sx import-leads FILE.csv|FILE.json [--name NAME] [--side inbound|cold]
             [--assign rules|none] [--duplicates skip|fill|replace]
             [--per-import N] [--wait] [--failures OUT.csv]
@@ -186,6 +190,14 @@ class Client:
     def add_task(self, lead_id: str, **fields: Any) -> Any:
         body = {k: v for k, v in fields.items() if v is not None}
         return self.call("POST", f"/leads/{urllib.parse.quote(lead_id, safe='')}/tasks", body=body)
+
+    def tasks(self, view: str | None = None, person: str | None = None) -> Any:
+        return self.call("GET", "/tasks", {"view": view, "person": person})
+
+    def task_action(self, task_id: str, action: str, **fields: Any) -> Any:
+        body = {k: v for k, v in fields.items() if v is not None}
+        path = f"/tasks/{urllib.parse.quote(task_id, safe='')}/{action}"
+        return self.call("POST", path, body=body)
 
     def move_stage(self, lead_id: str, **fields: Any) -> Any:
         body = {k: v for k, v in fields.items() if v is not None}
@@ -482,6 +494,50 @@ TOOLS += [
         "the longest call. Time only. team: what each member used (owners and admins).",
         "inputSchema": {"type": "object", "properties": {"team": {"type": "boolean"}}},
     },
+    {
+        "name": "list_tasks",
+        "description": "Open tasks as the Tasks list shows them: view overdue, today or "
+        "upcoming, with how many of each; person for an owner's look at a seller.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "view": {"type": "string", "enum": ["overdue", "today", "upcoming"]},
+                "person": {"type": "string"},
+            },
+        },
+    },
+    {
+        "name": "complete_task",
+        "description": "Marks one open task on a lead done; undone for 7 days with "
+        "undo_change. Needs leads:tasks.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string"},
+                "request_id": {"type": "string", "minLength": 8, "maxLength": 80},
+                "preview": {"type": "boolean"},
+            },
+            "required": ["task_id", "request_id"],
+        },
+    },
+    {
+        "name": "snooze_task",
+        "description": "Moves one open task on a lead later (15m, 1h, evening, tomorrow, "
+        "week); undone for 7 days with undo_change. Needs leads:tasks.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string"},
+                "choice": {
+                    "type": "string",
+                    "enum": ["15m", "1h", "evening", "tomorrow", "week"],
+                },
+                "request_id": {"type": "string", "minLength": 8, "maxLength": 80},
+                "preview": {"type": "boolean"},
+            },
+            "required": ["task_id", "choice", "request_id"],
+        },
+    },
 ]
 
 
@@ -632,6 +688,16 @@ def _tool(client: Client, name: str, args: dict[str, Any]) -> Any:
         return client.import_leads(body, args.get("request_id") or _request_id())
     if name == "analysis_time":
         return client.analysis_time(args.get("team") is True)
+    if name == "list_tasks":
+        return client.tasks(args.get("view"), args.get("person"))
+    if name in ("complete_task", "snooze_task"):
+        return client.task_action(
+            str(args["task_id"]),
+            "done" if name == "complete_task" else "snooze",
+            choice=args.get("choice"),
+            request_id=str(args["request_id"]),
+            preview=bool(args.get("preview", False)),
+        )
     if name == "get_lead_import":
         answer = client.lead_import(str(args["import_id"]))
         if args.get("problem_rows") is True:
@@ -792,6 +858,18 @@ def _parser() -> argparse.ArgumentParser:
     for name in ("reason-code", "next", "request-id"):
         stage.add_argument(f"--{name}")
     stage.add_argument("--preview", action="store_true")
+    task_list = commands.add_parser("tasks")
+    task_list.add_argument("--view", choices=["overdue", "today", "upcoming"])
+    task_list.add_argument("--person")
+    finish = commands.add_parser("done")
+    finish.add_argument("task_id")
+    finish.add_argument("--request-id")
+    finish.add_argument("--preview", action="store_true")
+    later = commands.add_parser("snooze")
+    later.add_argument("task_id")
+    later.add_argument("choice", choices=["15m", "1h", "evening", "tomorrow", "week"])
+    later.add_argument("--request-id")
+    later.add_argument("--preview", action="store_true")
     imports = commands.add_parser("import-leads")
     imports.add_argument("file")
     imports.add_argument("--name")
@@ -912,6 +990,16 @@ def main(
                 reason=args.reason,
                 reason_code=args.reason_code,
                 next_action_at=args.next,
+                request_id=args.request_id or _request_id(),
+                preview=args.preview,
+            )
+        elif args.command == "tasks":
+            out = client.tasks(args.view, args.person)
+        elif args.command in ("done", "snooze"):
+            out = client.task_action(
+                args.task_id,
+                args.command,
+                choice=getattr(args, "choice", None),
                 request_id=args.request_id or _request_id(),
                 preview=args.preview,
             )

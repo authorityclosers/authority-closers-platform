@@ -31,8 +31,11 @@ from ac_platform.lead_desk.contracts import (
     NoteCommand,
     StageMove,
     TaskAction,
+    TaskChange,
     TaskCommand,
     TaskKind,
+    TaskSnooze,
+    TaskSnoozeChoice,
 )
 from ac_platform.lead_desk.errors import DeskError
 from ac_platform.lead_desk.journey import model as journeys
@@ -84,6 +87,22 @@ class Door:
 
 
 IN_APP = Door(via="app", door_id=None, label="Sales X-Ray")
+
+# A change to a task on a lead is a ``task`` write in the ledger (ai-writes.md: leads:tasks
+# adds a task and marks one done); what it changed tells them apart, since adding one
+# always names its kind.
+TASK_DONE: tuple[str, ...] = ("status",)
+TASK_SNOOZED: tuple[str, ...] = ("starts_at",)
+
+
+def task_change(row: IntegrationWrite) -> Literal["added", "done", "snoozed"]:
+    """Which change a ``task`` ledger row records."""
+    fields = tuple(row.fields or ())
+    if fields == TASK_DONE:
+        return "done"
+    if fields == TASK_SNOOZED:
+        return "snoozed"
+    return "added"
 
 
 def _refuse(decision: policy.Decision) -> None:
@@ -255,6 +274,7 @@ class AiWrites:
             "at": row.created_at.isoformat(),
             "undo_until": (row.created_at + policy.UNDO_WINDOW).isoformat(),
             "status": "undone" if undone is not None else "applied",
+            **({"task_change": task_change(row)} if row.action == "task" else {}),
             "replayed": replayed,
             **({"task_id": str(row.task_id)} if row.task_id else {}),
         }
@@ -554,6 +574,163 @@ class AiWrites:
         )
         return await self._answer(row)
 
+    async def _lead_task(self, task_id: UUID) -> LeadTask:
+        """A task on a lead this workspace holds; a task of your own stays in Sales X-Ray."""
+        task: LeadTask | None = await self.db.get(LeadTask, task_id)
+        if task is None or task.tenant_id != self.tenant_id:
+            raise AiWriteError(404, "task_missing", "No such task.")
+        if task.lead_id is None:
+            raise AiWriteError(
+                422, "own_task", "Apps change tasks on leads; a task of your own stays in the app."
+            )
+        return task
+
+    async def _task_write(
+        self,
+        change: Literal["done", "snoozed"],
+        task_id: UUID,
+        *,
+        request_id: object,
+        expected_revision: int | None,
+        preview: bool,
+        choice: TaskSnoozeChoice | None = None,
+    ) -> dict[str, Any]:
+        """Mark a task on a lead done, or snooze it (ai-writes.md: leads:tasks also marks
+        a task done), as the person this connection acts for: a ``task`` write, under the
+        owner's task switch and the task caps. Undo reopens it, or puts its due back,
+        unless someone changed it since."""
+        request = self._request(request_id)
+        command_id = self._command(request)
+        seen = await self._replay(command_id)
+        if seen is not None:
+            if seen.task_id != task_id or seen.action != "task" or task_change(seen) != change:
+                raise AiWriteError(
+                    409, "request_reused", "That request_id was used for another change."
+                )
+            return await self._answer(seen, replayed=True)
+        task = await self._lead_task(task_id)
+        assert task.lead_id is not None
+        await self._check("task", task.lead_id)
+        if task.status != "open":
+            raise AiWriteError(409, "not_open", "This task isn't open any more.")
+        revision = task.revision if expected_revision is None else expected_revision
+        if revision != task.revision:
+            raise AiWriteError(409, "changed_since", "This task changed. Read it and try again.")
+        if preview:
+            lead = await self.desk._lead(task.lead_id)
+            would = {"status": "done"} if change == "done" else {"snooze": choice}
+            return {
+                "preview": True,
+                "action": "task",
+                "task_change": change,
+                "lead_id": str(task.lead_id),
+                "lead_name": lead.name,
+                "task_id": str(task.id),
+                "would_change": would,
+                "via": self.door.label,
+            }
+        change_id = uuid4()
+        book = TaskBook(self.desk)
+        if change == "done":
+            await book.done(task.id, TaskAction(command_id=command_id, expected_revision=revision))
+            fields = list(TASK_DONE)
+        else:
+            assert choice is not None
+            await book.snooze(
+                task.id,
+                TaskSnooze(command_id=command_id, expected_revision=revision, choice=choice),
+            )
+            fields = list(TASK_SNOOZED)
+        row = await self._record(
+            change_id,
+            action="task",
+            lead_id=task.lead_id,
+            request_id=request,
+            command_id=command_id,
+            event_id=await self._event_for(command_id),
+            task_id=task.id,
+            fields=fields,
+        )
+        return await self._answer(row)
+
+    async def task_done(
+        self,
+        task_id: UUID,
+        *,
+        request_id: object,
+        expected_revision: int | None = None,
+        preview: bool = False,
+    ) -> dict[str, Any]:
+        return await self._task_write(
+            "done",
+            task_id,
+            request_id=request_id,
+            expected_revision=expected_revision,
+            preview=preview,
+        )
+
+    async def task_snooze(
+        self,
+        task_id: UUID,
+        choice: TaskSnoozeChoice,
+        *,
+        request_id: object,
+        expected_revision: int | None = None,
+        preview: bool = False,
+    ) -> dict[str, Any]:
+        return await self._task_write(
+            "snoozed",
+            task_id,
+            request_id=request_id,
+            expected_revision=expected_revision,
+            preview=preview,
+            choice=choice,
+        )
+
+    async def _undo_task_change(self, row: IntegrationWrite, command_id: UUID) -> None:
+        """Reopen a task an app marked done, or put back the due an app's snooze moved,
+        if nobody changed the task since (it was last touched by that change)."""
+        task: LeadTask | None = (
+            await self.db.get(LeadTask, row.task_id, with_for_update=True)
+            if row.task_id is not None
+            else None
+        )
+        event = await self.db.get(LeadEvent, row.event_id) if row.event_id else None
+        data = event.data if event is not None and isinstance(event.data, dict) else {}
+        unchanged = task is not None and event is not None and task.updated_at <= event.created_at
+        if task_change(row) == "done":
+            if not unchanged or task is None or task.status != "done":
+                raise AiWriteError(
+                    409,
+                    "changed_since",
+                    "Someone changed this task since. Change it in Sales X-Ray instead.",
+                )
+            await TaskBook(self.desk).undo(
+                task.id,
+                TaskAction(command_id=uuid5(command_id, "reopen"), expected_revision=task.revision),
+            )
+            return
+        before = data.get("from_due_at")
+        if not unchanged or task is None or task.status != "open" or not isinstance(before, str):
+            raise AiWriteError(
+                409,
+                "changed_since",
+                "Someone changed this task since. Change it in Sales X-Ray instead.",
+            )
+        try:
+            await TaskBook(self.desk).change(
+                task.id,
+                TaskChange(
+                    command_id=uuid5(command_id, "unsnooze"),
+                    expected_revision=task.revision,
+                    starts_at=datetime.fromisoformat(before),
+                ),
+            )
+        except AiWriteError:
+            raise
+        except DeskError as error:
+            raise AiWriteError(error.status, "cannot_undo", str(error)) from None
+
     async def _undo_update(self, row: IntegrationWrite, command_id: UUID) -> None:
         """Put back what an app's update replaced, if nobody changed those fields since."""
         event = await self.db.get(LeadEvent, row.event_id) if row.event_id else None
@@ -637,6 +814,7 @@ class AiWrites:
                     "via": row.app_label,
                     "at": row.created_at.isoformat(),
                     "status": "undone" if done else "applied",
+                    **({"task_change": task_change(row)} if row.action == "task" else {}),
                     "can_undo": not done
                     and row.lead_id in leads
                     and policy.may_undo(
@@ -685,7 +863,9 @@ class AiWrites:
         command_id = self._command(request)
         if row.action == "update":
             await self._undo_update(row, command_id)
-        if row.action == "task" and row.task_id is not None:
+        if row.action == "task" and task_change(row) != "added":
+            await self._undo_task_change(row, command_id)
+        elif row.action == "task" and row.task_id is not None:
             task: LeadTask | None = await self.db.get(LeadTask, row.task_id, with_for_update=True)
             if task is None or task.status != "open" or task.revision != 1:
                 raise AiWriteError(

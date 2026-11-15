@@ -40,6 +40,8 @@ from ac_platform.integrations.api_http import (
     Reader,
     StageBody,
     TaskBody,
+    TaskDoneBody,
+    TaskSnoozeBody,
     UndoBody,
     make_opener,
 )
@@ -411,6 +413,70 @@ TOOLS: tuple[dict[str, Any], ...] = (
         "scope": "leads:stage",
     },
     {
+        "name": "list_tasks",
+        "title": "List open tasks",
+        "description": (
+            "This person's open tasks as the Tasks list shows them (call-backs are in To "
+            "Call): view is overdue, today (the default) or upcoming, with how many of "
+            "each. An owner or admin may pass person (a person_id) for a seller's list."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "view": {"type": "string", "enum": ["overdue", "today", "upcoming"]},
+                "person": _ID,
+            },
+        },
+        "annotations": _READS,
+        "scope": "leads:read",
+    },
+    {
+        "name": "complete_task",
+        "title": "Mark a task done",
+        "description": (
+            "Marks one open task on a lead done, as this person. The lead's history shows "
+            "which app did it, and it can be undone for 7 days (the task reopens) unless "
+            "someone changed it since."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task_id": _ID,
+                "expected_revision": {"type": "integer", "minimum": 1},
+                "request_id": _REQUEST,
+                "preview": _PREVIEW,
+            },
+            "required": ["task_id", "request_id"],
+        },
+        "annotations": _WRITES,
+        "scope": "leads:tasks",
+    },
+    {
+        "name": "snooze_task",
+        "title": "Snooze a task",
+        "description": (
+            "Moves one open task on a lead later: 15m, 1h, evening, tomorrow or week, as "
+            "the app's own snooze does. It can be undone for 7 days (the due comes back) "
+            "unless someone changed it since."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task_id": _ID,
+                "choice": {
+                    "type": "string",
+                    "enum": ["15m", "1h", "evening", "tomorrow", "week"],
+                },
+                "expected_revision": {"type": "integer", "minimum": 1},
+                "request_id": _REQUEST,
+                "preview": _PREVIEW,
+            },
+            "required": ["task_id", "choice", "request_id"],
+        },
+        "annotations": _WRITES,
+        "scope": "leads:tasks",
+    },
+    {
         "name": "list_my_changes",
         "title": "Changes this app made",
         "description": (
@@ -744,6 +810,19 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
         move = _body(StageBody, args, stage_fields)
         answer, _ = await reader.move_stage(_uuid(args, "lead_id"), move)
         return answer
+    if name == "list_tasks":
+        person = _uuid(args, "person") if args.get("person") else None
+        return await reader.tasks(str(args.get("view") or "today"), person)
+    if name == "complete_task":
+        finished = _body(TaskDoneBody, args, ("expected_revision", "request_id", "preview"))
+        answer, _ = await reader.task_done(_uuid(args, "task_id"), finished)
+        return answer
+    if name == "snooze_task":
+        snoozed = _body(
+            TaskSnoozeBody, args, ("choice", "expected_revision", "request_id", "preview")
+        )
+        answer, _ = await reader.task_snooze(_uuid(args, "task_id"), snoozed)
+        return answer
     if name == "list_my_changes":
         return await reader.changes(_uuid(args, "lead_id") if args.get("lead_id") else None)
     if name == "undo_change":
@@ -758,7 +837,7 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
 
 def _body(model: Any, args: dict[str, Any], fields: tuple[str, ...]) -> Any:
     """Only the fields a tool takes; anything else is refused, never dropped."""
-    extra = sorted(set(args) - set(fields) - {"lead_id", "change_id"})
+    extra = sorted(set(args) - set(fields) - {"lead_id", "change_id", "task_id"})
     if extra:
         raise ApiError(422, "field_not_allowed", f"Not a field this tool takes: {extra[0]}.")
     try:

@@ -151,6 +151,9 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "add_note",
         "add_task",
         "move_stage",
+        "list_tasks",
+        "complete_task",
+        "snooze_task",
         "list_my_changes",
         "undo_change",
         *LESSONS,
@@ -185,6 +188,7 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "get_lead",
         "list_duplicates",
         "get_duplicate",
+        "list_tasks",
         *LESSONS,
     }
     assert {tool["name"] for tool in mcp_http.listed(frozenset({"webhooks:manage"}))} == {
@@ -196,7 +200,16 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
     notes = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:notes"}))}
     assert notes == {"whoami", "add_note", "list_my_changes", "undo_change", *LESSONS}
     tasks = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:tasks"}))}
-    assert tasks == {"whoami", "add_task", "list_my_changes", "undo_change", *LESSONS}
+    # Marking a task done and snoozing it come with adding tasks (15 Nov 2026).
+    assert tasks == {
+        "whoami",
+        "add_task",
+        "complete_task",
+        "snooze_task",
+        "list_my_changes",
+        "undo_change",
+        *LESSONS,
+    }
     # Stage moves (15 Nov 2026): their own scope.
     stages = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:stage"}))}
     assert stages == {"whoami", "move_stage", "list_my_changes", "undo_change", *LESSONS}
@@ -206,6 +219,8 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "add_note",
         "add_task",
         "move_stage",
+        "complete_task",
+        "snooze_task",
         "undo_change",
         "create_recording_upload",
     }
