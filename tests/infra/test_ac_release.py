@@ -1472,7 +1472,13 @@ class PrepareRunner(FakeRunner):
                 hashlib.sha256(descriptor.read_bytes()).hexdigest() + "\n"
             )
             (output / f"service-{target}.json").write_text("{}\n")
-            result = {"release_id": target, "provider_calls": 0, "approval_replaced": False}
+            result = {
+                "release_id": target,
+                "provider_calls": 0,
+                "approval_replaced": "--approval-file" in argv,
+                "approval_sha256": "f" * 64,
+                "openai_added": "--add-openai-provider" in argv,
+            }
             return subprocess.CompletedProcess(argv, 0, json.dumps(result), "")
         if argv[:2] == ["docker", "inspect"] and self.inspections:
             return subprocess.CompletedProcess(argv, 0, self.inspections.pop(0) + "\n", "")
@@ -1554,6 +1560,49 @@ def test_activation_is_carried_forward_with_a_native_reuse_proof(tmp_path: Path)
     # A retry finds the published activation and prepares nothing new.
     assert prepare(engine, tmp_path) == {"sales_xray_activation": "present"}
     assert len(engine.run.prepared) == 1
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
+def test_root_adds_openai_and_a_sealed_approval_once_through_the_release(
+    tmp_path: Path,
+) -> None:
+    """Luna on staging (15 Nov 2026): Root drops the OpenAI provider entry and the newly
+    sealed approval into operator-inputs/staging/; the next carried-forward activation adds
+    them, and a later one, whose source has both, passes neither again."""
+    engine = hosted_setup(tmp_path)
+    inputs = engine.paths.application / "operator-inputs" / "staging"
+    (inputs / "openai-provider.json").write_text('{"provider_id": "openai"}\n')
+    sealed = inputs / "next-approval.json"
+    sealed.write_text('{"sealed": "luna-one-pass"}\n')
+    summary = prepare(engine, tmp_path)
+
+    argv = engine.run.prepared[0]
+    assert argv[argv.index("--add-openai-provider") + 1] == str(inputs / "openai-provider.json")
+    assert argv[argv.index("--openai-identity-dir") + 1] == (
+        "/etc/authority-closers/secrets/sales-xray/identities/staging/openai"
+    )
+    assert argv[argv.index("--approval-file") + 1] == str(sealed)
+    assert argv[argv.index("--approval-sha256") + 1] == MODULE._sha256_file(sealed)
+    assert summary["sales_xray_openai"] == "added"
+    assert summary["sales_xray_approval"] == f"replaced by {'f' * 64}"
+
+    # Once the running activation has both, neither is passed again.
+    current = {
+        "approval_file": json.loads(engine.activation_path("staging", OLD).read_text())[
+            "approval_file"
+        ],
+        "approval_sha256": MODULE._sha256_file(sealed),
+        "compose_overlay": "compose.sales-xray-hosted-openai.yaml",
+    }
+    assert engine.activation_additions("staging", current) == {
+        "argv": [],
+        "openai": False,
+        "approval": False,
+    }
+    # A symlinked input is never followed.
+    (inputs / "openai-provider.json").unlink()
+    (inputs / "openai-provider.json").symlink_to(sealed)
+    assert engine.activation_additions("staging", {})["openai"] is False
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
