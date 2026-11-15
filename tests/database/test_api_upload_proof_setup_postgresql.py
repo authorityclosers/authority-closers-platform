@@ -134,6 +134,20 @@ def test_a_test_workspace_gets_its_terms_and_a_key_once(
             assert context is not None and context.scopes == frozenset({"recordings:write"})
             assert made is not None and made.payload["issue"] == APPROVAL[3]
             assert key not in str(made.payload)
+            # Release PR #623 review: run again, it makes no second key and shows none.
+            twice = await _run(setup, _command(setup, email, "mint-key", "--apply"))
+            assert (twice["status"], twice["key_id"]) == ("already_minted", minted["key_id"])
+            assert "_key" not in twice
+            async with setup.sessions() as db:
+                made_twice = list(
+                    await db.scalars(
+                        select(AuditEvent).where(
+                            AuditEvent.action == "integration.api_key_created",
+                            AuditEvent.tenant_id == setup.state.tenant_id,
+                        )
+                    )
+                )
+            assert len(made_twice) == 1
         finally:
             await setup.engine.dispose()
 

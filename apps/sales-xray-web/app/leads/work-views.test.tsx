@@ -21,6 +21,7 @@ import {
   lastView,
   listTitle,
   sideStage,
+  bandQueueCount,
   stagesPipeline,
   pipelinesFor,
   pickableStages,
@@ -533,4 +534,28 @@ it("calls the side's To Call from All Leads, and each work view's own list elsew
   );
   expect(host.textContent).toContain("Call Next Lead · 4");
   expect(host.textContent).not.toContain("913");
+});
+
+// Codex's review on release PR #622: All Leads' band counts the queue a tap
+// takes, the side's To Call at the stage picked, never the whole To Call.
+it("counts the band by the queue a tap takes", () => {
+  const counts = { listCount: 7, toCallCount: 540, toCallAtStage: 0 };
+  expect(bandQueueCount({ view: "all", stagePicked: true, ...counts })).toBe(0);
+  expect(bandQueueCount({ view: "all", stagePicked: false, ...counts })).toBe(
+    540,
+  );
+  expect(
+    bandQueueCount({
+      view: "all",
+      stagePicked: true,
+      ...counts,
+      toCallAtStage: null,
+    }),
+  ).toBeNull();
+  expect(
+    bandQueueCount({ view: "to_call", stagePicked: true, ...counts }),
+  ).toBe(7);
+  expect(
+    bandQueueCount({ view: "follow_ups", stagePicked: false, ...counts }),
+  ).toBe(7);
 });
