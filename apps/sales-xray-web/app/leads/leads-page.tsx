@@ -151,7 +151,6 @@ import {
   rememberView,
   keepsView,
   notLoadedText,
-  sideStage,
   stagesPipeline,
   tabCount,
   useWide,
@@ -1633,7 +1632,8 @@ export function LeadsRoute({
   const stageWord = (row: LeadRow) => {
     const own = ownStage(row);
     const word = own ? stageName(own, row.side ?? side) : undefined;
-    return workView === "all" ? sideStage(row, word ?? row.stage_label) : word;
+    // All Leads keeps to its side (bc5046b26): no "Cold · " on its rows.
+    return word;
   };
   // Its colour, the row's dot (Leads L1): the stage's own, as its chip has.
   const stageDot = (row: LeadRow) => {

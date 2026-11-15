@@ -742,6 +742,16 @@ export function ListView({
     stepCounts.current = onStepCounts;
     viewCounts.current = onViewCounts;
   });
+  // Counts come with the saved rows (Leads part 05): the remembered first page
+  // carries the tabs', stages' and steps' counts, so they paint with its rows
+  // and the tabs never sit empty, then widen, while the list reads again.
+  useEffect(() => {
+    if (!remembered || stage === TEST) return;
+    if (remembered.stage_counts) counts.current?.(remembered.stage_counts);
+    if (remembered.step_counts) stepCounts.current?.(remembered.step_counts);
+    if (remembered.view_counts && Object.keys(remembered.view_counts).length)
+      viewCounts.current?.(remembered.view_counts);
+  }, [remembered, stage]);
   // Keys on a computer: J/K, Enter, C (asks before calling), L. Not while ticking.
   const list = useRef<HTMLUListElement>(null);
   const days = useRef<HTMLDivElement>(null);
@@ -1284,7 +1294,7 @@ export function ListView({
                 onOpen={onOpen}
                 showOwner={scope !== "mine"}
                 pipelineNames={pipeline ? null : pipelineNames}
-                sides={refine?.view === "all"}
+                sides={false}
                 selecting={selecting}
                 ticks={canManage}
                 chosen={chosen}

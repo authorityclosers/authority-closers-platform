@@ -21,6 +21,18 @@ export function leadSearchCommands(
   },
 ): Command[] {
   const words = text.trim();
+  // None matched: it says so, above the calls row (Leads part 05).
+  if (!leads.length)
+    return [
+      {
+        id: "leads:none",
+        group: "Leads",
+        label: `No leads called “${words}”`,
+        hint: "Try a name, or 4 digits of a number",
+        icon: <Search size={16} aria-hidden="true" />,
+        run: () => act.showAll(words),
+      },
+    ];
   const rows: Command[] = leads.slice(0, SEARCH_LEADS_SHOWN).map((row) => ({
     id: `leads:open:${row.lead_id}`,
     group: "Leads",

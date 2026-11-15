@@ -1830,10 +1830,16 @@ export function ago(iso: string, now: Date = new Date()): string {
 
 export function when(iso: string, now: Date = new Date()): string {
   const at = new Date(iso);
-  const time = at.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  // One time format, "3:16 pm", whatever the phone's locale (L1 R4; Leads
+  // part 04 check: "was due 3:16" read as morning or afternoon alike).
+  const time = at
+    .toLocaleTimeString("en-IN", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    })
+    // "3:16 am" stays whole when a line wraps.
+    .replace(/\s(am|pm)$/i, "\u00a0$1");
   const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
   if (sameDay(at, now)) return `today ${time}`;
   const tomorrow = new Date(now);

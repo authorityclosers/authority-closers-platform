@@ -8608,3 +8608,9 @@ fieldset.form {
   justify-self: start;
   min-height: 44px;
 }
+
+/* A row's third line at the owner line's size, so "Late · was due 3:16 am"
+   keeps one line at 363 (Leads part 05 follow-up). */
+.leadFace[data-compact] .leadWhy {
+  font-size: var(--sx-text-xs);
+}
