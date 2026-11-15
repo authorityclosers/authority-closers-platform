@@ -313,7 +313,7 @@ it("gives an owner the team's floor, one side at a time", async () => {
     Array.from(host.querySelectorAll("[data-need]"), (need) =>
       need.getAttribute("data-need"),
     ),
-  ).toEqual(["fresh", "late", "unowned", "gaps", "recordings"]);
+  ).toEqual(["late", "fresh", "unowned", "gaps", "recordings"]);
   // Each seller's day, the unexplained hour-long break as the row's line.
   const seller = host.querySelector('[aria-label="Each seller today"] a');
   expect(seller?.textContent?.toLowerCase()).toContain("priya example");

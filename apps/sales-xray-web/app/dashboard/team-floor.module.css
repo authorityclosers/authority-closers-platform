@@ -2585,3 +2585,15 @@ button.chip {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
+
+/* Needs you now coloured by meaning (design-research piece 07): waiting is sky,
+   a missing recording neutral; never green for work waiting. */
+.need[data-tone="sky"] {
+  --tone: var(--lx-home-sky);
+  --tone-soft: var(--lx-home-sky-soft);
+}
+
+.need[data-tone="slate"] {
+  --tone: var(--sx-ink-2);
+  --tone-soft: var(--sx-fill);
+}
