@@ -48,6 +48,10 @@ const note: UpdateNote = {
   seen: false,
   published_at: null,
 };
+// Bell lines from the last hours: only those pop (tester report 206).
+const HOUR = 60 * 60 * 1000;
+const hoursAgo = (hours: number) =>
+  new Date(Date.now() - hours * HOUR).toISOString();
 const event: UpdateNotification = {
   id: "fictional-event",
   kind: "lead_assigned",
@@ -55,7 +59,7 @@ const event: UpdateNotification = {
   body: "New from your website form.",
   href: "/leads",
   urgent: true,
-  created_at: "2026-10-27T09:00:00Z",
+  created_at: hoursAgo(1),
   read: false,
 };
 const markSeen = vi.fn().mockResolvedValue(undefined);
@@ -69,7 +73,7 @@ const updates = {
       ...event,
       id: "older",
       kind: "report_ready" as const,
-      created_at: "2026-10-27T08:00:00Z",
+      created_at: hoursAgo(2),
     },
     { ...event, id: "not-urgent", urgent: false },
     { ...event, id: "already-read", read: true },
@@ -153,7 +157,7 @@ it("raises a page's early lines by the bell's rules, once, and clears them as th
     notifications_status: "loading" as const,
   };
   await act(async () => root.render(render(waiting)));
-  const older = { ...event, id: "older", created_at: "2026-10-27T08:00:00Z" };
+  const older = { ...event, id: "older", created_at: hoursAgo(2) };
   await act(async () => raiseNotificationLines([event, older]));
   const id = `event:${key}:fictional-event`;
   expect(raised().map((alert) => alert.id)).toEqual([id]);
@@ -269,4 +273,27 @@ it("clears banners once read and for another account, and never follows an unsaf
   const count = mocks.raise.mock.calls.length;
   await act(async () => root.render(render(null)));
   expect(mocks.raise).toHaveBeenCalledTimes(count);
+});
+
+it("never pops a line older than a day, from the bell or a page; it waits in the bell (tester report 206)", async () => {
+  // Production 1.58, 14 Nov 2026: a lead given on 30 Oct, still unread,
+  // popped over a call report at an app open two weeks later.
+  const stale = { ...event, id: "stale", created_at: hoursAgo(14 * 24) };
+  await act(async () =>
+    root.render(
+      <UpdateNotices
+        updates={{
+          ...updates,
+          notes: [],
+          notifications: [stale],
+          unread_count: 1,
+        }}
+        contextKey={`account-${account}`}
+        openNews={vi.fn()}
+        openEvent={vi.fn()}
+      />,
+    ),
+  );
+  await act(async () => raiseNotificationLines([stale]));
+  expect(raised()).toEqual([]);
 });
