@@ -6198,7 +6198,8 @@ class LeadDesk:
         called back since, open tasks more than an hour late, connected calls with no
         recording today. Breaks: the three longest gaps between calls inside the working
         day, all the time between calls outside set breaks, and today's first and last
-        call. Owners and admins see every seller; a seller sees their own. Read from the
+        call. Owners and admins see every seller (the people who take leads, and anyone
+        who called or moved a lead in the period); a seller sees their own. Read from the
         calls Recent Calls lists, so it agrees with Home; a lead's side is its pipeline
         (migration 0146, empty is Inbound).
 
@@ -6466,7 +6467,14 @@ class LeadDesk:
             ).all()
         }
         if team:
-            people = {rep.state.person_id: rep.state.name for rep in await self._reps()}
+            # The people who take leads (15 Nov 2026: an owner or admin who sells
+            # nothing is no seller "not started"): sellers, and anyone who switched
+            # Taking new leads on; anyone else once they called or moved a lead.
+            people = {
+                rep.state.person_id: rep.state.name
+                for rep in await self._reps()
+                if rep.role == SELLER_ROLE or rep.state.available
+            }
             acting = {row.actor for row in rows} | {row[0] for row in moves}
             people.update(await self._names(acting - set(people)))
         else:
