@@ -23,6 +23,7 @@ import {
   setupLines,
   setupProgress,
 } from "../leads/phone-setup";
+import { PHONE_SETUP_PANEL_ATTRIBUTE } from "../capture-setup/capture-setup-rules";
 import { PhoneSetupFlow, type FlowStep } from "../leads/phone-setup-flow";
 import { checkLabel } from "../leads/phone-setup-words";
 import { hapticsOn, setHaptics } from "../ui/haptics";
@@ -52,6 +53,17 @@ export function PhoneSetupPanel() {
       if (event === "resume") void setupStatus().then(take);
     });
   }, [take]);
+
+  // While this panel offers "Set up this phone", "Finish setting up" waits:
+  // one offer of the same steps on a screen (tester report 217).
+  const offering =
+    status !== null && setupLines(status).some((key) => !lineDone(key, status));
+  useEffect(() => {
+    if (!offering) return;
+    const html = document.documentElement;
+    html.setAttribute(PHONE_SETUP_PANEL_ATTRIBUTE, "");
+    return () => html.removeAttribute(PHONE_SETUP_PANEL_ATTRIBUTE);
+  }, [offering]);
 
   if (!status) return null;
   const { done, total } = setupProgress(status);

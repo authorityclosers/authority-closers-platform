@@ -75,7 +75,10 @@ import { Button } from "../ui/kit";
 import { FIRST_RUN_ATTRIBUTE } from "../welcome/setup-state";
 import { useWorkspaceAccess } from "../workspace-access";
 import { recordCaptureSetup } from "./capture-setup-client";
-import { CAPTURE_SETUP_ATTRIBUTE } from "./capture-setup-rules";
+import {
+  CAPTURE_SETUP_ATTRIBUTE,
+  PHONE_SETUP_PANEL_ATTRIBUTE,
+} from "./capture-setup-rules";
 import own from "./capture-setup.module.css";
 import {
   PERMISSIONS_ATTRIBUTE,
@@ -109,12 +112,14 @@ const OPEN_EVENT = "sx-permissions-open";
 /**
  * The first-run screens that fill the page (Terms, Home's first run, "Set up
  * this phone"): the reminder waits for them, so it never sits over their
- * buttons (Redmi, v1.35 staging: it covered "Report a problem").
+ * buttons (Redmi, v1.35 staging: it covered "Report a problem"). Settings'
+ * Phone setup offers the same steps itself, so it waits there too.
  */
 const FULL_PAGE = [
   CONSENT_ATTRIBUTE,
   FIRST_RUN_ATTRIBUTE,
   CAPTURE_SETUP_ATTRIBUTE,
+  PHONE_SETUP_PANEL_ATTRIBUTE,
 ];
 function watchFullPage(changed: () => void) {
   const watch = new MutationObserver(changed);

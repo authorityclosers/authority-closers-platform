@@ -78,9 +78,29 @@ command_step() {
     done <<< "$output"
     return "$status"
 }
+# The native C1 images run only on demand and may be loaded without a name, so a prune of
+# unnamed images deleted one and C1 failed on staging and production (16 Nov 2026). Name
+# every image a native helper unit runs before pruning; say so if one is missing.
+protect_native_images() {
+    local unit ref tags
+    for unit in ${AC_DISK_NATIVE_UNITS:-/etc/systemd/system/ac-sales-xray-native-*.service}; do
+        [ -f "$unit" ] && [ ! -L "$unit" ] || continue
+        ref=$(grep -o -- '--image-ref sha256:[0-9a-f]\{64\}' "$unit" | head -n 1 | cut -d' ' -f2 || true)
+        [ -n "$ref" ] || continue
+        if ! tags=$("$DOCKER" image inspect "$ref" --format '{{len .RepoTags}}' 2>/dev/null); then
+            say "native image missing ref=$ref unit=$(basename "$unit")"
+            continue
+        fi
+        if [ "$tags" = "0" ]; then
+            command_step "$DOCKER" tag "$ref" "ac-sales-xray-native:kept-${ref:7:12}" \
+                && say "native image named ref=$ref"
+        fi
+    done
+}
 # Docker prune prints IDs and a total; preserve the per-image sizes as well.
 docker_images() {
     local before after row image size status=0
+    protect_native_images
     before=$("$DOCKER" image ls --filter dangling=true --no-trunc --format '{{.ID}} {{.Size}}') \
         || { say 'Docker image size inventory failed'; before=""; }
     command_step "$DOCKER" image prune -f || status=$?

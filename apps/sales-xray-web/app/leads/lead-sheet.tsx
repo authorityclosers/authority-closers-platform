@@ -1574,7 +1574,12 @@ export function eventText(event: LeadEvent): {
   title: string;
   detail?: string;
 } {
-  const who = event.actor_name ?? "The desk";
+  // Who did it, in words a seller reads at once (tester report 211, production
+  // 1.58, 14 Nov 2026: "The desk changed city, and it is not clear who the desk
+  // is"). No person: the app did it (the lead rules, a website form, an import
+  // or a connected app); a person whose name we can't read: a teammate.
+  const who =
+    event.actor_name ?? (event.actor_person_id ? "A teammate" : "Sales X-Ray");
   switch (event.kind) {
     case "captured":
       return { title: `Came in from ${event.source_label ?? "a source"}` };

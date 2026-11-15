@@ -4,10 +4,14 @@
  * questions with stable IDs and twelve complete lessons, read from
  * library.json, which is the sample's own data copied word for word (its
  * internal coaching notes are kept apart in coach-notes.json and never reach
- * the learner's screen). The other 138 questions have no approved lesson yet,
- * and nothing here writes one.
+ * the learner's screen). The other 138 questions have no approved lesson yet:
+ * drafts.json holds a draft for each, written in his structure for Dipak to
+ * confirm (owner, 16 Nov 2026: every question answered in the next update),
+ * each marked draft_for_dipak and shown with a "Draft · Dipak to confirm" tag
+ * so nothing written for him passes as his.
  */
 
+import drafts from "./drafts.json";
 import data from "./library.json";
 
 export type Category = Readonly<{
@@ -38,6 +42,8 @@ export type Lesson = Readonly<{
   cue: string;
   mission: string;
   next: readonly string[];
+  /** A draft written for Dipak to confirm, never his approved teaching. */
+  draft_for_dipak?: true;
 }>;
 
 export type Featured = Readonly<{
@@ -50,7 +56,12 @@ export type Featured = Readonly<{
 
 export const CATEGORIES: readonly Category[] = data.categories;
 export const FEATURED: readonly Featured[] = data.featured;
+/** Dipak's own lessons, word for word. */
 export const LESSONS = data.lessons as unknown as Readonly<
+  Record<string, Lesson>
+>;
+/** Drafts for the questions his lessons don't cover yet, for him to confirm. */
+export const DRAFTS = drafts.lessons as unknown as Readonly<
   Record<string, Lesson>
 >;
 /** The sample's short card line and icon per category ("Price और hesitation"). */
@@ -88,8 +99,14 @@ export const categoryById = (id: string): Category | null =>
   BY_CATEGORY.get(id) ?? null;
 export const featuredById = (id: string): Featured | null =>
   FEATURED.find((topic) => topic.id === id) ?? null;
+const own = (record: object, id: string) =>
+  Object.prototype.hasOwnProperty.call(record, id);
+/** The question's lesson: Dipak's own, else its draft for him to confirm. */
 export const lessonFor = (id: string): Lesson | null =>
-  Object.prototype.hasOwnProperty.call(LESSONS, id) ? LESSONS[id] : null;
+  own(LESSONS, id) ? LESSONS[id] : own(DRAFTS, id) ? DRAFTS[id] : null;
+/** True while the question's lesson is a draft waiting for Dipak. */
+export const isDraft = (id: string): boolean =>
+  !own(LESSONS, id) && own(DRAFTS, id);
 
 /** The words a question is shown with: its real-situation wording, if any. */
 export const questionLabel = (question: Question): string =>

@@ -47,6 +47,7 @@ import { COPY } from "./copy";
 import {
   CATEGORIES,
   CATEGORY_ICONS,
+  DRAFTS,
   LESSONS,
   questionById,
   questionLabel,
@@ -193,6 +194,32 @@ describe("Homepage", () => {
     expect(view()).toBe("home");
     for (const line of [COPY.eyebrow, COPY.hello, ...COPY.intro, COPY.introAsk])
       expect(text()).toContain(line);
+  });
+
+  it("keeps the greeting short: Dipak's intro lines fold until asked for (owner, 16 Nov 2026)", async () => {
+    await show();
+    const toggle = host.querySelector<HTMLButtonElement>(
+      "button[aria-expanded]",
+    );
+    const more = host.querySelector(
+      `[id="${toggle?.getAttribute("aria-controls")}"]`,
+    );
+    expect(toggle?.textContent).toBe(COPY.introMore);
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+    expect(more?.getAttribute("aria-hidden")).toBe("true");
+    expect(more?.hasAttribute("inert")).toBe(true);
+    for (const line of COPY.intro) expect(more?.textContent).toContain(line);
+    await click(toggle);
+    expect(toggle?.textContent).toBe(COPY.introLess);
+    expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+    expect(more?.getAttribute("aria-hidden")).toBe("false");
+    expect(more?.hasAttribute("inert")).toBe(false);
+  });
+
+  it("opens Saved lessons from the greeting's corner", async () => {
+    await show();
+    await click(button(COPY.savedLessons));
+    expect(view()).toBe("saved");
   });
 
   it("opens Search from its search entry", async () => {
@@ -428,16 +455,20 @@ describe("Interactive lessons", () => {
     expect(heading()).toBe(questionLabel(questionById(related[0])!));
   });
 
-  it("says plainly when a question's lesson isn't ready, inventing nothing", async () => {
+  it("shows a drafted lesson whole, tagged as a draft for Dipak, its mission not markable", async () => {
     await show("/ask-dipak?lesson=PB05");
     expect(heading()).toBe(questionById("PB05")?.title);
-    expect(
-      host.querySelector('[data-lesson-state="not-ready"]'),
-    ).not.toBeNull();
-    expect(text()).toContain(COPY.notReady);
-    expect(host.querySelectorAll("button[aria-pressed]")).toHaveLength(0);
-    expect(text()).not.toContain(COPY.quick);
-    expect(text()).not.toContain(COPY.parts);
+    const draft = DRAFTS.PB05;
+    expect(draft.draft_for_dipak).toBe(true);
+    expect(host.querySelector("[data-draft]")?.textContent).toBe(COPY.draftTag);
+    expect(text()).toContain(draft.quick);
+    expect(text()).toContain(draft.mission);
+    expect(text()).toContain(COPY.draftMission);
+    expect(button(COPY.markMission)).toBeUndefined();
+    // Dipak's own lessons carry no draft tag and keep their mission tick.
+    await show("/ask-dipak?lesson=PB03");
+    expect(host.querySelector("[data-draft]")).toBeNull();
+    expect(button(COPY.markMission)).not.toBeUndefined();
   });
 });
 
