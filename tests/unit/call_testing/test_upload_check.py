@@ -4,6 +4,7 @@ sits under a header and above a tab bar, and off-screen controls report zero hei
 (scripts/call_testing/upload_check.py)."""
 
 import importlib.util
+import struct
 import sys
 from pathlib import Path
 
@@ -87,42 +88,63 @@ def test_labelled_nodes_keep_their_centres() -> None:
     assert upload.HEADER_BOTTOM < 400 < upload.SAFE_BOTTOM
 
 
-class _Reads:
-    """A screen whose accessibility tree lags: it reads "unchecked" ``stale`` times first."""
+def _raw(
+    width: int, height: int, teal: tuple[int, int, int, int] | None, header: int = 16
+) -> bytes:
+    """An Android raw screencap: white, with a teal square where a ticked box is drawn."""
+    pixels = bytearray(b"\xff\xff\xff\xff" * width * height)
+    if teal:
+        x0, y0, x1, y1 = teal
+        for y in range(y0, y1):
+            for x in range(x0, x1):
+                at = (y * width + x) * 4
+                pixels[at : at + 4] = bytes((0, 125, 121, 255))
+    head = struct.pack("<III", width, height, 1) + (b"\0\0\0\0" if header == 16 else b"")
+    return head + bytes(pixels)
 
-    def __init__(self, stale: int, ticks: bool = True) -> None:
-        self.stale, self.ticks, self.reads = stale, ticks, 0
 
-    def full(self):  # type: ignore[no-untyped-def]
-        self.reads += 1
-        checked = self.ticks and self.reads > self.stale
-        return upload.parse_full(
-            _screen(
-                "[154,888][211,945]", "[238,885][481,954]", "[148,1040][931,1177]", checked=checked
-            )
-        )
+# The box as uiautomator reported it on 15 Nov 2026: 888-945, drawn at 867-916.
+BOX = {"x": 182, "y": 916, "top": 888, "bottom": 945}
 
 
-def _clock():  # type: ignore[no-untyped-def]
+def test_a_ticked_box_is_seen_in_the_pixels_not_uiautomator() -> None:
+    ticked = _raw(300, 1100, (156, 867, 207, 916))
+    assert upload.box_ticked(ticked, BOX) is True
+    assert upload.box_ticked(_raw(300, 1100, (156, 867, 207, 916), header=12), BOX) is True
+    assert upload.box_ticked(_raw(300, 1100, None), BOX) is False
+    # Teal elsewhere (the + button, the steps below) doesn't count.
+    assert upload.box_ticked(_raw(300, 1100, (20, 100, 120, 200)), BOX) is False
+
+
+def test_a_screen_that_shows_the_tick_late_is_waited_out_never_tapped_again() -> None:
+    frames = [_raw(300, 1100, None)] * 3 + [_raw(300, 1100, (156, 867, 207, 916))]
+    taken = []
+
+    def capture() -> bytes:
+        taken.append(1)
+        return frames[min(len(taken) - 1, len(frames) - 1)]
+
     now = [0.0]
-    return now, (lambda: now[0]), (lambda seconds: now.__setitem__(0, now[0] + seconds))
-
-
-def test_a_lagging_tree_is_waited_out_never_tapped_again() -> None:
-    # 15 Nov 2026: a second tap on a stale "unchecked" read unticked the box again.
-    screen = _Reads(stale=3)
-    _, clock, sleep = _clock()
-    found = upload.tick_seen(screen, seconds=8, sleep=sleep, clock=clock)
-    assert found is not None and found[0]["checked"] is True
-    assert screen.reads == 4
+    shown = upload.tick_shown(
+        capture,
+        BOX,
+        seconds=8,
+        sleep=lambda s: now.__setitem__(0, now[0] + s),
+        clock=lambda: now[0],
+    )
+    assert shown is True and len(taken) == 4
 
 
 def test_a_box_that_never_ticks_is_given_up_after_the_wait() -> None:
-    screen = _Reads(stale=0, ticks=False)
-    now, clock, sleep = _clock()
-    found = upload.tick_seen(screen, seconds=8, sleep=sleep, clock=clock)
-    assert found is not None and found[0]["checked"] is False
-    assert now[0] >= 8
+    now = [0.0]
+    shown = upload.tick_shown(
+        lambda: _raw(300, 1100, None),
+        BOX,
+        seconds=8,
+        sleep=lambda s: now.__setitem__(0, now[0] + s),
+        clock=lambda: now[0],
+    )
+    assert shown is False and now[0] >= 8
 
 
 def test_the_terms_box_is_tapped_once() -> None:

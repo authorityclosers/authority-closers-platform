@@ -23,6 +23,7 @@ import hashlib
 import importlib.util
 import json
 import re
+import struct
 import subprocess
 import sys
 import time
@@ -110,23 +111,52 @@ def terms_controls(nodes: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[st
 
 
 TICK_SECONDS = 8.0
+# A ticked box is filled teal (its accent colour, light and dark); an unticked one is white
+# with a grey outline. 18 CSS px at ~2.75 px each is ~2,400 pixels when filled.
+TEAL_PIXELS = 400
 
 
-def tick_seen(
-    screen: Any,
+def teal_pixels(raw: bytes, x0: int, x1: int, y0: int, y1: int) -> int:
+    """Teal pixels in a box of an Android raw screencap (``screencap`` without -p: width,
+    height and format, sometimes a colour space, then RGBA rows)."""
+    width, height = struct.unpack_from("<II", raw, 0)
+    header = len(raw) - width * height * 4
+    if header not in (12, 16):
+        raise ValueError("not a raw screencap")
+    count = 0
+    for y in range(max(y0, 0), min(y1, height)):
+        row = header + y * width * 4
+        for x in range(max(x0, 0), min(x1, width)):
+            r, g, b = raw[row + x * 4], raw[row + x * 4 + 1], raw[row + x * 4 + 2]
+            if r < 90 and g > r + 50 and b > r + 40:
+                count += 1
+    return count
+
+
+def box_ticked(raw: bytes, box: dict[str, Any]) -> bool:
+    """Whether the Terms box shows ticked on screen. Read from pixels, never uiautomator: in
+    the Play app's WebView a tapped box fills teal while uiautomator keeps reporting
+    checked=false, and its bounds can sit ~25 px below the drawn box (15 Nov 2026)."""
+    x, top, bottom = box["x"], box["top"], box["bottom"]
+    return teal_pixels(raw, x - 42, x + 43, top - 70, bottom + 20) >= TEAL_PIXELS
+
+
+def tick_shown(
+    capture: Any,
+    box: dict[str, Any],
     *,
     seconds: float,
     sleep: Any = time.sleep,
     clock: Any = time.monotonic,
-) -> tuple[dict[str, Any], dict[str, Any]] | None:
-    """Re-read the screen until the Terms box reads ticked or ``seconds`` pass; never taps.
-    Returns the last controls seen (or None when they weren't on screen)."""
+) -> bool:
+    """Look at the screen until the box shows ticked or ``seconds`` pass; never taps."""
     deadline = clock() + seconds
-    found = terms_controls(screen.full())
-    while not (found and found[0]["checked"]) and clock() < deadline:
+    while True:
+        if box_ticked(capture(), box):
+            return True
+        if clock() >= deadline:
+            return False
         sleep(1)
-        found = terms_controls(screen.full())
-    return found
 
 
 class Screen:
@@ -363,18 +393,26 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             return result
 
         def agree() -> str:
-            # One tap only. The WebView's accessibility tree lags the page (15 Nov 2026: it
-            # put the box ~25 px below where it was drawn, and read "unchecked" a second after
-            # a tap), so a second tap on a stale "unchecked" unticks the box again. The box
-            # sits inside its label, so a tap a little off the drawn box still ticks it.
+            # One tap, judged by the screen's pixels. In the Play app's WebView uiautomator
+            # never reports the box checked (15 Nov 2026: a tap filled it teal while
+            # uiautomator still said checked=false), so the old check failed every ticked
+            # run, and its second tap unticked the box again. The box sits inside its label,
+            # so a tap a little off the drawn box still ticks it.
+            def capture() -> bytes:
+                return subprocess.run(  # noqa: S603 - adb with a fixed verb
+                    [adb.adb, "-s", adb.serial, "exec-out", "screencap"],
+                    capture_output=True,
+                    timeout=30,
+                    check=False,
+                ).stdout
+
             found = terms_controls(screen.full())
-            if found and found[0]["checked"]:
-                return "already ticked"
             target = found[0] if found else box
+            if box_ticked(capture(), target):
+                return "already ticked"
             adb.sh(f"input tap {target['x']} {target['y']}")
-            found = tick_seen(screen, seconds=TICK_SECONDS)
-            if found and found[0]["checked"]:
-                return "ticked"
+            if tick_shown(capture, target, seconds=TICK_SECONDS):
+                return "ticked (seen on screen)"
             # Evidence for why: the box's own state and the screen.
             shot = Path(args.out) / f"terms-{datetime.now(UTC):%Y%m%dT%H%M%SZ}.png"
             shot.parent.mkdir(parents=True, exist_ok=True)
@@ -386,11 +424,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     check=False,
                 ).stdout
             )
-            state = found[0] if found else box
             raise TimeoutError(
-                "the Terms checkbox didn't tick "
-                f"(enabled={state.get('enabled')}, checked={state.get('checked')}, "
-                f"tapped ({state['x']},{state['y']}); screen {shot.name})"
+                "the Terms checkbox didn't show ticked on screen "
+                f"(enabled={target.get('enabled')}, tapped ({target['x']},{target['y']}); "
+                f"screen {shot.name})"
             )
 
         step("tick the Terms", agree)
