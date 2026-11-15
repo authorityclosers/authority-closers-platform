@@ -17,7 +17,9 @@ reach a root-only file without anyone typing or seeing it.
   (``integrations.keys.create``, audited as ``integration.api_key_created`` with the approval).
   With ``--apply`` the key itself, and nothing else, goes to standard output, for the caller
   to pipe into a root-only file; everything else goes to standard error. A dry run prints no
-  key. Refused unless the workspace's plan allows API keys and ``recordings:write``.
+  key. Refused unless the workspace's plan allows API keys and ``recordings:write``. Run again
+  while that maker's live key of this name exists, it makes none (``already_minted``) and
+  prints no key (release PR #623 review, 15 Nov 2026): a key can't be shown twice.
 
 Refused for any workspace whose name doesn't say it is a test, sandbox or fictional one.
 Owner-approved data change (AGENTS.md): dry run by default, one transaction, idempotent for
@@ -31,7 +33,10 @@ In staging or production, inside the deployed API container:
       --approver "<approver>" --issue <reference> --reason "<their words>" \\
       status|terms|mint-key [--apply] < scripts/data-changes/api-upload-proof-setup.py
 
-    ... mint-key --apply < ... | sudo sh -c 'umask 077; cat > /root/<file>'
+    ... mint-key --apply < ... | sudo sh -c 'umask 077; f=/root/<file>; cat > "$f.new";
+          if [ -s "$f.new" ]; then mv "$f.new" "$f"; else rm -f "$f.new"; fi'
+
+(an empty answer, such as ``already_minted`` or a refusal, never replaces the file).
 """
 
 from __future__ import annotations
@@ -280,6 +285,18 @@ async def execute(
         return {**result, "terms_after": after.state, "status": "applied"}
     if not tier.api_keys or not tier.allows(SCOPE):
         raise Refused("the_plan_does_not_allow_recordings_write_keys")
+    mine = [
+        key for key in live if key.name == command.key_name and key.created_by_person_id == maker.id
+    ]
+    if mine:
+        # A key is shown once, when it is made; this one exists already.
+        return {
+            **result,
+            "key_id": str(mine[0].id),
+            "key_prefix": mine[0].prefix,
+            "expires_at": mine[0].expires_at,
+            "status": "already_minted",
+        }
     key, view = await db.run_sync(
         lambda sync: keys.create(
             sync.connection(),
@@ -387,10 +404,12 @@ def main(
         print(f"data change failed: {type(error).__name__}", file=sys.stderr)
         return 2
     key = result.pop("_key", None)
-    if key is not None:
-        # The key alone on standard output, for a pipe into a root-only file; never echoed.
+    if command.action == "mint-key":
+        # Standard output carries a new key and nothing else, for a pipe into a root-only
+        # file; the summary (and an already-minted answer) goes to standard error.
         print(json.dumps(result, sort_keys=True, default=str, indent=2), file=sys.stderr)
-        sys.stdout.write(key + "\n")
+        if key is not None:
+            sys.stdout.write(key + "\n")
         return 0
     print(json.dumps(result, sort_keys=True, default=str, indent=2))
     return 0
