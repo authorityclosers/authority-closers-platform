@@ -82,7 +82,14 @@ export type LibrarySubmission = {
 export type CallLead = {
   leadId: string;
   name: string;
-  stage: "new" | "not_connected" | "follow_up" | "interested" | "won" | "lost";
+  stage:
+    | "new"
+    | "not_connected"
+    | "follow_up"
+    | "interested"
+    | "won"
+    | "lost"
+    | "junk";
   /** The business's own stage, when the seller picked one. */
   step: string | null;
   pipeline: string;
@@ -95,6 +102,10 @@ const LEAD_STAGES = [
   "interested",
   "won",
   "lost",
+  // Junk Lead (the nine stages, 30 Oct 2026): a lead the server keeps in
+  // stage "junk". Without it one junked lead failed the whole Calls list, and
+  // Home said "Some numbers did not load" (dev sandbox, 15 Nov 2026).
+  "junk",
 ] as const;
 
 /** A row's lead, checked: exactly its five fields, or the contract fails. */
@@ -783,6 +794,7 @@ export const CALL_LEAD_STAGE_WORDS: Record<CallLead["stage"], string> = {
   interested: "Interested",
   won: "Won",
   lost: "Lost",
+  junk: "Junk",
 };
 
 /**
