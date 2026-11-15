@@ -433,6 +433,19 @@ a {
     0 8px 16px -8px color-mix(in oklab, var(--lx-home-primary) 55%, transparent);
   --sx-gloss-ink: white;
   --sx-press-sink: scale(0.97);
+  /* Colour by meaning, never by position: a badge or chip is the soft fill
+     with the strong ink. Good or the outcome, understanding, needs action,
+     calls and connecting, a problem. Home's palette, light and dark. */
+  --sx-tone-good: var(--lx-home-emerald);
+  --sx-tone-good-soft: var(--lx-home-emerald-soft);
+  --sx-tone-info: var(--lx-home-violet);
+  --sx-tone-info-soft: var(--lx-home-violet-soft);
+  --sx-tone-action: var(--lx-home-orange);
+  --sx-tone-action-soft: var(--lx-home-orange-soft);
+  --sx-tone-calls: var(--lx-home-sky);
+  --sx-tone-calls-soft: var(--lx-home-sky-soft);
+  --sx-tone-problem: var(--lx-home-rose);
+  --sx-tone-problem-soft: var(--lx-home-rose-soft);
 }
 
 :root[data-theme="dark"] {

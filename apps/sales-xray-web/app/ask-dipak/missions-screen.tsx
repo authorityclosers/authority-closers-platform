@@ -233,7 +233,7 @@ export function MissionsScreen() {
                 <span className={styles.checkButtons}>
                   <button
                     type="button"
-                    className={styles.smallBtn}
+                    className={`${styles.smallBtn} ${styles.primary}`}
                     disabled={busy}
                     onClick={() =>
                       void run(() => answerCall(call.call_id, code, true))

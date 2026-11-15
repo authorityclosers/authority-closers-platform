@@ -814,19 +814,26 @@ class AiWrites:
         request = self._request(request_id)
         rows = (
             await self.db.scalars(
-                select(IntegrationWrite).where(
+                select(IntegrationWrite)
+                .where(
                     IntegrationWrite.tenant_id == self.tenant_id,
                     self._mine(),
                     IntegrationWrite.action.in_(("stage", "assign")),
                     IntegrationWrite.created_at >= self.now - policy.UNDO_WINDOW,
                 )
+                .order_by(IntegrationWrite.created_at.desc(), IntegrationWrite.id)
             )
         ).all()
-        wanted = {
-            hashlib.sha256(self._each(request, row.lead_id).encode()).hexdigest(): row
-            for row in rows
-        }
-        mine = [row for sha, row in wanted.items() if row.request_sha256 == sha]
+        # This request's own rows first (each lead's change carries the request's per-lead
+        # id), then one per lead: another change to the same lead from this key (another
+        # request) must never stand in for it (Codex P2 on release PR 619).
+        mine: list[IntegrationWrite] = []
+        seen: set[UUID] = set()
+        for row in rows:
+            wanted = hashlib.sha256(self._each(request, row.lead_id).encode()).hexdigest()
+            if row.request_sha256 == wanted and row.lead_id not in seen:
+                seen.add(row.lead_id)
+                mine.append(row)
         if not mine:
             raise AiWriteError(404, "change_missing", "No changes from that request to undo.")
         undone, kept = 0, []

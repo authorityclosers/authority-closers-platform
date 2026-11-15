@@ -23,6 +23,8 @@ import hashlib
 import importlib.util
 import json
 import re
+import struct
+import subprocess
 import sys
 import time
 from datetime import UTC, datetime
@@ -85,6 +87,7 @@ def parse_full(xml: str) -> list[dict[str, Any]]:
                 "label": (attr("text") or attr("content-desc")).strip(),
                 "cls": attr("class"),
                 "checked": attr("checked") == "true",
+                "enabled": attr("enabled") != "false",
             }
         )
     return found
@@ -105,6 +108,55 @@ def terms_controls(nodes: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[st
     if box and button and 250 < box["y"] < SAFE_BOTTOM - 150 and button["bottom"] < SAFE_BOTTOM:
         return box, button
     return None
+
+
+TICK_SECONDS = 8.0
+# A ticked box is filled teal (its accent colour, light and dark); an unticked one is white
+# with a grey outline. 18 CSS px at ~2.75 px each is ~2,400 pixels when filled.
+TEAL_PIXELS = 400
+
+
+def teal_pixels(raw: bytes, x0: int, x1: int, y0: int, y1: int) -> int:
+    """Teal pixels in a box of an Android raw screencap (``screencap`` without -p: width,
+    height and format, sometimes a colour space, then RGBA rows)."""
+    width, height = struct.unpack_from("<II", raw, 0)
+    header = len(raw) - width * height * 4
+    if header not in (12, 16):
+        raise ValueError("not a raw screencap")
+    count = 0
+    for y in range(max(y0, 0), min(y1, height)):
+        row = header + y * width * 4
+        for x in range(max(x0, 0), min(x1, width)):
+            r, g, b = raw[row + x * 4], raw[row + x * 4 + 1], raw[row + x * 4 + 2]
+            if r < 90 and g > r + 50 and b > r + 40:
+                count += 1
+    return count
+
+
+def box_ticked(raw: bytes, box: dict[str, Any]) -> bool:
+    """Whether the Terms box shows ticked on screen. Read from pixels, never uiautomator: in
+    the Play app's WebView a tapped box fills teal while uiautomator keeps reporting
+    checked=false, and its bounds can sit ~25 px below the drawn box (15 Nov 2026)."""
+    x, top, bottom = box["x"], box["top"], box["bottom"]
+    return teal_pixels(raw, x - 42, x + 43, top - 70, bottom + 20) >= TEAL_PIXELS
+
+
+def tick_shown(
+    capture: Any,
+    box: dict[str, Any],
+    *,
+    seconds: float,
+    sleep: Any = time.sleep,
+    clock: Any = time.monotonic,
+) -> bool:
+    """Look at the screen until the box shows ticked or ``seconds`` pass; never taps."""
+    deadline = clock() + seconds
+    while True:
+        if box_ticked(capture(), box):
+            return True
+        if clock() >= deadline:
+            return False
+        sleep(1)
 
 
 class Screen:
@@ -258,8 +310,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 current = screen.wait("Switch workspace", seconds=10)[2]
                 if args.workspace.lower() in current.lower():
                     return current
-                screen.tap_text("Switch workspace")
-                time.sleep(1.5)
+                for attempt in range(2):
+                    screen.tap_text("Switch workspace")
+                    time.sleep(2)
+                    if screen.find("Where your calls, leads and reports live"):
+                        break
+                    if attempt:
+                        raise TimeoutError("the workspace sheet didn't open")
                 screen.tap_text(args.workspace, seconds=10)
                 time.sleep(1.5)
                 # The row asks "Switch to <workspace>?"; a second tap confirms.
@@ -271,7 +328,19 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
             step("workspace", switch)
             time.sleep(3)
-        step("open +", lambda: screen.tap_text("Add a lead, a call or a task"))
+
+        def fresh() -> str:
+            # A cold start opens New analysis fresh in the chosen workspace, as a seller's
+            # would, with nothing left from the switch.
+            adb.sh(f"am force-stop {phone.PACKAGE}")
+            time.sleep(1.5)
+            adb.bring_forward()
+            time.sleep(4)
+            return screen.header()
+
+        step("fresh start", fresh)
+        # After a cold start the app can still be loading its web copy for a while.
+        step("open +", lambda: screen.tap_text("Add a lead, a call or a task", seconds=60))
         step(
             "Add a call",
             lambda: screen.tap_text("Record or upload a call for analysis", "Add a call"),
@@ -315,24 +384,51 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         )
         result["terms_at"] = {
             "checkbox": [box["x"], box["y"]],
+            "checkbox_enabled": box["enabled"],
             "analyse": [button["x"], button["y"]],
+            "analyse_enabled": button["enabled"],
         }
         if not args.agree:
             result["stopped"] = "before the Terms tick (rehearsal, nothing ticked or uploaded)"
             return result
 
         def agree() -> str:
-            for _ in range(2):
-                found = terms_controls(screen.full())
-                if found and found[0]["checked"]:
-                    return "ticked"
-                target = found[0] if found else box
-                adb.sh(f"input tap {target['x']} {target['y']}")
-                time.sleep(1)
+            # One tap, judged by the screen's pixels. In the Play app's WebView uiautomator
+            # never reports the box checked (15 Nov 2026: a tap filled it teal while
+            # uiautomator still said checked=false), so the old check failed every ticked
+            # run, and its second tap unticked the box again. The box sits inside its label,
+            # so a tap a little off the drawn box still ticks it.
+            def capture() -> bytes:
+                return subprocess.run(  # noqa: S603 - adb with a fixed verb
+                    [adb.adb, "-s", adb.serial, "exec-out", "screencap"],
+                    capture_output=True,
+                    timeout=30,
+                    check=False,
+                ).stdout
+
             found = terms_controls(screen.full())
-            if found and found[0]["checked"]:
-                return "ticked"
-            raise TimeoutError("the Terms checkbox didn't tick")
+            target = found[0] if found else box
+            if box_ticked(capture(), target):
+                return "already ticked"
+            adb.sh(f"input tap {target['x']} {target['y']}")
+            if tick_shown(capture, target, seconds=TICK_SECONDS):
+                return "ticked (seen on screen)"
+            # Evidence for why: the box's own state and the screen.
+            shot = Path(args.out) / f"terms-{datetime.now(UTC):%Y%m%dT%H%M%SZ}.png"
+            shot.parent.mkdir(parents=True, exist_ok=True)
+            shot.write_bytes(
+                subprocess.run(  # noqa: S603 - adb with a fixed verb
+                    [adb.adb, "-s", adb.serial, "exec-out", "screencap", "-p"],
+                    capture_output=True,
+                    timeout=30,
+                    check=False,
+                ).stdout
+            )
+            raise TimeoutError(
+                "the Terms checkbox didn't show ticked on screen "
+                f"(enabled={target.get('enabled')}, tapped ({target['x']},{target['y']}); "
+                f"screen {shot.name})"
+            )
 
         step("tick the Terms", agree)
 
