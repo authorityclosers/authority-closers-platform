@@ -1,6 +1,9 @@
 import { expect, it } from "vitest";
 
-import { parseSubmissionLibraryPage } from "./acquisition-client";
+import {
+  CALL_LEAD_STAGE_WORDS,
+  parseSubmissionLibraryPage,
+} from "./acquisition-client";
 
 const firstId = "11111111-1111-4111-8111-111111111111";
 const secondId = "22222222-2222-4222-8222-222222222222";
@@ -130,4 +133,38 @@ it("reads a call's lead exactly, and refuses a malformed one", () => {
         next_cursor: null,
       }),
     ).toThrow();
+});
+
+// The server keeps a lead in one of seven stages (lead_desk_leads' check:
+// new, not_connected, follow_up, interested, won, lost, junk). A call whose
+// lead is in any of them reads, Junk Lead included: one junked lead used to
+// fail the whole list, so Home said "Some numbers did not load" (15 Nov 2026).
+it("reads a call's lead in every stage the server keeps, Junk included", () => {
+  const stages = [
+    "new",
+    "not_connected",
+    "follow_up",
+    "interested",
+    "won",
+    "lost",
+    "junk",
+  ] as const;
+  const page = parseSubmissionLibraryPage({
+    submissions: stages.map((stage, index) => ({
+      ...row(`4444444${index}-4444-4444-8444-444444444444`),
+      lead: {
+        lead_id: "66666666-6666-4666-8666-666666666666",
+        name: "fictional lead",
+        stage,
+        step: stage === "junk" ? "junk" : null,
+        pipeline: "main",
+      },
+    })),
+    next_cursor: null,
+  });
+  expect(page.submissions.map((submission) => submission.lead?.stage)).toEqual([
+    ...stages,
+  ]);
+  for (const stage of stages) expect(CALL_LEAD_STAGE_WORDS[stage]).toBeTruthy();
+  expect(CALL_LEAD_STAGE_WORDS.junk).toBe("Junk");
 });
