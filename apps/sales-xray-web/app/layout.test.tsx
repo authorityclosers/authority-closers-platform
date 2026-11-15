@@ -1,6 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 
+// next/font runs in Next's compiler, not in vitest: a stand-in with its shape.
+vi.mock("next/font/local", () => ({
+  default: () => ({ className: "", variable: "sx-font-jakarta", style: {} }),
+}));
+
 import Layout from "./layout";
 import { themeInitScript } from "./lightbox/theme";
 import { glassInitScript, themePreviewScript } from "./ui/look";
@@ -17,7 +22,10 @@ async function markup() {
 it("marks the standalone document, starts light and runs the theme preview, then the theme script, first", async () => {
   vi.stubEnv("NODE_ENV", "development");
   const html = await markup();
-  expect(html).toMatch(/^<html lang="en" data-lx-root="" data-theme="light">/);
+  // The preloaded font's class (next/font) rides on the html element.
+  expect(html).toMatch(
+    /^<html lang="en" class="sx-font-jakarta" data-lx-root="" data-theme="light">/,
+  );
   expect(html).toContain(
     `<body class="sales-xray-document" data-clarity-mask="true"><script id="sales-xray-theme-preview">${themePreviewScript()}</script><script id="sales-xray-theme-init">${themeInitScript()}</script><script id="sales-xray-glass-init">${glassInitScript()}</script>`,
   );

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import localFont from "next/font/local";
 import "@fontsource-variable/plus-jakarta-sans/wght.css";
 import "@fontsource-variable/bricolage-grotesque/wght.css";
 import "@fontsource-variable/newsreader/wght.css";
@@ -18,6 +19,19 @@ import {
   themePreviewScript,
 } from "./ui/look";
 import { ThemeProvider } from "./lightbox/theme-provider";
+
+/** The app's type from the first paint (owner, 15 Nov 2026: "the system is
+ *  battling"): Plus Jakarta's latin file preloaded with the page, with a fallback
+ *  sized to its metrics, so a cold start never paints in the phone's own font and
+ *  then swaps. The fontsource faces above cover the other scripts. */
+const jakarta = localFont({
+  src: "../node_modules/@fontsource-variable/plus-jakarta-sans/files/plus-jakarta-sans-latin-wght-normal.woff2",
+  weight: "200 800",
+  style: "normal",
+  display: "swap",
+  variable: "--sx-font-jakarta",
+  adjustFontFallback: "Arial",
+});
 import { LiveDataBanner } from "./live-data-banner";
 import {
   AppCompatibilityProvider,
@@ -75,7 +89,13 @@ export default async function Layout({
   return (
     // data-lx-root keeps the learner-web embed tokens out of this document.
     // The pre-paint script may change the theme attributes before hydration.
-    <html lang="en" data-lx-root="" data-theme="light" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={jakarta.variable}
+      data-lx-root=""
+      data-theme="light"
+      suppressHydrationWarning
+    >
       {/* data-clarity-mask: Microsoft Clarity, where it runs at all (clarity.tsx),
           masks everything on the page, leads, calls, reports, transcripts and
           chats included, on top of the project's own Strict masking. */}
