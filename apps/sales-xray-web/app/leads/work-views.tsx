@@ -743,6 +743,27 @@ export function LeadSearch({
   );
 }
 
+/** What the Call band counts, and hides on at zero: the queue a tap takes
+ *  (Codex's review on release PR #622). To Call and Follow-ups take the list
+ *  shown, the stage's count when one is picked; All Leads takes the side's To
+ *  Call, at the stage picked when there is one. Null while not known. */
+export function bandQueueCount({
+  view,
+  stagePicked,
+  listCount,
+  toCallCount,
+  toCallAtStage,
+}: {
+  view: WorkView;
+  stagePicked: boolean;
+  listCount: number | null;
+  toCallCount: number | null;
+  toCallAtStage: number | null;
+}): number | null {
+  if (view !== "all") return listCount;
+  return stagePicked ? toCallAtStage : toCallCount;
+}
+
 /** The list Call Next goes through: the tab's own, but All Leads lists both
  *  sides, so there it is the side's To Call, its count and its leads (phone
  *  QA, 3 Nov 2026: Inbound's All Leads said "Call Next Lead · 913", Cold's). */

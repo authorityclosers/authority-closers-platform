@@ -135,6 +135,7 @@ import { can as roleCan } from "../organisation/roles";
 import { listScope, OPENING_STAGE, OPENING_WORK } from "./opening";
 import {
   CallBand,
+  bandQueueCount,
   callNextView,
   FilterButton,
   LeadSearch,
@@ -1178,6 +1179,36 @@ export function LeadsRoute({
       setStepCounts({ key: stepCountsKey, value }),
     [stepCountsKey],
   );
+  // The side's To Call at the stage picked: what All Leads' band calls, and
+  // counts (Codex's review on release PR #622).
+  const toCallAsk = useMemo(
+    () => ({
+      scope,
+      owner: scope === "team" ? (sellerOwner ?? undefined) : undefined,
+      search: query,
+      pipeline,
+      more: {
+        ...more,
+        side,
+        view: "to_call" as const,
+        when: null,
+        step: stepShown,
+      },
+    }),
+    [scope, sellerOwner, query, pipeline, more, side, stepShown],
+  );
+  const [toCallAtStage, setToCallAtStage] = useState<{
+    ask: typeof toCallAsk;
+    total: number;
+  } | null>(null);
+  useEffect(() => {
+    if (workView !== "all" || !stepShown) return;
+    const controller = new AbortController();
+    readLeads(toCallAsk, controller.signal)
+      .then((page) => setToCallAtStage({ ask: toCallAsk, total: page.total }))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [toCallAsk, workView, stepShown, version]);
   // The work views' counts for the same filters ("To Call 7"), from a side's
   // first page; Inbound To Call is the badge's number (competitor teardown #9).
   const [viewCounts, setViewCounts] = useState<{
@@ -1884,13 +1915,7 @@ export function LeadsRoute({
       return;
     }
     try {
-      const page = await readLeads({
-        scope,
-        owner: scope === "team" ? (sellerOwner ?? undefined) : undefined,
-        search: query,
-        pipeline,
-        more: { ...more, side, view: "to_call", when: null, step: stepShown },
-      });
+      const page = await readLeads(toCallAsk);
       startRound(null, {
         order: page.leads.map((row) => row.lead_id),
         tried: triedLately(page.leads),
@@ -1944,10 +1969,17 @@ export function LeadsRoute({
           onShowAll: () => pickWork({ step: null }),
         }
       : null;
-  // What the band counts, and hides on at zero: the leads this list holds, the
-  // stage's count when one is picked (tab counts ignore the stage chip,
-  // 087652e82). All Leads calls the side's To Call, so it keeps that count.
-  const bandCount = workView === "all" ? callCount : matching;
+  // What the band counts, and hides on at zero: the queue a tap takes (tab
+  // counts ignore the stage chip, 087652e82). All Leads calls the side's To
+  // Call, at the stage picked when there is one.
+  const bandCount = bandQueueCount({
+    view: workView,
+    stagePicked: !!stepShown,
+    listCount: matching,
+    toCallCount: callCount,
+    toCallAtStage:
+      toCallAtStage?.ask === toCallAsk ? toCallAtStage.total : null,
+  });
   // The list's own order, in words that say what it does (Leads part 03).
   const listOrder =
     workView === "to_call"
@@ -2399,7 +2431,7 @@ export function LeadsRoute({
                   known zero (Leads part 05; L1's empty rule). */}
               {(
                 workView === "all"
-                  ? (callCount ?? 0) > 0
+                  ? (bandCount ?? 0) > 0
                   : !!topLead || bandCount !== 0
               ) ? (
                 <CallBand
