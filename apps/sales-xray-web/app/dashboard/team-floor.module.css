@@ -2597,3 +2597,43 @@ button.chip {
   --tone: var(--sx-ink-2);
   --tone-soft: var(--sx-fill);
 }
+
+/* The owner's OnePlus (363 px, report 220): phones up to 375 px keep the team
+   chips on one line and the sellers' table in its columns. */
+.rowName small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowName small[data-warn]::before {
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.sellerRow > b {
+  white-space: nowrap;
+}
+
+@media (max-width: 375px) {
+  .workLine {
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+
+  .workLine .chip {
+    min-width: 0;
+    gap: 4px;
+    padding: 0 8px;
+    white-space: nowrap;
+  }
+
+  .sellerHead,
+  .sellerRow {
+    grid-template-columns: minmax(0, 1fr) 34px 58px 56px;
+    column-gap: 6px;
+    padding: 0 10px;
+  }
+}
