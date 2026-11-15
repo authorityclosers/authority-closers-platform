@@ -60,6 +60,7 @@ import {
   type AskView,
 } from "./nav";
 import { loadProgress, setItem, useProgress, type Progress } from "./progress";
+import { toneOfCategory, toneOfFeatured } from "./tones";
 
 /** The element that scrolls this page: the shell's panel, or the window. */
 function scrollerOf(node: HTMLElement | null): Element {
@@ -204,7 +205,7 @@ function HomeScreen({ open }: { open: Open }) {
             key={topic.id}
             view={{ kind: "topic", id: topic.id }}
             open={open}
-            className={styles.topicCard}
+            className={`${styles.topicCard} ${styles[toneOfFeatured(topic.id)]}`}
           >
             <span className={styles.topicIcon}>
               <AskIcon name={topic.icon} />
@@ -270,7 +271,7 @@ function TopicsScreen({ open, back }: { open: Open; back: () => void }) {
             key={category.id}
             view={{ kind: "category", id: category.id }}
             open={open}
-            className={styles.topicCard}
+            className={`${styles.topicCard} ${styles[toneOfCategory(category.id)]}`}
           >
             <span className={styles.topicIcon}>
               <AskIcon name={CATEGORY_ICONS[category.id] ?? "layers"} />
@@ -302,14 +303,18 @@ function TopicScreen({
   return (
     <>
       <Breadcrumb onBack={back}>{COPY.title}</Breadcrumb>
-      <div className={styles.chip}>{COPY.topicChip}</div>
+      <div className={`${styles.chip} ${styles[toneOfFeatured(topic.id)]}`}>
+        {COPY.topicChip}
+      </div>
       <h2 className={styles.pageTitle}>{topic.name}</h2>
       <p className={styles.pageSub}>
         {topic.sub} · {COPY.topicSub}
       </p>
-      {featuredQuestions(topic).map((question) => (
-        <QuestionRow key={question.id} question={question} open={open} />
-      ))}
+      <div className={styles.rows}>
+        {featuredQuestions(topic).map((question) => (
+          <QuestionRow key={question.id} question={question} open={open} />
+        ))}
+      </div>
     </>
   );
 }
@@ -327,12 +332,16 @@ function CategoryScreen({
   return (
     <>
       <Breadcrumb onBack={back}>{COPY.allTitle}</Breadcrumb>
-      <div className={styles.chip}>{CATEGORY_LABELS[category.id]}</div>
+      <div className={`${styles.chip} ${styles[toneOfCategory(category.id)]}`}>
+        {CATEGORY_LABELS[category.id]}
+      </div>
       <h2 className={styles.pageTitle}>{category.name}</h2>
       <p className={styles.pageSub}>{COPY.categorySub}</p>
-      {categoryQuestions(category).map((question) => (
-        <QuestionRow key={question.id} question={question} open={open} />
-      ))}
+      <div className={styles.rows}>
+        {categoryQuestions(category).map((question) => (
+          <QuestionRow key={question.id} question={question} open={open} />
+        ))}
+      </div>
     </>
   );
 }
@@ -374,9 +383,11 @@ function SearchScreen({
       </label>
       <div aria-live="polite" data-results="">
         {results.length ? (
-          results.map((question) => (
-            <QuestionRow key={question.id} question={question} open={open} />
-          ))
+          <div className={styles.rows}>
+            {results.map((question) => (
+              <QuestionRow key={question.id} question={question} open={open} />
+            ))}
+          </div>
         ) : (
           <div className={styles.empty}>
             <strong>{COPY.noMatch}</strong>
@@ -405,9 +416,11 @@ function SavedScreen({
       <h2 className={styles.pageTitle}>{COPY.savedTitle}</h2>
       <p className={styles.pageSub}>{COPY.savedSub}</p>
       {saved.length ? (
-        saved.map((question) => (
-          <QuestionRow key={question.id} question={question} open={open} />
-        ))
+        <div className={styles.rows}>
+          {saved.map((question) => (
+            <QuestionRow key={question.id} question={question} open={open} />
+          ))}
+        </div>
       ) : waiting ? (
         <div className={styles.rowSkeleton} aria-busy="true" />
       ) : progress.status === "failed" ? (
@@ -416,7 +429,7 @@ function SavedScreen({
           Check your connection, then try again.
           <button
             type="button"
-            className={styles.smallBtn}
+            className={`${styles.smallBtn} ${styles.primary}`}
             onClick={() => void loadProgress()}
           >
             Try again
@@ -479,7 +492,11 @@ function LessonScreen({
   const lesson = lessonFor(id);
   const head = (
     <Breadcrumb onBack={back}>
-      <span className={styles.chip}>{lessonChip(question)}</span>
+      <span
+        className={`${styles.chip} ${styles[toneOfCategory(question.categoryId)]}`}
+      >
+        {lessonChip(question)}
+      </span>
     </Breadcrumb>
   );
   if (!lesson)
@@ -492,7 +509,11 @@ function LessonScreen({
         </div>
         <div className={styles.panel} data-lesson-state="not-ready">
           <p className={styles.copy}>{COPY.notReady}</p>
-          <button type="button" className={styles.smallBtn} onClick={back}>
+          <button
+            type="button"
+            className={`${styles.smallBtn} ${styles.primary}`}
+            onClick={back}
+          >
             {COPY.backToQuestions}
           </button>
         </div>

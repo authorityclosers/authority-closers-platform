@@ -371,3 +371,146 @@ def test_missions_active_answers_counts_and_the_team_read(
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_answers_follow_a_call_to_the_recording_attached_later(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Codex review of release PR 617 (15 Nov 2026): a seller answers the missions right
+    after a call the phone logged; its recording is attached to that call later, as its own
+    call event naming the original (LeadDesk.attach_recording). The answers stay with the call
+    whichever way it is reached, the recording is no second call, and it counts once."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        tenant = setup.state.tenant_id
+        try:
+            seller = await _person(setup, "Priya", role="member")
+            manager = await _person(setup, "Meera", role="manager")
+            await _tick(setup, seller, "PB03", "OB03")
+            async with setup.sessions() as db, db.begin():
+                for code in ("PB03", "OB03"):
+                    await coaching.set_active(
+                        db, person_id=seller, tenant_id=tenant, question_id=code, on=True, now=NOW
+                    )
+
+            # The call, answered at once: no recording yet.
+            lead_id, call_event = await _call(setup, seller, minutes_ago=30)
+            async with setup.sessions() as db, db.begin():
+                right_after = await coaching.resolve_call(
+                    db, person_id=seller, tenant_id=tenant, call_id=call_event
+                )
+                assert right_after is not None and right_after.submission_id is None
+                await coaching.record_answers(
+                    db,
+                    person_id=seller,
+                    call=right_after,
+                    answers=[("PB03", True), ("OB03", False)],
+                    now=NOW,
+                )
+
+            # Its recording, attached to that call later by the manager.
+            submission, attachment = uuid4(), uuid4()
+            async with setup.sessions() as db, db.begin():
+                db.add(
+                    ConversationAcquisitionUsage(
+                        id=uuid4(),
+                        tenant_id=tenant,
+                        person_id=seller,
+                        submission_id=submission,
+                        source_sha256="c" * 64,
+                        duration_evidence_sha256="d" * 64,
+                        reserved_seconds=60,
+                        policy_revision="fictional",
+                        created_at=NOW,
+                    )
+                )
+                db.add(
+                    LeadEvent(
+                        id=attachment,
+                        tenant_id=tenant,
+                        lead_id=lead_id,
+                        kind="call",
+                        actor_person_id=manager,
+                        data={
+                            "submission_id": str(submission),
+                            "simulated": False,
+                            "recording": True,
+                            "for_call": str(call_event),
+                        },
+                        created_at=NOW + timedelta(minutes=5),
+                    )
+                )
+
+            async with setup.sessions() as db, db.begin():
+                # By the analysed call, the attachment or the call: one call, answers kept.
+                for way in (submission, attachment, call_event):
+                    found = await coaching.resolve_call(
+                        db, person_id=seller, tenant_id=tenant, call_id=way
+                    )
+                    assert found is not None, way
+                    assert (found.key, found.call_event_id, found.submission_id) == (
+                        call_event,
+                        call_event,
+                        submission,
+                    )
+                    assert found.lead_id == lead_id
+                    check = await coaching.call_check(db, person_id=seller, call=found)
+                    assert {m["question_id"]: m["done"] for m in check["missions"]} == {
+                        "PB03": True,
+                        "OB03": False,
+                    }
+                # The manager's own reach is unchanged: it isn't their call.
+                assert (
+                    await coaching.resolve_call(
+                        db, person_id=manager, tenant_id=tenant, call_id=attachment
+                    )
+                    is None
+                )
+
+                # The recording is not another call waiting for answers.
+                recent = await coaching.recent_calls(db, person_id=seller, tenant_id=tenant)
+                assert [(c["call_id"], c["submission_id"]) for c in recent] == [
+                    (str(call_event), str(submission))
+                ]
+                assert recent[0]["answered"] == ["OB03", "PB03"] and recent[0]["waiting"] == []
+
+                # A change through the analysed call supersedes the first answer.
+                by_recording = await coaching.resolve_call(
+                    db, person_id=seller, tenant_id=tenant, call_id=submission
+                )
+                assert by_recording is not None
+                await coaching.record_answers(
+                    db,
+                    person_id=seller,
+                    call=by_recording,
+                    answers=[("OB03", True)],
+                    now=NOW + timedelta(minutes=10),
+                )
+                # Answers kept before this fix against the attachment, or the analysed call
+                # alone, count with the same call.
+                for event_id, at in ((attachment, 11), (None, 12)):
+                    db.add(
+                        SalesXrayAskDipakCallCheck(
+                            id=uuid4(),
+                            person_id=seller,
+                            tenant_id=tenant,
+                            call_event_id=event_id,
+                            submission_id=submission,
+                            lead_id=lead_id,
+                            question_id="PB03",
+                            done=True,
+                            created_at=NOW + timedelta(minutes=at),
+                        )
+                    )
+                await db.flush()
+                growth = await coaching.my_growth(db, person_id=seller, tenant_id=tenant)
+                counts = {
+                    m["question_id"]: (m["done_calls"], m["not_done_calls"])
+                    for m in growth["missions"]
+                }
+                assert counts["PB03"] == (1, 0) and counts["OB03"] == (1, 0)
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())

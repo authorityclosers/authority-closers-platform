@@ -78,12 +78,24 @@ it("colours from the theme's tokens only, so light and dark both read", () => {
   const used = new Set(
     [...css.matchAll(/var\((--[\w-]+)\)/g)].map(([, name]) => name),
   );
+  // The page's own --ad-tone only carries a topic's --sx-tone-* colour.
   for (const name of used)
-    expect(name).toMatch(/^--(sx|xr)-|^--lx-leading-devanagari$/);
+    expect(name).toMatch(
+      /^--(sx|xr)-|^--lx-leading-devanagari$|^--ad-tone(-soft)?$/,
+    );
   // The sample's green, as the app's green: selected, saved and done.
   expect(rule(".mcq.selected")).toContain("var(--xr-green)");
   expect(rule(".mark.active")).toContain("var(--xr-green)");
   expect(rule(".check.done::before")).toContain("var(--xr-green)");
+});
+
+it("colours a topic by its meaning, never by its place (Home's finish)", () => {
+  expect(css).not.toMatch(/nth-child/);
+  for (const tone of ["good", "info", "action", "calls"]) {
+    expect(rule(`.${tone}`)).toContain(`var(--sx-tone-${tone})`);
+    expect(rule(`.${tone}`)).toContain(`var(--sx-tone-${tone}-soft)`);
+  }
+  expect(css).toMatch(/\.topicIcon\s*\{[^}]*var\(--ad-tone-soft\)/);
 });
 
 it("takes text from the app's one type scale, which grows with the phone's text size", () => {

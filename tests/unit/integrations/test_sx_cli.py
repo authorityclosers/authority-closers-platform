@@ -213,6 +213,29 @@ def test_a_stage_move_from_the_command_line_and_the_mcp_tool() -> None:
     assert "reason_code" not in sent and "expected_revision" not in sent
 
 
+def test_the_webhook_from_the_command_line() -> None:
+    env = {"SX_API_KEY": KEY, "SX_API_BASE": "https://salesxray.example.test/v1/api"}
+    fake = Fake(
+        {
+            ("GET", "/webhook"): (200, {"webhook": None, "menu": {"events": []}}),
+            ("PUT", "/webhook"): (200, {"webhook": {}, "secret": "whsec_x"}),
+            ("POST", "/webhook/test"): (200, {"delivered": True}),
+            ("POST", "/webhook/rotate/finish"): (200, {"webhook": {}}),
+            ("GET", "/webhook/deliveries"): (200, {"deliveries": []}),
+        }
+    )
+    assert sx.main(["webhook"], env, fake) == 0
+    hook = ["webhook", "set", "--url", "https://partner.example.test/hook"]
+    assert sx.main([*hook, "--events", "lead.created,analysis.completed"], env, fake) == 0
+    assert json.loads(fake.seen[1][3]) == {
+        "url": "https://partner.example.test/hook",
+        "events": ["lead.created", "analysis.completed"],
+    }
+    for action in ("test", "finish", "deliveries"):
+        assert sx.main(["webhook", action], env, fake) == 0
+    assert [seen[0] for seen in fake.seen[2:]] == ["POST", "POST", "GET"]
+
+
 def test_the_team_from_the_command_line_and_the_mcp_tool() -> None:
     env = {"SX_API_KEY": KEY, "SX_API_BASE": "https://salesxray.example.test/v1/api"}
     fake = Fake({("GET", "/team"): (200, {"people": [{"name": "Asha"}], "unassigned_leads": 0})})

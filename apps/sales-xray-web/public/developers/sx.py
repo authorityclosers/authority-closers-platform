@@ -19,6 +19,9 @@ command-line argument, so it stays out of shell history and process lists).
     sx coaching [--call CALL_ID | --team]     # Coaching: yours (as a person), one of
                                               # your calls, or the team's counts
     sx team                                   # names, roles, lead limits (team:read)
+    sx webhook [show|set|test|rotate|finish|disable|deliveries] [--url U]
+            [--events a,b] [--facts PROFILE]  # the organisation's webhook
+                                              # (webhooks:manage; an owner's or admin's key)
     sx minutes [--team]                       # analysis time given, used and left
                                               # (calls:read; --team: each member's use)
     sx leads [--stage KEY|open] [--offset N]  # KEY: one of the stages each page lists
@@ -183,6 +186,16 @@ class Client:
 
     def facts(self, call_id: str) -> Any:
         return self.call("GET", f"/calls/{urllib.parse.quote(call_id, safe='')}/facts")
+
+    def webhook(self, action: str = "show", body: dict[str, Any] | None = None) -> Any:
+        if action == "show":
+            return self.call("GET", "/webhook")
+        if action == "set":
+            return self.call("PUT", "/webhook", body=body or {})
+        if action == "deliveries":
+            return self.call("GET", "/webhook/deliveries")
+        path = "/webhook/rotate/finish" if action == "finish" else f"/webhook/{action}"
+        return self.call("POST", path, body={})
 
     def team(self) -> Any:
         return self.call("GET", "/team")
@@ -1045,6 +1058,16 @@ def _parser() -> argparse.ArgumentParser:
     coaching_of.add_argument("--call", metavar="CALL_ID")
     coaching_of.add_argument("--team", action="store_true")
     commands.add_parser("team")
+    hook = commands.add_parser("webhook")
+    hook.add_argument(
+        "action",
+        nargs="?",
+        default="show",
+        choices=["show", "set", "test", "rotate", "finish", "disable", "deliveries"],
+    )
+    hook.add_argument("--url")
+    hook.add_argument("--events", help="comma-separated, from `sx webhook show`")
+    hook.add_argument("--facts")
     minutes = commands.add_parser("minutes")
     minutes.add_argument("--team", action="store_true")
     leads = commands.add_parser("leads")
@@ -1215,6 +1238,16 @@ def main(
             out = _report(client, args)
         elif args.command == "coaching":
             out = client.coaching(args.call, args.team)
+        elif args.command == "webhook":
+            body = None
+            if args.action == "set":
+                body = {
+                    "url": args.url,
+                    "events": [item.strip() for item in (args.events or "").split(",") if item],
+                }
+                if args.facts:
+                    body["facts_profile"] = args.facts
+            out = client.webhook(args.action, body)
         elif args.command == "team":
             out = client.team()
         elif args.command == "minutes":
