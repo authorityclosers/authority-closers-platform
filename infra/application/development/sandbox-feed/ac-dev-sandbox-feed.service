@@ -1,0 +1,38 @@
+# Dev AC Sales Sandbox live feed (owner, 15 Nov 2026): one tick of fictional sales work
+# through the app's own lead desk, as the dev-live API's runtime user, inside the capped
+# ac-strikes.slice. DEV ONLY: the feed refuses unless AC_ENVIRONMENT is development.
+# Installed by install-sandbox-feed.sh; see scripts/sandbox_feed/README.md.
+[Unit]
+Description=Dev AC Sales Sandbox live feed (one tick, dev only)
+After=network-online.target ac-dev-live-api.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Slice=ac-strikes.slice
+User=10001
+Group=10001
+RuntimeDirectory=ac-dev-sandbox-feed
+EnvironmentFile=/etc/authority-closers/development/api-live.env
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WorkingDirectory=/
+# The dev-live API's active build slot is root-only: read it as root, hand the path over.
+ExecStartPre=+/usr/local/lib/ac-dev-sandbox-feed/python-path /run/ac-dev-sandbox-feed/python
+ExecStart=/bin/sh -c 'exec "$(cat /run/ac-dev-sandbox-feed/python)" /usr/local/lib/ac-dev-sandbox-feed/feed.py tick --apply'
+SyslogIdentifier=ac-dev-sandbox-feed
+Nice=15
+IOSchedulingClass=idle
+CPUQuota=50%
+MemoryMax=512M
+TasksMax=32
+TimeoutStartSec=10min
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+# The same view of /srv as the dev-live API: its backend read-only, its Sales X-Ray store
+# writable (profile photos), nothing else.
+TemporaryFileSystem=/srv/authority-closers:ro
+BindReadOnlyPaths=/srv/authority-closers/development/live-backend
+BindPaths=/srv/authority-closers/sales-xray/development-live

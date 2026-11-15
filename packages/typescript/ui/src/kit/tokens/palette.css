@@ -17,6 +17,8 @@
  * - Added --lx-film-lens-outline and --lx-film-lens-fill: the Lens on film uses the
  *   board colours in both themes.
  * - Dark --lx-closing-ink is #BFD0FF (the light value is unreadable on dark surfaces).
+ * - Added --lx-home-* (owner, 14 Nov 2026): Home's owner-dashboard tones from its design-tokens.json, light and
+ *   dark, each text tone on its soft surface at 4.5:1 or more.
  * - Dark values added for --lx-info, --lx-info-soft, --lx-warning, --lx-warning-soft and
  *   --lx-hypothesis so status and inference text keep 4.5:1 in dark.
  * - --lx-info is slate in both themes (11 Oct 2026, owner: one teal accent), not blue.
@@ -114,6 +116,18 @@
   --lx-info-soft: #eceff4;
   --lx-warning: #b45309;
   --lx-warning-soft: #fff5e8;
+  /* Home's owner dashboard (owner, 14 Nov 2026, design-tokens.json): four tones, each text on its soft surface at 4.5:1+, and the selected green. */
+  --lx-home-primary: #007a58;
+  --lx-home-emerald: #006b50;
+  --lx-home-emerald-soft: #e0f5ed;
+  --lx-home-violet: #4e2cbf;
+  --lx-home-violet-soft: #eee8ff;
+  --lx-home-orange: #9b4100;
+  --lx-home-orange-soft: #fff0e1;
+  --lx-home-rose: #b3183a;
+  --lx-home-rose-soft: #fde7ee;
+  --lx-home-sky: #0b5cad;
+  --lx-home-sky-soft: #e4f0fd;
   --lx-danger: #c0261b;
   --lx-danger-soft: #fdebe9;
   --lx-danger-edge: #f3c6c1;
@@ -290,6 +304,17 @@
   --lx-info-soft: rgba(195, 199, 206, 0.12);
   --lx-warning: #f59e0b;
   --lx-warning-soft: rgba(245, 158, 11, 0.12);
+  /* Home's owner dashboard tones in dark (owner, 14 Nov 2026). */
+  --lx-home-emerald: #5ad3a6;
+  --lx-home-emerald-soft: #0f2a22;
+  --lx-home-violet: #b7a4ff;
+  --lx-home-violet-soft: #221a44;
+  --lx-home-orange: #ffb072;
+  --lx-home-orange-soft: #34210f;
+  --lx-home-rose: #ff8da5;
+  --lx-home-rose-soft: #3a1421;
+  --lx-home-sky: #8cc4ff;
+  --lx-home-sky-soft: #13253d;
   --lx-danger: #f97066;
   --lx-danger-soft: rgba(249, 112, 102, 0.12);
   --lx-gradient-brand: linear-gradient(
@@ -361,6 +386,17 @@
   --lx-info-soft: #eceff4;
   --lx-warning: #b45309;
   --lx-warning-soft: #fff5e8;
+  /* Home's tones, light (owner, 14 Nov 2026). */
+  --lx-home-emerald: #006b50;
+  --lx-home-emerald-soft: #e0f5ed;
+  --lx-home-violet: #4e2cbf;
+  --lx-home-violet-soft: #eee8ff;
+  --lx-home-orange: #9b4100;
+  --lx-home-orange-soft: #fff0e1;
+  --lx-home-rose: #b3183a;
+  --lx-home-rose-soft: #fde7ee;
+  --lx-home-sky: #0b5cad;
+  --lx-home-sky-soft: #e4f0fd;
   --lx-danger: #c0261b;
   --lx-danger-soft: #fdebe9;
   --lx-ring-focus: 0 0 0 2px var(--lx-surface), 0 0 0 4px var(--lx-teal);

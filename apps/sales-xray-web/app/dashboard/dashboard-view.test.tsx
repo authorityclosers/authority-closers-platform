@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+process.env.NEXT_PUBLIC_SX_SANDBOX_CARD = "1"; // the card is off on Home (owner, 15 Nov 2026); these tests keep it working
 import { act, StrictMode, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";

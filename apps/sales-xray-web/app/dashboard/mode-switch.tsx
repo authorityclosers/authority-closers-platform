@@ -23,9 +23,13 @@ const MODES: { key: HomeMode; label: string; icon: typeof UsersRound }[] = [
 export function ModeSwitch({
   value,
   onChange,
+  look,
 }: {
   value: HomeMode;
   onChange: (next: HomeMode) => void;
+  /** home: the owner's chosen Home (01_Home.png, 14 Nov 2026), a green
+   *  thumb with white words and filled icons. */
+  look?: "home";
 }) {
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   // The stretch plays on a move, not when the page opens.
@@ -52,6 +56,7 @@ export function ModeSwitch({
       role="radiogroup"
       aria-label="Home for"
       data-value={value}
+      data-look={look}
       onKeyDown={onKey}
     >
       <span className={styles.thumb} aria-hidden="true">
@@ -78,7 +83,11 @@ export function ModeSwitch({
             className={styles.option}
             onClick={() => pick(mode.key)}
           >
-            <Icon size={16} aria-hidden="true" />
+            <Icon
+              size={16}
+              fill={look === "home" ? "currentColor" : "none"}
+              aria-hidden="true"
+            />
             {mode.label}
           </button>
         );

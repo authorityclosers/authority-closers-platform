@@ -398,3 +398,33 @@
   color: var(--sx-ink-2);
   font-variant-numeric: tabular-nums;
 }
+
+/* Home's finish on Growth (owner, 15 Nov 2026): the period as Home's pill, a
+   sunken well and the glossy green thumb. */
+.page > [role="group"][aria-label="Performance for"] {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  border: var(--sx-well-edge);
+  background: var(--sx-well-fill);
+  box-shadow: var(--sx-well-depth);
+}
+
+.page > [role="group"][aria-label="Performance for"] > span {
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+}
+
+.page > [role="group"][aria-label="Performance for"] > button {
+  color: var(--sx-ink-2);
+  font-weight: 650;
+  transition: color 160ms ease-out 120ms;
+}
+
+.page
+  > [role="group"][aria-label="Performance for"]
+  > button[aria-pressed="true"] {
+  color: var(--sx-gloss-ink);
+  font-weight: 750;
+}

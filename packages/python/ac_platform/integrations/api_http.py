@@ -16,12 +16,32 @@ Base address: ``https://<sales x-ray host>/v1/api``.
                             Sales X-Ray, with a person.
 - POST /leads               add a lead; the same ``external_id`` again changes nothing
                             (leads:write). An app's lead shows the app's name as its source.
+- POST /leads/imports       up to 10,000 leads at once, filed in the background through the
+                            app's own file import; ``Idempotency-Key`` (leads:write;
+                            integrations/lead_imports.py)
+- GET  /leads/imports       recent imports; /leads/imports/{id} where one stands;
+                            /leads/imports/{id}/rows each row's outcome (leads:write)
 - PATCH /leads/{id}         change a lead's name, company, city, interest or language, as
                             an AI write with Undo (leads:update; the owner's switch decides)
+- POST /leads/{id}/stage    move a lead to another stage with the reason, as an AI write
+                            with Undo; Won, Lost and Junk wait for a person (leads:stage;
+                            the owner's switch decides)
 - POST /calls               a recording for the connected person to add to their calls;
                             it waits for them, nothing is analysed (calls:write; see
                             integrations/app_uploads.py)
 - GET  /calls/uploads/{id}  what became of one (calls:write)
+- GET  /tasks               open tasks, as the app's Tasks list shows them: overdue, today
+                            or upcoming, and how many of each; ``person`` for an owner or
+                            admin (leads:read)
+- POST /tasks/{id}/done     mark a task on a lead done, as an AI write with Undo (reopens it)
+- POST /tasks/{id}/snooze   snooze a task on a lead (15m, 1h, evening, tomorrow, week), as
+                            an AI write with Undo (puts its due back) (leads:tasks; the
+                            owner's switch for tasks decides both)
+- GET  /analysis-time       the workspace's analysis time: given, used and left, and the
+                            longest call (calls:read; time only, never a price;
+                            integrations/analysis_time.py)
+- GET  /analysis-time/team  the same, and what each member used of it (calls:read; an
+                            organisation's key, or its owners and admins)
 
 Who sees what:
 - An API key, or a token from an app an organisation connected, sees what an
@@ -58,15 +78,22 @@ from ac_platform.call_data import facts as call_facts
 from ac_platform.call_data.models import CallObject
 from ac_platform.http.rate_limits import InMemoryTokenBucketLimiter, RateLimitRule
 from ac_platform.http.routes import RouteContext
-from ac_platform.integrations import app_uploads, keys, oauth, tiers
+from ac_platform.integrations import analysis_time, app_uploads, keys, lead_imports, oauth, tiers
 from ac_platform.integrations.ai_writes import AiWriteError, AiWrites, Door
 from ac_platform.integrations.models import IntegrationOAuthClient
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.lead_desk import duplicate_queue
-from ac_platform.lead_desk.contracts import LeadPage, LeadRow, TaskKind
+from ac_platform.lead_desk.contracts import (
+    LeadPage,
+    LeadRow,
+    TaskBucket,
+    TaskKind,
+    TaskSnoozeChoice,
+)
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.journey import pipelines
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer
+from ac_platform.lead_desk.tasks import TaskBook
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
 from ac_platform.tenancy.roles import ORG_ROLES, READ_ONLY_ROLES, can
 
@@ -122,6 +149,35 @@ class LeadUpdateBody(BaseModel):
     expected_revision: int | None = Field(default=None, ge=1)
     request_id: str = Field(min_length=8, max_length=80)
     preview: bool = False
+
+
+class StageBody(BaseModel):
+    """An app moves a lead to another stage, with the reason (ai-writes.md, "stage")."""
+
+    model_config = ConfigDict(extra="forbid")
+    step: str = Field(min_length=1, max_length=40)
+    reason: str = Field(min_length=1, max_length=500)
+    # What the stage list asks for on some stages (for example why a talk is incomplete).
+    reason_code: str | None = Field(default=None, min_length=1, max_length=40)
+    next_action_at: AwareDatetime | None = None
+    expected_revision: int | None = Field(default=None, ge=1)
+    request_id: str = Field(min_length=8, max_length=80)
+    preview: bool = False
+
+
+class TaskDoneBody(BaseModel):
+    """An app marks a task on a lead done (ai-writes.md: leads:tasks)."""
+
+    model_config = ConfigDict(extra="forbid")
+    expected_revision: int | None = Field(default=None, ge=1)
+    request_id: str = Field(min_length=8, max_length=80)
+    preview: bool = False
+
+
+class TaskSnoozeBody(TaskDoneBody):
+    """An app snoozes a task on a lead, by one of the app's own choices."""
+
+    choice: TaskSnoozeChoice
 
 
 class UndoBody(BaseModel):
@@ -218,8 +274,11 @@ class Reader:
         tier: tiers.Tier | None = None,
         platform: tiers.Platform | None = None,
         resource: str | None = None,
+        settings: Any = None,
     ) -> None:
         self.session, self.caller, self.base = session, caller, base
+        # The server's settings, for reads composed as the app composes them.
+        self.settings = settings
         # The origin the caller reached (app, API or MCP host): its own resource metadata.
         self.resource = resource or base
         self.environment = environment
@@ -547,6 +606,59 @@ class Reader:
             )
         )
 
+    async def tasks(self, view: str = "today", person: UUID | None = None) -> dict[str, Any]:
+        """Open tasks as the app's Tasks list shows them (call-backs live in To Call):
+        overdue, today or upcoming, with how many of each. ``person``: an owner's or
+        admin's look at a seller's list (the desk's own check)."""
+        self.require("leads:read")
+        if view not in ("overdue", "today", "upcoming"):
+            raise ApiError(422, "view", "view is overdue, today or upcoming.")
+        bucket: TaskBucket = view  # type: ignore[assignment]
+        try:
+            listing = await TaskBook(self._desk()).listing(bucket, person)
+        except DeskError as error:
+            raise ApiError(error.status, "lead_desk", str(error)) from None
+        result: dict[str, Any] = listing.model_dump(mode="json", by_alias=True)
+        return result
+
+    async def task_done(self, task_id: UUID, body: TaskDoneBody) -> tuple[dict[str, Any], int]:
+        writes = await self._writes()
+        return await self._write(
+            writes.task_done(
+                task_id,
+                request_id=body.request_id,
+                expected_revision=body.expected_revision,
+                preview=body.preview,
+            )
+        )
+
+    async def task_snooze(self, task_id: UUID, body: TaskSnoozeBody) -> tuple[dict[str, Any], int]:
+        writes = await self._writes()
+        return await self._write(
+            writes.task_snooze(
+                task_id,
+                body.choice,
+                request_id=body.request_id,
+                expected_revision=body.expected_revision,
+                preview=body.preview,
+            )
+        )
+
+    async def move_stage(self, lead_id: UUID, body: StageBody) -> tuple[dict[str, Any], int]:
+        writes = await self._writes()
+        return await self._write(
+            writes.stage(
+                lead_id,
+                body.step,
+                reason=body.reason,
+                reason_code=body.reason_code,
+                next_action_at=body.next_action_at,
+                expected_revision=body.expected_revision,
+                request_id=body.request_id,
+                preview=body.preview,
+            )
+        )
+
     async def changes(self, lead_id: UUID | None = None) -> dict[str, Any]:
         writes = await self._writes()
         answer, _ = await self._write(writes.changes(lead_id=lead_id))
@@ -556,6 +668,51 @@ class Reader:
         writes = await self._writes()
         answer, _ = await self._write(writes.undo(change_id, request_id=body.request_id))
         return answer
+
+    async def analysis_time(self, *, team: bool = False) -> dict[str, Any]:
+        """The workspace's analysis time (and, for ``team``, each member's share), read as
+        the app reads it. Time only, never a price; names, never emails."""
+        self.require("calls:read")
+        settings = self.settings
+        tenant_id = self.key.tenant_id
+        if settings is None or tenant_id == settings.operations_tenant_id:
+            raise ApiError(
+                404, "not_available", "Analysis time is kept for Sales X-Ray workspaces."
+            )
+        if team:
+            if self.caller.personal_workspace:
+                raise ApiError(403, "organisation_only", "A team's time is kept in organisations.")
+            if self.caller.reach == "person" and self.caller.role not in {"owner", "admin"}:
+                raise ApiError(
+                    403,
+                    "not_manager",
+                    "Your organisation's owner or admin sees its team's analysis time.",
+                )
+            read = analysis_time.team
+        else:
+            read = analysis_time.left
+        return await read(
+            self.session,
+            settings,
+            tenant_id=tenant_id,
+            person_id=self.key.acting_person_id,
+            now=datetime.now(UTC),
+        )
+
+    async def import_door(self) -> lead_imports.Door:
+        """Who an import is from: this key or app connection, acting as its person, with the
+        Lead Desk role it reaches (an organisation's key acts as its owner)."""
+        self.require("leads:write")
+        self._desk()  # leads are kept in organisations, not Personal
+        name = await self.app_name()
+        return lead_imports.Door(
+            via="connection" if name is not None else "key",
+            door_id=self.key.key_id,
+            tenant_id=self.key.tenant_id,
+            acting_person_id=self.key.acting_person_id,
+            role="owner" if self.caller.reach == "organisation" else (self.caller.role or "member"),
+            label=name or f"API key {self.key.prefix}",
+        )
 
     async def add_lead(self, body: NewLeadBody) -> tuple[dict[str, Any], int]:
         self.require("leads:write")
@@ -665,6 +822,7 @@ def make_opener(ctx: RouteContext) -> Any:
                 tier=tier,
                 platform=platform,
                 resource=settings.sales_xray_host_origin(request.url.hostname),
+                settings=settings,
             )
 
     return open_reader
@@ -717,6 +875,69 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
         async with open_reader(request) as reader:
             return done(await reader.leads(stage, offset, limit))
 
+    # Many leads at once (integrations/lead_imports.py). Before /leads/{lead_id}, which
+    # would take "imports" for an id.
+    def refused(refusal: lead_imports.ImportRefused) -> ApiError:
+        return ApiError(refusal.status, refusal.code, refusal.message)
+
+    @router.post("/leads/imports")
+    async def import_leads(body: lead_imports.ImportBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            door = await reader.import_door()
+            try:
+                answer, status = await lead_imports.create(
+                    reader.session,
+                    door,
+                    body,
+                    idempotency_key=request.headers.get("idempotency-key"),
+                )
+            except lead_imports.ImportRefused as refusal:
+                raise refused(refusal) from None
+            return done(answer, status)
+
+    @router.get("/leads/imports")
+    async def lead_import_list(request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            door = await reader.import_door()
+            return done(
+                await lead_imports.recent(reader.session, door, every_door=reader.caller.sees_team)
+            )
+
+    async def one_import(reader: Reader, import_id: UUID) -> Any:
+        door = await reader.import_door()
+        job = await lead_imports.find(
+            reader.session, door, import_id, every_door=reader.caller.sees_team
+        )
+        if job is None:
+            raise ApiError(404, "import_missing", "No such import here.")
+        return job
+
+    @router.get("/leads/imports/{import_id}")
+    async def lead_import(import_id: UUID, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            job = await one_import(reader, import_id)
+            return done(await lead_imports.view(reader.session, job))
+
+    @router.get("/leads/imports/{import_id}/rows")
+    async def lead_import_rows(
+        import_id: UUID,
+        request: Request,
+        outcome: str | None = Query(default=None, max_length=16),
+        after: int = Query(default=-1, ge=-1, le=lead_imports.MAX_ROWS),
+        limit: int = Query(default=lead_imports.ROWS_PAGE, ge=1, le=lead_imports.ROWS_PAGE),
+    ) -> JSONResponse:
+        """Each row's outcome, ``limit`` at a time; ``after`` is the last row seen."""
+        async with open_reader(request) as reader:
+            job = await one_import(reader, import_id)
+            try:
+                return done(
+                    await lead_imports.rows(
+                        reader.session, job, outcome=outcome, after=after, limit=limit
+                    )
+                )
+            except lead_imports.ImportRefused as refusal:
+                raise refused(refusal) from None
+
     @router.get("/leads/{lead_id}")
     async def lead(lead_id: UUID, request: Request) -> JSONResponse:
         async with open_reader(request) as reader:
@@ -755,6 +976,31 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
     async def update_lead(lead_id: UUID, body: LeadUpdateBody, request: Request) -> JSONResponse:
         async with open_reader(request) as reader:
             answer, status = await reader.update_lead(lead_id, body)
+            return done(answer, 200 if status == 201 else status)
+
+    @router.get("/tasks")
+    async def tasks(
+        request: Request, view: str = "today", person: UUID | None = None
+    ) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.tasks(view, person))
+
+    @router.post("/tasks/{task_id}/done")
+    async def task_done(task_id: UUID, body: TaskDoneBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            answer, status = await reader.task_done(task_id, body)
+            return done(answer, 200 if status == 201 else status)
+
+    @router.post("/tasks/{task_id}/snooze")
+    async def task_snooze(task_id: UUID, body: TaskSnoozeBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            answer, status = await reader.task_snooze(task_id, body)
+            return done(answer, 200 if status == 201 else status)
+
+    @router.post("/leads/{lead_id}/stage")
+    async def move_stage(lead_id: UUID, body: StageBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            answer, status = await reader.move_stage(lead_id, body)
             return done(answer, 200 if status == 201 else status)
 
     # Recordings an app sends for its person (integrations/app_uploads.py).
@@ -825,6 +1071,16 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
                 raise ApiError(404, "upload_missing", "No such recording from this connection.")
             return done(app_uploads.upload_view(found, upload_base))
 
+    @router.get("/analysis-time")
+    async def analysis_left(request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.analysis_time())
+
+    @router.get("/analysis-time/team")
+    async def analysis_team(request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.analysis_time(team=True))
+
     @router.get("/changes")
     async def changes(request: Request, lead_id: UUID | None = None) -> JSONResponse:
         async with open_reader(request) as reader:
@@ -838,3 +1094,10 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
             return done(await reader.undo_change(change_id, body or UndoBody()))
 
     application.include_router(router)
+    # The importer files waiting chunks in the background (servers only).
+    lead_imports.attach(
+        application,
+        ctx.sessions,
+        ctx.settings.environment,
+        app_url=str(ctx.settings.sales_xray_app_url or "").rstrip("/"),
+    )

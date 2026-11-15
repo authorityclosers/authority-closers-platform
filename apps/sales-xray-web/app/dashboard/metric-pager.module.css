@@ -1,11 +1,61 @@
-/* Home's metric pages: on a phone one page per swipe, momentum from the
-   platform, dots right under the cards; from 1024 px every page at once
-   (owner, 31 Oct 2026). The track clips its own overflow; the page never
+/* Home's metric pages (the owner's approved Home, 14 Nov 2026: 01_Home.png, 02_Calls.png, 03_Speed.png): named tabs
+   with a three-position indicator over the cards; on a phone one page per swipe, momentum from the platform, the
+   tabs following the swipe; from 1024 px every page at once. The track clips its own overflow; the page never
    scrolls sideways. */
 .pager {
   display: grid;
   gap: 10px;
   min-width: 0;
+}
+
+/* Leads / Calls / Speed: equal thirds, the selected one green with its bar. Tap or swipe move the same state. */
+.tabs {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 8px;
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 6px 0 0;
+  border: 0;
+  background: none;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  line-height: var(--sx-leading-20);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tab i {
+  display: block;
+  width: 100%;
+  height: 3px;
+  border-radius: var(--sx-radius-pill);
+  background: color-mix(in oklab, var(--sx-ink) 14%, transparent);
+  transition: background-color var(--sx-dur-base) var(--sx-ease-out);
+}
+
+.tab[aria-selected="true"] {
+  color: var(--lx-home-emerald);
+  font-weight: 800;
+}
+
+.tab[aria-selected="true"] i {
+  background: var(--lx-home-emerald);
+}
+
+.tab:focus-visible {
+  outline: none;
+  border-radius: 10px;
+  box-shadow: var(--sx-focus-ring);
 }
 
 .track {
@@ -45,54 +95,12 @@
   font-weight: 650;
 }
 
-/* The dots: the current page is a short pill. Each is a 44 px target (QA,
-   31 Oct 2026); the row sits close under the cards all the same. */
-.dots {
-  display: flex;
-  justify-content: center;
-  margin: -14px 0 -12px;
-}
-
-.dot {
-  position: relative;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-.dot::before {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--sx-ink) 22%, transparent);
-  content: "";
-  transform: translate(-50%, -50%);
-  transition:
-    width var(--sx-dur-base) var(--sx-spring),
-    background-color var(--sx-dur-base) var(--sx-ease-out);
-}
-
-.dot[aria-selected="true"]::before {
-  width: 18px;
-  background: var(--sx-accent);
-}
-
-.dot:focus-visible {
-  outline: none;
-  box-shadow: var(--sx-focus-ring);
-}
-
-/* The figures: soft glass, two a row on a phone. */
+/* The cards: header (icon, name, chevron), the number on its own row, what it means, and its action, in every
+   card the same. Each card is one tap to the list it counts; a card with no list yet has no action. */
 .more {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -104,28 +112,43 @@
 }
 
 .figure {
-  display: grid;
-  align-content: space-between;
-  gap: 4px;
+  --tone: var(--lx-home-emerald);
+  --tone-soft: var(--lx-home-emerald-soft);
+
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  min-height: 96px;
   box-sizing: border-box;
-  padding: 14px 16px;
-  border: 1px solid color-mix(in oklab, var(--sx-ink) 7%, transparent);
-  border-radius: 20px;
-  background: color-mix(in oklab, var(--sx-surface) 74%, transparent);
+  padding: 12px 10px;
+  border: 1px solid color-mix(in oklab, var(--tone) 14%, transparent);
+  border-radius: 18px;
+  background: linear-gradient(
+    165deg,
+    var(--tone-soft) 0%,
+    color-mix(in oklab, var(--tone-soft) 40%, var(--sx-surface)) 100%
+  );
   box-shadow:
-    inset 0 1px 0 color-mix(in oklab, var(--sx-surface) 90%, transparent),
-    0 1px 2px color-mix(in oklab, var(--sx-ink) 5%, transparent),
-    0 12px 28px -18px color-mix(in oklab, var(--sx-ink) 28%, transparent);
+    0 1px 2px color-mix(in oklab, var(--sx-ink) 4%, transparent),
+    0 8px 20px -14px color-mix(in oklab, var(--sx-ink) 22%, transparent);
   color: var(--sx-ink);
   text-decoration: none;
-  backdrop-filter: blur(18px) saturate(1.4);
-  -webkit-backdrop-filter: blur(18px) saturate(1.4);
-  transition:
-    transform var(--sx-dur-fast) var(--sx-ease-out),
-    box-shadow var(--sx-dur-fast) var(--sx-ease-out);
+  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
   -webkit-tap-highlight-color: transparent;
+}
+
+.figure[data-tone="violet"] {
+  --tone: var(--lx-home-violet);
+  --tone-soft: var(--lx-home-violet-soft);
+}
+
+.figure[data-tone="orange"] {
+  --tone: var(--lx-home-orange);
+  --tone-soft: var(--lx-home-orange-soft);
+}
+
+.figure[data-tone="rose"] {
+  --tone: var(--lx-home-rose);
+  --tone-soft: var(--lx-home-rose-soft);
 }
 
 a.figure:active {
@@ -140,15 +163,12 @@ a.figure:focus-visible {
 @media (hover: hover) {
   a.figure:hover {
     transform: translateY(-1px);
-    box-shadow:
-      inset 0 1px 0 color-mix(in oklab, var(--sx-surface) 90%, transparent),
-      0 2px 4px color-mix(in oklab, var(--sx-ink) 6%, transparent),
-      0 16px 32px -18px color-mix(in oklab, var(--sx-ink) 34%, transparent);
   }
 }
 
-/* Swiped in: the figures rise, one after another. */
-.page[data-active] .figure {
+/* First paint only: the cards rise once, one after another; never again on a
+   swipe or a tab tap (motion-research-2.md). */
+.page .figure {
   animation: figure-rise var(--sx-dur-page) var(--sx-ease-out) both;
   animation-delay: calc(var(--i, 0) * 45ms);
 }
@@ -165,37 +185,106 @@ a.figure:focus-visible {
   }
 }
 
+.figHead {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 6px;
+}
+
+div.figure .figHead,
+button.figure .figHead {
+  grid-template-columns: 24px minmax(0, 1fr);
+}
+
+.figIcon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--tone) 14%, var(--sx-surface));
+  color: var(--tone);
+}
+
+.figIcon svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2;
+}
+
 .figureLabel {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
-  color: var(--sx-muted);
-  font-size: var(--sx-text-sm);
-  font-weight: 650;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-xs);
+  font-weight: 750;
+  line-height: var(--sx-leading-16);
+}
+
+.figureLabel > span {
+  min-width: 0;
+  letter-spacing: -0.01em;
+  overflow-wrap: break-word;
+}
+
+/* Something to act on: a red mark on the icon's corner, so the name keeps
+   its whole line. */
+.figure[data-red] .figIcon::after {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--lx-home-rose);
+  box-shadow: 0 0 0 2px var(--sx-surface);
+  content: "";
+}
+
+.figChevron {
+  width: 14px;
+  height: 14px;
+  color: var(--sx-ink);
+}
+
+/* The number left, what it means right-aligned beside it; a number too long
+   for both puts its meaning under it. */
+.figValue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px 10px;
+  min-height: 40px;
+  margin-top: 12px;
+}
+
+.figValue .figureNote {
+  flex: 1 1 56px;
+  max-width: 62%;
+  margin-left: auto;
+  text-align: right;
 }
 
 .figure strong {
+  margin-top: 0;
   color: var(--sx-ink);
   font-size: var(--sx-text-2xl);
-  font-weight: 750;
+  font-weight: 800;
   letter-spacing: -0.02em;
   line-height: var(--sx-leading-36);
   font-variant-numeric: tabular-nums;
 }
 
-.figure[data-red] strong {
-  color: var(--sx-bad);
-}
-
-.figure[data-red] .figureLabel::after {
-  width: 7px;
-  height: 7px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--sx-bad);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--sx-bad) 18%, transparent);
-  content: "";
+.unit {
+  margin: 0 4px 0 2px;
+  font-size: var(--sx-text-md);
+  font-weight: 750;
 }
 
 .figure strong[aria-busy] {
@@ -207,13 +296,38 @@ a.figure:focus-visible {
 
 .figureNote {
   color: var(--sx-muted);
-  font-size: var(--sx-text-xs);
+  font-size: var(--sx-text-2xs);
+  line-height: var(--sx-leading-16);
+}
+
+.figAction {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 32px;
+  margin-top: 10px;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--tone) 12%, var(--sx-surface));
+  color: var(--tone);
+  font-size: var(--sx-text-2xs);
+  font-weight: 750;
+  line-height: var(--sx-leading-16);
+}
+
+.figAction svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* A computer: no slider; every page is a titled row of four. */
 @media (min-width: 1024px) {
   .pager {
     gap: 0;
+  }
+
+  .tabs {
+    display: none;
   }
 
   .track {
@@ -228,26 +342,22 @@ a.figure:focus-visible {
     display: block;
   }
 
-  .dots {
-    display: none;
-  }
-
   .more {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 16px;
   }
 
-  .page[data-active] .figure {
+  .page .figure {
     animation: none;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .page[data-active] .figure {
+  .page .figure {
     animation: none;
   }
 
-  .dot::before,
+  .tab i,
   .figure {
     transition: none;
   }
@@ -255,5 +365,328 @@ a.figure:focus-visible {
   a.figure:hover,
   a.figure:active {
     transform: none;
+  }
+}
+
+/* A figure with no page of its own yet (Speed): the whole card says how it's
+   counted, with the same foot as the others, so every page's cards share one
+   shape (owner, 15 Nov 2026: Speed's empty bottom left). */
+button.figure {
+  width: 100%;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button.figure:active {
+  transform: scale(0.98);
+}
+
+button.figure:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.explain {
+  --tone: var(--lx-home-emerald);
+
+  display: grid;
+  gap: 12px;
+}
+
+.explain[data-tone="violet"] {
+  --tone: var(--lx-home-violet);
+}
+
+.explain[data-tone="orange"] {
+  --tone: var(--lx-home-orange);
+}
+
+.explain[data-tone="rose"] {
+  --tone: var(--lx-home-rose);
+}
+
+.explainValue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.explainValue strong {
+  color: var(--tone);
+  font-size: var(--sx-text-2xl);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.explainHow {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+/* The pager's motion (owner, 15 Nov 2026: "the sliding animation ... is very
+   boring"; Material's scrollable tabs). One green bar slides under the tabs with
+   the finger; each tab's own line stays a quiet track. The pages ease in depth
+   as they pass, on the browser's scroll timeline. */
+.tabs {
+  position: relative;
+}
+
+.tab {
+  transition: color 160ms ease-out;
+}
+
+.tab i,
+.tab[aria-selected="true"] i {
+  background: color-mix(in oklab, var(--sx-ink) 14%, transparent);
+}
+
+.tabBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: calc((100% - (var(--pages) - 1) * 8px) / var(--pages));
+  height: 3px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-home-emerald);
+  transform: translateX(calc(var(--pager-at, 0) * (100% + 8px)));
+  pointer-events: none;
+}
+
+@supports (animation-timeline: view()) {
+  .page {
+    animation: page-depth linear both;
+    animation-timeline: view(inline);
+  }
+}
+
+@keyframes page-depth {
+  0% {
+    opacity: 0.4;
+    transform: scale(0.94);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0.4;
+    transform: scale(0.94);
+  }
+}
+
+@media (min-width: 1024px) {
+  .tabBar {
+    display: none;
+  }
+
+  .page {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page {
+    animation: none;
+  }
+
+  .tab {
+    transition: none;
+  }
+}
+
+/* Pager motion, round 2 (motion-research-2.md section 1). The bar stretches
+   mid-swipe as Material's elastic indicator does (width from the script); the
+   entering page's cards trail it by 12-30 px and fade .5 -> 1, settling with the
+   page. */
+.tabBar {
+  transform: translateX(calc(var(--pager-ink-x, 0) * (100% + 8px)))
+    scaleX(var(--pager-ink, 1));
+  transform-origin: left center;
+}
+
+@supports (animation-timeline: view()) {
+  .page {
+    animation: none;
+    view-timeline: --pager-page inline;
+  }
+
+  .more .figure > * {
+    animation: card-depth linear both;
+    animation-timeline: --pager-page;
+  }
+}
+
+@keyframes card-depth {
+  entry 0% {
+    opacity: 0.92;
+    translate: 0 6px;
+  }
+
+  entry 100%,
+  exit 0% {
+    opacity: 1;
+    translate: 0 0;
+  }
+
+  exit 100% {
+    opacity: 0.92;
+    translate: 0 -4px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .more .figure > * {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .more .figure > * {
+    animation: none;
+  }
+}
+
+/* owner 15 Nov: Leads | Calls | Speed in the same language as Inbound | Cold and the
+   tiles above. One segmented pill: a sunken well, a glossy green thumb that follows the
+   swipe 1:1 (--pager-at) and glides on a tap; no per-tab lines. Cards are tiles. */
+.tabs {
+  position: relative;
+  gap: 0;
+  padding: 4px;
+  border: 0.5px solid color-mix(in oklab, var(--sx-ink) 10%, transparent);
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--sx-ink) 7%, var(--sx-elevated)),
+    color-mix(in oklab, var(--sx-ink) 3%, var(--sx-elevated))
+  );
+  box-shadow:
+    inset 0 1px 2px color-mix(in oklab, var(--lx-film) 12%, transparent),
+    0 1px 0 color-mix(in oklab, white 80%, transparent);
+}
+.tab {
+  position: relative;
+  z-index: 1;
+  flex-direction: row;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 999px;
+  color: var(--sx-ink-2);
+  font-weight: 700;
+  transition:
+    color 220ms ease-out,
+    transform 140ms ease-out;
+}
+.tab:active {
+  transform: scale(0.97);
+}
+.tab i {
+  display: none;
+}
+.tab[aria-selected="true"] {
+  color: white;
+  font-weight: 800;
+}
+.tabBar {
+  display: block !important;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc((100% - 8px) / var(--pages));
+  height: auto;
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, white 14%, var(--lx-home-primary)),
+    var(--lx-home-primary) 60%,
+    color-mix(in oklab, black 10%, var(--lx-home-primary))
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 35%, transparent),
+    inset 0 -1px 0 color-mix(in oklab, black 18%, transparent),
+    0 2px 4px color-mix(in oklab, var(--lx-home-primary) 30%, transparent),
+    0 8px 16px -8px color-mix(in oklab, var(--lx-home-primary) 55%, transparent);
+  transform: translateX(calc(var(--pager-at, 0) * 100%)) !important;
+  will-change: transform;
+}
+
+/* the cards: tiles with the same finish as the summary above */
+.figure {
+  border: 0.5px solid color-mix(in oklab, var(--sx-ink) 9%, transparent) !important;
+  border-radius: 22px !important;
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    0 1px 1px color-mix(in oklab, var(--lx-film) 5%, transparent),
+    0 4px 10px -2px color-mix(in oklab, var(--lx-film) 7%, transparent),
+    0 14px 28px -18px color-mix(in oklab, var(--lx-film) 22%, transparent) !important;
+  transition:
+    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 160ms;
+}
+.figure:active {
+  transform: translateY(1px) scale(0.985);
+}
+.figAction {
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 color-mix(in oklab, white 60%, transparent);
+}
+/* pages slide in softly as they arrive */
+.page[data-active] .figure {
+  animation: figIn 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.page[data-active] li:nth-child(2) .figure {
+  animation-delay: 50ms;
+}
+.page[data-active] li:nth-child(3) .figure {
+  animation-delay: 90ms;
+}
+.page[data-active] li:nth-child(4) .figure {
+  animation-delay: 130ms;
+}
+@keyframes figIn {
+  from {
+    opacity: 0.4;
+    transform: translateY(6px) scale(0.99);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page[data-active] .figure {
+    animation: none;
+  }
+  .tab {
+    transition: none;
+  }
+}
+
+/* owner 15 Nov: no box behind the cards; room for their shadows inside the swipe area */
+.track,
+.page {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.track {
+  padding: 4px 4px 22px;
+  margin: -4px -4px -22px;
+  scroll-padding-inline: 4px;
+}
+
+/* A 16 px seam between pages on a phone (design-research piece 04): mid-swipe,
+   two pages read as two pages. */
+@media (max-width: 1023px) {
+  .track {
+    column-gap: 16px;
   }
 }

@@ -1,0 +1,25 @@
+#!/bin/sh
+# One-off run of the dev sandbox feed (setup, backfill, night, read, or a tick by hand), the
+# same way the timer runs it: uid 10001, the dev-live API's env and interpreter,
+# ac-strikes.slice, nice and idle IO, logs to journald (ac-dev-sandbox-feed) and stdout.
+#   sudo ac-dev-sandbox-feed setup --apply
+#   sudo ac-dev-sandbox-feed backfill --from=2026-11-03 --apply
+#   sudo ac-dev-sandbox-feed read
+set -eu
+[ "$(id -u)" = 0 ] || { echo "run as root" >&2; exit 77; }
+slot=$(cat /var/lib/ac-dev-live-backend/active-slot)
+case "$slot" in a|b) ;; *) echo "unknown slot" >&2; exit 1 ;; esac
+python=/srv/authority-closers/development/live-backend/$slot/.venv/bin/python
+exec systemd-run --quiet --wait --pipe --collect \
+  --unit="ac-dev-sandbox-feed-manual-$(date +%s)" \
+  -p Slice=ac-strikes.slice -p User=10001 -p Group=10001 \
+  -p EnvironmentFile=/etc/authority-closers/development/api-live.env \
+  -p Environment="PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1" \
+  -p WorkingDirectory=/ -p Nice=15 -p IOSchedulingClass=idle -p CPUQuota=50% \
+  -p MemoryMax=768M -p UMask=0077 -p NoNewPrivileges=yes -p PrivateTmp=yes \
+  -p ProtectSystem=strict -p ProtectHome=yes \
+  -p TemporaryFileSystem=/srv/authority-closers:ro \
+  -p BindReadOnlyPaths=/srv/authority-closers/development/live-backend \
+  -p BindPaths=/srv/authority-closers/sales-xray/development-live \
+  -p SyslogIdentifier=ac-dev-sandbox-feed \
+  "$python" /usr/local/lib/ac-dev-sandbox-feed/feed.py "$@"

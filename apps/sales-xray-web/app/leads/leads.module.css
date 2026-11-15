@@ -8333,3 +8333,164 @@ fieldset.form {
   outline: none;
   box-shadow: inset 0 0 0 2px var(--sx-accent);
 }
+
+/* The lead over Home (owner, 15 Nov 2026): nearly the whole screen, a sheet you
+   can close with its X or drag down; its ⋯ beside the X. */
+.leadOverPage {
+  --sheet-max-height: 94dvh;
+}
+.leadOverPage [class*="panel"] {
+  min-height: 88dvh;
+  max-height: 94dvh;
+}
+.leadOverMenu {
+  position: absolute;
+  top: 12px;
+  right: 60px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+}
+.leadOverMenu:empty {
+  display: none;
+}
+
+/* Home's finish on Leads (owner, 15 Nov 2026): the list is a tile, as Home's
+   cards are. */
+.listPanel {
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+}
+
+/* Home's finish on Leads, round 2 (owner, 15 Nov 2026). The work views as Home's
+   segmented pill: a sunken well, the chosen view a glossy green thumb. */
+.root [role="tablist"][aria-label="Work views"] {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 0;
+  width: 100%;
+  padding: 4px;
+  border: var(--sx-well-edge);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-well-fill);
+  box-shadow: var(--sx-well-depth);
+}
+
+.root :has(> [role="tablist"][aria-label="Work views"]) {
+  display: flex;
+  overflow: visible;
+  border-bottom: 0;
+  box-shadow: none;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.root [aria-label="Work views"] > [role="tab"] {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: none;
+  box-shadow: none;
+  color: var(--sx-ink-2);
+  font-size: min(var(--sx-text-sm), 14px);
+  font-weight: 650;
+  white-space: nowrap;
+  transition:
+    background-color 220ms,
+    box-shadow 220ms,
+    color 160ms,
+    transform 140ms ease-out;
+}
+
+.root [aria-label="Work views"] > [role="tab"]::before,
+.root [aria-label="Work views"] > [role="tab"]::after {
+  display: none;
+}
+
+.root [aria-label="Work views"] > [role="tab"] > span {
+  color: inherit;
+}
+
+.root [aria-label="Work views"] > [role="tab"][aria-selected="true"] {
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+  font-weight: 750;
+}
+
+.root [aria-label="Work views"] > [role="tab"]:active {
+  transform: var(--sx-press-sink);
+}
+
+/* The stage chips as small tiles. */
+.root [aria-label="Pipeline stage"] button[aria-pressed="false"] {
+  border: var(--sx-tile-edge);
+  background: var(--sx-tile-fill);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--lx-film) 6%, transparent);
+}
+
+/* Call and WhatsApp as Home's rounded tiles; Call in Home green. */
+.quickAct {
+  width: 44px;
+  height: 44px;
+  border: var(--sx-tile-edge);
+  border-radius: 14px;
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+  transition: transform 140ms ease-out;
+}
+
+.leadList .quickAct[data-channel="call"] {
+  border: var(--sx-tile-edge);
+  background: var(--lx-home-emerald-soft);
+  color: var(--lx-home-emerald);
+}
+
+.quickAct:active {
+  transform: var(--sx-press-sink);
+}
+
+/* Each lead's initials in one of Home's five colours, steady for that lead. */
+.leadAvatar[data-tone] > span {
+  background: var(--lx-home-emerald-soft);
+  color: var(--lx-home-emerald);
+}
+
+.leadAvatar[data-tone="1"] > span {
+  background: var(--lx-home-violet-soft);
+  color: var(--lx-home-violet);
+}
+
+.leadAvatar[data-tone="2"] > span {
+  background: var(--lx-home-orange-soft);
+  color: var(--lx-home-orange);
+}
+
+.leadAvatar[data-tone="3"] > span {
+  background: var(--lx-home-sky-soft);
+  color: var(--lx-home-sky);
+}
+
+.leadAvatar[data-tone="4"] > span {
+  background: var(--lx-home-rose-soft);
+  color: var(--lx-home-rose);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root [aria-label="Work views"] > [role="tab"],
+  .quickAct {
+    transition: none;
+  }
+}

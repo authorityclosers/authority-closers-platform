@@ -80,7 +80,8 @@ DEFAULTS: dict[str, Any] = {
         ),
         "trial": _tier(
             "Trial",
-            READ,
+            # Coaching reads come with call reads (the orchestrator, 14 Nov 2026).
+            [*READ, "coaching:read"],
             api_keys=False,
             per_minute=120,
             workspace_per_minute=240,
@@ -91,7 +92,8 @@ DEFAULTS: dict[str, Any] = {
         ),
         "personal": _tier(
             "Personal",
-            ["calls:read", "calls:write", "reports:read"],
+            # Coaching scopes ride with the call scopes (the orchestrator, 14 Nov 2026).
+            ["calls:read", "calls:write", "reports:read", "coaching:read", "coaching:write"],
             api_keys=False,
             per_minute=120,
             workspace_per_minute=240,

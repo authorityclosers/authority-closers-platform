@@ -17,6 +17,7 @@ import {
 } from "../leads/native-phone";
 import {
   FIXABLE,
+  lineDone,
   lineTodo,
   reportSetup,
   setupLines,
@@ -55,9 +56,12 @@ export function PhoneSetupPanel() {
   if (!status) return null;
   const { done, total } = setupProgress(status);
   const lines = setupLines(status);
-  const missing = lines.filter((key) => status.checks[key] !== true);
+  // Lines are done as the count says: a picked recordings folder ticks Call
+  // recordings (Redmi QA on production, 14 Nov 2026: "5 of 9 done" over a list
+  // that still had Call recordings and its Fix).
+  const missing = lines.filter((key) => !lineDone(key, status));
   const finished = lines
-    .filter((key) => status.checks[key] === true)
+    .filter((key) => lineDone(key, status))
     .map((key) => checkLabel(key, status.store));
   return (
     <Panel title="Phone setup">

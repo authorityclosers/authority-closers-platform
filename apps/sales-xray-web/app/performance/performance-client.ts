@@ -46,6 +46,8 @@ export type SideEffort = {
 export type SellerEffort = {
   person_id: string;
   name: string;
+  /** Their photo; null or absent (an older server) means initials. */
+  photo_url?: string | null;
   inbound: SideEffort;
   cold: SideEffort;
   /** The three longest gaps between calls, longest first. */
@@ -84,9 +86,11 @@ export function readEffort(
   days: EffortDays,
   signal?: AbortSignal,
   month = false,
+  /** One chosen past day for Home's date, India time ("2026-11-13"). */
+  on?: string,
 ) {
   return deskRequest<Effort>(
-    `/performance/sellers?days=${days}${month ? "&month=true" : ""}`,
+    `/performance/sellers?days=${days}${month ? "&month=true" : ""}${on ? `&on=${on}` : ""}`,
     { signal },
   );
 }

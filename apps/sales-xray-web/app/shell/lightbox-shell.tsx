@@ -26,8 +26,6 @@ import {
   UserRound,
   Users,
   UsersRound,
-  ChartColumn,
-  TrendingUp,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -79,6 +77,12 @@ import { opensInPlace } from "../settings-open";
 import { useWorkspaceAccess } from "../workspace-access";
 import { BrandLockup } from "./brand-lockup";
 import { phoneTabFor, shellActiveFor, type PhoneTab } from "./phone-nav";
+import {
+  AskDipakGlyph,
+  GrowthGlyph,
+  HomeGlyph,
+  ReportsGlyph,
+} from "./nav-glyphs";
 import { RailTip } from "./rail-tip";
 import { usePlacePrefetch, useHoverPrefetch } from "./route-prefetch";
 import { ScreenLink } from "./screen-link";
@@ -1413,6 +1417,20 @@ function LightboxShellFrame({
     !chromePending &&
     Boolean(workspaceLabel) &&
     (switchable.length > 1 || invites.invites.length > 0 || invites.live);
+  // Home on a phone wears the owner's chosen bar (01_Home.png, 14 Nov
+  // 2026): the organisation's round mark, its name on two lines (the last
+  // word bold), the switch chevron; no page title. Other pages keep theirs.
+  const homeBar = barTitle === "Home" && authenticated && !guest;
+  const homeWords = (workspaceLabel ?? "").trim().split(/\s+/);
+  const homeNameTop =
+    homeWords.length > 1 ? homeWords.slice(0, -1).join(" ") : null;
+  const homeNameLast = homeWords[homeWords.length - 1] ?? "";
+  const homeNameLines = workspaceLabel ? (
+    <span>
+      {homeNameTop ? <small>{homeNameTop}</small> : null}
+      <b>{homeNameLast}</b>
+    </span>
+  ) : null;
   const personalWorkspace = workspaces.find(
     (workspace) =>
       workspace.kind === "personal" && workspace.sales_xray_enabled,
@@ -1848,9 +1866,84 @@ function LightboxShellFrame({
         data-shell-content=""
         data-arrived={arrived ? "" : undefined}
       >
-        <header className={styles.mobileBar} data-pull-bar="">
+        <header
+          className={styles.mobileBar}
+          data-pull-bar=""
+          data-home={homeBar ? "" : undefined}
+        >
           {/* r17: the lens, then where you are: workspace over page title. */}
-          {workspaceLabel || pageTitle ? (
+          {homeBar ? (
+            <div className={styles.homeLead}>
+              {/* The organisation's mark opens the account sheet (Log
+                  out, Settings), as the face does on other pages. */}
+              <button
+                type="button"
+                className={styles.homeMark}
+                onClick={toggleAccountSheet}
+                aria-label="Account and log out"
+                aria-haspopup="dialog"
+                aria-expanded={accountCardOpen}
+                data-pending={chromePending || !shownWorkspace ? "" : undefined}
+              >
+                {chromePending ||
+                !shownWorkspace ? null : shownWorkspace.kind ===
+                  "organisation" ? (
+                  <WorkspaceTile
+                    workspace={shownWorkspace}
+                    logoUrl={
+                      branding?.tenantId === shownWorkspace.tenant_id
+                        ? branding.logoUrl
+                        : null
+                    }
+                    size="xl"
+                  />
+                ) : (
+                  <span className={styles.homeFace} aria-hidden="true">
+                    <AccountAvatarImage
+                      key={profile?.email ?? ""}
+                      photoUrl={profile?.photo_url}
+                    >
+                      {accountInitials(profileName, profile?.email ?? null) || (
+                        <UserRound size={18} />
+                      )}
+                    </AccountAvatarImage>
+                  </span>
+                )}
+              </button>
+              {/* Scrolled past Home's own rows, Home writes its scope here
+                  in the name's place (scope-row.tsx). */}
+              <span className={styles.homeTitles}>
+                {canSwitchHere ? (
+                  <button
+                    type="button"
+                    className={styles.homeName}
+                    data-home-name=""
+                    onClick={() => setWorkspaceSheetOpen(true)}
+                    aria-haspopup="dialog"
+                    aria-expanded={workspaceSheetOpen}
+                    aria-label={`Workspace: ${workspaceLabel}. Switch workspace`}
+                    title={`Workspace: ${workspaceLabel}`}
+                  >
+                    {homeNameLines}
+                    <ChevronDown
+                      size={18}
+                      strokeWidth={2.25}
+                      aria-hidden="true"
+                    />
+                  </button>
+                ) : (
+                  <span
+                    className={styles.homeName}
+                    data-home-name=""
+                    title={workspaceLabel ?? undefined}
+                  >
+                    {homeNameLines}
+                  </span>
+                )}
+                <span className={styles.homeScope} data-home-scope-slot="" />
+              </span>
+            </div>
+          ) : workspaceLabel || pageTitle ? (
             <div className={styles.mobileWorkspace}>
               {/* Signed in, your own face opens the account menu (Log out)
                   from every screen; signed out, the brand mark goes home. */}
@@ -2120,7 +2213,7 @@ function LightboxShellFrame({
           onClick={tapTab("dashboard")}
           aria-current={litTab === "dashboard" ? "page" : undefined}
         >
-          <LayoutGrid size={20} aria-hidden="true" />
+          <HomeGlyph size={20} selected={litTab === "dashboard"} />
           <span className={styles.tabPill} aria-hidden="true" />
           <span>Home</span>
         </ScreenLink>
@@ -2163,7 +2256,7 @@ function LightboxShellFrame({
             onClick={tapTab("ask")}
             aria-current={litTab === "ask" ? "page" : undefined}
           >
-            <span className={styles.askFace} aria-hidden="true" />
+            <AskDipakGlyph size={20} />
             <span className={styles.tabPill} aria-hidden="true" />
             <span>Ask Dipak</span>
           </ScreenLink>
@@ -2177,7 +2270,7 @@ function LightboxShellFrame({
             onClick={tapTab("reports")}
             aria-current={litTab === "reports" ? "page" : undefined}
           >
-            <ChartColumn size={20} aria-hidden="true" />
+            <ReportsGlyph size={20} />
             <span className={styles.tabPill} aria-hidden="true" />
             <span>{CALLS_PAGE_NAME}</span>
           </ScreenLink>
@@ -2190,7 +2283,7 @@ function LightboxShellFrame({
             onClick={tapTab("growth")}
             aria-current={litTab === "growth" ? "page" : undefined}
           >
-            <TrendingUp size={20} aria-hidden="true" />
+            <GrowthGlyph size={20} />
             <span className={styles.tabPill} aria-hidden="true" />
             <span>Growth</span>
           </ScreenLink>

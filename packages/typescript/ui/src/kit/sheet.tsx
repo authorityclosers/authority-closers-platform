@@ -89,16 +89,39 @@ function restingFrom(wide: Wide): Keyframe {
 function enter(panel: HTMLElement, scrim: HTMLElement, wide: Wide) {
   const phone = matches(SHEET_PHONE_QUERY);
   const reduce = reducedMotion();
-  play(panel, [restingFrom(wide), { transform: "none", opacity: 1 }], {
-    duration: reduce ? 160 : phone ? 460 : 320,
-    easing: reduce
-      ? "linear"
-      : easing(panel, "--sx-spring-calm", "cubic-bezier(0.32, 0.72, 0, 1)"),
-  });
-  play(scrim, [{ opacity: 0 }, { opacity: 1 }], {
-    duration: reduce ? 160 : 260,
-    easing: "linear",
-  });
+  // owner, 15 Nov 2026: every pop-up opens like Home's explain sheet. On a
+  // phone it rises with a small overshoot and settles; the page behind dims
+  // and blurs; the rows inside follow one by one (data-entering, CSS).
+  if (phone && !reduce) {
+    play(
+      panel,
+      [
+        { transform: "translate3d(0, 100%, 0) scale(0.96)", offset: 0 },
+        { transform: "translate3d(0, -1.5%, 0) scale(1.004)", offset: 0.7 },
+        { transform: "none", opacity: 1, offset: 1 },
+      ],
+      { duration: 620, easing: "cubic-bezier(0.18, 1.25, 0.32, 1)" },
+    );
+    panel.setAttribute("data-entering", "");
+    window.setTimeout(() => panel.removeAttribute("data-entering"), 700);
+  } else {
+    play(panel, [restingFrom(wide), { transform: "none", opacity: 1 }], {
+      duration: reduce ? 160 : 320,
+      easing: reduce
+        ? "linear"
+        : easing(panel, "--sx-spring-calm", "cubic-bezier(0.32, 0.72, 0, 1)"),
+    });
+  }
+  play(
+    scrim,
+    phone && !reduce
+      ? [
+          { opacity: 0, backdropFilter: "blur(0px)" },
+          { opacity: 1, backdropFilter: "blur(6px)" },
+        ]
+      : [{ opacity: 0 }, { opacity: 1 }],
+    { duration: reduce ? 160 : 360, easing: "ease-out" },
+  );
 }
 
 async function leave(panel: HTMLElement, scrim: HTMLElement, wide: Wide) {

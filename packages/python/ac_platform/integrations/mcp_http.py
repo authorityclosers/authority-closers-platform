@@ -30,18 +30,22 @@ from uuid import UUID
 from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
+from ac_platform.ask_dipak import integration as ask_dipak
 from ac_platform.http.routes import RouteContext
-from ac_platform.integrations import tiers
+from ac_platform.integrations import coaching_api, lead_imports, recordings_api, reports_api, tiers
 from ac_platform.integrations.api_http import (
     ApiError,
     NewLeadBody,
     NoteBody,
     Reader,
+    StageBody,
     TaskBody,
+    TaskDoneBody,
+    TaskSnoozeBody,
     UndoBody,
     make_opener,
 )
-from ac_platform.integrations.oauth_http import DEFAULT_SCOPES
+from ac_platform.integrations.oauth_http import connect_scopes
 from ac_platform.lead_desk.commitments import TASK_KINDS
 
 PROTOCOLS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
@@ -49,10 +53,12 @@ VERSION = "1.0.0"
 MAX_BODY = 65536
 INSTRUCTIONS = (
     "Sales X-Ray holds this person's sales calls (with reports and the facts found in "
-    "them) and their leads. List calls or leads first, then read one by its id. Quote "
+    "them) and their leads. List calls or leads first, then read one by its id; a "
+    "call's report and transcript come from get_report and get_transcript. Quote "
     "facts as Sales X-Ray gives them; withheld parts of a call are never shown. With "
     "permission, notes and tasks can be added to a lead; each shows which app sent it "
-    "and can be undone for 7 days."
+    "and can be undone for 7 days. Ask Dipak's sales lessons are here too, with the "
+    "person's Next-call missions and their after-call answers."
 )
 
 _ID = {"type": "string", "description": "The id from a list."}
@@ -161,6 +167,22 @@ TOOLS: tuple[dict[str, Any], ...] = (
         "annotations": _READS,
         "scope": "reports:read",
     },
+    # Call reports, transcripts and Saved reports (integrations/reports_api.py).
+    *reports_api.TOOLS,
+    # Coaching from those reports (integrations/coaching_api.py).
+    *coaching_api.TOOLS,
+    {
+        "name": "analysis_time",
+        "title": "Analysis time left",
+        "description": (
+            "How much call analysis time the workspace has: given, used and left, in "
+            "seconds, and the longest call it takes. Time only, never a price. With team, "
+            "also what each member used (an organisation's owners and admins)."
+        ),
+        "inputSchema": {"type": "object", "properties": {"team": {"type": "boolean"}}},
+        "annotations": _READS,
+        "scope": "calls:read",
+    },
     {
         "name": "list_leads",
         "title": "List leads",
@@ -241,6 +263,88 @@ TOOLS: tuple[dict[str, Any], ...] = (
         "scope": "leads:write",
     },
     {
+        "name": "import_leads",
+        "title": "Import many leads",
+        "description": (
+            "Imports up to 250 leads per call into Lead Desk, filed in the background exactly "
+            "like a file uploaded in the app: duplicates (same phone, or same email without "
+            "one) are not new leads, and the import can be undone in the app for 48 hours. "
+            "Answers at once with an import id; get_lead_import says when it is done. For "
+            "thousands of leads, call it again with the next 250 and a new request_id; the "
+            "same request_id with the same leads changes nothing. external_id is the lead's "
+            "id in your system: the same id again is the same lead."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "leads": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 250,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            name: {"type": "string"}
+                            for name in (
+                                "name",
+                                "phone",
+                                "email",
+                                "company",
+                                "city",
+                                "language",
+                                "interest",
+                                "stage",
+                                "owner",
+                                "source",
+                                "external_id",
+                            )
+                        },
+                    },
+                    "description": "Each lead: at least a name, phone or email. stage is a "
+                    "stage's name; owner a teammate's email or name; source the list it "
+                    "came from.",
+                },
+                "name": {"type": "string", "description": "The import's name in the app."},
+                "side": {"type": "string", "enum": ["inbound", "cold"]},
+                "assign": {
+                    "type": "string",
+                    "enum": ["rules", "none"],
+                    "description": "rules: the workspace's lead rules give new leads out; "
+                    "none: nobody gets them yet. A lead's owner field wins either way.",
+                },
+                "duplicates": {
+                    "type": "string",
+                    "enum": ["skip", "fill", "replace"],
+                    "description": "A lead already here: left as it is (skip), its empty "
+                    "details filled, or its details replaced.",
+                },
+                "request_id": _REQUEST,
+            },
+            "required": ["leads"],
+        },
+        "annotations": _WRITES,
+        "scope": "leads:write",
+    },
+    {
+        "name": "get_lead_import",
+        "title": "See where an import stands",
+        "description": (
+            "Where an import from import_leads stands: queued, running, done or "
+            "partly_failed, with how many leads were created, updated and skipped. "
+            "problem_rows true also lists the rows that were skipped or failed, and why."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "import_id": _ID,
+                "problem_rows": {"type": "boolean"},
+            },
+            "required": ["import_id"],
+        },
+        "annotations": _READS,
+        "scope": "leads:write",
+    },
+    {
         "name": "add_note",
         "title": "Add a note to a lead",
         "description": (
@@ -287,23 +391,115 @@ TOOLS: tuple[dict[str, Any], ...] = (
         "scope": "leads:tasks",
     },
     {
+        "name": "move_stage",
+        "title": "Move a lead to another stage",
+        "description": (
+            "Moves one lead to another stage of its pipeline, with the reason, as this "
+            "person. `step` is a stage key from list_leads' `stages`. Won, Lost and Junk "
+            "need a person (needs_review). Some stages also ask for a reason_code or a "
+            "next_action_at; the refusal says which. The history shows which app moved it, "
+            "and it can be undone for 7 days unless the lead moved again."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "lead_id": _ID,
+                "step": {"type": "string", "minLength": 1, "maxLength": 40},
+                "reason": {"type": "string", "minLength": 1, "maxLength": 500},
+                "reason_code": {"type": "string", "maxLength": 40},
+                "next_action_at": _WHEN,
+                "expected_revision": {"type": "integer", "minimum": 1},
+                "request_id": _REQUEST,
+                "preview": _PREVIEW,
+            },
+            "required": ["lead_id", "step", "reason", "request_id"],
+        },
+        "annotations": _WRITES,
+        "scope": "leads:stage",
+    },
+    {
+        "name": "list_tasks",
+        "title": "List open tasks",
+        "description": (
+            "This person's open tasks as the Tasks list shows them (call-backs are in To "
+            "Call): view is overdue, today (the default) or upcoming, with how many of "
+            "each. An owner or admin may pass person (a person_id) for a seller's list."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "view": {"type": "string", "enum": ["overdue", "today", "upcoming"]},
+                "person": _ID,
+            },
+        },
+        "annotations": _READS,
+        "scope": "leads:read",
+    },
+    {
+        "name": "complete_task",
+        "title": "Mark a task done",
+        "description": (
+            "Marks one open task on a lead done, as this person. The lead's history shows "
+            "which app did it, and it can be undone for 7 days (the task reopens) unless "
+            "someone changed it since."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task_id": _ID,
+                "expected_revision": {"type": "integer", "minimum": 1},
+                "request_id": _REQUEST,
+                "preview": _PREVIEW,
+            },
+            "required": ["task_id", "request_id"],
+        },
+        "annotations": _WRITES,
+        "scope": "leads:tasks",
+    },
+    {
+        "name": "snooze_task",
+        "title": "Snooze a task",
+        "description": (
+            "Moves one open task on a lead later: 15m, 1h, evening, tomorrow or week, as "
+            "the app's own snooze does. It can be undone for 7 days (the due comes back) "
+            "unless someone changed it since."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task_id": _ID,
+                "choice": {
+                    "type": "string",
+                    "enum": ["15m", "1h", "evening", "tomorrow", "week"],
+                },
+                "expected_revision": {"type": "integer", "minimum": 1},
+                "request_id": _REQUEST,
+                "preview": _PREVIEW,
+            },
+            "required": ["task_id", "choice", "request_id"],
+        },
+        "annotations": _WRITES,
+        "scope": "leads:tasks",
+    },
+    {
         "name": "list_my_changes",
         "title": "Changes this app made",
         "description": (
-            "The notes and tasks this connection added in the last 30 days, newest first, "
-            "and whether each can still be undone."
+            "The notes, tasks and stage moves this connection made in the last 30 days, "
+            "newest first, and whether each can still be undone."
         ),
         "inputSchema": {"type": "object", "properties": {"lead_id": _ID}},
         "annotations": _READS,
-        "scope": ("leads:notes", "leads:tasks"),
+        "scope": ("leads:notes", "leads:tasks", "leads:stage"),
     },
     {
         "name": "undo_change",
         "title": "Undo a change this app made",
         "description": (
             "Undoes one change this connection made, within 7 days: a note stops showing, "
-            "an open task is cancelled. Both stay in the lead's history. A task someone "
-            "has changed since is not undone."
+            "an open task is cancelled, a moved lead goes back. All stay in the lead's "
+            "history. A task someone has changed since, or a lead moved again, is not "
+            "undone."
         ),
         "inputSchema": {
             "type": "object",
@@ -311,8 +507,12 @@ TOOLS: tuple[dict[str, Any], ...] = (
             "required": ["change_id"],
         },
         "annotations": {**_WRITES, "destructiveHint": True},
-        "scope": ("leads:notes", "leads:tasks"),
+        "scope": ("leads:notes", "leads:tasks", "leads:stage"),
     },
+    # Ask Dipak's lessons and coaching loop (ask_dipak/integration.py).
+    *ask_dipak.TOOLS,
+    # A seller's call uploaded by an organisation's key (integrations/recordings_api.py).
+    *recordings_api.TOOLS,
 )
 _BY_NAME = {tool["name"]: tool for tool in TOOLS}
 
@@ -523,6 +723,8 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
         return await reader.call(_uuid(args, "call_id"))
     if name == "call_facts":
         return await reader.facts(_uuid(args, "call_id"))
+    if name == "analysis_time":
+        return await reader.analysis_time(team=args.get("team") is True)
     if name == "list_leads":
         offset = args.get("offset", 0)
         if not isinstance(offset, int) or isinstance(offset, bool):
@@ -543,6 +745,45 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
             raise ApiError(422, "argument", "Lead fields must be short text.") from None
         answer, _ = await reader.add_lead(body)
         return answer
+    if name == "import_leads":
+        import_fields = ("leads", "name", "side", "assign", "duplicates")
+        request_id = args.get("request_id")
+        body = _body(
+            lead_imports.ImportBody,
+            {key: value for key, value in args.items() if key != "request_id"},
+            import_fields,
+        )
+        if len(body.leads) > 250:
+            raise ApiError(422, "argument", "Send up to 250 leads per call.")
+        door = await reader.import_door()
+        try:
+            answer, _ = await lead_imports.create(
+                reader.session,
+                door,
+                body,
+                idempotency_key=request_id if isinstance(request_id, str) else None,
+            )
+        except lead_imports.ImportRefused as refusal:
+            raise ApiError(refusal.status, refusal.code, refusal.message) from None
+        return answer
+    if name == "get_lead_import":
+        door = await reader.import_door()
+        job = await lead_imports.find(
+            reader.session,
+            door,
+            _uuid(args, "import_id"),
+            every_door=reader.caller.sees_team,
+        )
+        if job is None:
+            raise ApiError(404, "import_missing", "No such import here.")
+        answer = await lead_imports.view(reader.session, job)
+        if args.get("problem_rows") is True:
+            problems = []
+            for outcome in ("skipped", "failed"):
+                page = await lead_imports.rows(reader.session, job, outcome=outcome, limit=100)
+                problems += page["rows"]
+            answer["problem_rows"] = sorted(problems, key=lambda item: item["row"])[:200]
+        return answer
     if name == "add_note":
         note = _body(NoteBody, args, ("note", "request_id", "preview"))
         answer, _ = await reader.add_note(_uuid(args, "lead_id"), note)
@@ -561,17 +802,51 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
         task = _body(TaskBody, args, task_fields)
         answer, _ = await reader.add_task(_uuid(args, "lead_id"), task)
         return answer
+    if name == "move_stage":
+        stage_fields = (
+            "step",
+            "reason",
+            "reason_code",
+            "next_action_at",
+            "expected_revision",
+            "request_id",
+            "preview",
+        )
+        move = _body(StageBody, args, stage_fields)
+        answer, _ = await reader.move_stage(_uuid(args, "lead_id"), move)
+        return answer
+    if name == "list_tasks":
+        person = _uuid(args, "person") if args.get("person") else None
+        return await reader.tasks(str(args.get("view") or "today"), person)
+    if name == "complete_task":
+        finished = _body(TaskDoneBody, args, ("expected_revision", "request_id", "preview"))
+        answer, _ = await reader.task_done(_uuid(args, "task_id"), finished)
+        return answer
+    if name == "snooze_task":
+        snoozed = _body(
+            TaskSnoozeBody, args, ("choice", "expected_revision", "request_id", "preview")
+        )
+        answer, _ = await reader.task_snooze(_uuid(args, "task_id"), snoozed)
+        return answer
     if name == "list_my_changes":
         return await reader.changes(_uuid(args, "lead_id") if args.get("lead_id") else None)
     if name == "undo_change":
         undo = _body(UndoBody, args, ("request_id",))
         return await reader.undo_change(_uuid(args, "change_id"), undo)
+    if name in coaching_api.NAMES:
+        return await coaching_api.run_tool(reader, name, args)
+    if name in reports_api.NAMES:
+        return await reports_api.run_tool(reader, name, args)
+    if name in ask_dipak.NAMES:
+        return await ask_dipak.run_tool(reader, name, args)
+    if name in recordings_api.NAMES:
+        return await recordings_api.run_tool(reader, name, args)
     raise KeyError(name)
 
 
 def _body(model: Any, args: dict[str, Any], fields: tuple[str, ...]) -> Any:
     """Only the fields a tool takes; anything else is refused, never dropped."""
-    extra = sorted(set(args) - set(fields) - {"lead_id", "change_id"})
+    extra = sorted(set(args) - set(fields) - {"lead_id", "change_id", "task_id"})
     if extra:
         raise ApiError(422, "field_not_allowed", f"Not a field this tool takes: {extra[0]}.")
     try:
@@ -642,22 +917,25 @@ def install_mcp_http(application: FastAPI, ctx: RouteContext) -> None:
     settings = ctx.settings
     open_reader = make_opener(ctx)
 
-    def challenge(request: Request) -> str:
+    async def challenge(request: Request) -> str:
         # RFC 9728 and MCP 2025-11-25: where to find Connect, and the scopes to ask for
-        # (reading). The metadata is on the host the assistant reached: mcp.salesxray.in, or
-        # the old address for connections made there (2 Nov 2026).
+        # (reading, and the lead writes once the owner lets connected apps write). The
+        # metadata is on the host the assistant reached: mcp.salesxray.in, or the old address
+        # for connections made there (2 Nov 2026).
         base = settings.sales_xray_host_origin(request.url.hostname) or ""
+        async with ctx.sessions() as db:
+            platform = await tiers.read_platform(db)
         return (
             f'resource_metadata="{base}/.well-known/oauth-protected-resource/v1/mcp", '
-            f'scope="{DEFAULT_SCOPES}"'
+            f'scope="{connect_scopes(platform)}"'
         )
 
-    def refused(error: ApiError, request: Request) -> JSONResponse:
+    async def refused(error: ApiError, request: Request) -> JSONResponse:
         headers = {"Cache-Control": "no-store"}
         if error.status == 401:
             invalid = ', error="invalid_token"' if error.code == "key_invalid" else ""
             headers["WWW-Authenticate"] = (
-                f'Bearer realm="sales-xray", {challenge(request)}{invalid}'
+                f'Bearer realm="sales-xray", {await challenge(request)}{invalid}'
             )
         if error.retry_after is not None:
             headers["Retry-After"] = str(error.retry_after)
@@ -684,7 +962,7 @@ def install_mcp_http(application: FastAPI, ctx: RouteContext) -> None:
                 else:
                     answer = await handle(reader, message)
         except ApiError as error:
-            return refused(error, request)
+            return await refused(error, request)
         if answer is None:
             return Response(status_code=202)
         return JSONResponse(answer, headers={"Cache-Control": "no-store"})

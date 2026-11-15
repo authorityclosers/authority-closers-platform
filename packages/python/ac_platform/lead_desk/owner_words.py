@@ -17,6 +17,16 @@ _MOVED: Final = re.compile(r"^Moved by (.+?)\.?$")
 _GAP: Final = re.compile(r"^Nobody free speaks (.+?); \d+ open leads?, the fewest\.?$", re.I)
 _RULES: Final = re.compile(r"^(.*?)(?:,\s*)?\d+ open leads?( \(fewest\))?\.?$", re.I)
 _LATE: Final = re.compile(r"^No call in (\d+) minutes?\.\s*", re.I)
+# The lead rules' own reasons (routing.decide): "<rule words>: <name> (rule N)", "Rule N:
+# <names> away or at their limit, given by the lead rules", "No routing rule matched; given
+# by the lead rules". The rule words are the values it matched (a source key, a city, an
+# answer), never for a seller's screen (Redmi QA on production, 14 Nov 2026: a corner card
+# read "webhook: swamini deshpande (rule 1)").
+_ROUTED: Final = re.compile(r"^.*: (.+?) \(rule (\d+)\)\.?$")
+_PASSED: Final = re.compile(
+    r"^Rule \d+: .+ away or at their limit, given by the lead rules\.?$", re.I
+)
+_UNMATCHED: Final = re.compile(r"^No routing rule matched; given by the lead rules\.?$", re.I)
 
 
 def _joined(parts: list[str]) -> str:
@@ -35,6 +45,16 @@ def _reword(text: str, who: str) -> str:
             f"Picked automatically: nobody free speaks {gap.group(1)}, so it went to whoever "
             "had the fewest open leads."
         )
+    routed = _ROUTED.match(text)
+    if routed:
+        if who == "you":
+            return "Given to you by your lead rules."
+        name = " ".join(word[:1].upper() + word[1:] for word in routed.group(1).split())
+        return f"Given to {name} by lead rule {routed.group(2)}."
+    if _PASSED.match(text):
+        return "Given out by the lead rules: the people its rule names were away or full."
+    if _UNMATCHED.match(text):
+        return "Given out by the lead rules."
     rules = _RULES.match(text)
     if not rules:
         return text

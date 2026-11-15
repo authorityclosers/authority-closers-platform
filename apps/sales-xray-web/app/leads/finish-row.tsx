@@ -50,6 +50,12 @@ function keepGone(ids: string[]) {
   }
 }
 
+/** Home's Pending action closed with its X (owner, 15 Nov 2026): put away on
+ *  this phone, as "Didn't call" does; Leads still has the call. */
+export function putAway(eventId: string): void {
+  keepGone([...readGone().filter((id) => id !== eventId), eventId]);
+}
+
 /** A call taken back from "Didn't call": off this phone's put-away list. */
 function bringBack(eventId: string): string[] {
   const next = readGone().filter((id) => id !== eventId);

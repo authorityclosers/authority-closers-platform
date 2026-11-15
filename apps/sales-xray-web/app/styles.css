@@ -84,6 +84,18 @@
   --lx-info-soft: #eceff4;
   --lx-warning: #b45309;
   --lx-warning-soft: #fff5e8;
+  /* Home's owner dashboard (owner, 14 Nov 2026, design-tokens.json): four tones, each text on its soft surface at 4.5:1+, and the selected green. */
+  --lx-home-primary: #007a58;
+  --lx-home-emerald: #006b50;
+  --lx-home-emerald-soft: #e0f5ed;
+  --lx-home-violet: #4e2cbf;
+  --lx-home-violet-soft: #eee8ff;
+  --lx-home-orange: #9b4100;
+  --lx-home-orange-soft: #fff0e1;
+  --lx-home-rose: #b3183a;
+  --lx-home-rose-soft: #fde7ee;
+  --lx-home-sky: #0b5cad;
+  --lx-home-sky-soft: #e4f0fd;
   --lx-danger: #c0261b;
   --lx-danger-soft: #fdebe9;
   --lx-danger-edge: #f3c6c1;

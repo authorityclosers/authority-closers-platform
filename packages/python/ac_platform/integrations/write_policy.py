@@ -20,29 +20,43 @@ from uuid import UUID
 
 from ac_platform.lead_desk.contracts import APP_CHANGE_UNDO_DAYS
 
-Action = Literal["note", "task", "update"]
-ACTIONS: Final[tuple[Action, ...]] = ("note", "task", "update")
+Action = Literal["note", "task", "update", "stage"]
+ACTIONS: Final[tuple[Action, ...]] = ("note", "task", "update", "stage")
 SCOPES: Final[dict[str, str]] = {
     "note": "leads:notes",
     "task": "leads:tasks",
     "update": "leads:update",
+    "stage": "leads:stage",
+}
+# What a refusal calls each action.
+WORDS: Final[dict[str, str]] = {
+    "note": "notes",
+    "task": "tasks",
+    "update": "updates",
+    "stage": "stage moves",
 }
 # The workspace's switch (Organisation -> AI apps). Defaults agreed 25 Oct 2026: notes,
-# tasks and outcomes on; everything else (lead updates too) off until an owner turns it on.
+# tasks and outcomes on; everything else (lead updates and stage moves too) off until an
+# owner turns it on.
 SWITCH_DEFAULTS: Final[dict[str, bool]] = {
     "paused": False,
     "note": True,
     "task": True,
     "outcome": True,
     "update": False,
+    "stage": False,
 }
+# A stage move from an app (ai-writes.md, section 8): never to Won, Lost or Junk, which
+# wait for a person's review.
+REVIEW_STAGES: Final[tuple[str, ...]] = ("won", "lost", "junk")
+REASON_LIMIT: Final = 500
 # A lead update (ai-writes.md, section 2): only these fields. Phone and email decide
 # duplicates and who a call matches, so they wait for the review queue (slice 2).
 UPDATE_FIELDS: Final[tuple[str, ...]] = ("name", "company", "city", "interest", "language")
 REVIEW_FIELDS: Final[tuple[str, ...]] = ("phone", "email")
 # Caps, in the last 24 hours unless said otherwise (ai-writes.md, section 5).
-PER_CONNECTION: Final[dict[str, int]] = {"note": 200, "task": 200, "update": 200}
-PER_LEAD: Final[dict[str, int]] = {"note": 20, "task": 20, "update": 20}
+PER_CONNECTION: Final[dict[str, int]] = {"note": 200, "task": 200, "update": 200, "stage": 50}
+PER_LEAD: Final[dict[str, int]] = {"note": 20, "task": 20, "update": 20, "stage": 5}
 PER_WORKSPACE: Final = 2_000
 PER_MINUTE: Final = 30  # one connection, any action
 UNDO_WINDOW: Final = timedelta(days=APP_CHANGE_UNDO_DAYS)
@@ -113,7 +127,7 @@ def decide(
             False,
             403,
             "action_off",
-            f"An owner has turned off {action}s from apps in this workspace.",
+            f"An owner has turned off {WORDS[action]} from apps in this workspace.",
         )
     if counts.minute >= PER_MINUTE:
         return Decision(False, 429, "cap_reached", "Too many changes this minute. Wait a minute.")
@@ -129,14 +143,14 @@ def decide(
             False,
             429,
             "cap_reached",
-            f"This connection sent {PER_CONNECTION[action]} {action}s in the last 24 hours.",
+            f"This connection sent {PER_CONNECTION[action]} {WORDS[action]} in the last 24 hours.",
         )
     if counts.lead >= PER_LEAD[action]:
         return Decision(
             False,
             429,
             "cap_reached",
-            f"This lead got {PER_LEAD[action]} {action}s from apps in the last 24 hours.",
+            f"This lead got {PER_LEAD[action]} {WORDS[action]} from apps in the last 24 hours.",
         )
     return ALLOW
 
@@ -191,11 +205,14 @@ __all__ = [
     "PER_LEAD",
     "PER_MINUTE",
     "PER_WORKSPACE",
+    "REASON_LIMIT",
     "REVIEW_FIELDS",
+    "REVIEW_STAGES",
     "SCOPES",
     "SWITCH_DEFAULTS",
     "UNDO_WINDOW",
     "UPDATE_FIELDS",
+    "WORDS",
     "Counts",
     "Decision",
     "clean_text",

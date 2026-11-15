@@ -5,6 +5,12 @@
 - POST /v1/admin/integrations/keys/{id}/revoke       a key, at once
 - POST /v1/admin/integrations/webhooks/{id}/disable  a webhook, at once
 - POST /v1/admin/integrations/connections/{id}/revoke  a connected app, at once
+- GET  /v1/admin/integrations/imports                every organisation's last 100 lead
+                                                     imports through the API, with counts
+- GET  /v1/admin/integrations/imports/{id}/problems  an import's skipped and failed rows,
+                                                     why, and the caller's ids (no lead
+                                                     details)
+- POST /v1/admin/integrations/imports/{id}/stop      what still waits is not filed
 
 Each change is audited in that organisation's own chain and answers with the updated
 row. No key or secret is ever returned: keys by prefix, webhooks by scheme and host.
@@ -36,8 +42,12 @@ from ac_platform.http.auth import (
 )
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
-from ac_platform.integrations import keys, oauth, sealed
+from ac_platform.integrations import keys, lead_imports, oauth, sealed
 from ac_platform.integrations.errors import IntegrationError
+from ac_platform.integrations.import_models import (
+    IntegrationLeadImport,
+    IntegrationLeadImportChunk,
+)
 from ac_platform.integrations.models import IntegrationApiKey
 from ac_platform.kernel.errors import DomainError
 from ac_platform.organisations.workspace_kinds import classify_workspaces
@@ -350,6 +360,114 @@ async def revoke_connection(
     return fresh
 
 
+async def imports_overview(
+    database: AsyncSession,
+    *,
+    operations_tenant_id: UUID | None,
+    personal_tenant_id: UUID | None,
+    now: datetime,
+) -> dict[str, Any]:
+    """Every organisation's last 100 lead imports through the API, newest first, and what
+    waits or failed in the last day."""
+    jobs = (
+        await database.scalars(
+            select(IntegrationLeadImport)
+            .order_by(IntegrationLeadImport.created_at.desc())
+            .limit(100)
+        )
+    ).all()
+    workspaces = await classify_workspaces(
+        database,
+        operations_tenant_id=operations_tenant_id,
+        personal_tenant_id=personal_tenant_id,
+        tenant_ids={job.tenant_id for job in jobs},
+    )
+    chunk = IntegrationLeadImportChunk
+    day = now - timedelta(days=1)
+    waiting = await database.scalar(
+        select(func.coalesce(func.sum(chunk.size), 0)).where(chunk.state == "pending")
+    )
+    failed = await database.scalar(
+        select(func.coalesce(func.sum(chunk.size), 0)).where(
+            chunk.state == "failed", chunk.finished_at > day
+        )
+    )
+    rows_day = await database.scalar(
+        select(func.coalesce(func.sum(IntegrationLeadImport.total), 0)).where(
+            IntegrationLeadImport.created_at > day
+        )
+    )
+    items = []
+    for job in jobs:
+        found = workspaces.get(job.tenant_id)
+        items.append(
+            {
+                **await lead_imports.view(database, job),
+                "organisation": {"id": str(job.tenant_id), "name": found.name if found else None},
+                "via": job.via,
+                "label": job.label,
+            }
+        )
+    return {
+        "schema": SCHEMA,
+        "counts": {
+            "rows_waiting": int(waiting or 0),
+            "rows_failed_24h": int(failed or 0),
+            "rows_sent_24h": int(rows_day or 0),
+        },
+        "imports": items,
+    }
+
+
+async def import_problems(database: AsyncSession, import_id: UUID) -> dict[str, Any]:
+    """An import's skipped and failed rows, in order: never a lead's details."""
+    job = await database.get(IntegrationLeadImport, import_id)
+    if job is None:
+        raise IntegrationError("import")
+    rows: list[dict[str, Any]] = []
+    for outcome in ("skipped", "failed"):
+        page = await lead_imports.rows(database, job, outcome=outcome)
+        rows += page["rows"]
+    return {
+        **await lead_imports.view(database, job),
+        "problems": sorted(rows, key=lambda row: row["row"])[: lead_imports.ROWS_PAGE],
+    }
+
+
+async def stop_import(
+    database: AsyncSession, *, import_id: UUID, actor: Any, now: datetime
+) -> dict[str, Any]:
+    """What still waits is not filed: each waiting row says it was stopped, and the rows
+    themselves go. Filed leads stay (the organisation's owners undo them in the app)."""
+    job = await database.get(IntegrationLeadImport, import_id)
+    if job is None:
+        raise IntegrationError("import")
+    chunk = IntegrationLeadImportChunk
+    waiting = (
+        await database.scalars(
+            select(chunk)
+            .where(chunk.import_id == import_id, chunk.state == "pending")
+            .with_for_update()
+        )
+    ).all()
+    for part in waiting:
+        part.result = lead_imports.failed_rows(part, "Stopped by Sales X-Ray support")
+        part.state, part.error, part.rows, part.finished_at = "failed", "stopped", None, now
+    if waiting:
+        # In the organisation's own chain, so its owners see who stopped it.
+        await AuditRepository(database).append(
+            tenant_id=job.tenant_id,
+            actor_person_id=actor.person_id,
+            action="integration.lead_import_stopped",
+            resource_type="integration_lead_import",
+            resource_id=job.id,
+            payload={"rows": sum(part.size for part in waiting), "by": "platform"},
+            session_id=actor.session_id,
+        )
+    await database.flush()
+    return await lead_imports.view(database, job)
+
+
 def install_integrations_admin_http(application: FastAPI, ctx: RouteContext) -> None:
     settings = ctx.settings
     dependency = Depends(ctx.require_actor, scope="function")
@@ -421,6 +539,46 @@ def install_integrations_admin_http(application: FastAPI, ctx: RouteContext) -> 
             )
         except IntegrationError:
             raise HTTPException(404, "That webhook is not here.") from None
+
+    @router.get("/imports")
+    async def lead_import_list(
+        request: Request, response: Response, auth: AuthenticatedTransaction = dependency
+    ) -> dict[str, Any]:
+        await admit(request, response, auth, write=False)
+        return await imports_overview(
+            auth.database,
+            operations_tenant_id=settings.operations_tenant_id,
+            personal_tenant_id=settings.public_learner_tenant_id,
+            now=datetime.now(UTC),
+        )
+
+    @router.get("/imports/{import_id}/problems")
+    async def lead_import_problems(
+        import_id: UUID,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        await admit(request, response, auth, write=False)
+        try:
+            return await import_problems(auth.database, import_id)
+        except IntegrationError:
+            raise HTTPException(404, "That import is not here.") from None
+
+    @router.post("/imports/{import_id}/stop")
+    async def lead_import_stop(
+        import_id: UUID,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        actor = await admit(request, response, auth, write=True)
+        try:
+            return await stop_import(
+                auth.database, import_id=import_id, actor=actor, now=datetime.now(UTC)
+            )
+        except IntegrationError:
+            raise HTTPException(404, "That import is not here.") from None
 
     @router.post("/connections/{grant_id}/revoke")
     async def disconnect(

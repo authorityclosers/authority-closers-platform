@@ -192,6 +192,8 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "lead_desk_duplicate_decisions",
         "lead_desk_merges",
         "integration_writes",
+        "integration_lead_imports",
+        "integration_lead_import_chunks",
         # Pulse (migration 0139).
         "person_pulse_profiles",
         "pulse_org_links",
@@ -222,6 +224,8 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "sales_xray_tester_events",
         "conversation_report_saves",
         "sales_xray_ask_dipak_events",
+        "sales_xray_ask_dipak_focus_events",
+        "sales_xray_ask_dipak_call_checks",
         "bug_issues",
         "bug_issue_reports",
         "bug_issue_events",

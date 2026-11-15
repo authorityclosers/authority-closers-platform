@@ -46,6 +46,7 @@ from ac_platform.conversation_intelligence.application import (
     utc,
 )
 from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
+from ac_platform.conversation_intelligence.key_upload import KeyUploadActor
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Tenant
 
@@ -230,7 +231,8 @@ class AcquisitionSessions:
         *,
         shared_identity_locks: bool = False,
     ) -> tuple[UUID | None, UUID | None]:
-        if actor is not None and type(actor) is not ActorContext:
+        # A seller through an organisation's API key (key_upload) owns their own calls too.
+        if actor is not None and type(actor) not in (ActorContext, KeyUploadActor):
             raise ConversationDenied("A current Academy identity is required.")
         if token is not None:
             visitor = await self._visitor(token, now)

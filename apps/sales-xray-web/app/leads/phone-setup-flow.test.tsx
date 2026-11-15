@@ -149,6 +149,19 @@ describe("flowSteps", () => {
     expect(flowSteps(ready, { available: true, enabled: true })).toEqual([]);
   });
 
+  it("leaves the recordings step out once a folder is picked", () => {
+    // Redmi QA on production (14 Nov 2026): the checklist counts a picked folder
+    // as Call recordings done, so Set up this phone doesn't ask again.
+    const picked = parseSetup(
+      setup(NONE, { folderPickSupported: true, folderPicked: true }),
+    )!;
+    expect(flowSteps(picked, null)).not.toContain("recordings");
+    const notYet = parseSetup(
+      setup(NONE, { folderPickSupported: true, folderPicked: false }),
+    )!;
+    expect(flowSteps(notYet, null)).toContain("recordings");
+  });
+
   it("offers the recorder last, and only where it helps", () => {
     const off = parseSetup(setup(NONE, { recorderProfile: folderOff }))!;
     expect(flowSteps(off, { available: false, enabled: false }).at(-1)).toBe(

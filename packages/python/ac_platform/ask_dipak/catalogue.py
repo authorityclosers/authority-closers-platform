@@ -1,207 +1,154 @@
-"""Ask Dipak's question records (Dipak's spec and clickable sample, 13 Nov 2026).
+"""Ask Dipak's library on the server (Dipak's spec and clickable sample, 13 Nov 2026).
 
-The 150 question IDs in his ten categories and the twelve that have a complete lesson, as the
-library the app shows has them (apps/sales-xray-web/app/ask-dipak/library.json; a test keeps
-the two the same). The server stores progress only against these IDs, and a Next-call mission
-only for a question whose lesson has one.
+``library.json`` here is the same file the app shows (apps/sales-xray-web/app/ask-dipak/
+library.json; a test keeps the two equal): his 10 categories, 150 question records with stable
+IDs and the 12 complete lessons, word for word. The API, the MCP tools and the CLI read lessons
+and search from it, so every surface teaches the same text; progress is stored only against
+these IDs, and a Next-call mission only where the question has a lesson. His internal coaching
+notes are not in it.
 """
 
 from __future__ import annotations
 
+import json
+from dataclasses import dataclass
+from functools import cache
+from importlib import resources
+from typing import Any
+
+
+@dataclass(frozen=True)
+class Question:
+    id: str
+    title: str
+    category_id: str
+    category_name: str
+    source: str
+
+    @property
+    def label(self) -> str:
+        """The words the app shows it with: the homepage's real-situation wording, if any."""
+        return str(_library()["labels"].get(self.id, self.title))
+
+    def public(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "title": self.title,
+            "label": self.label,
+            "category_id": self.category_id,
+            "category": self.category_name,
+            "lesson_ready": self.id in LESSON_IDS,
+        }
+
+
+@cache
+def _library() -> dict[str, Any]:
+    text = resources.files("ac_platform.ask_dipak").joinpath("library.json").read_text("utf-8")
+    data: dict[str, Any] = json.loads(text)
+    return data
+
+
+def _questions() -> tuple[Question, ...]:
+    return tuple(
+        Question(
+            id=question["id"],
+            title=question["title"],
+            category_id=category["id"],
+            category_name=category["name"],
+            source=category["doc"],
+        )
+        for category in _library()["categories"]
+        for question in category["questions"]
+    )
+
+
+QUESTIONS: tuple[Question, ...] = _questions()
+_BY_ID = {question.id: question for question in QUESTIONS}
+
 #: Category -> its questions, in Dipak's order.
 QUESTIONS_BY_CATEGORY: dict[str, tuple[str, ...]] = {
-    "01": (
-        "CF01",
-        "CF02",
-        "CF03",
-        "CF04",
-        "CF05",
-        "PR01",
-        "PR02",
-        "PR03",
-        "PR04",
-        "PR05",
-        "NEW-001",
-        "NEW-002",
-        "NEW-003",
-        "NEW-004",
-    ),
-    "02": (
-        "RP01",
-        "RP02",
-        "RP03",
-        "RP04",
-        "RP05",
-        "NEW-005",
-        "NEW-006",
-        "NEW-007",
-        "NEW-008",
-        "NEW-009",
-    ),
-    "03": (
-        "TP01",
-        "TP02",
-        "TP03",
-        "TP04",
-        "TP05",
-        "LI01",
-        "LI02",
-        "LI03",
-        "LI04",
-        "LI05",
-        "AQ01",
-        "AQ02",
-        "AQ03",
-        "AQ04",
-        "AQ05",
-        "NEW-010",
-        "NEW-011",
-        "NEW-012",
-    ),
-    "04": (
-        "PG01",
-        "PG02",
-        "PG03",
-        "PG04",
-        "PG05",
-        "CS01",
-        "CS02",
-        "CS03",
-        "CS04",
-        "CS05",
-        "NEW-013",
-        "NEW-014",
-        "NEW-015",
-        "NEW-016",
-    ),
-    "05": (
-        "IM01",
-        "IM02",
-        "IM03",
-        "IM04",
-        "IM05",
-        "NEW-017",
-        "NEW-018",
-        "NEW-019",
-        "NEW-020",
-        "NEW-021",
-    ),
-    "06": (
-        "AG01",
-        "AG02",
-        "AG03",
-        "AG04",
-        "AG05",
-        "DM01",
-        "DM02",
-        "DM03",
-        "DM04",
-        "DM05",
-        "DP01",
-        "DP02",
-        "DP03",
-        "DP04",
-        "DP05",
-        "NEW-022",
-        "NEW-023",
-        "NEW-024",
-    ),
-    "07": (
-        "MS01",
-        "MS02",
-        "MS03",
-        "MS04",
-        "MS05",
-        "EX01",
-        "EX02",
-        "EX03",
-        "EX04",
-        "EX05",
-        "NEW-025",
-        "NEW-026",
-        "NEW-027",
-        "NEW-028",
-    ),
-    "08": (
-        "PB01",
-        "PB02",
-        "PB03",
-        "PB04",
-        "PB05",
-        "OB01",
-        "OB02",
-        "OB03",
-        "OB04",
-        "OB05",
-        "NEW-029",
-        "NEW-030",
-        "NEW-031",
-        "NEW-032",
-        "NEW-033",
-    ),
-    "09": (
-        "CL01",
-        "CL02",
-        "CL03",
-        "CL04",
-        "CL05",
-        "NX01",
-        "NX02",
-        "NX03",
-        "NX04",
-        "NX05",
-        "FU01",
-        "FU02",
-        "FU03",
-        "FU04",
-        "FU05",
-        "NEW-034",
-    ),
-    "10": (
-        "SC01",
-        "SC02",
-        "SC03",
-        "SC04",
-        "SC05",
-        "LE01",
-        "LE02",
-        "LE03",
-        "LE04",
-        "LE05",
-        "CO01",
-        "CO02",
-        "CO03",
-        "CO04",
-        "CO05",
-        "CR01",
-        "CR02",
-        "CR03",
-        "CR04",
-        "CR05",
-        "NEW-035",
-    ),
+    category["id"]: tuple(question["id"] for question in category["questions"])
+    for category in _library()["categories"]
 }
-
-QUESTION_IDS: frozenset[str] = frozenset(
-    question for questions in QUESTIONS_BY_CATEGORY.values() for question in questions
-)
-
-#: The questions with a complete lesson, so a Next-call mission.
-LESSON_IDS: frozenset[str] = frozenset(
+CATEGORIES: tuple[dict[str, str], ...] = tuple(
     {
-        "CF01",
-        "RP01",
-        "TP03",
-        "PG01",
-        "IM01",
-        "DM01",
-        "EX02",
-        "PB03",
-        "NX02",
-        "NEW-035",
-        "DM02",
-        "OB03",
+        "id": category["id"],
+        "name": category["name"],
+        "description": category["description"],
+        "line": _library()["categoryLabels"].get(category["id"], ""),
+        "source": category["doc"],
     }
+    for category in _library()["categories"]
 )
+QUESTION_IDS: frozenset[str] = frozenset(_BY_ID)
+#: The questions with a complete lesson, so a Next-call mission.
+LESSON_IDS: frozenset[str] = frozenset(_library()["lessons"])
+#: Shown while a search is empty.
+SUGGESTIONS: tuple[str, ...] = tuple(_library()["suggestions"])
+#: Common words that point at one question ("mahanga" -> PB03).
+ALIASES: dict[str, str] = dict(_library()["aliases"])
 
-__all__ = ["LESSON_IDS", "QUESTIONS_BY_CATEGORY", "QUESTION_IDS"]
+
+def question(question_id: str) -> Question | None:
+    return _BY_ID.get(question_id)
+
+
+def lesson(question_id: str) -> dict[str, Any] | None:
+    """A complete lesson in Dipak's order, or None while the question has none."""
+    raw = _library()["lessons"].get(question_id)
+    found = _BY_ID.get(question_id)
+    if raw is None or found is None:
+        return None
+    return {
+        **found.public(),
+        "quick_answer": raw["quick"],
+        "scenario": raw["scenario"],
+        "options": [
+            {"letter": "ABC"[index], "choice": choice, "why": why, "takeaway": takeaway}
+            for index, (choice, why, takeaway) in enumerate(raw["options"])
+        ],
+        "deep_lesson": list(raw["deep"]),
+        "remember": raw["cue"],
+        "next_call_mission": raw["mission"],
+        "related": [_BY_ID[code].public() for code in raw["next"] if code in _BY_ID],
+    }
+
+
+def mission_text(question_id: str) -> str | None:
+    raw = _library()["lessons"].get(question_id)
+    return None if raw is None else str(raw["mission"])
+
+
+def search(query: str, limit: int = 50) -> list[Question]:
+    """The app's keyword search: titles, category names, IDs and shown wording, ignoring case,
+    its aliases first; an empty query gives the six suggestions. No AI, no guessing."""
+    needle = query.casefold().strip()
+    if not needle:
+        return [_BY_ID[code] for code in SUGGESTIONS if code in _BY_ID]
+    special = [_BY_ID[code] for word, code in ALIASES.items() if word in needle and code in _BY_ID]
+    match = [
+        item
+        for item in QUESTIONS
+        if any(
+            needle in text.casefold()
+            for text in (item.title, item.category_name, item.id, item.label)
+        )
+    ]
+    ordered = list(dict.fromkeys([*special, *match]))
+    return ordered[:limit]
+
+
+__all__ = [
+    "ALIASES",
+    "CATEGORIES",
+    "LESSON_IDS",
+    "QUESTIONS",
+    "QUESTIONS_BY_CATEGORY",
+    "QUESTION_IDS",
+    "SUGGESTIONS",
+    "Question",
+    "lesson",
+    "mission_text",
+    "question",
+    "search",
+]
