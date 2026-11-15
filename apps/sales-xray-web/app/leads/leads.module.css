@@ -5335,7 +5335,7 @@ a.repName {
    shows only while it says something (a sync under way or paused, Select). */
 .listHead[data-bare]:not(:has(.syncChip:not([data-quiet]))):not(
     :has(.selectToggle)
-  ) {
+  ):not(:has(.listSort)) {
   display: none;
 }
 
@@ -8108,7 +8108,8 @@ fieldset.form {
   grid-area: quick;
   align-self: center;
   justify-self: end;
-  gap: 8px;
+  /* 56 px centres: the 48 px touch boxes no longer overlap (Leads part 04). */
+  gap: 12px;
   padding: 0 12px 0 8px;
 }
 
@@ -8396,13 +8397,21 @@ fieldset.form {
 
 .leadFace[data-compact] .quickAct {
   transition:
-    transform 160ms cubic-bezier(0.2, 0, 0, 1),
+    transform 140ms cubic-bezier(0.2, 0, 0, 1),
     background-color 100ms;
 }
 
+/* A press answers at once (Leads part 04): the soft accent fill and 0.94. */
 .leadFace[data-compact] .quickAct:active {
-  transform: scale(0.96);
-  transition-duration: 90ms;
+  background: var(--sx-accent-soft);
+  transform: scale(0.94);
+  transition-duration: 80ms;
+}
+
+/* Dark: an outline you can see, about 3:1 on the card where the line was
+   1.3:1 (Leads part 04); light keeps L1's. */
+:global(:root[data-theme="dark"]) .leadFace[data-compact] .quickAct {
+  border-color: color-mix(in oklab, var(--sx-ink) 36%, var(--sx-surface));
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -8417,4 +8426,191 @@ fieldset.form {
 .leadFace[data-compact] .leadSub > *,
 .leadFace[data-quick][data-compact] .leadSub > * {
   white-space: nowrap;
+}
+
+/* Leads part 03, filter and sort (design-research 03-filter-sort.md, 15 Nov
+   2026): the list's sort and List | Table in one slim row over the list, out of
+   the Filter sheet; the sort says it is one ("Sort: Next call first"). */
+.listHead[data-bare]:has(.listSort) {
+  min-height: 44px;
+  padding: 0 8px 0 12px;
+}
+
+.listSort button[aria-haspopup="listbox"] {
+  width: auto;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+}
+
+/* On a phone too, List | Table sits at the row's end, beside the sort: it left the
+   Filter sheet, and the owner uses the table on his phone (24 Oct, bug 194). */
+@media (max-width: 767px) {
+  .listHead[data-bare]:has(.listSort) .listTools:not(:empty),
+  .listHead[data-bare]:has(.listSort) .listTools .layoutSwitch {
+    display: inline-flex;
+  }
+}
+
+.listHead[data-bare]:has(.listSort) .layoutSwitch button {
+  justify-content: center;
+  min-width: 44px;
+}
+
+/* The filters that are on: soft accent chips in one row, 36 px to the eye and
+   44 to a finger, then Clear. */
+.activeFilters {
+  flex-wrap: nowrap;
+  margin-block: -4px;
+  padding-block: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.activeFilters > li {
+  flex: none;
+}
+
+.activeFilter {
+  position: relative;
+  min-height: 36px;
+  border-color: transparent;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.activeFilter::after {
+  position: absolute;
+  inset: -4px 0;
+  content: "";
+}
+
+.activeClear {
+  min-height: 36px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.activeClear:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* Leads part 05, loading, syncing and empty (design-research 05-empty-loading.md,
+   15 Nov 2026). The first frame in the page's real shapes; one faithful row. */
+.skeletonHead {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.skeletonTabs {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.skeletonChips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.skeletonChips > :last-child {
+  flex: none;
+  margin-inline-start: auto;
+}
+
+.skeletonSort {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.listLoadingRow {
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 88px;
+  padding: 10px 12px;
+}
+
+.listLoadingText {
+  gap: 7px;
+}
+
+.listLoadingActions {
+  display: flex;
+  gap: 12px;
+}
+
+/* How fresh the list is, one muted line in the sort row: "Updating…", or
+   "Couldn't update · Retry". */
+.syncLine {
+  margin-inline-start: auto;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.syncLine[data-quiet] {
+  display: none;
+}
+
+.syncLine[data-bad] {
+  color: var(--sx-bad);
+}
+
+.syncRetry {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.syncLine + .listTools {
+  margin-inline-start: 8px;
+}
+
+/* Empty says why, its words at the card's width and its one action under them. */
+.listPanel .inlineEmpty {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-content: center;
+  align-items: start;
+  column-gap: 12px;
+  row-gap: 12px;
+  min-height: 160px;
+  padding: 20px;
+}
+
+.listPanel .inlineEmpty > .inlineEmptyAction {
+  grid-column: 2;
+  justify-self: start;
+  min-height: 44px;
+}
+
+/* A row's third line at the owner line's size, so "Late · was due 3:16 am"
+   keeps one line at 363 (Leads part 05 follow-up). */
+.leadFace[data-compact] .leadWhy {
+  font-size: var(--sx-text-xs);
 }

@@ -245,11 +245,20 @@ class TaskBook:
         who = person or self.desk.viewer.person_id
         if who != self.desk.viewer.person_id and not self.desk.viewer.can_manage:
             raise DeskError(403, "Only owners and admins see someone else's tasks.")
+        # Listed and counted only while its lead is on the viewer's desk, or it has no lead
+        # (a task of your own): a task a seller added on a lead since given to another
+        # seller leaves their list and its counts (Codex's review on release PR 621,
+        # 15 Nov 2026); owners and admins see every lead.
+        shown = or_(
+            LeadTask.lead_id.is_(None),
+            LeadTask.lead_id.in_(select(Lead.id).where(self.desk._visible())),
+        )
         mine = and_(
             LeadTask.tenant_id == self.tenant_id,
             or_(LeadTask.owner_person_id == who, LeadTask.created_by_person_id == who),
             LeadTask.status == OPEN,
             LeadTask.kind.not_in(CALLING_KINDS),
+            shown,
         )
         late = self.now - scheduler.OVERDUE_FROM
         today_end = datetime.combine(
@@ -270,8 +279,7 @@ class TaskBook:
                 .outerjoin(
                     Lead, and_(Lead.id == LeadTask.lead_id, Lead.tenant_id == LeadTask.tenant_id)
                 )
-                # Tasks of your own (no lead) too.
-                .where(mine, windows[which], or_(LeadTask.lead_id.is_(None), self.desk._visible()))
+                .where(mine, windows[which])
                 .order_by(LeadTask.starts_at, LeadTask.id)
                 .limit(LIST_LIMIT)
             )

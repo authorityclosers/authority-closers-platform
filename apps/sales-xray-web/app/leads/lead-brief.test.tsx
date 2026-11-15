@@ -101,8 +101,9 @@ it("says why a new lead enquired, and that nobody has talked to them yet", async
   );
   expect(host.querySelector("h3")?.textContent).toBe("Before you call");
   expect(rows().map(({ label, value }) => [label, value])).toEqual([
-    ["Why they enquired", "Free masterclass"],
-    ["Last talk", "No previous conversation"],
+    // Only what is known (Leads part 06).
+    ["Interested in", "Free masterclass"],
+    ["Last call", "None logged yet"],
   ]);
 });
 

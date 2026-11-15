@@ -20,8 +20,9 @@ from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.models import Lead
 from ac_platform.lead_desk.vocabulary import OPEN_STAGES
 
-# All Leads is every lead the person may see, on both sides (owner, 2 Nov 2026: "All leads"
-# lists every lead); To Call and Follow-ups keep to the side picked.
+# All Leads is every lead the person may see on the side picked, as To Call and Follow-ups
+# are (orchestrator, 15 Nov 2026, Leads part 05 and L1 #166; it listed both sides from
+# 2 Nov 2026 until then).
 WorkView = Literal["to_call", "follow_ups", "all"]
 CallView = Literal["to_call", "follow_ups"]
 FollowUpWhen = Literal["today", "overdue", "upcoming"]

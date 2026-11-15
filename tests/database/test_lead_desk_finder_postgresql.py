@@ -73,6 +73,13 @@ def test_notes_newest_first_with_outcome_remarks_and_search_everywhere(
             # Search: a lead by name, a note, a task.
             by_name = (await here.client.get(f"{BASE}/search", params={"q": "Find Two"})).json()
             assert [row["lead_id"] for row in by_name["leads"]] == [two]
+            # A lead by phone, as typed: the search sheet lists matching leads before its
+            # calls search (design-research, Leads part 05 item 9, 15 Nov 2026).
+            for typed in ("63002", "98760 63002", "+91 98760 63002"):
+                by_phone = (await here.client.get(f"{BASE}/search", params={"q": typed})).json()
+                assert [row["lead_id"] for row in by_phone["leads"]] == [two], typed
+            none = (await here.client.get(f"{BASE}/search", params={"q": "zqxv"})).json()
+            assert none == {"schema": "lead-desk/1", "leads": [], "notes": [], "tasks": []}
             by_note = (await here.client.get(f"{BASE}/search", params={"q": "whatsapp"})).json()
             assert [item["lead_id"] for item in by_note["notes"]] == [one]
             assert by_note["leads"] == [] and by_note["tasks"] == []

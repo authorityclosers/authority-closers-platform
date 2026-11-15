@@ -86,7 +86,6 @@ import type { LeadIntent } from "./lead-sheet";
 import { publishBadge } from "./leads-badge";
 import { LeadsMenu, type LeadsMenuItem } from "./leads-menu";
 
-import { SellerChips } from "./seller-chips";
 import { useNudgeCard } from "./nudge-card";
 import { StartWhenAsked } from "./start-when-asked";
 import {
@@ -152,7 +151,6 @@ import {
   rememberView,
   keepsView,
   notLoadedText,
-  sideStage,
   stagesPipeline,
   tabCount,
   useWide,
@@ -214,10 +212,13 @@ import {
   ActiveFilters,
   FilterChip,
   FilterSheet,
+  SortPick,
   filterNames,
   filtersOn as countFilters,
   type LeadFilters,
 } from "./lead-filters";
+import { displayName } from "../display-name";
+import type { LeadFace } from "./list-view";
 import styles from "./leads.module.css";
 import { OPEN_ADD_EVENT, setViewedLeadsSide } from "../shell/shell-store";
 import { useSideNumbers } from "./side-numbers";
@@ -580,17 +581,16 @@ export function LeadsRoute({
   const [sharing, setSharing] = useState(false);
   // The current tab's first lead: Start calling opens it.
   const [topLead, setTopLead] = useState<string | null>(null);
+  // The listed leads' names and stage words, in order: the band names the
+  // lead it opens (Leads part 04).
+  const [faces, setFaces] = useState<Readonly<Record<string, LeadFace>>>({});
   const wide = useWide();
-  // Where the list draws its List | Table switch (Leads L1): beside Filter on
-  // a computer, inside the Filter sheet on a phone.
+  // Where the list draws its List | Table switch: beside Filter on a computer;
+  // on a phone, in the list's own row beside its sort (Leads part 03).
   const [headLayoutSlot, setHeadLayoutSlot] = useState<HTMLElement | null>(
     null,
   );
-  const [sheetLayoutSlot, setSheetLayoutSlot] = useState<HTMLElement | null>(
-    null,
-  );
   // And its "Syncing…": at the pinned head's lower edge, taking no room.
-  const [syncSlot, setSyncSlot] = useState<HTMLElement | null>(null);
   // Call Next's queue (Dipak's handoff, items 16-17 and 80): the leads served
   // this round, in the list's order. A lead opened any other way is one-off.
   const [queue, setQueue] = useState<ReadonlySet<string> | null>(null);
@@ -1586,6 +1586,9 @@ export function LeadsRoute({
     side: more.side,
     view: more.view,
     when: workView === "follow_ups" ? more.when : null,
+    // ...and the sort: it hides nothing (Leads part 03).
+    sort: more.sort,
+    order: more.order,
   };
   const clearFilters = () => {
     setSellerOwner(null);
@@ -1629,7 +1632,8 @@ export function LeadsRoute({
   const stageWord = (row: LeadRow) => {
     const own = ownStage(row);
     const word = own ? stageName(own, row.side ?? side) : undefined;
-    return workView === "all" ? sideStage(row, word ?? row.stage_label) : word;
+    // All Leads keeps to its side (bc5046b26): no "Cold · " on its rows.
+    return word;
   };
   // Its colour, the row's dot (Leads L1): the stage's own, as its chip has.
   const stageDot = (row: LeadRow) => {
@@ -1664,7 +1668,13 @@ export function LeadsRoute({
   // Leads → Filter (stage lists only): whose leads, the pipeline, a name or number.
   const filterable = (stageView || board) && view !== TEST;
   const defaultWho: Scope = sees ? "team" : "mine";
-  const shownFilters: LeadFilters = { who: scope, pipeline, q: query, more };
+  const shownFilters: LeadFilters = {
+    who: scope,
+    pipeline,
+    q: query,
+    more,
+    owner: scope === "team" ? sellerOwner : null,
+  };
 
   const applyFilters = (next: LeadFilters) =>
     applyView(
@@ -1675,7 +1685,7 @@ export function LeadsRoute({
         q: next.q,
         more: next.more ?? {},
       },
-      next.who === "team" ? sellerOwner : null,
+      next.who === "team" ? (next.owner ?? null) : null,
     );
   const applyView = (spec: ViewSpec, seller: string | null = null) => {
     setSellerOwner(seller);
@@ -1893,6 +1903,69 @@ export function LeadsRoute({
     viewCounts?.key === viewCountsKey
       ? (viewCounts.value[callNextView(workView)] ?? null)
       : null;
+  // The leads the filters leave, for the Filter sheet's "View 5 leads": the
+  // stage's count when one is picked, else the view's (Leads part 03).
+  const matching = stepShown
+    ? stepCounts?.key === stepCountsKey
+      ? (stepCounts.value[stepShown] ?? 0)
+      : null
+    : viewCounts?.key === viewCountsKey
+      ? (viewCounts.value[workView] ?? null)
+      : null;
+  // The lead the Call band opens, in words: "Rahul Joshi · New Lead" (Leads
+  // part 04). All Leads calls the side's To Call, which this list isn't.
+  const upNext =
+    workView === "all"
+      ? null
+      : startFrom({
+          paused: desk ? readPaused(desk.me.person_id, side) : null,
+          order: Object.keys(faces),
+          tried,
+        }).next;
+  const upFace = upNext ? faces[upNext] : undefined;
+  const upNextWords = upFace
+    ? [displayName(upFace.name), upFace.stage].filter(Boolean).join(" · ")
+    : null;
+  // The list is still loading its first lead: the band says so (Leads part 05).
+  const finding = workView !== "all" && !topLead;
+  // A picked stage with no leads: the empty card names it, and Show all
+  // stages takes only the stage away (Leads part 05).
+  const pickedStage = stepShown
+    ? pickable.find((stage) => stage.key === stepShown)
+    : undefined;
+  const stagePickEmpty =
+    pickedStage && view === OPENING_STAGE
+      ? {
+          title: `No ${side === "cold" ? "Cold" : "Inbound"} leads in ${stageName(pickedStage, side)}`,
+          text:
+            workView === "all"
+              ? "None of your leads are at this stage."
+              : `None of your ${workView === "to_call" ? "To Call" : "Follow-ups"} leads are at this stage.`,
+          onShowAll: () => pickWork({ step: null }),
+        }
+      : null;
+  // What the band counts, and hides on at zero: the leads this list holds, the
+  // stage's count when one is picked (tab counts ignore the stage chip,
+  // 087652e82). All Leads calls the side's To Call, so it keeps that count.
+  const bandCount = workView === "all" ? callCount : matching;
+  // The list's own order, in words that say what it does (Leads part 03).
+  const listOrder =
+    workView === "to_call"
+      ? ({ label: "Next call first", same: null } as const)
+      : newestFirst
+        ? ({ label: "Newest first", same: "created" } as const)
+        : ({ label: "Follow-up soonest", same: "next_action" } as const);
+  // "Assigned to"'s sellers, most leads first (Leads part 03).
+  const sellersToPick =
+    can && team && team.length > 1
+      ? [...team]
+          .sort(
+            (a, b) =>
+              (ownerCounts?.[b.person_id] ?? b.open_leads) -
+              (ownerCounts?.[a.person_id] ?? a.open_leads),
+          )
+          .map((rep) => ({ id: rep.person_id, name: displayName(rep.name) }))
+      : [];
   // A wide screen shows the lead beside the list (owner, 31 Oct 2026: the
   // computer's full width, a list and a detail pane); elsewhere a sheet.
   const paneShown =
@@ -2041,7 +2114,6 @@ export function LeadsRoute({
                 // Dipak's handoff (31 Oct 2026, items 44-73): the lead type,
                 // search with one Filter, the work views and one stage pick.
                 <WorkHead
-                  syncSlot={setSyncSlot}
                   side={
                     bothSides || more.side ? (
                       <SideSelector
@@ -2087,12 +2159,10 @@ export function LeadsRoute({
                             />
                           ) : null}
                           <FilterButton
-                            count={
-                              countFilters(
-                                { ...shownFilters, q: "" },
-                                defaultWho,
-                              ) + (sellerOwner ? 1 : 0)
-                            }
+                            count={countFilters(
+                              { ...shownFilters, q: "" },
+                              defaultWho,
+                            )}
                             onOpen={() =>
                               setFiltering((current) => ({
                                 round: (current?.round ?? 0) + 1,
@@ -2155,10 +2225,7 @@ export function LeadsRoute({
                 <ViewTools>
                   {" "}
                   <FilterChip
-                    count={
-                      countFilters(shownFilters, defaultWho) +
-                      (sellerOwner ? 1 : 0)
-                    }
+                    count={countFilters(shownFilters, defaultWho)}
                     onOpen={() =>
                       setFiltering((current) => ({
                         round: (current?.round ?? 0) + 1,
@@ -2173,7 +2240,9 @@ export function LeadsRoute({
                   filters={{ ...shownFilters, q: "" }}
                   defaultWho={defaultWho}
                   pipes={pipes?.pipelines ?? []}
+                  sellers={sellersToPick}
                   onChange={(next) => applyFilters({ ...next, q: query })}
+                  onClear={clearFilters}
                 />
               ) : null}
             </>
@@ -2239,6 +2308,8 @@ export function LeadsRoute({
               </div>
               <ListView
                 onTopLead={setTopLead}
+                onFaces={setFaces}
+                stagePick={stagePickEmpty}
                 onOrder={(leadIds, recent) => {
                   order.current = leadIds;
                   setTried((now) =>
@@ -2251,8 +2322,23 @@ export function LeadsRoute({
                 fresh={fresh}
                 heading={null}
                 bare
-                layoutSlot={wide ? headLayoutSlot : sheetLayoutSlot}
-                syncSlot={syncSlot}
+                layoutSlot={wide ? headLayoutSlot : null}
+                // The list's sort in its own row (Leads part 03), out of Filter.
+                sortPick={
+                  view !== TEST ? (
+                    <SortPick
+                      more={more}
+                      defaultLabel={listOrder.label}
+                      same={listOrder.same}
+                      onChange={(next) =>
+                        applyFilters({
+                          ...shownFilters,
+                          more: { ...more, ...next },
+                        })
+                      }
+                    />
+                  ) : null
+                }
                 empty={view === OPENING_STAGE ? emptyWords(workView) : null}
                 canManage={can}
                 initial={desk === serverSeed?.desk ? serverSeed : null}
@@ -2288,6 +2374,7 @@ export function LeadsRoute({
                   { ...shownFilters, q: "" },
                   defaultWho,
                   pipes?.pipelines ?? [],
+                  sellersToPick,
                 )}
                 onClearFilters={clearFilters}
                 onAdd={() => begin("adding", setAdding)}
@@ -2308,18 +2395,31 @@ export function LeadsRoute({
               {/* The one Call (Leads L1): Call Next Lead or Start Cold Calling,
                   the list's first lead, in a band above the tab bar; an empty
                   view has none. */}
-              {(workView === "all" ? (callCount ?? 0) > 0 : !!topLead) ? (
+              {/* It holds its place while the list loads, and hides only on a
+                  known zero (Leads part 05; L1's empty rule). */}
+              {(
+                workView === "all"
+                  ? (callCount ?? 0) > 0
+                  : !!topLead || bandCount !== 0
+              ) ? (
                 <CallBand
                   side={side}
                   view={callNextView(workView)}
-                  disabled={false}
-                  count={callCount}
+                  disabled={finding}
+                  count={bandCount}
+                  // Who the tap opens: the round's start over the same order
+                  // and recent tries the tap uses (Leads part 04).
+                  who={finding ? null : upNextWords}
                   // A paused round: the band says Continue, as a tap offers.
-                  label={continueWords(
-                    desk ? readPaused(desk.me.person_id, side) : null,
-                    callCount,
-                    tabCount,
-                  )}
+                  label={
+                    finding
+                      ? "Finding next call…"
+                      : continueWords(
+                          desk ? readPaused(desk.me.person_id, side) : null,
+                          bandCount,
+                          tabCount,
+                        )
+                  }
                   onStart={() => {
                     if (workView === "all") {
                       void callToCall();
@@ -2366,72 +2466,22 @@ export function LeadsRoute({
             filters={shownFilters}
             defaultWho={defaultWho}
             canPickWho={sees}
-            layoutSlot={stageView && !wide ? setSheetLayoutSlot : undefined}
             pipes={several(pipesShown) ? pipesShown.pipelines : []}
             onApply={applyFilters}
-            // The list's sort lives here in the work views (Leads L1: no sort row
-            // over the list).
-            sort={
-              stageView
-                ? {
-                    defaultLabel:
-                      workView === "to_call"
-                        ? "Calling order"
-                        : newestFirst
-                          ? "Newest"
-                          : "Next due",
-                    same:
-                      workView === "to_call"
-                        ? null
-                        : newestFirst
-                          ? "created"
-                          : "next_action",
-                  }
-                : undefined
-            }
+            // The work views' sort is the list's own row (Leads part 03).
+            sortOnList={stageView}
+            matching={stageView ? matching : null}
             onClearAll={() =>
               applyView({
                 stage: view,
                 pipeline: null,
                 who: defaultWho,
                 q: query,
-                more: { ...keptWork, step: more.step },
+                // Clear resets the stage too, and keeps the sort (Leads part 03).
+                more: keptWork,
               })
             }
-            sellerPicker={
-              can && stageView && view !== TEST && team && team.length > 1 ? (
-                <SellerChips
-                  sellersOnly
-                  reps={team}
-                  counts={
-                    ownerCounts ??
-                    Object.fromEntries(
-                      team.map((rep) => [rep.person_id, rep.open_leads]),
-                    )
-                  }
-                  unassigned={desk.counts.unassigned ?? null}
-                  pick={{
-                    owner: scope === "team" ? sellerOwner : null,
-                    unassigned: scope === "unassigned",
-                  }}
-                  onPick={(next) => {
-                    applyView(
-                      {
-                        stage: view,
-                        pipeline,
-                        q: query,
-                        more,
-                        who: next.unassigned ? "unassigned" : "team",
-                      },
-                      next.owner,
-                    );
-                    setFiltering(
-                      (current) => current && { ...current, open: false },
-                    );
-                  }}
-                />
-              ) : null
-            }
+            sellers={stageView && view !== TEST ? sellersToPick : []}
           />
         ) : null}
         <LeadsMenu

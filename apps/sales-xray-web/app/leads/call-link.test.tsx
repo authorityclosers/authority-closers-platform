@@ -46,6 +46,19 @@ afterEach(async () => {
 
 const link = () => host.querySelector<HTMLAnchorElement>("a")!;
 
+/** The page hides (the dialer opened), then shows again. */
+function hidePage() {
+  Object.defineProperty(document, "hidden", {
+    configurable: true,
+    value: true,
+  });
+  document.dispatchEvent(new Event("visibilitychange"));
+  Object.defineProperty(document, "hidden", {
+    configurable: true,
+    value: false,
+  });
+}
+
 it("is the lead's tel: link, marked so a touch on it isn't timed as a call", () => {
   expect(link().getAttribute("href")).toBe("tel:+910000000000");
   expect(link().hasAttribute("data-sx-call")).toBe(true);
@@ -72,8 +85,38 @@ it("calls on a touch whose click a glide ate, and on a keyboard or screen reader
   await act(async () => {
     await new Promise((done) => setTimeout(done, 850));
   });
+  // The dialer opened and the page hid; back on it, a new press calls again.
+  hidePage();
   // Enter on the focused link, or TalkBack's double tap: a click, no touch.
   await act(async () => link().click());
   expect(calls).toEqual(["pointerup", "click"]);
   expect(pressed.report).toHaveBeenCalledWith("click");
+  hidePage();
+});
+
+// Leads part 04: no double dial. A second tap on the same number within 2.5 s is
+// the same call, until the page hides (the dialer opened).
+it("never dials twice for a double tap, and calls again once the dialer opened", async () => {
+  const touch = (type: string) =>
+    link().dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        pointerType: "touch",
+        isPrimary: true,
+        pointerId: 7,
+      }),
+    );
+  const tap = () =>
+    act(async () => {
+      touch("pointerdown");
+      touch("pointerup");
+    });
+  await tap();
+  await tap();
+  expect(calls).toEqual(["pointerup"]);
+  hidePage();
+  await tap();
+  expect(calls).toEqual(["pointerup", "pointerup"]);
+  hidePage();
 });
