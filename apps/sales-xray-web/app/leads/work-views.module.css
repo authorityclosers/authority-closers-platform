@@ -578,3 +578,35 @@
 .callNextButton:active {
   transform: var(--sx-press-sink);
 }
+
+/* Leads part 04: the band says who it opens, on a second line inside the same
+   56 px pill; the name fades in when it changes. */
+.callBandWords {
+  display: grid;
+  min-width: 0;
+  justify-items: center;
+  line-height: 1.25;
+}
+
+.callBandWho {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  opacity: 0.82;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: callBandWhoIn 140ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+@keyframes callBandWhoIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .callBandWho {
+    animation: none;
+  }
+}

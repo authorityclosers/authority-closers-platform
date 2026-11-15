@@ -219,6 +219,7 @@ import {
   type LeadFilters,
 } from "./lead-filters";
 import { displayName } from "../display-name";
+import type { LeadFace } from "./list-view";
 import styles from "./leads.module.css";
 import { OPEN_ADD_EVENT, setViewedLeadsSide } from "../shell/shell-store";
 import { useSideNumbers } from "./side-numbers";
@@ -581,6 +582,9 @@ export function LeadsRoute({
   const [sharing, setSharing] = useState(false);
   // The current tab's first lead: Start calling opens it.
   const [topLead, setTopLead] = useState<string | null>(null);
+  // The listed leads' names and stage words, in order: the band names the
+  // lead it opens (Leads part 04).
+  const [faces, setFaces] = useState<Readonly<Record<string, LeadFace>>>({});
   const wide = useWide();
   // Where the list draws its List | Table switch: beside Filter on a computer;
   // on a phone, in the list's own row beside its sort (Leads part 03).
@@ -1909,6 +1913,20 @@ export function LeadsRoute({
     : viewCounts?.key === viewCountsKey
       ? (viewCounts.value[workView] ?? null)
       : null;
+  // The lead the Call band opens, in words: "Rahul Joshi · New Lead" (Leads
+  // part 04). All Leads calls the side's To Call, which this list isn't.
+  const upNext =
+    workView === "all"
+      ? null
+      : startFrom({
+          paused: desk ? readPaused(desk.me.person_id, side) : null,
+          order: Object.keys(faces),
+          tried,
+        }).next;
+  const upFace = upNext ? faces[upNext] : undefined;
+  const upNextWords = upFace
+    ? [displayName(upFace.name), upFace.stage].filter(Boolean).join(" · ")
+    : null;
   // The list's own order, in words that say what it does (Leads part 03).
   const listOrder =
     workView === "to_call"
@@ -2270,6 +2288,7 @@ export function LeadsRoute({
               </div>
               <ListView
                 onTopLead={setTopLead}
+                onFaces={setFaces}
                 onOrder={(leadIds, recent) => {
                   order.current = leadIds;
                   setTried((now) =>
@@ -2362,6 +2381,9 @@ export function LeadsRoute({
                   view={callNextView(workView)}
                   disabled={false}
                   count={callCount}
+                  // Who the tap opens: the round's start over the same order
+                  // and recent tries the tap uses (Leads part 04).
+                  who={upNextWords}
                   // A paused round: the band says Continue, as a tap offers.
                   label={continueWords(
                     desk ? readPaused(desk.me.person_id, side) : null,

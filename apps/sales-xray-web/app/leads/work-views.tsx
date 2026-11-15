@@ -634,6 +634,7 @@ export function CallBand({
   count = null,
   label = null,
   className,
+  who = null,
 }: {
   side: Side;
   /** Follow-ups says so: "Call Next Follow-up · 12" (spec §3). */
@@ -647,6 +648,9 @@ export function CallBand({
   label?: string | null;
   /** The page's own class beside the band's (Home keeps it to phones). */
   className?: string;
+  /** Who the tap opens, on a second line: "Rahul Joshi · New Lead" (Leads
+   *  part 04). */
+  who?: string | null;
 }) {
   return (
     <div
@@ -670,15 +674,22 @@ export function CallBand({
           strokeWidth={2}
           aria-hidden="true"
         />
-        <span>
-          {label ??
-            `${
-              view === "follow_ups"
-                ? "Call Next Follow-up"
-                : side === "cold"
-                  ? "Start Cold Calling"
-                  : "Call Next Lead"
-            }${count ? ` · ${tabCount(count)}` : ""}`}
+        <span className={styles.callBandWords}>
+          <span>
+            {label ??
+              `${
+                view === "follow_ups"
+                  ? "Call Next Follow-up"
+                  : side === "cold"
+                    ? "Start Cold Calling"
+                    : "Call Next Lead"
+              }${count ? ` · ${tabCount(count)}` : ""}`}
+          </span>
+          {who ? (
+            <span key={who} className={styles.callBandWho}>
+              {who}
+            </span>
+          ) : null}
         </span>
       </button>
     </div>

@@ -78,6 +78,9 @@ import {
 } from "./row-window";
 import styles from "./leads.module.css";
 
+/** A listed lead as the Call band names it: "Rahul Joshi · New Lead". */
+export type LeadFace = { name: string; stage: string };
+
 const CachedLeadLine = memo(LeadLine);
 const subscribeHydration = () => () => {};
 
@@ -354,6 +357,7 @@ export function ListView({
   syncSlot = null,
   onTopLead,
   onOrder,
+  onFaces,
   stageWord,
   stageTone,
   quietLate = false,
@@ -379,6 +383,9 @@ export function ListView({
   /** The leads in the list's order, as shown: Call Next goes through them;
    *  with those tried in the last hour, which a continued round passes over. */
   onOrder?: (leadIds: readonly string[], recent: readonly string[]) => void;
+  /** Each listed lead's name and stage word, in the list's order: the Call
+   *  band names the lead it opens (Leads part 04). */
+  onFaces?: (faces: Readonly<Record<string, LeadFace>>) => void;
   initial?: ServerLeads | null;
   cacheIdentity?: string | null;
   /** "open", a stage kind, or "test". */
@@ -659,6 +666,26 @@ export function ListView({
       ),
     );
   }, [order, lastTries]);
+  // Each row's name and stage word, in order, for the Call band's second line.
+  const facesTo = useRef(onFaces);
+  useEffect(() => {
+    facesTo.current = onFaces;
+  });
+  const facesKey = rows
+    .map((row) =>
+      [row.lead_id, row.name, stageWord?.(row) ?? row.stage_label].join(
+        "\u0001",
+      ),
+    )
+    .join("\u0002");
+  useEffect(() => {
+    const faces: Record<string, LeadFace> = {};
+    for (const part of facesKey ? facesKey.split("\u0002") : []) {
+      const [id, name, stage] = part.split("\u0001");
+      faces[id] = { name, stage };
+    }
+    facesTo.current?.(faces);
+  }, [facesKey]);
   // Only the rows near the view are drawn (NearRows): a row's kind (three
   // lines, or two for a closed lead with no next step) gives its height until
   // it is drawn and read.
