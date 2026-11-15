@@ -27,6 +27,7 @@ import {
 
 import { notify } from "../notice-center";
 import { OrganisationView } from "../organisation/organisation-view";
+import { ApiUploadsSwitch } from "./api-uploads";
 import { AssistantSetup } from "./assistant-setup";
 import { DevFold } from "./dev-card";
 import { TryApi } from "./try-api";
@@ -139,20 +140,24 @@ export function DevelopersSection() {
           refresh,
           extras: {
             keys: (
-              // Folded until wanted; a key made a moment ago opens it.
-              <DevFold
-                key={freshKey ? "fresh" : "folded"}
-                icon={<FlaskConical />}
-                tone="blue"
-                title="Try the API"
-                note="A real request with your key"
-                open={freshKey !== null}
-              >
-                <TryApi
-                  freshKey={freshKey}
-                  onUsed={() => setRefresh((value) => value + 1)}
-                />
-              </DevFold>
+              <>
+                {/* Calls apps send with these keys (API gap 2). */}
+                <ApiUploadsSwitch />
+                {/* Folded until wanted; a key made a moment ago opens it. */}
+                <DevFold
+                  key={freshKey ? "fresh" : "folded"}
+                  icon={<FlaskConical />}
+                  tone="blue"
+                  title="Try the API"
+                  note="A real request with your key"
+                  open={freshKey !== null}
+                >
+                  <TryApi
+                    freshKey={freshKey}
+                    onUsed={() => setRefresh((value) => value + 1)}
+                  />
+                </DevFold>
+              </>
             ),
           },
         }}
