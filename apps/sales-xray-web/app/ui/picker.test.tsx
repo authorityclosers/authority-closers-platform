@@ -296,3 +296,35 @@ it("as a table cell's editor opens at once above the page, never as a sheet, and
     window.matchMedia = real;
   }
 });
+
+// Leads part 03: a row with nothing in it stays listed and tappable, muted.
+it("marks a row with nothing in it, and still picks it", async () => {
+  const onChange = vi.fn();
+  await act(async () =>
+    root.render(
+      <Picker
+        title="Pipeline stage"
+        value={null}
+        all={{ label: "All stages", count: 3 }}
+        options={[
+          { key: "new", label: "New lead", count: 3 },
+          { key: "won", label: "Won", count: 0 },
+        ]}
+        onChange={onChange}
+      />,
+    ),
+  );
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!
+      .click(),
+  );
+  const rows = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+  expect(rows.map((row) => row.hasAttribute("data-empty"))).toEqual([
+    false,
+    false,
+    true,
+  ]);
+  await act(async () => rows[2].click());
+  expect(onChange).toHaveBeenCalledWith("won");
+});

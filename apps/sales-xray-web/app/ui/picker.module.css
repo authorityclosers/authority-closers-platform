@@ -269,6 +269,12 @@
   font-weight: 500;
 }
 
+/* A row with nothing in it (a stage with no leads): listed and tappable, its
+   name muted unless it is the choice (Leads part 03). */
+.option[data-empty]:not([aria-selected="true"]) .name {
+  color: var(--sx-muted);
+}
+
 .check {
   color: var(--lx-teal);
   visibility: hidden;
