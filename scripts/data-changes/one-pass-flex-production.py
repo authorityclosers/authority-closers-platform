@@ -348,6 +348,40 @@ def _transcription(row: Any) -> str | None:
     return None if route is None else route.provider_id
 
 
+async def _last_classic(database: Any, tenant_id: UUID, rows: dict[int, Any]) -> Any:
+    """The Scribe configuration last in use: the newest activation of a configuration Gemini
+    does not transcribe; none ever activated, the newest such row, as before. Staging, 16 Nov
+    2026: a newer Scribe row, saved but never in use and carrying its own GPT-6 Luna entry,
+    was taken for the classic one once a switch made a Gemini-transcribed configuration
+    active, so the switch refused its own read-back (references given: the classic one has a
+    Luna entry; none given: references needed) and ``back`` would have activated that row."""
+    from ac_platform.conversation_intelligence.models import (
+        ConversationProviderActivation,
+        ConversationProviderConfiguration,
+    )
+
+    used = (
+        await database.scalars(
+            select(ConversationProviderConfiguration)
+            .join(
+                ConversationProviderActivation,
+                ConversationProviderActivation.configuration_id
+                == ConversationProviderConfiguration.id,
+            )
+            .where(
+                ConversationProviderActivation.tenant_id == tenant_id,
+                ConversationProviderConfiguration.tenant_id == tenant_id,
+            )
+            .order_by(ConversationProviderActivation.sequence.desc())
+            .limit(64)
+        )
+    ).all()
+    newest = (row for _, row in sorted(rows.items(), reverse=True))
+    return next(
+        (row for row in (*used, *newest) if _transcription(row) not in (None, "gemini")), None
+    )
+
+
 async def _state(
     database: Any, actor: Any, service: Any, command: Command | None = None
 ) -> dict[str, Any]:
@@ -366,14 +400,7 @@ async def _state(
     classic = (
         active
         if active is not None and _transcription(active) not in (None, "gemini")
-        else next(
-            (
-                row
-                for _, row in sorted(rows.items(), reverse=True)
-                if _transcription(row) not in (None, "gemini")
-            ),
-            None,
-        )
+        else await _last_classic(database, actor.tenant_id, rows)
     )
     variants = list(TIERS)
     if command is not None and command.variant not in variants:
