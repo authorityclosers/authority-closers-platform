@@ -148,6 +148,51 @@ it("fades the page area, opacity only, for a move no tap started", async () => {
   await frame.unmount();
 });
 
+it("opens a new screen at its top, and keeps the place on a step back (tester report 216)", async () => {
+  let y = 568;
+  const realScrollY = Object.getOwnPropertyDescriptor(window, "scrollY");
+  Object.defineProperty(window, "scrollY", {
+    configurable: true,
+    get: () => y,
+  });
+  const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(((
+    options: ScrollToOptions,
+  ) => {
+    y = options.top ?? y;
+  }) as typeof window.scrollTo);
+  const frame = await mount("/organisation/insights");
+  expect(scrollTo).not.toHaveBeenCalled();
+  // The account sheet's Selling, with the old page scrolled down: the new
+  // page shows from its top, not cut to the old scroll.
+  y = 54;
+  await frame.render("/settings/selling");
+  expect(scrollTo).toHaveBeenCalledOnce();
+  expect(scrollTo).toHaveBeenCalledWith({
+    top: 0,
+    left: 0,
+    behavior: "instant",
+  });
+  expect(y).toBe(0);
+  // A tap on a tab that moves left is a new screen too.
+  y = 300;
+  await frame.render("/dashboard");
+  expect(y).toBe(0);
+  // Back (history) keeps the place the browser and the page put back.
+  y = 420;
+  await act(async () => {
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await frame.render("/settings/selling");
+  expect(y).toBe(420);
+  // A new address in the same page (a query) moves nothing.
+  scrollTo.mockClear();
+  await frame.render("/settings/selling");
+  expect(scrollTo).not.toHaveBeenCalled();
+  await frame.unmount();
+  scrollTo.mockRestore();
+  if (realScrollY) Object.defineProperty(window, "scrollY", realScrollY);
+});
+
 it("shows the outline on the press, and the click only navigates", async () => {
   const frame = await mount("/dashboard");
   await act(async () => {
