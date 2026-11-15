@@ -13,14 +13,8 @@
  * answered by the server.
  */
 
-import { ArrowUpDown, ChevronDown, SlidersHorizontal, X } from "lucide-react";
-import {
-  useCallback,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { SlidersHorizontal, X } from "lucide-react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
@@ -42,14 +36,16 @@ export type LeadFilters = {
   q: string;
   /** Sort and the other filters, over the whole list. */
   more?: ListMore;
+  /** One seller's leads, with who "team" (Leads part 03: "Assigned to"). */
+  owner?: string | null;
 };
 
 type Pipe = { key: string; name: string };
 
 const WHO: { key: Scope; label: string }[] = [
-  { key: "team", label: "Everyone" },
+  { key: "team", label: "All sellers" },
   { key: "mine", label: "Mine" },
-  { key: "unassigned", label: "No owner" },
+  { key: "unassigned", label: "Unassigned" },
 ];
 
 export const DUE_WORDS: Record<ListDue, string> = {
@@ -77,7 +73,8 @@ export const MADE_WORDS: Record<ListMade, string> = {
   history: "Old leads",
 };
 export const SORT_WORDS: Record<ListSort, string> = {
-  next_action: "Next follow-up",
+  // Says what the order does (Leads part 03).
+  next_action: "Follow-up soonest",
   last_contact: "Last contact",
   name: "Name",
   created: "Newest first",
@@ -122,9 +119,15 @@ export function SortPick({
     <Picker
       title="Sort"
       label="Sort:"
-      icon={<ArrowUpDown size={16} aria-hidden="true" />}
       mode={mode}
       value={value}
+      // Over the list it says it is a sort at any width: "Sort: Next call
+      // first" (Leads part 03; no direction mark, nothing reverses).
+      display={
+        mode === "inline" ? undefined : (
+          <span>{`Sort: ${value === null ? defaultLabel : SORT_CHOICES[value]}`}</span>
+        )
+      }
       all={{ label: defaultLabel }}
       options={Object.entries(SORT_CHOICES)
         .filter(([key]) => key !== same)
@@ -167,6 +170,7 @@ export function filtersOn(filters: LeadFilters, defaultWho: Scope): number {
   return (
     (filters.q.trim() ? 1 : 0) +
     (filters.who !== defaultWho ? 1 : 0) +
+    (filters.owner && filters.who === "team" ? 1 : 0) +
     (filters.pipeline ? 1 : 0) +
     (more.source ? 1 : 0) +
     (more.due ? 1 : 0) +
@@ -220,6 +224,7 @@ function filterChips(
   filters: LeadFilters,
   defaultWho: Scope,
   pipes: Pipe[],
+  sellers: readonly Seller[] = [],
 ): { key: string; label: string; clear: LeadFilters }[] {
   const more = filters.more ?? {};
   const without = (key: keyof ListMore): LeadFilters => ({
@@ -239,6 +244,14 @@ function filterChips(
       label: WHO.find((item) => item.key === filters.who)?.label ?? "",
       clear: { ...filters, who: defaultWho },
     });
+  if (filters.owner && filters.who === "team") {
+    const name = sellers.find((seller) => seller.id === filters.owner)?.name;
+    chips.push({
+      key: "owner",
+      label: name ? `Owner: ${name.split(" ")[0]}` : "One seller",
+      clear: { ...filters, owner: null },
+    });
+  }
   if (filters.pipeline)
     chips.push({
       key: "pipeline",
@@ -293,25 +306,32 @@ export function filterNames(
   filters: LeadFilters,
   defaultWho: Scope,
   pipes: Pipe[] = [],
+  sellers: readonly Seller[] = [],
 ): string[] {
-  return filterChips(filters, defaultWho, pipes)
+  return filterChips(filters, defaultWho, pipes, sellers)
     .filter((chip) => chip.key !== "sort")
     .map((chip) => chip.label);
 }
 
-/** The filters that are on, each with its own ×. */
+/** The filters that are on, each with its own ×, then Clear (Leads part 03). */
 export function ActiveFilters({
   filters,
   defaultWho,
   pipes,
   onChange,
+  sellers = [],
+  onClear,
 }: {
   filters: LeadFilters;
   defaultWho: Scope;
   pipes: Pipe[];
   onChange: (next: LeadFilters) => void;
+  /** The sellers, for "Owner: Farah". */
+  sellers?: readonly Seller[];
+  /** Clears every filter at once (the sort stays). */
+  onClear?: () => void;
 }) {
-  const chips = filterChips(filters, defaultWho, pipes);
+  const chips = filterChips(filters, defaultWho, pipes, sellers);
   if (!chips.length) return null;
   return (
     <ul className={styles.activeFilters} aria-label="Filters on">
@@ -332,6 +352,17 @@ export function ActiveFilters({
           </button>
         </li>
       ))}
+      {onClear && chips.some((chip) => chip.key !== "sort") ? (
+        <li>
+          <button
+            type="button"
+            className={styles.activeClear}
+            onClick={onClear}
+          >
+            Clear
+          </button>
+        </li>
+      ) : null}
     </ul>
   );
 }
@@ -368,6 +399,12 @@ function Choices<T extends string>({
   );
 }
 
+/** A seller "Assigned to" can name. */
+export type Seller = { id: string; name: string };
+
+/** "Assigned to"'s key for one seller. */
+const SELLER = "seller:";
+
 export function FilterSheet({
   open,
   onClose,
@@ -376,10 +413,12 @@ export function FilterSheet({
   canPickWho,
   pipes,
   onApply,
-  sellerPicker,
+  sellers = [],
   onClearAll,
   fileSources = [],
   sort,
+  sortOnList = false,
+  matching = null,
   layoutSlot,
 }: {
   open: boolean;
@@ -392,6 +431,10 @@ export function FilterSheet({
   /** The list's sort, first in the sheet (Leads L1: no sort row over the list):
    *  its own order's words, and the choice that is that order. */
   sort?: { defaultLabel: string; same: ListSort | null };
+  /** The list's own row holds the sort (Leads part 03): none in the sheet. */
+  sortOnList?: boolean;
+  /** The leads the filters leave, once counted: "View 5 leads". */
+  matching?: number | null;
   /** The organisation's own lists, from files' Source columns (ph1-18). */
   fileSources?: readonly string[];
   defaultWho: Scope;
@@ -400,14 +443,22 @@ export function FilterSheet({
   /** Several pipelines: one, or all of them. */
   pipes: Pipe[];
   onApply: (next: LeadFilters) => void;
-  sellerPicker?: ReactNode;
+  /** The sellers "Assigned to" lists, most leads first (Leads part 03: one field
+   *  in place of "Whose leads" and "One seller"). */
+  sellers?: readonly Seller[];
   onClearAll?: () => void;
 }) {
   // A fresh sheet each opening starts from the filters on now.
   const [draft, setDraft] = useState(filters);
   const more = draft.more ?? {};
+  // Every choice applies as it is made (Leads part 03): the list and its counts
+  // follow at once, and the sheet's button only goes back to the list.
+  const change = (next: LeadFilters) => {
+    setDraft(next);
+    onApply({ ...next, q: next.q.trim() });
+  };
   const setMore = (next: ListMore) =>
-    setDraft({ ...draft, more: { ...more, ...next } });
+    change({ ...draft, more: { ...more, ...next } });
   const apply = (next: LeadFilters) => {
     onApply({ ...next, q: next.q.trim() });
     onClose();
@@ -430,6 +481,12 @@ export function FilterSheet({
     node.addEventListener("click", heard);
     return () => node.removeEventListener("click", heard);
   }, []);
+  const assigned =
+    draft.who === "team"
+      ? draft.owner
+        ? `${SELLER}${draft.owner}`
+        : null
+      : draft.who;
   return (
     <Sheet
       open={open}
@@ -445,13 +502,23 @@ export function FilterSheet({
                 onClearAll();
                 onClose();
               } else
-                apply({ who: defaultWho, pipeline: null, q: "", more: {} });
+                apply({
+                  who: defaultWho,
+                  pipeline: null,
+                  q: "",
+                  // Clear keeps the sort: it hides nothing (Leads part 03).
+                  more: more.sort
+                    ? { sort: more.sort, order: more.order ?? null }
+                    : {},
+                });
             }}
           >
-            Clear Filters
+            Clear filters
           </Button>
-          <Button variant="primary" onClick={() => apply(draft)}>
-            Show Results
+          <Button variant="primary" onClick={onClose}>
+            {matching === null
+              ? "View leads"
+              : `View ${matching.toLocaleString("en-IN")} ${matching === 1 ? "lead" : "leads"}`}
           </Button>
         </div>
       }
@@ -460,10 +527,10 @@ export function FilterSheet({
         className={styles.filterForm}
         onSubmit={(event) => {
           event.preventDefault();
-          apply(draft);
+          onClose();
         }}
       >
-        {sort ? (
+        {sort && !sortOnList ? (
           <SortPick
             more={more}
             defaultLabel={sort.defaultLabel}
@@ -479,7 +546,7 @@ export function FilterSheet({
           </div>
         ) : null}
         {/* Pipeline first: for a team with several, the choice that matters most
-            (orchestrator, 25 Oct 2026); then whose leads. */}
+            (orchestrator, 25 Oct 2026); then who the leads are assigned to. */}
         {pipes.length > 1 ? (
           <Choices
             label="Pipeline"
@@ -488,28 +555,33 @@ export function FilterSheet({
             )}
             value={draft.pipeline}
             any="All pipelines"
-            onChange={(pipeline) => setDraft({ ...draft, pipeline })}
+            onChange={(pipeline) => change({ ...draft, pipeline })}
           />
         ) : null}
         {canPickWho ? (
           <Choices
-            label="Whose leads"
-            words={{ mine: "Mine", unassigned: "No owner" }}
-            value={draft.who === "team" ? null : draft.who}
-            any="Everyone"
-            onChange={(who) =>
-              setDraft({ ...draft, who: (who as Scope | null) ?? "team" })
+            label="Assigned to"
+            words={{
+              mine: "Mine",
+              ...Object.fromEntries(
+                sellers.map((seller) => [`${SELLER}${seller.id}`, seller.name]),
+              ),
+              unassigned: "Unassigned",
+            }}
+            value={assigned}
+            any="All sellers"
+            onChange={(key) =>
+              change(
+                key?.startsWith(SELLER)
+                  ? { ...draft, who: "team", owner: key.slice(SELLER.length) }
+                  : {
+                      ...draft,
+                      who: (key as Scope | null) ?? "team",
+                      owner: null,
+                    },
+              )
             }
           />
-        ) : null}
-        {sellerPicker ? (
-          <details className={styles.pickerGroup} name="lead-filter-choice">
-            <summary>
-              <span>One seller</span>
-              <ChevronDown size={16} aria-hidden="true" />
-            </summary>
-            <div className={styles.sellerChoices}>{sellerPicker}</div>
-          </details>
         ) : null}
         {/* Dipak's handoff (31 Oct 2026, items 50-52): source, date and
             follow-up; search is on the page. */}
@@ -543,10 +615,11 @@ export function FilterSheet({
           value={more.when}
           onChange={(when) => setMore({ when, due: null })}
         />
-        {/* One sort: the list's own, first in the sheet, when the list gives
-            it (Leads L1); this row only where it doesn't (Redmi QA F1, 10 Nov
-            2026: "Sort: Next due" at the top and "Sort by Any" at the foot). */}
-        {sort ? null : (
+        {/* One sort: the list's own (its row, or first in the sheet) when the
+            list gives it (Leads L1, part 03); this row only where it doesn't
+            (Redmi QA F1, 10 Nov 2026: "Sort: Next due" at the top and "Sort by
+            Any" at the foot). */}
+        {sort || sortOnList ? null : (
           <Choices
             label="Sort by"
             words={SORT_CHOICES}

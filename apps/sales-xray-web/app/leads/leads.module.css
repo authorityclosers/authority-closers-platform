@@ -5335,7 +5335,7 @@ a.repName {
    shows only while it says something (a sync under way or paused, Select). */
 .listHead[data-bare]:not(:has(.syncChip:not([data-quiet]))):not(
     :has(.selectToggle)
-  ) {
+  ):not(:has(.listSort)) {
   display: none;
 }
 
@@ -8417,4 +8417,82 @@ fieldset.form {
 .leadFace[data-compact] .leadSub > *,
 .leadFace[data-quick][data-compact] .leadSub > * {
   white-space: nowrap;
+}
+
+/* Leads part 03, filter and sort (design-research 03-filter-sort.md, 15 Nov
+   2026): the list's sort and List | Table in one slim row over the list, out of
+   the Filter sheet; the sort says it is one ("Sort: Next call first"). */
+.listHead[data-bare]:has(.listSort) {
+  min-height: 44px;
+  padding: 0 8px 0 12px;
+}
+
+.listSort button[aria-haspopup="listbox"] {
+  width: auto;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+}
+
+/* On a phone too, List | Table sits at the row's end, beside the sort: it left the
+   Filter sheet, and the owner uses the table on his phone (24 Oct, bug 194). */
+@media (max-width: 767px) {
+  .listHead[data-bare]:has(.listSort) .listTools,
+  .listHead[data-bare]:has(.listSort) .listTools .layoutSwitch {
+    display: inline-flex;
+  }
+}
+
+.listHead[data-bare]:has(.listSort) .layoutSwitch button {
+  justify-content: center;
+  min-width: 44px;
+}
+
+/* The filters that are on: soft accent chips in one row, 36 px to the eye and
+   44 to a finger, then Clear. */
+.activeFilters {
+  flex-wrap: nowrap;
+  margin-block: -4px;
+  padding-block: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.activeFilters > li {
+  flex: none;
+}
+
+.activeFilter {
+  position: relative;
+  min-height: 36px;
+  border-color: transparent;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.activeFilter::after {
+  position: absolute;
+  inset: -4px 0;
+  content: "";
+}
+
+.activeClear {
+  min-height: 36px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.activeClear:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
 }

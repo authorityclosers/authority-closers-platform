@@ -592,7 +592,7 @@ export function StageChips({
 }
 
 /** Filter at the chip row's end (Leads L1): a 40 dp circle, 48 dp to a finger,
- *  with a dot while a filter other than the stage is on. */
+ *  with the count of filters on other than the stage (Leads part 03). */
 export function FilterButton({
   count,
   onOpen,
@@ -611,6 +611,11 @@ export function FilterButton({
       onClick={onOpen}
     >
       <SlidersHorizontal size={20} aria-hidden="true" />
+      {count ? (
+        <span className={styles.filterBadge} aria-hidden="true">
+          {count}
+        </span>
+      ) : null}
     </button>
   );
 }

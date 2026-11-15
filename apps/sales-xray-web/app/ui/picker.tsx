@@ -261,6 +261,13 @@ export function Picker({
     if (refocus && !sheet) button.current?.focus();
   };
   const pick = (key: string | null) => {
+    // On a phone the sheet shows the tapped row chosen, then goes (Leads part
+    // 03: a tap applies at once and the sheet closes after it).
+    if (sheet && !reducedMotion()) {
+      if (key !== value) onChange(key);
+      window.setTimeout(() => close(false), 120);
+      return;
+    }
     close();
     if (key !== value) onChange(key);
   };

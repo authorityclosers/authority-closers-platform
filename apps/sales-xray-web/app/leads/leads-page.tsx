@@ -86,7 +86,6 @@ import type { LeadIntent } from "./lead-sheet";
 import { publishBadge } from "./leads-badge";
 import { LeadsMenu, type LeadsMenuItem } from "./leads-menu";
 
-import { SellerChips } from "./seller-chips";
 import { useNudgeCard } from "./nudge-card";
 import { StartWhenAsked } from "./start-when-asked";
 import {
@@ -214,10 +213,12 @@ import {
   ActiveFilters,
   FilterChip,
   FilterSheet,
+  SortPick,
   filterNames,
   filtersOn as countFilters,
   type LeadFilters,
 } from "./lead-filters";
+import { displayName } from "../display-name";
 import styles from "./leads.module.css";
 import { OPEN_ADD_EVENT, setViewedLeadsSide } from "../shell/shell-store";
 import { useSideNumbers } from "./side-numbers";
@@ -581,12 +582,9 @@ export function LeadsRoute({
   // The current tab's first lead: Start calling opens it.
   const [topLead, setTopLead] = useState<string | null>(null);
   const wide = useWide();
-  // Where the list draws its List | Table switch (Leads L1): beside Filter on
-  // a computer, inside the Filter sheet on a phone.
+  // Where the list draws its List | Table switch: beside Filter on a computer;
+  // on a phone, in the list's own row beside its sort (Leads part 03).
   const [headLayoutSlot, setHeadLayoutSlot] = useState<HTMLElement | null>(
-    null,
-  );
-  const [sheetLayoutSlot, setSheetLayoutSlot] = useState<HTMLElement | null>(
     null,
   );
   // And its "Syncing…": at the pinned head's lower edge, taking no room.
@@ -1586,6 +1584,9 @@ export function LeadsRoute({
     side: more.side,
     view: more.view,
     when: workView === "follow_ups" ? more.when : null,
+    // ...and the sort: it hides nothing (Leads part 03).
+    sort: more.sort,
+    order: more.order,
   };
   const clearFilters = () => {
     setSellerOwner(null);
@@ -1664,7 +1665,13 @@ export function LeadsRoute({
   // Leads → Filter (stage lists only): whose leads, the pipeline, a name or number.
   const filterable = (stageView || board) && view !== TEST;
   const defaultWho: Scope = sees ? "team" : "mine";
-  const shownFilters: LeadFilters = { who: scope, pipeline, q: query, more };
+  const shownFilters: LeadFilters = {
+    who: scope,
+    pipeline,
+    q: query,
+    more,
+    owner: scope === "team" ? sellerOwner : null,
+  };
 
   const applyFilters = (next: LeadFilters) =>
     applyView(
@@ -1675,7 +1682,7 @@ export function LeadsRoute({
         q: next.q,
         more: next.more ?? {},
       },
-      next.who === "team" ? sellerOwner : null,
+      next.who === "team" ? (next.owner ?? null) : null,
     );
   const applyView = (spec: ViewSpec, seller: string | null = null) => {
     setSellerOwner(seller);
@@ -1893,6 +1900,33 @@ export function LeadsRoute({
     viewCounts?.key === viewCountsKey
       ? (viewCounts.value[callNextView(workView)] ?? null)
       : null;
+  // The leads the filters leave, for the Filter sheet's "View 5 leads": the
+  // stage's count when one is picked, else the view's (Leads part 03).
+  const matching = stepShown
+    ? stepCounts?.key === stepCountsKey
+      ? (stepCounts.value[stepShown] ?? 0)
+      : null
+    : viewCounts?.key === viewCountsKey
+      ? (viewCounts.value[workView] ?? null)
+      : null;
+  // The list's own order, in words that say what it does (Leads part 03).
+  const listOrder =
+    workView === "to_call"
+      ? ({ label: "Next call first", same: null } as const)
+      : newestFirst
+        ? ({ label: "Newest first", same: "created" } as const)
+        : ({ label: "Follow-up soonest", same: "next_action" } as const);
+  // "Assigned to"'s sellers, most leads first (Leads part 03).
+  const sellersToPick =
+    can && team && team.length > 1
+      ? [...team]
+          .sort(
+            (a, b) =>
+              (ownerCounts?.[b.person_id] ?? b.open_leads) -
+              (ownerCounts?.[a.person_id] ?? a.open_leads),
+          )
+          .map((rep) => ({ id: rep.person_id, name: displayName(rep.name) }))
+      : [];
   // A wide screen shows the lead beside the list (owner, 31 Oct 2026: the
   // computer's full width, a list and a detail pane); elsewhere a sheet.
   const paneShown =
@@ -2087,12 +2121,10 @@ export function LeadsRoute({
                             />
                           ) : null}
                           <FilterButton
-                            count={
-                              countFilters(
-                                { ...shownFilters, q: "" },
-                                defaultWho,
-                              ) + (sellerOwner ? 1 : 0)
-                            }
+                            count={countFilters(
+                              { ...shownFilters, q: "" },
+                              defaultWho,
+                            )}
                             onOpen={() =>
                               setFiltering((current) => ({
                                 round: (current?.round ?? 0) + 1,
@@ -2155,10 +2187,7 @@ export function LeadsRoute({
                 <ViewTools>
                   {" "}
                   <FilterChip
-                    count={
-                      countFilters(shownFilters, defaultWho) +
-                      (sellerOwner ? 1 : 0)
-                    }
+                    count={countFilters(shownFilters, defaultWho)}
                     onOpen={() =>
                       setFiltering((current) => ({
                         round: (current?.round ?? 0) + 1,
@@ -2173,7 +2202,9 @@ export function LeadsRoute({
                   filters={{ ...shownFilters, q: "" }}
                   defaultWho={defaultWho}
                   pipes={pipes?.pipelines ?? []}
+                  sellers={sellersToPick}
                   onChange={(next) => applyFilters({ ...next, q: query })}
+                  onClear={clearFilters}
                 />
               ) : null}
             </>
@@ -2251,7 +2282,23 @@ export function LeadsRoute({
                 fresh={fresh}
                 heading={null}
                 bare
-                layoutSlot={wide ? headLayoutSlot : sheetLayoutSlot}
+                layoutSlot={wide ? headLayoutSlot : null}
+                // The list's sort in its own row (Leads part 03), out of Filter.
+                sortPick={
+                  view !== TEST ? (
+                    <SortPick
+                      more={more}
+                      defaultLabel={listOrder.label}
+                      same={listOrder.same}
+                      onChange={(next) =>
+                        applyFilters({
+                          ...shownFilters,
+                          more: { ...more, ...next },
+                        })
+                      }
+                    />
+                  ) : null
+                }
                 syncSlot={syncSlot}
                 empty={view === OPENING_STAGE ? emptyWords(workView) : null}
                 canManage={can}
@@ -2288,6 +2335,7 @@ export function LeadsRoute({
                   { ...shownFilters, q: "" },
                   defaultWho,
                   pipes?.pipelines ?? [],
+                  sellersToPick,
                 )}
                 onClearFilters={clearFilters}
                 onAdd={() => begin("adding", setAdding)}
@@ -2366,72 +2414,22 @@ export function LeadsRoute({
             filters={shownFilters}
             defaultWho={defaultWho}
             canPickWho={sees}
-            layoutSlot={stageView && !wide ? setSheetLayoutSlot : undefined}
             pipes={several(pipesShown) ? pipesShown.pipelines : []}
             onApply={applyFilters}
-            // The list's sort lives here in the work views (Leads L1: no sort row
-            // over the list).
-            sort={
-              stageView
-                ? {
-                    defaultLabel:
-                      workView === "to_call"
-                        ? "Calling order"
-                        : newestFirst
-                          ? "Newest"
-                          : "Next due",
-                    same:
-                      workView === "to_call"
-                        ? null
-                        : newestFirst
-                          ? "created"
-                          : "next_action",
-                  }
-                : undefined
-            }
+            // The work views' sort is the list's own row (Leads part 03).
+            sortOnList={stageView}
+            matching={stageView ? matching : null}
             onClearAll={() =>
               applyView({
                 stage: view,
                 pipeline: null,
                 who: defaultWho,
                 q: query,
-                more: { ...keptWork, step: more.step },
+                // Clear resets the stage too, and keeps the sort (Leads part 03).
+                more: keptWork,
               })
             }
-            sellerPicker={
-              can && stageView && view !== TEST && team && team.length > 1 ? (
-                <SellerChips
-                  sellersOnly
-                  reps={team}
-                  counts={
-                    ownerCounts ??
-                    Object.fromEntries(
-                      team.map((rep) => [rep.person_id, rep.open_leads]),
-                    )
-                  }
-                  unassigned={desk.counts.unassigned ?? null}
-                  pick={{
-                    owner: scope === "team" ? sellerOwner : null,
-                    unassigned: scope === "unassigned",
-                  }}
-                  onPick={(next) => {
-                    applyView(
-                      {
-                        stage: view,
-                        pipeline,
-                        q: query,
-                        more,
-                        who: next.unassigned ? "unassigned" : "team",
-                      },
-                      next.owner,
-                    );
-                    setFiltering(
-                      (current) => current && { ...current, open: false },
-                    );
-                  }}
-                />
-              ) : null
-            }
+            sellers={stageView && view !== TEST ? sellersToPick : []}
           />
         ) : null}
         <LeadsMenu
