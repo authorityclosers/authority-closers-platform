@@ -11,6 +11,7 @@ lib=/usr/local/lib/ac-dev-sandbox-feed
 sources=(
   scripts/sandbox_feed/feed.py
   scripts/sandbox_feed/avatars.py
+  scripts/sandbox_feed/reports.py
   scripts/data-changes/sandbox-organisations.py
   "$here/python-path"
   "$here/ac-dev-sandbox-feed"
@@ -20,13 +21,14 @@ sources=(
 targets=(
   "$lib/feed.py"
   "$lib/avatars.py"
+  "$lib/reports.py"
   "$lib/sandbox-organisations.py"
   "$lib/python-path"
   /usr/local/sbin/ac-dev-sandbox-feed
   /etc/systemd/system/ac-dev-sandbox-feed.service
   /etc/systemd/system/ac-dev-sandbox-feed.timer
 )
-modes=(0644 0644 0644 0755 0755 0644 0644)
+modes=(0644 0644 0644 0644 0755 0755 0644 0644)
 [[ $EUID == 0 ]] || { echo "Run as root" >&2; exit 77; }
 if [[ ${1:-} == --remove ]]; then
   systemctl disable --now ac-dev-sandbox-feed.timer || true

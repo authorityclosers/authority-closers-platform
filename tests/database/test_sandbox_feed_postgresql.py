@@ -189,6 +189,8 @@ def test_setup_tick_cursor_and_refusals(postgres_harness: Any, tmp_path: Path) -
             made = tick["made"]
             assert made["calls"] > 10
             assert made["connected"] <= made["calls"]
+            # No authored reports in this database: the reports step says so and moves on.
+            assert made.get("reports_source_missing") == 1
             # Each lead the coach hands the owner gets a call booked for later today.
             assert made.get("owner_follow_ups", 0) == made.get("handed_to_owner", 0)
             until = datetime.fromisoformat(tick["until"])

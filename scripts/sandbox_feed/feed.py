@@ -26,6 +26,7 @@ commits.
     python feed.py tick      [--apply]  the cursor to now - 20 min (the timer, every ~12 min)
     python feed.py backfill  [--apply] [--from=YYYY-MM-DD]  whole days up to the last midnight
     python feed.py night     [--apply] [--pace N]  one-off: today 00:00 to now, compressed
+    python feed.py reports   [--apply]  reports for today's calls already logged (cursor unmoved)
     python feed.py read                 today's counts, read-only
 
 Prints counts only: never a lead's name, phone or email.
@@ -1073,10 +1074,18 @@ async def avatars(db: AsyncSession, ws: Workspace) -> int:
 
 
 def _avatars_module() -> ModuleType:
-    path = HERE / "avatars.py"
-    loader = importlib.util.spec_from_file_location("sandbox_feed_avatars", path)
+    return _module("avatars")
+
+
+def _module(name: str) -> ModuleType:
+    """A sibling module of this script (avatars.py, reports.py), loaded once."""
+    key = f"sandbox_feed_{name}"
+    if key in sys.modules:
+        return sys.modules[key]
+    loader = importlib.util.spec_from_file_location(key, HERE / f"{name}.py")
     assert loader is not None and loader.loader is not None
     module = importlib.util.module_from_spec(loader)
+    sys.modules[key] = module
     loader.loader.exec_module(module)
     return module
 
@@ -1133,6 +1142,18 @@ async def play_window(
     )
     await run.load()
     await run.play()
+    # Analysed reports for a few of the window's connected calls, reusing authored ones.
+    run.counter.update(
+        await _module("reports").attach_reports(
+            db,
+            ws.tenant_id,
+            run.desk,
+            {who.person_id: who for who in ws.sellers},
+            cursor=cursor,
+            until=until,
+            real_now=real_now,
+        )
+    )
     counts = {k: v for k, v in run.counter.items() if k != "commands"}
     await record(db, ws, mode, cursor, until, counts)
     return {
@@ -1307,6 +1328,52 @@ async def run(
             if not apply:
                 break  # a dry run rehearses the first day only (each day builds on the last)
             cursor = until
+        return reports
+
+    if command == "reports":
+
+        async def todays_reports(db: AsyncSession, ws: Workspace) -> dict[str, Any]:
+            midnight = at(now.astimezone(IST).date(), time(0, 0))
+            run = FeedRun(
+                db,
+                ws.tenant_id,
+                ws.people,
+                ws.sellers,
+                ws.profiles,
+                ws.keys,
+                cursor=midnight,
+                until=now,
+                real_now=now,
+            )
+            made: Counter[str] = Counter()
+            for _ in range(3):  # PER_TICK at a time, up to the day's PER_DAY
+                step = await _module("reports").attach_reports(
+                    db,
+                    ws.tenant_id,
+                    run.desk,
+                    {who.person_id: who for who in ws.sellers},
+                    cursor=midnight,
+                    until=now,
+                    real_now=now,
+                )
+                made.update(step)
+                if not step.get("reports_attached"):
+                    break
+            await append_audit_event(
+                db,
+                tenant_id=ws.tenant_id,
+                actor_person_id=ws.people["owner"].person_id,
+                actor_type="operator",
+                action=ACTION + ".reports",
+                resource_type="tenant",
+                resource_id=ws.tenant_id,
+                request_id=str(uuid5(FEED, f"reports:{now.isoformat()}")),
+                reason="Dev sandbox feed: analysed reports for today's calls (no paid analysis)",
+                payload={"made": dict(made)},
+            )
+            return {"mode": "reports", "made": dict(made)}
+
+        await once(todays_reports)
         return reports
 
     if command == "night":

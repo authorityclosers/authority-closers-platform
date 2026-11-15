@@ -27,6 +27,7 @@ def _load(name: str, path: Path):  # type: ignore[no-untyped-def]
 
 feed = _load("sandbox_feed_unit", ROOT / "scripts/sandbox_feed/feed.py")
 avatars = _load("sandbox_feed_avatars_unit", ROOT / "scripts/sandbox_feed/avatars.py")
+reports = _load("sandbox_feed_reports_unit", ROOT / "scripts/sandbox_feed/reports.py")
 UNITS = ROOT / "infra/application/development/sandbox-feed"
 DAYS = [date(2026, 11, 2) + timedelta(days=n) for n in range(28)]
 
@@ -156,3 +157,28 @@ def test_the_timer_runs_capped_as_the_api_user_in_working_hours() -> None:
     assert 'AC_ENVIRONMENT="development"' in installer
     for name in ("feed.py", "avatars.py", "sandbox-organisations.py"):
         assert name in installer
+
+
+def test_reports_reuse_authored_ones_a_few_a_day_and_charge_nothing() -> None:
+    """Reports copy the AUT-1676 loader's authored, AI-free reports (orchestrator, 15 Nov 2026:
+    at most 5 new paid analyses a day; this makes none)."""
+    loader = (ROOT / "scripts/data-changes/load-sales-xray-sandbox-hosted.py").read_text("utf-8")
+    assert f'POLICY = "{reports.SOURCE_POLICY}"' in loader
+    assert reports.PER_TICK <= reports.PER_DAY <= 6
+    low, high = reports.SECONDS
+    assert 60 <= low < high <= 600
+    assert reports.CAPTURE == "android_dialer_pickup"
+    text = (ROOT / "scripts/sandbox_feed/reports.py").read_text("utf-8")
+    assert 'kind="no_work_performed"' in text and "charged_seconds=0" in text
+    assert "ConversationReports._validated(draft, recording)" in text
+    # One id per call and kind, the same on a replay, never shared between kinds.
+    call = reports.NAMESPACE
+    kinds = ("recording", "run", "submission", "usage", "lease", "job", "report", "attach")
+    ids = {reports._id(kind, call) for kind in kinds}
+    assert len(ids) == len(kinds)
+    assert reports._id("report", call) == reports._id("report", call)
+    # A report tells the same story as the lead: its outcome follows the stage after the call.
+    assert reports.outcome_of("won") == "won"
+    assert reports.outcome_of("lost") == reports.outcome_of("junk") == "lost"
+    for stage in ("new", "not_connected", "follow_up", "interested"):
+        assert reports.outcome_of(stage) == "follow_up"
