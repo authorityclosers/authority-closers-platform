@@ -218,12 +218,12 @@ it("keeps Log a call under the brief, the first screen being the lead's (lead pa
   const brief = host.querySelector('section[aria-labelledby^="lead-brief-"]');
   expect(brief?.querySelector("h3")?.textContent).toBe("Before you call");
   const line = brief?.nextElementSibling;
-  expect(line?.textContent).toBe("Called from another phone?Log a call");
+  expect(line?.textContent).toBe("Called elsewhere?Log a call");
   const button = line?.querySelector("button");
   expect(
     document.getElementById(button?.getAttribute("aria-describedby") ?? "")
       ?.textContent,
-  ).toBe("Called from another phone?");
+  ).toBe("Called elsewhere?");
   await act(async () => button?.click());
   expect(opened).toHaveBeenCalledOnce();
 });

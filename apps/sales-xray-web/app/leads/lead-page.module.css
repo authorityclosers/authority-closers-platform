@@ -943,3 +943,64 @@ button.stepButton:focus-visible {
   outline: 2px solid var(--sx-accent);
   outline-offset: 2px;
 }
+
+/* Leads part 06 (design-research 06-lead-page-first-screen.md, 15 Nov 2026):
+   the strip's columns spread across the card, the line measured between dots. */
+.stepper {
+  justify-content: space-between;
+  column-gap: 2px;
+}
+
+.step::before {
+  right: auto;
+  left: var(--line-from, -50%);
+  width: var(--line-span, 100%);
+}
+
+/* Whole words: the column is as wide as the longest one, never split. */
+.stepper .stepLabel {
+  max-width: none;
+  overflow-wrap: normal;
+}
+
+/* The one Call band look: the Leads band's glossy finish. */
+a.callBand {
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
+/* "Call Pallavi", then the number as the dialer gets it, in the same 56 dp. */
+.callWords {
+  display: grid;
+  min-width: 0;
+  justify-items: center;
+  line-height: var(--sx-leading-20);
+}
+
+.callNumber {
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--sx-leading-16);
+  opacity: 0.85;
+}
+
+/* The owner's view: whose lead it is, under the fact line. */
+.ownerLine {
+  margin: 2px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+/* "Called elsewhere? · Log a call" in the dock, 8 dp above the band. */
+.dockLog {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.dockLog button {
+  border: 1px solid var(--sx-line-strong);
+  color: var(--sx-accent);
+}

@@ -132,10 +132,15 @@ const named = (text: string) =>
   [...host.querySelectorAll<HTMLElement>("a, button")].find(
     (item) => item.textContent?.trim() === text,
   );
+// The band says the number under its words (Leads part 06).
+const band = (text: string) =>
+  [...host.querySelectorAll<HTMLElement>("a[data-sx-call]")].find((item) =>
+    item.textContent?.trim().startsWith(text),
+  );
 
 it("calls an open lead by first name, the stage a strip it can move along", async () => {
   await show(base);
-  expect(named("Call Shrikant")).toBeTruthy();
+  expect(band("Call Shrikant")).toBeTruthy();
   const strip = host.querySelector('ol[aria-label="Stage"]');
   expect(strip?.querySelector('[aria-current="step"]')?.textContent).toBe(
     "Follow-up",
@@ -155,7 +160,7 @@ it("shows a closed lead's state as a chip, no follow-up, and Call again", async 
   expect(host.querySelector('ol[aria-label="Stage"]')).toBeNull();
   expect(host.textContent).toContain("Won");
   expect(host.textContent).not.toContain("Follow-up ·");
-  expect(named("Call again")).toBeTruthy();
+  expect(band("Call again")).toBeTruthy();
 });
 
 it("gives a viewer no Note, Follow-up or stage taps, and More only Ask Dipak and Copy link", async () => {

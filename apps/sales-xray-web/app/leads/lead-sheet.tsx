@@ -1296,7 +1296,7 @@ export function LogThis({
   return (
     <p className={styles.logThis}>
       <span id={id} className={styles.logThisHint}>
-        {hint ?? "Called from another phone?"}
+        {hint ?? "Called elsewhere?"}
       </span>
       <button
         type="button"
@@ -3628,12 +3628,16 @@ export function LeadCard({
         strokeWidth={2}
         aria-hidden="true"
       />
-      <span>
-        {calling || company.busy
-          ? "Calling…"
-          : ["won", "lost", "junk"].includes(lead.stage)
-            ? "Call again"
-            : `Call ${displayFirst(lead.name)}`}
+      <span className={page.callWords}>
+        <span>
+          {calling || company.busy
+            ? "Calling…"
+            : ["won", "lost", "junk"].includes(lead.stage)
+              ? "Call again"
+              : `Call ${displayFirst(lead.name)}`}
+        </span>
+        {/* The number as the dialer gets it (Leads part 06). */}
+        <span className={page.callNumber}>{displayPhone(detail.phone)}</span>
       </span>
     </CallLink>
   ) : detail.can_edit ? (
@@ -3686,7 +3690,8 @@ export function LeadCard({
   const closed = ["won", "lost", "junk"].includes(lead.stage);
   const facts = [
     lead.city,
-    shortSource(lead),
+    // The source's kind; the page they came from is the brief's (Leads part 06).
+    shortSource(lead).split(" · ")[0],
     lead.side === "cold" ? "Cold" : "Inbound",
   ]
     .filter(Boolean)
@@ -3707,11 +3712,11 @@ export function LeadCard({
     </span>
   ) : (
     <span>
-      Follow-up ·{" "}
+      {lead.next_action_at ? "Follow-up" : "Next follow-up"} ·{" "}
       <span className={page.followWhen}>
         {lead.next_action_at
           ? upperFirst(when(lead.next_action_at))
-          : "None yet"}
+          : "Not set"}
         {pencil}
       </span>
     </span>
@@ -3831,6 +3836,10 @@ export function LeadCard({
           <div className={page.headWords}>
             <h2 className={page.name}>{lead.name}</h2>
             {facts ? <p className={page.facts}>{facts}</p> : null}
+            {/* Whose lead it is, for whoever sees the team's (Leads part 06). */}
+            {me?.can_manage && lead.owner_name ? (
+              <p className={page.ownerLine}>Owner: {lead.owner_name}</p>
+            ) : null}
             {followLine}
           </div>
         </div>
@@ -3856,7 +3865,17 @@ export function LeadCard({
         {hidePrimary || formOpen
           ? null
           : primarySlot
-            ? createPortal(primaryAction, primarySlot)
+            ? createPortal(
+                <>
+                  {/* "Called elsewhere? · Log a call" with the band, so a
+                      notice over the dock never covers it (Leads part 06). */}
+                  {idleLog ? (
+                    <div className={page.dockLog}>{question}</div>
+                  ) : null}
+                  {primaryAction}
+                </>,
+                primarySlot,
+              )
             : primaryAction}
         {/* The call's own lines under Call (owner, #31, 26 Oct 2026): the
             phone app's hint, then "Called from another phone? Log it", or
@@ -3934,7 +3953,7 @@ export function LeadCard({
       <SuggestedStage detail={detail} onChanged={onChanged} />
       <MeetingCard detail={detail} onChanged={onChanged} />
       <LeadTasks detail={detail} onChanged={onChanged} />
-      {idleLog ? question : null}
+      {idleLog && (!primarySlot || hidePrimary || formOpen) ? question : null}
       <Picker open={more} onClose={() => setMore(false)} title="More">
         <ul className={page.moreList}>
           <li>
@@ -4751,6 +4770,8 @@ export function LeadSheet({
             <div
               className={styles.primaryDock}
               data-sheet-no-drag
+              // A corner card arrives as its pill over a lead's call (Leads part 06).
+              data-call-band=""
               ref={setPrimarySlot}
             />
           ) : undefined

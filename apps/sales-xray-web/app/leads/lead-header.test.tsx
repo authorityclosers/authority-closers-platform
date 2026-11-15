@@ -136,11 +136,11 @@ it("says the next follow-up under the name, and opens its presets", async () => 
   expect(document.body.textContent).toContain("Remind me");
 });
 
-it("says None yet when no follow-up is set", async () => {
+it("says Not set when no follow-up is set (Leads part 06)", async () => {
   await open(null);
   expect(
     [...document.querySelectorAll("button")].some(
-      (item) => item.textContent === "Follow-up · None yet",
+      (item) => item.textContent === "Next follow-up · Not set",
     ),
   ).toBe(true);
 });
