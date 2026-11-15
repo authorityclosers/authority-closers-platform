@@ -3933,10 +3933,23 @@ class Engine:
             return {}
         previous = self.activation_path(environment, current)
         descriptor = json.loads(previous.read_text(encoding="utf-8"))
-        expires = self.approval_expiry(descriptor)
-        if expires - self.clock() < APPROVAL_MIN_REMAINING_SECONDS:
+        # The approval the new activation will run with: Root's replacement when one is
+        # supplied (release PR #623 review, 15 Nov 2026), else the running one.
+        additions = self.activation_additions(environment, descriptor)
+        running = descriptor
+        if additions["approval"]:
+            given = additions["argv"]
+            running = {"approval_file": given[given.index("--approval-file") + 1]}
+        try:
+            expires = self.approval_expiry(running)
+        except (OSError, ValueError, TypeError, KeyError):
             raise ReleaseError(
-                f"the {environment} Sales Xray approval expires {_date(expires)}; "
+                f"the {environment} Sales Xray replacement approval can't be read"
+            ) from None
+        if expires - self.clock() < APPROVAL_MIN_REMAINING_SECONDS:
+            which = "replacement approval" if additions["approval"] else "approval"
+            raise ReleaseError(
+                f"the {environment} Sales Xray {which} expires {_date(expires)}; "
                 "renew it before deploying"
             )
         native_sha, manifest = self.native_for_image(str(descriptor["native_image_ref"]))
@@ -3972,7 +3985,6 @@ class Engine:
                 "--source-repository",
                 str(self.paths.mirror),
             ]
-        additions = self.activation_additions(environment, descriptor)
         argv += additions["argv"]
         completed = self.run(argv, log=log, check=False, timeout=900)
         if completed.returncode != 0:

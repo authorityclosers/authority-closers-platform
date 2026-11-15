@@ -1572,7 +1572,7 @@ def test_root_adds_openai_and_a_sealed_approval_once_through_the_release(
     inputs = engine.paths.application / "operator-inputs" / "staging"
     (inputs / "openai-provider.json").write_text('{"provider_id": "openai"}\n')
     sealed = inputs / "next-approval.json"
-    sealed.write_text('{"sealed": "luna-one-pass"}\n')
+    sealed.write_text(json.dumps({"sealed": "luna-one-pass", "expires_at_epoch": NOW + 60 * DAY}))
     summary = prepare(engine, tmp_path)
 
     argv = engine.run.prepared[0]
@@ -1602,6 +1602,38 @@ def test_root_adds_openai_and_a_sealed_approval_once_through_the_release(
     (inputs / "openai-provider.json").unlink()
     (inputs / "openai-provider.json").symlink_to(sealed)
     assert engine.activation_additions("staging", {})["openai"] is False
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
+def test_the_expiry_guard_checks_the_replacement_approval(tmp_path: Path) -> None:
+    """Release PR #623 review: with Root's replacement approval, the 24-hour guard reads the
+    approval the new activation will run with, not the one it replaces."""
+    # A running approval about to lapse is fine when the replacement is fresh.
+    (tmp_path / "fresh").mkdir()
+    (tmp_path / "stale").mkdir()
+    engine = hosted_setup(tmp_path / "fresh", expires_in=3600)
+    inputs = engine.paths.application / "operator-inputs" / "staging"
+    (inputs / "next-approval.json").write_text(
+        json.dumps(
+            {
+                "expires_at_epoch": NOW + 30 * DAY,
+                "acquisition_policy": {"expires_at_epoch": NOW + 20 * DAY},
+            }
+        )
+    )
+    summary = prepare(engine, tmp_path / "fresh")
+    assert summary["sales_xray_approval_expires"] == MODULE._date(NOW + 20 * DAY)
+    # A replacement that lapses within a day is refused, though the running one is fine.
+    engine = hosted_setup(tmp_path / "stale")
+    inputs = engine.paths.application / "operator-inputs" / "staging"
+    (inputs / "next-approval.json").write_text(json.dumps({"expires_at_epoch": NOW + 3600}))
+    with pytest.raises(MODULE.ReleaseError, match="replacement approval expires"):
+        prepare(engine, tmp_path / "stale")
+    assert engine.run.prepared == []
+    # One that can't be read is refused too.
+    (inputs / "next-approval.json").write_text("{}")
+    with pytest.raises(MODULE.ReleaseError, match="replacement approval can't be read"):
+        prepare(engine, tmp_path / "stale")
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
