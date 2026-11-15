@@ -487,10 +487,12 @@ def legacy_tree():
             return self.generic_visit(node)
 
     RemoveRemote().visit(engine)
-    # Independent fingerprint of the pre-change Engine (source c0b46d87b blob).
+    # Independent fingerprint of the Engine without its remote additions. Updated 16 Nov 2026
+    # for d0fa7c547 (a replacement approval checked in the API image: check_replacement_approval,
+    # approval_check_packages); the remote additions are unchanged.
     assert (
         hashlib.sha256(ast.dump(engine).encode()).hexdigest()
-        == "493f9c2e39e8fc24742bdf2d0bea99cc61f3be4278d31bc6c9bbb1c3444556f8"
+        == "022d43a0804301e94e13bef3209004eee57f90e78e655795371d042e81826d8e"
     )
     return ast.fix_missing_locations(tree)
 
