@@ -75,8 +75,19 @@ REGISTER_WORDS = {
         "and grant_types (authorization_code, refresh_token)."
     ),
 }
-# What an MCP host gets when it asks for no scope: reading, never writing.
+# What an MCP host gets when it asks for no scope, and what MCP's challenge tells it to ask
+# for: reading. Once the owner lets connected apps write (developer_platform's
+# advertise_writes, Admin -> Economics), the lead writes too, as far as the workspace's plan
+# includes them (API gap 1, 15 Nov 2026: Claude couldn't push leads).
 DEFAULT_SCOPES = "calls:read reports:read leads:read"
+WRITE_SCOPES = "leads:write leads:notes leads:tasks"
+
+
+def connect_scopes(platform: tiers.Platform) -> str:
+    """The scopes a host gets when it asks for none, and that MCP's challenge names."""
+    return f"{DEFAULT_SCOPES} {WRITE_SCOPES}" if platform.advertise_writes else DEFAULT_SCOPES
+
+
 # The MCP tools' scopes, which the resource metadata offers (webhooks:manage is for the CLI).
 MCP_SCOPES = (
     "calls:read",
@@ -302,13 +313,14 @@ def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
         }
 
     async def checked(auth: Any, body: AuthorizeRequest) -> tuple[Any, list[str]]:
+        asked = body.scope or connect_scopes(await tiers.read_platform(auth.database))
         try:
             result: tuple[Any, list[str]] = await auth.database.run_sync(
                 lambda session: oauth.check_request(
                     session.connection(),
                     client_id=body.client_id,
                     redirect_uri=body.redirect_uri,
-                    scope=body.scope or DEFAULT_SCOPES,
+                    scope=asked,
                     code_challenge=body.code_challenge,
                     code_challenge_method=body.code_challenge_method,
                     response_type=body.response_type,

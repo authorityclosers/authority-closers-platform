@@ -42,7 +42,7 @@ from ac_platform.integrations.api_http import (
     UndoBody,
     make_opener,
 )
-from ac_platform.integrations.oauth_http import DEFAULT_SCOPES
+from ac_platform.integrations.oauth_http import connect_scopes
 from ac_platform.lead_desk.commitments import TASK_KINDS
 
 PROTOCOLS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
@@ -769,22 +769,25 @@ def install_mcp_http(application: FastAPI, ctx: RouteContext) -> None:
     settings = ctx.settings
     open_reader = make_opener(ctx)
 
-    def challenge(request: Request) -> str:
+    async def challenge(request: Request) -> str:
         # RFC 9728 and MCP 2025-11-25: where to find Connect, and the scopes to ask for
-        # (reading). The metadata is on the host the assistant reached: mcp.salesxray.in, or
-        # the old address for connections made there (2 Nov 2026).
+        # (reading, and the lead writes once the owner lets connected apps write). The
+        # metadata is on the host the assistant reached: mcp.salesxray.in, or the old address
+        # for connections made there (2 Nov 2026).
         base = settings.sales_xray_host_origin(request.url.hostname) or ""
+        async with ctx.sessions() as db:
+            platform = await tiers.read_platform(db)
         return (
             f'resource_metadata="{base}/.well-known/oauth-protected-resource/v1/mcp", '
-            f'scope="{DEFAULT_SCOPES}"'
+            f'scope="{connect_scopes(platform)}"'
         )
 
-    def refused(error: ApiError, request: Request) -> JSONResponse:
+    async def refused(error: ApiError, request: Request) -> JSONResponse:
         headers = {"Cache-Control": "no-store"}
         if error.status == 401:
             invalid = ', error="invalid_token"' if error.code == "key_invalid" else ""
             headers["WWW-Authenticate"] = (
-                f'Bearer realm="sales-xray", {challenge(request)}{invalid}'
+                f'Bearer realm="sales-xray", {await challenge(request)}{invalid}'
             )
         if error.retry_after is not None:
             headers["Retry-After"] = str(error.retry_after)
@@ -811,7 +814,7 @@ def install_mcp_http(application: FastAPI, ctx: RouteContext) -> None:
                 else:
                     answer = await handle(reader, message)
         except ApiError as error:
-            return refused(error, request)
+            return await refused(error, request)
         if answer is None:
             return Response(status_code=202)
         return JSONResponse(answer, headers={"Cache-Control": "no-store"})
