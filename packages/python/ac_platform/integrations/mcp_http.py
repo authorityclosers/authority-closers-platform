@@ -35,6 +35,9 @@ from ac_platform.http.routes import RouteContext
 from ac_platform.integrations import coaching_api, lead_imports, recordings_api, reports_api, tiers
 from ac_platform.integrations.api_http import (
     ApiError,
+    AssignBody,
+    BulkBody,
+    LeadUpdateBody,
     NewLeadBody,
     NoteBody,
     Reader,
@@ -43,6 +46,7 @@ from ac_platform.integrations.api_http import (
     TaskDoneBody,
     TaskSnoozeBody,
     UndoBody,
+    UploadBody,
     make_opener,
 )
 from ac_platform.integrations.oauth_http import connect_scopes
@@ -171,6 +175,18 @@ TOOLS: tuple[dict[str, Any], ...] = (
     *reports_api.TOOLS,
     # Coaching from those reports (integrations/coaching_api.py).
     *coaching_api.TOOLS,
+    {
+        "name": "list_team",
+        "title": "List the team",
+        "description": (
+            "The team: each person's name and role (never an email), whether they take new "
+            "leads, their lead limit, open leads and today's calls, and the leads waiting "
+            "for an owner. Use a person_id from here to give leads (assign_lead)."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+        "annotations": _READS,
+        "scope": "team:read",
+    },
     {
         "name": "analysis_time",
         "title": "Analysis time left",
@@ -391,6 +407,58 @@ TOOLS: tuple[dict[str, Any], ...] = (
         "scope": "leads:tasks",
     },
     {
+        "name": "create_lead_import_upload",
+        "title": "Get an address to upload a CSV of leads",
+        "description": (
+            "For many leads at once (up to 10,000): returns a one-time upload_url, good for "
+            "15 minutes. PUT the CSV there as text/csv (its first row names the columns: name, "
+            "phone, email, company, city, interest, stage, owner, source, external id), with no "
+            "key needed. It queues as one import (the same file twice, once); read it with "
+            "get_lead_import. Choices as for import_leads."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "maxLength": 200},
+                "side": {"type": "string", "enum": ["inbound", "cold"]},
+                "assign": {"type": "string", "enum": ["rules", "none"]},
+                "duplicates": {"type": "string", "enum": ["skip", "fill", "replace"]},
+                "stage": {"type": "string", "maxLength": 40},
+            },
+        },
+        # A new address each time; nothing changes until a file arrives.
+        "annotations": {**_WRITES, "idempotentHint": False},
+        "scope": "leads:write",
+    },
+    {
+        "name": "update_lead",
+        "title": "Change a lead's details",
+        "description": (
+            "Changes one lead's name, company, city, interest or language (fields: an object "
+            "of those), as this person. Phone and email need a person's review. The history "
+            "shows which app changed it, and Undo puts back what was there for 7 days."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "lead_id": _ID,
+                "fields": {
+                    "type": "object",
+                    "properties": {
+                        name: {"type": ["string", "null"], "maxLength": 200}
+                        for name in ("name", "company", "city", "interest", "language")
+                    },
+                },
+                "expected_revision": {"type": "integer", "minimum": 1},
+                "request_id": _REQUEST,
+                "preview": _PREVIEW,
+            },
+            "required": ["lead_id", "fields", "request_id"],
+        },
+        "annotations": _WRITES,
+        "scope": "leads:update",
+    },
+    {
         "name": "move_stage",
         "title": "Move a lead to another stage",
         "description": (
@@ -416,6 +484,75 @@ TOOLS: tuple[dict[str, Any], ...] = (
         },
         "annotations": _WRITES,
         "scope": "leads:stage",
+    },
+    {
+        "name": "assign_lead",
+        "title": "Give a lead to a teammate",
+        "description": (
+            "Gives one lead to a teammate (person_id from the team), or with none to whom "
+            "the lead rules pick; its open tasks go with it. Only an organisation's API key "
+            "held by an owner or admin. Undone for 7 days unless it moved again."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "lead_id": _ID,
+                "person_id": _ID,
+                "expected_revision": {"type": "integer", "minimum": 1},
+                "request_id": _REQUEST,
+                "preview": _PREVIEW,
+            },
+            "required": ["lead_id", "request_id"],
+        },
+        "annotations": _WRITES,
+        "scope": "leads:assign",
+    },
+    {
+        "name": "update_leads",
+        "title": "Change many leads at once",
+        "description": (
+            "One stage move (with the reason) or one assign for up to 1,000 leads: lead_ids, "
+            "or a filter by stage. Above 5 leads, call it with preview first and send back "
+            "its preview_sha. Each lead is its own change, undone for 7 days (one by one, "
+            "or the whole request). Only an organisation's API key held by an owner or admin."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "lead_ids": {"type": "array", "items": {"type": "string"}, "maxItems": 1000},
+                "filter": {
+                    "type": "object",
+                    "properties": {"stage": {"type": "string"}, "search": {"type": "string"}},
+                    "required": ["stage"],
+                },
+                "change": {
+                    "type": "object",
+                    "properties": {
+                        "stage": {
+                            "type": "object",
+                            "properties": {
+                                "step": {"type": "string"},
+                                "reason": {"type": "string", "maxLength": 500},
+                                "reason_code": {"type": "string"},
+                                "next_action_at": _WHEN,
+                                "amount": {"type": "integer", "minimum": 1},
+                            },
+                            "required": ["step", "reason"],
+                        },
+                        "assign": {
+                            "type": "object",
+                            "properties": {"person_id": {"type": "string"}},
+                        },
+                    },
+                },
+                "request_id": _REQUEST,
+                "preview": _PREVIEW,
+                "preview_sha": {"type": "string", "minLength": 64, "maxLength": 64},
+            },
+            "required": ["change", "request_id"],
+        },
+        "annotations": _WRITES,
+        "scope": ("leads:stage", "leads:assign"),
     },
     {
         "name": "list_tasks",
@@ -490,7 +627,7 @@ TOOLS: tuple[dict[str, Any], ...] = (
         ),
         "inputSchema": {"type": "object", "properties": {"lead_id": _ID}},
         "annotations": _READS,
-        "scope": ("leads:notes", "leads:tasks", "leads:stage"),
+        "scope": ("leads:notes", "leads:tasks", "leads:stage", "leads:assign"),
     },
     {
         "name": "undo_change",
@@ -507,7 +644,7 @@ TOOLS: tuple[dict[str, Any], ...] = (
             "required": ["change_id"],
         },
         "annotations": {**_WRITES, "destructiveHint": True},
-        "scope": ("leads:notes", "leads:tasks", "leads:stage"),
+        "scope": ("leads:notes", "leads:tasks", "leads:stage", "leads:assign"),
     },
     # Ask Dipak's lessons and coaching loop (ask_dipak/integration.py).
     *ask_dipak.TOOLS,
@@ -723,6 +860,8 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
         return await reader.call(_uuid(args, "call_id"))
     if name == "call_facts":
         return await reader.facts(_uuid(args, "call_id"))
+    if name == "list_team":
+        return await reader.team()
     if name == "analysis_time":
         return await reader.analysis_time(team=args.get("team") is True)
     if name == "list_leads":
@@ -765,6 +904,17 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
             )
         except lead_imports.ImportRefused as refusal:
             raise ApiError(refusal.status, refusal.code, refusal.message) from None
+        return answer
+    if name == "create_lead_import_upload":
+        choices = _body(
+            UploadBody, args, ("name", "side", "assign", "duplicates", "pipeline", "stage")
+        )
+        return await reader.lead_import_upload(choices)
+    if name == "update_lead":
+        change = _body(
+            LeadUpdateBody, args, ("fields", "expected_revision", "request_id", "preview")
+        )
+        answer, _ = await reader.update_lead(_uuid(args, "lead_id"), change)
         return answer
     if name == "get_lead_import":
         door = await reader.import_door()
@@ -814,6 +964,20 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
         )
         move = _body(StageBody, args, stage_fields)
         answer, _ = await reader.move_stage(_uuid(args, "lead_id"), move)
+        return answer
+    if name == "assign_lead":
+        giving = _body(
+            AssignBody, args, ("person_id", "expected_revision", "request_id", "preview")
+        )
+        answer, _ = await reader.assign_lead(_uuid(args, "lead_id"), giving)
+        return answer
+    if name == "update_leads":
+        many = _body(
+            BulkBody,
+            args,
+            ("lead_ids", "filter", "change", "request_id", "preview", "preview_sha"),
+        )
+        answer, _ = await reader.bulk(many)
         return answer
     if name == "list_tasks":
         person = _uuid(args, "person") if args.get("person") else None

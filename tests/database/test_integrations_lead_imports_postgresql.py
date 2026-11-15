@@ -13,15 +13,19 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from ac_platform.audit.models import AuditEvent
 from ac_platform.http.routes import RouteContext
 from ac_platform.integrations import admin_http, lead_imports
 from ac_platform.integrations.api_http import install_integrations_api
 from ac_platform.integrations.http import install_integrations_http
-from ac_platform.integrations.import_models import IntegrationLeadImportChunk
+from ac_platform.integrations.import_models import (
+    IntegrationLeadImport,
+    IntegrationLeadImportChunk,
+)
 from ac_platform.lead_desk.models import Lead
+from ac_platform.tenancy.models import Membership
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_submission_http_postgresql import ORIGIN, _setup
@@ -350,6 +354,102 @@ def test_platform_admins_see_every_import_and_stop_one(
                 )
                 assert after["counts"]["rows_waiting"] == 0
                 assert after["counts"]["rows_failed_24h"] == 300
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_a_person_removed_or_lowered_after_queueing_has_nothing_filed_or_less(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Codex P1 on release PR 617 (15 Nov 2026): the person's membership and role are read
+    again when each chunk is filed, not trusted from when the import was queued."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)  # the signed-in person is an admin
+            context = RouteContext(setup.settings, setup.require_actor, setup.sessions)
+            install_integrations_http(setup.app, context)
+            install_integrations_api(setup.app, context)
+            mine = (
+                Membership.tenant_id == setup.state.tenant_id,
+                Membership.person_id == setup.state.person_id,
+            )
+
+            async def membership(**values: Any) -> None:
+                async with setup.sessions() as db, db.begin():
+                    await db.execute(update(Membership).where(*mine).values(**values))
+
+            async def queue(start: int) -> None:
+                queued = await app.post(
+                    "/v1/api/leads/imports",
+                    headers=bearer,
+                    json={"leads": _leads(4, start=start)},
+                )
+                assert queued.status_code == 202, queued.text
+
+            async def last_chunk() -> IntegrationLeadImportChunk:
+                async with setup.sessions() as db:
+                    chunk = await db.scalar(
+                        select(IntegrationLeadImportChunk).order_by(
+                            IntegrationLeadImportChunk.created_at.desc()
+                        )
+                    )
+                    assert chunk is not None
+                    return chunk
+
+            async with (
+                httpx.AsyncClient(
+                    transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+                ) as page,
+                httpx.AsyncClient(
+                    transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+                ) as app,
+            ):
+                page.cookies.set(setup.settings.session_cookie_name, setup.token)
+                key, _ = await _key(page, "Changes hands")
+                bearer = {"Authorization": f"Bearer {key}"}
+
+                # Now view-only: the waiting import files nothing, and says why.
+                await queue(2000)
+                await membership(role="viewer")
+                assert await _file_all(setup) == 1
+                chunk = await last_chunk()
+                assert chunk.state == "failed" and chunk.error == "person_removed"
+                assert {row["outcome"] for row in chunk.result["rows"]} == {"failed"}
+
+                # Removed from the workspace: the same.
+                await membership(role="admin")
+                await queue(2100)
+                await membership(status="inactive", ended_at=datetime.now(UTC))
+                assert await _file_all(setup) == 1
+                chunk = await last_chunk()
+                assert chunk.state == "failed" and chunk.error == "person_removed"
+                async with setup.sessions() as db:
+                    made = await db.scalar(
+                        select(func.count())
+                        .select_from(Lead)
+                        .where(Lead.source_ref.like("ref:ext-2%"))
+                    )
+                assert made == 0
+
+                # Lowered from admin to member: filed with the member's role, not the old one.
+                await membership(status="active", ended_at=None)
+                async with setup.sessions() as db:
+                    job = await db.scalar(
+                        select(IntegrationLeadImport).order_by(
+                            IntegrationLeadImport.created_at.desc()
+                        )
+                    )
+                    assert job is not None and job.role == "owner"  # an organisation key
+                    assert await lead_imports.acting_role(db, job) == "admin"
+                await membership(role="member")
+                async with setup.sessions() as db:
+                    job = await db.get(IntegrationLeadImport, job.id)
+                    assert job is not None
+                    assert await lead_imports.acting_role(db, job) == "member"
         finally:
             await setup.engine.dispose()
 

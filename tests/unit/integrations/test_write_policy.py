@@ -90,6 +90,34 @@ def test_a_stage_move_goes_ahead_once_its_scope_and_switch_allow_it() -> None:
     assert off.message == "An owner has turned off stage moves from apps in this workspace."
 
 
+def test_only_an_owners_or_admins_organisation_key_assigns_and_skips_caps_in_bulk() -> None:
+    # ai-writes.md, "Amended 15 Nov": assign is a manager key's; the pause still stops it.
+    held = frozenset({"leads:assign", "leads:stage"})
+    seller = policy.decide("assign", scopes=held, settings=ON, counts=counts())
+    assert (seller.allowed, seller.code) == (False, "managers_only")
+    manager = policy.decide("assign", scopes=held, settings=ON, counts=counts(), manager_key=True)
+    assert manager == policy.ALLOW
+    paused = policy.decide(
+        "assign", scopes=held, settings={**ON, "paused": True}, counts=None, manager_key=True
+    )
+    assert paused.code == "writes_paused"
+    # One lead of a bulk change goes without counts; the switches still decide.
+    stage_on = {**ON, "stage": True}
+    assert (
+        policy.decide("stage", scopes=held, settings=stage_on, counts=None, manager_key=True)
+        == policy.ALLOW
+    )
+    off = policy.decide("stage", scopes=held, settings=ON, counts=None, manager_key=True)
+    assert off.code == "action_off"
+    # A single change keeps its caps, whoever sends it.
+    capped = policy.decide(
+        "stage", scopes=held, settings=stage_on, counts=counts(lead=5), manager_key=True
+    )
+    assert capped.code == "cap_reached"
+    with pytest.raises(ValueError):
+        policy.decide("stage", scopes=held, settings=stage_on, counts=None)
+
+
 def test_another_actions_count_does_not_spend_this_ones_cap() -> None:
     busy = counts(connection={"note": 200})
     assert policy.decide("task", scopes=SCOPES, settings=ON, counts=busy).allowed

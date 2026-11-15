@@ -97,6 +97,7 @@ MCP_SCOPES = (
     "leads:notes",
     "leads:tasks",
     "leads:stage",
+    "team:read",
     "coaching:read",
     "coaching:write",
 )

@@ -147,6 +147,7 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "call_coaching",
         "team_coaching",
         "analysis_time",
+        "list_team",
         "list_leads",
         "get_lead",
         "list_duplicates",
@@ -154,9 +155,13 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "add_lead",
         "import_leads",
         "get_lead_import",
+        "create_lead_import_upload",
+        "update_lead",
         "add_note",
         "add_task",
         "move_stage",
+        "assign_lead",
+        "update_leads",
         "list_tasks",
         "complete_task",
         "snooze_task",
@@ -174,7 +179,17 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
     assert uploads == {"whoami", "create_recording_upload", "recording_status", *LESSONS}
     # Many leads at once (14 Nov 2026) come with leads:write, beside add_lead.
     importing = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:write"}))}
-    assert importing == {"whoami", "add_lead", "import_leads", "get_lead_import", *LESSONS}
+    assert importing == {
+        "whoami",
+        "add_lead",
+        "import_leads",
+        "get_lead_import",
+        # A CSV to a one-time address (15 Nov 2026).
+        "create_lead_import_upload",
+        *LESSONS,
+    }
+    updating = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:update"}))}
+    assert updating == {"whoami", "update_lead", *LESSONS}
     reading = {tool["name"] for tool in mcp_http.listed(frozenset({"calls:read"}))}
     assert reading == {
         "search",
@@ -197,6 +212,9 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "list_tasks",
         *LESSONS,
     }
+    # The team (15 Nov 2026): names, never emails, its own scope.
+    team = {tool["name"] for tool in mcp_http.listed(frozenset({"team:read"}))}
+    assert team == {"whoami", "list_team", *LESSONS}
     assert {tool["name"] for tool in mcp_http.listed(frozenset({"webhooks:manage"}))} == {
         "whoami",
         *LESSONS,
@@ -218,17 +236,38 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
     }
     # Stage moves (15 Nov 2026): their own scope.
     stages = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:stage"}))}
-    assert stages == {"whoami", "move_stage", "list_my_changes", "undo_change", *LESSONS}
+    assert stages == {
+        "whoami",
+        "move_stage",
+        "update_leads",
+        "list_my_changes",
+        "undo_change",
+        *LESSONS,
+    }
+    # Assigns (15 Nov 2026): an owner's or admin's organisation key, its own scope.
+    assigning = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:assign"}))}
+    assert assigning == {
+        "whoami",
+        "assign_lead",
+        "update_leads",
+        "list_my_changes",
+        "undo_change",
+        *LESSONS,
+    }
     writes = {
         "add_lead",
         "import_leads",
         "add_note",
         "add_task",
         "move_stage",
+        "assign_lead",
+        "update_leads",
         "complete_task",
         "snooze_task",
         "undo_change",
         "create_recording_upload",
+        "create_lead_import_upload",
+        "update_lead",
     }
     for tool in mcp_http.listed(frozenset(scopes.SCOPES)):
         assert "scope" not in tool and tool["inputSchema"]["type"] == "object"
@@ -238,7 +277,11 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         assert tool["annotations"]["destructiveHint"] is (tool["name"] == "undo_change")
         assert tool["annotations"]["openWorldHint"] is False
         # A new lead and a new upload are each a new thing; the rest repeat safely.
-        if tool["name"] in writes - {"add_lead", "create_recording_upload"}:
+        if tool["name"] in writes - {
+            "add_lead",
+            "create_recording_upload",
+            "create_lead_import_upload",
+        }:
             assert tool["annotations"]["idempotentHint"] is True
             assert "request_id" in tool["inputSchema"]["properties"]
         assert tool["title"]

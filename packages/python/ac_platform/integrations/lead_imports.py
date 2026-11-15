@@ -374,17 +374,55 @@ async def rows(
 # ----- the runner ---------------------------------------------------------------------
 
 
-async def _door_open(session: AsyncSession, job: IntegrationLeadImport, now: datetime) -> bool:
+async def door_open(session: AsyncSession, via: str, door_id: UUID, now: datetime) -> bool:
     """The key or connection that asked is still in force: revoking it stops what waits."""
-    if job.via == "key":
-        key = await session.get(IntegrationApiKey, job.door_id)
+    if via == "key":
+        key = await session.get(IntegrationApiKey, door_id)
         return (
             key is not None
             and key.revoked_at is None
             and (key.expires_at is None or key.expires_at > now)
         )
-    grant = await session.get(IntegrationOAuthGrant, job.door_id)
+    grant = await session.get(IntegrationOAuthGrant, door_id)
     return grant is not None and grant.revoked_at is None
+
+
+async def _door_open(session: AsyncSession, job: IntegrationLeadImport, now: datetime) -> bool:
+    return await door_open(session, job.via, job.door_id, now)
+
+
+# The lesser of the role an import was queued with and the role its person holds when a
+# chunk is filed decides (Codex P1 on release PR 617, 15 Nov 2026: a person removed, or
+# whose role was lowered, after queueing an import still had it filed with the old role).
+_ROLE_RANK: Final[dict[str, int]] = {"owner": 4, "admin": 3, "manager": 2, "member": 1}
+
+
+async def person_role(
+    session: AsyncSession, tenant_id: UUID, person_id: UUID, asked_as: str
+) -> str | None:
+    """The role a person's import is filed with now: the lesser of the one it was asked
+    with and the one they hold this moment. None when they are no longer an active member
+    of the workspace, or their role can only view (nothing is filed)."""
+    from ac_platform.tenancy.models import Membership
+    from ac_platform.tenancy.roles import READ_ONLY_ROLES
+
+    current = await session.scalar(
+        select(Membership.role).where(
+            Membership.tenant_id == tenant_id,
+            Membership.person_id == person_id,
+            Membership.status == "active",
+            Membership.ended_at.is_(None),
+        )
+    )
+    if current is None or current in READ_ONLY_ROLES or current not in _ROLE_RANK:
+        return None
+    asked = asked_as if asked_as in _ROLE_RANK else "member"
+    return min((asked, current), key=lambda role: _ROLE_RANK[role])
+
+
+async def acting_role(session: AsyncSession, job: IntegrationLeadImport) -> str | None:
+    """The role a queued import's chunk is filed with now (``person_role``)."""
+    return await person_role(session, job.tenant_id, job.acting_person_id, job.role)
 
 
 def failed_rows(part: IntegrationLeadImportChunk, why: str) -> dict[str, Any]:
@@ -408,8 +446,10 @@ async def _file(
     job: IntegrationLeadImport,
     part: IntegrationLeadImportChunk,
     app_url: str,
+    role: str,
 ) -> dict[str, Any]:
-    """File one chunk through the Lead Desk's file import, as the key's own viewer."""
+    """File one chunk through the Lead Desk's file import, as the key's own viewer, with the
+    role its person holds now (``acting_role``)."""
     from ac_platform.conversation_intelligence.synthetic_import_models import (
         ConversationSandboxOrganisation,
     )
@@ -429,7 +469,7 @@ async def _file(
         Viewer(
             person_id=job.acting_person_id,
             tenant_id=job.tenant_id,
-            role=job.role,
+            role=role,
             name=job.label,
         ),
         sandbox=sandbox,
@@ -508,12 +548,16 @@ async def process_next(
         job = await session.get(IntegrationLeadImport, part.import_id)
         assert job is not None  # the chunk's import, by its foreign key
         part.attempts += 1
+        role = await acting_role(session, job)
         if not await _door_open(session, job, moment):
             result, error = failed_rows(part, "The key or app was revoked"), "door_closed"
+        elif role is None:
+            why = "The person who sent it is no longer a member who can add leads"
+            result, error = failed_rows(part, why), "person_removed"
         else:
             try:
                 async with session.begin_nested():
-                    result, error = await _file(session, job, part, app_url), None
+                    result, error = await _file(session, job, part, app_url, role), None
             except Exception as failure:  # noqa: BLE001 - a bad chunk must not stop the queue
                 from ac_platform.lead_desk.store import DeskError
 
