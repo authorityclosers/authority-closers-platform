@@ -87,10 +87,11 @@ it("shows To Call, Follow-ups and All Leads as views, and switches once per tap"
   expect(
     host.querySelector('[role="tablist"]')!.getAttribute("aria-label"),
   ).toBe("Work views");
+  // Counts not known yet say so (Leads part 05).
   expect(tabs()).toEqual([
-    ["To Call", "true"],
-    ["Follow-ups", "false"],
-    ["All Leads", "false"],
+    ["To Call —", "true"],
+    ["Follow-ups —", "false"],
+    ["All Leads —", "false"],
   ]);
   const [toCall, followUps] =
     host.querySelectorAll<HTMLButtonElement>("button");

@@ -356,6 +356,9 @@ function Tabs<T extends string>({
  *  ("To Call 7"): Inbound To Call is the Leads badge's own number (competitor
  *  teardown #9, one count rule). Text tabs on one line that scroll sideways
  *  where they don't fit, never wrapping (Leads L1; bugs 165, 180, ux-audit N7). */
+/** A count not known yet (Leads part 05): the tab says "—". */
+const UNKNOWN = -1;
+
 export function ViewTabs({
   value,
   onChange,
@@ -368,13 +371,14 @@ export function ViewTabs({
   return (
     <CountTabs
       label="Work views"
+      // Unknown counts say so, "—", never nothing (Leads part 05).
       items={WORK_VIEWS.map((view) => ({
         ...view,
-        count: counts?.[view.key] ?? null,
+        count: counts ? (counts[view.key] ?? null) : UNKNOWN,
       }))}
       value={value}
       onChange={onChange}
-      format={tabCount}
+      format={(count) => (count === UNKNOWN ? "—" : tabCount(count))}
     />
   );
 }
@@ -560,6 +564,9 @@ export function StageChips({
     items.push({ key: value, label: keyWords(value), count: null });
   return (
     <ChipRow
+      // Drawn again when the chips change (counts, stages), so the chosen one is
+      // scrolled into view (Leads part 05: "Won" sat off-screen).
+      key={items.map((item) => item.key).join(" ")}
       label="Pipeline stage"
       items={items}
       value={value ?? ALL_STAGES}

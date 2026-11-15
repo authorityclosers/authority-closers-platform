@@ -8450,7 +8450,7 @@ fieldset.form {
 /* On a phone too, List | Table sits at the row's end, beside the sort: it left the
    Filter sheet, and the owner uses the table on his phone (24 Oct, bug 194). */
 @media (max-width: 767px) {
-  .listHead[data-bare]:has(.listSort) .listTools,
+  .listHead[data-bare]:has(.listSort) .listTools:not(:empty),
   .listHead[data-bare]:has(.listSort) .listTools .layoutSwitch {
     display: inline-flex;
   }
@@ -8504,4 +8504,107 @@ fieldset.form {
 .activeClear:focus-visible {
   outline: none;
   box-shadow: var(--sx-focus-ring);
+}
+
+/* Leads part 05, loading, syncing and empty (design-research 05-empty-loading.md,
+   15 Nov 2026). The first frame in the page's real shapes; one faithful row. */
+.skeletonHead {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.skeletonTabs {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.skeletonChips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.skeletonChips > :last-child {
+  flex: none;
+  margin-inline-start: auto;
+}
+
+.skeletonSort {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.listLoadingRow {
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 88px;
+  padding: 10px 12px;
+}
+
+.listLoadingText {
+  gap: 7px;
+}
+
+.listLoadingActions {
+  display: flex;
+  gap: 12px;
+}
+
+/* How fresh the list is, one muted line in the sort row: "Updating…", or
+   "Couldn't update · Retry". */
+.syncLine {
+  margin-inline-start: auto;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.syncLine[data-quiet] {
+  display: none;
+}
+
+.syncLine[data-bad] {
+  color: var(--sx-bad);
+}
+
+.syncRetry {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.syncLine + .listTools {
+  margin-inline-start: 8px;
+}
+
+/* Empty says why, its words at the card's width and its one action under them. */
+.listPanel .inlineEmpty {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-content: center;
+  align-items: start;
+  column-gap: 12px;
+  row-gap: 12px;
+  min-height: 160px;
+  padding: 20px;
+}
+
+.listPanel .inlineEmpty > .inlineEmptyAction {
+  grid-column: 2;
+  justify-self: start;
+  min-height: 44px;
 }

@@ -592,7 +592,6 @@ export function LeadsRoute({
     null,
   );
   // And its "Syncing…": at the pinned head's lower edge, taking no room.
-  const [syncSlot, setSyncSlot] = useState<HTMLElement | null>(null);
   // Call Next's queue (Dipak's handoff, items 16-17 and 80): the leads served
   // this round, in the list's order. A lead opened any other way is one-off.
   const [queue, setQueue] = useState<ReadonlySet<string> | null>(null);
@@ -1927,6 +1926,24 @@ export function LeadsRoute({
   const upNextWords = upFace
     ? [displayName(upFace.name), upFace.stage].filter(Boolean).join(" · ")
     : null;
+  // The list is still loading its first lead: the band says so (Leads part 05).
+  const finding = workView !== "all" && !topLead;
+  // A picked stage with no leads: the empty card names it, and Show all
+  // stages takes only the stage away (Leads part 05).
+  const pickedStage = stepShown
+    ? pickable.find((stage) => stage.key === stepShown)
+    : undefined;
+  const stagePickEmpty =
+    pickedStage && view === OPENING_STAGE
+      ? {
+          title: `No ${side === "cold" ? "Cold" : "Inbound"} leads in ${stageName(pickedStage, side)}`,
+          text:
+            workView === "all"
+              ? "None of your leads are at this stage."
+              : `None of your ${workView === "to_call" ? "To Call" : "Follow-ups"} leads are at this stage.`,
+          onShowAll: () => pickWork({ step: null }),
+        }
+      : null;
   // The list's own order, in words that say what it does (Leads part 03).
   const listOrder =
     workView === "to_call"
@@ -2093,7 +2110,6 @@ export function LeadsRoute({
                 // Dipak's handoff (31 Oct 2026, items 44-73): the lead type,
                 // search with one Filter, the work views and one stage pick.
                 <WorkHead
-                  syncSlot={setSyncSlot}
                   side={
                     bothSides || more.side ? (
                       <SideSelector
@@ -2289,6 +2305,7 @@ export function LeadsRoute({
               <ListView
                 onTopLead={setTopLead}
                 onFaces={setFaces}
+                stagePick={stagePickEmpty}
                 onOrder={(leadIds, recent) => {
                   order.current = leadIds;
                   setTried((now) =>
@@ -2318,7 +2335,6 @@ export function LeadsRoute({
                     />
                   ) : null
                 }
-                syncSlot={syncSlot}
                 empty={view === OPENING_STAGE ? emptyWords(workView) : null}
                 canManage={can}
                 initial={desk === serverSeed?.desk ? serverSeed : null}
@@ -2375,21 +2391,31 @@ export function LeadsRoute({
               {/* The one Call (Leads L1): Call Next Lead or Start Cold Calling,
                   the list's first lead, in a band above the tab bar; an empty
                   view has none. */}
-              {(workView === "all" ? (callCount ?? 0) > 0 : !!topLead) ? (
+              {/* It holds its place while the list loads, and hides only on a
+                  known zero (Leads part 05; L1's empty rule). */}
+              {(
+                workView === "all"
+                  ? (callCount ?? 0) > 0
+                  : !!topLead || callCount !== 0
+              ) ? (
                 <CallBand
                   side={side}
                   view={callNextView(workView)}
-                  disabled={false}
+                  disabled={finding}
                   count={callCount}
                   // Who the tap opens: the round's start over the same order
                   // and recent tries the tap uses (Leads part 04).
-                  who={upNextWords}
+                  who={finding ? null : upNextWords}
                   // A paused round: the band says Continue, as a tap offers.
-                  label={continueWords(
-                    desk ? readPaused(desk.me.person_id, side) : null,
-                    callCount,
-                    tabCount,
-                  )}
+                  label={
+                    finding
+                      ? "Finding next call…"
+                      : continueWords(
+                          desk ? readPaused(desk.me.person_id, side) : null,
+                          callCount,
+                          tabCount,
+                        )
+                  }
                   onStart={() => {
                     if (workView === "all") {
                       void callToCall();

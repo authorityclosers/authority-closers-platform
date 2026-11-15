@@ -42,7 +42,8 @@ import { withoutRepeats } from "./page-merge";
 import { useBackClose } from "../ui/back-close";
 import { useListLoadWatch } from "./load-watch";
 import { triedLately } from "./call-round";
-import { Button, Skeleton } from "../ui/kit";
+import { Button } from "../ui/kit";
+import { LoadingRows } from "./leads-skeleton";
 import {
   DeleteLeadsSheet,
   SelectBar,
@@ -80,6 +81,13 @@ import styles from "./leads.module.css";
 
 /** A listed lead as the Call band names it: "Rahul Joshi · New Lead". */
 export type LeadFace = { name: string; stage: string };
+
+/** A picked stage with no leads, as the empty card says it (Leads part 05). */
+export type StagePickEmpty = {
+  title: string;
+  text: string;
+  onShowAll: () => void;
+};
 
 const CachedLeadLine = memo(LeadLine);
 const subscribeHydration = () => () => {};
@@ -358,6 +366,7 @@ export function ListView({
   onTopLead,
   onOrder,
   onFaces,
+  stagePick = null,
   stageWord,
   stageTone,
   quietLate = false,
@@ -383,6 +392,9 @@ export function ListView({
   /** The leads in the list's order, as shown: Call Next goes through them;
    *  with those tried in the last hour, which a continued round passes over. */
   onOrder?: (leadIds: readonly string[], recent: readonly string[]) => void;
+  /** A stage with no leads: what the empty card says, and its way back to
+   *  every stage (Leads part 05). */
+  stagePick?: StagePickEmpty | null;
   /** Each listed lead's name and stage word, in the list's order: the Call
    *  band names the lead it opens (Leads part 04). */
   onFaces?: (faces: Readonly<Record<string, LeadFace>>) => void;
@@ -1091,7 +1103,36 @@ export function ListView({
     !!rows.length;
   // Only when it says something (owner, #73): "Updated just now" on every
   // list was noise. Where the page gives it a place (the head's edge), there.
-  const syncSign = (
+  // In the work views' sort row it is one muted line (Leads part 05: the
+  // floating tag sat over the card's edge and said nothing of its age).
+  const syncLine = bare && !!sortPick && stage !== TEST;
+  const syncSign = syncLine ? (
+    <span
+      className={styles.syncLine}
+      aria-label="Lead sync"
+      role="status"
+      aria-live="polite"
+      data-quiet={error || syncing ? undefined : ""}
+      data-bad={error ? "" : undefined}
+    >
+      {error ? (
+        <>
+          Couldn’t update ·{" "}
+          <button
+            type="button"
+            className={styles.syncRetry}
+            onClick={() => setAttempt((count) => count + 1)}
+          >
+            Retry
+          </button>
+        </>
+      ) : syncing ? (
+        "Updating…"
+      ) : (
+        ""
+      )}
+    </span>
+  ) : (
     <span
       className={styles.syncChip}
       aria-label="Lead sync"
@@ -1218,23 +1259,8 @@ export function ListView({
             aria-busy="true"
             aria-label="Loading leads"
           >
-            {[0, 1, 2, 3, 4].map((key) => (
-              <div
-                key={key}
-                className={styles.listLoadingRow}
-                aria-hidden="true"
-              >
-                <Skeleton width={36} height={36} radius="circle" />
-                <div className={styles.listLoadingText}>
-                  <Skeleton width={144} height={16} />
-                  <Skeleton width={112} height={12} />
-                  <span className={styles.listLoadingActions}>
-                    <Skeleton width={136} height={36} radius="pill" />
-                  </span>
-                </div>
-                <Skeleton width={48} height={20} radius="pill" />
-              </div>
-            ))}
+            {/* The row's own outline (Leads part 05). */}
+            <LoadingRows />
           </div>
         ) : rows.length === 0 ? (
           <EmptyList
@@ -1244,6 +1270,7 @@ export function ListView({
             query={query}
             filtered={filtered || !!query}
             filterNames={filterNames}
+            stagePick={stagePick}
             onClearFilters={onClearFilters}
             onAdd={onAdd}
             onShowOpen={onShowOpen}
@@ -1413,6 +1440,7 @@ function EmptyList({
   query,
   filtered,
   filterNames = [],
+  stagePick = null,
   onClearFilters,
   onAdd,
   onShowOpen,
@@ -1424,6 +1452,7 @@ function EmptyList({
   query: string;
   filtered: boolean;
   filterNames?: readonly string[];
+  stagePick?: StagePickEmpty | null;
   onClearFilters?: () => void;
   onAdd?: () => void;
   onShowOpen?: () => void;
@@ -1435,11 +1464,39 @@ function EmptyList({
         {label}
       </Button>
     ) : null;
+  // Empty says why, and undoes only that (Leads part 05): a search, then a
+  // stage with none, then the other filters.
+  if (query)
+    return (
+      <InlineEmpty
+        icon={SearchX}
+        title={`No leads called “${query}”`}
+        text={
+          onSearchAll
+            ? "Not in this list. It may be in All Leads."
+            : "Try a name or a phone number."
+        }
+        action={
+          onSearchAll
+            ? action("Search All Leads", onSearchAll)
+            : action("Clear filters", onClearFilters)
+        }
+      />
+    );
+  if (stagePick && !filterNames.length)
+    return (
+      <InlineEmpty
+        icon={Users}
+        title={stagePick.title}
+        text={stagePick.text}
+        action={action("Show all stages", stagePick.onShowAll)}
+      />
+    );
   if (filtered)
     return (
       <InlineEmpty
         icon={SearchX}
-        title="No leads match"
+        title="No leads match these filters"
         text={
           query && onSearchAll
             ? "Not in this list. It may be in All Leads."
@@ -1449,7 +1506,7 @@ function EmptyList({
                 // "Nobody here for whose leads you picked" for any filter).
                 filterNames.length
                 ? `Filters on: ${filterNames.join(" · ")}.`
-                : "Clear the filters to see every lead here."
+                : "Remove a filter to see more."
         }
         action={
           query && onSearchAll
