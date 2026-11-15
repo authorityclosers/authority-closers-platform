@@ -770,3 +770,68 @@
 .related:last-child {
   border-bottom: 0;
 }
+
+/* Home's finish on Ask Dipak (owner, 15 Nov 2026), inside Dipak's spec rules
+   (section 33: theme tokens, the type scale, one transition). The welcome is a
+   Home tile with a faint green corner, a size calmer; the search a tile; each
+   topic a tile that presses in, its icon a soft badge, coloured by position. */
+.hero {
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background:
+    radial-gradient(
+      140% 100% at 100% 0%,
+      color-mix(in oklab, var(--xr-green) 9%, transparent),
+      transparent 55%
+    ),
+    var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+}
+
+.hello {
+  font-size: var(--sx-text-xl);
+  font-weight: 800;
+}
+
+.hero p {
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
+}
+
+.searchField,
+.searchHome {
+  border: var(--sx-tile-edge);
+  background: var(--sx-tile-fill);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--sx-ink) 6%, transparent);
+}
+
+.topicCard {
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+}
+
+.topicCard:active {
+  transform: var(--sx-press-sink);
+}
+
+.topicIcon {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--xr-green) 14%, transparent);
+  color: var(--xr-green);
+}
+
+.topicGrid > .topicCard:nth-child(3n + 2) .topicIcon {
+  background: color-mix(in oklab, var(--sx-accent) 14%, transparent);
+  color: var(--sx-accent);
+}
+
+.topicGrid > .topicCard:nth-child(3n) .topicIcon {
+  background: color-mix(in oklab, var(--sx-warn) 18%, transparent);
+  color: var(--sx-warn);
+}

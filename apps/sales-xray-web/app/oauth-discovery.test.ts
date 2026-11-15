@@ -78,6 +78,8 @@ describe("OAuth discovery", () => {
       "leads:tasks",
       // Stage moves (ai-writes.md, "stage"): their own scope.
       "leads:stage",
+      // The team, names never emails (15 Nov 2026).
+      "team:read",
       "coaching:read",
       "coaching:write",
     ]);

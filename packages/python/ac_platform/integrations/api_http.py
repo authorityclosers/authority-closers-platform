@@ -19,13 +19,25 @@ Base address: ``https://<sales x-ray host>/v1/api``.
 - POST /leads/imports       up to 10,000 leads at once, filed in the background through the
                             app's own file import; ``Idempotency-Key`` (leads:write;
                             integrations/lead_imports.py)
+- POST /leads/imports/uploads  a one-time address (15 minutes) to PUT a CSV of up to 10,000
+                            leads to, without the key: it queues as one import, the same file
+                            twice once (leads:write; integrations/import_uploads.py)
+- PUT  /leads/imports/upload/{token}  the CSV itself
 - GET  /leads/imports       recent imports; /leads/imports/{id} where one stands;
                             /leads/imports/{id}/rows each row's outcome (leads:write)
 - PATCH /leads/{id}         change a lead's name, company, city, interest or language, as
                             an AI write with Undo (leads:update; the owner's switch decides)
 - POST /leads/{id}/stage    move a lead to another stage with the reason, as an AI write
                             with Undo; Won, Lost and Junk wait for a person (leads:stage;
-                            the owner's switch decides)
+                            the owner's switch decides), except from an owner's or admin's
+                            organisation key, which closes with the reason (and Won's amount)
+- POST /leads/{id}/assign   give a lead to a teammate, or to whom the lead rules pick, with
+                            Undo (leads:assign; an owner's or admin's organisation key only)
+- POST /leads/bulk          one stage move or assign for up to 1,000 leads (ids, or a stage
+                            filter), each lead its own change with Undo; above 5 leads,
+                            preview first and send its preview_sha (an owner's or admin's
+                            organisation key only; ai-writes.md, "Amended 15 Nov")
+- POST /changes/undo-request  undo every change one bulk request made
 - POST /calls               a recording for the connected person to add to their calls;
                             it waits for them, nothing is analysed (calls:write; see
                             integrations/app_uploads.py)
@@ -37,6 +49,10 @@ Base address: ``https://<sales x-ray host>/v1/api``.
 - POST /tasks/{id}/snooze   snooze a task on a lead (15m, 1h, evening, tomorrow, week), as
                             an AI write with Undo (puts its due back) (leads:tasks; the
                             owner's switch for tasks decides both)
+- GET  /team                the team as the app shows it: names and roles (never emails),
+                            who takes new leads, lead limits and today's work, and the
+                            unassigned leads (team:read; an organisation's key, or a
+                            person whose role sees the team)
 - GET  /analysis-time       the workspace's analysis time: given, used and left, and the
                             longest call (calls:read; time only, never a price;
                             integrations/analysis_time.py)
@@ -63,7 +79,7 @@ from __future__ import annotations
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
@@ -78,7 +94,16 @@ from ac_platform.call_data import facts as call_facts
 from ac_platform.call_data.models import CallObject
 from ac_platform.http.rate_limits import InMemoryTokenBucketLimiter, RateLimitRule
 from ac_platform.http.routes import RouteContext
-from ac_platform.integrations import analysis_time, app_uploads, keys, lead_imports, oauth, tiers
+from ac_platform.integrations import (
+    analysis_time,
+    app_uploads,
+    import_uploads,
+    keys,
+    lead_imports,
+    oauth,
+    sealed,
+    tiers,
+)
 from ac_platform.integrations.ai_writes import AiWriteError, AiWrites, Door
 from ac_platform.integrations.models import IntegrationOAuthClient
 from ac_platform.kernel.authz import ActorContext
@@ -163,6 +188,76 @@ class StageBody(BaseModel):
     expected_revision: int | None = Field(default=None, ge=1)
     request_id: str = Field(min_length=8, max_length=80)
     preview: bool = False
+    # Whole rupees, for a move to Won (an owner's or admin's organisation key).
+    amount: int | None = Field(default=None, ge=1)
+
+
+class AssignBody(BaseModel):
+    """An owner's or admin's organisation key gives a lead to a teammate (person_id from
+    GET /team), or, with none, to whom the lead rules pick."""
+
+    model_config = ConfigDict(extra="forbid")
+    person_id: UUID | None = None
+    expected_revision: int | None = Field(default=None, ge=1)
+    request_id: str = Field(min_length=8, max_length=80)
+    preview: bool = False
+
+
+class BulkStage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    step: str = Field(min_length=1, max_length=40)
+    reason: str = Field(min_length=1, max_length=500)
+    reason_code: str | None = Field(default=None, min_length=1, max_length=40)
+    next_action_at: AwareDatetime | None = None
+    amount: int | None = Field(default=None, ge=1)
+
+
+class BulkAssign(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    person_id: UUID | None = None
+
+
+class BulkChange(BaseModel):
+    """Exactly one: a stage move or an assign."""
+
+    model_config = ConfigDict(extra="forbid")
+    stage: BulkStage | None = None
+    assign: BulkAssign | None = None
+
+
+class BulkFilter(BaseModel):
+    """The leads a bulk change takes, by stage (a key from GET /leads's stages, or open)."""
+
+    model_config = ConfigDict(extra="forbid")
+    stage: str = Field(min_length=1, max_length=40)
+    search: str | None = Field(default=None, max_length=120)
+
+
+class BulkBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    lead_ids: list[UUID] | None = Field(default=None, min_length=1, max_length=1000)
+    filter: BulkFilter | None = None
+    change: BulkChange
+    request_id: str = Field(min_length=8, max_length=80)
+    preview: bool = False
+    preview_sha: str | None = Field(default=None, min_length=64, max_length=64)
+
+
+class UploadBody(BaseModel):
+    """The choices for an import whose rows come as a CSV to a one-time address."""
+
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(default="CSV upload", min_length=1, max_length=200)
+    side: Literal["inbound", "cold"] = "inbound"
+    assign: Literal["rules", "none"] = "rules"
+    duplicates: Literal["skip", "fill", "replace"] = "skip"
+    pipeline: str | None = Field(default=None, max_length=40)
+    stage: str | None = Field(default=None, max_length=40)
+
+
+class UndoRequestBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_id: str = Field(min_length=8, max_length=80)
 
 
 class TaskDoneBody(BaseModel):
@@ -541,6 +636,21 @@ class Reader:
         )
         return (name or "An AI app")[:80]
 
+    async def _manager_key(self) -> bool:
+        """An organisation's API key (not a connected app) whose person is, right now, one
+        of the organisation's owners or admins (ai-writes.md, "Amended 15 Nov")."""
+        if self.caller.reach != "organisation" or self.key.prefix.startswith("app "):
+            return False
+        role = await self.session.scalar(
+            select(Membership.role).where(
+                Membership.tenant_id == self.key.tenant_id,
+                Membership.person_id == self.key.acting_person_id,
+                Membership.status == "active",
+                Membership.ended_at.is_(None),
+            )
+        )
+        return role in {"owner", "admin"}
+
     async def _writes(self) -> AiWrites:
         """Changes from this caller, behind the AI-write guardrails (ai-writes.md)."""
         self._refuse_read_only()
@@ -559,6 +669,7 @@ class Reader:
                 door_id=self.key.key_id,
                 label=f"API key {self.key.prefix}",
                 scopes=self.key.scopes,
+                manager_key=await self._manager_key(),
             )
         return AiWrites(desk, door)
 
@@ -656,8 +767,65 @@ class Reader:
                 expected_revision=body.expected_revision,
                 request_id=body.request_id,
                 preview=body.preview,
+                amount=body.amount,
             )
         )
+
+    async def assign_lead(self, lead_id: UUID, body: AssignBody) -> tuple[dict[str, Any], int]:
+        writes = await self._writes()
+        return await self._write(
+            writes.assign(
+                lead_id,
+                body.person_id,
+                request_id=body.request_id,
+                expected_revision=body.expected_revision,
+                preview=body.preview,
+            )
+        )
+
+    async def _filtered(self, chosen: BulkFilter) -> list[UUID]:
+        """The leads a stage filter takes, newest change first, up to the bulk limit."""
+        found: list[UUID] = []
+        offset: int | None = 0
+        while offset is not None and len(found) < 1000:
+            page = await self.leads(stage=chosen.stage, offset=offset, search=chosen.search)
+            found.extend(UUID(str(row["lead_id"])) for row in page["leads"])
+            offset = page.get("next_offset")
+        return found[:1000]
+
+    async def bulk(self, body: BulkBody) -> tuple[dict[str, Any], int]:
+        """One change to many leads (ai-writes.md, "Amended 15 Nov")."""
+        if (body.lead_ids is None) == (body.filter is None):
+            raise ApiError(422, "leads", "Send lead_ids or a filter, one of them.")
+        change = body.change
+        if (change.stage is None) == (change.assign is None):
+            raise ApiError(422, "change", "The change is one stage move or one assign.")
+        writes = await self._writes()
+        ids = list(body.lead_ids) if body.lead_ids is not None else []
+        if body.filter is not None:
+            ids = await self._filtered(body.filter)
+            if not ids:
+                raise ApiError(404, "no_leads", "No leads match that filter.")
+        # As JSON (ids and times as text): the preview answers it and hashes it.
+        spec = (
+            {"stage": change.stage.model_dump(mode="json", exclude_none=True)}
+            if change.stage is not None
+            else {"assign": change.assign.model_dump(mode="json") if change.assign else {}}
+        )
+        return await self._write(
+            writes.bulk(
+                ids,
+                spec,
+                request_id=body.request_id,
+                preview=body.preview,
+                preview_sha=body.preview_sha,
+            )
+        )
+
+    async def undo_request(self, body: UndoRequestBody) -> dict[str, Any]:
+        writes = await self._writes()
+        answer, _ = await self._write(writes.undo_request(body.request_id))
+        return answer
 
     async def changes(self, lead_id: UUID | None = None) -> dict[str, Any]:
         writes = await self._writes()
@@ -668,6 +836,39 @@ class Reader:
         writes = await self._writes()
         answer, _ = await self._write(writes.undo(change_id, request_id=body.request_id))
         return answer
+
+    async def team(self) -> dict[str, Any]:
+        """The team as Lead Desk's Team page shows it, for apps (API gap 7, 15 Nov 2026):
+        each person's name and role (never an email or phone), whether they take new leads,
+        their lead limit and open leads, and today's work; and the leads waiting for an
+        owner. Who may see it is the desk's own check (an organisation's key always)."""
+        self.require("team:read")
+        try:
+            team = await self._desk().team()
+        except DeskError as error:
+            raise ApiError(error.status, "lead_desk", str(error)) from None
+        return {
+            "people": [
+                {
+                    "person_id": str(rep.person_id),
+                    "name": rep.name,
+                    "role": rep.role,
+                    "takes_new_leads": rep.available,
+                    "max_open_leads": rep.max_open,
+                    "open_leads": rep.open_leads,
+                    "over_limit": rep.over_capacity,
+                    "due_now": rep.due_now,
+                    "calls_today": rep.calls_today,
+                    "connected_today": rep.connected_today,
+                    "languages": list(rep.languages),
+                    "areas": list(rep.areas),
+                    "interests": list(rep.interests),
+                }
+                for rep in team.reps
+            ],
+            "unassigned_leads": team.unassigned,
+            "waiting_first_call": team.waiting_first_call,
+        }
 
     async def analysis_time(self, *, team: bool = False) -> dict[str, Any]:
         """The workspace's analysis time (and, for ``team``, each member's share), read as
@@ -698,6 +899,25 @@ class Reader:
             person_id=self.key.acting_person_id,
             now=datetime.now(UTC),
         )
+
+    async def lead_import_upload(self, body: UploadBody) -> dict[str, Any]:
+        """A one-time address to send a CSV of leads to (import_uploads.py)."""
+        door = await self.import_door()
+        seal = sealed.load_key()
+        if seal is None:
+            raise ApiError(503, "not_ready", "Uploads aren't set up on this server yet.")
+        now = datetime.now(UTC)
+        token = import_uploads.make(seal.key, door, body.model_dump(exclude_none=True), now)
+        return {
+            "upload_url": f"{self.base or ''}/v1/api/leads/imports/upload/{token}",
+            "method": "PUT",
+            "content_type": "text/csv",
+            "expires_at": (now + import_uploads.LIFETIME).isoformat(),
+            "max_bytes": import_uploads.MAX_BYTES,
+            "max_rows": lead_imports.MAX_ROWS,
+            "columns": sorted(set(import_uploads.COLUMNS.values())),
+            "then": "The PUT answers the import's id; read it with get_lead_import.",
+        }
 
     async def import_door(self) -> lead_imports.Door:
         """Who an import is from: this key or app connection, acting as its person, with the
@@ -880,6 +1100,50 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
     def refused(refusal: lead_imports.ImportRefused) -> ApiError:
         return ApiError(refusal.status, refusal.code, refusal.message)
 
+    @router.post("/leads/imports/uploads")
+    async def lead_import_upload(body: UploadBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.lead_import_upload(body), 201)
+
+    @router.put("/leads/imports/upload/{token}")
+    async def lead_import_upload_file(token: str, request: Request) -> JSONResponse:
+        """The CSV, sent to its one-time address: the token is the permission, read again in
+        full (the key or app still in force, its person still able to add leads)."""
+        seal = sealed.load_key()
+        if seal is None:
+            raise ApiError(503, "not_ready", "Uploads aren't set up on this server yet.")
+        now = datetime.now(UTC)
+        raw = await request.body()
+        try:
+            upload = import_uploads.read(seal.key, token, now)
+            body = lead_imports.ImportBody(leads=import_uploads.rows(raw), **upload.choices)
+            door = upload.door
+            async with ctx.sessions() as session, session.begin():
+                if not await lead_imports.door_open(session, door.via, door.door_id, now):
+                    raise ApiError(
+                        403,
+                        "key_revoked",
+                        "The key or app that asked for this address was revoked.",
+                    )
+                role = await lead_imports.person_role(
+                    session, door.tenant_id, door.acting_person_id, door.role
+                )
+                if role is None:
+                    raise ApiError(
+                        403,
+                        "person_removed",
+                        "The person who asked for this address can no longer add leads.",
+                    )
+                answer, status = await lead_imports.create(
+                    session,
+                    replace(door, role=role),
+                    body,
+                    idempotency_key=f"upload-{upload.nonce}",
+                )
+        except lead_imports.ImportRefused as refusal:
+            raise refused(refusal) from None
+        return done(answer, status)
+
     @router.post("/leads/imports")
     async def import_leads(body: lead_imports.ImportBody, request: Request) -> JSONResponse:
         async with open_reader(request) as reader:
@@ -1003,6 +1267,23 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
             answer, status = await reader.move_stage(lead_id, body)
             return done(answer, 200 if status == 201 else status)
 
+    @router.post("/leads/{lead_id}/assign")
+    async def assign_lead(lead_id: UUID, body: AssignBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            answer, status = await reader.assign_lead(lead_id, body)
+            return done(answer, 200 if status == 201 else status)
+
+    @router.post("/leads/bulk")
+    async def bulk_leads(body: BulkBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            answer, _ = await reader.bulk(body)
+            return done(answer)
+
+    @router.post("/changes/undo-request")
+    async def undo_request(body: UndoRequestBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.undo_request(body))
+
     # Recordings an app sends for its person (integrations/app_uploads.py).
     upload_root = app_uploads.inbox_root(ctx.settings.sales_xray_storage_root)
     upload_base = (
@@ -1070,6 +1351,11 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
             if found is None:
                 raise ApiError(404, "upload_missing", "No such recording from this connection.")
             return done(app_uploads.upload_view(found, upload_base))
+
+    @router.get("/team")
+    async def team(request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.team())
 
     @router.get("/analysis-time")
     async def analysis_left(request: Request) -> JSONResponse:

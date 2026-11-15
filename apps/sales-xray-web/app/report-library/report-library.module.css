@@ -875,3 +875,51 @@
     transform: none;
   }
 }
+
+/* Home's finish on Reports (owner, 15 Nov 2026): Main | All Reports as Home's
+   pill, Analyse a call in the glossy green, report cards as Home's tiles. */
+.tabs {
+  border: var(--sx-well-edge);
+  background: var(--sx-well-fill);
+  box-shadow: var(--sx-well-depth);
+}
+
+.tab {
+  transition: transform 140ms ease-out;
+}
+
+.tab[aria-selected="true"] {
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
+.tab:active {
+  transform: var(--sx-press-sink);
+}
+
+.analyseButton {
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+  transition: transform 140ms ease-out;
+}
+
+.analyseButton:active {
+  transform: var(--sx-press-sink);
+}
+
+.card,
+.cardSkeleton {
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab,
+  .analyseButton {
+    transition: none;
+  }
+}

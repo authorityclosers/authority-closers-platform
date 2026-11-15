@@ -172,9 +172,9 @@ type Need = {
   count: number;
   label: string;
   href: string;
-  /** The count's colour (05_Home_Lower): new green, late and breaks orange,
-   *  no owner and missed calls rose, recordings violet. */
-  tone: "emerald" | "orange" | "rose" | "violet";
+  /** The count's colour by meaning (design-research piece 07): missed calls
+   *  rose; late, no owner and breaks orange; waiting sky; recordings neutral. */
+  tone: "emerald" | "orange" | "rose" | "violet" | "sky" | "slate";
   /** A second line, where the alert counts something other than the side shown. */
   note?: string;
 };
@@ -187,16 +187,9 @@ function needs(
   stages: StageKeys | undefined,
 ): Need[] {
   const day = effort?.[side];
+  // Most urgent first (design-research piece 07): a customer who called and
+  // wasn't called back, then promises already late, then new leads waiting.
   const list: Need[] = [
-    side === "inbound" && counts?.fresh != null && stages?.newKey
-      ? {
-          key: "fresh",
-          count: counts.fresh,
-          label: "New leads not called yet",
-          tone: "emerald",
-          href: leadsHref("inbound", { view: "to_call", step: stages.newKey }),
-        }
-      : null,
     side === "inbound" && effort
       ? {
           key: "missed",
@@ -210,9 +203,18 @@ function needs(
       ? {
           key: "late",
           count: day.late,
-          label: "Follow-ups late",
+          label: "Overdue follow-ups",
           tone: "orange",
           href: LATE(side),
+        }
+      : null,
+    side === "inbound" && counts?.fresh != null && stages?.newKey
+      ? {
+          key: "fresh",
+          count: counts.fresh,
+          label: "New leads waiting for a first call",
+          tone: "sky",
+          href: leadsHref("inbound", { view: "to_call", step: stages.newKey }),
         }
       : null,
     counts
@@ -220,7 +222,7 @@ function needs(
           key: "unowned",
           count: counts.unowned,
           label: "Leads with no owner",
-          tone: "rose",
+          tone: "orange",
           href: `/leads?tab=all&stage=open&who=unassigned${side === "cold" ? "&side=cold" : ""}`,
         }
       : null,
@@ -241,8 +243,8 @@ function needs(
           // tried beside 11 without a recording, all on Cold); an older
           // server's total otherwise.
           count: day?.missing_recordings ?? effort.missing_recordings,
-          label: "Connected calls without a recording",
-          tone: "violet",
+          label: "Calls missing a recording",
+          tone: "slate",
           href: "/analysis/calls",
         }
       : null,

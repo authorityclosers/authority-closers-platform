@@ -34,7 +34,47 @@ const talk = (seconds: number) => {
     : { value: `${Math.floor(minutes / 60)}h ${minutes % 60}`, unit: "min" };
 };
 
-export function PastDayButton({ side }: { side: Side }) {
+/** What a past day's sheet counts: the person's own day. */
+type OwnDay = Pick<
+  SideEffort,
+  | "attempted"
+  | "connected"
+  | "talk_seconds"
+  | "reached"
+  | "interested"
+  | "meetings"
+  | "won"
+>;
+
+const NO_CALLS: OwnDay = {
+  attempted: 0,
+  connected: 0,
+  talk_seconds: 0,
+  reached: 0,
+  interested: 0,
+  meetings: 0,
+  won: 0,
+};
+
+/** The signed-in person's own day on this side (Codex review on PR #617): an
+ *  owner's, admin's or manager's read is the team's, so their own row is picked
+ *  by id; with no row they made no calls that day. A seller's read is their own. */
+export function ownDay(effort: Effort, side: Side, me: string | null): OwnDay {
+  if (!effort.team) return effort.sellers[0]?.[side] ?? effort[side];
+  const row = me
+    ? effort.sellers.find((seller) => seller.person_id === me)
+    : undefined;
+  return row ? row[side] : NO_CALLS;
+}
+
+export function PastDayButton({
+  side,
+  me,
+}: {
+  side: Side;
+  /** The signed-in person, whose day the sheet shows. */
+  me: string | null;
+}) {
   const [picking, setPicking] = useState(false);
   const [day, setDay] = useState<string | null>(null);
   return (
@@ -54,7 +94,12 @@ export function PastDayButton({ side }: { side: Side }) {
         day={null}
         onPick={(next) => setDay(next)}
       />
-      <PastDaySheet day={day} side={side} onClose={() => setDay(null)} />
+      <PastDaySheet
+        day={day}
+        side={side}
+        me={me}
+        onClose={() => setDay(null)}
+      />
     </>
   );
 }
@@ -62,10 +107,12 @@ export function PastDayButton({ side }: { side: Side }) {
 function PastDaySheet({
   day,
   side,
+  me,
   onClose,
 }: {
   day: string | null;
   side: Side;
+  me: string | null;
   onClose: () => void;
 }) {
   const [got, setGot] = useState<{
@@ -85,8 +132,8 @@ function PastDaySheet({
     return () => controller.abort();
   }, [day]);
   const mine = got && got.day === day ? got : null;
-  const own: SideEffort | null = mine?.effort
-    ? (mine.effort.sellers[0]?.[side] ?? mine.effort[side])
+  const own: OwnDay | null = mine?.effort
+    ? ownDay(mine.effort, side, me)
     : null;
   const pct =
     own && own.attempted

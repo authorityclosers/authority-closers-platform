@@ -225,8 +225,10 @@ class IntegrationWrite(Base):
             name="integration_write_door",
         ),
         CheckConstraint(
+            # assign: an owner's or admin's organisation key gives a lead to a teammate
+            # (migration 0156; ai-writes.md, "Amended 15 Nov").
             "action IN ('note', 'task', 'outcome', 'summary', 'stage', 'create', 'update',"
-            " 'import', 'undo')",
+            " 'import', 'undo', 'assign')",
             name="integration_write_action",
         ),
         CheckConstraint(

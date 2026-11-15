@@ -16,7 +16,7 @@ from uuid import UUID
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from ac_platform.http.routes import RouteContext
 from ac_platform.integrations.api_http import install_integrations_api
@@ -25,6 +25,7 @@ from ac_platform.integrations.models import IntegrationWrite
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.journey import transitions
 from ac_platform.lead_desk.models import Lead
+from ac_platform.tenancy.models import Membership
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_submission_http_postgresql import ORIGIN, _setup
@@ -59,6 +60,19 @@ async def _places(setup: Any, lead_id: str) -> tuple[Any, Any, Any]:
             stage for stage in journey.board() if stage.kind in CLOSED
         )
         return current, open_move, closed
+
+
+async def _role(setup: Any, role: str) -> None:
+    """The signed-in person's role in the organisation (their key's reach follows it)."""
+    async with setup.sessions() as db, db.begin():
+        await db.execute(
+            update(Membership)
+            .where(
+                Membership.tenant_id == setup.state.tenant_id,
+                Membership.person_id == setup.state.person_id,
+            )
+            .values(role=role)
+        )
 
 
 async def _where(setup: Any, lead_id: str) -> tuple[str, str | None]:
@@ -130,6 +144,10 @@ def test_an_app_moves_a_stage_only_when_allowed_and_undo_moves_it_back(
                 )
                 assert again.status_code == 200 and again.json()["stage"] is True
 
+                # A key whose person sells (not an owner or admin) can't close a lead: that
+                # waits for a person (an owner's or admin's key closes with a reason,
+                # ai-writes.md "Amended 15 Nov", tests/database/test_ai_writes_bulk_postgresql).
+                await _role(setup, "member")
                 for wrong, code in (
                     ({"reason": "   "}, "reason"),
                     ({"step": closed.key}, "needs_review"),
@@ -142,6 +160,7 @@ def test_an_app_moves_a_stage_only_when_allowed_and_undo_moves_it_back(
                     )
                     assert refused.status_code == 422, (wrong, refused.text)
                     assert refused.json()["error"]["code"] == code
+                await _role(setup, "admin")
                 preview = await app.post(
                     path,
                     headers=bearer,

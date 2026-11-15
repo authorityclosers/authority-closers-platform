@@ -20,13 +20,15 @@ from uuid import UUID
 
 from ac_platform.lead_desk.contracts import APP_CHANGE_UNDO_DAYS
 
-Action = Literal["note", "task", "update", "stage"]
-ACTIONS: Final[tuple[Action, ...]] = ("note", "task", "update", "stage")
+Action = Literal["note", "task", "update", "stage", "assign"]
+ACTIONS: Final[tuple[Action, ...]] = ("note", "task", "update", "stage", "assign")
 SCOPES: Final[dict[str, str]] = {
     "note": "leads:notes",
     "task": "leads:tasks",
     "update": "leads:update",
     "stage": "leads:stage",
+    # Only an organisation's key held by an owner or admin (ai-writes.md, "Amended 15 Nov").
+    "assign": "leads:assign",
 }
 # What a refusal calls each action.
 WORDS: Final[dict[str, str]] = {
@@ -34,7 +36,14 @@ WORDS: Final[dict[str, str]] = {
     "task": "tasks",
     "update": "updates",
     "stage": "stage moves",
+    "assign": "assigns",
 }
+# An organisation's key held by an owner or admin (ai-writes.md, "Amended 15 Nov",
+# orchestrator for the owner, 15 Nov 2026) also assigns, changes up to 1,000 leads at once
+# (previewed above 5, instead of the caps) and closes leads (Won, Lost, Junk) with a
+# reason; the owner's pause and switches still decide.
+BULK_MAX: Final = 1_000
+PREVIEW_ABOVE: Final = 5
 # The workspace's switch (Organisation -> AI apps). Defaults agreed 25 Oct 2026: notes,
 # tasks and outcomes on; everything else (lead updates and stage moves too) off until an
 # owner turns it on.
@@ -55,8 +64,14 @@ REASON_LIMIT: Final = 500
 UPDATE_FIELDS: Final[tuple[str, ...]] = ("name", "company", "city", "interest", "language")
 REVIEW_FIELDS: Final[tuple[str, ...]] = ("phone", "email")
 # Caps, in the last 24 hours unless said otherwise (ai-writes.md, section 5).
-PER_CONNECTION: Final[dict[str, int]] = {"note": 200, "task": 200, "update": 200, "stage": 50}
-PER_LEAD: Final[dict[str, int]] = {"note": 20, "task": 20, "update": 20, "stage": 5}
+PER_CONNECTION: Final[dict[str, int]] = {
+    "note": 200,
+    "task": 200,
+    "update": 200,
+    "stage": 50,
+    "assign": 50,
+}
+PER_LEAD: Final[dict[str, int]] = {"note": 20, "task": 20, "update": 20, "stage": 5, "assign": 5}
 PER_WORKSPACE: Final = 2_000
 PER_MINUTE: Final = 30  # one connection, any action
 UNDO_WINDOW: Final = timedelta(days=APP_CHANGE_UNDO_DAYS)
@@ -102,9 +117,15 @@ def decide(
     *,
     scopes: frozenset[str],
     settings: Mapping[str, bool],
-    counts: Counts,
+    counts: Counts | None,
+    manager_key: bool = False,
 ) -> Decision:
-    """Whether this change may go ahead now, and if not, why, in words a person can act on."""
+    """Whether this change may go ahead now, and if not, why, in words a person can act on.
+
+    ``manager_key``: an organisation's key held by an owner or admin ("Amended 15 Nov"),
+    the only caller that assigns (no switch of its own; the owner's pause still stops it).
+    ``counts`` None: one lead of such a key's bulk change, which previews instead of
+    counting against the caps; the switches still decide."""
     if action not in ACTIONS:
         return Decision(False, 422, "action", "Sales X-Ray doesn't take that change from apps.")
     scope = SCOPES[action]
@@ -122,13 +143,25 @@ def decide(
             "writes_paused",
             "An owner has paused changes from apps in this workspace. Reading still works.",
         )
-    if not settings.get(action, False):
+    if action == "assign":
+        if not manager_key:
+            return Decision(
+                False,
+                403,
+                "managers_only",
+                "Only an organisation's API key held by an owner or admin gives leads to people.",
+            )
+    elif not settings.get(action, False):
         return Decision(
             False,
             403,
             "action_off",
             f"An owner has turned off {WORDS[action]} from apps in this workspace.",
         )
+    if counts is None:
+        if not manager_key:
+            raise ValueError("only a manager's bulk change goes without counts")
+        return ALLOW
     if counts.minute >= PER_MINUTE:
         return Decision(False, 429, "cap_reached", "Too many changes this minute. Wait a minute.")
     if counts.workspace >= PER_WORKSPACE:
@@ -205,6 +238,8 @@ __all__ = [
     "PER_LEAD",
     "PER_MINUTE",
     "PER_WORKSPACE",
+    "BULK_MAX",
+    "PREVIEW_ABOVE",
     "REASON_LIMIT",
     "REVIEW_FIELDS",
     "REVIEW_STAGES",
