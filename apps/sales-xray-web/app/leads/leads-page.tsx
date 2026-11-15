@@ -1944,6 +1944,10 @@ export function LeadsRoute({
           onShowAll: () => pickWork({ step: null }),
         }
       : null;
+  // What the band counts, and hides on at zero: the leads this list holds, the
+  // stage's count when one is picked (tab counts ignore the stage chip,
+  // 087652e82). All Leads calls the side's To Call, so it keeps that count.
+  const bandCount = workView === "all" ? callCount : matching;
   // The list's own order, in words that say what it does (Leads part 03).
   const listOrder =
     workView === "to_call"
@@ -2396,13 +2400,13 @@ export function LeadsRoute({
               {(
                 workView === "all"
                   ? (callCount ?? 0) > 0
-                  : !!topLead || callCount !== 0
+                  : !!topLead || bandCount !== 0
               ) ? (
                 <CallBand
                   side={side}
                   view={callNextView(workView)}
                   disabled={finding}
-                  count={callCount}
+                  count={bandCount}
                   // Who the tap opens: the round's start over the same order
                   // and recent tries the tap uses (Leads part 04).
                   who={finding ? null : upNextWords}
@@ -2412,7 +2416,7 @@ export function LeadsRoute({
                       ? "Finding next call…"
                       : continueWords(
                           desk ? readPaused(desk.me.person_id, side) : null,
-                          callCount,
+                          bandCount,
                           tabCount,
                         )
                   }
