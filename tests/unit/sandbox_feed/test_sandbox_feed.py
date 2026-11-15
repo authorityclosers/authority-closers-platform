@@ -66,6 +66,8 @@ def test_the_star_works_hardest_and_farah_leaves_follow_ups() -> None:
     others = [p for alias, p in feed.PROFILES.items() if alias != feed.STAR]
     assert all(star.think < p.think for p in others)
     assert all(star.connect > p.connect for p in others)
+    # The star also works the most Cold leads a day, so she leads the month's calls.
+    assert all(star.cold_cap > p.cold_cap for p in others)
     assert feed.PROFILES["ac.farah"].skip == max(p.skip for p in feed.PROFILES.values())
     assert feed.PROFILES["ac.sneha"].sides == "inbound"
     assert feed.PROFILES["ac.aditya"].sides == "cold"

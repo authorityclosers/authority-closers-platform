@@ -85,6 +85,7 @@ from ac_platform.identity.repositories import AsyncSqlAlchemyIdentityRepository 
 from ac_platform.identity.sales_xray_profile_models import PersonPhoto  # noqa: E402
 from ac_platform.identity.services import PersonSnapshot  # noqa: E402
 from ac_platform.lead_desk.contracts import (  # noqa: E402
+    FollowUp,
     NoteCommand,
     PhoneLog,
     PhoneLogCall,
@@ -136,9 +137,9 @@ Seller = gen.Seller
 # Aditya only Cold.
 PROFILES: Final[dict[str, Any]] = {
     "ac.priya": Seller(
-        "Priya", "Deshmukh", "Pune", "ac.priya", 0, 3.2, 0.02, 0.01, 45, 1.15, 0, 1.35
+        "Priya", "Deshmukh", "Pune", "ac.priya", 0, 3.2, 0.02, 0.01, 70, 1.15, 0, 1.35
     ),
-    "ac.rohan": Seller("Rohan", "Patil", "Pune", "ac.rohan", 10, 5.0, 0.06, 0.05, 35, 1.0, 0, 1.0),
+    "ac.rohan": Seller("Rohan", "Patil", "Pune", "ac.rohan", 10, 5.0, 0.06, 0.05, 25, 1.0, 0, 1.0),
     "ac.sneha": Seller(
         "Sneha", "Iyer", "Mumbai", "ac.sneha", 15, 6.0, 0.08, 0.06, 0, 1.05, 0, 1.1, "inbound"
     ),
@@ -730,6 +731,32 @@ class FeedRun(gen.Run):
             held.owner = owner
             self.by_seller[owner].append(held)
             self.counter["handed_to_owner"] += 1
+            await self.owner_today(owner, held, moment + timedelta(minutes=2 + step), rng)
+
+    async def owner_today(self, owner: int, held: Any, moment: datetime, rng: Any) -> None:
+        """The owner books himself a call on the lead later today (a follow-up and its
+        call-back task), so his Me view has work due today."""
+        day = moment.astimezone(IST).date()
+        if self.night:
+            due = moment + timedelta(minutes=rng.uniform(20, 60))
+        else:
+            due = max(at(day, time(14, 0)), moment + timedelta(minutes=45)) + timedelta(
+                minutes=rng.choice((0, 30, 60, 90, 120))
+            )
+            if due > at(day, time(18, 30)):
+                return
+        lead = held.lead
+        await self.desk(self.sellers[owner], moment).follow_up(
+            lead.id,
+            FollowUp(
+                command_id=self.key("owner-follow-up", lead.id),
+                expected_revision=lead.revision,
+                at=due,
+            ),
+        )
+        held.task = await self.task(owner, held, moment, "call_back", due)
+        self.open_tasks.setdefault(lead.id, []).append((held.task, owner))
+        self.counter["owner_follow_ups"] += 1
 
     async def support(self, moment: datetime, number: int) -> None:
         """A customer who already bought rings their seller with a question: a call that
