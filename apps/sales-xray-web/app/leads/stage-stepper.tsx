@@ -16,6 +16,8 @@ import { sideScrollFades, useSideScroll } from "@ac/ui/kit";
 
 import type { Kind, StageView } from "./journey/journey-client";
 import { stageName, type Side } from "./journey/stage-look";
+import { useLayoutEffect } from "react";
+
 import styles from "./lead-page.module.css";
 
 /** Kinds that close or sit beside the path, never steps on it. */
@@ -46,6 +48,19 @@ export function mainPath(
     .map((stage) => ({ key: stage.key, label: stageName(stage, side) }));
 }
 
+/** A stage's name as the strip says it, short and in sentence case (Leads
+ *  part 06, P5's words): "Open" for "Open Leads", "Meeting scheduled". */
+export function stripWord(label: string): string {
+  return label
+    .trim()
+    .replace(/\s+Leads$/i, "")
+    .split(/\s+/)
+    .map((word, index) =>
+      index > 0 && /^[A-Z][a-z]+$/.test(word) ? word.toLowerCase() : word,
+    )
+    .join(" ");
+}
+
 export function StageStepper({
   steps,
   current,
@@ -68,6 +83,33 @@ export function StageStepper({
     'li[data-state="current"]',
     current,
   );
+  // The line from each dot to the one before, measured: the columns differ.
+  useLayoutEffect(() => {
+    const list = ref.current;
+    if (!list) return;
+    const place = () => {
+      const items = Array.from(list.children) as HTMLElement[];
+      const centre = (item: HTMLElement) => {
+        const dot = item.querySelector<HTMLElement>("[data-step-dot]");
+        return (
+          item.offsetLeft +
+          (dot ? dot.offsetLeft + dot.offsetWidth / 2 : item.offsetWidth / 2)
+        );
+      };
+      items.forEach((item, index) => {
+        if (index === 0) return;
+        const from = centre(items[index - 1]);
+        const to = centre(item);
+        item.style.setProperty("--line-from", `${from - item.offsetLeft}px`);
+        item.style.setProperty("--line-span", `${to - from}px`);
+      });
+    };
+    place();
+    const watch =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
+    watch?.observe(list);
+    return () => watch?.disconnect();
+  }, [ref, steps, current]);
   return (
     <ol
       ref={ref}
@@ -75,16 +117,16 @@ export function StageStepper({
       className={`${styles.stepper} ${sideScrollFades}`}
       aria-label="Stage"
       style={{
-        // Equal columns, at least 64 dp and wide enough for a step's longest
-        // word (6 em of its xs type: the current step's bold "Connected" fits); spread out when they fit, else the
-        // strip scrolls.
-        gridTemplateColumns: `repeat(${steps.length}, minmax(max(64px, 6em), 1fr))`,
+        // Each column as wide as its step's longest word, at least 36 dp,
+        // spread across the card, so a path of six fits at 363 (Leads part
+        // 06: Meeting Done and Won sat off the card); longer still scrolls.
+        gridTemplateColumns: `repeat(${steps.length}, minmax(36px, min-content))`,
       }}
     >
       {steps.map((step, index) => {
         const state = index < at ? "done" : index === at ? "current" : "ahead";
         const dot = (
-          <span className={styles.stepDot} aria-hidden="true">
+          <span className={styles.stepDot} data-step-dot="" aria-hidden="true">
             {state === "done" ? (
               <svg viewBox="0 0 16 16">
                 <path d="M4 8.5l2.5 2.5L12 5.5" />
@@ -92,7 +134,9 @@ export function StageStepper({
             ) : null}
           </span>
         );
-        const words = <span className={styles.stepLabel}>{step.label}</span>;
+        const words = (
+          <span className={styles.stepLabel}>{stripWord(step.label)}</span>
+        );
         return (
           <li key={step.key} className={styles.step} data-state={state}>
             {state !== "current" && movable.has(step.key) ? (

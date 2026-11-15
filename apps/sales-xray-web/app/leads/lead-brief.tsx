@@ -31,6 +31,7 @@ import {
   type LeadEvent,
 } from "./leads-client";
 import styles from "./lead-page.module.css";
+import { shortSource } from "./source-mark";
 
 const UNKNOWN = "Not known yet";
 
@@ -263,6 +264,11 @@ export function LeadBrief({
   const fact = (...labels: string[]) =>
     facts.find((item) => labels.includes(item.label))?.value ?? null;
   const talk = lastTalkOf(detail.events);
+  // The page they came from, off the header's fact line (Leads part 06).
+  const fromPage = detail.lead.source_label
+    ? shortSource(detail.lead).split(" · ")[1]
+    : undefined;
+  const cameFrom = fromPage ? `${fromPage} page` : null;
 
   const rows: Row[] = talk
     ? [
@@ -293,11 +299,14 @@ export function LeadBrief({
         },
       ]
     : [
+        // Only what's known (Leads part 06): what they asked about, where they
+        // came from, and that no call is logged (talks elsewhere may exist).
         {
-          label: "Why they enquired",
+          label: "Interested in",
           value: detail.lead.interest?.trim() || null,
         },
-        { label: "Last talk", value: "No previous conversation" },
+        ...(cameFrom ? [{ label: "Came from", value: cameFrom }] : []),
+        { label: "Last call", value: "None logged yet" },
       ];
 
   return (

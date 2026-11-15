@@ -82,7 +82,7 @@ async def worklist(here: World, now: datetime) -> None:
                 created_at=arrived,
             )
             db.add(Lead(**values))
-        # A Cold lead: All Leads lists it beside the Inbound ones (owner, 2 Nov 2026).
+        # A Cold lead: on Cold's All Leads, not Inbound's (orchestrator, 15 Nov 2026).
         values = {key: getattr(base, key) for key in keys}
         values.update(
             id=uuid4(),
@@ -163,24 +163,30 @@ def test_work_views_and_the_stage_filter(
             ) == ["Fictional follow-up later"]
             # A side without a work view (Home's counts) is still that side only.
             assert len(await names(scope="mine", side="inbound")) == 7
-            # All Leads: every lead the seller may see on both sides, the closed one and the
-            # Cold one too (owner, 2 Nov 2026), and its tab counts the same leads; To Call and
-            # Follow-ups keep to the side picked.
+            # All Leads: every lead the seller may see on the side picked, the closed one too,
+            # and its tab counts the same leads; the Cold one is on Cold's All Leads
+            # (orchestrator, 15 Nov 2026, Leads part 05; it listed both sides until then).
             every = await here.client.get(
                 f"{BASE}/leads", params={"scope": "mine", "side": "inbound", "view": "all"}
             )
             assert every.status_code == 200, every.text
             page = every.json()
-            assert len(page["leads"]) == page["total"] == 8
-            cold = next(row for row in page["leads"] if row["name"] == "Fictional cold unworked")
-            assert cold["side"] == "cold"
-            assert page["view_counts"] == {"to_call": len(to_call), "follow_ups": 4, "all": 8}
-            assert sum(page["step_counts"].values()) == 8
+            assert len(page["leads"]) == page["total"] == 7
+            assert {row["side"] for row in page["leads"]} == {"inbound"}
+            assert page["view_counts"] == {"to_call": len(to_call), "follow_ups": 4, "all": 7}
+            assert sum(page["step_counts"].values()) == 7
             calling = await here.client.get(
                 f"{BASE}/leads", params={"scope": "mine", "side": "inbound", "view": "to_call"}
             )
             assert calling.status_code == 200, calling.text
-            assert calling.json()["view_counts"]["all"] == 8
+            assert calling.json()["view_counts"]["all"] == 7
+            on_cold = await here.client.get(
+                f"{BASE}/leads", params={"scope": "mine", "side": "cold", "view": "all"}
+            )
+            assert on_cold.status_code == 200, on_cold.text
+            cold_page = on_cold.json()
+            assert [row["name"] for row in cold_page["leads"]] == ["Fictional cold unworked"]
+            assert cold_page["view_counts"]["all"] == cold_page["total"] == 1
 
             # The stage filter: the owner's first New stage takes the new leads with no step.
             journey = await here.client.get(f"{BASE}/journey")
@@ -193,11 +199,22 @@ def test_work_views_and_the_stage_filter(
                 "Fictional new older",
             ]
             assert await names(scope="mine", side="inbound", step="no_such_stage") == []
-            # On All Leads (both sides), New shows the newest first unless a sort is picked
-            # (bug 127); To Call keeps its calling order (oldest new lead first).
+            # The tabs count the side, not the stage picked; the stage chips count the tab
+            # (design-research, Leads part 05 item 8, 15 Nov 2026: "To Call 0" beside
+            # "All stages 540" with Won picked).
+            for view in ("to_call", "all"):
+                ask = {"scope": "mine", "side": "inbound", "view": view}
+                whole = await here.client.get(f"{BASE}/leads", params=ask)
+                assert whole.status_code == 200, whole.text
+                for picked in (new_key, "no_such_stage"):
+                    one = await here.client.get(f"{BASE}/leads", params={**ask, "step": picked})
+                    assert one.status_code == 200, one.text
+                    assert one.json()["view_counts"] == whole.json()["view_counts"], picked
+                    assert one.json()["step_counts"] == whole.json()["step_counts"], picked
+            # On All Leads, New shows the newest first unless a sort is picked (bug 127); To
+            # Call keeps its calling order (oldest new lead first).
             assert await names(scope="mine", side="inbound", view="all", step=new_key) == [
                 "Fictional new newer",
-                "Fictional cold unworked",
                 "Fictional new older",
             ]
             assert await names(scope="mine", side="inbound", view="to_call", step=new_key) == [

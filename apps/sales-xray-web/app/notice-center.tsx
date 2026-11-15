@@ -391,6 +391,7 @@ function NoticeCard({
   const arrivesFolded = () =>
     docked ||
     overBar ||
+    onRowList() ||
     notice.folded === true ||
     notice.slim === true ||
     wasSeen(key);
@@ -652,6 +653,13 @@ function subscribeOverBar(listener: () => void) {
   };
 }
 const isOverBar = () => overBar;
+
+/** A list with row actions on screen (its Call band): a card arrives as its
+ *  pill at once there, so it never sits over a row's Call or WhatsApp
+ *  (orchestrator, Leads part 04, 15 Nov 2026; the 8 Nov sheet rule). */
+const onRowList = () =>
+  typeof document !== "undefined" &&
+  document.querySelector("[data-call-band]") !== null;
 const notOverBar = () => false;
 
 /** Cards that can wait while a lead's after-call question is open: news,

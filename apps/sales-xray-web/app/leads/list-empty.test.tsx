@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { ListView, TEST } from "./list-view";
+import { ListView, TEST, type StagePickEmpty } from "./list-view";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -48,6 +48,7 @@ async function empty(
   query = "",
   filtered = false,
   filterNames: string[] = [],
+  stagePick: StagePickEmpty | null = null,
 ) {
   const calls = { clear: vi.fn(), add: vi.fn(), open: vi.fn() };
   await act(async () =>
@@ -62,6 +63,7 @@ async function empty(
         version={0}
         filtered={filtered}
         filterNames={filterNames}
+        stagePick={stagePick}
         onClearFilters={calls.clear}
         onAdd={calls.add}
         onShowOpen={calls.open}
@@ -78,7 +80,8 @@ async function empty(
 
 it("a search with no match clears it", async () => {
   const { calls, button } = await empty("open", "Open", "pune");
-  expect(host.textContent).toContain("No leads match");
+  // It says what was searched (Leads part 05).
+  expect(host.textContent).toContain("No leads called “pune”");
   expect(button.textContent).toBe("Clear filters");
   await act(async () => button.click());
   expect(calls.clear).toHaveBeenCalledTimes(1);
@@ -102,9 +105,7 @@ it("filters that leave nobody say which, and clear", async () => {
 
 it("a filter without words still says to clear them", async () => {
   const { button } = await empty("interested", "Interested", "", true);
-  expect(host.textContent).toContain(
-    "Clear the filters to see every lead here.",
-  );
+  expect(host.textContent).toContain("Remove a filter to see more.");
   expect(button.textContent).toBe("Clear filters");
 });
 
@@ -155,4 +156,23 @@ it("a search with no match in a work view runs over All Leads (persona row 8da7d
   ]);
   await act(async () => (buttons[0] as HTMLButtonElement).click());
   expect(all).toHaveBeenCalledTimes(1);
+});
+
+// Leads part 05: a stage with none says so, and Show all stages takes only the
+// stage away; with other filters on, it is the filters' empty card.
+it("a stage with no leads names it and shows every stage again", async () => {
+  const onShowAll = vi.fn();
+  const pick = {
+    title: "No Cold leads in Won",
+    text: "None of your To Call leads are at this stage.",
+    onShowAll,
+  };
+  const { button } = await empty("open", "Open", "", true, [], pick);
+  expect(host.textContent).toContain("No Cold leads in Won");
+  expect(button.textContent).toBe("Show all stages");
+  await act(async () => button.click());
+  expect(onShowAll).toHaveBeenCalledTimes(1);
+  const other = await empty("open", "Open", "", true, ["Website form"], pick);
+  expect(host.textContent).toContain("No leads match these filters");
+  expect(other.button.textContent).toBe("Clear filters");
 });

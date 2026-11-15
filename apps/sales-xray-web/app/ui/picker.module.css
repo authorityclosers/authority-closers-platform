@@ -238,8 +238,12 @@
   grid-template-columns: minmax(0, 1fr) auto 18px;
 }
 
-.option:hover {
-  background: var(--sx-fill-soft);
+/* Hover only where a pointer hovers: on a phone a tapped row kept the hover
+   fill, so the stage sheet showed two chosen looks (Leads part 03). */
+@media (hover: hover) and (pointer: fine) {
+  .option:hover {
+    background: var(--sx-fill-soft);
+  }
 }
 
 .option:focus-visible {
@@ -247,7 +251,9 @@
   box-shadow: var(--sx-focus-ring);
 }
 
+/* The chosen row: the soft accent fill and its check, together. */
 .option[aria-selected="true"] {
+  background: var(--sx-accent-soft);
   font-weight: 600;
 }
 

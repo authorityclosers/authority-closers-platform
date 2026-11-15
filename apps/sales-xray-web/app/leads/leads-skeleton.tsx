@@ -3,18 +3,39 @@
  * loading screen (design system v2, 20 Oct): only the kit, styles and the
  * shell, never the Lead Desk page or its API client.
  *
- * It is the final layout of the default view, To call (Liquid Glass polish,
- * 22 Oct 2026: nothing moves when the page arrives): the one header row (Taking
- * leads, the ⋯ menu), the stage tabs, then the Today card with its rows. On a
- * computer the page head and tiles stand above, as they do once loaded.
+ * It is the page's own first screen in its real shapes (Leads part 05, 15 Nov
+ * 2026: the old chip row and pill tabs drew here and moved when the page came):
+ * the side switch, the work tabs, the stage chips with Filter, then the list's
+ * card with its sort row and faithful rows. On a computer the page head and
+ * tiles stand above, as they do once loaded.
  */
 
 import { AcquisitionShell } from "../acquisition-shell";
-import { Panel, Skeleton, SkeletonRow } from "../ui/kit";
+import { Skeleton } from "../ui/kit";
 import styles from "./leads.module.css";
 
-/** The stage tabs' widths as they read at 390 px: To call, Open, the first stages. */
-const TABS = [109, 96, 112, 120, 104];
+/** A list row's outline (Leads part 05): the row's own 40 avatar, its name and
+ *  two lines, and its two 44 circles 56 apart. */
+export function LoadingRows({ count = 5 }: { count?: number }) {
+  return (
+    <>
+      {Array.from({ length: count }, (_, key) => (
+        <div key={key} className={styles.listLoadingRow} aria-hidden="true">
+          <Skeleton width={40} height={40} radius="circle" />
+          <div className={styles.listLoadingText}>
+            <Skeleton width={140} height={14} />
+            <Skeleton width={120} height={11} />
+            <Skeleton width={80} height={11} />
+          </div>
+          <span className={styles.listLoadingActions}>
+            <Skeleton width={44} height={44} radius="circle" />
+            <Skeleton width={44} height={44} radius="circle" />
+          </span>
+        </div>
+      ))}
+    </>
+  );
+}
 
 export function LeadsSkeleton() {
   return (
@@ -36,35 +57,25 @@ export function LeadsSkeleton() {
             ))}
           </div>
         </div>
-        <div className={styles.toolbar} aria-hidden="true">
-          <Skeleton width={128} height={34} radius="pill" />
-          <span className={styles.toolbarEnd}>
-            <Skeleton width={40} height={40} radius="circle" />
-          </span>
-        </div>
-        <div
-          className={`${styles.stageTabs} ${styles.stageTabsSkeleton}`}
-          aria-hidden="true"
-        >
-          {TABS.map((width) => (
-            <Skeleton key={width} width={width} height={36} radius="pill" />
-          ))}
-        </div>
-        <div className={styles.deskGrid}>
-          <div className={styles.deskMain}>
-            <Panel title="Today">
-              {/* The first section's title (Overdue, Call now) and its count. */}
-              <h3 className={styles.sectionTitle} aria-hidden="true">
-                <Skeleton width={64} height={12} />
-                <Skeleton width={22} height={20} radius="pill" />
-              </h3>
-              <div className={styles.leadRowsSkeleton}>
-                {[0, 1, 2, 3, 4].map((key) => (
-                  <SkeletonRow key={key} avatar={40} lines={3} />
-                ))}
-              </div>
-            </Panel>
+        <div className={styles.skeletonHead} aria-hidden="true">
+          <Skeleton height={48} radius="pill" />
+          <div className={styles.skeletonTabs}>
+            <Skeleton width={72} height={14} />
+            <Skeleton width={100} height={14} />
+            <Skeleton width={92} height={14} />
           </div>
+          <div className={styles.skeletonChips}>
+            <Skeleton width={112} height={32} radius="pill" />
+            <Skeleton width={96} height={32} radius="pill" />
+            <Skeleton width={72} height={32} radius="pill" />
+            <Skeleton width={40} height={40} radius="circle" />
+          </div>
+        </div>
+        <div className={`${styles.listPanel} ${styles.skeletonCard}`}>
+          <div className={styles.skeletonSort} aria-hidden="true">
+            <Skeleton width={150} height={14} />
+          </div>
+          <LoadingRows />
         </div>
       </div>
     </AcquisitionShell>

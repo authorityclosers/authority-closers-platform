@@ -105,7 +105,7 @@ it("names the filters that narrow the list, in their chips' words", () => {
   ).toEqual([]);
 });
 
-it("applies whose leads and a pipeline together", async () => {
+it("applies who the leads are assigned to and a pipeline", async () => {
   const onApply = vi.fn();
   await act(async () =>
     root.render(
@@ -122,15 +122,15 @@ it("applies whose leads and a pipeline together", async () => {
   );
   // Search is on the Leads page itself (Dipak's handoff, 31 Oct 2026).
   expect(document.querySelector('input[type="search"]')).toBeNull();
-  await openChoices("Whose leads");
+  await openChoices("Assigned to");
   await act(async () => option("Mine").click());
   await openChoices("Pipeline");
   await act(async () => option("Partner outreach").click());
-  await act(async () => button("Show Results").click());
-  expect(onApply).toHaveBeenCalledWith({
+  expect(onApply).toHaveBeenLastCalledWith({
     who: "mine",
     pipeline: "partner",
     q: "",
+    owner: null,
   });
 });
 
@@ -169,7 +169,7 @@ it("applies and closes the sheet when Show as is chosen", async () => {
   expect(onClose).toHaveBeenCalled();
 });
 
-it("a seller sees no whose-leads choice, and Clear Filters clears", async () => {
+it("a seller sees no Assigned to, and Clear filters clears", async () => {
   const onApply = vi.fn();
   await act(async () =>
     root.render(
@@ -184,8 +184,8 @@ it("a seller sees no whose-leads choice, and Clear Filters clears", async () => 
       />,
     ),
   );
-  expect(document.body.textContent).not.toContain("Whose leads");
-  await act(async () => button("Clear Filters").click());
+  expect(document.body.textContent).not.toContain("Assigned to");
+  await act(async () => button("Clear filters").click());
   expect(onApply).toHaveBeenCalledWith({
     who: "mine",
     pipeline: null,
@@ -212,13 +212,13 @@ it("each filter that is on has its own remove", async () => {
   );
   expect(labels).toEqual([
     "Remove filter “pune”",
-    "Remove filter No owner",
+    "Remove filter Unassigned",
     "Remove filter Partner outreach",
   ]);
   await act(async () =>
     host
       .querySelector<HTMLButtonElement>(
-        '[aria-label="Remove filter No owner"]',
+        '[aria-label="Remove filter Unassigned"]',
       )!
       .click(),
   );
@@ -250,7 +250,6 @@ it("filters by source, date and follow-up, and sorts the whole list", async () =
   await act(async () => option("Overdue").click());
   await openChoices("Sort by");
   await act(async () => option("Name").click());
-  await act(async () => button("Show Results").click());
   expect(onApply).toHaveBeenCalledWith({
     ...NONE,
     more: {
@@ -289,7 +288,6 @@ it("Old leads open in All Leads, never under To Call", async () => {
   );
   await openChoices("Date");
   await act(async () => option("Old leads").click());
-  await act(async () => button("Show Results").click());
   expect(onApply).toHaveBeenCalledWith({
     ...NONE,
     more: { created: "history", view: "all", when: null },
@@ -331,7 +329,7 @@ it("the sort and the new filters show as chips that remove themselves", async ()
   });
 });
 
-it("asks for the pipeline first, then whose leads, then source, date and follow-up", async () => {
+it("asks for the pipeline first, then Assigned to, then source, date and follow-up", async () => {
   await act(async () =>
     root.render(
       <FilterSheet
@@ -350,7 +348,7 @@ it("asks for the pipeline first, then whose leads, then source, date and follow-
     (field) => field.textContent ?? "",
   );
   expect(fields[0]).toContain("Pipeline");
-  expect(fields[1]).toContain("Whose leads");
+  expect(fields[1]).toContain("Assigned to");
   expect(fields).toHaveLength(6);
   expect(fields[2]).toContain("Lead source");
   expect(fields[3]).toContain("Date");
@@ -400,7 +398,6 @@ it("sorts oldest first: the newest-first order, reversed", async () => {
   await openChoices("Sort by");
   expect(option("Newest first")).toBeTruthy();
   await act(async () => option("Oldest first").click());
-  await act(async () => button("Show Results").click());
   expect(onApply).toHaveBeenCalledWith({
     who: "team",
     pipeline: null,
@@ -423,7 +420,7 @@ it("sorts from the list's head: its own order, then the Filter's choices", async
       />,
     ),
   );
-  // A sort mark inside the same button, so it reads as sort at phone width.
+  // The chevron says the button opens a list.
   expect(
     document.querySelector('button[aria-haspopup="listbox"] svg'),
   ).toBeTruthy();
@@ -435,11 +432,148 @@ it("sorts from the list's head: its own order, then the Filter's choices", async
     ),
   ).toEqual([
     "Newest",
-    "Next follow-up",
+    "Follow-up soonest",
     "Last contact",
     "Name",
     "Oldest first",
   ]);
   await act(async () => option("Oldest first").click());
   expect(onChange).toHaveBeenLastCalledWith({ sort: "created", order: "asc" });
+});
+
+// Leads part 03 (design-research 03-filter-sort.md, 15 Nov 2026): every choice
+// applies as it is made; the sheet's button only goes back to the list.
+it("applies each choice as it is made, and View N leads goes back to the list", async () => {
+  const onApply = vi.fn();
+  const onClose = vi.fn();
+  await act(async () =>
+    root.render(
+      <FilterSheet
+        open
+        onClose={onClose}
+        filters={NONE}
+        defaultWho="team"
+        canPickWho
+        pipes={[]}
+        onApply={onApply}
+        matching={5}
+        sortOnList
+      />,
+    ),
+  );
+  // The list's own row holds the sort: none here.
+  expect(document.body.textContent).not.toContain("Sort");
+  await openChoices("Lead source");
+  await act(async () => option("File upload").click());
+  expect(onApply).toHaveBeenCalledTimes(1);
+  expect(onApply).toHaveBeenLastCalledWith({
+    ...NONE,
+    more: { source: "csv" },
+  });
+  await act(async () => button("View 5 leads").click());
+  expect(onClose).toHaveBeenCalled();
+  expect(onApply).toHaveBeenCalledTimes(1);
+});
+
+it("names one seller in Assigned to, and its chip says whose leads they are", async () => {
+  const onApply = vi.fn();
+  const sellers = [
+    { id: "p1", name: "Farah Shaikh" },
+    { id: "p2", name: "Rahul Joshi" },
+  ];
+  await act(async () =>
+    root.render(
+      <FilterSheet
+        open
+        onClose={() => undefined}
+        filters={NONE}
+        defaultWho="team"
+        canPickWho
+        pipes={[]}
+        onApply={onApply}
+        sellers={sellers}
+      />,
+    ),
+  );
+  await openChoices("Assigned to");
+  expect(
+    [
+      ...document.querySelectorAll(
+        '[role="listbox"][aria-label="Assigned to"] [role="option"]',
+      ),
+    ].map((item) => item.textContent?.trim()),
+  ).toEqual([
+    "All sellers",
+    "Mine",
+    "Farah Shaikh",
+    "Rahul Joshi",
+    "Unassigned",
+  ]);
+  await act(async () => option("Farah Shaikh").click());
+  expect(onApply).toHaveBeenLastCalledWith({ ...NONE, owner: "p1" });
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  const onClear = vi.fn();
+  const onChange = vi.fn();
+  await act(async () =>
+    root.render(
+      <ActiveFilters
+        filters={{ ...NONE, owner: "p1" }}
+        defaultWho="team"
+        pipes={[]}
+        sellers={sellers}
+        onChange={onChange}
+        onClear={onClear}
+      />,
+    ),
+  );
+  expect(filtersOn({ ...NONE, owner: "p1" }, "team")).toBe(1);
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Remove filter Owner: Farah"]',
+      )!
+      .click(),
+  );
+  expect(onChange).toHaveBeenCalledWith({ ...NONE, owner: null });
+  await act(async () => button("Clear").click());
+  expect(onClear).toHaveBeenCalled();
+});
+
+it("Clear filters keeps the sort", async () => {
+  const onApply = vi.fn();
+  await act(async () =>
+    root.render(
+      <FilterSheet
+        open
+        onClose={() => undefined}
+        filters={{ ...NONE, more: { source: "csv", sort: "name" } }}
+        defaultWho="team"
+        canPickWho
+        pipes={[]}
+        onApply={onApply}
+      />,
+    ),
+  );
+  await act(async () => button("Clear filters").click());
+  expect(onApply).toHaveBeenCalledWith({
+    ...NONE,
+    more: { sort: "name", order: null },
+  });
+});
+
+it("over the list, the sort says it is one at any width", async () => {
+  await act(async () =>
+    root.render(
+      <SortPick
+        more={{}}
+        defaultLabel="Next call first"
+        same={null}
+        onChange={() => undefined}
+      />,
+    ),
+  );
+  expect(
+    document.querySelector('button[aria-haspopup="listbox"]')?.textContent,
+  ).toBe("Sort: Next call first");
 });

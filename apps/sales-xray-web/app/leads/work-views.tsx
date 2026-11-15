@@ -356,6 +356,9 @@ function Tabs<T extends string>({
  *  ("To Call 7"): Inbound To Call is the Leads badge's own number (competitor
  *  teardown #9, one count rule). Text tabs on one line that scroll sideways
  *  where they don't fit, never wrapping (Leads L1; bugs 165, 180, ux-audit N7). */
+/** A count not known yet (Leads part 05): the tab says "—". */
+const UNKNOWN = -1;
+
 export function ViewTabs({
   value,
   onChange,
@@ -368,13 +371,14 @@ export function ViewTabs({
   return (
     <CountTabs
       label="Work views"
+      // Unknown counts say so, "—", never nothing (Leads part 05).
       items={WORK_VIEWS.map((view) => ({
         ...view,
-        count: counts?.[view.key] ?? null,
+        count: counts ? (counts[view.key] ?? null) : UNKNOWN,
       }))}
       value={value}
       onChange={onChange}
-      format={tabCount}
+      format={(count) => (count === UNKNOWN ? "—" : tabCount(count))}
     />
   );
 }
@@ -560,6 +564,9 @@ export function StageChips({
     items.push({ key: value, label: keyWords(value), count: null });
   return (
     <ChipRow
+      // Drawn again when the chips change (counts, stages), so the chosen one is
+      // scrolled into view (Leads part 05: "Won" sat off-screen).
+      key={items.map((item) => item.key).join(" ")}
       label="Pipeline stage"
       items={items}
       value={value ?? ALL_STAGES}
@@ -592,7 +599,7 @@ export function StageChips({
 }
 
 /** Filter at the chip row's end (Leads L1): a 40 dp circle, 48 dp to a finger,
- *  with a dot while a filter other than the stage is on. */
+ *  with the count of filters on other than the stage (Leads part 03). */
 export function FilterButton({
   count,
   onOpen,
@@ -611,6 +618,11 @@ export function FilterButton({
       onClick={onOpen}
     >
       <SlidersHorizontal size={20} aria-hidden="true" />
+      {count ? (
+        <span className={styles.filterBadge} aria-hidden="true">
+          {count}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -629,6 +641,7 @@ export function CallBand({
   count = null,
   label = null,
   className,
+  who = null,
 }: {
   side: Side;
   /** Follow-ups says so: "Call Next Follow-up · 12" (spec §3). */
@@ -642,6 +655,9 @@ export function CallBand({
   label?: string | null;
   /** The page's own class beside the band's (Home keeps it to phones). */
   className?: string;
+  /** Who the tap opens, on a second line: "Rahul Joshi · New Lead" (Leads
+   *  part 04). */
+  who?: string | null;
 }) {
   return (
     <div
@@ -665,15 +681,22 @@ export function CallBand({
           strokeWidth={2}
           aria-hidden="true"
         />
-        <span>
-          {label ??
-            `${
-              view === "follow_ups"
-                ? "Call Next Follow-up"
-                : side === "cold"
-                  ? "Start Cold Calling"
-                  : "Call Next Lead"
-            }${count ? ` · ${tabCount(count)}` : ""}`}
+        <span className={styles.callBandWords}>
+          <span>
+            {label ??
+              `${
+                view === "follow_ups"
+                  ? "Call Next Follow-up"
+                  : side === "cold"
+                    ? "Start Cold Calling"
+                    : "Call Next Lead"
+              }${count ? ` · ${tabCount(count)}` : ""}`}
+          </span>
+          {who ? (
+            <span key={who} className={styles.callBandWho}>
+              {who}
+            </span>
+          ) : null}
         </span>
       </button>
     </div>
