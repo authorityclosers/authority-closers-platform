@@ -19,6 +19,13 @@ Base address: ``https://<sales x-ray host>/v1/api``.
 - POST /leads/imports       up to 10,000 leads at once, filed in the background through the
                             app's own file import; ``Idempotency-Key`` (leads:write;
                             integrations/lead_imports.py)
+- GET  /webhook             the organisation's webhook, and the events and facts it can send;
+                            PUT saves it (the secret shows once), POST /webhook/test sends a
+                            signed test, /webhook/rotate and /rotate/finish change the secret,
+                            /webhook/disable stops it, GET /webhook/deliveries the last 50 and
+                            POST /webhook/deliveries/{id}/retry sends one again
+                            (webhooks:manage; an organisation's key held by an owner or admin,
+                            within the plan's webhooks; integrations/webhooks.py)
 - POST /leads/imports/uploads  a one-time address (15 minutes) to PUT a CSV of up to 10,000
                             leads to, without the key: it queues as one import, the same file
                             twice once (leads:write; integrations/import_uploads.py)
@@ -90,6 +97,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ac_platform.audit.service import AuditRepository
 from ac_platform.call_data import facts as call_facts
 from ac_platform.call_data.models import CallObject
 from ac_platform.http.rate_limits import InMemoryTokenBucketLimiter, RateLimitRule
@@ -103,8 +111,10 @@ from ac_platform.integrations import (
     oauth,
     sealed,
     tiers,
+    webhooks,
 )
 from ac_platform.integrations.ai_writes import AiWriteError, AiWrites, Door
+from ac_platform.integrations.errors import IntegrationError
 from ac_platform.integrations.models import IntegrationOAuthClient
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.lead_desk import duplicate_queue
@@ -241,6 +251,15 @@ class BulkBody(BaseModel):
     request_id: str = Field(min_length=8, max_length=80)
     preview: bool = False
     preview_sha: str | None = Field(default=None, min_length=64, max_length=64)
+
+
+class WebhookBody(BaseModel):
+    """The organisation's webhook: its address, events and the call facts it carries."""
+
+    model_config = ConfigDict(extra="forbid")
+    url: str = Field(min_length=8, max_length=2048)
+    events: list[str] = Field(min_length=1, max_length=8)
+    facts_profile: str | None = Field(default=None, max_length=64)
 
 
 class UploadBody(BaseModel):
@@ -900,6 +919,128 @@ class Reader:
             now=datetime.now(UTC),
         )
 
+    # ----- the organisation's webhook (API gap 6, 15 Nov 2026) --------------------------
+
+    async def _webhook_door(self) -> sealed.SealKey:
+        """webhooks:manage, from an organisation's key held by an owner or admin (as Settings
+        -> Integrations is theirs), within the plan's webhooks; the platform's seal key."""
+        self.require("webhooks:manage")
+        if not await self._manager_key():
+            raise ApiError(
+                403,
+                "managers_only",
+                "The webhook is managed with an organisation's API key held by an owner or admin.",
+            )
+        if self.tier.webhooks < 1:
+            raise ApiError(403, "plan_scope", "Webhooks come with the Organisation plan.")
+        seal = sealed.load_key()
+        if seal is None:
+            raise ApiError(503, "not_ready", "Webhooks aren't set up on this server yet.")
+        return seal
+
+    async def _hook_audit(self, action: str, payload: dict[str, Any] | None = None) -> None:
+        await AuditRepository(self.session).append(
+            tenant_id=self.key.tenant_id,
+            actor_person_id=self.key.acting_person_id,
+            actor_type="api_key",
+            action=action,
+            resource_type="partner_webhook_endpoint",
+            payload={"via": f"API key {self.key.prefix}", **(payload or {})},
+            now=datetime.now(UTC),
+        )
+
+    async def webhook(self) -> dict[str, Any]:
+        await self._webhook_door()
+        current = await webhooks.active(self.session, self.key.tenant_id)
+        return {"webhook": await webhooks.view(self.session, current), "menu": webhooks.menu()}
+
+    async def webhook_change(
+        self,
+        action: Literal["save", "rotate", "finish", "disable"],
+        body: WebhookBody | None = None,
+    ) -> dict[str, Any]:
+        """Save, rotate, finish rotating or disable the webhook, audited as from this key."""
+        seal = await self._webhook_door()
+        tenant, person, now = self.key.tenant_id, self.key.acting_person_id, datetime.now(UTC)
+        secret: str | None = None
+        try:
+            if action == "save":
+                assert body is not None
+                secret = await webhooks.save(
+                    self.session,
+                    seal,
+                    tenant_id=tenant,
+                    person_id=person,
+                    url=body.url,
+                    events=list(body.events),
+                    facts_profile=body.facts_profile,
+                    environment=self.environment,
+                    now=now,
+                )
+                await self._hook_audit(
+                    "integration.webhook_saved",
+                    {"events": list(body.events), "new_secret": secret is not None},
+                )
+            elif action == "rotate":
+                secret = await webhooks.rotate(
+                    self.session,
+                    seal,
+                    tenant_id=tenant,
+                    person_id=person,
+                    environment=self.environment,
+                    now=now,
+                )
+                await self._hook_audit("integration.webhook_secret_rotation_started")
+            elif action == "finish":
+                await webhooks.finish_rotation(
+                    self.session,
+                    tenant_id=tenant,
+                    person_id=person,
+                    environment=self.environment,
+                    now=now,
+                )
+                await self._hook_audit("integration.webhook_secret_rotation_finished")
+            else:
+                await webhooks.disable(self.session, tenant_id=tenant, person_id=person, now=now)
+                await self._hook_audit("integration.webhook_disabled")
+                return {"webhook": None}
+        except IntegrationError as error:
+            raise ApiError(error.status, error.code, _hook_words(error.code)) from None
+        current = await webhooks.active(self.session, tenant)
+        view = await webhooks.view(self.session, current)
+        return {"webhook": view, "secret": secret} if action != "finish" else {"webhook": view}
+
+    async def webhook_test(self, client: Any) -> dict[str, Any]:
+        seal = await self._webhook_door()
+        try:
+            result: dict[str, Any] = await webhooks.test(
+                self.session,
+                seal,
+                tenant_id=self.key.tenant_id,
+                environment=self.environment,
+                now=datetime.now(UTC),
+                client=client,
+            )
+        except IntegrationError as error:
+            raise ApiError(error.status, error.code, _hook_words(error.code)) from None
+        return result
+
+    async def webhook_deliveries(self, retry: UUID | None = None) -> dict[str, Any]:
+        await self._webhook_door()
+        tenant = self.key.tenant_id
+        if retry is not None:
+            try:
+                await webhooks.retry(
+                    self.session,
+                    tenant_id=tenant,
+                    event_id=retry,
+                    person_id=self.key.acting_person_id,
+                    now=datetime.now(UTC),
+                )
+            except IntegrationError as error:
+                raise ApiError(error.status, error.code, _hook_words(error.code)) from None
+        return {"deliveries": await webhooks.deliveries(self.session, tenant)}
+
     async def lead_import_upload(self, body: UploadBody) -> dict[str, Any]:
         """A one-time address to send a CSV of leads to (import_uploads.py)."""
         door = await self.import_door()
@@ -953,6 +1094,17 @@ class Reader:
         if found is None:
             raise ApiError(422, "lead_empty", "Send at least a name, phone or email.")
         return {"id": str(found.id), "outcome": outcome}, 201 if outcome == "created" else 200
+
+
+_HOOK_WORDS = {
+    "url": "Use an https address on the public internet.",
+    "events": "Choose events from the menu GET /webhook gives.",
+    "facts_profile": "Choose a facts profile from the menu GET /webhook gives.",
+}
+
+
+def _hook_words(code: str) -> str:
+    return _HOOK_WORDS.get(code, f"Sales X-Ray couldn't do that with the webhook ({code}).")
 
 
 def make_opener(ctx: RouteContext) -> Any:
@@ -1099,6 +1251,47 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
     # would take "imports" for an id.
     def refused(refusal: lead_imports.ImportRefused) -> ApiError:
         return ApiError(refusal.status, refusal.code, refusal.message)
+
+    @router.get("/webhook")
+    async def webhook(request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.webhook())
+
+    @router.put("/webhook")
+    async def save_webhook(body: WebhookBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.webhook_change("save", body))
+
+    @router.post("/webhook/rotate")
+    async def rotate_webhook(request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.webhook_change("rotate"))
+
+    @router.post("/webhook/rotate/finish")
+    async def finish_webhook_rotation(request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.webhook_change("finish"))
+
+    @router.post("/webhook/disable")
+    async def disable_webhook(request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.webhook_change("disable"))
+
+    @router.post("/webhook/test")
+    async def test_webhook(request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            client = getattr(application.state, "integrations_http_client", None)
+            return done(await reader.webhook_test(client))
+
+    @router.get("/webhook/deliveries")
+    async def webhook_deliveries(request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.webhook_deliveries())
+
+    @router.post("/webhook/deliveries/{event_id}/retry")
+    async def retry_webhook_delivery(event_id: UUID, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.webhook_deliveries(retry=event_id))
 
     @router.post("/leads/imports/uploads")
     async def lead_import_upload(body: UploadBody, request: Request) -> JSONResponse:
