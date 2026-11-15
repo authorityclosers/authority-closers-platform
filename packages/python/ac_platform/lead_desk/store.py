@@ -1852,12 +1852,9 @@ class LeadDesk:
             found[str(side)] = SideCounts(
                 new=int(new), open_leads=int(open_leads), follow_ups_today=int(today)
             )
-        # The Open Leads card opens All Leads at that stage, which lists both sides (owner,
-        # 2 Nov 2026), so each side's card counts both.
-        both = sum(counts.open_leads for counts in found.values())
-        found = {
-            side: counts.model_copy(update={"open_leads": both}) for side, counts in found.items()
-        }
+        # The Open Leads card opens All Leads at that stage on its own side, so it counts
+        # that side (orchestrator, 15 Nov 2026, Leads part 05; until then All Leads listed
+        # both sides and each side's card counted both).
         return found, new_key, open_key
 
     async def _stages_then(self, moments: Sequence[tuple[UUID, datetime]]) -> list[str | None]:
@@ -2052,7 +2049,6 @@ class LeadDesk:
         if scope != "mine" and not self.viewer.can_see_team:
             raise DeskError(403, "Your role sees your own leads only.")
         where: list[Any] = [self._seen()]
-        side_clause: Any = None
         if created == "history":
             # Old leads brought in as history (2 Nov 2026): only this filter lists them,
             # all of them; none is in To Call or Follow-ups, so the work view is set aside.
@@ -2062,16 +2058,15 @@ class LeadDesk:
             if not search:
                 # Nobody's work: in no list, tab or count. A search still finds them below.
                 where.append(worked())
-            # Inbound Leads or Cold Leads (migration 0146): the stage tabs count one side. All
-            # Leads lists both (owner, 2 Nov 2026); the side still counts To Call and
-            # Follow-ups. A search also finds an old lead kept as history: "this person
-            # enquired in June".
+            # Inbound Leads or Cold Leads (migration 0146): every list, tab and count keeps
+            # to the side picked, All Leads too (orchestrator, 15 Nov 2026, Leads part 05
+            # and L1 #166: "All Leads 1.8K" on both sides read as unscoped; All Leads listed
+            # both sides from 2 Nov 2026 until then). A search also finds an old lead kept as
+            # history: "this person enquired in June".
             if side is not None:
-                side_clause = (
+                where.append(
                     or_(on_side(side), Lead.pipeline == HISTORY) if search else on_side(side)
                 )
-            if side_clause is not None and view != "all":
-                where.append(side_clause)
         # To Call holds the leads who rang and weren't reached since, first (#9 option A).
         waiting: dict[UUID, tuple[datetime, int]] = {}
         if view == "to_call" or (side is not None and offset == 0):
@@ -2168,16 +2163,10 @@ class LeadDesk:
             # The follow-up filter counts as the list applies it (robot J181, 2 Nov 2026: To
             # Call said 3 over an empty list); only inside Follow-ups is it the tab's own split.
             split = when_clause if view == "follow_ups" else None
-            rest = [
-                item
-                for item in where
-                if item is not view_clause and item is not split and item is not side_clause
-            ]
+            # All three on the side picked (orchestrator, 15 Nov 2026).
+            rest = [item for item in where if item is not view_clause and item is not split]
             to_call = in_view("to_call", day_end, waiting)
             follow_ups = in_view("follow_ups", day_end)
-            if side_clause is not None:
-                # To Call and Follow-ups on the side picked; All Leads on both.
-                to_call, follow_ups = and_(side_clause, to_call), and_(side_clause, follow_ups)
             found = (
                 await self.db.execute(
                     select(
