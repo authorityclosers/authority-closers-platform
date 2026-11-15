@@ -13,7 +13,15 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   ChevronRight,
+  Clock,
+  Heart,
   Minus,
+  Phone,
+  Plus,
+  Target,
+  Timer,
+  Trophy,
+  UserX,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -208,25 +216,6 @@ function DayChart({
   );
 }
 
-function Ring({ part, whole }: { part: number; whole: number }) {
-  const share = whole ? part / whole : 0;
-  const around = 2 * Math.PI * 22;
-  return (
-    <span className={styles.ring} aria-hidden="true">
-      <svg viewBox="0 0 52 52">
-        <circle className={styles.ringTrack} cx="26" cy="26" r="22" />
-        <circle
-          className={styles.ringFill}
-          cx="26"
-          cy="26"
-          r="22"
-          strokeDasharray={`${(share * around).toFixed(2)} ${around.toFixed(2)}`}
-        />
-      </svg>
-    </span>
-  );
-}
-
 /** What a tile reads: the period's report. */
 export type TileData = {
   now: Outcomes;
@@ -390,6 +379,26 @@ export const TILES = {
 export type TileKey = keyof typeof TILES;
 
 /** Which tiles Home shows, in order. */
+/** Each tile's icon and colour on Home (owner's chosen lower Home, 07, 14 Nov
+ *  2026): Won green, Interested violet, New leads orange, Connected blue,
+ *  so no two side by side share a colour (owner, 15 Nov 2026). */
+const TILE_LOOK: Record<
+  TileKey,
+  {
+    icon: typeof Trophy;
+    tone: "emerald" | "violet" | "orange" | "rose" | "sky";
+  }
+> = {
+  won: { icon: Trophy, tone: "emerald" },
+  interested: { icon: Heart, tone: "violet" },
+  new_leads: { icon: Plus, tone: "orange" },
+  connected: { icon: Target, tone: "sky" },
+  untouched: { icon: UserX, tone: "rose" },
+  first_call: { icon: Timer, tone: "violet" },
+  calls: { icon: Phone, tone: "emerald" },
+  late: { icon: Clock, tone: "orange" },
+};
+
 export const TILE_SETS = {
   /** The owner's choice, 28 Oct 2026: outcomes first (B). */
   outcomes: ["won", "interested", "new_leads", "connected"],
@@ -398,8 +407,6 @@ export const TILE_SETS = {
   /** Home's second figures, in the sideways slider (owner, 28 Oct 2026). */
   slider: ["won", "interested", "connected", "calls", "new_leads"],
 } as const satisfies Record<string, readonly TileKey[]>;
-
-const ringOf = ([part, whole]: [number, number]) => ({ part, whole });
 
 /**
  * The period switch and the outcome tiles. `performance` is the period's
@@ -438,12 +445,21 @@ export function OutcomeTiles({
   const compared = tiles.some((key) => "compare" in TILES[key]);
   return (
     <>
-      <Segmented
-        label="Period"
-        value={String(period) as "1" | "7" | "30"}
-        onChange={(next) => onPeriod(Number(next) as Period)}
-        items={PERIODS}
-      />
+      <div className={styles.periods}>
+        <Segmented
+          label="Period"
+          value={String(period) as "1" | "7" | "30"}
+          onChange={(next) => onPeriod(Number(next) as Period)}
+          items={PERIODS}
+        />
+      </div>
+      {/* The window and what it is compared with, said once above the
+          tiles (07_Sales_Period). */}
+      {data && compared ? (
+        <p className={styles.window}>
+          {`${windowWords(period)} · compared with ${beforeWords(period)}`}
+        </p>
+      ) : null}
       {data ? (
         <div
           className={layout === "slider" ? styles.slider : styles.tiles}
@@ -451,6 +467,7 @@ export function OutcomeTiles({
         >
           {tiles.map((key) => {
             const tile: TileSpec = TILES[key];
+            const Icon = TILE_LOOK[key].icon;
             return (
               <button
                 key={key}
@@ -458,43 +475,37 @@ export function OutcomeTiles({
                 className={styles.tile}
                 data-tile={key}
                 data-tone={tile.tone}
+                data-look={TILE_LOOK[key].tone}
                 aria-haspopup="dialog"
                 onClick={() => setOpen(key)}
               >
                 <span className={styles.label}>
-                  {tile.label}
-                  <ChevronRight size={14} aria-hidden="true" />
-                </span>
-                <span className={styles.figure}>
-                  {tile.ring ? <Ring {...ringOf(tile.ring(data))} /> : null}
-                  <strong className={styles.value}>{tile.shown(data)}</strong>
-                </span>
-                {tile.compare ? (
-                  <Change
-                    value={tile.compare(data.now)}
-                    previous={tile.compare(data.before)}
-                  />
-                ) : (
-                  <span className={styles.change} data-trend="flat">
-                    Right now
+                  <span className={styles.tileIcon} aria-hidden="true">
+                    <Icon size={16} strokeWidth={2} />
                   </span>
-                )}
-                {tile.bars && tile.day ? (
-                  <DayChart
-                    days={data.days}
-                    pick={tile.day}
-                    label={tile.label}
-                  />
-                ) : null}
+                  {tile.label}
+                </span>
+                <strong className={styles.value}>{tile.shown(data)}</strong>
                 {layout === "slider" ? null : (
                   <span className={styles.note}>
                     {/* The window, said on the tile (ph1-20, 1 Nov 2026:
                         "Connected 86%" read as today's beside today's 0). */}
-                    {tile.compare
-                      ? `${windowWords(period)} · ${tile.note(data)}`
-                      : tile.note(data)}
+                    <span>{tile.note(data)}</span>
+                    {tile.compare ? <span>{windowWords(period)}</span> : null}
                   </span>
                 )}
+                <span className={styles.tileFoot}>
+                  {tile.compare ? (
+                    <Change
+                      value={tile.compare(data.now)}
+                      previous={tile.compare(data.before)}
+                    />
+                  ) : (
+                    <span className={styles.change} data-trend="flat">
+                      Right now
+                    </span>
+                  )}
+                </span>
               </button>
             );
           })}
@@ -506,11 +517,6 @@ export function OutcomeTiles({
       ) : (
         <OutcomesSkeleton />
       )}
-      {data && compared ? (
-        <p
-          className={styles.footnote}
-        >{`Compared with ${beforeWords(period)}`}</p>
-      ) : null}
       <Sheet
         open={opened !== undefined}
         onClose={() => setOpen(null)}

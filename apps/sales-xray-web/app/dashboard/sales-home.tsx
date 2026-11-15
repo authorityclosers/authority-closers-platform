@@ -22,7 +22,14 @@
  * Only real numbers: nothing here is estimated or invented.
  */
 
-import { FileText, Gauge, UsersRound, WifiOff } from "lucide-react";
+import {
+  ChartColumn,
+  ChevronRight,
+  FileText,
+  UsersRound,
+  WifiOff,
+} from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import type { LibrarySubmission } from "../acquisition-client";
@@ -43,9 +50,8 @@ import {
   type Desk,
   type Period,
 } from "../leads/leads-client";
-import { ActionList, ActionRow } from "../ui/kit";
 import { InCorner } from "../notice-center";
-import { ModeSwitch } from "./mode-switch";
+import { ScopeRow } from "./scope-row";
 import { OutcomeTiles, TILE_SETS } from "./outcome-tiles";
 import type { HomeDesk } from "./my-day-client";
 import styles from "./sales-home.module.css";
@@ -137,36 +143,65 @@ function usePerformance() {
 
 /** The team's Home: the floor, on the side the address names; the
  *  owner's own tasks beside it when they work leads. */
-/** The ways on from the team's Home: Performance, the team, call reports. */
+/** The ways on from the team's Home (owner's chosen lower Home, 08, 14 Nov
+ *  2026): Performance, the team, call reports, each its tinted icon. */
 export function TeamMore({ sellers }: { sellers: number }) {
+  const ways = [
+    {
+      key: "performance",
+      icon: ChartColumn,
+      tone: "violet",
+      title: "Performance",
+      note: "Each seller's calls, talk time and breaks",
+      href: "/growth",
+    },
+    {
+      key: "team",
+      icon: UsersRound,
+      tone: "emerald",
+      title: "Your team",
+      note: sellers
+        ? `${sellers} ${sellers === 1 ? "seller" : "sellers"} and how each one does`
+        : "Sellers and how each one does",
+      href: "/organisation?tab=team",
+    },
+    {
+      key: "reports",
+      icon: FileText,
+      tone: "orange",
+      title: "Call reports",
+      note: "Every analysed call",
+      href: "/reports",
+    },
+  ] as const;
   return (
-    <ActionList label="More">
-      <ActionRow
-        icon={<Gauge size={20} />}
-        tone="neutral"
-        title="Performance"
-        note="Each seller's calls, talk time and breaks"
-        href="/growth"
-      />
-      <ActionRow
-        icon={<UsersRound size={20} />}
-        tone="neutral"
-        title="Your team"
-        note={
-          sellers
-            ? `${sellers} ${sellers === 1 ? "seller" : "sellers"}`
-            : "Sellers and how each one does"
-        }
-        href="/organisation?tab=team"
-      />
-      <ActionRow
-        icon={<FileText size={20} />}
-        tone="neutral"
-        title="Call reports"
-        note="Every analysed call"
-        href="/reports"
-      />
-    </ActionList>
+    <section className={styles.ways} aria-labelledby="ways-title">
+      <div className={styles.waysHead}>
+        <h2 id="ways-title">Ways on</h2>
+        <p>More ways to understand your team</p>
+      </div>
+      <ul className={styles.wayList}>
+        {ways.map((way) => {
+          const Icon = way.icon;
+          return (
+            <li key={way.key}>
+              <Link className={styles.way} href={way.href} data-tone={way.tone}>
+                <span className={styles.wayIcon} aria-hidden="true">
+                  <Icon size={20} strokeWidth={2} />
+                </span>
+                <span className={styles.wayBody}>
+                  <span className={styles.wayText}>
+                    <strong>{way.title}</strong>
+                    <span>{way.note}</span>
+                  </span>
+                  <ChevronRight size={18} aria-hidden="true" />
+                </span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
@@ -453,18 +488,14 @@ export function SalesHome({
           </p>
         </InCorner>
       )}
+      {/* Team | Me and today's date on a row of their own, as in the
+          owner's chosen Home (01_Home.png, 14 Nov 2026). */}
+      {manager && works ? (
+        <ScopeRow value={view} onChange={chooseView} />
+      ) : null}
       {/* The month's revenue against its target, above both modes
-          (capture-setup session, 31 Oct 2026), with Team | Me at the end of
-          its line rather than on a row of its own (Home studio, 4 Nov 2026:
-          the row it freed keeps the next call above the fold). */}
-      <RevenueBar
-        scope={shown === "team" ? "team" : "mine"}
-        end={
-          manager && works ? (
-            <ModeSwitch value={view} onChange={chooseView} />
-          ) : undefined
-        }
-      />
+          (capture-setup session, 31 Oct 2026). */}
+      <RevenueBar scope={shown === "team" ? "team" : "mine"} />
 
       <div
         key={shown}

@@ -112,3 +112,168 @@
     transition: none;
   }
 }
+
+/* Home's look (owner's chosen Home, 01_Home.png, 14 Nov 2026): a quiet well;
+   each side with its icon; the chosen one a gradient pill, its icon in a white
+   disc, Inbound green and Cold slate, so the words, the icon and the colour all
+   say which. */
+.selector[data-tone="home"] {
+  gap: 4px;
+  padding: 3px;
+  border: 0;
+  background: var(--sx-fill);
+}
+
+.selector[data-tone="home"] .option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 40px;
+  font-weight: 650;
+}
+
+.icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.selector[data-tone="home"] .option[aria-checked="true"][data-side="inbound"] {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--lx-home-primary) 82%, white),
+    var(--lx-home-primary)
+  );
+  box-shadow:
+    0 3px 8px -3px color-mix(in oklab, var(--lx-home-primary) 70%, transparent),
+    inset 0 1px 0 color-mix(in oklab, white 24%, transparent);
+}
+
+.selector[data-tone="home"] .option[aria-checked="true"][data-side="cold"] {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--lx-closing) 82%, white),
+    var(--lx-closing)
+  );
+  box-shadow:
+    0 3px 8px -3px color-mix(in oklab, var(--lx-closing) 70%, transparent),
+    inset 0 1px 0 color-mix(in oklab, white 24%, transparent);
+}
+
+.selector[data-tone="home"] .option[aria-checked="true"] .icon {
+  background: var(--lx-on-teal);
+}
+
+.selector[data-tone="home"]
+  .option[aria-checked="true"][data-side="inbound"]
+  .icon {
+  color: var(--lx-home-primary);
+}
+
+.selector[data-tone="home"]
+  .option[aria-checked="true"][data-side="cold"]
+  .icon {
+  color: var(--lx-closing);
+}
+
+/* Flat fills under the words (critique 01: a gradient's light top fell under
+   4.5:1 with white text); the icon disc in the surface's own colour. */
+.selector[data-tone="home"] .option[aria-checked="true"][data-side="inbound"] {
+  background: var(--lx-home-emerald);
+  box-shadow: none;
+  color: var(--sx-surface);
+}
+
+.selector[data-tone="home"] .option[aria-checked="true"][data-side="cold"] {
+  background: var(--lx-closing);
+  box-shadow: none;
+}
+
+.selector[data-tone="home"] .option[aria-checked="true"] .icon {
+  background: var(--sx-surface);
+}
+
+.selector[data-tone="home"]
+  .option[aria-checked="true"][data-side="inbound"]
+  .icon {
+  color: var(--lx-home-emerald);
+}
+
+/* One geometry in both states (critique 02): track 48, pill 42, the icon in
+   the same 24 px box whether chosen or not; 15/600. */
+.selector[data-tone="home"] .option {
+  min-height: 42px;
+  font-weight: 600;
+}
+
+.selector[data-tone="home"] .option[aria-checked="false"] .icon {
+  background: color-mix(in oklab, var(--sx-ink) 7%, transparent);
+}
+
+/* As drawn (02-summary-v2): a white track with a 1 px line; neither icon in a
+   disc, the chosen one in the words' colour, so both states share one shape. */
+.selector[data-tone="home"] {
+  background: var(--sx-elevated);
+  box-shadow: inset 0 0 0 1px var(--sx-line);
+}
+
+.selector[data-tone="home"] .option .icon,
+.selector[data-tone="home"] .option[aria-checked="true"] .icon,
+.selector[data-tone="home"] .option[aria-checked="false"] .icon {
+  background: none;
+  color: inherit;
+}
+
+/* The chosen side's icon in its words' colour (an older rule painted it in the
+   pill's own green, so it vanished). */
+.selector[data-tone="home"]
+  .option[aria-checked="true"][data-side="inbound"]
+  .icon,
+.selector[data-tone="home"]
+  .option[aria-checked="true"][data-side="cold"]
+  .icon {
+  background: none;
+  color: inherit;
+}
+
+/* owner 15 Nov: the same finish as Home's tiles: a hairline edge, a fine top highlight
+   and soft layered depth; the chosen side is a glossy raised green with a soft inner
+   light; it presses in slightly when tapped. */
+.selector[data-tone="home"] {
+  border: 0.5px solid color-mix(in oklab, var(--sx-ink) 10%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--sx-ink) 7%, var(--sx-elevated)),
+    color-mix(in oklab, var(--sx-ink) 3%, var(--sx-elevated))
+  );
+  box-shadow:
+    inset 0 1px 2px color-mix(in oklab, var(--lx-film) 12%, transparent),
+    0 1px 0 color-mix(in oklab, white 80%, transparent);
+}
+.selector[data-tone="home"] .option[aria-checked="true"][data-side="inbound"],
+.selector[data-tone="home"] .option[aria-checked="true"][data-side="cold"] {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, white 14%, var(--lx-home-primary)),
+    var(--lx-home-primary) 60%,
+    color-mix(in oklab, black 10%, var(--lx-home-primary))
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 35%, transparent),
+    inset 0 -1px 0 color-mix(in oklab, black 18%, transparent),
+    0 2px 4px color-mix(in oklab, var(--lx-home-primary) 30%, transparent),
+    0 8px 16px -8px color-mix(in oklab, var(--lx-home-primary) 55%, transparent);
+}
+.selector[data-tone="home"] .option {
+  transition:
+    transform 140ms ease-out,
+    background 220ms,
+    box-shadow 220ms;
+}
+.selector[data-tone="home"] .option:active {
+  transform: scale(0.97);
+}

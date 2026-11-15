@@ -364,7 +364,9 @@ it("is the owner's Smart lists Home: the work in five blocks, each opening its e
     'a[href="/leads?lead=00000000-0000-4000-8000-000000000001"]',
   );
   expect(name?.textContent).toBe("Amit Sample");
-  expect(host.textContent).toContain("Meta Ads · Assigned 4 min ago");
+  // Where from and what happened are icon chips now (owner, 15 Nov 2026).
+  expect(host.textContent).toContain("Meta Ads");
+  expect(host.textContent).toContain("Assigned 4 min ago");
   // Next action, ready to call; one big button, no countdown beside it.
   expect(host.querySelector("#next-title")?.textContent).toBe("Next action");
   expect(host.textContent).toContain("Ready to call");
@@ -457,7 +459,7 @@ it("switches to Cold at once, with no second read", async () => {
   expect(start?.getAttribute("href")).toBe("/leads?view=to_call&side=cold");
   // Fresh enquiries waiting on Inbound, one tap to them.
   const alert = Array.from(host.querySelectorAll("a")).find((link) =>
-    link.textContent?.startsWith("8 fresh inbound leads need attention"),
+    link.getAttribute("aria-label")?.startsWith("8 new inbound leads waiting"),
   );
   expect(alert?.getAttribute("href")).toBe("/leads?view=to_call&step=new");
 });
@@ -593,9 +595,8 @@ it("says the next lead rang and wasn't reached, and calls them back", async () =
   root = createRoot(host);
   for (const which of ["inbound", "cold"] as const) {
     await act(async () => root.render(<NextCall side={which} own={own} />));
-    expect(host.textContent).toContain(
-      "Meta Ads · Missed call 30 min ago · 2 calls · call back",
-    );
+    for (const chip of ["Meta Ads", "Missed call 30 min ago", "2 calls"])
+      expect(host.textContent).toContain(chip);
     expect(host.textContent).toContain("Call back");
     expect(host.textContent).not.toContain("Start Cold Calling");
   }

@@ -1,0 +1,156 @@
+/* A seller's past day (owner, 15 Nov 2026): the pill beside Today's overview, and
+   the day's four figures as the same measured tiles as Home (28 | 13 | 32 | 8 | 18). */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 13px 0 11px;
+  border: 0.5px solid color-mix(in oklab, var(--sx-ink) 9%, transparent);
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, white 60%, var(--sx-elevated)),
+    var(--sx-elevated)
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    0 4px 10px -4px color-mix(in oklab, var(--lx-film) 14%, transparent);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 140ms ease-out;
+}
+.pill svg {
+  color: var(--lx-home-primary);
+}
+.pill:active {
+  transform: scale(0.95);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.grid > li {
+  display: grid;
+  grid-template-rows: 28px 45px 18px;
+  padding: 16px;
+  border-radius: 20px;
+  background: color-mix(in oklab, var(--sx-ink) 3.5%, var(--sx-elevated));
+  box-shadow: inset 0 0 0 0.5px
+    color-mix(in oklab, var(--sx-ink) 6%, transparent);
+  animation: tileIn 460ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+.grid > li.wait {
+  min-height: 123px;
+  background: linear-gradient(
+    90deg,
+    var(--sx-fill),
+    color-mix(in oklab, var(--sx-fill) 40%, transparent),
+    var(--sx-fill)
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@keyframes tileIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+.icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--k) 13%, transparent);
+  color: var(--k);
+  --k: var(--lx-home-primary);
+}
+.icon[data-k="picked"] {
+  --k: var(--lx-info);
+}
+.icon[data-k="talk"] {
+  --k: color-mix(in oklab, var(--sx-warn) 85%, black);
+}
+.icon[data-k="reached"] {
+  --k: color-mix(in oklab, var(--lx-info) 55%, var(--lx-danger));
+}
+.grid strong {
+  align-self: end;
+  font-size: var(--sx-text-3xl);
+  line-height: 1;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.grid strong small {
+  margin-left: 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.label {
+  align-self: end;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-20);
+  font-weight: 600;
+}
+.wins {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 13px 0 8px;
+}
+.wins > div {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 13px 8px;
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--lx-home-primary) 8%, transparent);
+}
+.wins dt {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+.wins dd {
+  margin: 0;
+  font-size: var(--sx-text-xl);
+  font-weight: 800;
+  color: var(--lx-home-primary);
+}
+.note {
+  margin: 8px 0 13px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+@media (prefers-reduced-motion: reduce) {
+  .grid > li {
+    animation: none;
+  }
+}
+
+.grid strong {
+  display: flex;
+  align-items: baseline;
+  height: 40px;
+}
+.grid > li {
+  grid-template-rows: 28px 53px 18px;
+}

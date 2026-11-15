@@ -16,9 +16,14 @@ const rule = (source: string, selector: string) => {
   return at < 0 ? "" : source.slice(at, source.indexOf("}", at));
 };
 
-it("has no gradient, glass, blur or shadows on its blocks", () => {
-  expect(css).not.toMatch(/gradient/);
-  expect(css).not.toMatch(/backdrop-filter/);
+it("wears the owner Home's tile finish on top of Dipak's base (owner, 15 Nov 2026)", () => {
+  // The owner, 15 Nov 2026: the seller's Today must look exactly like the new
+  // owner Home: glass tiles, the glossy green, a soft press. The base rules stay
+  // Dipak's; the finish is one late block, so the base rules stay readable.
+  const finish = css.slice(css.indexOf("/* owner 15 Nov: the seller's Today"));
+  expect(finish).toMatch(/\.cards \[data-card\] \{/);
+  expect(finish).toMatch(/border-radius: 22px/);
+  expect(finish).toMatch(/:active/);
   for (const selector of [".card", ".next", ".pending", ".taskList .taskRow"])
     expect(rule(css, selector)).not.toMatch(/box-shadow/);
 });

@@ -10,12 +10,11 @@
  * dashboard's outline, "Last 30 days" and a chart, for 1 to 7 s on 3G).
  */
 
-import { ModeSwitch } from "./mode-switch";
 import { OutcomeTiles, TILE_SETS } from "./outcome-tiles";
 import { TeamMore, useKeptSides } from "./sales-home";
 import { SellerOutline } from "./seller-home";
 import { FloorOutline } from "./team-floor";
-import revenue from "./revenue.module.css";
+import { ScopeRow } from "./scope-row";
 import styles from "./sales-home.module.css";
 
 const nothing = () => {};
@@ -31,9 +30,7 @@ export function HomeOutline({ manager }: { manager: boolean }) {
     >
       {manager ? (
         <>
-          <div className={revenue.endOnly}>
-            <ModeSwitch value="team" onChange={nothing} />
-          </div>
+          <ScopeRow value="team" onChange={nothing} />
           <div className={styles.mode} data-mode="team" data-still="">
             <FloorOutline
               outcomes={

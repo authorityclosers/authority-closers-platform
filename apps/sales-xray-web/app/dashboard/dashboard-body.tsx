@@ -203,7 +203,10 @@ export function DashboardBody({
   // it was pushed down the page as Home filled in (QA robot 474deee5, 9 Nov
   // 2026: 0.22 to 0.44 on load at 363 and 390, seen 345 times).
   const sandboxCard =
-    sandbox?.sandbox && (!sales || salesDrawn) ? (
+    // owner 15 Nov: the sandbox banner is gone from Home.
+    process.env.NEXT_PUBLIC_SX_SANDBOX_CARD === "1" &&
+    sandbox?.sandbox &&
+    (!sales || salesDrawn) ? (
       <SandboxCard facts={sandbox} team={team === true} />
     ) : null;
   const content = (

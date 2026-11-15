@@ -160,9 +160,16 @@ it("shows what works with its value, and no tabs or rows of sellers", async () =
   expect(chips().slice(0, 4)).toEqual([
     ["hours", "Not set"],
     ["first_call", "Within 10 min"],
-    ["nudges", "On, except 1"],
+    ["nudges", "On · all but 1"],
     ["alerts", "Off"],
   ]);
+  // Grouped by who each one affects (design-research piece 05).
+  expect(
+    Array.from(
+      sheet()?.querySelectorAll("h3") ?? [],
+      (each) => each.textContent,
+    ),
+  ).toEqual(["Team rules", "Your updates", "Targets"]);
   expect(sheet()?.textContent).not.toContain("Soon");
   expect(button("Alerts")).toBeUndefined();
   expect(button("Targets")).toBeUndefined();
@@ -182,7 +189,7 @@ it("sets the first-call limit in one tap", async () => {
     path: "/v1/lead-desk/sla",
     body: { on: true, minutes: 15, alertManagers: false },
   });
-  await act(async () => button("Team controls")?.click());
+  await act(async () => button("Back to Team controls")?.click());
   await settle();
   expect(chips()[1]).toEqual(["first_call", "Within 15 min"]);
 });
@@ -221,6 +228,16 @@ it("excepts one seller from nudges inside its card", async () => {
 it("starts working hours from the owner's usual day: 10:30 to 7, lunch 1:30 to 2:15", async () => {
   await openControls();
   await card("hours");
+  // A lead after hours is an explicit choice, set to assign at once.
+  expect(
+    Array.from(sheet()?.querySelectorAll("[role=radio]") ?? [], (radio) => [
+      radio.querySelector("b")?.textContent,
+      radio.getAttribute("aria-checked"),
+    ]),
+  ).toEqual([
+    ["Assign at once", "true"],
+    ["Hold until work starts", "false"],
+  ]);
   await act(async () => button("Use these hours")?.click());
   await settle();
   expect(sent.at(-1)).toEqual({
@@ -235,9 +252,14 @@ it("starts working hours from the owner's usual day: 10:30 to 7, lunch 1:30 to 2
       breaks: [{ start: "13:30", end: "14:15" }],
     },
   });
-  await act(async () => button("Team controls")?.click());
+  // Saved says so on its button, not in a toast.
+  expect(button("Saved")).toBeDefined();
+  await act(async () => button("Back to Team controls")?.click());
   await settle();
-  expect(chips()[0]).toEqual(["hours", "10:30–7:00 · lunch 1:30–2:15"]);
+  expect(chips()[0]).toEqual([
+    "hours",
+    "Mon–Sat · 10:30–19:00\nLunch 13:30–14:15",
+  ]);
 });
 
 it("shows only the alert that works, and switches it", async () => {
@@ -274,7 +296,7 @@ it("counts the owner alerts on, and opens the day's summary", async () => {
   await openControls();
   // The target is on and doesn't alert managers: two of the other three.
   expect(chips().slice(3, 5)).toEqual([
-    ["alerts", "2 of 4 on"],
+    ["alerts", "2 of 4 alerts on"],
     ["summary", "Off"],
   ]);
   await card("alerts");
@@ -288,7 +310,7 @@ it("counts the owner alerts on, and opens the day's summary", async () => {
     "An Interested lead has no follow-up for 7 days",
     "A seller makes no call for 45 min",
   ]);
-  await act(async () => button("Team controls")?.click());
+  await act(async () => button("Back to Team controls")?.click());
   await settle();
   await card("summary");
   await act(async () => button("Send me the day’s summary at 7 PM")?.click());
@@ -298,7 +320,7 @@ it("counts the owner alerts on, and opens the day's summary", async () => {
     path: "/v1/lead-desk/owner-alerts",
     body: { summary_days: [0, 1, 2, 3, 4, 5] },
   });
-  await act(async () => button("Team controls")?.click());
+  await act(async () => button("Back to Team controls")?.click());
   await settle();
   expect(chips()[4]).toEqual(["summary", "7 PM · Mon–Sat"]);
 });

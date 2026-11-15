@@ -140,9 +140,8 @@ it("shows the four outcomes, each with its change and its words", async () => {
   expect(tile("won").textContent).toContain("6");
   expect(tile("won").textContent).toContain("2 more");
   // The tile names its window (ph1-20, 1 Nov 2026: "86%" read as today's).
-  expect(tile("won").textContent).toContain(
-    "Last 7 days · 20% of 30 leads called",
-  );
+  expect(tile("won").textContent).toContain("20% of 30 leads called");
+  expect(tile("won").textContent).toContain("Last 7 days");
   expect(tile("interested").textContent).toContain("4 more");
   expect(tile("new_leads").textContent).toContain("Same as before");
   expect(tile("new_leads").textContent).toContain("First call in 18 min");
@@ -150,34 +149,15 @@ it("shows the four outcomes, each with its change and its words", async () => {
   expect(tile("connected").textContent).toContain("32%");
   expect(tile("connected").textContent).toContain("2 fewer");
   expect(tile("connected").textContent).toContain("13 of 41 calls");
-  expect(host.textContent).toContain("Compared with the previous 7 days");
+  expect(host.textContent).toContain("compared with the previous 7 days");
 });
 
-it("draws a week's days as seven bars, a true zero kept as a mark", async () => {
+// Home v2 (owner, 15 Nov 2026): a tile is its number, its note and its change;
+// the days are drawn in its detail, never as a row of bars on the tile.
+it("keeps the days for a tile's detail, not on the tile", async () => {
   await draw(week);
-  const bars = tile("won").querySelector('[role="img"]');
-  expect(bars?.getAttribute("aria-label")).toContain("Won by day:");
-  expect(bars?.children).toHaveLength(7);
-  expect(tile("won").querySelectorAll("[data-zero]").length).toBe(3);
-  // Each day's number sits on its bar.
-  expect(
-    Array.from(
-      bars?.querySelectorAll("small") ?? [],
-      (label) => label.textContent,
-    ),
-  ).toEqual(["0", "0", "1", "0", "1", "1", "3"]);
-});
-
-// The owner (10 Nov 2026, item 10): with no data, a row of "0 0 0 0 0 0 0"
-// under the 0 looked as if nothing was ever built there. A tile whose days are
-// all zero draws none; the others keep theirs.
-it("draws no row of zeros on a tile whose days are all zero", async () => {
-  await draw({
-    ...week,
-    daily: (week.daily ?? []).map((item) => ({ ...item, won: 0 })),
-  });
-  expect(tile("won").querySelector('[role="img"]')).toBeNull();
-  expect(tile("interested").querySelector('[role="img"]')).not.toBeNull();
+  for (const key of ["won", "interested", "new_leads", "connected"])
+    expect(tile(key).querySelector('[role="img"]')).toBeNull();
 });
 
 it("opens a tile's detail: the days, who did it, and the leads behind it", async () => {
@@ -223,7 +203,7 @@ it("draws no days for today, and a dash when nobody called", async () => {
   expect(tile("won").querySelector('[role="img"]')).toBeNull();
   expect(tile("won").textContent).toContain("No leads called yet");
   expect(tile("connected").textContent).toContain("–");
-  expect(host.textContent).toContain("Compared with yesterday");
+  expect(host.textContent).toContain("compared with yesterday");
 });
 
 // QA robot 49a966dd (9 Nov 2026): while loading, each placeholder tile held

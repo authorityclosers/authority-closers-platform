@@ -391,3 +391,57 @@ a {
 /* Moving between places animates the page area directly
    (shell/screen-transition.ts): a view transition's overlay would take the
    click that follows a press. */
+
+/* ---------- Home's finish, for every page (owner, 15 Nov 2026) ----------
+   The look the owner built on Home: tiles with a hairline edge, a fine top
+   highlight and soft layered depth; segmented pills as a sunken well with a
+   glossy raised green thumb; a press that sinks 3 %. Pages and pop-ups use
+   these instead of copying Home's rules. */
+:root {
+  --sx-tile-radius: 22px;
+  --sx-tile-edge: 0.5px solid color-mix(in oklab, var(--lx-ink) 9%, transparent);
+  --sx-tile-fill: linear-gradient(
+    180deg,
+    color-mix(in oklab, white 60%, var(--lx-elevated)),
+    var(--lx-elevated)
+  );
+  --sx-tile-depth:
+    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    0 1px 1px color-mix(in oklab, var(--lx-film) 5%, transparent),
+    0 4px 10px -2px color-mix(in oklab, var(--lx-film) 7%, transparent),
+    0 16px 32px -18px color-mix(in oklab, var(--lx-film) 22%, transparent);
+  --sx-well-edge: 0.5px solid
+    color-mix(in oklab, var(--lx-ink) 10%, transparent);
+  --sx-well-fill: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--lx-ink) 7%, var(--lx-elevated)),
+    color-mix(in oklab, var(--lx-ink) 3%, var(--lx-elevated))
+  );
+  --sx-well-depth:
+    inset 0 1px 2px color-mix(in oklab, var(--lx-film) 12%, transparent),
+    0 1px 0 color-mix(in oklab, white 80%, transparent);
+  --sx-gloss: linear-gradient(
+    180deg,
+    color-mix(in oklab, white 14%, var(--lx-home-primary)),
+    var(--lx-home-primary) 60%,
+    color-mix(in oklab, black 10%, var(--lx-home-primary))
+  );
+  --sx-gloss-depth:
+    inset 0 1px 0 color-mix(in oklab, white 35%, transparent),
+    inset 0 -1px 0 color-mix(in oklab, black 18%, transparent),
+    0 2px 4px color-mix(in oklab, var(--lx-home-primary) 30%, transparent),
+    0 8px 16px -8px color-mix(in oklab, var(--lx-home-primary) 55%, transparent);
+  --sx-gloss-ink: white;
+  --sx-press-sink: scale(0.97);
+}
+
+:root[data-theme="dark"] {
+  --sx-tile-edge: 0.5px solid color-mix(in oklab, white 10%, transparent);
+  --sx-tile-fill: var(--lx-elevated);
+  --sx-tile-depth:
+    inset 0 1px 0 color-mix(in oklab, white 8%, transparent),
+    0 10px 26px -16px color-mix(in oklab, black 60%, transparent);
+  --sx-well-edge: 0.5px solid color-mix(in oklab, white 10%, transparent);
+  --sx-well-fill: color-mix(in oklab, white 6%, var(--lx-elevated));
+  --sx-well-depth: inset 0 1px 2px color-mix(in oklab, black 40%, transparent);
+}

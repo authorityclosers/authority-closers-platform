@@ -2047,7 +2047,7 @@ export function LeadsRoute({
                       <SideSelector
                         value={side}
                         onChange={(next) => pickWork({ side: next })}
-                        tone="calm"
+                        tone="home"
                       />
                     ) : null
                   }

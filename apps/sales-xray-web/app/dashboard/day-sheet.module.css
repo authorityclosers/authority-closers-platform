@@ -1,0 +1,284 @@
+/* Pick a day (owner, 15 Nov 2026): Today and Yesterday, then a month calendar
+   with 44 px days; the chosen day a Home-green circle, today a ring. */
+.quick {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.quickDay {
+  min-height: 44px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-elevated);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease-out,
+    color 120ms ease-out;
+}
+
+.quickDay[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--lx-home-emerald);
+  color: var(--sx-surface);
+}
+
+.calendar {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.monthRow {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  text-align: center;
+}
+
+.monthRow strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 800;
+}
+
+.step {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-ink);
+  cursor: pointer;
+}
+
+.step:disabled {
+  color: var(--sx-hairline);
+  cursor: default;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.weekday {
+  padding-bottom: 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  text-align: center;
+}
+
+.day {
+  justify-self: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease-out,
+    color 120ms ease-out;
+}
+
+.day[data-today] {
+  box-shadow: inset 0 0 0 1.5px var(--lx-home-emerald);
+}
+
+.day[aria-pressed="true"] {
+  background: var(--lx-home-emerald);
+  color: var(--sx-surface);
+}
+
+.day:disabled {
+  color: var(--sx-hairline);
+  cursor: default;
+}
+
+.day:focus-visible,
+.step:focus-visible,
+.quickDay:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .day,
+  .quickDay {
+    transition: none;
+  }
+}
+
+/* owner 15 Nov: the picker in Home's language. Today | Yesterday is one segmented
+   well with the glossy green thumb; the month sits in a tile; days press in; the
+   chosen day is a raised green circle, today a soft green ring. */
+.quick {
+  gap: 0;
+  padding: 4px;
+  border: 0.5px solid color-mix(in oklab, var(--sx-ink) 10%, transparent);
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--sx-ink) 7%, var(--sx-elevated)),
+    color-mix(in oklab, var(--sx-ink) 3%, var(--sx-elevated))
+  );
+  box-shadow:
+    inset 0 1px 2px color-mix(in oklab, var(--lx-film) 12%, transparent),
+    0 1px 0 color-mix(in oklab, white 80%, transparent);
+}
+.quickDay {
+  min-height: 42px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink-2);
+  transition:
+    transform 140ms ease-out,
+    color 200ms,
+    background 220ms,
+    box-shadow 220ms;
+}
+.quickDay:active,
+.day:active:not(:disabled),
+.step:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.quickDay[aria-pressed="true"],
+.day[aria-pressed="true"] {
+  color: white;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, white 14%, var(--lx-home-primary)),
+    var(--lx-home-primary) 60%,
+    color-mix(in oklab, black 10%, var(--lx-home-primary))
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 35%, transparent),
+    inset 0 -1px 0 color-mix(in oklab, black 18%, transparent),
+    0 2px 4px color-mix(in oklab, var(--lx-home-primary) 30%, transparent),
+    0 8px 16px -8px color-mix(in oklab, var(--lx-home-primary) 55%, transparent);
+  font-weight: 800;
+}
+.calendar {
+  margin-top: 14px;
+  padding: 10px 8px 12px;
+  border: 1px solid color-mix(in oklab, white 70%, transparent);
+  outline: 0.5px solid color-mix(in oklab, var(--sx-ink) 8%, transparent);
+  outline-offset: -0.5px;
+  border-radius: 22px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, white 60%, var(--sx-elevated)),
+    var(--sx-elevated)
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    0 4px 10px -2px color-mix(in oklab, var(--lx-film) 7%, transparent),
+    0 14px 28px -18px color-mix(in oklab, var(--lx-film) 22%, transparent);
+}
+.monthRow strong {
+  font-size: var(--sx-text-md);
+  letter-spacing: -0.01em;
+}
+.step {
+  width: 38px;
+  height: 38px;
+  justify-self: center;
+  border: 0.5px solid color-mix(in oklab, var(--sx-ink) 9%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, white 60%, var(--sx-elevated)),
+    var(--sx-elevated)
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    0 2px 6px -2px color-mix(in oklab, var(--lx-film) 14%, transparent);
+  transition: transform 140ms ease-out;
+}
+.step:disabled {
+  box-shadow: none;
+  background: transparent;
+  border-color: transparent;
+}
+.weekday {
+  font-size: var(--sx-text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.day {
+  width: 40px;
+  height: 40px;
+  font-weight: 600;
+  transition:
+    transform 140ms ease-out,
+    background 200ms,
+    color 200ms;
+}
+.day[data-today]:not([aria-pressed="true"]) {
+  box-shadow: none;
+  background: color-mix(in oklab, var(--lx-home-primary) 12%, transparent);
+  color: var(--lx-home-primary);
+  font-weight: 800;
+}
+.day:disabled {
+  color: color-mix(in oklab, var(--sx-ink) 22%, transparent);
+}
+
+.tipRow {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  margin: -4px 0 12px;
+}
+.tipButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--sx-ink) 6%, transparent);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.tipButton:active {
+  transform: scale(0.96);
+}
+.tip {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: color-mix(
+    in oklab,
+    var(--lx-home-primary) 10%,
+    var(--sx-elevated)
+  );
+  color: var(--sx-ink);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-20);
+  animation: tipIn 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+@keyframes tipIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+}

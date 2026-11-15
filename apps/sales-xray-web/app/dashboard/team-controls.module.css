@@ -4,21 +4,25 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 44px;
-  padding: 0 16px 0 14px;
-  border: 1px solid color-mix(in oklab, var(--sx-ink) 8%, transparent);
+  min-height: 38px; /* owner 15 Nov: 14% more compact top to bottom */
+  padding: 0 12px 0 14px;
+  border: 1px solid var(--sx-hairline);
   border-radius: var(--sx-radius-pill);
-  background: color-mix(in oklab, var(--sx-surface) 80%, transparent);
+  background: var(--sx-elevated);
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 650;
+  font-weight: 700;
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--lx-film) 8%, transparent);
   cursor: pointer;
   transition: transform var(--sx-dur-fast) var(--sx-ease-out);
 }
 
+/* Home's green sliders (owner's chosen Home, 01_Home.png); the chevron
+   quiet: it opens the Team controls sheet. */
 .gear svg {
-  color: var(--sx-accent);
+  flex: none;
+  color: var(--lx-home-emerald);
 }
 
 .gear:active {
@@ -482,4 +486,320 @@
   .gear:active {
     transform: none;
   }
+}
+
+/* Home's Controls (critique 01): the right column's 148 px, a 1 px line, no
+   shadow; no chevron, since it opens a sheet, not a menu. */
+.gear {
+  width: 148px;
+  flex: none; /* never squeezed by the Today title: same edge as the date pill above */
+  justify-content: center;
+  border-color: var(--sx-line);
+  box-shadow: none;
+}
+
+/* His reference keeps the chevron (design-research's correction, 15 Nov 2026). */
+.gear svg:last-child {
+  color: var(--sx-ink-2);
+}
+
+/* owner 15 Nov: the same finish as Home's tiles: a hairline edge, a fine top highlight
+   and soft layered depth; the chosen side is a glossy raised green with a soft inner
+   light; it presses in slightly when tapped. */
+.gear {
+  border: 0.5px solid color-mix(in oklab, var(--sx-ink) 9%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, white 60%, var(--sx-elevated)),
+    var(--sx-elevated)
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    0 1px 1px color-mix(in oklab, var(--lx-film) 5%, transparent),
+    0 4px 10px -2px color-mix(in oklab, var(--lx-film) 7%, transparent),
+    0 12px 24px -16px color-mix(in oklab, var(--lx-film) 22%, transparent);
+}
+.gear:active {
+  transform: scale(0.97);
+}
+
+/* Grouped by who it affects (design-research piece 05, 15 Nov 2026): one opaque
+   surface per group, 1 px lines between rows, no floating cards or glass; each
+   row's value in words under its title. The revenue card (its own module) takes
+   the same look through data-control. */
+.groups {
+  display: grid;
+  gap: 20px;
+  padding-bottom: 12px;
+}
+
+.group {
+  display: grid;
+  gap: 8px;
+}
+
+.groupTitle {
+  margin: 0;
+  padding: 0 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  line-height: min(var(--sx-leading-20), 18px);
+}
+
+.groupList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--sx-hairline);
+  border-radius: 16px;
+  background: var(--sx-elevated);
+  list-style: none;
+}
+
+.groupList > li + li {
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.groupList [data-control] {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 18px;
+  grid-template-areas:
+    "icon title chevron"
+    "icon chip chevron";
+  align-items: center;
+  gap: 2px 12px;
+  width: 100%;
+  min-height: 64px;
+  margin: 0;
+  padding: 12px 14px 12px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: background-color 100ms ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.groupList [data-control]:active {
+  transform: none;
+  background: color-mix(in oklab, var(--sx-ink) 6%, transparent);
+}
+
+.groupList [data-control]:focus-visible {
+  outline: none;
+  box-shadow: inset var(--sx-focus-ring);
+}
+
+.groupList [data-control] > :first-child {
+  display: grid;
+  grid-area: icon;
+  align-self: center;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--lx-home-emerald) 10%, transparent);
+  color: var(--lx-home-emerald);
+}
+
+.groupList [data-control] > :first-child svg {
+  width: 20px;
+  height: 20px;
+}
+
+.groupList [data-control] > :nth-child(2) {
+  grid-area: title;
+  min-width: 0;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  line-height: var(--sx-leading-20);
+}
+
+.groupList [data-control] > :nth-child(3) {
+  grid-area: chip;
+  justify-self: start;
+  max-width: 100%;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--lx-home-emerald);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: min(var(--sx-leading-20), 18px);
+  white-space: pre-line;
+}
+
+.groupList [data-control] > :nth-child(3)[data-tone="off"] {
+  background: none;
+  color: var(--sx-muted);
+}
+
+.groupList [data-control] > svg:last-child {
+  grid-area: chevron;
+  color: var(--sx-muted);
+}
+
+@media (hover: hover) {
+  .groupList [data-control]:hover {
+    transform: none;
+    background: color-mix(in oklab, var(--sx-ink) 4%, transparent);
+  }
+}
+
+/* The detail's one header: back beside the title (the sheet's lead slot). */
+.backIcon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  margin: 0 0 0 -10px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.backIcon:active {
+  background: color-mix(in oklab, var(--sx-ink) 8%, transparent);
+}
+
+.backIcon:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* Working hours: the days with a live summary. */
+.daysHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding-top: 4px;
+}
+
+.daysHead > span:first-child {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.daysHead > span:last-child {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+}
+
+.day {
+  min-height: 44px;
+}
+
+.day[aria-pressed="false"] {
+  color: var(--sx-muted);
+}
+
+.day[aria-pressed="true"] {
+  background: var(--lx-home-emerald);
+  color: var(--sx-surface);
+}
+
+/* What happens to a lead that arrives outside the hours: two radio rows. */
+.afterHours {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--sx-ink) 6%, transparent);
+}
+
+.afterTitle {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.afterChoice {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  min-height: 52px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-hairline);
+  border-radius: 14px;
+  background: var(--sx-elevated);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.afterChoice[aria-checked="true"] {
+  border-color: color-mix(in oklab, var(--lx-home-emerald) 55%, transparent);
+  background: var(--lx-home-emerald-soft);
+}
+
+.afterChoice:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.afterChoice > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.afterChoice b {
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.afterChoice small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: min(var(--sx-leading-20), 18px);
+}
+
+.radio {
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border: 2px solid var(--sx-muted);
+  border-radius: 50%;
+}
+
+.afterChoice[aria-checked="true"] .radio {
+  border-color: var(--lx-home-emerald);
+  box-shadow: inset 0 0 0 4px var(--sx-elevated);
+  background: var(--lx-home-emerald);
+}
+
+/* Save held at the bottom of the sheet: always in reach, and the notice layer
+   lifts any card above it instead of covering it. A saved change says so on
+   the button. */
+.save {
+  position: sticky;
+  bottom: 12px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 52px;
+  background: var(--lx-home-emerald);
+  color: var(--sx-surface);
 }
