@@ -76,6 +76,10 @@ describe("OAuth discovery", () => {
       // AI writes (docs/product/ai-writes.md): notes and tasks, each its own scope.
       "leads:notes",
       "leads:tasks",
+      // Stage moves (ai-writes.md, "stage"): their own scope.
+      "leads:stage",
+      "coaching:read",
+      "coaching:write",
     ]);
     const resource = await resourceMetadata(
       at("salesxray.authorityclosers.com"),

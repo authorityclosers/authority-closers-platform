@@ -267,6 +267,9 @@ class SellerEffort(Model):
     # leads were worth in whole rupees, as revenue credits them (teardown #18).
     follow_ups_done: int = 0
     won_amount: int = 0
+    # Their photo; None means initials (owner, 15 Nov 2026: Home's team faces show
+    # each seller's own photo, so he can see at a glance who has worked).
+    photo_url: str | None = None
 
 
 class Effort(Model):
@@ -1831,6 +1834,19 @@ class ImportCommand(Command):
     # that lead as it is; owners and admins may "fill" its empty details from the row, or
     # "replace" its details with the row's filled cells. A blank cell never empties one.
     duplicates: Literal["skip", "fill", "replace"] = "skip"
+    # A part of a larger import sent through the API (integrations/lead_imports.py): where
+    # its rows start in the whole, so each row's own ids stay apart from the other parts'.
+    start_row: int = Field(default=0, ge=0, le=100_000)
+    # The caller's own id for each row (none, or one per row; None for a row without):
+    # the same id again is the same lead, whatever else the row says.
+    refs: tuple[str | None, ...] = Field(default=(), max_length=2000)
+
+    @field_validator("refs")
+    @classmethod
+    def _refs_fit(cls, refs: tuple[str | None, ...]) -> tuple[str | None, ...]:
+        if any(ref is not None and not 1 <= len(ref) <= 120 for ref in refs):
+            raise ValueError("A row's id is 1 to 120 characters.")
+        return refs
 
 
 class NewSource(Command):

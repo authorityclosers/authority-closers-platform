@@ -51,6 +51,16 @@ const WHY_TONE: Record<LeadRow["why_kind"], Tone> = {
  * brought in on purpose and kept on Cold (owner, 2 Nov 2026). It says so, with
  * the day the person sent it, never "New lead · just now". Null for any other.
  */
+
+/** A lead's colour among Home's five, steady for that lead (owner, 15 Nov 2026:
+ *  Home's look on Leads; Home's seller faces keep theirs the same way). */
+function toneOf(id: string): number {
+  let sum = 0;
+  for (let index = 0; index < id.length; index += 1)
+    sum += id.charCodeAt(index);
+  return sum % 5;
+}
+
 export function olderEnquiry(row: LeadRow): string | null {
   if (row.source !== "meta" || row.side !== "cold") return null;
   const sent = new Date(row.received_at ?? row.created_at);
@@ -376,7 +386,7 @@ export function LeadLine({
           aria-label={`Open ${row.name}`}
         >
           {compact ? (
-            <span className={styles.leadAvatar}>
+            <span className={styles.leadAvatar} data-tone={toneOf(row.lead_id)}>
               <Avatar name={row.name} size={40} />
             </span>
           ) : (

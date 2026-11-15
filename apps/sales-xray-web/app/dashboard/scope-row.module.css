@@ -1,0 +1,200 @@
+/* Home's scope row (owner's chosen Home, 01_Home.png, 14 Nov 2026): Team | Me
+   at the left edge, today's date at the right, one line; at large text the
+   date takes the next line instead of squeezing the switch. */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 12px;
+  min-width: 0;
+  /* 12 px to Today's heading under it, as drawn (Home's own gap is 20). */
+  margin-bottom: -8px;
+}
+
+.today {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  min-width: 148px; /* owner 15 Nov: same width and height as Controls under it, edges line up */
+  justify-content: center;
+  margin: 0;
+  padding: 0 16px 0 14px;
+  border: 1px solid var(--sx-hairline);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-elevated);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--lx-film) 8%, transparent);
+}
+
+.today svg {
+  flex: none;
+  color: var(--sx-ink-2);
+}
+
+/* Before the page is live: the date's room, so nothing moves when it lands. */
+.today span:empty {
+  min-width: 10ch;
+}
+
+/* The date is a label, not a button (critique 01: both reviewers took the
+   white pill for "change the date"): no fill, border or shadow, in the same
+   148 px column as Controls under it, its words at that column's right edge. */
+.today {
+  width: 148px;
+  justify-content: flex-end;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--sx-ink-2);
+}
+
+/* The date picks a day (owner, 15 Nov 2026): a real button again, in the
+   right column's look beside Controls, its chevron saying it opens a picker;
+   a past day in Home green, so it is never mistaken for today. */
+.today {
+  min-height: 44px; /* same height as the Team | Me pill beside it (owner 15 Nov) */
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  background: var(--sx-elevated);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 100ms ease-out;
+}
+
+.today:active {
+  transform: scale(0.97);
+}
+
+.today:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.today svg:last-child {
+  color: var(--sx-ink-2);
+}
+
+.today[data-past] {
+  border-color: color-mix(in oklab, var(--lx-home-emerald) 40%, transparent);
+  background: var(--lx-home-emerald-soft);
+  color: var(--lx-home-emerald);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .today {
+    transition: none;
+  }
+}
+
+/* owner 15 Nov: the same finish as Home's tiles: a hairline edge, a fine top highlight
+   and soft layered depth; the chosen side is a glossy raised green with a soft inner
+   light; it presses in slightly when tapped. */
+.today {
+  border: 0.5px solid color-mix(in oklab, var(--sx-ink) 9%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, white 60%, var(--sx-elevated)),
+    var(--sx-elevated)
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    0 1px 1px color-mix(in oklab, var(--lx-film) 5%, transparent),
+    0 4px 10px -2px color-mix(in oklab, var(--lx-film) 7%, transparent),
+    0 12px 24px -16px color-mix(in oklab, var(--lx-film) 22%, transparent);
+}
+
+/* The line the bar watches: the bottom of this row (motion-research-2.md). */
+.row {
+  position: relative;
+}
+
+.mark {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+/* Scrolled past, in the bar: "TEAM" over the day, in the workspace name's type;
+   a tap goes back to the top. */
+.compact {
+  display: grid;
+  min-width: 0;
+  min-height: 44px;
+  align-content: center;
+  margin: 0;
+  padding: 0 6px 0 0;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: var(--lx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.compact small,
+.compact b {
+  overflow: hidden;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact small {
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.compact b {
+  margin-top: 3px;
+  font-size: min(var(--sx-text-xl), 19px);
+  font-weight: 800;
+}
+
+.compactClear {
+  display: grid;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-ink-2);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.compact:focus-visible,
+.compactClear:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* 12 px under the bar's tiles, as the other rows are (design-research check:
+   it sat 22 px down). */
+.row {
+  margin-top: -10px;
+}

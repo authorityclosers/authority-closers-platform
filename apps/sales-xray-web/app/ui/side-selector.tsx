@@ -11,6 +11,7 @@
  * neutral surface, its words saying which.
  */
 
+import { LogIn, Snowflake } from "lucide-react";
 import type { KeyboardEvent } from "react";
 
 import styles from "./side-selector.module.css";
@@ -34,8 +35,10 @@ export function SideSelector({
   /** A short line under it for the chosen side ("Fresh enquiries"); optional. */
   notes?: Partial<Record<Side, string>>;
   label?: string;
-  /** side: the chosen side in its colour; calm: in a neutral surface. */
-  tone?: "side" | "calm";
+  /** side: the chosen side in its colour; calm: in a neutral surface;
+   *  home: the owner's chosen Home (01_Home.png, 14 Nov 2026), each side
+   *  with its icon, the chosen one a gradient pill. */
+  tone?: "side" | "calm" | "home";
 }) {
   // A radio group: the arrow keys move between the two, as in any radio group.
   const onKey = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -62,6 +65,7 @@ export function SideSelector({
       >
         {SIDES.map((side) => {
           const chosen = side.key === value;
+          const Icon = side.key === "inbound" ? LogIn : Snowflake;
           return (
             <button
               key={side.key}
@@ -76,6 +80,11 @@ export function SideSelector({
               }}
               onKeyDown={onKey}
             >
+              {tone === "home" ? (
+                <span className={styles.icon} aria-hidden="true">
+                  <Icon size={16} strokeWidth={2.5} />
+                </span>
+              ) : null}
               {side.label}
             </button>
           );

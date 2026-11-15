@@ -190,10 +190,13 @@ class AcquisitionProcessing:
             )
             if standing_consent_id is not None:
                 # Which consent this upload relied on, readable later; the analysis
-                # itself starts when its plan is accepted (conversation.auto_analysis_started).
+                # itself starts when its plan is accepted (conversation.auto_analysis_started),
+                # by the server once the audio check is done (auto_start), with the session
+                # that uploaded the call, recorded here.
                 await AuditRepository(self.database).append(
                     tenant_id=processing.tenant_id,
                     actor_person_id=actor.person_id if actor is not None else processing.person_id,
+                    session_id=actor.session_id if actor is not None else None,
                     action="conversation.auto_upload_accepted",
                     resource_type="conversation_recording",
                     resource_id=quote["recording_id"],

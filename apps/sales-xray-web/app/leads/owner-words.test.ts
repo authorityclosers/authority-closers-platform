@@ -27,6 +27,23 @@ describe("who a lead is with, in plain words", () => {
     );
   });
 
+  it("never shows the lead rules' shorthand", () => {
+    // Redmi QA on production (14 Nov 2026): "webhook: swamini deshpande (rule 1)".
+    expect(ownerNote("webhook: fictional seller (rule 1)")).toBe(
+      "Given to Fictional Seller by lead rule 1.",
+    );
+    expect(
+      ownerNote(
+        "Rule 1: Fictional Seller away or at their limit, given by the lead rules",
+      ),
+    ).toBe(
+      "Given out by the lead rules: the people its rule names were away or full.",
+    );
+    expect(ownerNote("No routing rule matched; given by the lead rules")).toBe(
+      "Given out by the lead rules.",
+    );
+  });
+
   it("says who moved it and why it moved on", () => {
     expect(ownerNote("Moved by Suyash Kulkarni")).toBe(
       "Reassigned by Suyash Kulkarni.",

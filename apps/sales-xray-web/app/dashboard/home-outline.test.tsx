@@ -80,7 +80,7 @@ it("outlines the team's floor where this device last saw an owner", async () => 
   window.localStorage.setItem("sx:home-role", "manager");
   await draw(listing);
   expect(host.querySelector('[data-mode="team"]')).not.toBeNull();
-  expect(host.textContent).toContain("tried today");
+  expect(host.textContent).toContain("Total calls");
   expect(host.textContent).toContain("Needs you now");
   expect(host.textContent).not.toContain("Last 30 days");
 });

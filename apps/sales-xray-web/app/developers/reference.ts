@@ -14,7 +14,7 @@ export const API = `${API_HOST}/v1/api`;
 
 export type Param = {
   name: string;
-  where: "path" | "query" | "body";
+  where: "path" | "query" | "body" | "header";
   type: string;
   text: string;
 };
@@ -36,11 +36,16 @@ const HEADERS = "{ Authorization: `Bearer ${process.env.SX_API_KEY}` }";
 
 export const SCOPES: [string, string][] = [
   ["calls:read", "Read calls and their status"],
-  ["reports:read", "Read the facts found in calls"],
+  [
+    "reports:read",
+    "Read call reports, transcripts and the facts found in calls",
+  ],
   ["leads:read", "Read leads"],
   ["leads:write", "Add leads"],
   ["leads:notes", "Add notes to leads"],
   ["leads:tasks", "Add tasks and reminders to leads"],
+  ["coaching:read", "Read Next-call missions and their counts"],
+  ["coaching:write", "Save lessons and answer missions (connected apps only)"],
   ["webhooks:manage", "Manage the webhook (coming to the API)"],
 ];
 
@@ -182,6 +187,180 @@ for (const fact of facts.facts) console.log(fact.label, fact.display);`,
 }`,
     notes:
       "Shortened: each fact carries a few more fields (category, kind, value, basis). Sensitive parts of a call are never quoted.",
+  },
+  {
+    id: "api-reports",
+    method: "GET",
+    path: "/reports",
+    scope: "reports:read",
+    summary:
+      "Calls whose report is ready, newest first, 50 a page, each with whether it is in Saved reports.",
+    params: [
+      {
+        name: "saved",
+        where: "query",
+        type: "true",
+        text: "Only Saved reports: the person's for a connected app; for an organisation key, the person who made it.",
+      },
+      {
+        name: "before",
+        where: "query",
+        type: "call id",
+        text: "next_before from the last page.",
+      },
+    ],
+    curl: `curl "${API}/reports?saved=true" \\\n  ${AUTH}`,
+    js: `const page = await (
+  await fetch("${API}/reports", { headers: ${HEADERS} })
+).json();
+for (const item of page.reports) console.log(item.id, item.title, item.saved);`,
+    answer: `{
+  "reports": [
+    {
+      "id": "3f2b7d10-…",
+      "title": "Discovery call",
+      "created_at": "2026-10-20T09:12:00+00:00",
+      "duration_seconds": 1520,
+      "open_url": "${HOST}/analysis/calls/3f2b7d10-…",
+      "saved": true
+    }
+  ],
+  "next_before": null
+}`,
+    notes:
+      "A person reads their own calls' reports; owners, admins and organisation keys also the organisation's, as in the app.",
+  },
+  {
+    id: "api-report",
+    method: "GET",
+    path: "/calls/{id}/report",
+    scope: "reports:read",
+    summary:
+      "One call's report as the app shows it: summary, verdict, strengths, what to improve, next action, objections, closing and each skill's state.",
+    params: [
+      {
+        name: "id",
+        where: "path",
+        type: "call id",
+        text: "An id from GET /reports or GET /calls.",
+      },
+    ],
+    curl: `curl ${API}/calls/3f2b7d10-…/report \\\n  ${AUTH}`,
+    js: `const { report } = await (
+  await fetch(\`${API}/calls/\${callId}/report\`, { headers: ${HEADERS} })
+).json();
+console.log(report.summary, report.next_action);`,
+    answer: `{
+  "schema": "sales-xray.api-report/1",
+  "call": { "id": "3f2b7d10-…", "title": "Discovery call", "…": "…" },
+  "review_status": "…",
+  "official_score": false,
+  "report": { "summary": "…", "verdict": "…", "strengths": [], "improvements": [], "next_action": {}, "dimensions": [], "…": "…" }
+}`,
+    notes:
+      "Sensitive parts of a call are withheld. 404 report_not_ready while the report is being made. An AI report, never an official score.",
+  },
+  {
+    id: "api-report-docx",
+    method: "GET",
+    path: "/calls/{id}/report.docx",
+    scope: "reports:read",
+    summary: "The same report as a Word file.",
+    params: [
+      {
+        name: "id",
+        where: "path",
+        type: "call id",
+        text: "An id from GET /reports.",
+      },
+    ],
+    curl: `curl -o report.docx ${API}/calls/3f2b7d10-…/report.docx \\\n  ${AUTH}`,
+    js: `const file = await (
+  await fetch(\`${API}/calls/\${callId}/report.docx\`, { headers: ${HEADERS} })
+).arrayBuffer();`,
+    answer: `(a .docx file)`,
+  },
+  {
+    id: "api-transcript",
+    method: "GET",
+    path: "/calls/{id}/transcript",
+    scope: "reports:read",
+    summary:
+      "One call's transcript, segment by segment with start and end times in milliseconds.",
+    params: [
+      {
+        name: "id",
+        where: "path",
+        type: "call id",
+        text: "An id from GET /reports.",
+      },
+    ],
+    curl: `curl ${API}/calls/3f2b7d10-…/transcript \\\n  ${AUTH}`,
+    js: `const { segments } = await (
+  await fetch(\`${API}/calls/\${callId}/transcript\`, { headers: ${HEADERS} })
+).json();`,
+    answer: `{
+  "call": { "id": "3f2b7d10-…", "…": "…" },
+  "revision": "…",
+  "duration_ms": 1520000,
+  "segments": [{ "start_ms": 0, "end_ms": 4200, "text": "…", "…": "…" }]
+}`,
+    notes: "Sensitive parts of a call are withheld.",
+  },
+  {
+    id: "api-coaching",
+    method: "GET",
+    path: "/coaching",
+    scope: "reports:read",
+    summary:
+      "This person's Coaching, as the app's Coaching tab shows it: the skills to work on, recurring focus and each call's state.",
+    params: [],
+    curl: `curl ${API}/coaching \\\n  ${AUTH}`,
+    js: `const coaching = await (
+  await fetch("${API}/coaching", { headers: ${HEADERS} })
+).json();`,
+    answer: `{ "skills": [], "calls": [], "…": "…" }`,
+    notes:
+      "A person's own: a connected app acting as that person. An organisation key is 403 person_only. Suggestions from AI reports, never a score.",
+  },
+  {
+    id: "api-coaching-call",
+    method: "GET",
+    path: "/coaching/calls/{id}",
+    scope: "reports:read",
+    summary:
+      "The coaching for one of this person's own calls: what went well, what to change and the mission for the next call.",
+    params: [
+      {
+        name: "id",
+        where: "path",
+        type: "call id",
+        text: "One of your calls, from GET /reports.",
+      },
+    ],
+    curl: `curl ${API}/coaching/calls/3f2b7d10-… \\\n  ${AUTH}`,
+    js: `const call = await (
+  await fetch(\`${API}/coaching/calls/\${callId}\`, { headers: ${HEADERS} })
+).json();`,
+    answer: `{ "…": "…" }`,
+    notes:
+      "Only your own calls: owners and admins have no private-coaching bypass.",
+  },
+  {
+    id: "api-coaching-team",
+    method: "GET",
+    path: "/coaching/team",
+    scope: "reports:read",
+    summary:
+      "The team's Coaching: how often each recommendation came up, as counts, and the reps who chose to share theirs.",
+    params: [],
+    curl: `curl ${API}/coaching/team \\\n  ${AUTH}`,
+    js: `const team = await (
+  await fetch("${API}/coaching/team", { headers: ${HEADERS} })
+).json();`,
+    answer: `{ "…": "…" }`,
+    notes:
+      "Owners, admins and organisation keys (403 team_only otherwise). Never mistakes or success rates.",
   },
   {
     id: "api-leads",
@@ -328,6 +507,117 @@ const { id, outcome } = await response.json(); // 201 created, or 200`,
     answer: `{ "id": "c7d2…", "outcome": "created" }`,
     notes:
       "outcome is created (201), or 200 with known (this external_id was sent before) or repeat (a lead with this phone exists; it is marked as asking again).",
+  },
+  {
+    id: "api-import-leads",
+    method: "POST",
+    path: "/leads/imports",
+    scope: "leads:write",
+    summary:
+      "Import up to 10,000 leads at once. Answers at once with an import; the leads are filed in the background exactly like a file uploaded in Sales X-Ray: duplicates are not new leads, and an owner can undo the import in the app for 48 hours.",
+    params: [
+      {
+        name: "Idempotency-Key",
+        where: "header",
+        type: "string",
+        text: "8 to 120 characters. The same key with the same leads answers with the same import (200); with other leads, 409.",
+      },
+      {
+        name: "leads",
+        where: "body",
+        type: "array",
+        text: "Each lead: name, phone, email, company, city, language, interest, stage (a stage's name), owner (a teammate's email or name), source (its list) and external_id (your id: the same id again is the same lead). At least a name, phone or email.",
+      },
+      {
+        name: "name",
+        where: "body",
+        type: "string",
+        text: "The import's name in the app's Import history.",
+      },
+      {
+        name: "side",
+        where: "body",
+        type: "string",
+        text: "inbound (default) or cold.",
+      },
+      {
+        name: "assign",
+        where: "body",
+        type: "string",
+        text: "rules (default): the workspace's lead rules give new leads out; none: nobody gets them yet. A lead's owner wins either way.",
+      },
+      {
+        name: "duplicates",
+        where: "body",
+        type: "string",
+        text: "A lead already here: skip (default), fill its empty details, or replace them.",
+      },
+    ],
+    curl: `curl ${API}/leads/imports \\\n  ${AUTH} \\\n  -H "Content-Type: application/json" \\\n  -H "Idempotency-Key: crm-export-2026-11-14" \\\n  -d '{"name": "CRM export", "side": "cold", "leads": [{"name": "Asha Rao", "phone": "+919800000000", "external_id": "crm-42"}]}'`,
+    js: `const response = await fetch("${API}/leads/imports", {
+  method: "POST",
+  headers: {
+    ...${HEADERS},
+    "Content-Type": "application/json",
+    "Idempotency-Key": "crm-export-2026-11-14",
+  },
+  body: JSON.stringify({ name: "CRM export", side: "cold", leads }),
+});
+const { id, status } = await response.json(); // 202 queued, or 200 for a retry`,
+    answer: `{ "id": "5b1e…", "name": "CRM export", "status": "queued", "total": 5000, "processed": 0, "created": 0, "updated": 0, "skipped": 0, "failed": 0, "…": "…" }`,
+    notes:
+      "Up to 10,000 leads an import (a 4 MB body), 5 imports waiting and 50,000 leads a day per workspace (429 imports_busy or import_daily_limit). Each lead's details are kept only until it is filed.",
+  },
+  {
+    id: "api-lead-import",
+    method: "GET",
+    path: "/leads/imports/{import_id}",
+    scope: "leads:write",
+    summary:
+      "Where an import stands: queued, running, done, partly_failed or failed, with how many leads were created, updated, skipped and failed. GET /leads/imports lists the last 50.",
+    params: [],
+    curl: `curl ${API}/leads/imports/5b1e… \\\n  ${AUTH}`,
+    js: `const job = await (
+  await fetch(\`${API}/leads/imports/\${id}\`, { headers: ${HEADERS} })
+).json();`,
+    answer: `{ "id": "5b1e…", "status": "done", "total": 5000, "processed": 5000, "created": 4987, "updated": 0, "skipped": 13, "failed": 0, "assigned": 4987, "undo_until": "2026-11-16T10:00:00+00:00", "…": "…" }`,
+    notes:
+      "Poll every few seconds; 250 leads are filed at a time. undo_until says until when an owner can undo it in the app.",
+  },
+  {
+    id: "api-lead-import-rows",
+    method: "GET",
+    path: "/leads/imports/{import_id}/rows",
+    scope: "leads:write",
+    summary:
+      "Each lead's outcome, in the order sent: created, updated, skipped (with why), failed or waiting, and its lead.",
+    params: [
+      {
+        name: "outcome",
+        where: "query",
+        type: "string",
+        text: "Only rows with this outcome.",
+      },
+      {
+        name: "after",
+        where: "query",
+        type: "integer",
+        text: "The last row seen (next_after); rows are numbered from 0.",
+      },
+      {
+        name: "limit",
+        where: "query",
+        type: "integer",
+        text: "1 to 1,000 (default 1,000).",
+      },
+    ],
+    curl: `curl "${API}/leads/imports/5b1e…/rows?outcome=skipped" \\\n  ${AUTH}`,
+    js: `const { rows, next_after } = await (
+  await fetch(\`${API}/leads/imports/\${id}/rows?outcome=skipped\`, { headers: ${HEADERS} })
+).json();`,
+    answer: `{ "rows": [{ "row": 10, "external_id": "crm-52", "outcome": "skipped", "reason": "Already a lead", "lead_id": null }], "next_after": null }`,
+    notes:
+      "Reasons are the app's own: Already a lead, Repeated in the file, Number can't be read, No name, phone or email.",
   },
   {
     id: "api-add-note",
@@ -549,6 +839,12 @@ export const MCP_TOOLS: [string, string, string][] = [
   ["list_calls", "calls:read", "Calls, newest first"],
   ["get_call", "calls:read", "One call, with its facts when allowed"],
   ["call_facts", "reports:read", "The facts found in one call"],
+  ["list_reports", "reports:read", "Calls with a ready report; Saved reports"],
+  ["get_report", "reports:read", "One call's report"],
+  ["get_transcript", "reports:read", "One call's transcript"],
+  ["my_coaching", "reports:read", "This person's Coaching"],
+  ["call_coaching", "reports:read", "Coaching for one of their calls"],
+  ["team_coaching", "reports:read", "The team's Coaching counts"],
   ["list_leads", "leads:read", "Leads, by stage"],
   ["get_lead", "leads:read", "One lead with its history"],
   ["add_lead", "leads:write", "Add a lead"],

@@ -1,0 +1,91 @@
+--- a/usr/local/sbin/ac-ship
++++ b/usr/local/sbin/ac-ship
+@@ -5,7 +5,9 @@
+ #   --native-bridge <sha> with --promote/--native installs a retained application-only native core first.
+ #   --native ships a release that changes the Sales Xray native image (no migration changes allowed).
+ #   --commit ships a prepared commit that descends from main (e.g. the workbench plus a native hold) instead of HEAD.
+-# Runs as root (installed by Claude); git and gh run as acdev. Reports every phase to the owner on Telegram.
++# Runs as root (installed by Claude); git and gh run as acdev. Every phase goes to the log and, through
++# ac-release-notice, to the dev route only. The owner's Telegram gets one note per release, when it is live on
++# production (owner, 15 Nov 2026: "the notifications I get are just misleading"; his rule of 19 Oct).
+ set -uo pipefail
+ WB=/home/acdev/src/dev-live/authority-closers-platform
+ REPO=authorityclosers/authority-closers-platform
+@@ -27,7 +29,7 @@
+ exec 8>/run/ac-ship.lock; flock -n 8 || { echo "another ac-ship is running" >&2; exit 1; }
+ exec > >(tee -a "$LOG") 2>&1
+ say() { echo "$(date -u +%FT%TZ) $*"; }
+-tell() { say "$*"; /usr/local/sbin/ac-notify-owner "$*" >/dev/null 2>&1 || true; }
++tell() { say "$*"; /usr/local/sbin/ac-release-notice step "$*" >/dev/null 2>&1 || true; }
+ asacdev() { sudo -u acdev -H env AC_GIT_SHIP=1 PATH=/home/acdev/.local/opt/node/bin:/home/acdev/.local/bin:/usr/bin:/bin "$@"; }
+ gh() { asacdev /home/acdev/.local/bin/gh "$@"; }
+ fail() { tell "Ship $VER stopped: $*"; exit 1; }
+@@ -356,7 +358,10 @@
+ if [ "$(systemctl show ac-canary@production.service -p Result --value)" != success ]; then
+   fail "production canary failed after $VER; check now (rollback: ac-release rollback production)"
+ fi
+-tell "$VER is live on production and its canary passed: https://salesxray.authorityclosers.com"
++say "$VER is live on production and its canary passed: https://salesxray.authorityclosers.com"
++# The owner's one message for this release: 3-5 plain bullets from the title and the link, sent once per version.
++/usr/local/sbin/ac-release-notice live --version "$VER" --title "$TITLE" >/dev/null 2>&1 \
++  || say "WARN: the owner's live note for $VER was not sent (see /var/log/ac-notify.log)"
+ # RELEASE-COMMS (7 Nov 2026): plain-English release note to the owner + private Sales X-Ray Updates channel (background)
+ /usr/local/sbin/release-comms-post salesxray >/dev/null 2>&1 || true
+ say "=== ship $VER done"
+--- a/usr/local/sbin/ac-notify-owner
++++ b/usr/local/sbin/ac-notify-owner
+@@ -13,7 +13,19 @@
+ if not text and not photo:
+     sys.exit("usage: ac-notify-owner \"text\" [--photo path]")
+ if photo and hasattr(tg, "send_photo"):
+-    tg.send_photo(photo, caption=text[:900])
++    mid = tg.send_photo(photo, caption=text[:900])
+ else:
+-    tg.send(tg.esc(text) + (f"\n(image on the server: {tg.esc(photo)})" if photo else ""))
+-print("sent")
++    mid = tg.send(tg.esc(text) + (f"\n(image on the server: {tg.esc(photo)})" if photo else ""))
++# Owner, 15 Nov 2026: every message to him leaves one line in /var/log/ac-notify.log (what, and who sent it), so an
++# audit can show what he got. Release scripts no longer call this; they use ac-release-notice.
++try:
++    import json, os, time
++    with open(f"/proc/{os.getppid()}/cmdline", "rb") as proc:
++        caller = proc.read().replace(b"\0", b" ").decode(errors="replace").strip()[:200]
++    with open("/var/log/ac-notify.log", "a") as log:
++        log.write(json.dumps({"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kind": "ac-notify-owner",
++                              "to": "owner", "ok": bool(mid), "caller": caller, "text": text[:600]},
++                             ensure_ascii=False) + "\n")
++except OSError:
++    pass
++print("sent" if mid else "not sent")
+--- a/opt/release-comms/relcomms.py
++++ b/opt/release-comms/relcomms.py
+@@ -64,6 +64,9 @@
+         "node": "/home/acdev/.local/opt/node/bin/node",
+         "pw": "/home/acdev/src/dev-live/authority-closers-platform/node_modules/.pnpm/playwright-core@*/node_modules/playwright-core/index.mjs",
+         "cards": "pil",
++        # Owner, 15 Nov 2026: his Telegram gets one message per release, ac-ship's live note (ac-release-notice).
++        # Posts are still written and wait for this product's own bot (setup + flush); no fallback to his ops chat.
++        "owner_fallback": False,
+         "ops_env": "/etc/ac-notify/telegram.env",
+         "backlog_match": r"sales ?x-?ray|authority|\bAC\b|neeti|dipak",
+         "db": False,
+@@ -631,7 +634,7 @@
+             targets.append(("owner", token, ch["owner"]))
+         if ch.get("channel"):
+             targets.append(("channel", token, ch["channel"]))
+-    if not token and "owner" not in sent and "fallback" not in sent:
++    if not token and P.get("owner_fallback", True) and "owner" not in sent and "fallback" not in sent:
+         ops = read_env(P["ops_env"])
+         oid = owner_id(P)
+         if ops.get("TELEGRAM_BOT_TOKEN") and oid:
+--- a/root/cutpatch.sh
++++ b/root/cutpatch.sh
+@@ -11,7 +11,7 @@
+ TAG=${VER//./}
+ exec > >(tee -a "$LOG") 2>&1
+ say() { echo "$(date -u +%FT%TZ) $*"; }
+-tell() { say "$*"; /usr/local/sbin/ac-notify-owner "$*" >/dev/null 2>&1 || true; }
++tell() { say "$*"; /usr/local/sbin/ac-release-notice step "$*" >/dev/null 2>&1 || true; }  # owner 15 Nov: cut steps stay off his Telegram
+ [ -e /run/ac-release-cut.active ] && { say "Cut $VER not started: another cut holds /run/ac-release-cut.active"; exit 1; }
+ sudo -n -u acdev git -C "$REPO" fetch -q origin main || { tell "Cut $VER not started: fetching main failed"; exit 1; }
+ MAIN=$(sudo -n -u acdev git -C "$REPO" rev-parse FETCH_HEAD)

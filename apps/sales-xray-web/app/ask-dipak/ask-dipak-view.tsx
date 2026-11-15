@@ -26,6 +26,7 @@ import { useTabAgain } from "../shell/tab-again";
 import styles from "./ask-dipak.module.css";
 import { COPY } from "./copy";
 import { AskIcon } from "./icons";
+import { MissionsScreen } from "./missions-screen";
 import {
   CATEGORIES,
   CATEGORY_ICONS,
@@ -241,6 +242,17 @@ function HomeScreen({ open }: { open: Open }) {
           );
         })}
       </div>
+      <ScreenButton
+        view={{ kind: "missions" }}
+        open={open}
+        className={`${styles.entry} ${styles.missionsEntry}`}
+      >
+        <span className={styles.entryCopy}>
+          <span className={styles.entryTitle}>{COPY.myMissions}</span>
+          <span className={styles.entryMeta}>{COPY.myMissionsMeta}</span>
+        </span>
+        <AskIcon name="right" size={18} />
+      </ScreenButton>
       <p className={styles.notice}>{COPY.notice}</p>
     </>
   );
@@ -695,6 +707,14 @@ export function AskDipakView({
       break;
     case "saved":
       screen = <SavedScreen progress={progress} open={open} back={back} />;
+      break;
+    case "missions":
+      screen = (
+        <>
+          <Breadcrumb onBack={back}>{COPY.title}</Breadcrumb>
+          <MissionsScreen />
+        </>
+      );
       break;
     case "lesson":
       screen = (

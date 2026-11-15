@@ -11,12 +11,12 @@
  * so a signed-out visitor never sends a read (pages count their reads).
  */
 
-import { Contact } from "lucide-react";
 import { useSyncExternalStore } from "react";
 
 import { useUnreadChats } from "../chats/chats-badge";
 import { onWorkspaceChange, workspaceGeneration } from "../workspace-change";
 import { readBadge, type Badge } from "./badge-client";
+import { LeadsGlyph } from "../shell/nav-glyphs";
 import styles from "./leads-badge.module.css";
 
 const EVERY_MS = 2 * 60 * 1000;
@@ -150,7 +150,7 @@ export function LeadsTabIcon({
   const { late, count } = useLeadsCounts(live, withChats);
   return (
     <span className={styles.tabIcon}>
-      <Contact size={size} strokeWidth={strokeWidth} aria-hidden="true" />
+      <LeadsGlyph size={size} strokeWidth={strokeWidth} />
       {count ? (
         <span
           className={styles.tabBadge}

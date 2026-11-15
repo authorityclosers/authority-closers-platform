@@ -112,3 +112,95 @@
     animation: none;
   }
 }
+
+/* Home's look (owner's chosen Home, 01_Home.png, 14 Nov 2026): two equal
+   halves at the row's left edge, a green thumb with white words and filled
+   icons; the other half quiet. */
+.switch[data-look="home"] {
+  flex: 1 1 auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 220px;
+  min-width: 0;
+}
+
+.switch[data-look="home"] .pill {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--lx-home-primary) 82%, white),
+    var(--lx-home-primary)
+  );
+  box-shadow:
+    0 3px 8px -3px color-mix(in oklab, var(--lx-home-primary) 70%, transparent),
+    inset 0 1px 0 color-mix(in oklab, white 24%, transparent);
+}
+
+.switch[data-look="home"] .option {
+  min-height: 36px;
+  padding: 0 10px;
+  font-weight: 700;
+}
+
+.switch[data-look="home"] .option[aria-checked="true"] {
+  color: var(--lx-on-teal);
+}
+
+/* Flat Home green under white words (critique 01: the gradient's light top
+   measured 3.77:1, flat green 6.5:1); 44 px tall like the column beside it;
+   the thumb slides in 180 ms, the words change in 120 ms. */
+.switch[data-look="home"] .pill {
+  background: var(--lx-home-emerald);
+  box-shadow: none;
+}
+
+.switch[data-look="home"] .pill[data-moved] {
+  animation: none;
+}
+
+.switch[data-look="home"] .thumb {
+  transition: transform 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.switch[data-look="home"] .option {
+  min-height: 38px;
+  transition: color 120ms ease-out;
+}
+
+.switch[data-look="home"] .option[aria-checked="true"] {
+  color: var(--sx-surface);
+}
+
+/* owner 15 Nov: the same finish as Home's tiles: a hairline edge, a fine top highlight
+   and soft layered depth; the chosen side is a glossy raised green with a soft inner
+   light; it presses in slightly when tapped. */
+.switch[data-look="home"] {
+  border: 0.5px solid color-mix(in oklab, var(--sx-ink) 10%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--sx-ink) 7%, var(--sx-elevated)),
+    color-mix(in oklab, var(--sx-ink) 3%, var(--sx-elevated))
+  );
+  box-shadow:
+    inset 0 1px 2px color-mix(in oklab, var(--lx-film) 12%, transparent),
+    0 1px 0 color-mix(in oklab, white 80%, transparent);
+}
+.switch[data-look="home"] .pill {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, white 14%, var(--lx-home-primary)),
+    var(--lx-home-primary) 60%,
+    color-mix(in oklab, black 10%, var(--lx-home-primary))
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 35%, transparent),
+    inset 0 -1px 0 color-mix(in oklab, black 18%, transparent),
+    0 2px 4px color-mix(in oklab, var(--lx-home-primary) 30%, transparent),
+    0 8px 16px -8px color-mix(in oklab, var(--lx-home-primary) 55%, transparent);
+}
+.switch[data-look="home"] .option:active {
+  transform: scale(0.97);
+}
+.switch[data-look="home"] .option {
+  transition:
+    transform 140ms ease-out,
+    color 200ms;
+}

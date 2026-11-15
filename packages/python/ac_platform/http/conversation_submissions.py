@@ -1432,9 +1432,23 @@ def install_submission_http(
         actor = await owner.ownership.resolve_processing_actor(
             submission_id, **owner.arguments, allow_organisation_start=True
         )
+        # A plan accepted before (by the server's automatic start, auto_start, or an
+        # earlier click) is only shown again: this request started nothing, so it records
+        # no start of its own.
+        accepted_before = (
+            await owner.ownership.database.scalar(
+                select(ConversationProcessingPlan.acceptance_command_id).where(
+                    ConversationProcessingPlan.id == payload.plan_id,
+                    ConversationProcessingPlan.recording_id == scope.recording_id,
+                )
+            )
+            is not None
+        )
         accepted = await ConversationProcessingPlans(
             ConversationApplication(owner.ownership.database), runtime.authority, runtime.storage
         ).accept(actor, scope.recording_id, payload, key=key)
+        if accepted_before:
+            return accepted
         if standing_consent is not None and owner.actor is not None:
             # The plan's receipt stays the plan's own; this names the consent it relied on.
             await AuditRepository(owner.ownership.database).append(

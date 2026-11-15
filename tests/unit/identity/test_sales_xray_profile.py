@@ -126,6 +126,12 @@ def database(monkeypatch: pytest.MonkeyPatch) -> Any:
         Column("person_id", Uuid, nullable=False),
     )
     ask_dipak.create(engine)
+    coaching_tables = [
+        Table(name, MetaData(), Column("person_id", Uuid, nullable=False))
+        for name in ("sales_xray_ask_dipak_focus_events", "sales_xray_ask_dipak_call_checks")
+    ]
+    for table in coaching_tables:
+        table.create(engine)
     coaching_context = Table(
         "coaching_learner_context",
         MetaData(),
@@ -163,6 +169,8 @@ def database(monkeypatch: pytest.MonkeyPatch) -> Any:
         speaker_map_revisions.drop(engine)
         report_saves.drop(engine)
         ask_dipak.drop(engine)
+        for table in coaching_tables:
+            table.drop(engine)
         label_revisions.drop(engine)
         PersonProfileDetails.__table__.drop(engine)
         PersonPhoto.__table__.drop(engine)

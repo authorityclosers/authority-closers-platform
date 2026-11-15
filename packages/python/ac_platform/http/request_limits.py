@@ -19,6 +19,8 @@ MAX_BUG_REPORT_BYTES = 8 * 1024 * 1024
 # A file that follows an advanced bug report: a short screen recording at most (0149).
 MAX_BUG_FILE_BYTES = 21 * 1024 * 1024
 MAX_DECLARED_BODY_BYTES = MAX_MEDIA_CAPTION_BYTES
+# Many leads at once through the API (integrations/lead_imports.py): 10,000 rows of JSON.
+MAX_LEAD_IMPORT_BYTES = 4 * 1024 * 1024
 MAX_PROBLEM_INSTANCE_LENGTH = 512
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
@@ -61,6 +63,8 @@ def request_body_limit(scope: Scope) -> int:
         return MAX_MEDIA_CAPTION_BYTES
     if path == "/v1/bug-reports":
         return MAX_BUG_REPORT_BYTES
+    if path == "/v1/api/leads/imports":
+        return MAX_LEAD_IMPORT_BYTES
     if _BUG_FILE_PATH.fullmatch(path):
         return MAX_BUG_FILE_BYTES
     return MAX_REQUEST_BODY_BYTES

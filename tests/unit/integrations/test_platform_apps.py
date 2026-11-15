@@ -127,6 +127,10 @@ def test_return_addresses_are_https_or_this_computer(uri: str, allowed: bool) ->
     assert oauth.redirect_allowed(uri) is allowed
 
 
+# Ask Dipak's lessons need no scope: Dipak's content is the same for everyone.
+LESSONS = ("ask_dipak_search", "ask_dipak_lesson", "ask_dipak_how_to_improve")
+
+
 def test_mcp_tools_follow_the_connection_scopes() -> None:
     every = {tool["name"] for tool in mcp_http.listed(frozenset(scopes.SCOPES))}
     assert every == {
@@ -136,18 +140,51 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "list_calls",
         "get_call",
         "call_facts",
+        "list_reports",
+        "get_report",
+        "get_transcript",
+        "my_coaching",
+        "call_coaching",
+        "team_coaching",
+        "analysis_time",
         "list_leads",
         "get_lead",
         "list_duplicates",
         "get_duplicate",
         "add_lead",
+        "import_leads",
+        "get_lead_import",
         "add_note",
         "add_task",
+        "move_stage",
+        "list_tasks",
+        "complete_task",
+        "snooze_task",
         "list_my_changes",
         "undo_change",
+        *LESSONS,
+        "ask_dipak_my_missions",
+        "ask_dipak_recent_calls",
+        "ask_dipak_team_missions",
+        "create_recording_upload",
+        "recording_status",
     }
+    # A seller's call by an organisation's key (API gap 2, 15 Nov 2026): its own scope.
+    uploads = {tool["name"] for tool in mcp_http.listed(frozenset({"recordings:write"}))}
+    assert uploads == {"whoami", "create_recording_upload", "recording_status", *LESSONS}
+    # Many leads at once (14 Nov 2026) come with leads:write, beside add_lead.
+    importing = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:write"}))}
+    assert importing == {"whoami", "add_lead", "import_leads", "get_lead_import", *LESSONS}
     reading = {tool["name"] for tool in mcp_http.listed(frozenset({"calls:read"}))}
-    assert reading == {"search", "fetch", "whoami", "list_calls", "get_call"}
+    assert reading == {
+        "search",
+        "fetch",
+        "whoami",
+        "list_calls",
+        "get_call",
+        "analysis_time",
+        *LESSONS,
+    }
     leads = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:read"}))}
     assert leads == {
         "search",
@@ -157,15 +194,42 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "get_lead",
         "list_duplicates",
         "get_duplicate",
+        "list_tasks",
+        *LESSONS,
     }
-    assert {tool["name"] for tool in mcp_http.listed(frozenset({"webhooks:manage"}))} == {"whoami"}
+    assert {tool["name"] for tool in mcp_http.listed(frozenset({"webhooks:manage"}))} == {
+        "whoami",
+        *LESSONS,
+    }
     # AI writes (docs/product/ai-writes.md): each write tool needs its own scope; reading
     # leads alone shows none of them.
     notes = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:notes"}))}
-    assert notes == {"whoami", "add_note", "list_my_changes", "undo_change"}
+    assert notes == {"whoami", "add_note", "list_my_changes", "undo_change", *LESSONS}
     tasks = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:tasks"}))}
-    assert tasks == {"whoami", "add_task", "list_my_changes", "undo_change"}
-    writes = {"add_lead", "add_note", "add_task", "undo_change"}
+    # Marking a task done and snoozing it come with adding tasks (15 Nov 2026).
+    assert tasks == {
+        "whoami",
+        "add_task",
+        "complete_task",
+        "snooze_task",
+        "list_my_changes",
+        "undo_change",
+        *LESSONS,
+    }
+    # Stage moves (15 Nov 2026): their own scope.
+    stages = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:stage"}))}
+    assert stages == {"whoami", "move_stage", "list_my_changes", "undo_change", *LESSONS}
+    writes = {
+        "add_lead",
+        "import_leads",
+        "add_note",
+        "add_task",
+        "move_stage",
+        "complete_task",
+        "snooze_task",
+        "undo_change",
+        "create_recording_upload",
+    }
     for tool in mcp_http.listed(frozenset(scopes.SCOPES)):
         assert "scope" not in tool and tool["inputSchema"]["type"] == "object"
         assert tool["annotations"]["readOnlyHint"] is (tool["name"] not in writes)
@@ -173,7 +237,8 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         # takes something away (a note stops showing).
         assert tool["annotations"]["destructiveHint"] is (tool["name"] == "undo_change")
         assert tool["annotations"]["openWorldHint"] is False
-        if tool["name"] in writes - {"add_lead"}:
+        # A new lead and a new upload are each a new thing; the rest repeat safely.
+        if tool["name"] in writes - {"add_lead", "create_recording_upload"}:
             assert tool["annotations"]["idempotentHint"] is True
             assert "request_id" in tool["inputSchema"]["properties"]
         assert tool["title"]
@@ -342,7 +407,9 @@ def test_protected_resource_metadata_names_connect_and_the_tools_scopes() -> Non
         assert meta["scopes_supported"] == list(MCP_SCOPES)
     assert protected_resource_metadata(base, "v1/api")["resource"] == f"{base}/v1/api"  # type: ignore[index]
     assert protected_resource_metadata(base, "v1/admin") is None
-    assert set(MCP_SCOPES) <= set(scopes.SCOPES) and "webhooks:manage" not in MCP_SCOPES
+    # coaching:write is a person's connected app's (scopes.APP_SCOPES).
+    assert set(MCP_SCOPES) <= {*scopes.SCOPES, *scopes.APP_SCOPES}
+    assert "webhooks:manage" not in MCP_SCOPES
 
 
 def _ts_list(source: str, name: str) -> list[str]:

@@ -2790,3 +2790,389 @@
     white-space: normal;
   }
 }
+
+/* ---------- Home's bar (owner's chosen Home, 01_Home.png, 14 Nov 2026) ----------
+   Phones: the organisation's round mark, its name on two lines (the last word
+   bold), the switch chevron; then add (a green ring), search and the bell. */
+.homeLead {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.homeMark {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  flex: none;
+  place-items: center;
+  margin-left: -2px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.homeMark > span,
+.homeMark > span[data-size] {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px color-mix(in oklab, var(--lx-ink) 22%, transparent);
+}
+
+.homeMark[data-pending]::before {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--lx-sunken);
+  content: "";
+}
+
+.homeMark:active {
+  transform: scale(0.95);
+}
+
+.homeMark:focus-visible,
+.homeName:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.homeFace {
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+  background: linear-gradient(
+    180deg,
+    var(--lx-avatar-top),
+    var(--lx-avatar-bottom)
+  );
+  color: var(--lx-on-teal);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.homeFace :global(.account-avatar-image) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.homeName {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0 6px 0 0;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: var(--lx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+span.homeName {
+  cursor: default;
+}
+
+.homeName > span {
+  display: grid;
+  min-width: 0;
+}
+
+.homeName small,
+.homeName b {
+  overflow: hidden;
+  color: var(--lx-ink);
+  line-height: 1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.homeName small {
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+
+.homeName b {
+  margin-top: 3px;
+  font-size: min(var(--sx-text-xl), 19px);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.homeName > svg {
+  flex: none;
+  color: var(--lx-ink-2);
+}
+
+@media (max-width: 899.98px) {
+  .mobileBar[data-home] .barActions {
+    gap: 8px;
+  }
+
+  .mobileBar[data-home] .barAdd {
+    margin: 0;
+    color: var(--lx-home-emerald);
+  }
+
+  .mobileBar[data-home] .barAdd::before {
+    width: 34px;
+    height: 34px;
+    background: transparent;
+    box-shadow: inset 0 0 0 2px var(--lx-home-emerald);
+  }
+
+  .mobileBar[data-home] .barSearch {
+    color: var(--lx-ink);
+  }
+
+  /* On the page's own background, as drawn; the bar's glass and
+     hairline come back once the page scrolls under it. */
+  .shell:not([data-scrolled]) .mobileBar[data-home] {
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+/* Phones: the page's tab in Home's green with a short bar under its name
+   (owner's chosen Home, 08 and 12, 14 Nov 2026); the others quiet. */
+@media (max-width: 899.98px) {
+  .bottomLink[aria-current="page"],
+  .bottomLink[aria-current="page"] > svg {
+    color: var(--lx-home-emerald);
+  }
+
+  .bottomLink[aria-current="page"] {
+    position: relative;
+  }
+
+  .bottomLink[aria-current="page"]::after {
+    position: absolute;
+    bottom: -5px;
+    left: 50%;
+    width: 36px;
+    height: 3px;
+    margin-left: -18px;
+    border-radius: 2px;
+    background: var(--lx-home-emerald);
+    content: "";
+  }
+}
+
+/* Home's bar, measured (design-research critique 01, 15 Nov 2026): one
+   geometry for its actions, 48 px circles 4 px apart; search and the bell 22 px
+   at stroke 2 in ink; the + a 36 px ring at stroke 2 with a 20 px glyph that
+   turns into a cross while its sheet is open. Solid paper, no blur (a blurred
+   bar over moving content costs a mid-range phone its frame budget); a hairline
+   once the page scrolls under it. */
+@media (max-width: 899.98px) {
+  .mobileBar[data-home],
+  .shell[data-scrolled] .mobileBar[data-home] {
+    min-height: calc(56px + env(safe-area-inset-top, 0px));
+    background: var(--lx-paper);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    transition: box-shadow 150ms linear;
+  }
+
+  .mobileBar[data-home] {
+    box-shadow: none;
+  }
+
+  .shell[data-scrolled] .mobileBar[data-home] {
+    box-shadow: 0 1px 0 var(--sx-line);
+  }
+
+  .mobileBar[data-home] .homeName {
+    flex: 1 1 auto;
+  }
+
+  .mobileBar[data-home] .barActions {
+    gap: 4px;
+  }
+
+  .mobileBar[data-home] .barAdd,
+  .mobileBar[data-home] .barSearch,
+  .mobileBar[data-home] .barActions > [aria-label="Notifications"],
+  .mobileBar[data-home] .barSlot {
+    width: 48px;
+    height: 48px;
+    margin: 0;
+    border-radius: 50%;
+  }
+
+  .mobileBar[data-home] .barSearch,
+  .mobileBar[data-home] .barActions > [aria-label="Notifications"] {
+    color: var(--lx-ink);
+    transition: transform 200ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .mobileBar[data-home] .barSearch svg,
+  .mobileBar[data-home] .barActions > [aria-label="Notifications"] > svg {
+    width: 22px;
+    height: 22px;
+    stroke-width: 2;
+  }
+
+  .mobileBar[data-home] .barActions > [aria-label="Notifications"] > span {
+    top: 6px;
+    right: 6px;
+    background: var(--sx-bad);
+    box-shadow: 0 0 0 2px var(--lx-paper);
+    color: white;
+  }
+
+  .mobileBar[data-home] .barAdd {
+    transition: transform 200ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .mobileBar[data-home] .barAdd::before {
+    width: 36px;
+    height: 36px;
+    box-shadow: inset 0 0 0 2px var(--lx-home-emerald);
+  }
+
+  .mobileBar[data-home] .barAdd > svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
+    transition: transform 200ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .mobileBar[data-home] .barAdd[aria-expanded="true"] > svg {
+    transform: rotate(45deg);
+  }
+
+  .mobileBar[data-home] .barAdd:active,
+  .mobileBar[data-home] .barSearch:active,
+  .mobileBar[data-home] .barActions > [aria-label="Notifications"]:active {
+    transform: scale(0.94);
+    transition-duration: 100ms;
+  }
+}
+
+@media (max-width: 899.98px) and (prefers-reduced-motion: reduce) {
+  .mobileBar[data-home] .barAdd,
+  .mobileBar[data-home] .barAdd > svg,
+  .mobileBar[data-home] .barSearch,
+  .mobileBar[data-home] .barActions > [aria-label="Notifications"] {
+    transition: none;
+  }
+
+  .mobileBar[data-home] .barAdd:active,
+  .mobileBar[data-home] .barSearch:active,
+  .mobileBar[data-home] .barActions > [aria-label="Notifications"]:active {
+    transform: none;
+  }
+}
+
+/* Top bar v2 (design-research's pick, 15 Nov 2026): the three actions as equal
+   44 px rounded-square tiles on the surface with a 1 px line, 8 px apart; the +
+   in Home green with no ring. */
+@media (max-width: 899.98px) {
+  .mobileBar[data-home] .barActions {
+    gap: 8px;
+  }
+
+  .mobileBar[data-home] .barAdd,
+  .mobileBar[data-home] .barSearch,
+  .mobileBar[data-home] .barActions > [aria-label="Notifications"],
+  .mobileBar[data-home] .barSlot {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+  }
+
+  .mobileBar[data-home] .barAdd,
+  .mobileBar[data-home] .barSearch,
+  .mobileBar[data-home] .barActions > [aria-label="Notifications"] {
+    background: var(--sx-elevated);
+    box-shadow: inset 0 0 0 1px var(--sx-line);
+  }
+
+  .mobileBar[data-home] .barAdd::before {
+    display: none;
+  }
+
+  .mobileBar[data-home] .barAdd > svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  /* The unread count on the tile corner, clear of the bell. */
+  .mobileBar[data-home] .barActions > [aria-label="Notifications"] > span {
+    top: -6px;
+    right: -6px;
+  }
+}
+
+/* Scrolled past Home's rows (motion-research-2.md section 2): the workspace name
+   crossfades into Home's scope ("TEAM / Today") in the same place, 150 ms with a
+   4 px rise; the bar never changes height. The hidden one is out of reach. */
+.homeTitles {
+  display: grid;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.homeTitles > * {
+  grid-area: 1 / 1;
+  min-width: 0;
+  transition:
+    opacity 150ms var(--sx-ease-out),
+    transform 150ms var(--sx-ease-out),
+    visibility 0s linear 0s;
+}
+
+.homeScope {
+  display: flex;
+  align-items: center;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(4px);
+  transition-delay: 0s, 0s, 150ms;
+}
+
+.mobileBar[data-compact] .homeName {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition-delay: 0s, 0s, 150ms;
+}
+
+.mobileBar[data-compact] .homeScope {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  transition-delay: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .homeScope,
+  .mobileBar[data-compact] .homeName {
+    transform: none;
+  }
+}
+
+/* Narrow phones (363 px): the workspace name fits at 17 px with no letter
+   spacing ("SANDBOX" needed ~100 px of 97 at 19 px; design-research check). */
+@media (max-width: 375px) {
+  .homeName b {
+    font-size: min(var(--sx-text-xl), 17px);
+    letter-spacing: 0;
+  }
+}

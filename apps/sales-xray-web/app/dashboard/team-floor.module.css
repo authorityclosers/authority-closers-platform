@@ -135,9 +135,7 @@
 }
 
 /* Soft glass: the one surface on this screen. */
-.table,
-.need,
-.split {
+.table {
   border: 1px solid color-mix(in oklab, var(--sx-ink) 7%, transparent);
   border-radius: 20px;
   background: color-mix(in oklab, var(--sx-surface) 74%, transparent);
@@ -222,43 +220,119 @@ a.row:focus-visible {
   }
 }
 
-/* Needs you now: worst first; three on a phone, all on a computer. */
+/* Needs you now (owner's chosen lower Home, 05 and 15, 14 Nov 2026): one card,
+   worst first; a count column in each alert's colour, its words, a chevron;
+   three on a phone with the rest a tap away, all on a computer. */
+.needsCard {
+  display: grid;
+  min-width: 0;
+  padding: 14px 16px 2px;
+  border: 1px solid var(--sx-hairline);
+  border-radius: 20px;
+  background: var(--sx-elevated);
+  box-shadow:
+    0 1px 2px color-mix(in oklab, var(--lx-film) 6%, transparent),
+    0 10px 24px -18px color-mix(in oklab, var(--lx-film) 30%, transparent);
+}
+
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-bottom: 4px;
+}
+
+.cardHead h2 {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.scope {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+}
+
 .needs {
   display: grid;
-  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+.needs > li + li {
+  border-top: 1px solid var(--sx-hairline);
+}
+
 @media (max-width: 1023.98px) {
-  .needs > li[data-extra] {
+  .needs:not([data-open]) > li[data-extra] {
     display: none;
   }
 }
 
 .need {
+  --tone: var(--lx-home-emerald);
+  --tone-soft: var(--lx-home-emerald-soft);
+
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(64px, max-content) minmax(0, 1fr) 18px;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   min-height: 60px;
-  padding: 10px 14px 10px 16px;
+  padding: 10px 0;
   color: var(--sx-ink);
-  font-size: var(--sx-text-sm);
-  font-weight: 600;
   text-decoration: none;
-  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
   -webkit-tap-highlight-color: transparent;
 }
 
+.need[data-tone="orange"] {
+  --tone: var(--lx-home-orange);
+  --tone-soft: var(--lx-home-orange-soft);
+}
+
+.need[data-tone="rose"] {
+  --tone: var(--lx-home-rose);
+  --tone-soft: var(--lx-home-rose-soft);
+}
+
+.need[data-tone="violet"] {
+  --tone: var(--lx-home-violet);
+  --tone-soft: var(--lx-home-violet-soft);
+}
+
 .need strong {
-  min-width: 2ch;
-  color: var(--sx-bad);
-  font-size: var(--sx-text-xl);
-  font-weight: 750;
+  display: grid;
+  min-height: 38px;
+  place-items: center;
+  padding: 0 8px;
+  border-radius: 11px;
+  background: var(--tone-soft);
+  color: var(--tone);
+  font-size: min(var(--sx-text-xl), 20px);
+  font-weight: 800;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
+  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.need > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  line-height: var(--sx-leading-20);
+}
+
+.need small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .need svg {
@@ -266,70 +340,163 @@ a.row:focus-visible {
 }
 
 /* A row held while Needs you now loads. */
-.need[data-wait] {
-  opacity: 0.5;
+.need[data-wait] strong {
+  background: var(--sx-fill-soft);
 }
 
-.need:active {
-  transform: scale(0.98);
+.need[data-wait] > span {
+  width: 60%;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--sx-fill-soft);
+}
+
+.need:active strong {
+  transform: scale(0.95);
 }
 
 .need:focus-visible {
+  border-radius: 12px;
   outline: none;
   box-shadow: var(--sx-focus-ring);
 }
 
-@media (hover: hover) {
-  .need:hover {
-    transform: translateY(-1px);
+.showMore {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--sx-hairline);
+  background: transparent;
+  color: var(--lx-home-emerald);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.showMore svg {
+  transition: transform var(--sx-dur-base) var(--sx-ease-out);
+}
+
+.showMore svg[data-open] {
+  transform: rotate(180deg);
+}
+
+.showMore:focus-visible {
+  border-radius: 12px;
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@media (min-width: 1024px) {
+  .showMore {
+    display: none;
   }
 }
 
-/* Inbound and Cold side by side. */
+/* Inbound and Cold today (owner's chosen lower Home, 08 and 12, 14 Nov 2026):
+   two equal cards, each its icon and name, Tried, Connected and Talk time on
+   matching rows, and its unknown outcomes at its foot. */
 .split {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
   min-width: 0;
 }
 
 .splitSide {
+  --look: var(--lx-home-emerald);
+  --look-soft: var(--lx-home-emerald-soft);
+
   display: grid;
-  gap: 8px;
+  align-content: start;
   min-width: 0;
-  padding: 14px 16px;
+  padding: 12px 12px 0;
+  border: 1px solid color-mix(in oklab, var(--look) 14%, transparent);
+  border-radius: 18px;
+  background: linear-gradient(
+    165deg,
+    var(--look-soft) 0%,
+    color-mix(in oklab, var(--look-soft) 40%, var(--sx-surface)) 100%
+  );
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--lx-film) 6%, transparent);
 }
 
-.splitSide + .splitSide {
-  border-left: 1px solid color-mix(in oklab, var(--sx-ink) 6%, transparent);
+.splitSide[data-side="cold"] {
+  --look: var(--lx-home-violet);
+  --look-soft: var(--lx-home-violet-soft);
 }
 
 .splitName {
-  color: var(--sx-muted);
-  font-size: var(--sx-text-sm);
-  font-weight: 650;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid color-mix(in oklab, var(--look) 16%, transparent);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 800;
+}
+
+.splitIcon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  place-items: center;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--look) 14%, var(--sx-surface));
+  color: var(--look);
 }
 
 .split dl {
   display: grid;
-  gap: 6px;
-  margin: 0;
+  gap: 8px;
+  margin: 10px 0 12px;
 }
 
 .split dl > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: var(--sx-text-sm);
+  display: grid;
 }
 
 .split dt {
   color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
 }
 
 .split dd {
   margin: 0;
   color: var(--sx-ink);
-  font-weight: 700;
+  font-size: min(var(--sx-text-2xl), 26px);
+  font-weight: 800;
+  line-height: var(--sx-leading-28);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.splitFoot {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  border-top: 1px solid color-mix(in oklab, var(--look) 16%, transparent);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.splitFoot b {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
@@ -429,200 +596,414 @@ a.row:focus-visible {
   }
 }
 
-/* The floor at a glance: the day's ring, tries and connects, every seller's
-   pulse (owner, 31 Oct 2026). */
+/* The floor at a glance (owner's chosen Home, 01_Home.png; faces from
+   17_Hero_Team_Faces; critique 02, 15 Nov 2026). The ring left; Total calls,
+   Connection rate and the team right, each number on its own row under its name;
+   Not connected | Unknown under both. It keeps its loaded height while loading. */
 .hero {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 20px;
-  padding: 18px 20px;
-  border: 1px solid color-mix(in oklab, var(--sx-ink) 7%, transparent);
-  border-radius: 24px;
-  background: color-mix(in oklab, var(--sx-surface) 78%, transparent);
+  grid-template-areas:
+    "ring stats"
+    "foot foot";
+  grid-template-columns: minmax(124px, 42%) minmax(0, 1fr);
+  min-height: 352px;
+  border: 1px solid var(--sx-hairline);
+  border-radius: 20px;
+  background: var(--sx-elevated);
   box-shadow:
-    inset 0 1px 0 color-mix(in oklab, var(--sx-surface) 90%, transparent),
-    0 1px 2px color-mix(in oklab, var(--sx-ink) 5%, transparent),
-    0 18px 36px -22px color-mix(in oklab, var(--sx-ink) 34%, transparent);
+    0 1px 2px color-mix(in oklab, var(--lx-film) 6%, transparent),
+    0 10px 24px -18px color-mix(in oklab, var(--lx-film) 30%, transparent);
   color: var(--sx-ink);
+  overflow: hidden;
+}
+
+.hero a {
+  color: inherit;
   text-decoration: none;
-  backdrop-filter: blur(18px) saturate(1.4);
-  -webkit-backdrop-filter: blur(18px) saturate(1.4);
-  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
   -webkit-tap-highlight-color: transparent;
+  transition: transform 100ms ease-out;
 }
 
-.hero:active {
-  transform: scale(0.99);
+.hero a:active {
+  background: color-mix(in oklab, var(--sx-ink) 5%, transparent);
+  transform: scale(0.98);
 }
 
-.hero:focus-visible {
+.hero a:focus-visible {
   outline: none;
   box-shadow: var(--sx-focus-ring);
 }
 
-.dayRing {
+.ringSide {
   display: grid;
+  grid-area: ring;
   place-items: center;
-  width: 112px;
-  height: 112px;
+  min-width: 0;
+  padding: 14px 6px 10px;
 }
 
-.dayRing > * {
-  grid-area: 1 / 1;
+.ringCell {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.dayRing {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 130px;
+  height: 130px;
 }
 
 .dayRing svg {
-  width: 112px;
-  height: 112px;
+  width: 100%;
+  height: 100%;
   transform: rotate(-90deg);
 }
 
 .ringTrack,
 .ringDone {
   fill: none;
-  stroke-width: 9;
+  stroke-width: 10.5;
 }
 
+/* Home green at 22% on the surface: visible in light and dark alike. */
 .ringTrack {
-  stroke: var(--sx-fill);
+  stroke: color-mix(in oklab, var(--lx-home-emerald) 22%, transparent);
+}
+
+/* No calls yet: a neutral track, never a full circle read as 100%. */
+.dayRing[data-none] .ringTrack {
+  stroke: color-mix(in oklab, var(--sx-ink) 10%, transparent);
 }
 
 .ringDone {
-  stroke: var(--sx-accent);
+  stroke: var(--lx-home-primary);
   stroke-linecap: round;
-  transition: stroke-dashoffset var(--sx-dur-sheet) var(--sx-ease-out);
-  animation: day-ring-in 1100ms var(--sx-ease-out) both;
+  transition: stroke-dashoffset 320ms ease-out;
 }
 
-@keyframes day-ring-in {
-  from {
-    stroke-dashoffset: var(--ring);
-  }
+.dayRing[data-none] .ringDone {
+  stroke: transparent;
 }
 
 .ringText {
-  display: grid;
-  justify-items: center;
-  line-height: 1.05;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 .ringText strong {
-  font-size: var(--sx-text-2xl);
-  font-weight: 750;
-  letter-spacing: -0.02em;
+  font-size: var(--sx-text-3xl);
+  font-weight: 800;
+  line-height: var(--sx-leading-36);
   font-variant-numeric: tabular-nums;
 }
 
 .ringText > span {
+  font-size: var(--sx-text-xs);
+  font-weight: 750;
+  line-height: var(--sx-leading-16);
+}
+
+.ringText small {
+  max-width: 96px;
   color: var(--sx-muted);
   font-size: var(--sx-text-2xs);
-  font-weight: 650;
+  line-height: var(--sx-leading-16);
 }
 
-.heroBody {
-  display: grid;
-  gap: 6px;
+.stats {
+  display: flex;
+  grid-area: stats;
+  flex-direction: column;
   min-width: 0;
+  margin-top: 12px;
+  padding: 0 12px 6px;
+  border-left: 1px solid var(--sx-hairline);
 }
 
-.heroLine {
-  margin: 0;
+/* The name on its line, the number on its own under it (critique 02). */
+.stat {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-content: center;
+  column-gap: 8px;
+  min-height: 66px;
+  border-bottom: 1px solid var(--sx-hairline);
+}
+
+.stat svg,
+.teamHead svg:first-child {
+  width: 20px;
+  height: 20px;
   color: var(--sx-muted);
-  font-size: var(--sx-text-sm);
-  font-weight: 650;
 }
 
-.heroLine strong {
-  color: var(--sx-ink);
-  font-size: var(--sx-text-xl);
-  font-weight: 750;
+.stat > span {
+  overflow: hidden;
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  line-height: var(--sx-leading-16);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stat strong {
+  grid-column: 2;
+  font-size: min(var(--sx-text-2xl), 28px);
+  font-weight: 800;
+  line-height: var(--sx-leading-36);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.heroNote {
-  margin: 0;
+/* The team: its heading and where it leads on one line; who has worked under it;
+   every face in one row that scrolls sideways, fading at the edge. */
+.team {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding-top: 10px;
+  border-radius: 12px;
+}
+
+.teamHead {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  line-height: var(--sx-leading-16);
+}
+
+.workLine {
+  padding-left: 28px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
+  font-weight: 600;
+  line-height: var(--sx-leading-16);
 }
 
-/* While the team's numbers are on the way: their room, unseen. */
-.wait,
-.avatars li[data-wait] {
+.workLine b {
+  color: var(--lx-home-emerald);
+  font-weight: 800;
+}
+
+.workLine b[data-none] {
+  color: var(--sx-muted);
+}
+
+.faces {
+  display: flex;
+  margin: 2px 0 0 -6px;
+  padding: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: 16px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  list-style: none;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    black calc(100% - 24px),
+    transparent
+  );
+  mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
+}
+
+.faces::-webkit-scrollbar {
+  display: none;
+}
+
+/* A 44 px cell; the face 32 px; its ring 1 px clear of it. */
+.faces li {
+  --face: var(--lx-home-emerald);
+
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  scroll-snap-align: start;
+}
+
+.faces li > img,
+.faces li > span:first-child {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  outline: 1px solid var(--sx-line);
+  outline-offset: 1px;
+  object-fit: cover;
+}
+
+.faces li > span:first-child {
+  background: color-mix(in oklab, var(--face) 18%, var(--sx-surface));
+  color: color-mix(in oklab, var(--face) 85%, var(--sx-ink));
+  font-size: var(--sx-text-2xs);
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* Called today: a 2 px green ring and a check badge. */
+.faces li[data-worked] > img,
+.faces li[data-worked] > span:first-child {
+  outline: 2px solid var(--lx-home-emerald);
+}
+
+.check {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  display: grid;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--lx-home-emerald);
+  box-shadow: 0 0 0 2px var(--sx-elevated);
+  color: var(--sx-surface);
+}
+
+.faces li[data-wait] {
   visibility: hidden;
 }
 
-.avatars {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 10px;
-  min-height: 30px;
-  margin-top: 6px;
-  min-width: 0;
+.faces li > span[data-tone="1"] {
+  --face: var(--lx-home-violet);
 }
 
-/* Side by side, 8 px apart, wrapping when the team is long: each face's two
-   rings (4 px) sit clear of the next, so every seller's initials read whole.
-   Overlapped by 6 px, each ring covered its neighbour's second letter at
-   363 px, worse at 130 % (ux-audit N14, 8 Nov 2026). */
-.avatars ul {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0;
-  padding: 4px;
-  list-style: none;
+.faces li > span[data-tone="2"] {
+  --face: var(--lx-home-orange);
 }
 
-.avatars li {
+.faces li > span[data-tone="3"] {
+  --face: var(--lx-home-rose);
+}
+
+.faces li > span[data-tone="4"] {
+  --face: var(--lx-home-primary);
+}
+
+/* Not connected | Unknown: one footer under both columns, each name on its line
+   and its number under it. */
+.foot {
   display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--sx-elevated);
-  box-shadow:
-    0 0 0 2px var(--sx-surface),
-    0 0 0 4px var(--pulse, var(--sx-line));
-  color: var(--sx-ink);
-  font-size: var(--sx-text-2xs);
-  font-weight: 750;
+  grid-area: foot;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0 12px;
+  border-top: 1px solid var(--sx-hairline);
 }
 
-.avatars li[data-pulse="live"] {
-  --pulse: var(--sx-good);
+.foot a {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  align-content: center;
+  align-items: center;
+  column-gap: 8px;
+  min-height: 66px;
+  padding: 6px 8px 6px 4px;
+  border-radius: 10px;
 }
 
-.avatars li[data-pulse="idle"] {
-  --pulse: var(--sx-warn);
+.foot a + a {
+  padding-left: 12px;
+  border-left: 1px solid var(--sx-hairline);
+  border-radius: 0;
 }
 
-.avatars li[data-pulse="recent"] {
-  --pulse: color-mix(in oklab, var(--sx-good) 45%, var(--sx-line));
-}
-
-.avatars > span {
+.foot span {
+  min-width: 0;
+  overflow: hidden;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 650;
+  font-weight: 600;
+  line-height: var(--sx-leading-16);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-@media (min-width: 1024px) {
-  .hero {
-    gap: 28px;
-    padding: 22px 28px;
+.foot b {
+  grid-column: 2;
+  color: var(--sx-ink);
+  font-size: min(var(--sx-text-2xl), 24px);
+  font-weight: 800;
+  line-height: var(--sx-leading-28);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.foot i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* Green means connected only: Not connected is a filled grey dot, Unknown a
+   hollow one. */
+.foot i[data-dot="off"] {
+  background: var(--sx-muted);
+}
+
+.foot i[data-dot="unknown"] {
+  box-shadow: inset 0 0 0 2px var(--sx-muted);
+}
+
+/* A value on its way: a quiet bar after 150 ms, pulsing gently. */
+.wait {
+  display: inline-block;
+  width: 2.2em;
+  height: 0.7em;
+  border-radius: 6px;
+  background: var(--sx-line);
+  vertical-align: middle;
+  animation:
+    wait-show 0s linear 150ms both,
+    wait-pulse 1200ms ease-in-out 150ms infinite alternate;
+}
+
+@keyframes wait-show {
+  from {
+    visibility: hidden;
+  }
+
+  to {
+    visibility: visible;
+  }
+}
+
+@keyframes wait-pulse {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0.65;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ringDone {
+  .ringDone,
+  .hero a {
     transition: none;
-    animation: none;
   }
 
-  .hero {
-    transition: none;
+  .hero a:active {
+    transform: none;
+  }
+
+  .wait {
+    animation: wait-show 0s linear 150ms both;
   }
 }
 
@@ -631,4 +1012,1576 @@ a.row:focus-visible {
   display: grid;
   gap: 24px;
   min-width: 0;
+}
+
+/* Today's heading (owner's chosen Home, 01_Home.png, 14 Nov 2026): the word,
+   a hairline, and when its numbers were read. */
+.todayTitle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1 1 auto;
+  /* owner 15 Nov: Today sat further left than the Team | Me and Inbound pills; line it up with their inner edge */
+  padding-left: 4px;
+  gap: 10px;
+}
+
+.updated {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 10px;
+  border-left: 1px solid var(--sx-hairline);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.todayTitle h2 {
+  font-weight: 800;
+}
+
+/* Each seller today (owner's chosen lower Home, 06 and 10, 14 Nov 2026): what
+   it counts under the title; then one card, one repeated row per seller. */
+.sellersNote {
+  display: grid;
+  gap: 2px;
+  margin: -6px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+}
+
+.sellerList {
+  display: grid;
+  margin: 0;
+  padding: 0 16px;
+  border: 1px solid var(--sx-hairline);
+  border-radius: 20px;
+  background: var(--sx-elevated);
+  box-shadow:
+    0 1px 2px color-mix(in oklab, var(--lx-film) 6%, transparent),
+    0 10px 24px -18px color-mix(in oklab, var(--lx-film) 30%, transparent);
+  list-style: none;
+}
+
+.sellerList > li + li {
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.seller {
+  display: grid;
+  gap: 10px;
+  padding: 14px 0;
+  color: var(--sx-ink);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.seller:active {
+  opacity: 0.8;
+}
+
+.seller:focus-visible {
+  border-radius: 12px;
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.sellerTop {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.sellerFace > img,
+.sellerFace > span {
+  --face: var(--lx-home-emerald);
+
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.sellerFace > span {
+  background: color-mix(in oklab, var(--face) 16%, var(--sx-surface));
+  color: color-mix(in oklab, var(--face) 85%, var(--sx-ink));
+  font-size: var(--sx-text-xs);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.sellerFace > span[data-tone="1"] {
+  --face: var(--lx-home-violet);
+}
+
+.sellerFace > span[data-tone="2"] {
+  --face: var(--lx-home-orange);
+}
+
+.sellerFace > span[data-tone="3"] {
+  --face: var(--lx-home-rose);
+}
+
+.sellerFace > span[data-tone="4"] {
+  --face: var(--lx-home-primary);
+}
+
+.sellerWho {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* The whole name, wrapped, never cut (owner, 15 Nov 2026: "Dipak Vishwakar..."). */
+.sellerWho strong {
+  font-size: var(--sx-text-md);
+  font-weight: 800;
+  line-height: var(--sx-leading-20);
+  overflow-wrap: anywhere;
+}
+
+.sellerWho small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+}
+
+.sellerWho small [data-long] {
+  color: var(--lx-home-orange);
+  font-weight: 700;
+}
+
+.sellerState {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sellerState::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentcolor;
+  content: "";
+}
+
+.sellerState[data-state="recent"] {
+  background: var(--lx-home-violet-soft);
+  color: var(--lx-home-violet);
+}
+
+.sellerState[data-state="none"]::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px currentcolor;
+}
+
+.sellerFigures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sellerFigures > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sellerFigures small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+}
+
+/* A step quieter than the name (owner, 15 Nov 2026: the bold numbers made every
+   row look the same); a zero in grey. */
+.sellerFigures b {
+  font-size: min(var(--sx-text-xl), 20px);
+  font-weight: 700;
+  line-height: var(--sx-leading-28);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sellerFigures b[data-zero] {
+  color: var(--sx-muted);
+  font-weight: 600;
+}
+
+/* A past day (owner, 15 Nov 2026): Back to today beside its name, one tap. */
+.backToday {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-home-emerald-soft);
+  color: var(--lx-home-emerald);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.backToday:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* On a past day the lead queues are still now's, and say so. */
+.nowNote {
+  margin: 0 0 8px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+/* The team's heading on one line, its chevron at the end (owner, 15 Nov 2026). */
+.teamHead > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.teamHead > svg:last-child {
+  color: var(--sx-muted);
+}
+
+/* "Updated" with its sync glyph, which turns once when new numbers land (top
+   bar v2, 15 Nov 2026); still under reduced motion. */
+.updated {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.syncGlyph {
+  flex: none;
+  animation: sync-turn 600ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+@keyframes sync-turn {
+  from {
+    transform: rotate(-180deg);
+  }
+
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .syncGlyph {
+    animation: none;
+  }
+}
+
+/* The team line under the icon's edge, as drawn (02-summary-v2): the whole
+   "9 sellers, 5 worked, 4 not yet" fits; a longer one wraps, never cuts. */
+.workLine {
+  padding-left: 0;
+}
+
+/* The owner's own spec (17_18_Hero_Spec.md, 01_Home.png) over critique 02's faces
+   and footer (design-research's correction, 15 Nov 2026): not yet = his dashed
+   grey ring with the photo at 72%; called = a solid 2 px green ring; his passive
+   scroll line, no edge fade; the footer Connected | Not connected (| Unknown when
+   there is any). */
+.faces {
+  -webkit-mask-image: none;
+  mask-image: none;
+  scroll-timeline: --faces x;
+}
+
+.team {
+  timeline-scope: --faces;
+}
+
+.faces li:not([data-worked], [data-wait]) > img,
+.faces li:not([data-worked], [data-wait]) > span:first-child {
+  outline: 2px dashed var(--sx-muted);
+  opacity: 0.72;
+}
+
+.stripLine {
+  position: relative;
+  height: 2px;
+  margin: 2px 2px 0;
+  overflow: hidden;
+  border-radius: 1px;
+  background: var(--sx-hairline);
+}
+
+.stripLine::after {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--share) * 100%);
+  border-radius: 1px;
+  background: var(--sx-muted);
+  content: "";
+}
+
+@supports (animation-timeline: scroll()) {
+  .stripLine::after {
+    animation: strip-at linear both;
+    animation-timeline: --faces;
+  }
+}
+
+@keyframes strip-at {
+  to {
+    transform: translateX(calc((1 / var(--share) - 1) * 100%));
+  }
+}
+
+.foot {
+  grid-template-columns: none;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+}
+
+.foot i[data-dot="on"] {
+  background: var(--lx-home-primary);
+}
+
+/* owner 15 Nov: on a phone the time alone (the sync icon says updated), so Controls never covers it */
+.updatedWord {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+@media (min-width: 520px) {
+  .updatedWord {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+  }
+}
+
+/* owner 15 Nov: three bands. Top: the ring, and Total calls over Connection rate
+   with their full names. Middle: Team performance end to end. Bottom: Connected |
+   Not connected. */
+.hero {
+  min-height: 0;
+  grid-template-areas:
+    "ring s1"
+    "ring s2"
+    "team team"
+    "foot foot";
+  grid-template-rows: auto auto auto auto;
+}
+.stats {
+  display: contents;
+}
+.stats > .stat {
+  margin: 0;
+  padding: 0 14px;
+  border-left: 1px solid var(--sx-hairline);
+}
+.stats > .stat:first-child {
+  grid-area: s1;
+  padding-top: 12px;
+}
+.stats > .stat:nth-child(2) {
+  grid-area: s2;
+  border-bottom: 0;
+  padding-bottom: 6px;
+}
+.stats > .team {
+  grid-area: team;
+  margin: 0 12px;
+  padding: 12px 4px 10px;
+  border-top: 1px solid var(--sx-hairline);
+  border-radius: 0;
+}
+.ringSide {
+  padding: 12px 6px 8px;
+}
+
+/* owner 15 Nov: Team performance in three chips */
+.workLine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-left: 0;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.chip[data-tone="good"] {
+  background: color-mix(in oklab, var(--lx-home-emerald) 12%, transparent);
+  color: var(--lx-home-emerald);
+}
+.chip[data-tone="good"][data-none] {
+  background: var(--sx-fill);
+  color: var(--sx-muted);
+}
+.chip[data-tone="wait"] {
+  background: color-mix(
+    in oklab,
+    color-mix(in oklab, var(--sx-warn) 85%, black) 12%,
+    transparent
+  );
+  color: color-mix(
+    in oklab,
+    color-mix(in oklab, var(--sx-warn) 70%, black) 85%,
+    var(--sx-ink)
+  );
+}
+.chipWord {
+  font-weight: 600;
+}
+
+/* owner 15 Nov: the share of all calls as a tiny ring, drawn in */
+.shareRing {
+  width: 18px;
+  height: 18px;
+  transform: rotate(-90deg);
+}
+.shareTrack {
+  fill: none;
+  stroke: var(--sx-fill);
+  stroke-width: 3.5;
+}
+.shareArc {
+  fill: none;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 700ms var(--sx-ease-out);
+}
+.shareRing[data-tone="on"] .shareArc {
+  stroke: var(--lx-home-primary);
+}
+.shareRing[data-tone="off"] .shareArc {
+  stroke: var(--sx-muted);
+}
+.foot a {
+  grid-template-columns: 18px minmax(0, 1fr);
+}
+@media (prefers-reduced-motion: reduce) {
+  .shareArc,
+  .stats > .stat svg {
+    transition: none;
+  }
+}
+
+/* owner 15 Nov: the same cell everywhere. Total calls, Connection rate, Connected
+   and Not connected are each centred in their cell: icon and name on one line,
+   the number under them. Symmetric, and the numbers fill the space. */
+.stats > .stat,
+.foot a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 74px;
+  text-align: center;
+}
+.stats > .stat {
+  padding: 8px 10px;
+}
+.foot a {
+  padding: 8px 10px;
+}
+.statName {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.stats > .stat svg {
+  width: 18px;
+  height: 18px;
+}
+.stats > .stat > span,
+.foot a > span {
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  line-height: var(--sx-leading-20);
+  white-space: nowrap;
+  overflow: visible;
+}
+.stats > .stat strong,
+.foot a > b {
+  font-size: var(--sx-text-2xl);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.foot .shareRing {
+  width: 18px;
+  height: 18px;
+}
+
+/* Each seller today, compact (owner, 15 Nov 2026: "too cluttered", "everything
+   is repeated"; the fresh-chat reimagining): a 36 px face, the name and last call
+   beside it, the status at the right; the three figures in small-label columns
+   under the name, about 72 px a seller. Who hasn't started sits at the end,
+   quieter. */
+.seller {
+  gap: 4px;
+  padding: 12px 0;
+}
+
+.sellerTop {
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+}
+
+.sellerFace > img,
+.sellerFace > span {
+  width: 36px;
+  height: 36px;
+}
+
+.sellerWho strong {
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.sellerWho small {
+  font-size: var(--sx-text-2xs);
+}
+
+.sellerState {
+  gap: 5px;
+  padding: 3px 9px;
+  font-size: var(--sx-text-2xs);
+}
+
+.sellerState::before {
+  width: 6px;
+  height: 6px;
+}
+
+.sellerState[data-state="recent"] {
+  background: var(--lx-home-emerald-soft);
+  color: var(--lx-home-emerald);
+}
+
+.sellerState[data-state="idle"] {
+  color: var(--sx-ink-2);
+}
+
+.sellerFigures {
+  gap: 4px;
+  margin-left: 46px;
+}
+
+.sellerFigures small {
+  font-size: var(--sx-text-2xs);
+}
+
+.sellerFigures b {
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+  line-height: var(--sx-leading-20);
+}
+
+.sellerList > li[data-none] .seller {
+  opacity: 0.6;
+}
+
+/* Tighter rhythm, as drawn (fresh-chat reimagining): labels hug their numbers. */
+.seller {
+  gap: 2px;
+  padding: 10px 0;
+}
+
+.sellerWho strong {
+  line-height: min(var(--sx-leading-20), 18px);
+}
+
+.sellerWho small {
+  line-height: var(--sx-leading-16);
+}
+
+.sellerFigures small {
+  line-height: 1;
+}
+
+.sellerFigures > span {
+  gap: 3px;
+}
+
+/* owner 15 Nov: three separate rounded tiles (the ring, Total calls, Connection
+   rate) with a soft tint and a light lift, not a collage; the repeated
+   Connected | Not connected row goes (the ring already says it); the three chips
+   share the full width. */
+.hero {
+  grid-template-areas:
+    "ring s1"
+    "ring s2"
+    "team team";
+  gap: 10px;
+  padding: 10px;
+}
+.foot {
+  display: none;
+}
+.ringSide,
+.stats > .stat {
+  border: 1px solid
+    color-mix(in oklab, var(--lx-home-emerald) 14%, var(--sx-hairline));
+  border-radius: 16px;
+  background:
+    radial-gradient(
+      120% 90% at 0% 0%,
+      color-mix(in oklab, var(--lx-home-emerald) 9%, transparent),
+      transparent 60%
+    ),
+    var(--sx-elevated);
+  box-shadow:
+    0 1px 0 color-mix(in oklab, white 70%, transparent) inset,
+    0 6px 14px -10px color-mix(in oklab, var(--lx-film) 45%, transparent);
+  transition:
+    transform 160ms var(--sx-ease-out),
+    box-shadow 160ms var(--sx-ease-out);
+}
+.ringSide:active,
+.stats > .stat:active {
+  transform: translateY(1px) scale(0.99);
+  box-shadow: 0 2px 6px -4px
+    color-mix(in oklab, var(--lx-film) 45%, transparent);
+}
+.stats > .stat:first-child,
+.stats > .stat:nth-child(2) {
+  margin: 0;
+  padding: 10px;
+  border-left: 1px solid
+    color-mix(in oklab, var(--lx-home-emerald) 14%, var(--sx-hairline));
+  border-bottom: 1px solid
+    color-mix(in oklab, var(--lx-home-emerald) 14%, var(--sx-hairline));
+  min-height: 0;
+}
+.stats > .stat:nth-child(2) {
+  background:
+    radial-gradient(
+      120% 90% at 100% 0%,
+      color-mix(
+        in oklab,
+        color-mix(in oklab, var(--lx-info) 55%, var(--lx-danger)) 9%,
+        transparent
+      ),
+      transparent 60%
+    ),
+    var(--sx-elevated);
+}
+.ringSide {
+  padding: 12px 6px;
+}
+.stats > .team {
+  margin: 0;
+  padding: 10px 6px 4px;
+  border-top: 0;
+}
+.workLine {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.chip {
+  justify-content: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ringSide,
+  .stats > .stat {
+    transition: none;
+  }
+}
+.stats > .team {
+  padding-bottom: 0;
+}
+.hero {
+  padding-bottom: 6px;
+}
+
+/* owner 15 Nov: the tiles are the card. The outer box goes; Team performance is a
+   tile too; an Apple-like finish (soft layered shadows, fine top highlight, gentle
+   tint, rounder corners) and a short staggered rise as Home lands. */
+.hero {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+  gap: 12px;
+}
+.ringSide,
+.stats > .stat,
+.stats > .team {
+  border: 0.5px solid color-mix(in oklab, var(--sx-ink) 9%, transparent);
+  border-radius: 22px;
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    0 1px 1px color-mix(in oklab, var(--lx-film) 5%, transparent),
+    0 4px 10px -2px color-mix(in oklab, var(--lx-film) 7%, transparent),
+    0 16px 32px -18px color-mix(in oklab, var(--lx-film) 22%, transparent);
+  animation: tileRise 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.ringSide {
+  background:
+    radial-gradient(
+      140% 100% at 0% 0%,
+      color-mix(in oklab, var(--lx-home-emerald) 11%, transparent),
+      transparent 55%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, white 60%, var(--sx-elevated)),
+      var(--sx-elevated)
+    );
+}
+.stats > .stat:first-child {
+  border: 0.5px solid color-mix(in oklab, var(--sx-ink) 9%, transparent);
+  background:
+    radial-gradient(
+      140% 110% at 0% 0%,
+      color-mix(in oklab, var(--lx-home-emerald) 13%, transparent),
+      transparent 60%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, white 60%, var(--sx-elevated)),
+      var(--sx-elevated)
+    );
+  animation-delay: 60ms;
+}
+.stats > .stat:nth-child(2) {
+  border: 0.5px solid color-mix(in oklab, var(--sx-ink) 9%, transparent);
+  background:
+    radial-gradient(
+      140% 110% at 100% 0%,
+      color-mix(
+        in oklab,
+        color-mix(in oklab, var(--lx-info) 65%, var(--lx-danger)) 13%,
+        transparent
+      ),
+      transparent 60%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, white 60%, var(--sx-elevated)),
+      var(--sx-elevated)
+    );
+  animation-delay: 120ms;
+}
+.stats > .team {
+  padding: 14px 14px 12px;
+  background:
+    radial-gradient(
+      120% 120% at 100% 0%,
+      color-mix(in oklab, var(--sx-warn) 8%, transparent),
+      transparent 55%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, white 60%, var(--sx-elevated)),
+      var(--sx-elevated)
+    );
+  animation-delay: 180ms;
+}
+@keyframes tileRise {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  .ringSide,
+  .stats > .stat,
+  .stats > .team {
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, white 8%, transparent),
+      0 10px 26px -16px color-mix(in oklab, black 60%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ringSide,
+  .stats > .stat,
+  .stats > .team {
+    animation: none;
+  }
+}
+
+/* owner 15 Nov: tiles and chips are buttons now; they keep the tile look */
+.ringCell,
+.stats > button.stat,
+.chip {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.ringCell {
+  border: 0;
+  background: none;
+  padding: 0;
+}
+.stats > button.stat {
+  width: 100%;
+}
+button.chip {
+  border: 0;
+}
+.chip {
+  transition:
+    transform 140ms var(--sx-ease-out),
+    filter 140ms;
+}
+.chip:active {
+  transform: scale(0.95);
+  filter: brightness(0.97);
+}
+
+/* the explain sheet */
+.explain {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+}
+.explain[data-open] {
+  pointer-events: auto;
+}
+.explainScrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: color-mix(in oklab, var(--lx-film) 38%, transparent);
+  opacity: 0;
+  transition: opacity 260ms ease-out;
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+.explain[data-open] .explainScrim {
+  opacity: 1;
+}
+.explainSheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 78vh;
+  overflow: auto;
+  padding: 10px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  border-radius: 26px 26px 0 0;
+  background: var(--sx-elevated);
+  box-shadow: 0 -18px 40px -20px
+    color-mix(in oklab, var(--lx-film) 40%, transparent);
+  transform: translateY(104%);
+  transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.explain[data-open] .explainSheet {
+  transform: none;
+}
+.explainGrip {
+  display: block;
+  width: 38px;
+  height: 5px;
+  margin: 0 auto 14px;
+  border-radius: 3px;
+  background: var(--sx-line);
+}
+.explainSheet h3 {
+  margin: 0 0 4px;
+  font-size: var(--sx-text-xl);
+  font-weight: 800;
+}
+.explainSheet > p {
+  margin: 0 0 16px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+.explainBar {
+  display: flex;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--sx-fill);
+}
+.explainBar i {
+  display: block;
+  height: 100%;
+  transform-origin: left;
+  animation: barGrow 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.explainBar i + i {
+  animation-delay: 120ms;
+}
+.explainBar i[data-k="on"],
+.explainRows i[data-k="on"] {
+  background: var(--lx-home-primary);
+}
+.explainBar i[data-k="off"],
+.explainRows i[data-k="off"] {
+  background: color-mix(in oklab, var(--sx-ink-2) 45%, transparent);
+}
+.explainBar i[data-k="unknown"],
+.explainRows i[data-k="unknown"] {
+  background: var(--sx-line);
+}
+@keyframes barGrow {
+  from {
+    transform: scaleX(0);
+  }
+}
+.explainRows {
+  display: grid;
+  gap: 2px;
+  margin: 14px 0 6px;
+}
+.explainRows > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  border-bottom: 1px solid var(--sx-hairline);
+}
+.explainRows dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+.explainRows dt i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.explainRows dd {
+  margin: 0;
+  font-size: var(--sx-text-xl);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.explainRows dd small {
+  margin-left: 8px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+.explainPeople {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+.explainPeople li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  border-bottom: 1px solid var(--sx-hairline);
+  animation: personIn 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.explainPeople li > span:nth-child(2) {
+  flex: 1;
+  font-weight: 700;
+}
+.explainPeople small {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(
+    in oklab,
+    color-mix(in oklab, var(--sx-warn) 85%, black) 12%,
+    transparent
+  );
+  color: color-mix(in oklab, var(--sx-warn) 70%, black);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+.explainPeople small[data-worked] {
+  background: color-mix(in oklab, var(--lx-home-emerald) 12%, transparent);
+  color: var(--lx-home-emerald);
+}
+@keyframes personIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.explainSee {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 48px;
+  margin-top: 14px;
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--lx-home-emerald) 12%, transparent);
+  color: var(--lx-home-emerald);
+  font-weight: 800;
+  text-decoration: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .explainSheet,
+  .explainScrim {
+    transition: none;
+  }
+  .explainBar i,
+  .explainPeople li {
+    animation: none;
+  }
+}
+
+.explainPeople li > :first-child {
+  display: grid;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+}
+.explainPeople li > :first-child img,
+.explainPeople li > :first-child svg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* owner 15 Nov: a sheet that springs. In: rises with a little overshoot and settles,
+   the page dims and blurs, rows follow one by one. Out: drops away quickly. Drag down
+   follows the finger; past the line it closes. The page behind never scrolls. */
+.explain {
+  pointer-events: none;
+  overscroll-behavior: contain;
+  touch-action: none;
+}
+.explain[data-phase] {
+  pointer-events: auto;
+}
+.explainScrim {
+  transition: none;
+  opacity: 0;
+  -webkit-backdrop-filter: blur(0);
+  backdrop-filter: blur(0);
+}
+.explainSheet {
+  transition: none;
+  transform: translateY(110%);
+  touch-action: pan-x;
+  overscroll-behavior: contain;
+}
+.explain[data-phase="in"] .explainScrim {
+  animation: scrimIn 360ms ease-out both;
+}
+.explain[data-phase="in"] .explainSheet {
+  animation: sheetIn 620ms cubic-bezier(0.18, 1.25, 0.32, 1) both;
+}
+.explain[data-phase="out"] .explainScrim {
+  animation: scrimOut 240ms ease-in both;
+}
+.explain[data-phase="out"] .explainSheet {
+  animation: sheetOut 260ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+.explainSheet[data-drag] {
+  animation: none !important;
+  transition: none;
+}
+.explain[data-phase="in"] .explainSheet:not([data-drag]) {
+  transition: transform 260ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+@keyframes sheetIn {
+  0% {
+    transform: translateY(110%) scale(0.96);
+  }
+  70% {
+    transform: translateY(-1.5%) scale(1.004);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes sheetOut {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(110%);
+  }
+}
+@keyframes scrimIn {
+  from {
+    opacity: 0;
+    -webkit-backdrop-filter: blur(0);
+    backdrop-filter: blur(0);
+  }
+  to {
+    opacity: 1;
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+  }
+}
+@keyframes scrimOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.explain[data-phase="in"] .explainSheet > * {
+  animation: rowIn 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.explain[data-phase="in"] .explainSheet > *:nth-child(2) {
+  animation-delay: 90ms;
+}
+.explain[data-phase="in"] .explainSheet > *:nth-child(3) {
+  animation-delay: 130ms;
+}
+.explain[data-phase="in"] .explainSheet > *:nth-child(4) {
+  animation-delay: 170ms;
+}
+.explain[data-phase="in"] .explainSheet > *:nth-child(5) {
+  animation-delay: 210ms;
+}
+.explain[data-phase="in"] .explainSheet > *:nth-child(6) {
+  animation-delay: 250ms;
+}
+@keyframes rowIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .explain[data-phase] .explainSheet,
+  .explain[data-phase] .explainScrim,
+  .explain[data-phase="in"] .explainSheet > * {
+    animation-duration: 1ms;
+  }
+}
+
+/* owner 15 Nov: the spring plays once. Settled = no animation at all, so a drag never
+   replays it; the finger moves it 1:1; release glides back or slides away from there. */
+.explain[data-phase="open"] .explainSheet,
+.explain[data-phase="out"] .explainSheet {
+  animation: none;
+  transform: none;
+}
+.explain[data-phase="open"] .explainScrim {
+  animation: none;
+  opacity: 1;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.explain[data-phase="open"] .explainSheet > * {
+  animation: none;
+}
+.explain[data-phase="open"] .explainSheet:not([data-drag]) {
+  transition: transform 320ms cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+.explain[data-phase="out"] .explainSheet {
+  transition: transform 280ms cubic-bezier(0.4, 0, 0.9, 0.6);
+}
+.explain[data-phase="out"] .explainSheet > * {
+  animation: none;
+}
+.explainSheet[data-drag] {
+  transition: none !important;
+}
+
+/* owner 15 Nov: no scroll line under the faces; a soft fade at the edge says there is
+   more, and the row glides and snaps face by face */
+.stripLine {
+  display: none;
+}
+.faces {
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    black 0,
+    black calc(100% - 36px),
+    transparent
+  );
+  mask-image: linear-gradient(
+    90deg,
+    black 0,
+    black calc(100% - 36px),
+    transparent
+  );
+  padding-bottom: 2px;
+}
+.faces li {
+  scroll-snap-align: start;
+}
+
+/* A newly chosen day (motion-research-2.md section 3): the last numbers stay at
+   half strength until the day's own land, then fade up; headings stay sharp. */
+.today > :not(.head),
+.sellers > :not(.head),
+.splitBlock > :not(.head) {
+  transition: opacity 150ms ease-out;
+}
+
+.floor[data-stale] .today > :not(.head),
+.floor[data-stale] .sellers > :not(.head),
+.floor[data-stale] .splitBlock > :not(.head) {
+  opacity: 0.5;
+}
+
+/* The lead queues are live on any day: a live dot says so. */
+.nowNote {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nowNote > i {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--lx-home-emerald);
+  box-shadow: 0 0 0 3px var(--lx-home-emerald-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .today > :not(.head),
+  .sellers > :not(.head),
+  .splitBlock > :not(.head) {
+    transition: none;
+  }
+}
+
+/* owner 15 Nov: frosted glass on the summary tiles, like the Inbound | Cold edge */
+.ringSide,
+.stats > .stat:first-child,
+.stats > .stat:nth-child(2),
+.stats > .team {
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  backdrop-filter: blur(18px) saturate(1.5);
+  border: 1px solid color-mix(in oklab, white 70%, transparent);
+  outline: 0.5px solid color-mix(in oklab, var(--sx-ink) 8%, transparent);
+  outline-offset: -0.5px;
+}
+.ringSide {
+  background-color: color-mix(in oklab, white 62%, transparent);
+}
+
+/* A past day's name on one line; "Back to today" goes under it when the two
+   don't fit beside Controls (Note 8, 15 Nov 2026). */
+.todayTitle h2 {
+  white-space: nowrap;
+}
+
+.todayTitle:has(.backToday) {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+/* Each seller today as one aligned table (design-research piece 03, 15 Nov 2026):
+   one header row, then 76 px rows with numbers only, in right-aligned columns
+   (seller | 44 | 61 | 73 at a 393 px phone). */
+.sellerTable {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--sx-hairline);
+  border-radius: 20px;
+  background: var(--sx-elevated);
+  box-shadow:
+    0 1px 2px color-mix(in oklab, var(--lx-film) 6%, transparent),
+    0 10px 24px -18px color-mix(in oklab, var(--lx-film) 30%, transparent);
+}
+
+.sellerHead,
+.sellerRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px 64px 64px;
+  align-items: center;
+  column-gap: 8px;
+  padding: 0 12px;
+}
+
+.sellerHead {
+  min-height: 32px;
+  border-bottom: 1px solid var(--sx-hairline);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-2xs);
+  font-weight: 600;
+}
+
+.sellerHead > span:not(:first-child) {
+  text-align: right;
+}
+
+.sellerRows,
+.idleMore ul {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sellerRows > li + li,
+.idleMore li + li {
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.sellerRow {
+  min-height: 76px;
+  color: var(--sx-ink);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 100ms ease-out;
+}
+
+.sellerRow:active {
+  background: color-mix(in oklab, var(--sx-ink) 6%, transparent);
+}
+
+.sellerRow:focus-visible {
+  outline: none;
+  box-shadow: inset var(--sx-focus-ring);
+}
+
+.rowWho {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rowFace {
+  display: grid;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border-radius: 50%;
+}
+
+.rowFace > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.rowName {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rowName strong,
+.rowName small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowName strong {
+  font-size: min(var(--sx-text-sm), 14px);
+  font-weight: 600;
+  line-height: var(--sx-leading-20);
+}
+
+.rowName small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-2xs);
+  font-weight: 500;
+}
+
+/* A true, worth-it line only: an unplanned break of an hour or more. */
+.rowName small[data-warn] {
+  color: var(--lx-home-orange);
+}
+
+.rowName small[data-warn]::before {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+.sellerRow > b {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--sx-leading-20);
+  text-align: right;
+}
+
+.sellerRow > b[data-zero] {
+  color: var(--sx-muted);
+}
+
+/* The sellers with no calls on this side: one row, their faces overlapping; a
+   tap opens their rows. */
+.idleGroup {
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.idleRow {
+  display: flex;
+  width: 100%;
+  min-height: 56px;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.idleRow:focus-visible {
+  outline: none;
+  box-shadow: inset var(--sx-focus-ring);
+}
+
+.idleFaces {
+  display: flex;
+  flex: none;
+}
+
+.idleFaces > span {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  overflow: hidden;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--sx-elevated);
+}
+
+.idleFaces > span + span {
+  margin-left: -8px;
+}
+
+.idleFaces img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.idleWords {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.idleRow > svg {
+  flex: none;
+  color: var(--sx-muted);
+  transition: transform 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.idleGroup[data-open] .idleRow > svg {
+  transform: rotate(180deg);
+}
+
+.idleMore {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.idleMore > ul {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.idleGroup[data-open] .idleMore {
+  grid-template-rows: 1fr;
+}
+
+.idleGroup[data-open] .idleMore > ul {
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.viewAll {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-top: 1px solid var(--sx-hairline);
+  color: var(--lx-home-emerald);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.viewAll:focus-visible {
+  outline: none;
+  box-shadow: inset var(--sx-focus-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .idleMore,
+  .idleRow > svg,
+  .sellerRow {
+    transition: none;
+  }
+}
+
+/* the explain sheet now rides the shared kit Sheet: its rows still fan in */
+.explainKit .explainPeople li,
+.explainKit .explainRows > div {
+  animation: personIn 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* A long name takes two lines, never an ellipsis (design-research check of 03). */
+.rowName strong {
+  display: -webkit-box;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }

@@ -1,0 +1,15 @@
+# Every 12 minutes, with up to 2.5 minutes of jitter, from 09:30 to about 20:20 India time
+# (04:00-14:48 UTC): the working day (09:30-19:30) plus the feed's 20-minute lag.
+# Overnight enquiries are played, at their real times, by the first tick of the morning.
+[Unit]
+Description=Dev AC Sales Sandbox live feed, working hours (dev only)
+
+[Timer]
+OnCalendar=*-*-* 04..14:00/12:00 UTC
+RandomizedDelaySec=150
+AccuracySec=30s
+Persistent=false
+Unit=ac-dev-sandbox-feed.service
+
+[Install]
+WantedBy=timers.target

@@ -205,3 +205,82 @@ def test_plans_decide_what_apps_may_do(postgres_harness: Any, tmp_path: Path) ->
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_with_writes_on_connect_offers_the_plans_lead_writes(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """API gap 1 (15 Nov 2026): Claude asks for the scopes MCP's challenge names, or none.
+    While writes are off that is reading, as before; once the owner turns advertise_writes
+    on, the challenge names the lead writes too, Connect grants the ones the plan includes
+    (the connector can add a lead) and shows the rest quietly, never granted."""
+
+    async def exercise() -> None:
+        tiers.forget_platform()
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            _install(setup, setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()}))
+            tenant = str(setup.state.tenant_id)
+            reading = {"calls:read", "leads:read", "reports:read"}
+            writes = {"leads:notes", "leads:tasks", "leads:write"}
+            ping = {"jsonrpc": "2.0", "id": 1, "method": "ping"}
+            transport = httpx.ASGITransport(app=setup.app)
+            async with (
+                httpx.AsyncClient(transport=transport, base_url=ORIGIN) as person,
+                httpx.AsyncClient(transport=transport, base_url=ORIGIN) as server,
+            ):
+                person.cookies.set(setup.settings.session_cookie_name, setup.token)
+                app = (
+                    await server.post(
+                        "/v1/oauth/register",
+                        json={"client_name": "Assistant", "redirect_uris": [APP_RETURN]},
+                    )
+                ).json()
+
+                # Writes off: reading only, as before.
+                await _table(setup, overrides={tenant: "organisation"})
+                bare = await server.post("/v1/mcp", json=ping)
+                assert bare.status_code == 401
+                assert (
+                    'scope="calls:read reports:read leads:read"'
+                    in (bare.headers["www-authenticate"])
+                )
+                seen, tokens, _ = await _connect(person, server, app, APP_RETURN, None)
+                assert set(tokens["scope"].split()) == reading
+                assert seen["not_included"] == []
+
+                # Writes on: the challenge names the lead writes and Connect grants them.
+                await _table(setup, overrides={tenant: "organisation"}, advertise_writes=True)
+                bare = await server.post("/v1/mcp", json=ping)
+                assert bare.status_code == 401
+                assert (
+                    'scope="calls:read reports:read leads:read leads:write leads:notes leads:tasks"'
+                ) in bare.headers["www-authenticate"]
+                seen, tokens, _ = await _connect(person, server, app, APP_RETURN, None)
+                assert set(tokens["scope"].split()) == reading | writes
+                assert seen["not_included"] == []
+                bearer = {"Authorization": f"Bearer {tokens['access_token']}"}
+                listed = (await server.post("/v1/mcp", headers=bearer, json=LIST)).json()
+                names = {tool["name"] for tool in listed["result"]["tools"]}
+                assert {"add_lead", "import_leads", "add_note", "add_task"} <= names
+                added = (
+                    await server.post(
+                        "/v1/mcp",
+                        headers=bearer,
+                        json=_call("add_lead", {"name": "Asha Fictional"}),
+                    )
+                ).json()
+                assert added["result"]["isError"] is False, added
+
+                # On the trial the writes are shown quietly, never granted.
+                await _table(setup, overrides={tenant: "trial"}, advertise_writes=True)
+                seen, tokens, _ = await _connect(person, server, app, APP_RETURN, None)
+                assert set(tokens["scope"].split()) == reading
+                assert {row["key"] for row in seen["not_included"]} == writes
+                assert all(row["comes_with"] == "Organisation" for row in seen["not_included"])
+        finally:
+            tiers.forget_platform()
+            await setup.engine.dispose()
+
+    run(exercise())

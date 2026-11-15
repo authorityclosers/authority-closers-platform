@@ -1,0 +1,1124 @@
+{
+  "source": "Ask_Dipak_Premium_Clickable_Sample.html (Dipak's folder, 13 Nov 2026), const DB and the sample's constants, copied word for word; coaching notes kept apart in coach-notes.json.",
+  "sourceSha256": "e920ec405afdccdef53059de644368776d47501bbaf85b41fa18ad3d6f09bbad",
+  "categories": [
+    {
+      "id": "01",
+      "name": "Sales Mindset & Psychology",
+      "description": "Confidence, rejection and professional judgement",
+      "doc": "https://docs.google.com/document/d/1_aZ4cqEIXHsW6RG8vDC8eZ85_xtIPrs9Ywqjxxg-qiY/edit",
+      "questions": [
+        {
+          "id": "CF01",
+          "title": "How do I become more confident in sales?"
+        },
+        {
+          "id": "CF02",
+          "title": "Why do I take rejection personally?"
+        },
+        {
+          "id": "CF03",
+          "title": "How do I stay motivated when I'm not closing deals?"
+        },
+        {
+          "id": "CF04",
+          "title": "How do I stop overthinking every sales call?"
+        },
+        {
+          "id": "CF05",
+          "title": "How can I stop comparing myself with better salespeople?"
+        },
+        {
+          "id": "PR01",
+          "title": "What makes a salesperson genuinely professional?"
+        },
+        {
+          "id": "PR02",
+          "title": "What should I do if I don't know an answer?"
+        },
+        {
+          "id": "PR03",
+          "title": "How do I respectfully disagree with a customer?"
+        },
+        {
+          "id": "PR04",
+          "title": "What if I make a mistake during the call?"
+        },
+        {
+          "id": "PR05",
+          "title": "Can I be friendly and still maintain authority?"
+        },
+        {
+          "id": "NEW-001",
+          "title": "How do I stay composed when a customer questions my credibility?"
+        },
+        {
+          "id": "NEW-002",
+          "title": "How do I stop my desire to close affecting my judgement?"
+        },
+        {
+          "id": "NEW-003",
+          "title": "How do I separate what I observed from what I assumed?"
+        },
+        {
+          "id": "NEW-004",
+          "title": "What if I accidentally overpromise during a sales call?"
+        }
+      ]
+    },
+    {
+      "id": "02",
+      "name": "Rapport Building & Trust",
+      "description": "Human connection without forced small talk",
+      "doc": "https://docs.google.com/document/d/19Uh52X7oRH8VL1aOKYNAnE8zvPyfc1GqaX4nycwejZQ/edit",
+      "questions": [
+        {
+          "id": "RP01",
+          "title": "What is rapport, really?"
+        },
+        {
+          "id": "RP02",
+          "title": "How do I build trust with someone I've just met?"
+        },
+        {
+          "id": "RP03",
+          "title": "Why do some customers open up to me while others don't?"
+        },
+        {
+          "id": "RP04",
+          "title": "Should I agree with the customer to build rapport?"
+        },
+        {
+          "id": "RP05",
+          "title": "How can I tell whether the customer feels comfortable with me?"
+        },
+        {
+          "id": "NEW-005",
+          "title": "How do I build trust after a bad experience?"
+        },
+        {
+          "id": "NEW-006",
+          "title": "What if the customer doesn't like small talk?"
+        },
+        {
+          "id": "NEW-007",
+          "title": "How do I rebuild trust after misunderstanding?"
+        },
+        {
+          "id": "NEW-008",
+          "title": "What if the customer is friendly but shares little?"
+        },
+        {
+          "id": "NEW-009",
+          "title": "How do I create trust over WhatsApp or phone?"
+        }
+      ]
+    },
+    {
+      "id": "03",
+      "name": "Communication & Listening",
+      "description": "Speak clearly, listen carefully and ask better questions",
+      "doc": "https://docs.google.com/document/d/19r_Cn8Jh7I1-KhCcT7x6xihjYnq2i1gKDGqHFQ7F_5M/edit",
+      "questions": [
+        {
+          "id": "TP01",
+          "title": "Why does how I speak matter as much as what I say?"
+        },
+        {
+          "id": "TP02",
+          "title": "How do I know whether I'm speaking too fast?"
+        },
+        {
+          "id": "TP03",
+          "title": "When should I pause during a sales call?"
+        },
+        {
+          "id": "TP04",
+          "title": "What should I do when the customer suddenly becomes silent?"
+        },
+        {
+          "id": "TP05",
+          "title": "How can I sound confident without sounding aggressive?"
+        },
+        {
+          "id": "LI01",
+          "title": "What does good listening actually mean in sales?"
+        },
+        {
+          "id": "LI02",
+          "title": "How do I know whether I am a good listener?"
+        },
+        {
+          "id": "LI03",
+          "title": "Why do I sometimes miss important things customers say?"
+        },
+        {
+          "id": "LI04",
+          "title": "Is interrupting the customer always wrong?"
+        },
+        {
+          "id": "LI05",
+          "title": "How do I remember important information while listening?"
+        },
+        {
+          "id": "AQ01",
+          "title": "What makes a sales question powerful?"
+        },
+        {
+          "id": "AQ02",
+          "title": "Why do customers sometimes dislike too many questions?"
+        },
+        {
+          "id": "AQ03",
+          "title": "How do I ask deeper questions naturally?"
+        },
+        {
+          "id": "AQ04",
+          "title": "What if the customer gives one-word answers?"
+        },
+        {
+          "id": "AQ05",
+          "title": "How do I ask uncomfortable questions without offending someone?"
+        },
+        {
+          "id": "NEW-010",
+          "title": "How do I know when discovery feels like interrogation?"
+        },
+        {
+          "id": "NEW-011",
+          "title": "How do I summarize without changing meaning?"
+        },
+        {
+          "id": "NEW-012",
+          "title": "How should I adjust Hindi, English and Hinglish?"
+        }
+      ]
+    },
+    {
+      "id": "04",
+      "name": "Problem & Desire Discovery",
+      "description": "Diagnose the real problem before proposing a solution",
+      "doc": "https://docs.google.com/document/d/1FIb08PDcXmG1KMhYpM0ngWY75YO8sBUvbVz4Bu6qiYI/edit",
+      "questions": [
+        {
+          "id": "PG01",
+          "title": "How do I find the customer's real problem?"
+        },
+        {
+          "id": "PG02",
+          "title": "What's the difference between a surface problem and a root cause?"
+        },
+        {
+          "id": "PG03",
+          "title": "How do I understand what the customer truly wants?"
+        },
+        {
+          "id": "PG04",
+          "title": "Why should I ask what the customer has already tried?"
+        },
+        {
+          "id": "PG05",
+          "title": "How do I know when I've understood enough to present a solution?"
+        },
+        {
+          "id": "CS01",
+          "title": "Why should I understand what the customer is doing right now?"
+        },
+        {
+          "id": "CS02",
+          "title": "How do I understand someone's business without knowing their industry?"
+        },
+        {
+          "id": "CS03",
+          "title": "Which questions help me understand their existing process?"
+        },
+        {
+          "id": "CS04",
+          "title": "What if the customer doesn't know their own numbers?"
+        },
+        {
+          "id": "CS05",
+          "title": "How can I identify gaps in what they're currently doing?"
+        },
+        {
+          "id": "NEW-013",
+          "title": "What if they want leads but conversion is the issue?"
+        },
+        {
+          "id": "NEW-014",
+          "title": "What if different people describe the problem differently?"
+        },
+        {
+          "id": "NEW-015",
+          "title": "How do I understand workflow without making it an audit?"
+        },
+        {
+          "id": "NEW-016",
+          "title": "What if the customer gives contradictory answers?"
+        }
+      ]
+    },
+    {
+      "id": "05",
+      "name": "Value Creation & Quantification",
+      "description": "Understand real impact without invented numbers",
+      "doc": "https://docs.google.com/document/d/1iTmlIoYxEw-1fJ6VgB2IaVvdhg-OkFD2-sbJFMBeUZU/edit",
+      "questions": [
+        {
+          "id": "IM01",
+          "title": "Why is understanding the problem alone not enough?"
+        },
+        {
+          "id": "IM02",
+          "title": "How do I help customers see what a problem is costing them?"
+        },
+        {
+          "id": "IM03",
+          "title": "How do I ask about money without discomfort?"
+        },
+        {
+          "id": "IM04",
+          "title": "How do I explore emotional impact without manipulation?"
+        },
+        {
+          "id": "IM05",
+          "title": "How do I explain the cost of doing nothing?"
+        },
+        {
+          "id": "NEW-017",
+          "title": "How do I quantify a problem without reliable numbers?"
+        },
+        {
+          "id": "NEW-018",
+          "title": "How do I separate confirmed, estimated and unknown impact?"
+        },
+        {
+          "id": "NEW-019",
+          "title": "How do I discuss waiting without fake urgency?"
+        },
+        {
+          "id": "NEW-020",
+          "title": "How do I explain financial value without guaranteed ROI?"
+        },
+        {
+          "id": "NEW-021",
+          "title": "What if a real problem is not a priority now?"
+        }
+      ]
+    },
+    {
+      "id": "06",
+      "name": "Qualification & Decision Process",
+      "description": "Understand readiness, roles and genuine agreement",
+      "doc": "https://docs.google.com/document/d/1n4stiXU-5ngwO-nDDhh8lj_0VKTC7x3NCCdCo66LhCQ/edit",
+      "questions": [
+        {
+          "id": "AG01",
+          "title": "Why should I tell the customer how the call will go?"
+        },
+        {
+          "id": "AG02",
+          "title": "How do I set an agenda without sounding formal?"
+        },
+        {
+          "id": "AG03",
+          "title": "What if they want the price immediately?"
+        },
+        {
+          "id": "AG04",
+          "title": "Should I ask permission before asking questions?"
+        },
+        {
+          "id": "AG05",
+          "title": "How do I bring a conversation back on track?"
+        },
+        {
+          "id": "DM01",
+          "title": "How do I identify who makes the buying decision?"
+        },
+        {
+          "id": "DM02",
+          "title": "What if they need to ask their wife, husband or partner?"
+        },
+        {
+          "id": "DM03",
+          "title": "When should I involve another decision-maker?"
+        },
+        {
+          "id": "DM04",
+          "title": "How do I ask about buying authority naturally?"
+        },
+        {
+          "id": "DM05",
+          "title": "What if the person can't make the final decision?"
+        },
+        {
+          "id": "DP01",
+          "title": "How do customers actually make buying decisions?"
+        },
+        {
+          "id": "DP02",
+          "title": "What's the difference between interest and readiness?"
+        },
+        {
+          "id": "DP03",
+          "title": "How do I know if a buyer is serious?"
+        },
+        {
+          "id": "DP04",
+          "title": "What if the buyer wants it but isn't ready?"
+        },
+        {
+          "id": "DP05",
+          "title": "How do I know whether a lead is worth pursuing?"
+        },
+        {
+          "id": "NEW-022",
+          "title": "How do I distinguish different decision roles?"
+        },
+        {
+          "id": "NEW-023",
+          "title": "Might pay vs agreed to pay vs paid?"
+        },
+        {
+          "id": "NEW-024",
+          "title": "What if they like it but lack authority or budget?"
+        }
+      ]
+    },
+    {
+      "id": "07",
+      "name": "Solution Presentation & Influence",
+      "description": "Show the right value at the right time",
+      "doc": "https://docs.google.com/document/d/1TLqYBRXORqSMYnhDdr6CRrYy2XSmtAni4uYiL5rTStk/edit",
+      "questions": [
+        {
+          "id": "MS01",
+          "title": "How do I know which solution is right?"
+        },
+        {
+          "id": "MS02",
+          "title": "Why is pitching too early a bad idea?"
+        },
+        {
+          "id": "MS03",
+          "title": "What if the customer wants an unsuitable product?"
+        },
+        {
+          "id": "MS04",
+          "title": "How do I connect my solution to the actual problem?"
+        },
+        {
+          "id": "MS05",
+          "title": "When should I say my product isn't right for them?"
+        },
+        {
+          "id": "EX01",
+          "title": "How do I explain a product without presenting?"
+        },
+        {
+          "id": "EX02",
+          "title": "Features, benefits and outcomes: what is the difference?"
+        },
+        {
+          "id": "EX03",
+          "title": "How do I make the customer see value?"
+        },
+        {
+          "id": "EX04",
+          "title": "Should I explain every feature?"
+        },
+        {
+          "id": "EX05",
+          "title": "How do I check the customer understands?"
+        },
+        {
+          "id": "NEW-025",
+          "title": "What if they want a demo before discovery?"
+        },
+        {
+          "id": "NEW-026",
+          "title": "How do I explain limitations without damaging trust?"
+        },
+        {
+          "id": "NEW-027",
+          "title": "What if solving one problem creates another?"
+        },
+        {
+          "id": "NEW-028",
+          "title": "How do I use case studies without false promises?"
+        }
+      ]
+    },
+    {
+      "id": "08",
+      "name": "Objection Handling & Negotiation",
+      "description": "Understand concerns before answering them",
+      "doc": "https://docs.google.com/document/d/1bvLfCyc8B3o56EiYJq0Fk4Qj81b-Iw8evpN5VX5CJJw/edit",
+      "questions": [
+        {
+          "id": "PB01",
+          "title": "Why do I feel uncomfortable saying the price?"
+        },
+        {
+          "id": "PB02",
+          "title": "How should I tell the customer the price?"
+        },
+        {
+          "id": "PB03",
+          "title": "What should I do when someone says it's too expensive?"
+        },
+        {
+          "id": "PB04",
+          "title": "Is it really a budget problem?"
+        },
+        {
+          "id": "PB05",
+          "title": "When should I offer a discount?"
+        },
+        {
+          "id": "OB01",
+          "title": "What is an objection and why does it happen?"
+        },
+        {
+          "id": "OB02",
+          "title": "How do I find the real reason behind an objection?"
+        },
+        {
+          "id": "OB03",
+          "title": "What if they say 'I'll think about it'?"
+        },
+        {
+          "id": "OB04",
+          "title": "What if they tried a similar solution and failed?"
+        },
+        {
+          "id": "OB05",
+          "title": "How do I handle objections without sounding pushy?"
+        },
+        {
+          "id": "NEW-029",
+          "title": "When should I stop handling an objection and accept 'no'?"
+        },
+        {
+          "id": "NEW-030",
+          "title": "What if the same objection means different things?"
+        },
+        {
+          "id": "NEW-031",
+          "title": "What if they say 'I don't have time'?"
+        },
+        {
+          "id": "NEW-032",
+          "title": "How do I understand what failed last time?"
+        },
+        {
+          "id": "NEW-033",
+          "title": "How do I negotiate approved payment terms?"
+        }
+      ]
+    },
+    {
+      "id": "09",
+      "name": "Closing & Follow-Up",
+      "description": "Convert clarity into honest decisions and next steps",
+      "doc": "https://docs.google.com/document/d/1QOvycq5oqLr16T1kR5Xs-AknvLSQUs0EwhO0g9r9lH8/edit",
+      "questions": [
+        {
+          "id": "CL01",
+          "title": "When is the right time to close?"
+        },
+        {
+          "id": "CL02",
+          "title": "How do I ask a customer to buy?"
+        },
+        {
+          "id": "CL03",
+          "title": "Why am I nervous asking for payment?"
+        },
+        {
+          "id": "CL04",
+          "title": "What if they are interested but do not decide?"
+        },
+        {
+          "id": "CL05",
+          "title": "How do I recognize buying signals without assuming?"
+        },
+        {
+          "id": "NX01",
+          "title": "What should happen at the end of a sales call?"
+        },
+        {
+          "id": "NX02",
+          "title": "How do I secure a meaningful next step?"
+        },
+        {
+          "id": "NX03",
+          "title": "What if they promise to pay next week?"
+        },
+        {
+          "id": "NX04",
+          "title": "How do I avoid saying 'I'll follow up later'?"
+        },
+        {
+          "id": "NX05",
+          "title": "When should I stop pursuing a prospect?"
+        },
+        {
+          "id": "FU01",
+          "title": "Why do customers stop replying after a good call?"
+        },
+        {
+          "id": "FU02",
+          "title": "What should I send instead of 'Any update'?"
+        },
+        {
+          "id": "FU03",
+          "title": "How often should I follow up?"
+        },
+        {
+          "id": "FU04",
+          "title": "How do I restart a conversation with an old lead?"
+        },
+        {
+          "id": "FU05",
+          "title": "What if my WhatsApp message is read but unanswered?"
+        },
+        {
+          "id": "NEW-034",
+          "title": "How do I tell tentative promises from agreed next steps?"
+        }
+      ]
+    },
+    {
+      "id": "10",
+      "name": "Sales Growth & Performance",
+      "description": "Build your skills one relevant call at a time",
+      "doc": "https://docs.google.com/document/d/12dCZxFVnddWMbGPv9CHcsXIIR-O9pEiA452cLd6Zukc/edit",
+      "questions": [
+        {
+          "id": "SC01",
+          "title": "How do I start a sales call naturally?"
+        },
+        {
+          "id": "SC02",
+          "title": "How can I make someone interested in talking to me?"
+        },
+        {
+          "id": "SC03",
+          "title": "What if they sound busy or irritated?"
+        },
+        {
+          "id": "SC04",
+          "title": "Should I introduce myself and my company in detail?"
+        },
+        {
+          "id": "SC05",
+          "title": "Why do some lose interest in the first 30 seconds?"
+        },
+        {
+          "id": "LE01",
+          "title": "How do I start cold lead conversations?"
+        },
+        {
+          "id": "LE02",
+          "title": "How do I know whether a lead is good or bad?"
+        },
+        {
+          "id": "LE03",
+          "title": "What if my leads are not interested?"
+        },
+        {
+          "id": "LE04",
+          "title": "How much research should I do before a sales call?"
+        },
+        {
+          "id": "LE05",
+          "title": "How do I deal with prospecting rejection?"
+        },
+        {
+          "id": "CO01",
+          "title": "Many calls but few deals—why?"
+        },
+        {
+          "id": "CO02",
+          "title": "How do I identify my biggest weakness?"
+        },
+        {
+          "id": "CO03",
+          "title": "How should I practise sales skills daily?"
+        },
+        {
+          "id": "CO04",
+          "title": "What should I do after losing a deal?"
+        },
+        {
+          "id": "CO05",
+          "title": "How can I tell if I am improving?"
+        },
+        {
+          "id": "CR01",
+          "title": "What separates an average seller from a great closer?"
+        },
+        {
+          "id": "CR02",
+          "title": "Which sales skill should I improve first?"
+        },
+        {
+          "id": "CR03",
+          "title": "Can becoming a better closer help me earn more?"
+        },
+        {
+          "id": "CR04",
+          "title": "How do I become ready for high-ticket sales?"
+        },
+        {
+          "id": "CR05",
+          "title": "What does it take to become a sales leader?"
+        },
+        {
+          "id": "NEW-035",
+          "title": "How do I use Sales X-Ray coaching for my next five calls?"
+        }
+      ]
+    }
+  ],
+  "lessons": {
+    "CF01": {
+      "quick": "Confidence का मतलब हर question का तुरंत answer देना या sales की guarantee करना नहीं। Difficult moment में भी सच बोलकर next correct step लेना है।",
+      "scenario": "Buyer पूछता है: ‘Training से sales double होंगी—guarantee है?’ आपने उसकी team की current situation नहीं देखी।",
+      "options": [
+        [
+          "“हाँ Sir, definitely double होंगी।”",
+          "बिना proof के guarantee दी। Customer का actual result कई factors पर depend करता है।",
+          "Result जिसे control नहीं कर सकते, उसे guarantee न करें।"
+        ],
+        [
+          "“पहले आपकी current process समझेंगे। फिर बताऊँगा training कहाँ मदद कर सकती है।”",
+          "यह clear और responsible जवाब है। आपने uncertainty छिपाई नहीं और practical next step दिया।",
+          "Calm honesty भी confidence है।"
+        ],
+        [
+          "“हमारे program में 20 modules हैं।”",
+          "Feature बताया, लेकिन buyer ने result की guarantee पूछी थी।",
+          "पहले actual concern का जवाब दें।"
+        ]
+      ],
+      "deep": [
+        "‘Sir, बस guarantee दे दीजिए।’ Customer की यह line सुनकर immediate हाँ बोलने का pressure आ सकता है।",
+        "Imagine कीजिए driving-school instructor कहे, ‘दस classes के बाद हर traffic situation में perfect driving guaranteed।’ क्या यह responsible promise है?",
+        "Training practice और feedback दे सकती है, लेकिन future sales में leads, team attendance और real implementation भी matter करेंगे।",
+        "अगली call में difficult question आए तो पहले उसका concern समझिए; verified answer दें या honestly check करके बताने का commitment लें।"
+      ],
+      "cue": "Confidence result की guarantee नहीं, अगला सही कदम लेने की clarity है।",
+      "mission": "अगली पाँच relevant calls में tough question पर एक honest clarification या verified answer practice करें।",
+      "next": ["CF04", "CF02", "PR02"]
+    },
+    "RP01": {
+      "quick": "Rapport का मतलब random small talk नहीं। Customer की important बात सुनना और उसी से meaningful question पूछना ही connection की शुरुआत हो सकती है।",
+      "scenario": "Business owner: ‘Leads आईं, लेकिन follow-up system नहीं था।’ आप क्या कहेंगे?",
+      "options": [
+        [
+          "“पहले बताइए weekend कैसा गया?”",
+          "Owner ने actual problem बताई है। इस moment unrelated personal talk useful नहीं।",
+          "Customer की कही important बात पकड़िए।"
+        ],
+        [
+          "“Leads team तक नहीं पहुँचीं या पहुँचकर calls late हुईं?”",
+          "इससे original problem clearer हो सकती है।",
+          "सुनकर उसी point से next question बनाइए।"
+        ],
+        [
+          "“हमारी service में ऐसा कभी नहीं होगा।”",
+          "बिना diagnosis की guarantee buyer को गलत expectation दे सकती है।",
+          "सच में क्या deliver कर सकते हैं, वही बोलिए।"
+        ]
+      ],
+      "deep": [
+        "आप broadband shop में कहते हैं, ‘ऊपर वाले room में Wi-Fi नहीं आता।’ Seller तुरंत 300 Mbps plan बेचने लगता है।",
+        "दूसरा seller पूछता है, ‘Router के पास internet ठीक है? Problem सिर्फ ऊपर वाले room में है?’",
+        "उसने अभी कुछ बेचा नहीं। लेकिन buyer को अपनी real problem समझाने का मौका दिया। यही rapport का practical हिस्सा है।",
+        "Customer ने जो meaningful बात कही है, उसे seriously लें। Next scripted line से पहले उसी से related सवाल पूछें।"
+      ],
+      "cue": "Rapport बनाने के चक्कर में customer की असली बात मत छोड़िए।",
+      "mission": "अगली तीन relevant calls में buyer की एक important line से next follow-up question बनाएं।",
+      "next": ["RP02", "RP03", "RP04"]
+    },
+    "TP03": {
+      "quick": "Pause कोई dramatic trick नहीं। Important question, price या नई बात के बाद buyer को सोचने और बोलने की natural जगह दें।",
+      "scenario": "Buyer आपके impact question के बाद कुछ seconds सोच रहा है।",
+      "options": [
+        [
+          "तुरंत budget और team size पूछना शुरू करें।",
+          "पहला सवाल अभी खुला है। आप buyer का answer miss कर सकते हैं।",
+          "पहले question का answer आने दें।"
+        ],
+        [
+          "Natural pause लेकर buyer का जवाब सुनें।",
+          "Buyer को thinking time मिला। जरूरत पड़े तो gently clarify कर सकते हैं।",
+          "Pause सुनने का हिस्सा है।"
+        ],
+        [
+          "20 seconds चुप रहकर उसे pressure दें।",
+          "Deliberate awkward silence buyer को manipulate कर सकती है।",
+          "Normal pause रखें, pressure नहीं।"
+        ]
+      ],
+      "deep": [
+        "आप car showroom में ₹48,000 का price सुनते हैं। एक moment लेते हैं—EMI, budget और included terms सोचने के लिए।",
+        "Seller तुरंत 12 benefits गिनाने लगे तो आपके सवाल आने की जगह कहाँ बचेगी?",
+        "Question पूछने के बाद customer का answer खुद मत दीजिए। कभी pause thinking है, कभी network problem—context देखिए।",
+        "अगली relevant call में एक meaningful question के बाद naturally रुककर पूरा answer सुनें।"
+      ],
+      "cue": "सही सवाल पूछकर customer को जवाब देने की जगह दीजिए।",
+      "mission": "अगली तीन discovery calls में important question के बाद natural pause रखें।",
+      "next": ["TP04", "TP02", "LI04"]
+    },
+    "PG01": {
+      "quick": "Customer कहे ‘Sales कम है’, तो यह पता करना होगा sale किस stage पर रुकती है। First complaint पूरी problem नहीं बताती।",
+      "scenario": "Shop owner: ‘Sales नहीं हो रही, मुझे अच्छे salespeople चाहिए।’",
+      "options": [
+        [
+          "“Team weak है, नया staff hire करिए।”",
+          "Owner ने sales कम बताई, लेकिन cause अभी unknown है।",
+          "Problem का step check करें।"
+        ],
+        [
+          "“लोग दुकान में कम आते हैं, या आकर बिना खरीदे जाते हैं?”",
+          "अब actual stage clearer हो सकती है।",
+          "Buyer के जवाब से next question बनाएं।"
+        ],
+        [
+          "“Team को बस motivation चाहिए।”",
+          "Reason जाने बिना solution चुना।",
+          "पहले सही वजह समझिए।"
+        ]
+      ],
+      "deep": [
+        "आपका online food order late हुआ। क्या rider ही responsible है? शायद kitchen ने 30 minutes delay किया हो।",
+        "Result दिखाई दे रहा है, लेकिन delay कहाँ हुआ वह अलग question है।",
+        "Sales में भी ‘Sales कम’ result है। Shop में लोग आ ही नहीं रहे, stock नहीं, या staff pitch कमजोर है—इनका answer अलग होगा।",
+        "Customer की complaint को सच में समझने के लिए पूछें: problem किस step पर ज्यादा दिखती है?"
+      ],
+      "cue": "Customer की पहली complaint को पूरी कहानी मत मानिए।",
+      "mission": "अगली तीन discovery calls में problem किस step पर दिखती है, यह पूछें।",
+      "next": ["PG02", "CS01", "PG05"]
+    },
+    "IM01": {
+      "quick": "Problem क्या है, यह जानना शुरुआत है। Customer के काम, time या money पर उस problem का actual असर क्या है—यह भी समझिए।",
+      "scenario": "Owner: ‘Quotations देर से जाती हैं।’ उसके बाद क्या पूछा जाए?",
+      "options": [
+        [
+          "“हर महीने लाखों का नुकसान होगा!”",
+          "Impact का number बिना evidence बना दिया।",
+          "Loss invent नहीं करें।"
+        ],
+        [
+          "“Late quote के बाद customer क्या करता है? कोई recent case है?”",
+          "अब real effect समझने की कोशिश हुई।",
+          "Problem के बाद क्या होता है, पूछिए।"
+        ],
+        [
+          "“इसलिए closing training ले लीजिए।”",
+          "Impact और cause जाने बिना solution दिया।",
+          "पहले असर और reason समझिए।"
+        ]
+      ],
+      "deep": [
+        "Tiffin 20 minutes late पहुँची। Work-from-home person पर कम असर हुआ; train पकड़ने वाले व्यक्ति के लिए खाना miss हुआ।",
+        "Problem एक, लेकिन उसका impact अलग।",
+        "Sales में भी late quotation को automatic lost revenue नहीं कह सकते। एक recent example सुनें और record से check करें।",
+        "Impact समझने का purpose customer को डराना नहीं, decision को clear बनाना है।"
+      ],
+      "cue": "Problem जानना शुरुआत है; उसका असली असर समझना अगला कदम है।",
+      "mission": "अगली तीन calls में buyer की problem का actual effect पूछें।",
+      "next": ["IM02", "IM04", "PG02"]
+    },
+    "DM01": {
+      "quick": "Enquiry लेने वाला और budget approve करने वाला अलग person हो सकते हैं। Buyer से naturally पूछें ऐसा purchase कैसे decide होता है।",
+      "scenario": "HR manager program को अच्छा कहती हैं। क्या payment confirmed है?",
+      "options": [
+        [
+          "“हाँ, HR ने पसंद किया—payment link भेजता हूँ।”",
+          "Positive evaluation और final approval अलग हैं।",
+          "Decision role check करें।"
+        ],
+        [
+          "“Training select करने में आप किन लोगों के साथ decision लेंगी?”",
+          "Role respect के साथ समझ रहे हैं।",
+          "Buyer से process पूछें, title से नहीं।"
+        ],
+        [
+          "“HR decide नहीं कर सकतीं, founder बुलाओ।”",
+          "Job title से बिना proof authority judge की।",
+          "Real responsibility समझिए।"
+        ]
+      ],
+      "deep": [
+        "घर में refrigerator खरीदते समय एक person models देखता है, दूसरा electricity usage और तीसरा budget compare करता है।",
+        "Business purchases में भी evaluator, co-decision-maker और payment approver अलग हो सकते हैं।",
+        "HR manager training scope चुन सकती हैं, finance approval अलग हो सकता है—या HR खुद full authority रख सकती हैं।",
+        "Natural सवाल: ‘ऐसी training का decision आप खुद लेती हैं या किसी और के साथ होता है?’"
+      ],
+      "cue": "Call पर बोलने वाला और final decision लेने वाला हमेशा एक person नहीं।",
+      "mission": "अगली तीन calls में politely actual approval process पूछें।",
+      "next": ["DM04", "DM03", "NEW-022"]
+    },
+    "EX02": {
+      "quick": "Feature मतलब product क्या करता है। Benefit मतलब उससे buyer को कैसे मदद मिल सकती है। Outcome मतलब real use के बाद क्या बदला।",
+      "scenario": "Training में live roleplay included है। इसे buyer को कैसे समझाएँ?",
+      "options": [
+        [
+          "“Roleplay है, इसलिए sales guaranteed double।”",
+          "Feature को unsupported result guarantee बनाया।",
+          "Feature ≠ guaranteed sales।"
+        ],
+        [
+          "“Roleplay में objections practise होंगे; real-call change बाद में review करेंगे।”",
+          "Feature, possible benefit और measurement अलग हैं।",
+          "Practice का असर real calls में check करें।"
+        ],
+        [
+          "“Worksheet, video, roleplay—सब है।”",
+          "Features गिनाईं, buyer की problem से connection missing।",
+          "Usefulness समझाइए।"
+        ]
+      ],
+      "deep": [
+        "Washing machine का ‘Quick Wash — 15 minutes’ एक feature है। कम कपड़े जल्दी धोने में मदद करना उसका benefit हो सकता है।",
+        "लेकिन हर family का bill ₹500 कम होगा—यह guaranteed outcome नहीं।",
+        "Training में roleplay एक feature है। Objection पर better response की practice benefit है। Actual call behavior में क्या बदला, यह measure करना होगा।",
+        "Product क्या करता है, कैसे help कर सकता है और actual result क्या आया—तीनों अलग रखें।"
+      ],
+      "cue": "Feature क्या है, फायदा कैसे हो सकता है और असली result क्या आया—तीनों अलग हैं।",
+      "mission": "अगली तीन presentations में एक feature का practical benefit बताएं, outcome guarantee नहीं।",
+      "next": ["MS04", "EX03", "NEW-020"]
+    },
+    "PB03": {
+      "quick": "‘Too expensive’ हर buyer के लिए same नहीं। Budget, competitor comparison, expected amount या unclear value—पहले कारण समझिए।",
+      "scenario": "Customer: ‘₹60,000 बहुत expensive है।’ Actual reason unknown है।",
+      "options": [
+        [
+          "“अभी 20% discount दे देता हूँ।”",
+          "Price objection का reason जाने बिना concession।",
+          "पहले meaning पूछें।"
+        ],
+        [
+          "“₹60,000 किस comparison में ज्यादा लग रहा है—budget, दूसरा offer या value?”",
+          "Different reasons respectfully check किए।",
+          "Buyer के answer से response बदलें।"
+        ],
+        [
+          "“आपको अच्छे program की value नहीं समझ आती।”",
+          "Buyer को shame किया और concern miss हो गई।",
+          "Person नहीं, price gap समझें।"
+        ]
+      ],
+      "deep": [
+        "चार buyers ‘₹60,000 expensive है’ बोलते हैं। एक के पास money कम है, दूसरे को competitor ₹40,000 का मिला, तीसरे को value clear नहीं।",
+        "Sentence same है, लेकिन response same कैसे हो सकता है?",
+        "एक simple question पूछिए: ‘किसके comparison में ज्यादा लग रहा है?’",
+        "Answer के बाद only matching concern address करें; बिना proof discount या ROI guarantee नहीं।"
+      ],
+      "cue": "“Expensive” सुनते ही discount नहीं; पहले पूछिए किस comparison में।",
+      "mission": "अगली तीन price objections में discount से पहले actual comparison पूछें।",
+      "next": ["PB04", "NEW-030", "PB05"]
+    },
+    "NX02": {
+      "quick": "Meaningful next step किसी random date का नाम नहीं। Buyer के real decision event, उसका purpose और दोनों की agreement चाहिए।",
+      "scenario": "Buyer Wednesday evening co-founder से program discuss करेगा। Next call कैसे तय करेंगे?",
+      "options": [
+        [
+          "“कल सुबह 9 बजे call करूँगा।”",
+          "Decision event से पहले random contact।",
+          "Real event के बाद review रखें।"
+        ],
+        [
+          "“Wednesday discussion के बाद Thursday short review रखना ठीक रहेगा?”",
+          "Timing और purpose buyer के event से जुड़े हैं।",
+          "Mutual agreement के बाद ही appointment।"
+        ],
+        [
+          "“Co-founder से बात करेंगे, मतलब payment confirmed है।”",
+          "Discussion को approval/paid बना दिया।",
+          "Pending approval ≠ payment।"
+        ]
+      ],
+      "deep": [
+        "Internet connection के लिए building inspection Friday को है। Seller हर day status call करे तो Friday से पहले क्या नई बात मिलेगी?",
+        "Better है inspection के बाद mutually agreed review time रखना।",
+        "Sales में भी buyer Wednesday co-founder से बात करेगा, तो Thursday short review offer करना meaningful हो सकता है—अगर buyer agree करे।",
+        "Next step = decision event + useful reason + exact agreement; random calendar reminder नहीं।"
+      ],
+      "cue": "Follow-up तारीख नहीं, decision बदलने वाले event से जोड़िए।",
+      "mission": "अगली तीन pending calls में decision event, owner और mutually agreed time confirm करें।",
+      "next": ["NX01", "NX04", "NEW-034"]
+    },
+    "NEW-035": {
+      "quick": "Sales X-Ray report में कई findings हों तो lowest score blindly नहीं चुनें। Relevant audio सुनकर one practice behavior चुनें।",
+      "scenario": "Report में Closing low है, पर calls में seller problem समझने से पहले pitch शुरू करता है। Next focus क्या?",
+      "options": [
+        [
+          "“Lowest closing score है—हर buyer पर urgent close line।”",
+          "Score को direct cause मान लिया।",
+          "Repeated earlier discovery gap को check करें।"
+        ],
+        [
+          "“Audio verify करके buyer की problem पर one connected question practise करूँगा।”",
+          "One relevant and evidence-linked practice focus।",
+          "Next five genuine discovery opportunities में action track करें।"
+        ],
+        [
+          "“AI गलत भी हो सकता है, इसलिए report कभी मत देखो।”",
+          "Potential useful evidence को भी dismiss किया।",
+          "Verify, correct and learn from accepted evidence।"
+        ]
+      ],
+      "deep": [
+        "Fitness smartwatch एक number दिखाती है; लेकिन पूरी health का final judgement उस अकेले number से नहीं होगा।",
+        "Sales X-Ray में Closing score low है, पर audio में repeated early pitching दिखती है। सबसे काम का skill focus शायद deeper discovery question हो।",
+        "एक small roleplay करें। फिर next five relevant calls में देखें buyer ने problem बताई या नहीं, आपने follow-up question पूछा या नहीं।",
+        "No opportunity failure नहीं। Accepted audio से action check करें; AI score को personality label मत बनाइए।"
+      ],
+      "cue": "Report में सब मत सुधारिए; एक evidence-backed skill practise करें।",
+      "mission": "Sales X-Ray से one verified action चुनें और next five relevant calls में track करें।",
+      "next": ["CO02", "CO03", "CO05"]
+    },
+    "DM02": {
+      "quick": "Customer कहता है “मुझे wife/husband/partner से बात करनी है,” तो इसे तुरंत fake objection मत बोलिए। बड़े financial decisions कई घरों में मिलकर लिए जाते हैं। पूछिए: “क्या आप दोनों मिलकर final decide करते हैं, या बस details share करनी हैं?” Buyer की permission के बिना partner से contact न करें।",
+      "scenario": "एक customer ₹60,000 के program को suitable कहता है, फिर बोलता है: “Wife से बात करके बताऊँगा।” Seller क्या करे?",
+      "options": [
+        [
+          "“आप खुद decide नहीं कर सकते? यह तो बहाना है।”",
+          "Shared decision को insult किया। Customer ने family decision process बताया है, न कि fake excuse का proof दिया है।",
+          "Partner को obstacle मत समझिए।"
+        ],
+        [
+          "“बिल्कुल। आप दोनों मिलकर decide करते हैं, या आपको बस program समझाना है? चाहें तो summary भेज सकता हूँ।”",
+          "आपने decision process और choice दोनों समझीं। Buyer अगर joint discussion चाहे, तभी next step तय होगा।",
+          "Shared decision को respect करें।"
+        ],
+        [
+          "“Payment अभी कर दीजिए, बाद में घर पर समझा देना।”",
+          "Buyer की बताई approval boundary bypass हो गई। Payment pressure informed decision में मदद नहीं करता।",
+          "Approval से पहले commitment force न करें।"
+        ]
+      ],
+      "deep": [
+        "आप एक नया sofa लेने furniture store गए हैं। Sofa आपको पसंद है। Seller पूछता है, “Booking कर दें?” आप बोलते हैं, “घर पर partner से discuss करना है।”",
+        "अब seller कहता है, “आप खुद घर के लिए decide नहीं कर सकते क्या?” सोचिए, आपको कैसा लग सकता है।",
+        "हो सकता है budget, घर की जगह या choice दोनों के लिए important हो। एक अच्छा seller पूछेगा कि decision jointly होगा या केवल details share करनी हैं।",
+        "अगर buyer चाहे, तो verified details की summary दें। कोई payment या follow-up तब तक confirmed नहीं जब तक buyer ने साफ agree नहीं किया।"
+      ],
+      "cue": "Partner से पूछना जरूरी हो सकता है; उसे बहाना मानकर दबाव मत बनाइए।",
+      "mission": "अगली partner-approval conversation में politely पूछिए: “फैसला आप दोनों मिलकर करेंगे या सिर्फ details share करनी हैं?”",
+      "next": ["DM03", "DM04", "NEW-022"]
+    },
+    "OB03": {
+      "quick": "“मैं सोचूँगा” के कई meanings हो सकते हैं—comparison, partner discussion, implementation या बस time चाहिए। एक बार gently पूछिए: “किस हिस्से पर सोचने के लिए time चाहिए?” अगर buyer genuine space माँगे तो pressure न बनाएँ।",
+      "scenario": "एक hour की discussion के बाद buyer कहता है: “Program समझ आया है, लेकिन मुझे 24 hours अकेले सोचने दो।”",
+      "options": [
+        [
+          "“Call नहीं काटेंगे, पहले yes बोलना पड़ेगा।”",
+          "Buyer ने साफ space माँगी है। Repeated payment pressure उसकी choice ignore करता है।",
+          "Processing time valid है।"
+        ],
+        [
+          "“बिल्कुल। कोई specific doubt बाकी है या बस थोड़ा time चाहिए? मैं आपको space देता हूँ।”",
+          "एक respectful clarification है। Buyer चाहे तो doubt बताए या खुद बाद में decision करे।",
+          "Clarity लें, control नहीं।"
+        ],
+        [
+          "“आप मुझसे बचने के लिए सोचूँगा बोल रहे हो।”",
+          "Buyer का hidden motive बिना proof assume किया और आरोप लगा दिया।",
+          "Uncertainty को lie मत कहिए।"
+        ]
+      ],
+      "deep": [
+        "आप furniture shop में dining table देखते हैं। वह अच्छी लगती है लेकिन घर जाकर room की measurement check करना चाहते हैं।",
+        "Shopkeeper कहता है, “नहीं, अभी decide करिए।” वह आपका genuine step miss कर रहा है।",
+        "Sales में “सोचूँगा” सुनकर एक clarification useful हो सकती है। लेकिन buyer time या privacy माँगे तो repeated questioning pressure बन सकती है।",
+        "Follow-up की date तभी तय है जब दोनों ने agree की हो। “मैं खुद message करूँगा” payment agreement नहीं है।"
+      ],
+      "cue": "“सोचूँगा” पर एक बार clarity पूछिए; genuine time माँगे तो time दीजिए।",
+      "mission": "अगली “सोचकर बताऊँगा” conversation में एक respectful clarifier पूछें और unagreed follow-up date न लिखें।",
+      "next": ["NEW-029", "NEW-030", "DP04"]
+    }
+  },
+  "labels": {
+    "PB03": "Customer कहता है, “Price बहुत high है।” क्या करूँ?",
+    "DM02": "“मुझे wife/partner से पूछना है।” क्या यह objection है?",
+    "OB03": "Customer बोलता है, “मैं सोचकर बताऊँगा।” अब क्या करूँ?"
+  },
+  "featured": [
+    {
+      "id": "talk",
+      "name": "Communication & Rapport",
+      "sub": "Trust और listening",
+      "icon": "message",
+      "cats": ["02", "03"]
+    },
+    {
+      "id": "discover",
+      "name": "Customer को समझना",
+      "sub": "Problem और impact",
+      "icon": "find",
+      "cats": ["04", "05"]
+    },
+    {
+      "id": "price",
+      "name": "Price & Objections",
+      "sub": "Price और hesitation",
+      "icon": "tag",
+      "cats": ["08"]
+    },
+    {
+      "id": "close",
+      "name": "Closing & Follow-Up",
+      "sub": "Decision और next steps",
+      "icon": "target",
+      "cats": ["09"]
+    }
+  ],
+  "categoryLabels": {
+    "10": "Practice और improvement",
+    "01": "Confidence और thinking",
+    "02": "Comfort और connection",
+    "03": "Questions और listening",
+    "04": "Need और root cause",
+    "05": "Impact और value",
+    "06": "Fit और decision path",
+    "07": "Explain और guide",
+    "08": "Price और hesitation",
+    "09": "Decision और next steps"
+  },
+  "categoryIcons": {
+    "10": "growth",
+    "01": "brain",
+    "02": "handshake",
+    "03": "message",
+    "04": "find",
+    "05": "layers",
+    "06": "clipboard",
+    "07": "presentation",
+    "08": "tag",
+    "09": "target"
+  },
+  "suggestions": ["PB03", "OB03", "DM02", "NX02", "RP01", "CO02"],
+  "aliases": {
+    "expensive": "PB03",
+    "mahanga": "PB03",
+    "high price": "PB03",
+    "price high": "PB03",
+    "कीमत": "PB03",
+    "discount": "PB05",
+    "wife": "DM02",
+    "partner": "DM02",
+    "सोचकर": "OB03",
+    "सोचना": "OB03",
+    "think": "OB03",
+    "lead": "LE03",
+    "followup": "FU02",
+    "follow-up": "FU02"
+  }
+}

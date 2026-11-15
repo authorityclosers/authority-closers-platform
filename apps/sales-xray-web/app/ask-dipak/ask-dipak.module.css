@@ -290,6 +290,38 @@
   font-size: var(--sx-text-xs);
 }
 
+/* The coaching loop's minimal screen (13 Nov 2026 meeting): its way in and
+   its yes or no per mission after a call. */
+.missionsEntry {
+  margin-top: 10px;
+}
+
+.checkRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.checkButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.checkButtons .smallBtn {
+  width: auto;
+  min-width: 88px;
+  margin-top: 0;
+  padding: 0 14px;
+}
+
+.smallBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .notice {
   margin: 0;
   padding: 14px 0 0;

@@ -123,6 +123,33 @@ it("shows what the phone still needs, each line one tap from its fix", async () 
   expect(host.querySelector('dialog ol[aria-label^="Step"]')).toBeNull();
 });
 
+it("lists a picked recordings folder as done, as the count does", async () => {
+  // Redmi QA on production (14 Nov 2026): "5 of 9 done" over a list that still
+  // had Call recordings with its Fix and Recordings folder found, on a phone
+  // whose folder was picked; the test call still waits for a recording.
+  fakePhone(({ method }) =>
+    method === "callRecorderStatus"
+      ? { available: false, enabled: false }
+      : {
+          ...setup,
+          checks: { ...CHECKS, recordings: false },
+          store: "play",
+          folderPickSupported: true,
+          folderPicked: true,
+        },
+  );
+  await act(async () => root.render(<PhoneSetupPanel />));
+  await settle();
+  expect(host.textContent).toContain("6 of 9 done");
+  const lines = [...host.querySelectorAll('ul[aria-label="Still to do"] li')];
+  expect(
+    lines.map((line) => line.querySelector("strong")?.textContent),
+  ).toEqual(["Call recorder on", "Battery unrestricted", "Test call recorded"]);
+  expect(host.textContent).toContain(
+    "Call recordings, Notifications, Recordings folder found",
+  );
+});
+
 it("walks everything still to do from one button", async () => {
   fakePhone(({ method }) =>
     method === "callRecorderStatus"

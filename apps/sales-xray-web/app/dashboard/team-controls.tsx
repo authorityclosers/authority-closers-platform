@@ -23,15 +23,17 @@ import {
   AlarmClock,
   BellRing,
   CalendarClock,
+  ChevronDown,
   ChevronLeft,
+  Check,
   ChevronRight,
   Clock3,
   PhoneIncoming,
   Plus,
-  Settings2,
+  SlidersHorizontal,
   X,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 
 import { displayName } from "../display-name";
 import { notify } from "../notice-center";
@@ -84,10 +86,19 @@ const USUAL = {
 };
 
 /** "19:00" as "7:00", the way the team says it. */
-const clock = (value: string) => {
-  const [hours, minutes] = value.split(":").map(Number);
-  return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")}`;
+/** The days as words: "Every day", "Mon–Fri", "Mon–Sat", or the days themselves. */
+const daysWord = (days: number[]) => {
+  const set = [...new Set(days)].sort((a, b) => a - b);
+  if (set.length === 7) return "Every day";
+  if (!set.length) return "No days";
+  const run = set.every((day, index) => day === set[0] + index);
+  if (run && set.length > 2)
+    return `${DAYS[set[0]]}–${DAYS[set[set.length - 1]]}`;
+  return set.map((day) => DAYS[day]).join(", ");
 };
+
+/** A 24-hour time as the editor shows it: "09:30". */
+const hhmm = (value: string) => value.padStart(5, "0");
 
 /** The team and the first-call target, read when the sheet opens. */
 function useControls(open: boolean, round: number) {
@@ -165,6 +176,9 @@ function HoursDetail({
   const [breaks, setBreaks] = useState(set ? (set.breaks ?? []) : USUAL.breaks);
   const [pause, setPause] = useState(set?.pause_leads ?? false);
   const [busy, setBusy] = useState(false);
+  // Saved shows on the button for a moment, not in a toast (piece 05).
+  const [saved, setSaved] = useState(false);
+  const afterId = useId();
   const valid =
     days.length > 0 &&
     start < end &&
@@ -183,12 +197,8 @@ function HoursDetail({
           breaks,
         }),
       );
-      notify({
-        id: "team-controls",
-        tone: "success",
-        title: "Working hours saved",
-        timeout: 4_000,
-      });
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2_500);
     } catch {
       failed("Working hours weren't saved");
     } finally {
@@ -197,6 +207,10 @@ function HoursDetail({
   };
   return (
     <div className={styles.detail}>
+      <p className={styles.daysHead}>
+        <span>Active days</span>
+        <span>{daysWord(days)}</span>
+      </p>
       <div className={styles.days} role="group" aria-label="Work days">
         {DAYS.map((name, index) => (
           <button
@@ -234,6 +248,44 @@ function HoursDetail({
           aria-label="Work ends"
         />
       </Row>
+      {/* A lead that arrives outside these hours: an explicit choice (piece 05),
+          the same setting as before. */}
+      <div
+        className={styles.afterHours}
+        role="radiogroup"
+        aria-labelledby={afterId}
+      >
+        <p id={afterId} className={styles.afterTitle}>
+          When a lead arrives outside these hours
+        </p>
+        {[
+          {
+            hold: false,
+            title: "Assign at once",
+            note: "It goes to a seller straight away, day or night.",
+          },
+          {
+            hold: true,
+            title: "Hold until work starts",
+            note: "It waits, and goes to a seller when the next working hours begin.",
+          },
+        ].map((option) => (
+          <button
+            key={option.title}
+            type="button"
+            role="radio"
+            aria-checked={pause === option.hold}
+            className={styles.afterChoice}
+            onClick={() => setPause(option.hold)}
+          >
+            <span className={styles.radio} aria-hidden="true" />
+            <span>
+              <b>{option.title}</b>
+              <small>{option.note}</small>
+            </span>
+          </button>
+        ))}
+      </div>
       {breaks.map((gap, index) => (
         <Row key={index} label={index === 0 ? "Lunch" : "Break"}>
           <span className={styles.span}>
@@ -291,20 +343,24 @@ function HoursDetail({
           Add a break
         </button>
       ) : null}
-      <Row label="Hold new leads outside these hours">
-        <Toggle
-          label="Hold new leads outside these hours"
-          on={pause}
-          onChange={setPause}
-        />
-      </Row>
       <button
         type="button"
         className={styles.save}
         disabled={!valid || busy}
         onClick={() => void save()}
       >
-        {busy ? "Saving…" : set ? "Save hours" : "Use these hours"}
+        {busy ? (
+          "Saving…"
+        ) : saved ? (
+          <>
+            <Check size={18} strokeWidth={2.5} aria-hidden="true" />
+            Saved
+          </>
+        ) : set ? (
+          "Save hours"
+        ) : (
+          "Use these hours"
+        )}
       </button>
     </div>
   );
@@ -564,9 +620,9 @@ export function TeamControls() {
       key: "hours",
       icon: <Clock3 size={20} />,
       value: hours
-        ? `${clock(hours.start)}–${clock(hours.end)}${
+        ? `${daysWord(hours.days)} · ${hhmm(hours.start)}–${hhmm(hours.end)}${
             hours.breaks?.[0]
-              ? ` · lunch ${clock(hours.breaks[0].start)}–${clock(hours.breaks[0].end)}`
+              ? `\nLunch ${hhmm(hours.breaks[0].start)}–${hhmm(hours.breaks[0].end)}`
               : ""
           }`
         : "Not set",
@@ -583,15 +639,15 @@ export function TeamControls() {
       icon: <BellRing size={20} />,
       value: nudgesOn
         ? except
-          ? `On, except ${except}`
-          : "On for everyone"
+          ? `On · all but ${except}`
+          : "On · all sellers"
         : "Off",
       tone: nudgesOn ? undefined : "off",
     },
     {
       key: "alerts",
       icon: <AlarmClock size={20} />,
-      value: owner ? `${alertCount} of 4 on` : alertCount ? "On" : "Off",
+      value: owner ? `${alertCount} of 4 alerts on` : alertCount ? "On" : "Off",
       tone: alertCount ? undefined : "off",
     },
     ...(owner
@@ -616,13 +672,26 @@ export function TeamControls() {
           setRound((value) => value + 1);
         }}
       >
-        <Settings2 size={18} aria-hidden="true" />
+        <SlidersHorizontal size={18} strokeWidth={2.25} aria-hidden="true" />
         Controls
+        <ChevronDown size={16} strokeWidth={2.25} aria-hidden="true" />
       </button>
       <Sheet
         open={open}
         onClose={close}
         title={card ? TITLES[card] : "Team controls"}
+        lead={
+          card ? (
+            <button
+              type="button"
+              className={styles.backIcon}
+              aria-label="Back to Team controls"
+              onClick={() => setCard(null)}
+            >
+              <ChevronLeft size={22} strokeWidth={2.25} aria-hidden="true" />
+            </button>
+          ) : undefined
+        }
       >
         {state === "error" ? (
           <p className={styles.quiet} role="status">
@@ -631,45 +700,64 @@ export function TeamControls() {
         ) : !loaded || !shownTeam ? (
           <div className={styles.loading} aria-busy="true" />
         ) : card === null ? (
-          <ul className={styles.cards}>
-            {cards.map((item, index) => (
-              <li key={item.key} style={{ animationDelay: `${index * 40}ms` }}>
-                <button
-                  type="button"
-                  className={styles.card}
-                  data-control={item.key}
-                  onClick={() => setCard(item.key)}
-                >
-                  <span className={styles.icon} aria-hidden="true">
-                    {item.icon}
-                  </span>
-                  <span className={styles.cardTitle}>{TITLES[item.key]}</span>
-                  <span className={styles.chip} data-tone={item.tone}>
-                    {item.value}
-                  </span>
-                  <ChevronRight
-                    className={styles.chevron}
-                    size={18}
-                    aria-hidden="true"
-                  />
-                </button>
-              </li>
+          <div className={styles.groups}>
+            {[
+              {
+                title: "Team rules",
+                items: cards.filter((item) =>
+                  ["hours", "first_call", "nudges"].includes(item.key),
+                ),
+              },
+              {
+                title: "Your updates",
+                items: cards.filter(
+                  (item) => item.key === "alerts" || item.key === "summary",
+                ),
+              },
+            ].map((group) => (
+              <section key={group.title} className={styles.group}>
+                <h3 className={styles.groupTitle}>{group.title}</h3>
+                <ul className={styles.groupList}>
+                  {group.items.map((item) => (
+                    <li key={item.key}>
+                      <button
+                        type="button"
+                        className={styles.card}
+                        data-control={item.key}
+                        onClick={() => setCard(item.key)}
+                      >
+                        <span className={styles.icon} aria-hidden="true">
+                          {item.icon}
+                        </span>
+                        <span className={styles.cardTitle}>
+                          {TITLES[item.key]}
+                        </span>
+                        <span className={styles.chip} data-tone={item.tone}>
+                          {item.value}
+                        </span>
+                        <ChevronRight
+                          className={styles.chevron}
+                          size={18}
+                          aria-hidden="true"
+                        />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ))}
-            {/* The month's revenue target: capture-setup's card. */}
-            <li>
-              <RevenueTargetCard onOpen={() => setCard("revenue")} />
-            </li>
-          </ul>
+            {/* The month's revenue target: capture-setup's card, as a row. */}
+            <section className={styles.group}>
+              <h3 className={styles.groupTitle}>Targets</h3>
+              <ul className={styles.groupList}>
+                <li>
+                  <RevenueTargetCard onOpen={() => setCard("revenue")} />
+                </li>
+              </ul>
+            </section>
+          </div>
         ) : (
           <div className={styles.page}>
-            <button
-              type="button"
-              className={styles.back}
-              onClick={() => setCard(null)}
-            >
-              <ChevronLeft size={18} aria-hidden="true" />
-              Team controls
-            </button>
             {card === "hours" ? (
               <HoursDetail team={shownTeam} onSaved={setTeam} />
             ) : card === "first_call" ? (

@@ -28,6 +28,22 @@ function upperFirst(text: string): string {
 function reword(text: string): string {
   const moved = /^Moved by (.+?)\.?$/.exec(text);
   if (moved) return `Reassigned by ${moved[1]}.`;
+  // The lead rules' own reasons (lead_desk/routing.py), never their shorthand
+  // (Redmi QA on production, 14 Nov 2026: "webhook: swamini deshpande (rule 1)").
+  const routed = /^.*: (.+?) \(rule (\d+)\)\.?$/.exec(text);
+  if (routed)
+    return `Given to ${routed[1]
+      .split(/\s+/)
+      .map(upperFirst)
+      .join(" ")} by lead rule ${routed[2]}.`;
+  if (
+    /^Rule \d+: .+ away or at their limit, given by the lead rules\.?$/i.test(
+      text,
+    )
+  )
+    return "Given out by the lead rules: the people its rule names were away or full.";
+  if (/^No routing rule matched; given by the lead rules\.?$/i.test(text))
+    return "Given out by the lead rules.";
   const gap =
     /^Nobody free speaks (.+?); \d+ open leads?, the fewest\.?$/i.exec(text);
   if (gap)

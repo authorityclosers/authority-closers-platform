@@ -966,3 +966,867 @@ a.nextName:active::after,
     display: none;
   }
 }
+
+/* The owner's own work on Team Home (owner's chosen lower Home, 05, 14 Nov
+   2026): each list one white card, its title (with a count) and what it holds
+   on the right; rows with a round box, the words, a chevron; its actions at
+   its foot. A seller's Home keeps Today's list. */
+.homeCard {
+  gap: 0;
+  padding: 14px 16px 0;
+  border: 1px solid var(--sx-hairline);
+  border-radius: 20px;
+  background: var(--sx-elevated);
+  box-shadow:
+    0 1px 2px color-mix(in oklab, var(--lx-film) 6%, transparent),
+    0 10px 24px -18px color-mix(in oklab, var(--lx-film) 30%, transparent);
+}
+
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  min-height: 32px;
+  margin-bottom: 2px;
+}
+
+.cardHead h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.countChip {
+  display: inline-grid;
+  min-width: 26px;
+  height: 24px;
+  place-items: center;
+  padding: 0 7px;
+  border-radius: 8px;
+  background: var(--lx-home-violet-soft);
+  color: var(--lx-home-violet);
+  font-size: var(--sx-text-xs);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.cardScope {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+}
+
+.cardRows {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.cardRow {
+  min-height: 64px;
+  border-bottom: 1px solid var(--sx-hairline);
+}
+
+.cardRow:last-child {
+  border-bottom: 0;
+}
+
+.cardRow .swipeFace {
+  gap: 10px;
+  min-height: 64px;
+}
+
+.homeCard .box {
+  width: 24px;
+  height: 24px;
+  border-color: var(--sx-ink-2);
+  border-radius: 50%;
+}
+
+.homeCard .check input:checked + .box {
+  border-color: var(--lx-home-primary);
+  background: var(--lx-home-primary);
+}
+
+.cardText {
+  min-height: 44px;
+  align-content: center;
+  padding-block: 8px;
+}
+
+.cardText strong {
+  overflow: visible;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  line-height: var(--sx-leading-20);
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.cardText > span {
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 0;
+}
+
+.cardMeta > span + span::before {
+  margin: 0 6px;
+  color: var(--sx-muted);
+  content: "·";
+}
+
+.cardMeta [data-late-time] {
+  color: var(--lx-home-orange);
+  font-weight: 600;
+}
+
+.cardMeta .tag::before {
+  content: none;
+}
+
+.cardMeta .tag {
+  margin-left: 8px;
+}
+
+.cardWhen {
+  flex: none;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cardChevron {
+  flex: none;
+  color: var(--sx-muted);
+}
+
+.cardFoot {
+  display: flex;
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.cardAction {
+  display: inline-flex;
+  flex: 1 1 0;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--lx-home-emerald);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cardAction + .cardAction {
+  border-left: 1px solid var(--sx-hairline);
+}
+
+.cardAction:focus-visible {
+  border-radius: 12px;
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.homeCard .allClear {
+  min-height: 56px;
+  margin: 0;
+}
+
+/* owner 15 Nov: the seller's Today in the owner Home's language: a plain title,
+   four glass tiles with the icon and name on one line, the number big under them,
+   and a soft press; Next action is a tile too. */
+.overview h2 {
+  font: var(--sx-text-headline);
+  letter-spacing: -0.01em;
+  padding-left: 4px;
+}
+.overview p {
+  padding-left: 4px;
+}
+.cards {
+  gap: 10px;
+}
+.cards [data-card] {
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 92px;
+  padding: 10px 10px !important;
+  text-align: center;
+  border: 1px solid color-mix(in oklab, white 70%, transparent) !important;
+  outline: 0.5px solid color-mix(in oklab, var(--sx-ink) 8%, transparent);
+  outline-offset: -0.5px;
+  border-radius: 22px !important;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, white 60%, var(--sx-elevated)),
+    var(--sx-elevated)
+  ) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  backdrop-filter: blur(18px) saturate(1.5);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    0 1px 1px color-mix(in oklab, var(--lx-film) 5%, transparent),
+    0 4px 10px -2px color-mix(in oklab, var(--lx-film) 7%, transparent),
+    0 14px 28px -18px color-mix(in oklab, var(--lx-film) 22%, transparent) !important;
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  -webkit-tap-highlight-color: transparent;
+}
+.cards [data-card]:active {
+  transform: translateY(1px) scale(0.985);
+}
+.cards [data-card] [data-icon] {
+  position: static !important;
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  background: none !important;
+}
+.cards [data-card] [data-icon] svg {
+  width: 18px;
+  height: 18px;
+}
+.cards [data-card] strong {
+  order: 3;
+  font-size: var(--sx-text-2xl);
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.cards [data-card] [data-go] {
+  width: 16px;
+  height: 16px;
+  opacity: 0.45;
+}
+.cards [data-card] > span:nth-child(2) {
+  order: 2;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  color: var(--sx-ink-2);
+}
+.cards [data-card] > span:first-child {
+  order: 1;
+}
+.cards [data-card] > span:nth-child(4) {
+  order: 4;
+  font-size: var(--sx-text-xs);
+}
+.cards [data-card] > span:nth-child(5) {
+  order: 5;
+}
+.next,
+.pending {
+  border: 1px solid color-mix(in oklab, white 70%, transparent) !important;
+  outline: 0.5px solid color-mix(in oklab, var(--sx-ink) 8%, transparent);
+  outline-offset: -0.5px;
+  border-radius: 22px !important;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, white 60%, var(--sx-elevated)),
+    var(--sx-elevated)
+  ) !important;
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    0 4px 10px -2px color-mix(in oklab, var(--lx-film) 7%, transparent),
+    0 14px 28px -18px color-mix(in oklab, var(--lx-film) 22%, transparent);
+}
+.nextHead h2 {
+  font: var(--sx-text-headline);
+}
+
+/* icon and name on one line, centred; number under; caption last */
+.cards [data-card] {
+  display: grid !important;
+  grid-template-columns: 1fr auto auto 1fr;
+  grid-template-areas: ". i l ." "v v v v" "n n n n" "m m m m";
+  column-gap: 6px;
+  row-gap: 2px;
+  align-content: center;
+  justify-items: center;
+  min-height: 86px;
+}
+.cards [data-card] > span:first-child {
+  grid-area: i;
+  align-self: center;
+}
+.cards [data-card] > span:nth-child(2) {
+  grid-area: l;
+  align-self: center;
+  white-space: nowrap;
+}
+.cards [data-card] strong {
+  grid-area: v;
+}
+.cards [data-card] > span:nth-child(4) {
+  grid-area: n;
+}
+.cards [data-card] > span:nth-child(5) {
+  grid-area: m;
+}
+.cards [data-card][data-tone="teal"] [data-icon] {
+  color: var(--lx-home-primary);
+}
+
+/* number dead centre, the chevron in the tile's right edge; icons in tone colour */
+.cards [data-card] {
+  position: relative;
+}
+.cards [data-card] strong {
+  justify-self: center !important;
+  text-align: center;
+}
+.cards [data-card] [data-go] {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.cards [data-card][data-tone="teal"] [data-icon] {
+  color: var(--lx-home-primary) !important;
+}
+.cards [data-card][data-tone="indigo"] [data-icon] {
+  color: var(--lx-info) !important;
+}
+.cards [data-card][data-tone="amber"] [data-icon] {
+  color: color-mix(in oklab, var(--sx-warn) 70%, var(--sx-ink)) !important;
+}
+.cards [data-card][data-tone="slate"] [data-icon] {
+  color: var(--sx-ink-2) !important;
+}
+
+/* Call now and the Call band: the same glossy green as the pills */
+.next a[class*="capsule"],
+.next button[class*="capsule"],
+.homeBand a[class*="capsule"],
+.homeBand button[class*="capsule"] {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, white 14%, var(--lx-home-primary)),
+    var(--lx-home-primary) 60%,
+    color-mix(in oklab, black 10%, var(--lx-home-primary))
+  ) !important;
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 35%, transparent),
+    inset 0 -1px 0 color-mix(in oklab, black 18%, transparent),
+    0 2px 4px color-mix(in oklab, var(--lx-home-primary) 30%, transparent),
+    0 10px 20px -10px
+      color-mix(in oklab, var(--lx-home-primary) 60%, transparent) !important;
+  font-weight: 700;
+  transition: transform 140ms ease-out;
+}
+.next a[class*="capsule"]:active,
+.next button[class*="capsule"]:active,
+.homeBand a[class*="capsule"]:active,
+.homeBand button[class*="capsule"]:active {
+  transform: scale(0.97);
+}
+.next .nextName {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* owner 15 Nov: the Call band was a second big Call under the card's own. Now it is a
+   round call button in the corner, and only when the card's Call has scrolled away:
+   it springs in from below as the card leaves, and tucks away when the card returns. */
+@media (max-width: 899.98px) {
+  .homeBand[class] {
+    left: auto;
+    right: 16px;
+    padding: 0 0 12px;
+    background: transparent;
+    pointer-events: none;
+    transition:
+      transform 420ms cubic-bezier(0.18, 1.3, 0.32, 1),
+      opacity 220ms ease-out;
+  }
+  .homeBand button[class*="capsule"] {
+    width: 60px !important;
+    min-width: 0;
+    height: 60px;
+    min-height: 60px !important;
+    padding: 0 !important;
+    border-radius: 999px !important;
+    justify-content: center;
+    pointer-events: auto;
+  }
+  .homeBand button[class*="capsule"] > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .homeBand button[class*="capsule"] svg {
+    width: 26px;
+    height: 26px;
+    margin: 0;
+  }
+  .homeBand.bandAway {
+    opacity: 0;
+    transform: translateY(24px) scale(0.5);
+    transition:
+      transform 200ms ease-in,
+      opacity 160ms ease-in;
+  }
+  .homeBand.bandAway button {
+    pointer-events: none;
+  }
+  .bandRoom {
+    height: 24px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .homeBand[class],
+  .homeBand.bandAway {
+    transition: opacity 1ms;
+  }
+}
+
+/* owner 15 Nov, round 2: the tiles as widgets, every part on the same line in all
+   four. Top: the icon in a soft tinted badge, the chevron in the corner. Then the big
+   number, the name, the one-line caption. Left-aligned like the title above; no
+   "Your inbound lead activity" line. */
+.overview p {
+  display: none;
+}
+.overview h2 {
+  padding-left: 2px;
+}
+.cards [data-card] {
+  grid-template-columns: 1fr;
+  grid-template-rows: 32px 40px 20px 18px auto;
+  grid-template-areas: "i" "v" "l" "n" "m";
+  justify-items: start;
+  align-content: start;
+  row-gap: 0;
+  min-height: 0;
+  padding: 14px 14px 12px !important;
+  text-align: left;
+}
+.cards [data-card] > span:first-child {
+  grid-area: i;
+  align-self: start;
+  display: grid !important;
+  place-items: center;
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 10px !important;
+  background: color-mix(in oklab, currentColor 13%, transparent) !important;
+}
+.cards [data-card] [data-icon] svg {
+  width: 18px;
+  height: 18px;
+}
+.cards [data-card] strong {
+  grid-area: v;
+  justify-self: start !important;
+  align-self: end;
+  font-size: var(--sx-text-3xl);
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+.cards [data-card] > span:nth-child(2) {
+  grid-area: l;
+  align-self: center;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  color: var(--sx-ink);
+}
+.cards [data-card] > span:nth-child(4) {
+  grid-area: n;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-20);
+  color: var(--sx-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.cards [data-card] [data-go] {
+  top: 18px;
+  right: 12px;
+  transform: none;
+  width: 18px;
+  height: 18px;
+  padding: 3px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--sx-ink) 6%, transparent);
+  opacity: 0.7;
+  box-sizing: content-box;
+}
+
+/* owner 15 Nov, round 3: measured tiles. Type steps by sqrt(phi) = 1.272 from a 12 px
+   caption: 12 -> 15 (name) -> 19 -> 24 -> 31/32 (number, 12 x phi^2). Space steps by
+   phi from 8: 5, 8, 13, 21. Three rows of fixed height in every tile, so the icon
+   row, the numbers and the captions sit on one line across all four; one left edge;
+   the chevron centred on the icon row. Height ~ width / sqrt(2). */
+.cards {
+  gap: 13px;
+}
+.cards [data-card] {
+  grid-template-columns: 28px minmax(0, 1fr) 24px;
+  grid-template-rows: 28px 40px 18px auto;
+  grid-template-areas: "i l g" "v v v" "n n n" "m m m";
+  column-gap: 8px;
+  row-gap: 0;
+  align-items: center;
+  padding: 16px 16px 16px 16px !important;
+}
+.cards [data-card] > span:first-child {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 8px !important;
+}
+.cards [data-card] [data-icon] svg {
+  width: 16px;
+  height: 16px;
+}
+.cards [data-card] > span:nth-child(2) {
+  grid-area: l;
+  align-self: center;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.cards [data-card] strong {
+  grid-area: v;
+  align-self: end;
+  font-size: var(--sx-text-3xl);
+  line-height: 1;
+  margin-top: 8px;
+  font-weight: 750;
+}
+.cards [data-card] > span:nth-child(4) {
+  grid-area: n;
+  align-self: end;
+  line-height: var(--sx-leading-20);
+  font-size: var(--sx-text-xs);
+}
+.cards [data-card] [data-go] {
+  position: absolute;
+  top: 18px;
+  right: 16px;
+  width: 16px;
+  height: 16px;
+  padding: 4px;
+}
+/* numbers count up softly when the tiles arrive */
+.cards > li {
+  animation: tileIn 520ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+.cards > li:nth-child(2) {
+  animation-delay: 50ms;
+}
+.cards > li:nth-child(3) {
+  animation-delay: 100ms;
+}
+.cards > li:nth-child(4) {
+  animation-delay: 150ms;
+}
+@keyframes tileIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+/* the cold side's waiting banner: a soft amber pill, a breathing dot, the count bold */
+.alert {
+  margin: 0;
+  min-height: 48px;
+  padding: 0 12px 0 16px;
+  border: 1px solid color-mix(in oklab, var(--sx-warn) 22%, transparent);
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--sx-warn) 9%, var(--sx-elevated)),
+    color-mix(in oklab, var(--sx-warn) 5%, var(--sx-elevated))
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 70%, transparent),
+    0 6px 14px -10px
+      color-mix(
+        in oklab,
+        color-mix(in oklab, var(--sx-warn) 70%, black) 45%,
+        transparent
+      );
+  color: color-mix(
+    in oklab,
+    color-mix(in oklab, var(--sx-warn) 55%, black) 85%,
+    var(--sx-ink)
+  );
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  justify-content: flex-start;
+  gap: 10px;
+  animation: tileIn 420ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+  transition: transform 140ms ease-out;
+}
+.alert:active {
+  transform: scale(0.98);
+}
+.alert > svg {
+  margin-left: auto;
+  opacity: 0.7;
+}
+.alertWords strong {
+  font-weight: 800;
+  margin-right: 1px;
+}
+.alertDot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--sx-warn);
+}
+.alertDot::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 999px;
+  background: var(--sx-warn);
+  opacity: 0.35;
+  animation: breathe 1.8s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cards > li,
+  .alert {
+    animation: none;
+  }
+  .alertDot::after {
+    animation: none;
+  }
+}
+
+/* round 4: the name gets the full width. Rows: icon 28 | 13 | number 32 | 8 | name 20 |
+   caption 18. Every tile the same rows, so all four line up exactly. */
+.cards [data-card] {
+  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-rows: 28px 32px 20px 18px auto;
+  grid-template-areas: "i ." "v v" "l l" "n n" "m m";
+  row-gap: 0;
+}
+.cards [data-card] strong {
+  margin-top: 13px;
+  align-self: start;
+  line-height: 1;
+  height: 32px;
+}
+.cards [data-card] > span:nth-child(2) {
+  margin-top: 21px;
+  align-self: start;
+}
+.cards [data-card] > span:nth-child(4) {
+  margin-top: 21px;
+  align-self: start;
+}
+.cards [data-card] {
+  grid-template-rows: 28px 45px 41px 39px auto;
+  padding-bottom: 14px !important;
+}
+
+.cards [data-card] {
+  grid-template-rows: 28px 45px 28px 18px auto;
+}
+.cards [data-card] > span:nth-child(2) {
+  margin-top: 8px;
+}
+.cards [data-card] > span:nth-child(4) {
+  margin-top: 0;
+}
+
+/* owner 15 Nov, round 5: the waiting count rides on the Inbound pill (a red bubble on
+   its corner that pops in), so switching sides never moves the page. The switch
+   itself: the tiles and the next card slide in from the side you picked, one by one. */
+.sideWrap {
+  position: relative;
+}
+.sideBadge {
+  position: absolute;
+  top: -6px;
+  left: calc(50% - 30px);
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border: 2px solid var(--sx-paper, white);
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--lx-danger) 75%, white),
+    var(--lx-danger)
+  );
+  box-shadow: 0 4px 10px -4px
+    color-mix(in oklab, var(--lx-danger) 60%, transparent);
+  color: white;
+  font-size: var(--sx-text-2xs);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  animation: badgePop 520ms cubic-bezier(0.18, 1.6, 0.4, 1) both;
+}
+@keyframes badgePop {
+  from {
+    transform: scale(0);
+  }
+}
+.cards[data-side="cold"] > li {
+  animation-name: fromRight;
+}
+.cards[data-side="inbound"] > li {
+  animation-name: fromLeft;
+}
+.next[data-side="cold"] {
+  animation: fromRight 560ms 120ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+.next[data-side="inbound"] {
+  animation: fromLeft 560ms 120ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+@keyframes fromRight {
+  from {
+    opacity: 0;
+    transform: translateX(28px) scale(0.97);
+  }
+}
+@keyframes fromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-28px) scale(0.97);
+  }
+}
+
+/* Pending action: a clear X to close it; it folds away */
+.pendingHead {
+  align-items: center;
+}
+.pendingHead .chip {
+  margin-left: auto;
+}
+.pendingClose {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: -4px -6px -4px 4px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--sx-ink) 7%, transparent);
+  color: var(--sx-ink-2);
+  cursor: pointer;
+  transition:
+    transform 140ms ease-out,
+    background 160ms;
+}
+.pendingClose:active {
+  transform: scale(0.9);
+  background: color-mix(in oklab, var(--sx-ink) 12%, transparent);
+}
+.pending {
+  transition:
+    opacity 240ms ease-in,
+    transform 260ms cubic-bezier(0.4, 0, 0.9, 0.6);
+}
+.pending[data-leaving] {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.96);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cards > li,
+  .next,
+  .sideBadge {
+    animation: none !important;
+  }
+}
+
+.nextMeta {
+  margin: 8px 0 21px;
+}
+
+/* owner 15 Nov, round 6: Today's list and Done today, measured and finished. Rows are
+   soft inset tiles on the 8 / 13 / 21 rhythm (no ruled lines); each chip says what it
+   is with an icon (a task box, a follow-up calendar, a clock, a late mark); Done
+   today's four figures are centred mini tiles of one height. */
+.listRow {
+  margin-bottom: 8px !important;
+  border: 0 !important;
+  border-radius: 18px;
+  overflow: hidden;
+}
+.listRow:last-child {
+  margin-bottom: 13px !important;
+}
+.listRow > [class*="row"],
+.listRow > div,
+.listRow > a {
+  background: color-mix(in oklab, var(--sx-ink) 3.2%, var(--sx-elevated));
+  box-shadow: inset 0 0 0 0.5px
+    color-mix(in oklab, var(--sx-ink) 6%, transparent);
+  border-radius: 18px;
+}
+.listRow[data-late="true"] > [class*="row"],
+.listRow[data-late="true"] > div {
+  background: color-mix(in oklab, var(--lx-danger) 4%, var(--sx-elevated));
+  box-shadow:
+    inset 3px 0 0 var(--lx-danger),
+    inset 0 0 0 0.5px color-mix(in oklab, var(--lx-danger) 14%, transparent);
+}
+
+/* the title and the Past days pill on one line */
+.overview {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}

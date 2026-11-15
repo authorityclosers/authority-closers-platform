@@ -126,6 +126,11 @@ function contrast(
 
 // Every foreground/background pair Lightbox uses for text below 18.66px bold.
 const smallTextPairs: [string, string][] = [
+  ["home-emerald", "home-emerald-soft"],
+  ["home-violet", "home-violet-soft"],
+  ["home-orange", "home-orange-soft"],
+  ["home-rose", "home-rose-soft"],
+  ["home-sky", "home-sky-soft"],
   ["ink", "paper"],
   ["ink", "surface"],
   ["ink-2", "surface"],
@@ -240,6 +245,18 @@ describe("Lightbox token derivative", () => {
       "density-row-min",
       "density-panel-head",
       "density-tile-min",
+      // Home's owner-dashboard tones (owner, 14 Nov 2026).
+      "home-primary",
+      "home-emerald",
+      "home-emerald-soft",
+      "home-violet",
+      "home-violet-soft",
+      "home-orange",
+      "home-orange-soft",
+      "home-rose",
+      "home-rose-soft",
+      "home-sky",
+      "home-sky-soft",
     ]);
     // Liquid Glass (owner, 22 Oct 2026): true black, Apple's grey ladder.
     const changedDark = new Map([
@@ -276,6 +293,17 @@ describe("Lightbox token derivative", () => {
       "info-soft",
       "warning",
       "warning-soft",
+      // Home's owner-dashboard tones (owner, 14 Nov 2026).
+      "home-emerald",
+      "home-emerald-soft",
+      "home-violet",
+      "home-violet-soft",
+      "home-orange",
+      "home-orange-soft",
+      "home-rose",
+      "home-rose-soft",
+      "home-sky",
+      "home-sky-soft",
     ]);
 
     for (const [name, value] of sourceLight)

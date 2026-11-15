@@ -4,6 +4,9 @@ view shows data (approved data change).
 Owner, 30 Oct 2026 (owner chat, through the orchestrator): realistic sandbox data so the
 owner and the sales coach see every view populated and test as an owner and as a seller,
 with a login for each seller (docs/product/lead-desk/stages-views-sources.md, section 7).
+The test world's three companies (owner, 14 Nov 2026; ``WORLD``: "sahyadri", "suryoday",
+"kavach", docs/qa/test-world/WORLD.md) build the same way, each with 3 or 4 sellers and its own
+owner-manager as an admin who takes no leads; their names start with "TEST · ".
 For each organisation, in one transaction of its own, through the app's own code:
   1. five fictional sellers' accounts: plus-aliases of the owner's mailbox (so any mail
      reaches it), verified, each with the scrypt verifier of a password given in the input
@@ -362,6 +365,8 @@ class OrgSpec(NamedTuple):
     deals: tuple[int, ...]
     meeting: tuple[str, str, str | None, str | None]  # mode, agenda, link, place
     phones: int  # the first fictional number
+    # The company's own owner-manager (the test world): an admin who takes no leads.
+    manager: Seller | None = None
 
 
 ORGS: Final[dict[str, OrgSpec]] = {
@@ -529,6 +534,199 @@ ORGS: Final[dict[str, OrgSpec]] = {
     ),
 }
 
+# The test world (docs/qa/test-world/WORLD.md; owner, 14 Nov 2026: "create the three TEST
+# workspaces of the test world… each with an owner and 3–4 sellers, marked as test"). Same
+# people and products as the bible; each company's owner-manager is an admin who takes no
+# leads. Built with the same code, usually with a shorter history ("days": 14).
+WORLD: Final[dict[str, OrgSpec]] = {
+    "sahyadri": OrgSpec(
+        key="sahyadri",
+        name="TEST · Sahyadri Homes",
+        sellers=(
+            Seller("Priya", "Nair", "Pune", "tw.sh.priya", 0, 6.0, 0.04, 0.02, 2, 1.1, 0, 1.1),
+            Seller("Amol", "Jadhav", "Pune", "tw.sh.amol", 5, 7.0, 0.06, 0.05, 2, 1.0, 0, 1.0),
+            Seller("Faiz", "Shaikh", "Pune", "tw.sh.faiz", 10, 8.0, 0.15, 0.12, 2, 0.9, 5, 0.9),
+            Seller(
+                "Sneha", "Patil", "Pune", "tw.sh.sneha", 15, 5.0, 0.2, 0.1, 12, 0.8, 0, 0.9, "cold"
+            ),
+        ),
+        sources=(
+            Source("meta", "Meta Ads: Sunleaf Residences 2BHK form", 25),
+            Source("meta", "Meta Ads: Riverbend Towers site-visit form", 15),
+            Source("webhook", "HomeFinder portal: Pune listings", 20),
+            Source("webhook", "Google Ads: flats in Hinjawadi", 12),
+            Source("webhook", "Website: /sunleaf", 10),
+            Source("webhook", "Website: /sell-your-flat", 8),
+        ),
+        interests=(
+            "Sunleaf Residences 2BHK, Hinjawadi",
+            "Sunleaf Residences 3BHK, Hinjawadi",
+            "Riverbend Towers 3BHK, Kharadi",
+            "Sell my flat (resale mandate)",
+        ),
+        details=(
+            ("buying_for", ("Own home", "Investment", "Parents", "Rental income")),
+            ("budget", ("Under 70 lakh", "70 lakh to 1 crore", "Above 1 crore")),
+        ),
+        cities=("Pune", "Pimpri-Chinchwad", "Mumbai", "Thane", "Satara", "Kolhapur", "Dubai"),
+        daily=(4, 9),
+        cold=(
+            ColdList("File: Past site-visit enquiries 2025.xlsx", 80, 2, "Visited a site in 2025"),
+            ColdList("File: Hinjawadi IT park employees.xlsx", 300, -2, "IT professionals"),
+        ),
+        deals=(6800000, 7400000, 9500000, 11000000),
+        meeting=(
+            "in_person",
+            "Site visit: Sunleaf Residences sample flat (fictional)",
+            None,
+            "Sunleaf Residences sales office, Hinjawadi, Pune (fictional)",
+        ),
+        phones=60000,
+        manager=Seller("Rajesh", "Bhonsle", "Pune", "tw.sh.rajesh", 0, 9.0, 0, 0, 0, 1.0, 0, 1.0),
+    ),
+    "suryoday": OrgSpec(
+        key="suryoday",
+        name="TEST · Suryoday Solar",
+        sellers=(
+            Seller("Ganesh", "More", "Nashik", "tw.ss.ganesh", 0, 7.0, 0.05, 0.03, 2, 1.0, 0, 1.05),
+            Seller(
+                "Kavya",
+                "Iyer",
+                "Nashik",
+                "tw.ss.kavya",
+                5,
+                8.0,
+                0.08,
+                0.05,
+                0,
+                1.3,
+                0,
+                1.0,
+                "inbound",
+            ),
+            Seller(
+                "Rahul",
+                "Pawar",
+                "Nashik",
+                "tw.ss.rahul",
+                20,
+                6.0,
+                0.2,
+                0.15,
+                10,
+                0.85,
+                0,
+                0.9,
+                "cold",
+            ),
+        ),
+        sources=(
+            Source("meta", "Meta Ads: Rooftop solar subsidy form", 30),
+            Source("webhook", "Google Ads: solar panels Nashik", 25),
+            Source("webhook", "Website: /savings-calculator", 20),
+            Source("webhook", "YouTube: Rooftop solar explained", 10),
+        ),
+        interests=(
+            "3 kW home rooftop",
+            "5 kW home rooftop",
+            "25 kW shop or school roof",
+            "Yearly maintenance",
+        ),
+        details=(
+            ("roof", ("Own house", "Housing society", "Shop", "School")),
+            ("monthly_bill", ("Under 2,000", "2,000 to 5,000", "Above 5,000")),
+        ),
+        cities=("Nashik", "Malegaon", "Sinnar", "Igatpuri", "Ahmednagar", "Dhule", "Jalgaon"),
+        daily=(3, 6),
+        cold=(
+            ColdList("File: Past enquiries 2025.xlsx", 60, 2, "Enquired in 2025"),
+            ColdList("File: Nashik housing societies.xlsx", 200, -2, "Society secretaries"),
+        ),
+        deals=(190000, 290000, 1100000),
+        meeting=(
+            "in_person",
+            "Rooftop site survey (fictional)",
+            None,
+            "At the customer's roof, Nashik (fictional)",
+        ),
+        phones=70000,
+        manager=Seller("Vikas", "Thorat", "Nashik", "tw.ss.vikas", 0, 9.0, 0, 0, 0, 1.0, 0, 1.0),
+    ),
+    "kavach": OrgSpec(
+        key="kavach",
+        name="TEST · Kavach Insurance Advisors",
+        sellers=(
+            Seller("Anjali", "Rao", "Thane", "tw.ki.anjali", 0, 6.5, 0.04, 0.03, 2, 1.1, 0, 1.1),
+            Seller(
+                "Sachin",
+                "Gaikwad",
+                "Thane",
+                "tw.ki.sachin",
+                5,
+                6.0,
+                0.06,
+                0.04,
+                8,
+                0.8,
+                0,
+                1.0,
+                "cold",
+            ),
+            Seller(
+                "Deepa",
+                "Menon",
+                "Thane",
+                "tw.ki.deepa",
+                10,
+                8.0,
+                0.12,
+                0.1,
+                0,
+                1.0,
+                5,
+                0.95,
+                "inbound",
+            ),
+        ),
+        sources=(
+            Source("meta", "Meta Ads: Term cover 1 crore form", 25),
+            Source("meta", "Meta Ads: Family health floater form", 20),
+            Source("webhook", "Website: /quote", 20),
+            Source("webhook", "Google Ads: health insurance Thane", 15),
+        ),
+        interests=(
+            "Term cover 1 crore",
+            "Family health floater 10 lakh",
+            "Motor renewal",
+            "Senior citizen health cover",
+        ),
+        details=(
+            ("family", ("Single", "Couple", "Couple and kids", "With parents")),
+            ("age_band", ("25-35", "35-45", "45-60")),
+        ),
+        cities=("Thane", "Mumbai", "Navi Mumbai", "Kalyan", "Dombivli", "Bhiwandi", "Pune"),
+        daily=(4, 8),
+        cold=(
+            ColdList("File: Renewals due this quarter.xlsx", 120, 2, "Policies renewing soon"),
+            ColdList("File: Thane salaried employees.xlsx", 250, -2, "Salaried employees, Thane"),
+        ),
+        deals=(12000, 18000, 24000, 28000),
+        meeting=(
+            "google_meet",
+            "Cover needs review (fictional)",
+            "https://meet.example.com/kavach-test",
+            None,
+        ),
+        phones=80000,
+        manager=Seller("Farhan", "Merchant", "Thane", "tw.ki.farhan", 0, 9.0, 0, 0, 0, 1.0, 0, 1.0),
+    ),
+}
+
+
+def org_spec(key: str) -> OrgSpec:
+    """A sandbox organisation or a test-world company, by its key."""
+    return ORGS[key] if key in ORGS else WORLD[key]
+
 
 # ----- the input -------------------------------------------------------------------------
 
@@ -558,8 +756,8 @@ def spec_of(raw: str) -> dict[str, Any]:
         raise _refuse("missing_input", fields=missing)
     UUID(str(body["command_id"]))
     organisations = list(body["organisations"])
-    if not organisations or any(key not in ORGS for key in organisations):
-        raise _refuse("unknown_organisation", known=sorted(ORGS))
+    if not organisations or any(key not in ORGS and key not in WORLD for key in organisations):
+        raise _refuse("unknown_organisation", known=sorted([*ORGS, *WORLD]))
     if len(set(organisations)) != len(organisations):
         raise _refuse("organisation_twice")
     if "@" not in str(body["seller_mailbox"]):
@@ -599,7 +797,10 @@ def seller_email(mailbox: str, seller: Seller) -> str:
 def logins(spec: dict[str, Any]) -> dict[str, list[str]]:
     """The sellers' sign-in emails, per organisation."""
     return {
-        key: [seller_email(spec["seller_mailbox"], seller) for seller in ORGS[key].sellers]
+        key: [
+            seller_email(spec["seller_mailbox"], person)
+            for person in (*org_spec(key).sellers, *filter(None, (org_spec(key).manager,)))
+        ]
         for key in spec["organisations"]
     }
 
@@ -946,7 +1147,8 @@ class Run:
             )
         await desk.save_work_hours(WorkHoursCommand(**hours))
         # The owner and the coach take no leads; the sellers take all, without a limit.
-        for who in (self.people["owner"], self.people["admin"]):
+        managers = [self.people["manager"]] if "manager" in self.people else []
+        for who in (self.people["owner"], self.people["admin"], *managers):
             await desk.save_rep(
                 who.person_id, RepRules(expected_revision=0, available=False, max_open=None)
             )
@@ -1842,7 +2044,7 @@ async def run_one(
 ) -> dict[str, Any]:
     """One organisation: the change, its rehearsal, or its read-back, in the caller's
     transaction."""
-    org = ORGS[key]
+    org = org_spec(key)
     if spec.get("name_suffix"):
         org = org._replace(name=f"{org.name} {spec['name_suffix']}")
     base = UUID(str(spec["command_id"]))
@@ -1910,6 +2112,14 @@ async def run_one(
         )
         seller_ids.append(person_id)
         accounts.append({"email": email, "name": f"{seller.first} {seller.last}", "is": state})
+    manager_id: UUID | None = None
+    if org.manager is not None:
+        email = seller_email(spec["seller_mailbox"], org.manager)
+        name = f"{org.manager.first} {org.manager.last}"
+        manager_id, state = await _seller_account(
+            db, email, name, spec["password_hashes"].get(email), base, now
+        )
+        accounts.append({"email": email, "name": name, "is": state, "role": "admin"})
     report["sellers"] = accounts
 
     # 2. The organisation, its people, stages and sandbox flag.
@@ -1929,6 +2139,15 @@ async def run_one(
         operator_reference=reference,
         reason=why,
     )
+    if manager_id is not None:
+        await service.add_member(
+            tenant_id,
+            manager_id,
+            "admin",
+            uuid5(command_id, "member:manager"),
+            operator_reference=reference,
+            reason=why,
+        )
     for person_id in seller_ids:
         await service.add_member(
             tenant_id,
@@ -1956,6 +2175,8 @@ async def run_one(
         "owner": Actor(owner.id, "owner", owner.display_name or "Owner"),
         "admin": Actor(admin.id, "admin", admin.display_name or "Admin"),
     }
+    if manager_id is not None and org.manager is not None:
+        people["manager"] = Actor(manager_id, "admin", f"{org.manager.first} {org.manager.last}")
     sellers = [
         Actor(person_id, "member", f"{s.first} {s.last}")
         for person_id, s in zip(seller_ids, org.sellers, strict=True)

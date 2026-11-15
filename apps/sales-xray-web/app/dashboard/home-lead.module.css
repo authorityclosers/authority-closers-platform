@@ -1,0 +1,142 @@
+/* Home's tile list (owner, 15 Nov 2026): rows that arrive one by one, a soft
+   letter face, a round green Call; the same 8 / 13 / 21 rhythm as the tiles. */
+.rows {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rows > li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 64px;
+  padding: 8px 8px 8px 13px;
+  border-radius: 18px;
+  background: color-mix(in oklab, var(--sx-ink) 3.5%, transparent);
+  box-shadow: inset 0 0 0 0.5px
+    color-mix(in oklab, var(--sx-ink) 6%, transparent);
+  animation: rowIn 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes rowIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+.rows > li.wait {
+  background: linear-gradient(
+    90deg,
+    var(--sx-fill),
+    color-mix(in oklab, var(--sx-fill) 40%, transparent),
+    var(--sx-fill)
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+.row {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 140ms ease-out;
+}
+.row:active {
+  transform: scale(0.98);
+}
+.face {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: color-mix(
+    in oklab,
+    var(--lx-home-primary) 14%,
+    var(--sx-elevated)
+  );
+  color: var(--lx-home-primary);
+  font-weight: 800;
+}
+.words {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.words b {
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.words small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.call {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, white 14%, var(--lx-home-primary)),
+    var(--lx-home-primary) 60%,
+    color-mix(in oklab, black 10%, var(--lx-home-primary))
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 35%, transparent),
+    0 6px 12px -6px color-mix(in oklab, var(--lx-home-primary) 60%, transparent);
+  color: white;
+  cursor: pointer;
+  transition: transform 140ms ease-out;
+}
+.call:active {
+  transform: scale(0.92);
+}
+.note {
+  margin: 8px 0 13px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+.all {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 48px;
+  margin-top: 13px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--lx-home-primary) 10%, transparent);
+  color: var(--lx-home-primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rows > li {
+    animation: none;
+  }
+}

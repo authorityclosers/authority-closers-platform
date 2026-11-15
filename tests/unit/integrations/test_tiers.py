@@ -20,7 +20,11 @@ def test_defaults_keep_todays_access_and_nobody_gets_less_than_120_a_minute() ->
     for row in table["tiers"].values():
         assert row["per_minute"] >= 120 and row["workspace_per_minute"] >= row["per_minute"]
     trial = table["tiers"]["trial"]
-    assert trial["scopes"] == ["calls:read", "leads:read", "reports:read"]
+    assert trial["scopes"] == ["calls:read", "coaching:read", "leads:read", "reports:read"]
+    # Coaching rides with calls: coaching:write wherever calls:write is (14 Nov 2026).
+    for name, row in table["tiers"].items():
+        assert ("coaching:read" in row["scopes"]) is ("calls:read" in row["scopes"]), name
+        assert ("coaching:write" in row["scopes"]) is ("calls:write" in row["scopes"]), name
     assert trial["api_keys"] is False and trial["enforce_existing"] is False
     assert table["tiers"]["organisation"]["api_keys"] is True
     assert table["tiers"]["enterprise"]["per_minute"] == 300

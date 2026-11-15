@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PhoneHealth, RepView } from "./leads-client";
 import { parseSetup } from "./native-phone";
 import {
+  lineDone,
   lineTodo,
   PhoneSetupBar,
   reportedChecks,
@@ -266,9 +267,10 @@ describe("a seller's phone on Team", () => {
   });
 });
 
-it("counts Call recordings done once a folder is picked, as phone setup says", () => {
+it("counts Call recordings and the folder done once a folder is picked, as phone setup says", () => {
   // Redmi QA on the owner's production build, 13 Nov 2026: setup said
-  // "Recordings folder chosen" while this list said "Choose their folder".
+  // "Recordings folder chosen" while this list said "Choose their folder";
+  // on 14 Nov, Recordings folder found stayed unticked beside it too.
   const picker = { needsAllFiles: true, folderPickSupported: true };
   const picked = parseSetup(
     setup({ ...CHECKS, recordings: false }, { ...picker, folderPicked: true }),
@@ -276,11 +278,20 @@ it("counts Call recordings done once a folder is picked, as phone setup says", (
   const waiting = parseSetup(
     setup({ ...CHECKS, recordings: false }, { ...picker, folderPicked: false }),
   )!;
-  expect(setupProgress(picked).done).toBe(setupProgress(waiting).done + 1);
+  expect(setupProgress(picked).done).toBe(setupProgress(waiting).done + 2);
+  expect(lineDone("folder", picked)).toBe(true);
+  expect(lineDone("folder", waiting)).toBe(false);
+  expect(lineDone("testCall", picked)).toBe(false);
   expect(lineTodo("recordings", waiting)).toBe(FOLDER_TODO);
   expect(lineTodo("recordings", picked)).not.toBe(FOLDER_TODO);
-  expect(reportedChecks(picked)).toMatchObject({ recordings: true });
-  expect(reportedChecks(waiting)).toMatchObject({ recordings: false });
+  expect(reportedChecks(picked)).toMatchObject({
+    recordings: true,
+    folder: true,
+  });
+  expect(reportedChecks(waiting)).toMatchObject({
+    recordings: false,
+    folder: false,
+  });
 });
 
 it("says what to do on a line that isn't done, never what reads as done", () => {

@@ -422,3 +422,149 @@
     transform: none;
   }
 }
+
+/* Home's look (owner's chosen lower Home, 07 and 11, 14 Nov 2026). The period:
+   three equal halves, the chosen one Home's green pill. */
+.periods > [role="group"] {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+}
+
+/* The kits sliding thumb, in Homes green. */
+.periods > [role="group"] > span {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--lx-home-primary) 82%, white),
+    var(--lx-home-primary)
+  );
+  box-shadow:
+    0 3px 8px -3px color-mix(in oklab, var(--lx-home-primary) 70%, transparent),
+    inset 0 1px 0 color-mix(in oklab, white 24%, transparent);
+}
+
+.periods > [role="group"] > button {
+  min-height: 40px;
+  color: var(--sx-muted);
+  font-weight: 700;
+  /* White as the pill arrives under it, never on the grey before. */
+  transition: color 160ms var(--sx-ease-out) 120ms;
+}
+
+.periods > [role="group"] > button[aria-pressed="true"] {
+  color: var(--lx-on-teal);
+}
+
+.window {
+  margin: -2px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+/* Each tile the accepted card: its icon and name, the number on its own row,
+   what it counts and its window, the change over a hairline at its foot; a
+   soft wash of its colour. */
+.tiles .tile {
+  --look: var(--lx-home-emerald);
+  --look-soft: var(--lx-home-emerald-soft);
+
+  gap: 0;
+  padding: 12px 12px 0;
+  border: 1px solid color-mix(in oklab, var(--look) 14%, transparent);
+  border-radius: 18px;
+  background: linear-gradient(
+    165deg,
+    var(--look-soft) 0%,
+    color-mix(in oklab, var(--look-soft) 40%, var(--sx-surface)) 100%
+  );
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--lx-film) 6%, transparent);
+}
+
+.tiles .tile[data-look="violet"] {
+  --look: var(--lx-home-violet);
+  --look-soft: var(--lx-home-violet-soft);
+}
+
+.tiles .tile[data-look="orange"] {
+  --look: var(--lx-home-orange);
+  --look-soft: var(--lx-home-orange-soft);
+}
+
+.tiles .tile[data-look="rose"] {
+  --look: var(--lx-home-rose);
+  --look-soft: var(--lx-home-rose-soft);
+}
+
+.tiles .tile[data-look="sky"] {
+  --look: var(--lx-home-sky);
+  --look-soft: var(--lx-home-sky-soft);
+}
+
+.tiles .label {
+  justify-content: flex-start;
+  gap: 8px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 750;
+}
+
+.tileIcon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border-radius: 9px;
+  background: color-mix(
+    in oklab,
+    var(--look, var(--tone)) 14%,
+    var(--sx-surface)
+  );
+  color: var(--look, var(--tone));
+}
+
+.tiles .label .tileIcon svg {
+  color: inherit;
+}
+
+.tiles .value {
+  margin-top: 12px;
+}
+
+.tiles .note {
+  display: grid;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.tileFoot {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  margin-top: 10px;
+  border-top: 1px solid
+    color-mix(in oklab, var(--look, var(--tone)) 18%, transparent);
+}
+
+/* A rise reads green and a fall rose on every tile, whatever its colour. */
+.tiles .change[data-trend="up"] {
+  color: var(--lx-home-emerald);
+}
+
+.tiles .change[data-trend="down"] {
+  color: var(--lx-home-rose);
+}
+
+/* The period's pill flat, like Team/Me and Inbound (critique 01). */
+.periods > [role="group"] > span {
+  background: var(--lx-home-emerald);
+  box-shadow: none;
+}
+
+.periods > [role="group"] > button[aria-pressed="true"] {
+  color: var(--sx-surface);
+}

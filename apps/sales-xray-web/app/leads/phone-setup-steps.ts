@@ -27,6 +27,10 @@ export const folderPick = (status: SetupStatus) =>
   !status.allFilesSupported &&
   status.folderPickSupported;
 
+/** A recordings folder was picked: Call recordings is done, as the checklist says. */
+export const folderChosen = (status: SetupStatus) =>
+  status.folderPickSupported && status.folderPicked;
+
 /** The only dialler is Google's Phone app, which keeps its recordings to itself. */
 export const privateDialler = (status: SetupStatus) =>
   status.recorder?.kind === "private";
@@ -67,9 +71,11 @@ export function flowSteps(
   const steps: FlowStep[] = [];
   if (!done(status, "calls")) steps.push("calls");
   if (!done(status, "notifications")) steps.push("notifications");
-  // A private dialler's recordings step is said once, then left out.
+  // A private dialler's recordings step is said once, then left out; a picked
+  // folder needs no recordings step (Redmi QA on production, 14 Nov 2026).
   if (
     !done(status, "recordings") &&
+    !folderChosen(status) &&
     !(privateDialler(status) && privateDiallerSeen())
   )
     steps.push("recordings");

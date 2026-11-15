@@ -4584,7 +4584,11 @@ export function LeadSheet({
   focusAt = null,
   round = null,
   stages = null,
+  framed = "page",
 }: {
+  /** "sheet": a tall pop-up with an X and a drag down to close, over the page
+   *  it opened from (Home, owner 15 Nov 2026); "page": Leads' own lead page. */
+  framed?: "page" | "sheet";
   /** The organisation's stages in path order, for the step strip (P5). */
   stages?: readonly StageView[] | null;
   leadId: string | null;
@@ -4739,6 +4743,7 @@ export function LeadSheet({
     <>
       <PaneOrSheet
         inline={inline}
+        framed={framed}
         open={leadId !== null}
         rowKey={leadId}
         footer={
@@ -4910,6 +4915,7 @@ export function LeadSheet({
 /** The lead as a page, or in the pane beside the list on a wide screen. */
 function PaneOrSheet({
   inline,
+  framed = "page",
   open,
   footer,
   label,
@@ -4919,6 +4925,7 @@ function PaneOrSheet({
   children,
 }: {
   inline: boolean;
+  framed?: "page" | "sheet";
   open: boolean;
   footer?: ReactNode;
   label: string;
@@ -4932,6 +4939,21 @@ function PaneOrSheet({
   // Beside the list too, Back closes the lead before it leaves Leads, and the
   // lead's address entry is its own (the open lead in the address).
   useBackClose(inline && open, onClose);
+  // Over Home: the springy sheet, its X, its grabber and drag down to close;
+  // the lead's ⋯ sits at its top beside the X.
+  if (!inline && framed === "sheet")
+    return (
+      <Sheet
+        open={open}
+        label={label}
+        onClose={onClose}
+        footer={footer}
+        className={styles.leadOverPage}
+      >
+        <div className={styles.leadOverMenu} ref={menuSlot} />
+        {children}
+      </Sheet>
+    );
   // A page, not a sheet (lead page P5): one scroll, the list kept behind it.
   if (!inline)
     return (

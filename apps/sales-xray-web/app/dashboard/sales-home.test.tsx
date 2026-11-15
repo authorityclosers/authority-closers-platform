@@ -314,10 +314,12 @@ it("gives an owner the team's floor, one side at a time", async () => {
       need.getAttribute("data-need"),
     ),
   ).toEqual(["fresh", "late", "unowned", "gaps", "recordings"]);
-  // Each seller's day, the unexplained hour-long break in red.
+  // Each seller's day, the unexplained hour-long break as the row's line.
   const seller = host.querySelector('[aria-label="Each seller today"] a');
   expect(seller?.textContent?.toLowerCase()).toContain("priya example");
-  expect(seller?.querySelector("[data-red]")?.textContent).toBe("1 h 15 min");
+  expect(seller?.querySelector("small[data-warn]")?.textContent).toBe(
+    "Break 1 h 15 min",
+  );
   // How sales are going: the outcomes in a grid, no sideways row.
   expect(
     Array.from(
@@ -339,11 +341,11 @@ it("gives an owner the team's floor, one side at a time", async () => {
   ).toContain("Your team");
   expect(host.querySelector('a[href="/reports"]')).not.toBeNull();
   // The owner's own tasks and follow-ups sit beside the team's (Dipak: owners
-  // have their tasks too), with + Add up front.
+  // have their tasks too), with Add task at the card's foot.
   expect(
     Array.from(host.querySelectorAll("h2"), (title) => title.textContent),
   ).toContain("My tasks");
-  expect(buttons).toContain("+ Add");
+  expect(buttons).toContain("Add task");
 
   // Cold: Unworked, never mixed with Inbound.
   const cold = Array.from(host.querySelectorAll("[role=radio]")).find((radio) =>
@@ -523,7 +525,8 @@ it("holds the floor's note and faces in their place until the numbers land", asy
   await mount(true);
   const waiting = () => host.querySelectorAll("li[data-wait]").length;
   expect(waiting()).toBe(7);
-  expect(host.textContent).toContain("0% of today's leads called");
+  // The hero's team line is chips now (owner, 15 Nov 2026).
+  expect(host.textContent).toContain("Team performance");
   await act(async () => root.unmount());
   host.remove();
   window.localStorage.setItem("sx:home-floor-faces", "3");

@@ -128,6 +128,8 @@ export function usePullToRefresh(onRefresh: () => Promise<unknown> | void) {
         (child): child is HTMLElement =>
           child instanceof HTMLElement &&
           child !== spinner.current &&
+          // Rows that must not slide alone (owner 15 Nov: only Team | Me moved on a pull).
+          !child.hasAttribute("data-pull-still") &&
           getComputedStyle(child).position !== "fixed",
       );
       pull = 0;
