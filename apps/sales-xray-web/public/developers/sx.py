@@ -18,6 +18,7 @@ command-line argument, so it stays out of shell history and process lists).
                                               # file, or its transcript (reports:read)
     sx coaching [--call CALL_ID | --team]     # Coaching: yours (as a person), one of
                                               # your calls, or the team's counts
+    sx team                                   # names, roles, lead limits (team:read)
     sx minutes [--team]                       # analysis time given, used and left
                                               # (calls:read; --team: each member's use)
     sx leads [--stage KEY|open] [--offset N]  # KEY: one of the stages each page lists
@@ -182,6 +183,9 @@ class Client:
 
     def facts(self, call_id: str) -> Any:
         return self.call("GET", f"/calls/{urllib.parse.quote(call_id, safe='')}/facts")
+
+    def team(self) -> Any:
+        return self.call("GET", "/team")
 
     def analysis_time(self, team: bool = False) -> Any:
         return self.call("GET", "/analysis-time/team" if team else "/analysis-time")
@@ -625,6 +629,12 @@ TOOLS += [
             "required": ["change", "request_id"],
         },
     },
+    {
+        "name": "list_team",
+        "description": "The team: names and roles (never emails), who takes new leads, lead "
+        "limits and today's work. Its person_id values are what assign_lead takes.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
 ]
 
 
@@ -830,6 +840,8 @@ def _tool(client: Client, name: str, args: dict[str, Any]) -> Any:
             if key in args
         }
         return client.import_leads(body, args.get("request_id") or _request_id())
+    if name == "list_team":
+        return client.team()
     if name == "analysis_time":
         return client.analysis_time(args.get("team") is True)
     if name == "list_tasks":
@@ -1032,6 +1044,7 @@ def _parser() -> argparse.ArgumentParser:
     coaching_of = coaching.add_mutually_exclusive_group()
     coaching_of.add_argument("--call", metavar="CALL_ID")
     coaching_of.add_argument("--team", action="store_true")
+    commands.add_parser("team")
     minutes = commands.add_parser("minutes")
     minutes.add_argument("--team", action="store_true")
     leads = commands.add_parser("leads")
@@ -1202,6 +1215,8 @@ def main(
             out = _report(client, args)
         elif args.command == "coaching":
             out = client.coaching(args.call, args.team)
+        elif args.command == "team":
+            out = client.team()
         elif args.command == "minutes":
             out = client.analysis_time(args.team)
         elif args.command == "leads":

@@ -32,6 +32,7 @@ PATHS = (
     "/v1/api/calls/{call_id}/report.docx",
     "/v1/api/calls/{call_id}/transcript",
     "/v1/api/reports",
+    "/v1/api/team",
     "/v1/api/coaching",
     "/v1/api/coaching/team",
     "/v1/api/coaching/calls/{call_id}",

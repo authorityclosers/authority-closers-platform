@@ -110,6 +110,7 @@ def test_the_mcp_server_lists_and_calls_tools() -> None:
         "call_coaching",
         "team_coaching",
         "analysis_time",
+        "list_team",
         "list_tasks",
         "complete_task",
         "snooze_task",
@@ -210,6 +211,18 @@ def test_a_stage_move_from_the_command_line_and_the_mcp_tool() -> None:
     sent = json.loads(fake.seen[1][3])
     assert sent["step"] == "follow_up" and sent["next_action_at"].startswith("2026-11-20")
     assert "reason_code" not in sent and "expected_revision" not in sent
+
+
+def test_the_team_from_the_command_line_and_the_mcp_tool() -> None:
+    env = {"SX_API_KEY": KEY, "SX_API_BASE": "https://salesxray.example.test/v1/api"}
+    fake = Fake({("GET", "/team"): (200, {"people": [{"name": "Asha"}], "unassigned_leads": 0})})
+    assert sx.main(["team"], env, fake) == 0
+    assert fake.seen[0][1].endswith("/v1/api/team")
+    called = sx.handle(
+        client(fake),
+        {"id": 1, "method": "tools/call", "params": {"name": "list_team", "arguments": {}}},
+    )
+    assert json.loads(called["result"]["content"][0]["text"])["people"][0]["name"] == "Asha"
 
 
 def test_analysis_time_from_the_command_line_and_the_mcp_tool() -> None:

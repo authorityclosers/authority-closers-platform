@@ -45,6 +45,10 @@ Base address: ``https://<sales x-ray host>/v1/api``.
 - POST /tasks/{id}/snooze   snooze a task on a lead (15m, 1h, evening, tomorrow, week), as
                             an AI write with Undo (puts its due back) (leads:tasks; the
                             owner's switch for tasks decides both)
+- GET  /team                the team as the app shows it: names and roles (never emails),
+                            who takes new leads, lead limits and today's work, and the
+                            unassigned leads (team:read; an organisation's key, or a
+                            person whose role sees the team)
 - GET  /analysis-time       the workspace's analysis time: given, used and left, and the
                             longest call (calls:read; time only, never a price;
                             integrations/analysis_time.py)
@@ -808,6 +812,39 @@ class Reader:
         answer, _ = await self._write(writes.undo(change_id, request_id=body.request_id))
         return answer
 
+    async def team(self) -> dict[str, Any]:
+        """The team as Lead Desk's Team page shows it, for apps (API gap 7, 15 Nov 2026):
+        each person's name and role (never an email or phone), whether they take new leads,
+        their lead limit and open leads, and today's work; and the leads waiting for an
+        owner. Who may see it is the desk's own check (an organisation's key always)."""
+        self.require("team:read")
+        try:
+            team = await self._desk().team()
+        except DeskError as error:
+            raise ApiError(error.status, "lead_desk", str(error)) from None
+        return {
+            "people": [
+                {
+                    "person_id": str(rep.person_id),
+                    "name": rep.name,
+                    "role": rep.role,
+                    "takes_new_leads": rep.available,
+                    "max_open_leads": rep.max_open,
+                    "open_leads": rep.open_leads,
+                    "over_limit": rep.over_capacity,
+                    "due_now": rep.due_now,
+                    "calls_today": rep.calls_today,
+                    "connected_today": rep.connected_today,
+                    "languages": list(rep.languages),
+                    "areas": list(rep.areas),
+                    "interests": list(rep.interests),
+                }
+                for rep in team.reps
+            ],
+            "unassigned_leads": team.unassigned,
+            "waiting_first_call": team.waiting_first_call,
+        }
+
     async def analysis_time(self, *, team: bool = False) -> dict[str, Any]:
         """The workspace's analysis time (and, for ``team``, each member's share), read as
         the app reads it. Time only, never a price; names, never emails."""
@@ -1226,6 +1263,11 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
             if found is None:
                 raise ApiError(404, "upload_missing", "No such recording from this connection.")
             return done(app_uploads.upload_view(found, upload_base))
+
+    @router.get("/team")
+    async def team(request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.team())
 
     @router.get("/analysis-time")
     async def analysis_left(request: Request) -> JSONResponse:

@@ -174,6 +174,18 @@ TOOLS: tuple[dict[str, Any], ...] = (
     # Coaching from those reports (integrations/coaching_api.py).
     *coaching_api.TOOLS,
     {
+        "name": "list_team",
+        "title": "List the team",
+        "description": (
+            "The team: each person's name and role (never an email), whether they take new "
+            "leads, their lead limit, open leads and today's calls, and the leads waiting "
+            "for an owner. Use a person_id from here to give leads (assign_lead)."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+        "annotations": _READS,
+        "scope": "team:read",
+    },
+    {
         "name": "analysis_time",
         "title": "Analysis time left",
         "description": (
@@ -794,6 +806,8 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
         return await reader.call(_uuid(args, "call_id"))
     if name == "call_facts":
         return await reader.facts(_uuid(args, "call_id"))
+    if name == "list_team":
+        return await reader.team()
     if name == "analysis_time":
         return await reader.analysis_time(team=args.get("team") is True)
     if name == "list_leads":

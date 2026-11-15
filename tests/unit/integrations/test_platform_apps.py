@@ -147,6 +147,7 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "call_coaching",
         "team_coaching",
         "analysis_time",
+        "list_team",
         "list_leads",
         "get_lead",
         "list_duplicates",
@@ -199,6 +200,9 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "list_tasks",
         *LESSONS,
     }
+    # The team (15 Nov 2026): names, never emails, its own scope.
+    team = {tool["name"] for tool in mcp_http.listed(frozenset({"team:read"}))}
+    assert team == {"whoami", "list_team", *LESSONS}
     assert {tool["name"] for tool in mcp_http.listed(frozenset({"webhooks:manage"}))} == {
         "whoami",
         *LESSONS,
