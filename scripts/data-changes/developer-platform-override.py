@@ -12,16 +12,24 @@ using Claude"): ``developer_platform.advertise_writes`` lets connected apps (Cla
 write. MCP then lists the write tools the plan allows, and Connect offers the plan's lead
 writes to an app that asks for no scope (``oauth_http.connect_scopes``).
 
-This sets ``--tenant`` with ``--tier`` or ``--remove``, ``--advertise-writes on|off``, or both,
-through what Admin's "Save" does (PUT ``/v1/admin/economics/settings``,
-``economics.admin_http``), nothing reimplemented: a new revision through
+Orchestrator, 15 Nov 2026: each tier's scope list is saved in the settings (revision 1, 30 Oct),
+and a saved list beats the code's defaults, so a scope added since (coaching:read and
+coaching:write, leads:stage, recordings:write, team:read) reaches no tier until the table
+says so. ``--grant-scope TIER=SCOPE`` and ``--revoke-scope TIER=SCOPE`` (each repeatable)
+add or take away exactly those scopes on exactly those tiers.
+
+This sets ``--tenant`` with ``--tier`` or ``--remove``, ``--advertise-writes on|off``, scope
+grants and revokes, or any of them together, through what Admin's "Save" does (PUT
+``/v1/admin/economics/settings``, ``economics.admin_http``), nothing reimplemented: a new
+revision through
 ``economics.store.save`` (checked by ``economics.policy``), audited as
 ``economics.settings_saved`` with the old and new settings and the reason, plus the approval
 (approver, issue, this script). Every other setting (fees, routes, the costs, the tiers' own
 limits, other workspaces' overrides) stays as saved; if saving would change anything else, it
 is refused. Owner-approved data change (AGENTS.md): dry run by default, before and after
 printed, one transaction, idempotent (what is already saved changes nothing). ``--remove``
-undoes an override, ``--advertise-writes off`` undoes writes.
+undoes an override, ``--advertise-writes off`` undoes writes, ``--revoke-scope`` undoes a
+grant.
 
 The API reads the settings through a one-minute cache, so a change applies within a minute.
 
@@ -35,6 +43,7 @@ Run on ac with the dev-live API's settings (the slot the API runs from, a or b):
       cd /srv/authority-closers/development/live-backend/a && .venv/bin/python - \\
       --environment development --control-email <control account> \\
       [--tenant <workspace id> (--tier <tier> | --remove)] [--advertise-writes on|off] \\
+      [--grant-scope <tier>=<scope> ...] [--revoke-scope <tier>=<scope> ...] \\
       --approver "<approver>" --issue <reference> --reason "<their words>" [--apply]' \\
       < scripts/data-changes/developer-platform-override.py
 
@@ -43,6 +52,7 @@ In staging or production, inside the deployed API container:
     docker exec -i ac-application-production-api-1 python - \\
       --environment production --allow-production --control-email <control account> \\
       [--tenant <workspace id> (--tier <tier> | --remove)] [--advertise-writes on|off] \\
+      [--grant-scope <tier>=<scope> ...] [--revoke-scope <tier>=<scope> ...] \\
       --approver "<approver>" --issue <reference> --reason "<their words>" [--apply] \\
       < scripts/data-changes/developer-platform-override.py
 
@@ -69,8 +79,9 @@ SAVED = "economics.settings_saved"
 SECTION = "developer_platform"
 # The tiers (integrations.tier_policy.TIERS); kept here so --help works without the package.
 TIERS = ("unbilled", "trial", "personal", "organisation", "enterprise")
-# The developer_platform fields this script may change; the rest of the section stays.
-CHANGED = ("overrides", "advertise_writes")
+# The developer_platform fields this script may change (of the tiers, only the named ones'
+# scope lists); the rest of the section stays.
+CHANGED = ("overrides", "advertise_writes", "tiers")
 
 
 class Refused(RuntimeError):
@@ -93,6 +104,9 @@ class Command:
     tier: str | None = None
     # None leaves it as saved.
     advertise_writes: bool | None = None
+    # (tier, scope) pairs to add to or take from a tier's scope list.
+    grants: tuple[tuple[str, str], ...] = ()
+    revokes: tuple[tuple[str, str], ...] = ()
     apply: bool = False
 
 
@@ -108,6 +122,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--advertise-writes", choices=("on", "off"), help="let connected apps write, or not"
     )
+    parser.add_argument(
+        "--grant-scope", action="append", default=[], help="TIER=SCOPE: add it to that tier"
+    )
+    parser.add_argument(
+        "--revoke-scope", action="append", default=[], help="TIER=SCOPE: take it from that tier"
+    )
     parser.add_argument("--approver", required=True)
     parser.add_argument("--issue", required=True)
     parser.add_argument("--reason", required=True, help="the approval, in the approver's words")
@@ -120,6 +140,19 @@ def tenant(raw: str) -> UUID:
         return UUID(raw.strip())
     except ValueError:
         raise Refused("tenant_must_be_a_workspace_id") from None
+
+
+def pairs(raw: list[str]) -> tuple[tuple[str, str], ...]:
+    """``TIER=SCOPE`` arguments as (tier, scope) pairs, in order, each once."""
+    found: list[tuple[str, str]] = []
+    for item in raw:
+        tier_name, sep, scope = item.strip().partition("=")
+        if not sep or not tier_name.strip() or not scope.strip():
+            raise Refused("a_scope_change_is_tier_equals_scope")
+        pair = (tier_name.strip(), scope.strip())
+        if pair not in found:
+            found.append(pair)
+    return tuple(found)
 
 
 def command_from(args: argparse.Namespace) -> Command:
@@ -137,6 +170,8 @@ def command_from(args: argparse.Namespace) -> Command:
         tenant_id=None if args.tenant is None else tenant(args.tenant),
         tier=None if args.remove else args.tier,
         advertise_writes=None if args.advertise_writes is None else args.advertise_writes == "on",
+        grants=pairs(args.grant_scope),
+        revokes=pairs(args.revoke_scope),
         apply=bool(args.apply),
     )
 
@@ -145,12 +180,24 @@ def check(command: Command) -> Command:
     """The command, or why it can't run (before anything is read)."""
     from ac_platform.integrations import tier_policy
 
-    if command.tenant_id is None and command.advertise_writes is None:
+    if (
+        command.tenant_id is None
+        and command.advertise_writes is None
+        and not command.grants
+        and not command.revokes
+    ):
         raise Refused("nothing_to_change")
     if command.tenant_id is None and command.tier is not None:
         raise Refused("tier_and_remove_need_a_tenant")
     if command.tier is not None and command.tier not in tier_policy.TIERS:
         raise Refused("tier_is_not_a_developer_platform_tier")
+    for tier_name, scope in (*command.grants, *command.revokes):
+        if tier_name not in tier_policy.TIERS:
+            raise Refused("tier_is_not_a_developer_platform_tier")
+        if scope not in tier_policy.EVERY:
+            raise Refused("scope_is_not_a_developer_platform_scope")
+    if set(command.grants) & set(command.revokes):
+        raise Refused("a_scope_is_granted_and_revoked_at_once")
     reason = " ".join(command.reason.split())
     if not 1 <= len(reason) <= 200:
         raise Refused("reason_must_be_1_to_200_characters")
@@ -166,6 +213,8 @@ def check(command: Command) -> Command:
         tenant_id=command.tenant_id,
         tier=command.tier,
         advertise_writes=command.advertise_writes,
+        grants=command.grants,
+        revokes=command.revokes,
         apply=command.apply,
     )
 
@@ -205,14 +254,17 @@ async def _actor(database: Any, command: Command, operations_tenant_id: UUID) ->
     )
 
 
-def _state(section: dict[str, Any], key: str | None) -> dict[str, Any]:
-    """What the printout shows of the section: the flag, the overrides' count, this one."""
+def _state(section: dict[str, Any], key: str | None, tiers: list[str]) -> dict[str, Any]:
+    """What the printout shows of the section: the flag, the overrides' count, this one,
+    and the scope lists of the tiers being changed."""
     state: dict[str, Any] = {
         "advertise_writes": section["advertise_writes"],
         "overrides": len(section["overrides"]),
     }
     if key is not None:
         state["override"] = section["overrides"].get(key)
+    if tiers:
+        state["scopes"] = {name: list(section["tiers"][name]["scopes"]) for name in tiers}
     return state
 
 
@@ -252,21 +304,32 @@ async def execute(
         section["overrides"] = overrides
     if command.advertise_writes is not None:
         section["advertise_writes"] = command.advertise_writes
+    changing = sorted({name for name, _ in (*command.grants, *command.revokes)})
+    for name, scope in command.grants:
+        held = section["tiers"][name]["scopes"]
+        section["tiers"][name]["scopes"] = sorted({*held, scope})
+    for name, scope in command.revokes:
+        held = section["tiers"][name]["scopes"]
+        section["tiers"][name]["scopes"] = sorted(set(held) - {scope})
     try:
         wanted = policy.validate({**before, SECTION: section})
     except policy.SettingsError as error:
         raise Refused(f"settings_refused_{error.code}") from None
 
-    # Only this workspace's override and the flag may change.
+    # Only this workspace's override, the flag and the named tiers' scope lists may change.
     def rest(config: dict[str, Any]) -> dict[str, Any]:
         others = {k: v for k, v in config[SECTION]["overrides"].items() if k != key}
         kept = {k: v for k, v in config[SECTION].items() if k not in CHANGED}
-        return {**config, SECTION: {**kept, "other_overrides": others}}
+        tiers = {
+            name: {**row, "scopes": None} if name in changing else row
+            for name, row in config[SECTION]["tiers"].items()
+        }
+        return {**config, SECTION: {**kept, "other_overrides": others, "tiers": tiers}}
 
     if rest(before) != rest(wanted):
         raise Refused("saving_would_change_other_settings")
-    result["before"] = {"revision": revision, **_state(before[SECTION], key)}
-    result["after"] = _state(wanted[SECTION], key)
+    result["before"] = {"revision": revision, **_state(before[SECTION], key, changing)}
+    result["after"] = _state(wanted[SECTION], key, changing)
     if all(before[SECTION][field] == wanted[SECTION][field] for field in CHANGED):
         return {**result, "status": "no_op"}
     saved = await store.save(

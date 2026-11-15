@@ -164,6 +164,45 @@ def test_one_workspace_gets_a_tier_and_loses_it_like_an_admin_save(
             with pytest.raises(script.Refused, match="nothing_to_change"):
                 await do(apply=True, tenant_id=None, tier=None)
 
+            # A scope reaches exactly the named tiers; the others and every limit stay.
+            scoped = {"tenant_id": None, "tier": None}
+            grant = await do(apply=True, **scoped, grants=(("trial", "leads:notes"),))
+            assert grant["status"] == "applied"
+            assert "leads:notes" not in grant["before"]["scopes"]["trial"]
+            assert "leads:notes" in grant["after"]["scopes"]["trial"]
+            after, revision = await saved()
+            assert revision == 5
+            trial = after["developer_platform"]["tiers"]["trial"]
+            assert "leads:notes" in trial["scopes"]
+            unchanged = {
+                **after["developer_platform"]["tiers"],
+                "trial": {
+                    **trial,
+                    "scopes": before["developer_platform"]["tiers"]["trial"]["scopes"],
+                },
+            }
+            assert unchanged == before["developer_platform"]["tiers"]
+            assert (await do(apply=True, **scoped, grants=(("trial", "leads:notes"),)))[
+                "status"
+            ] == "no_op"
+            taken_back = await do(apply=True, **scoped, revokes=(("trial", "leads:notes"),))
+            assert taken_back["status"] == "applied"
+            after, revision = await saved()
+            assert revision == 6 and after == before
+            for wrong, code in (
+                ((("gold", "leads:notes"),), "tier_is_not"),
+                ((("trial", "leads:delete"),), "scope_is_not"),
+            ):
+                with pytest.raises(script.Refused, match=code):
+                    await do(apply=True, **scoped, grants=wrong)
+            with pytest.raises(script.Refused, match="granted_and_revoked"):
+                await do(
+                    apply=True,
+                    **scoped,
+                    grants=(("trial", "leads:notes"),),
+                    revokes=(("trial", "leads:notes"),),
+                )
+
             async with setup.sessions() as db:
                 events = (
                     await db.scalars(
@@ -172,7 +211,7 @@ def test_one_workspace_gets_a_tier_and_loses_it_like_an_admin_save(
                         .order_by(AuditEvent.sequence_no)
                     )
                 ).all()
-            assert len(events) == 4
+            assert len(events) == 6
             for event in events:
                 assert event.actor_person_id == setup.actor.person_id
                 assert event.payload["reason"] == WORDS
@@ -182,9 +221,11 @@ def test_one_workspace_gets_a_tier_and_loses_it_like_an_admin_save(
                     "data_change": script.DATA_CHANGE,
                     "operator": script.OPERATOR,
                 }
-            given, taken, writes_on, writes_off = (
+            given, taken, writes_on, writes_off, granted, revoked = (
                 event.payload["new"]["developer_platform"] for event in events
             )
+            assert "leads:notes" in granted["tiers"]["trial"]["scopes"]
+            assert "leads:notes" not in revoked["tiers"]["trial"]["scopes"]
             assert given["overrides"] == {workspace: "organisation"} and taken["overrides"] == {}
             assert writes_on["advertise_writes"] is True and writes_off["advertise_writes"] is False
         finally:
@@ -221,8 +262,27 @@ def test_the_cli_takes_a_tenant_with_one_tier_or_remove_and_the_writes_flag() ->
         ["--tier", "organisation"],  # no workspace
         ["--remove", "--advertise-writes", "on"],
         ["--tenant", "not-a-workspace", "--tier", "organisation"],
+        ["--grant-scope", "trial"],  # not TIER=SCOPE
+        ["--grant-scope", "=leads:notes"],
     ):
         assert script.main([*common, *refused]) == 2
+    granting = script.command_from(
+        script._parser().parse_args(
+            [
+                *common,
+                "--grant-scope",
+                "organisation=leads:stage",
+                "--grant-scope",
+                " enterprise = leads:stage ",
+                "--grant-scope",
+                "organisation=leads:stage",
+                "--revoke-scope",
+                "trial=coaching:read",
+            ]
+        )
+    )
+    assert granting.grants == (("organisation", "leads:stage"), ("enterprise", "leads:stage"))
+    assert granting.revokes == (("trial", "coaching:read"),)
     parse = script._parser().parse_args
     flag = script.command_from(parse([*common, "--advertise-writes", "on"]))
     assert flag.advertise_writes is True and flag.tenant_id is None and flag.tier is None
