@@ -1454,6 +1454,7 @@ class PrepareRunner(FakeRunner):
         super().__init__()
         self.fail = fail
         self.prepared: list[list[str]] = []
+        self.checked: list[list[str]] = []
         self.inspections: list[str] = []
 
     def __call__(self, argv, **kwargs) -> subprocess.CompletedProcess[str]:
@@ -1481,6 +1482,13 @@ class PrepareRunner(FakeRunner):
             return subprocess.CompletedProcess(argv, 0, json.dumps(result), "")
         if argv[:2] == ["docker", "inspect"] and self.inspections:
             return subprocess.CompletedProcess(argv, 0, self.inspections.pop(0) + "\n", "")
+        if argv[:2] == ["docker", "run"] and "--check-replacement-approval" in argv:
+            self.checked.append(argv)
+            digest = argv[argv.index("--approval-sha256") + 1]
+            answer = {"replacement_approval": "valid", "approval_sha256": digest}
+            return subprocess.CompletedProcess(
+                argv, 0, json.dumps({**answer, "service_sha256": "e" * 64}), ""
+            )
         return super().__call__(argv, **kwargs)
 
 
@@ -1514,6 +1522,23 @@ def hosted_setup(tmp_path: Path, *, expires_in: int = 90 * DAY, github=None, run
     )
     (engine.paths.application / "operator-inputs" / "staging").mkdir(parents=True)
     return engine
+
+
+def _checkable(engine, tmp_path: Path) -> None:
+    """What a replacement approval's check needs: the running release's API image and the
+    target's packages/python (from the mirror in a real run)."""
+    images = engine.paths.application / "releases" / OLD / "release-images.env"
+    images.parent.mkdir(parents=True, exist_ok=True)
+    images.write_text("AC_API_IMAGE=sha256:" + "a" * 64 + "\n")
+    packages = tmp_path / "packages"
+    packages.mkdir(exist_ok=True)
+    engine.approval_check_packages = lambda sha, stage: packages
+    running = engine.activation_path("staging", OLD)
+    descriptor = json.loads(running.read_text())
+    (tmp_path / "service.json").write_text("{}")
+    running.write_text(
+        json.dumps({**descriptor, "service_config_file": str(tmp_path / "service.json")})
+    )
 
 
 def prepare(engine, tmp_path: Path, *, dry_run: bool = False) -> dict[str, Any]:
@@ -1569,6 +1594,7 @@ def test_root_adds_openai_and_a_sealed_approval_once_through_the_release(
     sealed approval into operator-inputs/staging/; the next carried-forward activation adds
     them, and a later one, whose source has both, passes neither again."""
     engine = hosted_setup(tmp_path)
+    _checkable(engine, tmp_path)
     inputs = engine.paths.application / "operator-inputs" / "staging"
     (inputs / "openai-provider.json").write_text('{"provider_id": "openai"}\n')
     sealed = inputs / "next-approval.json"
@@ -1582,6 +1608,17 @@ def test_root_adds_openai_and_a_sealed_approval_once_through_the_release(
     )
     assert argv[argv.index("--approval-file") + 1] == str(sealed)
     assert argv[argv.index("--approval-sha256") + 1] == MODULE._sha256_file(sealed)
+    # v1.67 (16 Nov 2026): the host's python3 can't load the approval contract, so the
+    # approval was checked first in the running release's API image, and the prepare run
+    # gets what was checked.
+    (check,) = engine.run.checked
+    assert check[check.index("--network") + 1] == "none" and "--read-only" in check
+    assert "sha256:" + "a" * 64 in check  # the running release's API image
+    assert f"{tmp_path / 'packages'}:/src/packages/python:ro" in check
+    assert f"{sealed}:/check/approval.json:ro" in check
+    assert f"{inputs / 'openai-provider.json'}:/check/openai-provider.json:ro" in check
+    assert argv[argv.index("--approval-checked-sha256") + 1] == MODULE._sha256_file(sealed)
+    assert argv[argv.index("--approval-checked-service-sha256") + 1] == "e" * 64
     assert summary["sales_xray_openai"] == "added"
     assert summary["sales_xray_approval"] == f"replaced by {'f' * 64}"
 
@@ -1612,6 +1649,7 @@ def test_the_expiry_guard_checks_the_replacement_approval(tmp_path: Path) -> Non
     (tmp_path / "fresh").mkdir()
     (tmp_path / "stale").mkdir()
     engine = hosted_setup(tmp_path / "fresh", expires_in=3600)
+    _checkable(engine, tmp_path / "fresh")
     inputs = engine.paths.application / "operator-inputs" / "staging"
     (inputs / "next-approval.json").write_text(
         json.dumps(

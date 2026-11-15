@@ -23,6 +23,15 @@ the dedicated mounted token path, and ``--openai-identity-dir`` the environment'
 dedicated host directory.  The new service lists it, the compose environment
 gains ``AC_XRAY_OPENAI_IDENTITY_DIR`` and the descriptor selects the OpenAI
 overlay; a source that already has OpenAI is refused.  No token is read.
+
+A replacement approval is validated with the hosted application's own approval contract,
+which needs pydantic.  The release engine runs this tool with the host's python3, which has
+neither pydantic nor the application package, so the engine first runs
+``--check-replacement-approval`` in a disposable container of the API image (no network,
+read-only) and passes what it checked: ``--approval-checked-sha256`` and
+``--approval-checked-service-sha256`` (the approval's digest and the digest of the service
+it was checked against, the OpenAI entry included).  Here only that binding is re-checked;
+without it, the contract is imported here as before.
 """
 
 from __future__ import annotations
@@ -535,14 +544,8 @@ def _fresh_output_dir(output_dir: Path) -> None:
         raise _fail("output-dir cannot be created") from exc
 
 
-def _with_openai(
-    descriptor: dict[str, Any],
-    env: dict[str, str],
-    service: dict[str, Any],
-    provider_file: Path,
-    identity_dir: str,
-) -> tuple[dict[str, Any], dict[str, str], dict[str, Any]]:
-    """The source with the OpenAI worker identity added, validated as a whole."""
+def _service_with_openai(service: dict[str, Any], provider_file: Path) -> dict[str, Any]:
+    """The service with Root's OpenAI provider entry appended, checked entry by entry."""
 
     providers = service.get("providers")
     if not isinstance(providers, list) or not providers:
@@ -559,8 +562,56 @@ def _with_openai(
         raise _fail("OpenAI provider entry values must be nonempty strings")
     if entry["provider_id"] != "openai" or entry["token_file_ref"] != OPENAI_TOKEN_FILE:
         raise _fail("OpenAI provider entry must name openai and its mounted token path")
+    return {**service, "providers": [*providers, entry]}
+
+
+def check_replacement(
+    *,
+    approval_file: Path,
+    approval_sha256: str,
+    service_file: Path,
+    add_openai_provider: Path | None = None,
+) -> dict[str, Any]:
+    """Validate a replacement approval against the service the new activation will have
+    (``--check-replacement-approval``: run where the application package and pydantic are,
+    the release's API image) and report the binding the host prepare run re-checks."""
+
+    digest = _digest(approval_sha256, "replacement approval SHA-256")
+    try:
+        service = json.loads(_read_bytes(service_file, MAX_REFERENCE_BYTES))
+    except ValueError as exc:
+        raise _fail("the service to check against is not JSON") from exc
+    if not isinstance(service, dict):
+        raise _fail("the service to check against is invalid")
+    if add_openai_provider is not None:
+        service = _service_with_openai(service, add_openai_provider)
+    _validate_replacement_approval(
+        _read_bytes(approval_file, MAX_REFERENCE_BYTES),
+        expected_sha256=digest,
+        environment=str(service.get("environment")),
+        operations_tenant_id=str(service.get("operations_tenant_id")),
+        service=service,
+    )
+    return {
+        "replacement_approval": "valid",
+        "approval_sha256": digest,
+        "service_sha256": _sha(_json_bytes(service)),
+        "provider_calls": 0,
+        "writes": 0,
+    }
+
+
+def _with_openai(
+    descriptor: dict[str, Any],
+    env: dict[str, str],
+    service: dict[str, Any],
+    provider_file: Path,
+    identity_dir: str,
+) -> tuple[dict[str, Any], dict[str, str], dict[str, Any]]:
+    """The source with the OpenAI worker identity added, validated as a whole."""
+
+    next_service = _service_with_openai(service, provider_file)
     _openai_identity_dir(identity_dir, descriptor["environment"])
-    next_service = {**service, "providers": [*providers, entry]}
     next_env = {**env, "AC_XRAY_OPENAI_IDENTITY_DIR": identity_dir}
     next_descriptor = {**descriptor, "compose_overlay": OPENAI_OVERLAY}
     _validate_openai_identity_selection(next_descriptor, next_env, next_service)
@@ -581,12 +632,18 @@ def prepare(
     source_repository: Path | None = None,
     add_openai_provider: Path | None = None,
     openai_identity_dir: str | None = None,
+    approval_checked_sha256: str | None = None,
+    approval_checked_service_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Validate source inputs and write a new, inactive activation bundle."""
 
     target_release = _release(target_release_id, "target_release_id")
     if (approval_file is None) != (approval_sha256 is None):
         raise _fail("replacement approval path and digest must be supplied together")
+    if (approval_checked_sha256 is None) != (approval_checked_service_sha256 is None) or (
+        approval_checked_sha256 is not None and approval_file is None
+    ):
+        raise _fail("a checked replacement approval needs its approval and service digests")
     if (add_openai_provider is None) != (openai_identity_dir is None):
         raise _fail("the OpenAI provider entry and its identity directory go together")
     reuse_arguments = (native_reuse_proof, native_reuse_proof_sha256, source_repository)
@@ -637,13 +694,24 @@ def prepare(
             raise _fail("replacement approval requires a new target release")
         replacement_approval_digest = _digest(approval_sha256, "replacement approval SHA-256")
         replacement_approval_raw = _read_bytes(approval_file, MAX_REFERENCE_BYTES)
-        _validate_replacement_approval(
-            replacement_approval_raw,
-            expected_sha256=replacement_approval_digest,
-            environment=descriptor["environment"],
-            operations_tenant_id=service["operations_tenant_id"],
-            service=service,
-        )
+        if approval_checked_sha256 is not None:
+            # Checked with the contract in the release's API image (the engine's
+            # --check-replacement-approval run); here only that it was these bytes,
+            # against this very service.
+            if (
+                _sha(replacement_approval_raw) != replacement_approval_digest
+                or approval_checked_sha256 != replacement_approval_digest
+                or approval_checked_service_sha256 != _sha(_json_bytes(service))
+            ):
+                raise _fail("the checked replacement approval does not match these bytes")
+        else:
+            _validate_replacement_approval(
+                replacement_approval_raw,
+                expected_sha256=replacement_approval_digest,
+                environment=descriptor["environment"],
+                operations_tenant_id=service["operations_tenant_id"],
+                service=service,
+            )
     _fresh_output_dir(output_dir)
     environment = descriptor["environment"]
     artifact_prefix = native_artifact_sha256[:16]
@@ -736,6 +804,13 @@ def prepare(
         "approval_sha256": approval_output_digest,
         "approval_replaced": approval_output_raw is not None,
         "openai_added": add_openai_provider is not None,
+        "approval_checked_in": (
+            None
+            if approval_output_raw is None
+            else "image"
+            if approval_checked_sha256 is not None
+            else "here"
+        ),
         "output_dir": str(output_dir),
         "activation": str(activation_path),
         "activation_sha256": str(digest_path),
@@ -760,11 +835,38 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--add-openai-provider", type=Path)
     parser.add_argument("--openai-identity-dir")
+    parser.add_argument("--approval-checked-sha256")
+    parser.add_argument("--approval-checked-service-sha256")
+    return parser
+
+
+def _check_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Check a replacement approval only.")
+    parser.add_argument("--check-replacement-approval", action="store_true", required=True)
+    parser.add_argument("--approval-file", type=Path, required=True)
+    parser.add_argument("--approval-sha256", required=True)
+    parser.add_argument("--check-service", type=Path, required=True)
+    parser.add_argument("--add-openai-provider", type=Path)
     return parser
 
 
 def main(arguments: list[str] | None = None) -> int:
-    args = _parser().parse_args(arguments)
+    given = sys.argv[1:] if arguments is None else arguments
+    if "--check-replacement-approval" in given:
+        checking = _check_parser().parse_args(given)
+        try:
+            checked = check_replacement(
+                approval_file=checking.approval_file,
+                approval_sha256=checking.approval_sha256,
+                service_file=checking.check_service,
+                add_openai_provider=checking.add_openai_provider,
+            )
+        except (PrepareError, OSError, ValueError, TypeError, KeyError) as exc:
+            print(f"FAIL  {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(checked, sort_keys=True, indent=2))
+        return 0
+    args = _parser().parse_args(given)
     try:
         result = prepare(
             source_activation=args.source_activation,
@@ -779,6 +881,8 @@ def main(arguments: list[str] | None = None) -> int:
             source_repository=args.source_repository,
             add_openai_provider=args.add_openai_provider,
             openai_identity_dir=args.openai_identity_dir,
+            approval_checked_sha256=args.approval_checked_sha256,
+            approval_checked_service_sha256=args.approval_checked_service_sha256,
         )
     except (PrepareError, OSError, ValueError, TypeError, KeyError) as exc:
         print(f"FAIL  {exc}", file=sys.stderr)

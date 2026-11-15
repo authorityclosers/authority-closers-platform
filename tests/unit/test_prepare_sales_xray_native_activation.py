@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 from uuid import UUID
@@ -699,3 +700,111 @@ def test_prepare_requires_replacement_path_and_digest_together(
         )
 
     assert not (tmp_path / "prepared").exists()
+
+
+def test_the_replacement_approval_is_checked_where_the_contract_loads(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """v1.67 (16 Nov 2026): the engine checks the approval in the API image
+    (--check-replacement-approval) against the service the activation will have; the answer
+    binds the approval's digest and that service's."""
+    source_activation, _ = _write_source_activation(tmp_path)
+    monkeypatch.setattr(_MODULE.time, "time", lambda: 1_500)
+    service_file = Path(json.loads(source_activation.read_bytes())["service_config_file"])
+    replacement = _hosted_approval()
+    approval = tmp_path / "replacement.json"
+    approval.write_bytes(replacement)
+    digest = hashlib.sha256(replacement).hexdigest()
+    checked = _MODULE.check_replacement(
+        approval_file=approval, approval_sha256=digest, service_file=service_file
+    )
+    service = json.loads(service_file.read_bytes())
+    assert checked == {
+        "replacement_approval": "valid",
+        "approval_sha256": digest,
+        "service_sha256": hashlib.sha256(_MODULE._json_bytes(service)).hexdigest(),
+        "provider_calls": 0,
+        "writes": 0,
+    }
+    # With the OpenAI entry, the digest is that of the service with it.
+    entry = {**service["providers"][0], "provider_id": "openai"}
+    entry["credential_ref"] = "ref:credential/openai/1"
+    entry["token_file_ref"] = _MODULE.OPENAI_TOKEN_FILE
+    provider = tmp_path / "openai-provider.json"
+    provider.write_text(json.dumps(entry))
+    with_openai = _MODULE.check_replacement(
+        approval_file=approval,
+        approval_sha256=digest,
+        service_file=service_file,
+        add_openai_provider=provider,
+    )
+    expected = {**service, "providers": [*service["providers"], entry]}
+    assert (
+        with_openai["service_sha256"] == hashlib.sha256(_MODULE._json_bytes(expected)).hexdigest()
+    )
+    # The check-only command prints the same; another environment's approval is refused.
+    arguments = ["--check-replacement-approval", "--approval-file", str(approval)]
+    arguments += ["--approval-sha256", digest, "--check-service", str(service_file)]
+    assert _MODULE.main(arguments) == 0
+    other = _hosted_approval(environment="production")
+    approval.write_bytes(other)
+    arguments[arguments.index(digest)] = hashlib.sha256(other).hexdigest()
+    assert _MODULE.main(arguments) == 2
+
+
+def test_the_engines_host_python_takes_the_checked_approval(tmp_path: Path) -> None:
+    """The prepare run as the engine makes it (v1.67's staging deploy, 16 Nov 2026): python
+    without site-packages (no pydantic), so the contract can't load here. Alone, the
+    replacement is refused as before; with the check's digests it is installed, and digests
+    that don't match these bytes and this service are refused."""
+    source_activation, _ = _write_source_activation(tmp_path)
+    target = "2" * 40
+    replacement = _hosted_approval()
+    approval = tmp_path / "replacement.json"
+    approval.write_bytes(replacement)
+    digest = hashlib.sha256(replacement).hexdigest()
+    service_file = Path(json.loads(source_activation.read_bytes())["service_config_file"])
+    service_digest = hashlib.sha256(
+        _MODULE._json_bytes(json.loads(service_file.read_bytes()))
+    ).hexdigest()
+    driver = (
+        "import importlib.util, sys\n"
+        f"spec = importlib.util.spec_from_file_location('prep', {str(_SCRIPT)!r})\n"
+        "m = importlib.util.module_from_spec(spec); sys.modules['prep'] = m\n"
+        "spec.loader.exec_module(m)\n"
+        f"m._load_native_manifest = lambda _p, _d: ({target!r}, 'sha256:' + 'e' * 64, "
+        "'sha256:' + 'f' * 64)\n"
+        "m.time.time = lambda: 1500\n"
+        "raise SystemExit(m.main(sys.argv[1:]))\n"
+    )
+
+    def run(output: str, *extra: str) -> subprocess.CompletedProcess[str]:
+        command = [sys.executable, "-S", "-c", driver]
+        command += ["--source-activation", str(source_activation)]
+        command += ["--target-release-id", target]
+        command += ["--native-artifact-manifest", str(tmp_path / "native.json")]
+        command += ["--native-artifact-sha256", "a" * 64, "--output-dir", str(tmp_path / output)]
+        command += ["--approval-file", str(approval), "--approval-sha256", digest, *extra]
+        return subprocess.run(command, capture_output=True, text=True, check=False)  # noqa: S603
+
+    alone = run("alone")
+    assert alone.returncode == 2
+    assert "hosted approval contract validator is unavailable" in alone.stderr
+    taken = run(
+        "taken",
+        "--approval-checked-sha256",
+        digest,
+        "--approval-checked-service-sha256",
+        service_digest,
+    )
+    assert taken.returncode == 0, taken.stderr
+    result = json.loads(taken.stdout)
+    assert (result["approval_replaced"], result["approval_checked_in"]) == (True, "image")
+    wrong = run(
+        "wrong",
+        "--approval-checked-sha256",
+        digest,
+        "--approval-checked-service-sha256",
+        "0" * 64,
+    )
+    assert wrong.returncode == 2 and "does not match these bytes" in wrong.stderr

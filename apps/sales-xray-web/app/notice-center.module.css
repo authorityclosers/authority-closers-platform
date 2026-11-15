@@ -357,18 +357,20 @@
   flex: 1 1 auto;
 }
 
-/* The action kept in the pill ("Call now"). */
+/* The action kept in the pill ("Open lead", "Call now"): a text button, so
+   the screen's one filled action stays its Call band (design-research Leads
+   parts 04 and 06). */
 .pill .action {
   position: relative;
   flex: none;
   min-height: 30px;
   border-color: transparent;
-  background: var(--sx-accent);
-  color: var(--sx-accent-ink);
+  background: transparent;
+  color: var(--sx-accent);
   white-space: nowrap;
 }
 
-/* The filled button stays 30 px to the eye; its tap area is 48 px tall. */
+/* 30 px to the eye; its tap area is 48 px tall. */
 .pill .action::after {
   position: absolute;
   inset: -9px 0;
@@ -376,9 +378,8 @@
 }
 
 .pill .action:hover {
-  background: var(--sx-accent);
-  color: var(--sx-accent-ink);
-  filter: brightness(1.06);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
 }
 
 @keyframes fold {
