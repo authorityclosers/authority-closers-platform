@@ -165,6 +165,18 @@ TOOLS: tuple[dict[str, Any], ...] = (
         "scope": "reports:read",
     },
     {
+        "name": "analysis_time",
+        "title": "Analysis time left",
+        "description": (
+            "How much call analysis time the workspace has: given, used and left, in "
+            "seconds, and the longest call it takes. Time only, never a price. With team, "
+            "also what each member used (an organisation's owners and admins)."
+        ),
+        "inputSchema": {"type": "object", "properties": {"team": {"type": "boolean"}}},
+        "annotations": _READS,
+        "scope": "calls:read",
+    },
+    {
         "name": "list_leads",
         "title": "List leads",
         "description": (
@@ -640,6 +652,8 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
         return await reader.call(_uuid(args, "call_id"))
     if name == "call_facts":
         return await reader.facts(_uuid(args, "call_id"))
+    if name == "analysis_time":
+        return await reader.analysis_time(team=args.get("team") is True)
     if name == "list_leads":
         offset = args.get("offset", 0)
         if not isinstance(offset, int) or isinstance(offset, bool):

@@ -103,6 +103,7 @@ def test_the_mcp_server_lists_and_calls_tools() -> None:
         "undo_change",
         "import_leads",
         "get_lead_import",
+        "analysis_time",
     }
     facts = sx.handle(
         api,
@@ -198,6 +199,31 @@ def test_a_stage_move_from_the_command_line_and_the_mcp_tool() -> None:
     sent = json.loads(fake.seen[1][3])
     assert sent["step"] == "follow_up" and sent["next_action_at"].startswith("2026-11-20")
     assert "reason_code" not in sent and "expected_revision" not in sent
+
+
+def test_analysis_time_from_the_command_line_and_the_mcp_tool() -> None:
+    env = {"SX_API_KEY": KEY, "SX_API_BASE": "https://salesxray.example.test/v1/api"}
+    fake = Fake(
+        {
+            ("GET", "/analysis-time"): (200, {"left_seconds": 5400}),
+            ("GET", "/analysis-time/team"): (200, {"left_seconds": 5400, "people": []}),
+        }
+    )
+    assert sx.main(["minutes"], env, fake) == 0
+    assert sx.main(["minutes", "--team"], env, fake) == 0
+    assert [seen[1].split("/v1/api", 1)[1] for seen in fake.seen] == [
+        "/analysis-time",
+        "/analysis-time/team",
+    ]
+    called = sx.handle(
+        client(fake),
+        {
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "analysis_time", "arguments": {"team": True}},
+        },
+    )
+    assert json.loads(called["result"]["content"][0]["text"])["people"] == []
 
 
 def test_sx_list_leads_takes_the_organisations_own_stage_keys() -> None:

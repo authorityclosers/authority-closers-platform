@@ -30,6 +30,11 @@ Base address: ``https://<sales x-ray host>/v1/api``.
                             it waits for them, nothing is analysed (calls:write; see
                             integrations/app_uploads.py)
 - GET  /calls/uploads/{id}  what became of one (calls:write)
+- GET  /analysis-time       the workspace's analysis time: given, used and left, and the
+                            longest call (calls:read; time only, never a price;
+                            integrations/analysis_time.py)
+- GET  /analysis-time/team  the same, and what each member used of it (calls:read; an
+                            organisation's key, or its owners and admins)
 
 Who sees what:
 - An API key, or a token from an app an organisation connected, sees what an
@@ -66,7 +71,7 @@ from ac_platform.call_data import facts as call_facts
 from ac_platform.call_data.models import CallObject
 from ac_platform.http.rate_limits import InMemoryTokenBucketLimiter, RateLimitRule
 from ac_platform.http.routes import RouteContext
-from ac_platform.integrations import app_uploads, keys, lead_imports, oauth, tiers
+from ac_platform.integrations import analysis_time, app_uploads, keys, lead_imports, oauth, tiers
 from ac_platform.integrations.ai_writes import AiWriteError, AiWrites, Door
 from ac_platform.integrations.models import IntegrationOAuthClient
 from ac_platform.kernel.authz import ActorContext
@@ -240,8 +245,11 @@ class Reader:
         tier: tiers.Tier | None = None,
         platform: tiers.Platform | None = None,
         resource: str | None = None,
+        settings: Any = None,
     ) -> None:
         self.session, self.caller, self.base = session, caller, base
+        # The server's settings, for reads composed as the app composes them.
+        self.settings = settings
         # The origin the caller reached (app, API or MCP host): its own resource metadata.
         self.resource = resource or base
         self.environment = environment
@@ -594,6 +602,36 @@ class Reader:
         answer, _ = await self._write(writes.undo(change_id, request_id=body.request_id))
         return answer
 
+    async def analysis_time(self, *, team: bool = False) -> dict[str, Any]:
+        """The workspace's analysis time (and, for ``team``, each member's share), read as
+        the app reads it. Time only, never a price; names, never emails."""
+        self.require("calls:read")
+        settings = self.settings
+        tenant_id = self.key.tenant_id
+        if settings is None or tenant_id == settings.operations_tenant_id:
+            raise ApiError(
+                404, "not_available", "Analysis time is kept for Sales X-Ray workspaces."
+            )
+        if team:
+            if self.caller.personal_workspace:
+                raise ApiError(403, "organisation_only", "A team's time is kept in organisations.")
+            if self.caller.reach == "person" and self.caller.role not in {"owner", "admin"}:
+                raise ApiError(
+                    403,
+                    "not_manager",
+                    "Your organisation's owner or admin sees its team's analysis time.",
+                )
+            read = analysis_time.team
+        else:
+            read = analysis_time.left
+        return await read(
+            self.session,
+            settings,
+            tenant_id=tenant_id,
+            person_id=self.key.acting_person_id,
+            now=datetime.now(UTC),
+        )
+
     async def import_door(self) -> lead_imports.Door:
         """Who an import is from: this key or app connection, acting as its person, with the
         Lead Desk role it reaches (an organisation's key acts as its owner)."""
@@ -717,6 +755,7 @@ def make_opener(ctx: RouteContext) -> Any:
                 tier=tier,
                 platform=platform,
                 resource=settings.sales_xray_host_origin(request.url.hostname),
+                settings=settings,
             )
 
     return open_reader
@@ -945,6 +984,16 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
             if found is None:
                 raise ApiError(404, "upload_missing", "No such recording from this connection.")
             return done(app_uploads.upload_view(found, upload_base))
+
+    @router.get("/analysis-time")
+    async def analysis_left(request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.analysis_time())
+
+    @router.get("/analysis-time/team")
+    async def analysis_team(request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.analysis_time(team=True))
 
     @router.get("/changes")
     async def changes(request: Request, lead_id: UUID | None = None) -> JSONResponse:

@@ -13,6 +13,8 @@ command-line argument, so it stays out of shell history and process lists).
     sx me                                     # the key's organisation and scopes
     sx calls [--before CALL_ID]               # calls, newest first, 50 a page
     sx facts CALL_ID                          # the facts found in one call
+    sx minutes [--team]                       # analysis time given, used and left
+                                              # (calls:read; --team: each member's use)
     sx leads [--stage KEY|open] [--offset N]  # KEY: one of the stages each page lists
     sx lead LEAD_ID
     sx add-lead --name NAME [--phone P] [--email E] [--company C] [--city C]
@@ -164,6 +166,9 @@ class Client:
 
     def facts(self, call_id: str) -> Any:
         return self.call("GET", f"/calls/{urllib.parse.quote(call_id, safe='')}/facts")
+
+    def analysis_time(self, team: bool = False) -> Any:
+        return self.call("GET", "/analysis-time/team" if team else "/analysis-time")
 
     def leads(self, stage: str | None = None, offset: int | None = None) -> Any:
         return self.call("GET", "/leads", {"stage": stage, "offset": offset})
@@ -471,6 +476,12 @@ TOOLS += [
             "required": ["import_id"],
         },
     },
+    {
+        "name": "analysis_time",
+        "description": "The workspace's analysis time: given, used and left, in seconds, and "
+        "the longest call. Time only. team: what each member used (owners and admins).",
+        "inputSchema": {"type": "object", "properties": {"team": {"type": "boolean"}}},
+    },
 ]
 
 
@@ -619,6 +630,8 @@ def _tool(client: Client, name: str, args: dict[str, Any]) -> Any:
             if key in args
         }
         return client.import_leads(body, args.get("request_id") or _request_id())
+    if name == "analysis_time":
+        return client.analysis_time(args.get("team") is True)
     if name == "get_lead_import":
         answer = client.lead_import(str(args["import_id"]))
         if args.get("problem_rows") is True:
@@ -749,6 +762,8 @@ def _parser() -> argparse.ArgumentParser:
     calls.add_argument("--before")
     facts = commands.add_parser("facts")
     facts.add_argument("call_id")
+    minutes = commands.add_parser("minutes")
+    minutes.add_argument("--team", action="store_true")
     leads = commands.add_parser("leads")
     leads.add_argument("--stage")
     leads.add_argument("--offset", type=int)
@@ -868,6 +883,8 @@ def main(
             out = client.calls(args.before)
         elif args.command == "facts":
             out = client.facts(args.call_id)
+        elif args.command == "minutes":
+            out = client.analysis_time(args.team)
         elif args.command == "leads":
             out = client.leads(args.stage, args.offset)
         elif args.command == "lead":

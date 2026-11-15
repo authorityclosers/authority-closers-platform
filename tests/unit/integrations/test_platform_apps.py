@@ -140,6 +140,7 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "list_calls",
         "get_call",
         "call_facts",
+        "analysis_time",
         "list_leads",
         "get_lead",
         "list_duplicates",
@@ -166,7 +167,15 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
     importing = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:write"}))}
     assert importing == {"whoami", "add_lead", "import_leads", "get_lead_import", *LESSONS}
     reading = {tool["name"] for tool in mcp_http.listed(frozenset({"calls:read"}))}
-    assert reading == {"search", "fetch", "whoami", "list_calls", "get_call", *LESSONS}
+    assert reading == {
+        "search",
+        "fetch",
+        "whoami",
+        "list_calls",
+        "get_call",
+        "analysis_time",
+        *LESSONS,
+    }
     leads = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:read"}))}
     assert leads == {
         "search",
