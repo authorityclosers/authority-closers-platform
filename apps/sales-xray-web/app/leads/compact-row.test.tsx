@@ -216,7 +216,13 @@ it("adds the owner for a team's list, and keeps the full card elsewhere", async 
       </ul>,
     ),
   );
-  expect(host.textContent).toContain("Interested · Website · Fictional Seller");
+  // Part 01 (15 Nov 2026): line 2 is the stage and source; the owner its own line.
+  expect(host.querySelector('[class*="leadSub"]')?.textContent).toBe(
+    "Interested · Website",
+  );
+  expect(host.querySelector('[class*="leadOwnerLine"]')?.textContent).toBe(
+    "Owner: Fictional Seller",
+  );
   await act(async () =>
     root.render(
       <ul>
@@ -335,7 +341,7 @@ it("keeps a third line only for a row someone must act on", async () => {
   expect(third()).toBeUndefined();
 });
 
-it("puts a new Inbound enquiry's wait on its last line, amber then red", async () => {
+it("puts a new Inbound enquiry's wait on its last line, quiet", async () => {
   const show = (lead: LeadRow) =>
     act(async () =>
       root.render(
@@ -365,12 +371,13 @@ it("puts a new Inbound enquiry's wait on its last line, amber then red", async (
     "New Lead · Website",
   );
   expect(why().textContent).toBe("Waiting 12 min");
-  expect(why().getAttribute("data-tone")).toBe("warn");
+  // A wait is quiet, however long: red only for Late (part 01; L1).
+  expect(why().getAttribute("data-tone")).toBeNull();
   await show({
     ...fresh,
     created_at: new Date(Date.now() - 20 * 60_000).toISOString(),
   } as LeadRow);
-  expect(why().getAttribute("data-tone")).toBe("bad");
+  expect(why().getAttribute("data-tone")).toBeNull();
   await show({ ...fresh, side: "cold" } as LeadRow);
   expect(host.textContent).not.toContain("Waiting");
   // No number: no WhatsApp.

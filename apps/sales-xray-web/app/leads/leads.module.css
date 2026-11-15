@@ -8441,56 +8441,50 @@ fieldset.form {
   box-shadow: 0 1px 2px color-mix(in oklab, var(--lx-film) 6%, transparent);
 }
 
-/* Call and WhatsApp as Home's rounded tiles; Call in Home green. */
-.quickAct {
-  width: 44px;
-  height: 44px;
-  border: var(--sx-tile-edge);
-  border-radius: 14px;
-  background: var(--sx-tile-fill);
-  box-shadow: var(--sx-tile-depth);
-  transition: transform 140ms ease-out;
+@media (prefers-reduced-motion: reduce) {
+  .root [aria-label="Work views"] > [role="tab"] {
+    transition: none;
+  }
 }
 
-.leadList .quickAct[data-channel="call"] {
-  border: var(--sx-tile-edge);
-  background: var(--lx-home-emerald-soft);
-  color: var(--lx-home-emerald);
+/* Leads part 01, the list rows (design-research, 15 Nov 2026; L1 the floor):
+   the name and line 2 keep one line each; the owner's view adds its own owner
+   line; Call and WhatsApp press in as L1's circles. */
+.leadFace[data-compact] .leadNameText,
+.leadFace[data-compact] .leadSub,
+.leadFace[data-quick][data-compact] .leadSub {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.quickAct:active {
-  transform: var(--sx-press-sink);
+.leadOwnerLine {
+  display: block;
+  overflow: hidden;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  line-height: min(var(--sx-leading-20), 18px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* Each lead's initials in one of Home's five colours, steady for that lead. */
-.leadAvatar[data-tone] > span {
-  background: var(--lx-home-emerald-soft);
-  color: var(--lx-home-emerald);
+.leadFace[data-compact] .quickAct {
+  transition:
+    transform 160ms cubic-bezier(0.2, 0, 0, 1),
+    background-color 100ms;
 }
 
-.leadAvatar[data-tone="1"] > span {
-  background: var(--lx-home-violet-soft);
-  color: var(--lx-home-violet);
-}
-
-.leadAvatar[data-tone="2"] > span {
-  background: var(--lx-home-orange-soft);
-  color: var(--lx-home-orange);
-}
-
-.leadAvatar[data-tone="3"] > span {
-  background: var(--lx-home-sky-soft);
-  color: var(--lx-home-sky);
-}
-
-.leadAvatar[data-tone="4"] > span {
-  background: var(--lx-home-rose-soft);
-  color: var(--lx-home-rose);
+.leadFace[data-compact] .quickAct:active {
+  transform: scale(0.96);
+  transition-duration: 90ms;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .root [aria-label="Work views"] > [role="tab"],
-  .quickAct {
+  .leadFace[data-compact] .quickAct,
+  .leadFace[data-compact] .quickAct:active {
+    transform: none;
     transition: none;
   }
 }

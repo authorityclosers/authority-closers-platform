@@ -52,15 +52,6 @@ const WHY_TONE: Record<LeadRow["why_kind"], Tone> = {
  * the day the person sent it, never "New lead · just now". Null for any other.
  */
 
-/** A lead's colour among Home's five, steady for that lead (owner, 15 Nov 2026:
- *  Home's look on Leads; Home's seller faces keep theirs the same way). */
-function toneOf(id: string): number {
-  let sum = 0;
-  for (let index = 0; index < id.length; index += 1)
-    sum += id.charCodeAt(index);
-  return sum % 5;
-}
-
 export function olderEnquiry(row: LeadRow): string | null {
   if (row.source !== "meta" || row.side !== "cold") return null;
   const sent = new Date(row.received_at ?? row.created_at);
@@ -286,7 +277,6 @@ export function LeadLine({
   // next step (a new enquiry's wait among them).
   const step = compact ? stepLine(row) : null;
   const line = step ? step.text : whyLine(row);
-  const wait = compact && !row.missed_at ? waiting(row) : null;
   const older = compact ? olderEnquiry(row) : null;
   const sub = compact ? (
     <>
@@ -300,9 +290,9 @@ export function LeadLine({
       <span className={styles.leadStage}>{stageWord ?? row.stage_label}</span>
       {" · "}
       <span className={styles.leadSource} title={row.source_label || undefined}>
-        {shortSource(row)}
+        {/* The source's kind only; the programme is the lead page's (part 01). */}
+        {shortSource(row).split(" · ")[0]}
       </span>
-      {showOwner ? ` · ${row.owner_name ?? "No owner yet"}` : null}
       {older ? ` · ${older}` : null}
     </>
   ) : (
@@ -386,7 +376,7 @@ export function LeadLine({
           aria-label={`Open ${row.name}`}
         >
           {compact ? (
-            <span className={styles.leadAvatar} data-tone={toneOf(row.lead_id)}>
+            <span className={styles.leadAvatar}>
               <Avatar name={row.name} size={40} />
             </span>
           ) : (
@@ -397,16 +387,21 @@ export function LeadLine({
               <span className={styles.leadNameText}>{row.name}</span>
             </span>
             {sub ? <span className={styles.leadSub}>{sub}</span> : null}
+            {/* The owner's view: who owns the lead, on its own line (part 01). */}
+            {compact && showOwner ? (
+              <span className={styles.leadOwnerLine}>
+                {row.owner_name ? `Owner: ${row.owner_name}` : "No owner yet"}
+              </span>
+            ) : null}
             {line ? (
               <span
                 className={styles.leadWhy}
                 data-tone={
+                  // Red only for Late (part 01; L1): a wait is quiet.
                   row.missed_at || red
                     ? "bad"
                     : step
-                      ? step.late
-                        ? undefined
-                        : waitTone(wait)
+                      ? undefined
                       : WHY_TONE[row.why_kind]
                 }
               >
