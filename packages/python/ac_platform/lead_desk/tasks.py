@@ -97,6 +97,7 @@ def view(
     now: datetime,
     photos: Mapping[UUID, str | None] | None = None,
     side: Literal["inbound", "cold"] | None = None,
+    owner_name: str | None = None,
 ) -> TaskView:
     return TaskView(
         task_id=task.id,
@@ -123,6 +124,7 @@ def view(
         if task.created_by_person_id
         else None,
         lead_side=side,
+        owner_name=owner_name,
     )
 
 
@@ -133,6 +135,7 @@ async def views(
     task's lead name when they are on different leads."""
     listed = list(tasks)
     photos = await person_photos.photo_urls(db, (task.created_by_person_id for task in listed))
+    owners = await _owner_names(db, (task.owner_person_id for task in listed))
     # Each lead's side in one read: only "cold" is Cold (migration 0146).
     lead_ids = {task.lead_id for task in listed if task.lead_id is not None}
     sides: dict[UUID, Literal["inbound", "cold"]] = {}
@@ -148,9 +151,24 @@ async def views(
             now,
             photos,
             sides.get(task.lead_id) if task.lead_id is not None else None,
+            owners.get(task.owner_person_id) if task.owner_person_id is not None else None,
         )
         for task in listed
     )
+
+
+async def _owner_names(db: Any, people: Iterable[UUID | None]) -> dict[UUID, str]:
+    """Whose each task is, in one read: "for Priya" on a row that isn't the viewer's."""
+    from ac_platform.identity.models import Person
+    from ac_platform.lead_desk.store import person_name
+
+    wanted = {person for person in people if person is not None}
+    if not wanted:
+        return {}
+    return {
+        person.id: person_name(person)
+        for person in (await db.scalars(select(Person).where(Person.id.in_(wanted)))).all()
+    }
 
 
 @dataclass(frozen=True, slots=True)

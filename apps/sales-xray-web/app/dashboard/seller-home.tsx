@@ -56,6 +56,7 @@ import { createPortal } from "react-dom";
 import { displayName } from "../display-name";
 import { ActionSheet } from "../leads/action-sheet";
 import { AddTaskSheet } from "../leads/add-task-sheet";
+import { forWhom } from "../leads/tasks-view";
 import { useRowGestures } from "../leads/gestures";
 import {
   CallRows,
@@ -905,8 +906,11 @@ export function TodayTasks({
   side = "inbound",
   onMoved,
   canAdd = true,
+  me = null,
 }: {
   tasks: ListedTask[] | null;
+  /** The viewer: a task that isn't theirs says whose it is ("for Priya"). */
+  me?: string | null;
   /** + Add beside See all: the owner's Team Home keeps it; a seller's Home
    *  adds from the + above (Dipak's design, 4 Nov 2026). */
   canAdd?: boolean;
@@ -1012,6 +1016,9 @@ export function TodayTasks({
                   <span className={styles.cardMeta}>
                     {task.lead_name ? (
                       <span>{displayName(task.lead_name)}</span>
+                    ) : null}
+                    {forWhom(task, me) ? (
+                      <span>{forWhom(task, me)}</span>
                     ) : null}
                     {task.starts_at ? (
                       <span data-late-time={late(task) || undefined}>
@@ -1829,6 +1836,7 @@ export function MyTasks({ desk, side }: { desk: HomeDesk; side: Side }) {
         onAdded={reload}
         side={side}
         onMoved={reload}
+        me={desk.me?.person_id ?? null}
       />
       <UpcomingFollowUps side={side} own={desk.sides?.[side] ?? null} />
     </>

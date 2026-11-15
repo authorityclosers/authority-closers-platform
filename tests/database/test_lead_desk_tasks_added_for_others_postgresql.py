@@ -21,9 +21,11 @@ import pytest
 from sqlalchemy import update
 
 from ac_platform.http.routes import RouteContext
+from ac_platform.identity.models import Person
 from ac_platform.integrations.api_http import install_integrations_api
 from ac_platform.integrations.http import install_integrations_http
 from ac_platform.lead_desk.models import Lead, LeadTask
+from ac_platform.lead_desk.store import person_name
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run, seed
 from tests.database.test_conversation_submission_http_postgresql import ORIGIN, _setup
@@ -100,6 +102,11 @@ def test_a_task_added_on_a_teammates_lead_shows_on_the_adders_list_too(
                 shown = {item["task_id"] for item in mine.json()["tasks"]}
                 assert set(tasks) <= shown
                 assert mine.json()["counts"]["upcoming"] >= 2
+                # Each says whose it is, for "for <name>" on the row.
+                async with setup.sessions() as db:
+                    mate_name = person_name(await db.get(Person, mate))
+                listed = {item["task_id"]: item for item in mine.json()["tasks"]}
+                assert {listed[task]["owner_name"] for task in tasks} == {mate_name}
                 theirs = await person.get(
                     f"{DESK}/tasks", params={"view": "upcoming", "person": str(mate)}
                 )
