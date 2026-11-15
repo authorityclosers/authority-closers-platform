@@ -27,6 +27,13 @@ import type {
  */
 export const CAPTURE_SETUP_ATTRIBUTE = "data-sx-capture-setup";
 
+/**
+ * On the page while Settings' Phone setup offers "Set up this phone", so
+ * "Finish setting up" doesn't offer the same again (tester report 217,
+ * production 1.58, 14 Nov 2026: Phone and alerts "offers setup twice").
+ */
+export const PHONE_SETUP_PANEL_ATTRIBUTE = "data-sx-phone-setup-panel";
+
 export type CaptureStep =
   | "profile"
   | "consent"

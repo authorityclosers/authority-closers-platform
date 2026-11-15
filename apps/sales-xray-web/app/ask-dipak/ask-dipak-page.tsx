@@ -24,7 +24,7 @@ export function AskDipakSkeleton() {
     >
       <PageHeader title={COPY.title} titleInBar />
       <div className={styles.root} aria-busy="true">
-        <div className={styles.hero} style={{ minHeight: 320 }} />
+        <div className={styles.hero} style={{ minHeight: 140 }} />
       </div>
     </AcquisitionShell>
   );

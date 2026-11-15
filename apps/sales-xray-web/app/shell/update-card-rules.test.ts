@@ -1,6 +1,10 @@
 import { expect, it, vi } from "vitest";
 import type { UpdateNote, UpdateNotification } from "./updates-client";
-import { eligibleEvents, eligibleUpdate } from "./update-card-rules";
+import {
+  EVENT_BANNER_MAX_AGE_MS,
+  eligibleEvents,
+  eligibleUpdate,
+} from "./update-card-rules";
 
 const note: UpdateNote = {
   key: "fictional-note",
@@ -41,13 +45,37 @@ it("selects the first unseen major note in API order and only unread urgent even
     ]),
   ).toBeUndefined();
   expect(
-    eligibleEvents([
-      event,
-      { ...event, read: true },
-      { ...event, urgent: false },
-      { ...event, kind: "updates" },
-    ]),
+    eligibleEvents(
+      [
+        event,
+        { ...event, read: true },
+        { ...event, urgent: false },
+        { ...event, kind: "updates" },
+      ],
+      Date.parse("2026-10-09T01:00:00Z"),
+    ),
   ).toEqual([event]);
+});
+it("pops only lines from the last day; older unread ones wait in the bell (tester report 206)", () => {
+  const made = Date.parse(event.created_at);
+  const lead: UpdateNotification = {
+    ...event,
+    kind: "lead_assigned",
+    title: "Fictional Lead is your lead now",
+  };
+  expect(eligibleEvents([lead], made + 60_000)).toEqual([lead]);
+  expect(eligibleEvents([lead], made + EVENT_BANNER_MAX_AGE_MS)).toEqual([
+    lead,
+  ]);
+  // Two weeks on and still unread: no banner at the next app open.
+  expect(eligibleEvents([lead], made + 14 * EVENT_BANNER_MAX_AGE_MS)).toEqual(
+    [],
+  );
+  // A time the app can't read never hides a line.
+  const odd = { ...lead, created_at: "not a time" };
+  expect(eligibleEvents([odd], made + 14 * EVENT_BANNER_MAX_AGE_MS)).toEqual([
+    odd,
+  ]);
 });
 it("allows one update card across reloads of the module in a browser session", async () => {
   const values = new Map<string, string>();

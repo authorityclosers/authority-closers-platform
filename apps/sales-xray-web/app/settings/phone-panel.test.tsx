@@ -2,6 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { PHONE_SETUP_PANEL_ATTRIBUTE } from "../capture-setup/capture-setup-rules";
 import { buzz } from "../leads/native-phone";
 import { resetBackCloseForTests } from "../ui/back-close";
 import { PhoneSetupPanel, VibrationPanel } from "./phone-panel";
@@ -121,6 +122,36 @@ it("shows what the phone still needs, each line one tap from its fix", async () 
   );
   // Just that line: no steps to count.
   expect(host.querySelector('dialog ol[aria-label^="Step"]')).toBeNull();
+});
+
+it("holds Finish setting up while it offers Set up this phone, and only then (tester report 217)", async () => {
+  const marked = () =>
+    document.documentElement.hasAttribute(PHONE_SETUP_PANEL_ATTRIBUTE);
+  let checks = CHECKS;
+  fakePhone(({ method }) =>
+    method === "callRecorderStatus"
+      ? { available: true, enabled: true }
+      : { ...setup, checks },
+  );
+  await act(async () => root.render(<PhoneSetupPanel />));
+  await settle();
+  expect(buttons("Set up this phone")).toHaveLength(1);
+  expect(marked()).toBe(true);
+  // Everything done: nothing offered, nothing held.
+  checks = Object.fromEntries(
+    Object.keys(CHECKS).map((key) => [key, true]),
+  ) as typeof CHECKS;
+  await act(async () => root.render(<PhoneSetupPanel key="again" />));
+  await settle();
+  expect(buttons("Set up this phone")).toHaveLength(0);
+  expect(marked()).toBe(false);
+  // Leaving the page lets it go.
+  checks = CHECKS;
+  await act(async () => root.render(<PhoneSetupPanel key="third" />));
+  await settle();
+  expect(marked()).toBe(true);
+  await act(async () => root.render(<></>));
+  expect(marked()).toBe(false);
 });
 
 it("lists a picked recordings folder as done, as the count does", async () => {

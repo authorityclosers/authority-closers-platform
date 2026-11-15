@@ -10,7 +10,10 @@ import {
   notify,
 } from "../notice-center";
 import { WorkspaceAccessContext } from "../workspace-access";
-import { CAPTURE_SETUP_ATTRIBUTE } from "./capture-setup-rules";
+import {
+  CAPTURE_SETUP_ATTRIBUTE,
+  PHONE_SETUP_PANEL_ATTRIBUTE,
+} from "./capture-setup-rules";
 import { PermissionsGate } from "./permissions-gate";
 import { PERMISSIONS_ATTRIBUTE } from "./permissions-rules";
 
@@ -247,6 +250,20 @@ it("waits while a first-run screen fills the page, so it never covers its button
   expect(reminder()).toBe(false);
   await act(async () =>
     document.documentElement.removeAttribute(CAPTURE_SETUP_ATTRIBUTE),
+  );
+  await settle();
+  expect(reminder()).toBe(true);
+});
+
+it("waits while Settings' Phone setup offers the same steps (tester report 217)", async () => {
+  fakePhone(() => ({ ...ALL, callLog: false }));
+  await mount();
+  document.documentElement.setAttribute(PHONE_SETUP_PANEL_ATTRIBUTE, "");
+  await act(async () => byLabel("Not now: Call log").click());
+  await settle();
+  expect(reminder()).toBe(false);
+  await act(async () =>
+    document.documentElement.removeAttribute(PHONE_SETUP_PANEL_ATTRIBUTE),
   );
   await settle();
   expect(reminder()).toBe(true);

@@ -44,8 +44,10 @@ export function SuggestedStage({
           </small>
         ) : null}
       </span>
+      {/* Outlined: the Call band is the lead page's one filled action (tester
+          report 209, production 1.58, 14 Nov 2026: "two filled primary buttons
+          on one screen"). */}
       <Button
-        variant="primary"
         disabled={busy}
         onClick={async () => {
           setBusy(true);

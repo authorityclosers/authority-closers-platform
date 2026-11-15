@@ -5,8 +5,9 @@
  * library as the tab's home. Home → a topic or category → a question →
  * its lesson (quick answer, your turn with three options and Dipak's word on
  * each, the Deep lesson, the line to remember, the Next-call mission, what
- * to learn next); Search and Saved lessons beside them. Everything shown is
- * Dipak's own text; a question without a lesson yet says so.
+ * to learn next); Search and Saved lessons beside them. Dipak's own lessons
+ * show as they are; a lesson drafted for him carries a "Draft · Dipak to
+ * confirm" tag, and its mission can't be marked until he confirms it.
  */
 
 import { useSearchParams } from "next/navigation";
@@ -38,6 +39,7 @@ import {
   categoryQuestions,
   featuredById,
   featuredQuestions,
+  isDraft,
   lessonChip,
   lessonFor,
   questionById,
@@ -167,19 +169,65 @@ function Tools({ view, open }: { view: AskView; open: Open }) {
   );
 }
 
+/**
+ * Dipak's greeting, compact (owner, 16 Nov 2026: the paragraph "is taking lot
+ * of space … nobody seeing explore topics"): his hello and his question show,
+ * and his three intro lines fold behind "Dipak के बारे में", sliding open and
+ * shut (none with reduced motion). Saved lessons opens from its corner, as
+ * the bar keeps Home's set.
+ */
+function Greeting({ open }: { open: Open }) {
+  const [more, setMore] = useState(false);
+  const moreId = useId();
+  return (
+    <section className={styles.hero} data-more={more || undefined}>
+      <div className={styles.heroTop}>
+        <p className={styles.eyebrow}>{COPY.eyebrow}</p>
+        <button
+          type="button"
+          className={styles.heroSaved}
+          aria-label={COPY.savedLessons}
+          onClick={() => open({ kind: "saved" })}
+        >
+          <AskIcon name="bookmark" size={20} />
+        </button>
+      </div>
+      <h2 className={styles.hello}>{COPY.hello}</h2>
+      <p className={styles.heroAsk}>
+        <strong>{COPY.introAsk}</strong>
+      </p>
+      <div
+        className={styles.introMore}
+        id={moreId}
+        aria-hidden={!more}
+        inert={!more}
+      >
+        <div>
+          {COPY.intro.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
+      </div>
+      <button
+        type="button"
+        className={styles.introToggle}
+        aria-expanded={more}
+        aria-controls={moreId}
+        onClick={() => setMore((now) => !now)}
+      >
+        {more ? COPY.introLess : COPY.introMore}
+        <span className={styles.foldArrow} data-open={more || undefined}>
+          <AskIcon name="right" size={16} />
+        </span>
+      </button>
+    </section>
+  );
+}
+
 function HomeScreen({ open }: { open: Open }) {
   return (
     <>
-      <section className={styles.hero}>
-        <p className={styles.eyebrow}>{COPY.eyebrow}</p>
-        <h2 className={styles.hello}>{COPY.hello}</h2>
-        {COPY.intro.map((line) => (
-          <p key={line}>{line}</p>
-        ))}
-        <p>
-          <strong>{COPY.introAsk}</strong>
-        </p>
-      </section>
+      <Greeting open={open} />
       <ScreenButton
         view={{ kind: "search" }}
         open={open}
@@ -519,6 +567,7 @@ function LessonScreen({
         </div>
       </>
     );
+  const draft = isDraft(id);
   const saved = progress.saved.has(id);
   const done = progress.missions.has(id);
   const chosen = picked === undefined ? null : lesson.options[picked];
@@ -532,6 +581,11 @@ function LessonScreen({
         <div className={styles.questionHero}>
           <h2 className={styles.pageTitle}>{questionLabel(question)}</h2>
           <p className={styles.pageSub}>{COPY.parts}</p>
+          {draft ? (
+            <p className={styles.draftTag} data-draft="">
+              {COPY.draftTag}
+            </p>
+          ) : null}
         </div>
         <button
           type="button"
@@ -607,19 +661,25 @@ function LessonScreen({
 
       <h3 className={styles.sectionH}>{COPY.mission}</h3>
       <div className={`${styles.panel} ${styles.mission}`}>
-        <button
-          type="button"
-          className={`${styles.check} ${done ? styles.done : ""}`}
-          aria-pressed={done}
-          aria-label={done ? COPY.undoMission : COPY.markMission}
-          onClick={() => toggle(id, "mission", !done)}
-        >
-          {done ? <AskIcon name="check" size={19} /> : null}
-        </button>
+        {draft ? null : (
+          <button
+            type="button"
+            className={`${styles.check} ${done ? styles.done : ""}`}
+            aria-pressed={done}
+            aria-label={done ? COPY.undoMission : COPY.markMission}
+            onClick={() => toggle(id, "mission", !done)}
+          >
+            {done ? <AskIcon name="check" size={19} /> : null}
+          </button>
+        )}
         <div className={styles.missionText}>
           {lesson.mission}
           <p className={styles.mutedNote}>
-            {done ? COPY.missionDone : COPY.missionTodo}
+            {draft
+              ? COPY.draftMission
+              : done
+                ? COPY.missionDone
+                : COPY.missionTodo}
           </p>
         </div>
       </div>

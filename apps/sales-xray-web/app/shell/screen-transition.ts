@@ -115,6 +115,12 @@ const wide = () => window.matchMedia?.("(min-width: 900px)").matches === true;
 
 const EASE_OUT = "cubic-bezier(0.22, 1, 0.36, 1)";
 
+/** The page to its top at once, before the new screen paints. */
+function toTop() {
+  if (window.scrollY <= 0) return;
+  window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+}
+
 /** The spring from the tokens where the browser takes linear() curves. */
 function spring(element: HTMLElement) {
   return (
@@ -262,11 +268,31 @@ export function useScreenMotion(
     return () => window.clearTimeout(timer);
   }, [standing]);
 
+  // A step back through history (the phone's Back, a Back arrow) keeps the
+  // place the browser and the page put back; any other move opens a new screen.
+  const popped = useRef(false);
+  useEffect(() => {
+    const onPop = () => {
+      popped.current = true;
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
   const shown = useRef(pathname);
   useLayoutEffect(() => {
     const from = shown.current;
     shown.current = pathname;
     if (from === pathname) return;
+    const back = popped.current;
+    popped.current = false;
+    // A new screen opens at its top (tester report 216, production 1.58, 14
+    // Nov 2026: Selling, opened from the account sheet with Growth scrolled
+    // down, showed its title, back arrow and intro scrolled off). The outline
+    // or the new page is shorter than the old one, so the browser only cuts
+    // the old scroll down to the new page's end, and the router doesn't move
+    // a page whose top is still on screen, under the bar.
+    if (!back) toTop();
     // The outline already moved the screen; the page simply takes its place.
     if (tappedFrom.current === from) {
       tappedFrom.current = null;

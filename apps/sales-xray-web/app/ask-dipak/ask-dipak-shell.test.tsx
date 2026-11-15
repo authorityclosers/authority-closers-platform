@@ -1,8 +1,9 @@
 /**
  * Ask Dipak in the app's own navigation (Dipak's spec, sections 2 and 3):
  * the middle tab opens his library and is lit there, the bottom bar keeps
- * its five tabs, and on his tab the bar's search is his Search and Saved
- * lessons (lit while Saved lessons is open). Elsewhere the bar is as before.
+ * its five tabs, and on his tab the bar's search is his Search. The bar
+ * keeps Home's set, so the workspace's name keeps its room (owner, 16 Nov
+ * 2026: "the name of the organization is lost"). Elsewhere it is as before.
  */
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
@@ -45,7 +46,7 @@ function shell() {
   };
 }
 
-it("lights Ask Dipak's tab on his library and carries his Search and Saved lessons in the bar", () => {
+it("lights Ask Dipak's tab on his library and carries his Search, alone, in the bar", () => {
   place.path = "/ask-dipak";
   place.query = "view=saved";
   const { nav, bar } = shell();
@@ -58,23 +59,19 @@ it("lights Ask Dipak's tab on his library and carries his Search and Saved lesso
   expect(
     bar?.querySelector('button[aria-label="Search questions"]'),
   ).not.toBeNull();
-  expect(
-    bar
-      ?.querySelector('button[aria-label="Saved questions"]')
-      ?.getAttribute("aria-current"),
-  ).toBe("page");
   expect(bar?.querySelector('button[aria-label="Search"]')).toBeNull();
+  // No bookmark beside it: the bar is Home's, so the name isn't squeezed.
+  expect(bar?.querySelector('button[aria-label="Saved questions"]')).toBeNull();
 });
 
-it("leaves the bookmark unlit on his other screens", () => {
+it("gives the bar as many buttons on Ask Dipak as on Home", () => {
+  const count = () => shell().bar?.querySelectorAll("button, a").length;
   place.path = "/ask-dipak";
-  place.query = "lesson=PB03";
-  const { bar } = shell();
-  expect(
-    bar
-      ?.querySelector('button[aria-label="Saved questions"]')
-      ?.getAttribute("aria-current"),
-  ).toBeNull();
+  place.query = "";
+  const ask = count();
+  place.path = "/dashboard";
+  const home = count();
+  expect(ask).toBe(home);
 });
 
 it("keeps the app's own search on every other tab", () => {

@@ -15,6 +15,10 @@ export const COPY = {
     "यहाँ हम real situations explore करेंगे, decisions लेंगे और practical चीजें समझेंगे — एक-एक करके।",
   ],
   introAsk: "तो बताओ, आज क्या समझना चाहते हो?",
+  // The compact greeting's fold (owner, 16 Nov 2026); Dipak's lines unchanged.
+  introMore: "Dipak के बारे में",
+  introLess: "कम दिखाएँ",
+  savedLessons: "Saved lessons",
   searchPlaceholder: "Search questions or topics",
   explore: "Explore topics",
   seeAll: "See all",
@@ -58,6 +62,9 @@ export const COPY = {
   // The coaching loop's way in (13 Nov 2026 meeting); words to redesign.
   myMissions: "My Next-call missions",
   myMissionsMeta: "Your active missions and calls to answer",
+  // A lesson drafted for Dipak to confirm (owner, 16 Nov 2026).
+  draftTag: "Draft · Dipak to confirm",
+  draftMission: "Dipak के confirm करने के बाद यह mission mark कर पाएँगे।",
   notReadyChip: "Lesson not ready yet",
   notReady: "यह lesson अभी तैयार नहीं है। आप दूसरा सवाल खोल सकते हैं।",
 } as const;

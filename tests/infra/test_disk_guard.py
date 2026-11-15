@@ -46,6 +46,13 @@ elif name == "pgrep":
     sys.exit(int(os.environ.get("FAKE_PGREP", "1")))
 elif name == "du":
     print("4096\\t" + args[-1])
+elif name == "docker" and args[:2] == ["image", "inspect"]:
+    state = os.environ.get("FAKE_NATIVE", "")
+    if state == "missing":
+        sys.exit(1)
+    print("0" if state == "unnamed" else "1")
+elif name == "docker" and args[:1] == ["tag"]:
+    pass
 elif name == "docker" and args[:2] == ["image", "ls"]:
     if not (root / "pruned").exists():
         print("sha256:example 1GB")
@@ -102,6 +109,7 @@ def _run(
     pgrep: int = 1,
     fail: str = "",
     process: str = "",
+    native: str = "",
 ) -> subprocess.CompletedProcess[str]:
     (root / "conf").write_text(config)
     env = dict(os.environ)
@@ -124,6 +132,8 @@ def _run(
         FAKE_PGREP=str(pgrep),
         FAKE_FAIL=fail,
         FAKE_PROCESS=process,
+        FAKE_NATIVE=native,
+        AC_DISK_NATIVE_UNITS=str(root / "units" / "ac-sales-xray-native-*.service"),
     )
     for key, command in {
         "DF": "df",
@@ -562,3 +572,24 @@ def test_raw_spool_is_inventoried_even_with_sufficient_disk_and_never_pruned(gua
     assert "telemetry_spool=" in (guard / "guard.log").read_text()
     assert '"bytes": 7' in (guard / "guard.log").read_text()
     assert raw.read_bytes() == b"durable"
+
+
+@pytest.mark.parametrize("native", ["named", "unnamed", "missing"])
+def test_native_images_are_named_before_any_prune(guard: Path, native: str) -> None:
+    """16 Nov 2026: the unnamed native C1 image was pruned and C1 failed. Each image a native
+    helper unit runs is named before the prune; a missing one is logged."""
+    ref = "sha256:" + "f" * 64
+    unit = guard / "units" / "ac-sales-xray-native-staging.service"
+    unit.parent.mkdir()
+    unit.write_text(f"ExecStart=/usr/bin/python3 helper.py --socket /run/x --image-ref {ref}\n")
+    _run(guard, free="1,1,1,1,1,1,1,1,1,1", native=native)
+    calls = _calls(guard, "docker")
+    tags = [call for call in calls if call[1:2] == ["tag"]]
+    if native == "unnamed":
+        assert tags == [["docker", "tag", ref, "ac-sales-xray-native:kept-" + "f" * 12]]
+        prune = next(i for i, call in enumerate(calls) if call[1:3] == ["image", "prune"])
+        assert calls.index(tags[0]) < prune
+    else:
+        assert tags == []
+    log = (guard / "guard.log").read_text()
+    assert ("native image missing ref=" + ref in log) is (native == "missing")

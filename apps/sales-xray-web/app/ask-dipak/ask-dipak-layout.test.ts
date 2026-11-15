@@ -57,6 +57,8 @@ it.each([
   [".mcq", "min-height"],
   [".fold", "min-height"],
   [".mark", "height"],
+  [".heroSaved", "height"],
+  [".introToggle", "min-height"],
   [".check", "height"],
   [".related", "min-height"],
   [".smallBtn", "min-height"],
@@ -111,9 +113,49 @@ it("takes text from the app's one type scale, which grows with the phone's text 
     );
 });
 
-it("keeps motion to a turn of the Deep lesson's arrow, and none for reduced motion", () => {
-  expect(css.match(/transition:/g)).toHaveLength(1);
-  expect(css).toMatch(
-    /@media \(prefers-reduced-motion: no-preference\)\s*\{\s*\.foldArrow\s*\{\s*transition/,
+/** The stylesheet without its reduced-motion-safe blocks, and those blocks. */
+function motionSplit(): { outside: string; inside: string } {
+  const head = "@media (prefers-reduced-motion: no-preference)";
+  let outside = "";
+  let inside = "";
+  let at = 0;
+  for (
+    let start = css.indexOf(head);
+    start >= 0;
+    start = css.indexOf(head, at)
+  ) {
+    outside += css.slice(at, start);
+    let depth = 0;
+    let end = css.indexOf("{", start);
+    do {
+      if (css[end] === "{") depth += 1;
+      if (css[end] === "}") depth -= 1;
+      end += 1;
+    } while (depth > 0 && end < css.length);
+    inside += css.slice(start, end);
+    at = end;
+  }
+  return { outside: outside + css.slice(at), inside };
+}
+
+it("moves only the Deep lesson's arrow and the greeting, and nothing for reduced motion", () => {
+  const { outside, inside } = motionSplit();
+  expect(outside).not.toMatch(/transition|animation|@keyframes/);
+  expect(inside).toMatch(/\.foldArrow\s*\{\s*transition/);
+  // The greeting arrives and its intro folds with a fade and a lift, 200-250 ms
+  // (owner, 16 Nov 2026).
+  const fold =
+    inside.match(/\.introMore\s*\{\s*transition:([^}]*)\}/)?.[1] ?? "";
+  expect(fold).toMatch(/opacity/);
+  expect(fold).toMatch(/transform/);
+  const greet = inside.match(/\.hero\s*\{\s*animation:([^;]*);/)?.[1] ?? "";
+  expect(greet).toMatch(/greet/);
+  const times = [...`${fold} ${greet}`.matchAll(/(\d+)ms/g)].map(([, ms]) =>
+    Number(ms),
   );
+  expect(times.length).toBeGreaterThan(0);
+  for (const ms of times) {
+    expect(ms).toBeGreaterThanOrEqual(200);
+    expect(ms).toBeLessThanOrEqual(250);
+  }
 });
