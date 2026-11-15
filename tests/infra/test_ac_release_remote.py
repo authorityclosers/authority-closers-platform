@@ -490,11 +490,12 @@ def legacy_tree():
     # Independent fingerprint of the Engine without its remote additions. Updated 16 Nov 2026
     # for d0fa7c547 (a replacement approval checked in the API image: check_replacement_approval,
     # approval_check_packages), then for the kept web image (web_inputs_unchanged, kept_web and
-    # deploy's kept branch: a release with no web input change keeps the running web image);
+    # deploy's kept branch: a release with no web input change keeps the running web image),
+    # then for the native C1 image named on load (install_native_transition's docker tag);
     # the remote additions are unchanged.
     assert (
         hashlib.sha256(ast.dump(engine).encode()).hexdigest()
-        == "f6a8654d502ea3c5dde82030cf116a4cb1c01bea9967e3e135398571d9212dff"
+        == "449e91159b09d664886ae502361dedb2ef9caa7aaea0acd9b9d22a303fb7b424"
     )
     return ast.fix_missing_locations(tree)
 

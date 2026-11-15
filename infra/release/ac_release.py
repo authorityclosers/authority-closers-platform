@@ -120,6 +120,8 @@ NATIVE_FILES = frozenset(
 # The hosted worker cannot start once its approval lapses, so an approval with
 # less than this left is never carried into a new release.
 APPROVAL_MIN_REMAINING_SECONDS = 24 * 3600
+# The name a loaded native C1 image gets, so no prune of unnamed images removes it.
+NATIVE_IMAGE_NAME = "ac-sales-xray-native"
 # Root's one-time additions for the next carried-forward activation (Luna on staging,
 # 15 Nov 2026), under operator-inputs/<environment>/: the OpenAI worker identity's
 # provider entry, and a newly sealed approval. Each is used only while the running
@@ -3879,6 +3881,19 @@ class Engine:
         plan["armed"] = True
         self.run(
             ["docker", "load", "--input", str(target / "native-image.tar.gz")], log=log, timeout=900
+        )
+        # The native image runs only on demand and loads without a name, so a dangling-only
+        # prune (ac-disk-guard, ac-disk-nightly) deleted it and C1 failed on staging and
+        # production (16 Nov 2026). A name keeps it.
+        self.run(
+            [
+                "docker",
+                "tag",
+                plan["binding"].image_ref,
+                f"{NATIVE_IMAGE_NAME}:{native_sha[:12]}",
+            ],
+            log=log,
+            timeout=120,
         )
         result = installer.install(
             environment=environment,

@@ -2143,6 +2143,10 @@ def native_delivery_fixture(
         if argv[:2] == ["docker", "load"]:
             events.append("docker.load")
             return subprocess.CompletedProcess(argv, 0, "", "")
+        if argv[:2] == ["docker", "tag"]:
+            events.append("docker.tag")
+            events.append(f"tagged {argv[2]} {argv[3]}")
+            return subprocess.CompletedProcess(argv, 0, "", "")
         if argv[0] == "python3" and argv[1].endswith("prepare-sales-xray-native-activation.py"):
             events.append("activation.prepare")
             if plan.get("native_source", core_sha) != core_sha:
@@ -2271,6 +2275,10 @@ def test_native_transition_success_publishes_exact_binding_and_unchanged_approva
     assert approval.read_bytes() == old_approval
     assert events.index("native.install") < events.index("core.install")
     assert "native.restore" not in events
+    # 16 Nov 2026: the loaded native image is named at once, so no dangling prune removes it.
+    assert events.index("docker.load") < events.index("docker.tag") < events.index("native.install")
+    named = f"tagged {plan['binding'].image_ref} ac-sales-xray-native:"
+    assert any(event.startswith(named) for event in events)
     if staging_before is not None:
         assert staging_native_state(engine) == staging_before
 
