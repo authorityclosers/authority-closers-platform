@@ -201,14 +201,40 @@ def test_an_admins_key_assigns_and_changes_many_leads_with_preview_and_undo(
                         or 0
                     )
                 assert rows == 7  # each lead's change once, however often it was sent
+                # The same key moves one of the seven again, in another request: undoing the
+                # bulk request still finds all seven of its own changes (Codex P2, PR 619),
+                # and keeps the one moved since, saying so.
+                onward = next(
+                    item
+                    for item in transitions.moves(journey, move.stage, can_manage=True)
+                    if item.stage.kind not in CLOSED
+                    and item.stage.key not in (move.stage.key, current.key)
+                    and set(item.needs) <= {transitions.NEXT_ACTION}
+                )
+                again: dict[str, Any] = {
+                    "step": onward.stage.key,
+                    "reason": "Spoke again, moving on",
+                    "request_id": "req-single-0001",
+                }
+                if transitions.NEXT_ACTION in onward.needs:
+                    again["next_action_at"] = "2030-02-02T10:00:00+05:30"
+                moved_on = await app.post(
+                    f"/v1/api/leads/{ids[0]}/stage", headers=bearer, json=again
+                )
+                assert moved_on.status_code == 200, moved_on.text
                 undone = await app.post(
                     "/v1/api/changes/undo-request",
                     headers=bearer,
                     json={"request_id": "req-bulk-0001"},
                 )
                 assert undone.status_code == 200, undone.text
-                assert undone.json()["undone"] == 7 and undone.json()["kept"] == []
-                assert await _leads(setup, ids) == start
+                assert undone.json()["changes"] == 7 and undone.json()["undone"] == 6
+                assert [item["lead_id"] for item in undone.json()["kept"]] == [ids[0]]
+                after = await _leads(setup, ids)
+                assert {lead: after[lead] for lead in ids[1:]} == {
+                    lead: start[lead] for lead in ids[1:]
+                }
+                assert after[ids[0]][0] == onward.stage.kind
 
                 # Every open lead (a stage filter) to the teammate.
                 assign = {
