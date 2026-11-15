@@ -199,6 +199,18 @@ def test_work_views_and_the_stage_filter(
                 "Fictional new older",
             ]
             assert await names(scope="mine", side="inbound", step="no_such_stage") == []
+            # The tabs count the side, not the stage picked; the stage chips count the tab
+            # (design-research, Leads part 05 item 8, 15 Nov 2026: "To Call 0" beside
+            # "All stages 540" with Won picked).
+            for view in ("to_call", "all"):
+                ask = {"scope": "mine", "side": "inbound", "view": view}
+                whole = await here.client.get(f"{BASE}/leads", params=ask)
+                assert whole.status_code == 200, whole.text
+                for picked in (new_key, "no_such_stage"):
+                    one = await here.client.get(f"{BASE}/leads", params={**ask, "step": picked})
+                    assert one.status_code == 200, one.text
+                    assert one.json()["view_counts"] == whole.json()["view_counts"], picked
+                    assert one.json()["step_counts"] == whole.json()["step_counts"], picked
             # On All Leads, New shows the newest first unless a sort is picked (bug 127); To
             # Call keeps its calling order (oldest new lead first).
             assert await names(scope="mine", side="inbound", view="all", step=new_key) == [

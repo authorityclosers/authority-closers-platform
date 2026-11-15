@@ -2155,16 +2155,23 @@ class LeadDesk:
                 )
             ).all()
         }
-        # Each work view's count for the same people, search, filters and stage pick, on a
-        # side's first page: the tabs read "To Call 7 · Follow-ups 4 · All Leads 1,178", and
-        # a seller's own Inbound To Call is the badge's number (competitor teardown #9).
+        # Each work view's count for the same people, search and filters, on a side's first
+        # page: the tabs read "To Call 7 · Follow-ups 4 · All Leads 1,178", and a seller's own
+        # Inbound To Call is the badge's number (competitor teardown #9). Not the stage
+        # picked: the tabs count the side, the stage chips count the tab (design-research,
+        # Leads part 05 item 8, 15 Nov 2026: "To Call 0" beside "All stages 540" with Won
+        # picked).
         view_counts: dict[str, int] = {}
         if counting:
             # The follow-up filter counts as the list applies it (robot J181, 2 Nov 2026: To
             # Call said 3 over an empty list); only inside Follow-ups is it the tab's own split.
             split = when_clause if view == "follow_ups" else None
             # All three on the side picked (orchestrator, 15 Nov 2026).
-            rest = [item for item in where if item is not view_clause and item is not split]
+            rest = [
+                item
+                for item in where
+                if item is not view_clause and item is not split and item is not step_clause
+            ]
             to_call = in_view("to_call", day_end, waiting)
             follow_ups = in_view("follow_ups", day_end)
             found = (
