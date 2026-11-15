@@ -51,6 +51,17 @@ canary_call AS (
     ON c.submission_id = g.submission_id AND c.tenant_id = g.tenant_id
   WHERE g.recording_id IS NOT NULL
 ),
+-- Sandbox organisations (fictional data: the dev sandboxes, the test world's TEST
+-- workspaces): their calls are test use, never real (owner, 14 Nov 2026: "excluded from
+-- any real metrics").
+sandbox_tenant AS (
+  SELECT tenant_id FROM conversation_sandbox_organisations
+),
+sandbox_recording AS (
+  SELECT r.id::text AS id
+  FROM conversation_recordings r
+  WHERE r.tenant_id IN (SELECT tenant_id FROM sandbox_tenant)
+),
 -- Provider steps (C2 transcription, C4 facts, C5 report) with their job.
 step_raw AS (
   SELECT
@@ -174,6 +185,7 @@ call AS (
     CASE WHEN split_part(r.request_key, ':', 1) = 'syn' THEN 'synthetic'
          WHEN r.id IN (SELECT recording_id FROM canary_call) THEN 'canary'
          WHEN r.source_sha256 IN (SELECT sha FROM fixture) THEN 'qa'
+         WHEN r.tenant_id IN (SELECT tenant_id FROM sandbox_tenant) THEN 'sandbox'
          ELSE 'real' END AS kind,
     gs.capture_source,
     coalesce(
@@ -228,6 +240,7 @@ hold AS (
     h.v -> 'quote' ->> 'provider_id' AS provider,
     CASE WHEN (h.v -> 'quote' -> 'source' ->> 'recording_id') IN (SELECT recording_id::text FROM canary_call) THEN 'canary'
          WHEN (h.v -> 'quote' -> 'source' ->> 'source_sha256') IN (SELECT sha FROM fixture) THEN 'qa'
+         WHEN (h.v -> 'quote' -> 'source' ->> 'recording_id') IN (SELECT id FROM sandbox_recording) THEN 'sandbox'
          ELSE 'real' END AS kind,
     count(*) AS n,
     sum(CASE WHEN h.v -> 'quote' ->> 'max_cost_paise' ~ '^[0-9]{1,12}$' THEN (h.v -> 'quote' ->> 'max_cost_paise')::bigint ELSE 0 END) AS held_paise,
@@ -305,7 +318,7 @@ subscription AS (
 ),
 company AS (
   SELECT t.id AS company_id, t.slug,
-    CASE WHEN starts_with(t.slug, 'ac-sandbox-') THEN 'sandbox'
+    CASE WHEN starts_with(t.slug, 'ac-sandbox-') OR t.id IN (SELECT tenant_id FROM sandbox_tenant) THEN 'sandbox'
          WHEN t.slug = 'authority-closers-public-learners' THEN 'personal'
          WHEN starts_with(t.slug, 'authority-closers') THEN 'internal'
          WHEN o.tenant_id IS NOT NULL THEN 'organisation'

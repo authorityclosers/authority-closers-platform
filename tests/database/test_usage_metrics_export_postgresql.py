@@ -12,12 +12,22 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import insert, select
 
-from ac_platform.conversation_intelligence.cost_metrics import SCHEMA, parse_export, price
+from ac_platform.conversation_intelligence.cost_metrics import (
+    SCHEMA,
+    TEST_KINDS,
+    parse_export,
+    price,
+)
 from ac_platform.conversation_intelligence.models import ConversationRecording
+from ac_platform.conversation_intelligence.synthetic_import_models import (
+    ConversationSandboxOrganisation,
+)
+from ac_platform.tenancy.models import Organisation
 from ac_platform.usage_people.pseudonyms import ensure_key, names_for, pseudonym
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_worker_postgresql import (  # type: ignore[attr-defined]
@@ -100,3 +110,62 @@ def test_export_reads_a_real_step_and_its_open_hold_read_only(
         assert prepared.data.hex()[:32] not in text  # no audio, only numbers and labels
 
     run(exercise())
+
+
+def test_a_sandbox_organisations_call_and_hold_are_test_use(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Owner, 14 Nov 2026: the test world's TEST workspaces are "excluded from any real
+    metrics". A call, its hold and its company in a sandbox organisation export as
+    "sandbox", which Admin keeps apart from real use (cost_metrics.TEST_KINDS)."""
+
+    async def exercise() -> dict[str, Any]:
+        engine, _sessions, prepared, _reservation = await _uncertain_hold(
+            postgres_harness, tmp_path, max_cost_paise=2_000
+        )
+        try:
+            async with engine.begin() as connection:
+                tenant_id, person_id = (
+                    await connection.execute(
+                        select(
+                            ConversationRecording.tenant_id, ConversationRecording.person_id
+                        ).where(ConversationRecording.id == prepared.recording_id)
+                    )
+                ).one()
+                # A sandbox flag belongs to an organisation's tenant.
+                await connection.execute(
+                    insert(Organisation).values(
+                        tenant_id=tenant_id,
+                        created_by_person_id=person_id,
+                        creation_command_id=uuid4(),
+                        domain_verification_token="t" * 43,
+                    )
+                )
+                await connection.execute(
+                    insert(ConversationSandboxOrganisation).values(
+                        tenant_id=tenant_id,
+                        approved_by_person_id=person_id,
+                        approval_reference="test world (fictional)",
+                        created_at=datetime.now(UTC),
+                    )
+                )
+            async with engine.connect() as connection, connection.begin():
+                await connection.exec_driver_sql("SET TRANSACTION READ ONLY")
+                await connection.exec_driver_sql("SET LOCAL ac.metrics_environment = 'staging'")
+                result = await connection.exec_driver_sql(EXPORT_SQL.read_text(encoding="utf-8"))
+                raw = result.scalar_one()
+            document = raw if isinstance(raw, dict) else json.loads(raw)
+            document["_tenant"] = str(tenant_id)
+            return document
+        finally:
+            await engine.dispose()
+
+    document = run(exercise())
+    assert [call["kind"] for call in document["calls"]] == ["sandbox"]
+    company = {row["id"]: row["kind"] for row in document["companies"]}
+    assert company[document["_tenant"]] == "sandbox"
+    (hold,) = [row for row in document["holds"] if row["state"] == "uncertain"]
+    assert hold["kind"] == "sandbox"
+    assert "sandbox" in TEST_KINDS
+    export = parse_export("staging", {k: v for k, v in document.items() if k != "_tenant"})
+    assert [call.kind for call in export.calls] == ["sandbox"]

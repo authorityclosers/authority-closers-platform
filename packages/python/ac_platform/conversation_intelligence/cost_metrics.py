@@ -75,8 +75,10 @@ COMPANY_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
 CALL_SORTS = ("newest", "cost", "per_minute", "audio", "tokens")
 STALE_AFTER = timedelta(minutes=45)
 INDIA = ZoneInfo("Asia/Kolkata")
-# Never real use: release canaries, QA fixtures and the fictional synthetic calls.
-TEST_KINDS = frozenset({"canary", "qa", "synthetic"})
+# Never real use: release canaries, QA fixtures, the fictional synthetic calls and calls in
+# sandbox organisations (the dev sandboxes, the test world's TEST workspaces; owner, 14 Nov
+# 2026: "excluded from any real metrics").
+TEST_KINDS = frozenset({"canary", "qa", "synthetic", "sandbox"})
 PROVIDER_STAGES = ("C2", "C4", "C5")
 STAGE_LABELS = {
     "C1": "Audio check",
