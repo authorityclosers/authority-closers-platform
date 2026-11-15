@@ -56,6 +56,18 @@ from ac_platform.conversation_intelligence.provider_registry import parse_regist
 from ac_platform.one_pass import c2_route, markers
 
 
+def _configuration(path: Path) -> object:
+    """A configuration file as Root has it: the configuration itself, or the data change's
+    export of it, ``{"export": <name>, "configuration": {...}}``
+    (scripts/data-changes/one-pass-flex-production.py export; Luna on staging, 15 Nov 2026:
+    the seal refused the export as it came, invalid_registry_config_fields)."""
+
+    raw = json.loads(path.read_text())
+    if isinstance(raw, dict) and set(raw) == {"export", "configuration"}:
+        return raw["configuration"]
+    return raw
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="one_pass_c2_seal")
     parser.add_argument("--bundle", type=Path, required=True)
@@ -140,8 +152,8 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         governance = json.loads(arguments.openai_governance.read_text())
     bundle = load_hosted_approval_bundle(arguments.bundle.read_bytes())
-    classic = parse_registry_config(json.loads(arguments.classic.read_text()))
-    saved = parse_registry_config(json.loads(arguments.configuration.read_text()))
+    classic = parse_registry_config(_configuration(arguments.classic))
+    saved = parse_registry_config(_configuration(arguments.configuration))
     luna_key = ("openai", c2_route.LUNA_MODEL)
     openai = None
     if arguments.luna and not any(

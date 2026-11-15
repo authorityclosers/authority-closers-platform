@@ -114,6 +114,17 @@ NATIVE_FILES = frozenset(
 # The hosted worker cannot start once its approval lapses, so an approval with
 # less than this left is never carried into a new release.
 APPROVAL_MIN_REMAINING_SECONDS = 24 * 3600
+# Root's one-time additions for the next carried-forward activation (Luna on staging,
+# 15 Nov 2026), under operator-inputs/<environment>/: the OpenAI worker identity's
+# provider entry, and a newly sealed approval. Each is used only while the running
+# activation lacks it; the prepare tool validates both.
+OPENAI_PROVIDER_INPUT = "openai-provider.json"
+NEXT_APPROVAL_INPUT = "next-approval.json"
+OPENAI_OVERLAY = "compose.sales-xray-hosted-openai.yaml"
+OPENAI_IDENTITY_DIRS = {
+    "staging": "/etc/authority-closers/secrets/sales-xray/identities/staging/openai",
+    "production": "/etc/authority-closers/secrets/sales-xray/identities/production/openai",
+}
 # A crash-looping container can read "running" between restarts; it must stay
 # up this long without a restart to count as started.
 STEADY_SECONDS = 30
@@ -3961,6 +3972,8 @@ class Engine:
                 "--source-repository",
                 str(self.paths.mirror),
             ]
+        additions = self.activation_additions(environment, descriptor)
+        argv += additions["argv"]
         completed = self.run(argv, log=log, check=False, timeout=900)
         if completed.returncode != 0:
             lines = completed.stderr.strip().splitlines()
@@ -3976,7 +3989,8 @@ class Engine:
         if (
             result.get("release_id") != sha
             or result.get("provider_calls") != 0
-            or result.get("approval_replaced") is not False
+            or result.get("approval_replaced") is not additions["approval"]
+            or bool(result.get("openai_added")) is not additions["openai"]
         ):
             raise ReleaseError("the Sales Xray prepare tool returned an unexpected result")
         summary = {
@@ -3984,10 +3998,44 @@ class Engine:
             "sales_xray_native": native_sha,
             "sales_xray_approval_expires": _date(expires),
         }
+        if additions["openai"]:
+            summary["sales_xray_openai"] = "added"
+        if additions["approval"]:
+            summary["sales_xray_approval"] = f"replaced by {result.get('approval_sha256')}"
         if not dry_run:
             self._seal_activation(home, output)
             self._publish_activation(environment, sha, output)
         return summary
+
+    def activation_additions(
+        self, environment: str, descriptor: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """Root's one-time additions in operator-inputs/<environment>/, each passed only
+        while the running activation lacks it: the OpenAI provider entry (with the
+        environment's dedicated identity directory) and a newly sealed approval."""
+
+        inputs = self.paths.application / "operator-inputs" / environment
+        argv: list[str] = []
+        provider = inputs / OPENAI_PROVIDER_INPUT
+        openai = (
+            provider.is_file()
+            and not provider.is_symlink()
+            and descriptor.get("compose_overlay") != OPENAI_OVERLAY
+        )
+        if openai:
+            identity = OPENAI_IDENTITY_DIRS.get(environment)
+            if identity is None:
+                raise ReleaseError(f"{environment} has no OpenAI identity directory")
+            argv += ["--add-openai-provider", str(provider), "--openai-identity-dir", identity]
+        approval = inputs / NEXT_APPROVAL_INPUT
+        replace = (
+            approval.is_file()
+            and not approval.is_symlink()
+            and _sha256_file(approval) != descriptor.get("approval_sha256")
+        )
+        if replace:
+            argv += ["--approval-file", str(approval), "--approval-sha256", _sha256_file(approval)]
+        return {"argv": argv, "openai": openai, "approval": replace}
 
     def native_reuse_proof(self, native_sha: str, sha: str, directory: Path) -> Path:
         stored = self.store_native(native_sha)

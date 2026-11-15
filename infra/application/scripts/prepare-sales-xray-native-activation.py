@@ -15,6 +15,14 @@ approval contract is validated before the exact input bytes are copied into
 the fresh output bundle.  Source files are never changed.  The canonical
 installer remains responsible for copying/reviewing these prepared artifacts
 and for activation.
+
+An operator may also add the OpenAI worker identity once (Luna on staging, 15 Nov
+2026): ``--add-openai-provider`` names a JSON file holding the provider entry,
+with exactly the fields the existing providers have, ``provider_id`` "openai" and
+the dedicated mounted token path, and ``--openai-identity-dir`` the environment's
+dedicated host directory.  The new service lists it, the compose environment
+gains ``AC_XRAY_OPENAI_IDENTITY_DIR`` and the descriptor selects the OpenAI
+overlay; a source that already has OpenAI is refused.  No token is read.
 """
 
 from __future__ import annotations
@@ -527,6 +535,38 @@ def _fresh_output_dir(output_dir: Path) -> None:
         raise _fail("output-dir cannot be created") from exc
 
 
+def _with_openai(
+    descriptor: dict[str, Any],
+    env: dict[str, str],
+    service: dict[str, Any],
+    provider_file: Path,
+    identity_dir: str,
+) -> tuple[dict[str, Any], dict[str, str], dict[str, Any]]:
+    """The source with the OpenAI worker identity added, validated as a whole."""
+
+    providers = service.get("providers")
+    if not isinstance(providers, list) or not providers:
+        raise _fail("source service provider entries are invalid")
+    if any(item.get("provider_id") == "openai" for item in providers):
+        raise _fail("the source already configures OpenAI")
+    try:
+        entry = json.loads(_read_bytes(provider_file, MAX_REFERENCE_BYTES))
+    except ValueError as exc:
+        raise _fail("OpenAI provider entry is not JSON") from exc
+    if not isinstance(entry, dict) or set(entry) != set(providers[0]):
+        raise _fail("OpenAI provider entry must have exactly the existing providers' fields")
+    if any(not isinstance(value, str) or not value for value in entry.values()):
+        raise _fail("OpenAI provider entry values must be nonempty strings")
+    if entry["provider_id"] != "openai" or entry["token_file_ref"] != OPENAI_TOKEN_FILE:
+        raise _fail("OpenAI provider entry must name openai and its mounted token path")
+    _openai_identity_dir(identity_dir, descriptor["environment"])
+    next_service = {**service, "providers": [*providers, entry]}
+    next_env = {**env, "AC_XRAY_OPENAI_IDENTITY_DIR": identity_dir}
+    next_descriptor = {**descriptor, "compose_overlay": OPENAI_OVERLAY}
+    _validate_openai_identity_selection(next_descriptor, next_env, next_service)
+    return next_descriptor, next_env, next_service
+
+
 def prepare(
     *,
     source_activation: Path,
@@ -539,12 +579,16 @@ def prepare(
     native_reuse_proof: Path | None = None,
     native_reuse_proof_sha256: str | None = None,
     source_repository: Path | None = None,
+    add_openai_provider: Path | None = None,
+    openai_identity_dir: str | None = None,
 ) -> dict[str, Any]:
     """Validate source inputs and write a new, inactive activation bundle."""
 
     target_release = _release(target_release_id, "target_release_id")
     if (approval_file is None) != (approval_sha256 is None):
         raise _fail("replacement approval path and digest must be supplied together")
+    if (add_openai_provider is None) != (openai_identity_dir is None):
+        raise _fail("the OpenAI provider entry and its identity directory go together")
     reuse_arguments = (native_reuse_proof, native_reuse_proof_sha256, source_repository)
     if any(value is not None for value in reuse_arguments) and any(
         value is None for value in reuse_arguments
@@ -553,6 +597,10 @@ def prepare(
     descriptor, _descriptor_raw, env, service, _service_raw, _approval, _approval_raw = (
         _load_source(source_activation)
     )
+    if add_openai_provider is not None and openai_identity_dir is not None:
+        descriptor, env, service = _with_openai(
+            dict(descriptor), dict(env), dict(service), add_openai_provider, openai_identity_dir
+        )
     _source_commit, image_ref, config_id = _load_native_manifest(
         native_artifact_manifest, native_artifact_sha256
     )
@@ -687,6 +735,7 @@ def prepare(
         "approval_file": str(approval_output_path),
         "approval_sha256": approval_output_digest,
         "approval_replaced": approval_output_raw is not None,
+        "openai_added": add_openai_provider is not None,
         "output_dir": str(output_dir),
         "activation": str(activation_path),
         "activation_sha256": str(digest_path),
@@ -709,6 +758,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--native-reuse-proof-sha256")
     parser.add_argument("--source-repository", type=Path)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--add-openai-provider", type=Path)
+    parser.add_argument("--openai-identity-dir")
     return parser
 
 
@@ -726,6 +777,8 @@ def main(arguments: list[str] | None = None) -> int:
             native_reuse_proof=args.native_reuse_proof,
             native_reuse_proof_sha256=args.native_reuse_proof_sha256,
             source_repository=args.source_repository,
+            add_openai_provider=args.add_openai_provider,
+            openai_identity_dir=args.openai_identity_dir,
         )
     except (PrepareError, OSError, ValueError, TypeError, KeyError) as exc:
         print(f"FAIL  {exc}", file=sys.stderr)

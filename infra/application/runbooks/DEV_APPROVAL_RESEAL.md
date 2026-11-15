@@ -343,11 +343,15 @@ Reviewed script checksums for this handoff:
 
 | Script | SHA256 |
 | --- | --- |
-| `reseal-dev-sales-xray-approval.py` | `cb5123d209ad222df24cfece0132d85cdf416bc4c5465ea3fe887b62e8b8f96d` |
+| `reseal-dev-sales-xray-approval.py` | `fb781140aecfb535bd158fa824b73817aeed856d5c0f1bf840f9119b97331380` |
 | `refresh-dev-sales-xray-backend.py` | `951c82dcb3390ba1e0ffe836d2032deb9aee86c1232d2d8452674da5a6b8feb3` |
-| `prepare-sales-xray-native-activation.py` | `d026c11d2fee8671bf6418c46571d4c9209704f78a89cb5f11ecdcb6652728df` |
+| `prepare-sales-xray-native-activation.py` | `51a92dc2c20785fd5123f7a1e1a7ca463e1caffc55da1e44534fe4b258c2a560` |
 
 The tool also enforces the two helper digests before it imports their code.
+
+15 Nov 2026: the activation helper gained Root's one-time operator inputs (the OpenAI
+provider entry and a newly sealed approval, 687453160); the tool's pin and these checksums
+were updated with it.
 This handoff's three-script set is pinned to source
 `c4db17c467cfa88fb55ee3c05b7d6f76d48f1a40`. The activation helper has the same
 bytes at `a81cb05b147c749018700633deb5a433ec53c17e`; the follow-up source updates

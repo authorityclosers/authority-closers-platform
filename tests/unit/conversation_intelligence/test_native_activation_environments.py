@@ -72,3 +72,102 @@ def test_prepare_preserves_hosted_environment_and_source_artifacts(
         assert result["provider_calls"] == 0
         assert result["approval_replaced"] is False
     assert all(path.read_bytes() == raw for path, raw in original.items())
+
+
+def _openai_entry(source: Path, tmp_path: Path, **changes: str) -> Path:
+    descriptor = json.loads(source.read_bytes())
+    service = json.loads(Path(descriptor["service_config_file"]).read_bytes())
+    entry = {
+        **service["providers"][0],
+        "provider_id": "openai",
+        "credential_ref": "ref:credential/openai/staging-v1",
+        "secret_path_ref": "/sales-xray/openai",
+        "token_file_ref": _MODULE.OPENAI_TOKEN_FILE,
+        **changes,
+    }
+    path = tmp_path / f"openai-{len(changes)}-{sorted(changes)}.json"
+    path.write_text(json.dumps(entry))
+    return path
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+def test_root_adds_the_openai_identity_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, environment: str
+) -> None:
+    """Luna on staging (15 Nov 2026): the provider entry, the identity directory and the
+    OpenAI overlay together, validated as a whole; the source is never changed."""
+    # The host's real identity directories are Root's; these stand in for them.
+    for place in ("staging", "production"):
+        monkeypatch.setitem(
+            _MODULE.OPENAI_HOST_IDENTITY_DIRS,
+            place,
+            str(tmp_path / "identities" / place / "openai"),
+        )
+    source = _source_for_environment(tmp_path, environment)
+    original = {path: path.read_bytes() for path in source.parent.iterdir()}
+    target = "2" * 40
+    _patch_target_native(monkeypatch, target)
+    identity = _MODULE.OPENAI_HOST_IDENTITY_DIRS[environment]
+
+    def run(output: str, **extra: object) -> dict[str, object]:
+        return _MODULE.prepare(
+            source_activation=source,
+            target_release_id=target,
+            native_artifact_manifest=tmp_path / "native.json",
+            native_artifact_sha256="a" * 64,
+            output_dir=tmp_path / output,
+            **extra,
+        )
+
+    result = run(
+        "prepared",
+        add_openai_provider=_openai_entry(source, tmp_path),
+        openai_identity_dir=identity,
+    )
+    assert result["openai_added"] is True and result["provider_calls"] == 0
+    activation, _, env, service, _, _, _ = _MODULE._load_source(Path(result["activation"]))
+    assert activation["compose_overlay"] == _MODULE.OPENAI_OVERLAY
+    assert env["AC_XRAY_OPENAI_IDENTITY_DIR"] == identity
+    assert [item["provider_id"] for item in service["providers"]][-1] == "openai"
+    assert all(path.read_bytes() == raw for path, raw in original.items())
+
+    refusals = [
+        ({"add_openai_provider": _openai_entry(source, tmp_path)}, "go together"),
+        (
+            {
+                "add_openai_provider": _openai_entry(source, tmp_path, token_file_ref="/x/token"),  # noqa: S106
+                "openai_identity_dir": identity,
+            },
+            "mounted token path",
+        ),
+        (
+            {
+                "add_openai_provider": _openai_entry(source, tmp_path, extra="field"),
+                "openai_identity_dir": identity,
+            },
+            "exactly the existing providers",
+        ),
+        (
+            {
+                "add_openai_provider": _openai_entry(source, tmp_path),
+                "openai_identity_dir": _MODULE.OPENAI_HOST_IDENTITY_DIRS[
+                    "production" if environment == "staging" else "staging"
+                ],
+            },
+            "dedicated host path",
+        ),
+    ]
+    for index, (extra, words) in enumerate(refusals):
+        with pytest.raises(_MODULE.PrepareError, match=words):
+            run(f"refused-{index}", **extra)
+    # A source that already has OpenAI is refused.
+    with pytest.raises(_MODULE.PrepareError, match="already configures OpenAI"):
+        _MODULE.prepare(
+            source_activation=Path(result["activation"]),
+            target_release_id="3" * 40,
+            native_artifact_manifest=tmp_path / "native.json",
+            native_artifact_sha256="a" * 64,
+            output_dir=tmp_path / "again",
+            add_openai_provider=_openai_entry(source, tmp_path),
+            openai_identity_dir=identity,
+        )
