@@ -43,6 +43,12 @@ command-line argument, so it stays out of shell history and process lists).
     sx dipak team                             # every seller's missions (org key)
     sx dipak save|tick|active QUESTION_ID [--off]      # needs coaching:write
     sx dipak answer CALL_ID QUESTION_ID yes|no         # after a call
+    sx upload FILE --seller EMAIL|PERSON_ID [--lead LEAD_ID] [--called-at AT]
+            [--language en] [--wait]          # a seller's call, analysed as it arrives
+                                              # (an organisation key with
+                                              # recordings:write); the people on the
+                                              # call must know it is recorded
+    sx recording UPLOAD_ID                    # where an uploaded call is
     sx mcp                                    # an MCP server on stdio (for AI assistants)
 
 A change sent again with the same --request-id changes nothing; without one, sx makes
@@ -54,6 +60,11 @@ JSON list of such objects. It sends up to --per-import rows (default 5,000) per 
 each with an Idempotency-Key made from the file, so running it again on the same file
 creates nothing twice. --wait follows each import to the end and prints the totals;
 --failures writes the rows that were skipped or failed, with why, to a CSV.
+
+upload sends the file (up to 100 MB and 60 minutes) with its SHA-256, stating that the
+people on the call know it is recorded; the call is then the seller's own, in their Calls.
+--wait follows it until its report is ready (or it is held, with why) and prints where it
+ended.
 
 Output is JSON. Exit status 0 on success, 1 when the API refused (its error code and
 message are printed), 2 on a usage or connection problem.
@@ -78,6 +89,10 @@ from typing import Any
 DEFAULT_BASE = "https://api.salesxray.in/v1/api"
 VERSION = "1.0.0"
 TIMEOUT = 30
+UPLOAD_TIMEOUT = 900
+MAX_UPLOAD_BYTES = 100_000_000
+# Where an uploaded call stops moving (GET /recordings/{id}).
+SETTLED = ("report_ready", "held", "failed", "expired")
 
 
 class ApiError(Exception):
@@ -91,7 +106,8 @@ Transport = Callable[[urllib.request.Request], tuple[int, bytes]]
 
 def _urlopen(request: urllib.request.Request) -> tuple[int, bytes]:
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:  # noqa: S310
+        timeout = getattr(request, "sx_timeout", TIMEOUT)
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
             return response.status, response.read()
     except urllib.error.HTTPError as error:
         return error.code, error.read()
@@ -114,15 +130,19 @@ class Client:
         query: dict[str, Any] | None = None,
         body: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
+        raw: bytes | None = None,
     ) -> Any:
         clean = {k: v for k, v in (query or {}).items() if v is not None}
         url = self.base + path + ("?" + urllib.parse.urlencode(clean) if clean else "")
-        data = None if body is None else json.dumps(body).encode()
+        data = raw if raw is not None else None if body is None else json.dumps(body).encode()
         request = urllib.request.Request(url, data=data, method=method)  # noqa: S310
         request.add_header("Authorization", f"Bearer {self.key}")
         request.add_header("Accept", "application/json")
         request.add_header("User-Agent", f"sx/{VERSION}")
-        if data is not None:
+        if raw is not None:
+            request.add_header("Content-Type", "application/octet-stream")
+            request.sx_timeout = UPLOAD_TIMEOUT  # type: ignore[attr-defined]
+        elif data is not None:
             request.add_header("Content-Type", "application/json")
         for name, value in (headers or {}).items():
             request.add_header(name, value)
@@ -190,6 +210,24 @@ class Client:
 
     # Ask Dipak (/v1/api/ask-dipak): lessons with any key; missions with coaching:read
     # and coaching:write, which act as a person (a connected app's sxa_ token).
+    def create_recording(self, **fields: Any) -> Any:
+        body = {k: v for k, v in fields.items() if v is not None}
+        return self.call("POST", "/recordings", body=body)
+
+    def send_recording(self, upload_id: str, data: bytes) -> Any:
+        return self.call(
+            "PUT",
+            f"/recordings/{urllib.parse.quote(upload_id, safe='')}/source",
+            headers={
+                "X-Source-SHA256": hashlib.sha256(data).hexdigest(),
+                "X-Recording-Consent": "participants-informed",
+            },
+            raw=data,
+        )
+
+    def recording(self, upload_id: str) -> Any:
+        return self.call("GET", f"/recordings/{urllib.parse.quote(upload_id, safe='')}")
+
     def dipak_search(self, words: str = "") -> Any:
         return self.call("GET", "/ask-dipak/lessons", {"q": words or None})
 
@@ -663,6 +701,41 @@ def serve(client: Client, stdin: Any = sys.stdin, stdout: Any = sys.stdout) -> N
 # ----- command line --------------------------------------------------------------
 
 
+def upload_call(
+    client: Client,
+    path: str,
+    *,
+    seller: str,
+    lead: str | None = None,
+    called_at: str | None = None,
+    language: str | None = None,
+    wait: bool = False,
+    sleep: Callable[[float], None] = time.sleep,
+    wait_seconds: float = 900,
+) -> Any:
+    """Send one call for a seller; with ``wait``, follow it until it settles."""
+    size = os.path.getsize(path)
+    if not 0 < size <= MAX_UPLOAD_BYTES:
+        raise ValueError("Choose an audio or video file up to 100 MB.")
+    with open(path, "rb") as source:
+        data = source.read()
+    who = {"seller_email": seller} if "@" in seller else {"seller_id": seller}
+    opened = client.create_recording(
+        **who,
+        lead_id=lead,
+        called_at=called_at,
+        report_language=language,
+        file_name=os.path.basename(path)[:200] or None,
+    )
+    state = client.send_recording(opened["id"], data)
+    waited = 0.0
+    while wait and state.get("state") not in SETTLED and waited < wait_seconds:
+        sleep(5)
+        waited += 5
+        state = client.recording(opened["id"])
+    return state
+
+
 def _request_id() -> str:
     return f"sx-{uuid.uuid4().hex}"
 
@@ -741,6 +814,14 @@ def _parser() -> argparse.ArgumentParser:
     answer.add_argument("call_id")
     answer.add_argument("question_id")
     answer.add_argument("done", choices=("yes", "no"))
+    upload = commands.add_parser("upload", help="a seller's call, analysed as it arrives")
+    upload.add_argument("file")
+    upload.add_argument("--seller", required=True)
+    upload.add_argument("--lead")
+    upload.add_argument("--called-at")
+    upload.add_argument("--language", choices=["en", "hi-Deva+en", "mr-Deva+en"])
+    upload.add_argument("--wait", action="store_true")
+    commands.add_parser("recording").add_argument("upload_id")
     commands.add_parser("mcp")
     return parser
 
@@ -842,6 +923,19 @@ def main(
             out = client.undo(args.change_id, args.request_id)
         elif args.command == "dipak":
             out = _dipak(client, args)
+        elif args.command == "upload":
+            out = upload_call(
+                client,
+                args.file,
+                seller=args.seller,
+                lead=args.lead,
+                called_at=args.called_at,
+                language=args.language,
+                wait=args.wait,
+                sleep=sleep,
+            )
+        elif args.command == "recording":
+            out = client.recording(args.upload_id)
         else:
             out = client.add_lead(
                 name=args.name,

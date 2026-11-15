@@ -18,6 +18,10 @@ SCOPES: dict[str, str] = {
     # Ask Dipak's coaching loop (14 Nov 2026): missions and their counts; the team's
     # for an organisation key or a role that sees the team.
     "coaching:read": "Read Next-call missions and on how many calls each was done",
+    # A seller's call, sent by an organisation's key and analysed as it arrives (API gap 2,
+    # 15 Nov 2026; integrations/recordings_api.py). Not calls:write, which is a person's
+    # app inbox.
+    "recordings:write": "Upload calls for a seller to analyse",
     "webhooks:manage": "Manage the webhook",
 }
 # Only an app a person connects may ask for these: they act as that person, which an

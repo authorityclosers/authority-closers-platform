@@ -281,6 +281,24 @@ def install_acquisition_runtime(
 
     auto_start.attach(
         application,
-        auto_start.AutoStart(sessions=sessions, runtime=runtime.intake, factory=factory),
+        auto_start.AutoStart(
+            sessions=sessions,
+            runtime=runtime.intake,
+            factory=factory,
+            environment=settings.environment,
+        ),
         environment=settings.environment,
+    )
+
+    # Calls an organisation's API key sends for one of its sellers (API gap 2, 15 Nov 2026).
+    from ac_platform.integrations.recordings_api import install_recordings_api
+
+    install_recordings_api(
+        application,
+        settings=settings,
+        sessions=sessions,
+        require_actor=require_actor,
+        runtime=runtime.intake,
+        preflight=runtime.preflight,
+        factory=factory,
     )

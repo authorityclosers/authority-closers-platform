@@ -20,6 +20,7 @@ export const SCOPES = [
   "leads:update",
   "leads:stage",
   "coaching:read",
+  "recordings:write",
   "webhooks:manage",
 ] as const;
 

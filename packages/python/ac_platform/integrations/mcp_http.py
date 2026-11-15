@@ -32,7 +32,7 @@ from fastapi.responses import JSONResponse
 
 from ac_platform.ask_dipak import integration as ask_dipak
 from ac_platform.http.routes import RouteContext
-from ac_platform.integrations import lead_imports, tiers
+from ac_platform.integrations import lead_imports, recordings_api, tiers
 from ac_platform.integrations.api_http import (
     ApiError,
     NewLeadBody,
@@ -428,6 +428,8 @@ TOOLS: tuple[dict[str, Any], ...] = (
     },
     # Ask Dipak's lessons and coaching loop (ask_dipak/integration.py).
     *ask_dipak.TOOLS,
+    # A seller's call uploaded by an organisation's key (integrations/recordings_api.py).
+    *recordings_api.TOOLS,
 )
 _BY_NAME = {tool["name"]: tool for tool in TOOLS}
 
@@ -735,6 +737,8 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
         return await reader.undo_change(_uuid(args, "change_id"), undo)
     if name in ask_dipak.NAMES:
         return await ask_dipak.run_tool(reader, name, args)
+    if name in recordings_api.NAMES:
+        return await recordings_api.run_tool(reader, name, args)
     raise KeyError(name)
 
 

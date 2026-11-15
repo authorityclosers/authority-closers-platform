@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import io
 import json
@@ -311,3 +312,54 @@ def test_import_leads_reads_a_file_sends_idempotent_imports_and_reports_problems
         "row,external_id,outcome,reason",
         "3,a3,skipped,Number can't be read",
     ]
+
+
+def test_upload_sends_a_sellers_call_and_waits_for_its_report(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """API gap 2 (15 Nov 2026): sx upload FILE --seller ... --wait opens the upload, sends
+    the file with its SHA-256 and the recording statement, then follows it to its report."""
+    audio = tmp_path / "call.wav"
+    audio.write_bytes(b"RIFF" + bytes(60))
+    fake = Fake(
+        {
+            ("POST", "/recordings"): (201, {"id": "u1", "state": "waiting_for_file"}),
+            ("PUT", "/recordings/u1/source"): (202, {"id": "u1", "state": "queued"}),
+        }
+    )
+    states = iter([{"state": "analysing"}, {"state": "report_ready", "call_id": "u1"}])
+
+    def answer(request: urllib.request.Request) -> tuple[int, bytes]:
+        if request.get_method() == "GET":
+            fake.seen.append((request.get_method(), request.full_url, request.headers, None))
+            return 200, json.dumps(next(states)).encode()
+        return fake(request)
+
+    waits: list[float] = []
+    env = {"SX_API_KEY": KEY, "SX_API_BASE": "https://salesxray.example.test/v1/api"}
+    command = ["upload", str(audio), "--seller", "asha@example.test", "--lead", "l1", "--wait"]
+    assert sx.main(command, env, answer, waits.append) == 0, capsys.readouterr().err
+    assert json.loads(capsys.readouterr().out) == {"state": "report_ready", "call_id": "u1"}
+    assert waits == [5, 5]
+    opened, sent = fake.seen[0], fake.seen[1]
+    assert json.loads(opened[3]) == {
+        "seller_email": "asha@example.test",
+        "lead_id": "l1",
+        "file_name": "call.wav",
+    }
+    assert (sent[0], sent[3]) == ("PUT", audio.read_bytes())
+    assert sent[2]["Content-type"] == "application/octet-stream"
+    assert sent[2]["X-source-sha256"] == hashlib.sha256(audio.read_bytes()).hexdigest()
+    assert sent[2]["X-recording-consent"] == "participants-informed"
+    # A person's id instead of an email; a refusal prints its code and exits 1.
+    closed = Fake(
+        {
+            ("POST", "/recordings"): (
+                403,
+                {"error": {"code": "api_uploads_off", "message": "Not yet."}},
+            )
+        }
+    )
+    assert sx.main(["upload", str(audio), "--seller", "p1"], env, closed) == 1
+    assert "api_uploads_off" in capsys.readouterr().err
+    assert json.loads(closed.seen[0][3]) == {"seller_id": "p1", "file_name": "call.wav"}

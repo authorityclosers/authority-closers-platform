@@ -24,6 +24,13 @@ A call that can't start here (consent off, a refusal from the plan) is marked on
 (``conversation.auto_analysis_waiting``) and keeps its tap. Nothing is made up: the actor is
 the session that uploaded the call; an upload recorded without its session (before this
 change) is left to the phone. Content-free: ids and codes only.
+
+A call an organisation's API key uploaded for a seller (``conversation.api_upload_accepted``,
+API gap 2, 15 Nov 2026) starts here the same way, as that seller through the key
+(``key_upload.KeyUploadActor``): the key, its maker and the seller are admitted again, and
+instead of the seller's standing consent the workspace's API-upload terms must still be on
+for the upload terms in force, with the seller's AI level not Off (``key_upload.may_upload``).
+Its start names that acceptance and the key; no session is borrowed.
 """
 
 from __future__ import annotations
@@ -34,7 +41,7 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Final
+from typing import Any, Final, cast
 from uuid import UUID
 
 from fastapi import FastAPI
@@ -43,6 +50,7 @@ from sqlalchemy import select, text
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository
 from ac_platform.call_ai import auto_consent
+from ac_platform.conversation_intelligence import key_upload
 from ac_platform.conversation_intelligence.acquisition_processing import upload_policy
 from ac_platform.conversation_intelligence.application import (
     LOCAL_JOB,
@@ -50,6 +58,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationConflict,
     ConversationError,
 )
+from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.models import (
     ConversationProcessingPlan,
@@ -74,15 +83,20 @@ WAITING: Final = "conversation.auto_analysis_waiting"
 FRESH: Final = timedelta(hours=2)
 INTERVAL_SECONDS: Final = 3.0
 BATCH: Final = 20
+_LANGUAGES: Final = frozenset({"en", "hi-Deva+en", "mr-Deva+en"})
 
 
 @dataclass(frozen=True)
 class Candidate:
     tenant_id: UUID
     person_id: UUID
-    session_id: UUID
+    session_id: UUID | None
     recording_id: UUID
     submission_id: UUID
+    # An API upload (key_upload): the key and its maker; the session is then None.
+    key_id: UUID | None = None
+    maker_person_id: UUID | None = None
+    report_language: str | None = None
 
 
 def _lock_key(recording_id: UUID) -> int:
@@ -90,8 +104,13 @@ def _lock_key(recording_id: UUID) -> int:
 
 
 class AutoStart:
-    def __init__(self, *, sessions: Any, runtime: Any, factory: Any) -> None:
+    def __init__(
+        self, *, sessions: Any, runtime: Any, factory: Any, environment: str | None = None
+    ) -> None:
         self.sessions, self.runtime, self.factory = sessions, runtime, factory
+        # Where API uploads may be switched on (key_upload.OPEN_ENVIRONMENTS); without it
+        # none starts here.
+        self.environment = environment
 
     async def candidates(self, now: datetime) -> list[Candidate]:
         """Calls whose audio check finished in the last ``FRESH``, with no plan yet, uploaded
@@ -138,6 +157,11 @@ class AutoStart:
                 if any(event.action == WAITING for event in events):
                     continue
                 upload = next((event for event in events if event.action == UPLOADED), None)
+                if upload is None:
+                    by_key = await self._api_upload(db, tenant_id, recording_id)
+                    if by_key is not None:
+                        found.append(by_key)
+                    continue
                 if (
                     upload is None
                     or upload.actor_person_id is None
@@ -159,6 +183,46 @@ class AutoStart:
                     )
                 )
         return found
+
+    @staticmethod
+    async def _api_upload(db: Any, tenant_id: UUID, recording_id: UUID) -> Candidate | None:
+        """The call's API upload, when an organisation's key sent it."""
+        submission_id = await db.scalar(
+            select(ConversationGuestSubmission.submission_id).where(
+                ConversationGuestSubmission.tenant_id == tenant_id,
+                ConversationGuestSubmission.recording_id == recording_id,
+            )
+        )
+        if submission_id is None:
+            return None
+        event = await db.scalar(
+            select(AuditEvent)
+            .where(
+                AuditEvent.tenant_id == tenant_id,
+                AuditEvent.resource_type == key_upload.UPLOAD_RESOURCE,
+                AuditEvent.resource_id == str(submission_id),
+                AuditEvent.action == key_upload.UPLOADED,
+            )
+            .limit(1)
+        )
+        payload = event.payload if event is not None and isinstance(event.payload, dict) else {}
+        try:
+            seller = UUID(str(payload["seller_person_id"]))
+            key_id = UUID(str(payload["key_id"]))
+            maker = UUID(str(payload["maker_person_id"]))
+        except (KeyError, ValueError):
+            return None
+        language = payload.get("report_language")
+        return Candidate(
+            tenant_id=tenant_id,
+            person_id=seller,
+            session_id=None,
+            recording_id=recording_id,
+            submission_id=submission_id,
+            key_id=key_id,
+            maker_person_id=maker,
+            report_language=language if language in _LANGUAGES else None,
+        )
 
     async def _wait(self, item: Candidate, reason: str) -> None:
         async with self.sessions() as db, db.begin():
@@ -195,13 +259,39 @@ class AutoStart:
             if planned is not None:
                 return "skipped:planned"
             terms = upload_policy(self.runtime.policy)["policy_sha256"]
-            consent = await auto_consent.may_start(db, item.tenant_id, item.person_id, terms)
-            if consent is None:
-                refusal = "consent"
+            actor: ActorContext
+            relied_on: dict[str, str]
+            if item.key_id is not None and item.maker_person_id is not None:
+                accepted, why = (
+                    (None, key_upload.CLOSED)
+                    if self.environment is None
+                    else await key_upload.may_upload(
+                        db, item.tenant_id, item.person_id, terms, self.environment
+                    )
+                )
+                consent = accepted
+                if accepted is None:
+                    refusal = "terms" if why == key_upload.CLOSED else "ai_off"
+                actor = key_upload.key_actor(
+                    seller=item.person_id,
+                    tenant_id=item.tenant_id,
+                    key_id=item.key_id,
+                    maker=item.maker_person_id,
+                )
+                relied_on = {
+                    "api_upload_terms_event_id": str(accepted),
+                    "key_id": str(item.key_id),
+                }
             else:
+                consent = await auto_consent.may_start(db, item.tenant_id, item.person_id, terms)
+                if consent is None:
+                    refusal = "consent"
+                assert item.session_id is not None
                 actor = ActorContext(
                     person_id=item.person_id, tenant_id=item.tenant_id, session_id=item.session_id
                 )
+                relied_on = {"standing_consent_event_id": str(consent)}
+            if consent is not None:
                 try:
                     async with db.begin_nested():
                         plan = await self._accept(db, item, actor, authority)
@@ -211,12 +301,13 @@ class AutoStart:
                     await AuditRepository(db).append(
                         tenant_id=item.tenant_id,
                         actor_person_id=item.person_id,
+                        actor_type="person" if item.key_id is None else "api_key",
                         session_id=item.session_id,
                         action=STARTED,
                         resource_type="conversation_submission",
                         resource_id=item.submission_id,
                         payload={
-                            "standing_consent_event_id": str(consent),
+                            **relied_on,
                             "plan_id": str(plan["id"]),
                             "started_by": "server",
                         },
@@ -245,7 +336,11 @@ class AutoStart:
             ConversationApplication(db), authority, self.runtime.storage
         )
         plan = await plans.quote(
-            processing, item.recording_id, key=key, continuation_grant_id=continuation
+            processing,
+            item.recording_id,
+            key=key,
+            continuation_grant_id=continuation,
+            report_language=cast(Any, item.report_language),
         )
         return await plans.accept(
             processing,

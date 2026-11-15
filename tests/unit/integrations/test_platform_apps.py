@@ -156,7 +156,12 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "ask_dipak_my_missions",
         "ask_dipak_recent_calls",
         "ask_dipak_team_missions",
+        "create_recording_upload",
+        "recording_status",
     }
+    # A seller's call by an organisation's key (API gap 2, 15 Nov 2026): its own scope.
+    uploads = {tool["name"] for tool in mcp_http.listed(frozenset({"recordings:write"}))}
+    assert uploads == {"whoami", "create_recording_upload", "recording_status", *LESSONS}
     # Many leads at once (14 Nov 2026) come with leads:write, beside add_lead.
     importing = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:write"}))}
     assert importing == {"whoami", "add_lead", "import_leads", "get_lead_import", *LESSONS}
@@ -186,7 +191,15 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
     # Stage moves (15 Nov 2026): their own scope.
     stages = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:stage"}))}
     assert stages == {"whoami", "move_stage", "list_my_changes", "undo_change", *LESSONS}
-    writes = {"add_lead", "import_leads", "add_note", "add_task", "move_stage", "undo_change"}
+    writes = {
+        "add_lead",
+        "import_leads",
+        "add_note",
+        "add_task",
+        "move_stage",
+        "undo_change",
+        "create_recording_upload",
+    }
     for tool in mcp_http.listed(frozenset(scopes.SCOPES)):
         assert "scope" not in tool and tool["inputSchema"]["type"] == "object"
         assert tool["annotations"]["readOnlyHint"] is (tool["name"] not in writes)
@@ -194,7 +207,8 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         # takes something away (a note stops showing).
         assert tool["annotations"]["destructiveHint"] is (tool["name"] == "undo_change")
         assert tool["annotations"]["openWorldHint"] is False
-        if tool["name"] in writes - {"add_lead"}:
+        # A new lead and a new upload are each a new thing; the rest repeat safely.
+        if tool["name"] in writes - {"add_lead", "create_recording_upload"}:
             assert tool["annotations"]["idempotentHint"] is True
             assert "request_id" in tool["inputSchema"]["properties"]
         assert tool["title"]

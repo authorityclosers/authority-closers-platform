@@ -142,6 +142,19 @@ class ConversationApplication:
                 self.database, actor, now, lock_person=identity_locks and not in_provider_call()
             )
             return now
+        from ac_platform.conversation_intelligence.key_upload import (
+            KeyUploadActor,
+            admit_key_upload,
+        )
+
+        if isinstance(actor, KeyUploadActor):
+            # A seller acting through an organisation's API key (API gap 2): the key, its
+            # maker and the seller are read again instead of a sign-in session.
+            now = utc(self.clock())
+            await admit_key_upload(
+                self.database, actor, now, lock=identity_locks and not in_provider_call()
+            )
+            return now
         # The same person/session locks as existing AC commands serialize revocation
         # and idempotency. Never trust a previously hydrated actor as current authority.
         person_query = (
