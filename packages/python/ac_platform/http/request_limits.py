@@ -43,6 +43,9 @@ _CONVERSATION_DRAFT_IMPORT_PATH = re.compile(rf"/v1/admin/conversation/runs/{_UU
 _BUG_FILE_PATH = re.compile(rf"/v1/bug-reports/{_UUID}/files")
 # A recording an authorised app sends for a person (POST /v1/api/calls, calls:write).
 _APP_CALL_UPLOAD_PATH = re.compile(r"/v1/api/calls")
+# A seller's call an organisation's key sends (PUT, recordings:write; recordings_api.py),
+# under the same byte cap as the app's own upload.
+_API_RECORDING_BYTES_PATH = re.compile(rf"/v1/api/recordings/{_UUID}/source")
 
 
 def request_body_limit(scope: Scope) -> int:
@@ -172,6 +175,7 @@ class RequestBodyLimitMiddleware:
             if (
                 _ACQUISITION_BYTES_PATH.fullmatch(scope.get("path", ""))
                 or _SYNTHETIC_BYTES_PATH.fullmatch(scope.get("path", ""))
+                or _API_RECORDING_BYTES_PATH.fullmatch(scope.get("path", ""))
             )
             else None
         )
