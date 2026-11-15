@@ -292,6 +292,7 @@ GOVERNANCE = {
     "privacy_notice": "Synthetic test notice: OpenAI processes this call under a signed DPA.",
     "retention_ref": "ref:retention/openai-zero",
     "professional_gate_ref": "ref:professional/openai-1",
+    "gemini_privacy_notice": "Synthetic test notice: Google Gemini transcribes this call.",
 }
 REFS = (
     ("credential_ref", "ref:credential/openai/v1"),

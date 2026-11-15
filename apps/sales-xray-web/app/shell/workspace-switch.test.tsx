@@ -80,7 +80,12 @@ afterEach(async () => {
 });
 
 // The phone header's workspace line (as the shell's navigation test reads it).
-const shown = () => host.querySelector("header [title] small")?.textContent;
+// The bar's workspace name, whole (Home's bar shows it on two lines).
+const shown = () =>
+  host
+    .querySelector("header [data-home-name]")
+    ?.getAttribute("title")
+    ?.replace("Workspace: ", "");
 
 const render = () =>
   act(async () =>

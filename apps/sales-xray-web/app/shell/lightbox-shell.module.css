@@ -3176,3 +3176,62 @@ span.homeName {
     letter-spacing: 0;
   }
 }
+
+/* A phone page's own row under Home's bar (Leads part 02, 15 Nov 2026): its title
+   and, on Leads, Chats as a 44 px tile. It scrolls with the page. */
+.pageRow {
+  display: none;
+}
+
+@media (max-width: 899.98px) {
+  .pageRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 52px;
+    padding: 4px 16px 0;
+  }
+
+  .pageRowTitle {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--lx-ink);
+    font-size: min(var(--sx-text-2xl), 24px);
+    font-weight: 650;
+    line-height: min(var(--sx-leading-28), 28px);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pageRowTool {
+    position: relative;
+    display: grid;
+    flex: none;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    border-radius: 14px;
+    background: var(--sx-elevated);
+    box-shadow: inset 0 0 0 1px var(--sx-line);
+    color: var(--lx-ink);
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 140ms ease-out;
+  }
+
+  .pageRowTool:active {
+    transform: scale(0.94);
+  }
+
+  .pageRowTool:focus-visible {
+    outline: none;
+    box-shadow: var(--sx-focus-ring);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pageRowTool {
+    transition: none;
+  }
+}

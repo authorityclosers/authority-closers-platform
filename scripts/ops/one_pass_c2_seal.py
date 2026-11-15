@@ -5,7 +5,9 @@ Flex configuration, a second profile beside the standard one; ``--one-pass`` for
 configuration whose facts route is the one-pass C4 request; ``--one-pass --luna
 --openai-governance FILE`` for that request and C5 on GPT-6 Luna, where FILE is Root's JSON
 of the OpenAI stages' privacy_revision, privacy_notice, retention_ref and
-professional_gate_ref, after the owner confirmed the OpenAI DPA) (owner, 21 Oct 2026:
+professional_gate_ref, plus gemini_privacy_notice, the owner-approved wording of the same
+profile's Gemini stages (its C2; the hybrid's C5), after the owner confirmed the OpenAI DPA)
+(owner, 21 Oct 2026:
 "So at least get this on prod now!!!"; docs/ops/ONE-PASS-PRODUCTION.md):
 
     python scripts/ops/one_pass_c2_seal.py \\
@@ -78,7 +80,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--openai-governance",
         type=Path,
-        help="with --luna: Root's JSON of the OpenAI stages' privacy and retention references",
+        help=(
+            "with --luna: Root's JSON of the OpenAI stages' privacy and retention references"
+            " and gemini_privacy_notice (the profile's Gemini stages' wording)"
+        ),
     )
     parser.add_argument(
         "--luna-c4",

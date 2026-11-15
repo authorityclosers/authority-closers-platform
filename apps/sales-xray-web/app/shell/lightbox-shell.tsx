@@ -1420,7 +1420,11 @@ function LightboxShellFrame({
   // Home on a phone wears the owner's chosen bar (01_Home.png, 14 Nov
   // 2026): the organisation's round mark, its name on two lines (the last
   // word bold), the switch chevron; no page title. Other pages keep theirs.
-  const homeBar = barTitle === "Home" && authenticated && !guest;
+  // Home's bar on every signed-in page (Leads part 02, 15 Nov 2026: one identity
+  // mark, the workspace on two lines, the same tiles); a page's own title and
+  // action sit in the row under it (pageRow).
+  const homeBar = authenticated && !guest;
+  const pageRow = homeBar && barTitle && barTitle !== "Home" ? barTitle : null;
   const homeWords = (workspaceLabel ?? "").trim().split(/\s+/);
   const homeNameTop =
     homeWords.length > 1 ? homeWords.slice(0, -1).join(" ") : null;
@@ -2031,7 +2035,7 @@ function LightboxShellFrame({
             <ReviewBarChip live={leadsBadgeLive} />
             {/* Chats lives with Leads (Dipak's handoff, 31 Oct 2026): an icon
                 in its header, with the unread mark. */}
-            {guest || phoneTab !== "leads" ? null : (
+            {guest || phoneTab !== "leads" || pageRow ? null : (
               <ScreenLink
                 className={styles.barSearch}
                 href="/chats"
@@ -2085,6 +2089,29 @@ function LightboxShellFrame({
               ))}
           </div>
         </header>
+        {/* A phone page's own row under the bar (Leads part 02): its title, and
+            on Leads, Chats. It scrolls away with the page; the bar keeps its
+            height. */}
+        {pageRow ? (
+          <div className={styles.pageRow}>
+            {/* The phone's page name, as its bar showed it; the page's one h1
+                stays the top bar's. */}
+            <p className={styles.pageRowTitle} data-page-title="">
+              {pageRow}
+            </p>
+            {phoneTab === "leads" ? (
+              <ScreenLink
+                className={styles.pageRowTool}
+                href="/chats"
+                aria-label={
+                  unreadChats ? `Chats, ${unreadChats} unread` : "Chats"
+                }
+              >
+                <ChatsTabIcon size={22} live={leadsLive} />
+              </ScreenLink>
+            ) : null}
+          </div>
+        ) : null}
         <header className={styles.topBar}>
           <div className={styles.topBarLeft}>
             {pageTitle && (

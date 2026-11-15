@@ -102,7 +102,10 @@
   --lx-font-display:
     "Bricolage Grotesque Variable", "Bricolage Grotesque",
     "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  /* The preloaded face first (layout.tsx, next/font), so the first paint is the
+     app's type; the fontsource faces cover the other scripts. */
   --lx-font-ui:
+    var(--sx-font-jakarta, "Plus Jakarta Sans Variable"),
     "Plus Jakarta Sans Variable", "Plus Jakarta Sans",
     "Noto Sans Devanagari Variable", "Noto Sans Devanagari", system-ui,
     sans-serif;

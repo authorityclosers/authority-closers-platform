@@ -45,8 +45,9 @@ def test_the_key_upload_actor_is_never_a_sign_in_session() -> None:
         maker,
     )
     assert actor.session_id == key  # the key's id, never written as a session
-    assert key_upload.is_open("development") and not key_upload.is_open("staging")
-    assert not key_upload.is_open("production")
+    # Approved 15 Nov 2026: on in every hosted environment, closed anywhere else.
+    assert key_upload.is_open("staging") and key_upload.is_open("production")
+    assert not key_upload.is_open("preview")
 
 
 @pytest.mark.parametrize(

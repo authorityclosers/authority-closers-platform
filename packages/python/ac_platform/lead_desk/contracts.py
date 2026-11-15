@@ -781,6 +781,9 @@ class TaskView(Model):
     # Who wrote it (a person; None for the app's own), for their avatar.
     created_by_person_id: UUID | None = None
     created_by_photo_url: str | None = None
+    # Whose task it is, by name: "for Priya" on a row that isn't the viewer's own
+    # (owner bugs 218-219, 15 Nov 2026).
+    owner_name: str | None = None
     # Its lead's side, Inbound or Cold (migration 0146), for Home's type tag; None for a
     # task of your own.
     lead_side: Literal["inbound", "cold"] | None = None

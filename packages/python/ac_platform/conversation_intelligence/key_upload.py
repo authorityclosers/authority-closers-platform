@@ -19,11 +19,12 @@ can tell the two apart, and API-upload events record ``session_id`` as none.
 The workspace's API-upload terms (``api_upload_terms``): an owner or admin accepts them
 once, in their own session, for the upload terms in force; new upload terms (another AI
 provider, another retention) ask again. No API upload is processed without that
-acceptance. Whether it may stand in for each seller's own tap is the owner's decision
-(orchestrator, 15 Nov 2026), so until he approves it the acceptance can't be recorded
-outside local, test and development, and is read as absent there too: every API upload
-is refused with "API uploads aren't switched on for this workspace yet." The words below
-are a draft for that decision, shown only where it is open.
+acceptance; until an owner or admin accepts, every API upload is refused with "API
+uploads aren't switched on for this workspace yet." That this acceptance, with each
+upload's "participants informed" statement, stands in for the seller's own tap was the
+owner's decision; he delegated it, and the orchestrator approved the model and these words
+as drafted (15 Nov 2026). They are on in every hosted environment; one outside
+``OPEN_ENVIRONMENTS`` reads closed.
 """
 
 from __future__ import annotations
@@ -49,16 +50,16 @@ from ac_platform.tenancy.models import Membership, Tenant
 SCOPE: Final = "recordings:write"
 CONSENT: Final = "participants-informed"
 MANAGERS: Final = frozenset({"owner", "admin"})
-# Where the acceptance may be recorded and read, until the owner approves the model.
-OPEN_ENVIRONMENTS: Final = frozenset({"local", "test", "development"})
+# Where the acceptance may be recorded and read (approved 15 Nov 2026).
+OPEN_ENVIRONMENTS: Final = frozenset({"local", "test", "development", "staging", "production"})
 CLOSED: Final = "API uploads aren't switched on for this workspace yet."
 KEY_DENIED: Final = "This API key can no longer upload calls for this seller."
 
 TERMS_RESOURCE: Final = "sales_xray_api_upload_terms"
 TERMS_ACTION: Final = "sales_xray.api_upload_terms.v1"
-TERMS_VERSION: Final = "api-upload-terms-draft-2026-11-15"
+TERMS_VERSION: Final = "api-upload-terms-2026-11-15"
 TERMS_TITLE: Final = "Analyse calls our apps upload"
-# A draft for the owner's decision; shown only where API uploads may be switched on.
+# Approved 15 Nov 2026 (the owner's delegation, decided by the orchestrator).
 TERMS_TEXT: Final = (
     "Calls an app sends with one of {organisation}'s API keys are analysed as soon as they "
     "arrive, as calls of the seller the app names, with our analysis time and that seller's "
