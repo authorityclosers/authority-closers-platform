@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.ask_dipak import catalogue
@@ -144,27 +144,78 @@ def _uuid(value: object) -> UUID | None:
         return None
 
 
+def _for_call(event: LeadEvent) -> UUID | None:
+    """The call a recording was attached to later (LeadDesk.attach_recording): that adds its
+    own call event naming the original in ``for_call`` and never changes the original."""
+    return _uuid((event.data or {}).get("for_call"))
+
+
+async def _call_event(db: AsyncSession, tenant_id: UUID, event_id: UUID) -> LeadEvent | None:
+    found: LeadEvent | None = await db.scalar(
+        select(LeadEvent).where(
+            LeadEvent.id == event_id, LeadEvent.tenant_id == tenant_id, LeadEvent.kind == "call"
+        )
+    )
+    return found
+
+
+async def _attached_submission(
+    db: AsyncSession, tenant_id: UUID, call_event_id: UUID
+) -> UUID | None:
+    """The recording attached to this call afterwards; the newest attachment wins."""
+    data = await db.scalar(
+        select(LeadEvent.data)
+        .where(
+            LeadEvent.tenant_id == tenant_id,
+            LeadEvent.kind == "call",
+            LeadEvent.data["for_call"].as_string() == str(call_event_id),
+        )
+        .order_by(LeadEvent.created_at.desc(), LeadEvent.id.desc())
+        .limit(1)
+    )
+    return _uuid((data or {}).get("submission_id"))
+
+
+async def _original(db: AsyncSession, tenant_id: UUID, event: LeadEvent) -> LeadEvent:
+    """A recording attached later stands for the call it was attached to (Codex review of
+    release PR 617, 15 Nov 2026): the missions answered right after the call follow it."""
+    original_id = _for_call(event)
+    if original_id is None:
+        return event
+    original = await _call_event(db, tenant_id, original_id)
+    return original if original is not None else event
+
+
+async def _ref(db: AsyncSession, tenant_id: UUID, event: LeadEvent, seen: LeadEvent) -> CallRef:
+    """``event`` is the original call; ``seen`` is the event the call was found by (the same
+    one, or the recording attached to it later)."""
+    submission = (
+        _uuid((seen.data or {}).get("submission_id"))
+        or _uuid((event.data or {}).get("submission_id"))
+        or await _attached_submission(db, tenant_id, event.id)
+    )
+    return CallRef(
+        key=event.id,
+        tenant_id=tenant_id,
+        call_event_id=event.id,
+        submission_id=submission,
+        lead_id=event.lead_id,
+    )
+
+
 async def resolve_call(
     db: AsyncSession, *, person_id: UUID, tenant_id: UUID, call_id: UUID
 ) -> CallRef | None:
-    """The seller's own call in this workspace, by its lead call event or its analysed call's
-    ID; None for anyone else's call or an unknown ID."""
-    event = await db.scalar(
-        select(LeadEvent).where(
-            LeadEvent.id == call_id,
-            LeadEvent.tenant_id == tenant_id,
-            LeadEvent.kind == "call",
-            LeadEvent.actor_person_id == person_id,
-        )
-    )
+    """The seller's own call in this workspace, by its lead call event, the recording attached
+    to it later, or its analysed call's ID; None for anyone else's call or an unknown ID. A
+    call is always keyed by its original call event, so its answers stay one set whichever
+    way it is reached, before or after its recording arrives."""
+    event = await _call_event(db, tenant_id, call_id)
     if event is not None:
-        return CallRef(
-            key=event.id,
-            tenant_id=tenant_id,
-            call_event_id=event.id,
-            submission_id=_uuid((event.data or {}).get("submission_id")),
-            lead_id=event.lead_id,
-        )
+        original = await _original(db, tenant_id, event)
+        if original.actor_person_id != person_id:
+            return None
+        return await _ref(db, tenant_id, original, event)
     usage = await db.scalar(
         select(ConversationAcquisitionUsage.submission_id).where(
             ConversationAcquisitionUsage.tenant_id == tenant_id,
@@ -181,15 +232,25 @@ async def resolve_call(
             LeadEvent.kind == "call",
             LeadEvent.data["submission_id"].as_string() == str(call_id),
         )
-        .order_by(LeadEvent.created_at.desc())
+        .order_by(LeadEvent.created_at.desc(), LeadEvent.id.desc())
         .limit(1)
     )
+    if linked is None:
+        return CallRef(
+            key=call_id,
+            tenant_id=tenant_id,
+            call_event_id=None,
+            submission_id=call_id,
+            lead_id=None,
+        )
+    original = await _original(db, tenant_id, linked)
+    ref = await _ref(db, tenant_id, original, linked)
     return CallRef(
-        key=linked.id if linked is not None else call_id,
+        key=ref.key,
         tenant_id=tenant_id,
-        call_event_id=linked.id if linked is not None else None,
+        call_event_id=ref.call_event_id,
         submission_id=call_id,
-        lead_id=linked.lead_id if linked is not None else None,
+        lead_id=ref.lead_id,
     )
 
 
@@ -303,7 +364,9 @@ async def recent_calls(
     db: AsyncSession, *, person_id: UUID, tenant_id: UUID, limit: int = 20
 ) -> list[dict[str, Any]]:
     """The seller's latest calls from leads in this workspace, newest first, each with the
-    lead's name and the active missions it still waits on, for the after-call question."""
+    lead's name and the active missions it still waits on, for the after-call question. A
+    recording attached to a call later is that call, not another one: it shows as the call's
+    submission."""
     rows = (
         await db.execute(
             select(LeadEvent, Lead.name)
@@ -312,11 +375,27 @@ async def recent_calls(
                 LeadEvent.tenant_id == tenant_id,
                 LeadEvent.kind == "call",
                 LeadEvent.actor_person_id == person_id,
+                LeadEvent.data["for_call"].as_string().is_(None),
             )
             .order_by(LeadEvent.created_at.desc())
             .limit(max(1, min(limit, 50)))
         )
     ).all()
+    attached: dict[str, UUID] = {}
+    if rows:
+        later = await db.execute(
+            select(LeadEvent.data)
+            .where(
+                LeadEvent.tenant_id == tenant_id,
+                LeadEvent.kind == "call",
+                LeadEvent.data["for_call"].as_string().in_([str(event.id) for event, _ in rows]),
+            )
+            .order_by(LeadEvent.created_at, LeadEvent.id)
+        )
+        for (data,) in later.all():
+            submission = _uuid((data or {}).get("submission_id"))
+            if submission is not None:
+                attached[str((data or {}).get("for_call"))] = submission  # newest wins
     active = await active_missions(db, person_id)
     out = []
     for event, lead_name in rows:
@@ -324,7 +403,8 @@ async def recent_calls(
             key=event.id,
             tenant_id=tenant_id,
             call_event_id=event.id,
-            submission_id=_uuid((event.data or {}).get("submission_id")),
+            submission_id=_uuid((event.data or {}).get("submission_id"))
+            or attached.get(str(event.id)),
             lead_id=event.lead_id,
         )
         answers = await call_answers(db, person_id=person_id, call=call)
@@ -383,14 +463,55 @@ def _missions_out(
     ]
 
 
+async def _call_keys(
+    db: AsyncSession, rows: Sequence[tuple[UUID | None, UUID | None]]
+) -> dict[tuple[UUID | None, UUID | None], UUID]:
+    """Each answer's call, as its original call event: an answer kept against a recording
+    attached later, or against the analysed call alone, counts with the call it belongs to
+    (Codex review of release PR 617, 15 Nov 2026), so one call is never counted twice."""
+    events = {event for event, _ in rows if event is not None}
+    alone = {submission for event, submission in rows if event is None and submission is not None}
+    to_original: dict[UUID, UUID] = {}
+    if events:
+        found = await db.execute(
+            select(LeadEvent.id, LeadEvent.data).where(LeadEvent.id.in_(events))
+        )
+        for event_id, data in found.all():
+            original = _uuid((data or {}).get("for_call"))
+            if original is not None:
+                to_original[event_id] = original
+    by_submission: dict[UUID, UUID] = {}
+    if alone:
+        linked = await db.execute(
+            select(LeadEvent.id, LeadEvent.data)
+            .where(
+                LeadEvent.kind == "call",
+                LeadEvent.data["submission_id"].as_string().in_([str(s) for s in alone]),
+            )
+            .order_by(LeadEvent.created_at, LeadEvent.id)
+        )
+        for event_id, data in linked.all():
+            submission = _uuid((data or {}).get("submission_id"))
+            if submission is not None:
+                by_submission[submission] = (
+                    _uuid((data or {}).get("for_call")) or event_id
+                )  # newest wins
+    keys: dict[tuple[UUID | None, UUID | None], UUID] = {}
+    for event, submission in rows:
+        if event is not None:
+            keys[(event, submission)] = to_original.get(event, event)
+        elif submission is not None:
+            keys[(event, submission)] = by_submission.get(submission, submission)
+    return keys
+
+
 async def _check_rows(
     db: AsyncSession, *, person_ids: Sequence[UUID] | None, tenant_id: UUID | None
 ) -> list[tuple[UUID, UUID, str, bool, datetime]]:
     query = select(
         SalesXrayAskDipakCallCheck.person_id,
-        func.coalesce(
-            SalesXrayAskDipakCallCheck.call_event_id, SalesXrayAskDipakCallCheck.submission_id
-        ),
+        SalesXrayAskDipakCallCheck.call_event_id,
+        SalesXrayAskDipakCallCheck.submission_id,
         SalesXrayAskDipakCallCheck.question_id,
         SalesXrayAskDipakCallCheck.done,
         SalesXrayAskDipakCallCheck.created_at,
@@ -399,8 +520,12 @@ async def _check_rows(
         query = query.where(SalesXrayAskDipakCallCheck.person_id.in_(person_ids))
     if tenant_id is not None:
         query = query.where(SalesXrayAskDipakCallCheck.tenant_id == tenant_id)
-    result = await db.execute(query)
-    return [tuple(row) for row in result.all()]
+    rows = (await db.execute(query)).all()
+    keys = await _call_keys(db, [(event, submission) for _, event, submission, *_ in rows])
+    return [
+        (person_id, keys[(event, submission)], question_id, done, at)
+        for person_id, event, submission, question_id, done, at in rows
+    ]
 
 
 async def my_growth(
