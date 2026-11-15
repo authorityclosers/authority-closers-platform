@@ -13,6 +13,9 @@ command-line argument, so it stays out of shell history and process lists).
     sx me                                     # the key's organisation and scopes
     sx calls [--before CALL_ID]               # calls, newest first, 50 a page
     sx facts CALL_ID                          # the facts found in one call
+    sx reports [--saved] [--before CALL_ID]   # calls with a ready report, 50 a page
+    sx report CALL_ID [--docx FILE | --transcript]     # one call's report, its Word
+                                              # file, or its transcript (reports:read)
     sx minutes [--team]                       # analysis time given, used and left
                                               # (calls:read; --team: each member's use)
     sx leads [--stage KEY|open] [--offset N]  # KEY: one of the stages each page lists
@@ -173,6 +176,31 @@ class Client:
 
     def analysis_time(self, team: bool = False) -> Any:
         return self.call("GET", "/analysis-time/team" if team else "/analysis-time")
+
+    def reports(self, saved: bool = False, before: str | None = None) -> Any:
+        return self.call("GET", "/reports", {"saved": "true" if saved else None, "before": before})
+
+    def report(self, call_id: str) -> Any:
+        return self.call("GET", f"/calls/{_part(call_id)}/report")
+
+    def transcript(self, call_id: str) -> Any:
+        return self.call("GET", f"/calls/{_part(call_id)}/transcript")
+
+    def report_docx(self, call_id: str) -> bytes:
+        """The report as a Word file: the bytes, not JSON."""
+        url = f"{self.base}/calls/{_part(call_id)}/report.docx"
+        request = urllib.request.Request(url, method="GET")  # noqa: S310
+        request.add_header("Authorization", f"Bearer {self.key}")
+        request.add_header("User-Agent", f"sx/{VERSION}")
+        status, raw = self.transport(request)
+        if not 200 <= status < 300:
+            try:
+                payload = json.loads(raw or b"null")
+            except ValueError:
+                payload = None
+            error = (payload or {}).get("error", {}) if isinstance(payload, dict) else {}
+            raise ApiError(status, error.get("code", "http_error"), error.get("message", ""))
+        return raw
 
     def leads(self, stage: str | None = None, offset: int | None = None) -> Any:
         return self.call("GET", "/leads", {"stage": stage, "offset": offset})
@@ -541,6 +569,42 @@ TOOLS += [
 ]
 
 
+_CALL_ID = {"type": "string", "description": "A call id from list_calls or list_reports"}
+TOOLS += [
+    {
+        "name": "list_reports",
+        "description": "Calls with a ready report, newest first, 50 a page, and whether "
+        "each is in the key's person's Saved reports. saved=true for Saved reports only; "
+        "before=<the last id> for the next page. Needs reports:read.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"saved": {"type": "boolean"}, "before": {"type": "string"}},
+        },
+    },
+    {
+        "name": "get_report",
+        "description": "One call's report as the app shows it: summary, verdict, "
+        "strengths, what to improve, next action, objections, closing and each skill's "
+        "state. Sensitive parts are withheld; never an official score.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"call_id": _CALL_ID},
+            "required": ["call_id"],
+        },
+    },
+    {
+        "name": "get_transcript",
+        "description": "One call's transcript, segment by segment with times in "
+        "milliseconds. Sensitive parts are withheld.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"call_id": _CALL_ID},
+            "required": ["call_id"],
+        },
+    },
+]
+
+
 def read_leads(path: str) -> list[dict[str, str]]:
     """The leads in a CSV (a header row naming the fields) or a JSON list of objects; only
     the fields an import takes, as text, empty cells left out."""
@@ -706,6 +770,12 @@ def _tool(client: Client, name: str, args: dict[str, Any]) -> Any:
                 problems += client.lead_import_rows(str(args["import_id"]), outcome)["rows"]
             answer["problem_rows"] = sorted(problems, key=lambda row: row["row"])[:200]
         return answer
+    if name == "list_reports":
+        return client.reports(args.get("saved") is True, args.get("before"))
+    if name == "get_report":
+        return client.report(str(args["call_id"]))
+    if name == "get_transcript":
+        return client.transcript(str(args["call_id"]))
     if name == "list_my_changes":
         return client.changes(args.get("lead_id"))
     if name == "undo_change":
@@ -828,6 +898,14 @@ def _parser() -> argparse.ArgumentParser:
     calls.add_argument("--before")
     facts = commands.add_parser("facts")
     facts.add_argument("call_id")
+    reports = commands.add_parser("reports")
+    reports.add_argument("--saved", action="store_true")
+    reports.add_argument("--before")
+    report = commands.add_parser("report")
+    report.add_argument("call_id")
+    report_as = report.add_mutually_exclusive_group()
+    report_as.add_argument("--docx", metavar="FILE")
+    report_as.add_argument("--transcript", action="store_true")
     minutes = commands.add_parser("minutes")
     minutes.add_argument("--team", action="store_true")
     leads = commands.add_parser("leads")
@@ -919,6 +997,17 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _report(client: Client, args: argparse.Namespace) -> Any:
+    if args.docx:
+        document = client.report_docx(args.call_id)
+        with open(args.docx, "wb") as handle:
+            handle.write(document)
+        return {"saved_to": args.docx, "bytes": len(document)}
+    if args.transcript:
+        return client.transcript(args.call_id)
+    return client.report(args.call_id)
+
+
 def _dipak(client: Client, args: argparse.Namespace) -> Any:
     if args.ask == "search":
         return client.dipak_search(" ".join(args.words))
@@ -961,6 +1050,10 @@ def main(
             out = client.calls(args.before)
         elif args.command == "facts":
             out = client.facts(args.call_id)
+        elif args.command == "reports":
+            out = client.reports(args.saved, args.before)
+        elif args.command == "report":
+            out = _report(client, args)
         elif args.command == "minutes":
             out = client.analysis_time(args.team)
         elif args.command == "leads":

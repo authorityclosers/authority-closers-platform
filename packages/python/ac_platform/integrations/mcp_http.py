@@ -32,7 +32,7 @@ from fastapi.responses import JSONResponse
 
 from ac_platform.ask_dipak import integration as ask_dipak
 from ac_platform.http.routes import RouteContext
-from ac_platform.integrations import lead_imports, recordings_api, tiers
+from ac_platform.integrations import lead_imports, recordings_api, reports_api, tiers
 from ac_platform.integrations.api_http import (
     ApiError,
     NewLeadBody,
@@ -53,7 +53,8 @@ VERSION = "1.0.0"
 MAX_BODY = 65536
 INSTRUCTIONS = (
     "Sales X-Ray holds this person's sales calls (with reports and the facts found in "
-    "them) and their leads. List calls or leads first, then read one by its id. Quote "
+    "them) and their leads. List calls or leads first, then read one by its id; a "
+    "call's report and transcript come from get_report and get_transcript. Quote "
     "facts as Sales X-Ray gives them; withheld parts of a call are never shown. With "
     "permission, notes and tasks can be added to a lead; each shows which app sent it "
     "and can be undone for 7 days. Ask Dipak's sales lessons are here too, with the "
@@ -166,6 +167,8 @@ TOOLS: tuple[dict[str, Any], ...] = (
         "annotations": _READS,
         "scope": "reports:read",
     },
+    # Call reports, transcripts and Saved reports (integrations/reports_api.py).
+    *reports_api.TOOLS,
     {
         "name": "analysis_time",
         "title": "Analysis time left",
@@ -828,6 +831,8 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
     if name == "undo_change":
         undo = _body(UndoBody, args, ("request_id",))
         return await reader.undo_change(_uuid(args, "change_id"), undo)
+    if name in reports_api.NAMES:
+        return await reports_api.run_tool(reader, name, args)
     if name in ask_dipak.NAMES:
         return await ask_dipak.run_tool(reader, name, args)
     if name in recordings_api.NAMES:

@@ -36,7 +36,10 @@ const HEADERS = "{ Authorization: `Bearer ${process.env.SX_API_KEY}` }";
 
 export const SCOPES: [string, string][] = [
   ["calls:read", "Read calls and their status"],
-  ["reports:read", "Read the facts found in calls"],
+  [
+    "reports:read",
+    "Read call reports, transcripts and the facts found in calls",
+  ],
   ["leads:read", "Read leads"],
   ["leads:write", "Add leads"],
   ["leads:notes", "Add notes to leads"],
@@ -184,6 +187,125 @@ for (const fact of facts.facts) console.log(fact.label, fact.display);`,
 }`,
     notes:
       "Shortened: each fact carries a few more fields (category, kind, value, basis). Sensitive parts of a call are never quoted.",
+  },
+  {
+    id: "api-reports",
+    method: "GET",
+    path: "/reports",
+    scope: "reports:read",
+    summary:
+      "Calls whose report is ready, newest first, 50 a page, each with whether it is in Saved reports.",
+    params: [
+      {
+        name: "saved",
+        where: "query",
+        type: "true",
+        text: "Only Saved reports: the person's for a connected app; for an organisation key, the person who made it.",
+      },
+      {
+        name: "before",
+        where: "query",
+        type: "call id",
+        text: "next_before from the last page.",
+      },
+    ],
+    curl: `curl "${API}/reports?saved=true" \\\n  ${AUTH}`,
+    js: `const page = await (
+  await fetch("${API}/reports", { headers: ${HEADERS} })
+).json();
+for (const item of page.reports) console.log(item.id, item.title, item.saved);`,
+    answer: `{
+  "reports": [
+    {
+      "id": "3f2b7d10-…",
+      "title": "Discovery call",
+      "created_at": "2026-10-20T09:12:00+00:00",
+      "duration_seconds": 1520,
+      "open_url": "${HOST}/analysis/calls/3f2b7d10-…",
+      "saved": true
+    }
+  ],
+  "next_before": null
+}`,
+    notes:
+      "A person reads their own calls' reports; owners, admins and organisation keys also the organisation's, as in the app.",
+  },
+  {
+    id: "api-report",
+    method: "GET",
+    path: "/calls/{id}/report",
+    scope: "reports:read",
+    summary:
+      "One call's report as the app shows it: summary, verdict, strengths, what to improve, next action, objections, closing and each skill's state.",
+    params: [
+      {
+        name: "id",
+        where: "path",
+        type: "call id",
+        text: "An id from GET /reports or GET /calls.",
+      },
+    ],
+    curl: `curl ${API}/calls/3f2b7d10-…/report \\\n  ${AUTH}`,
+    js: `const { report } = await (
+  await fetch(\`${API}/calls/\${callId}/report\`, { headers: ${HEADERS} })
+).json();
+console.log(report.summary, report.next_action);`,
+    answer: `{
+  "schema": "sales-xray.api-report/1",
+  "call": { "id": "3f2b7d10-…", "title": "Discovery call", "…": "…" },
+  "review_status": "…",
+  "official_score": false,
+  "report": { "summary": "…", "verdict": "…", "strengths": [], "improvements": [], "next_action": {}, "dimensions": [], "…": "…" }
+}`,
+    notes:
+      "Sensitive parts of a call are withheld. 404 report_not_ready while the report is being made. An AI report, never an official score.",
+  },
+  {
+    id: "api-report-docx",
+    method: "GET",
+    path: "/calls/{id}/report.docx",
+    scope: "reports:read",
+    summary: "The same report as a Word file.",
+    params: [
+      {
+        name: "id",
+        where: "path",
+        type: "call id",
+        text: "An id from GET /reports.",
+      },
+    ],
+    curl: `curl -o report.docx ${API}/calls/3f2b7d10-…/report.docx \\\n  ${AUTH}`,
+    js: `const file = await (
+  await fetch(\`${API}/calls/\${callId}/report.docx\`, { headers: ${HEADERS} })
+).arrayBuffer();`,
+    answer: `(a .docx file)`,
+  },
+  {
+    id: "api-transcript",
+    method: "GET",
+    path: "/calls/{id}/transcript",
+    scope: "reports:read",
+    summary:
+      "One call's transcript, segment by segment with start and end times in milliseconds.",
+    params: [
+      {
+        name: "id",
+        where: "path",
+        type: "call id",
+        text: "An id from GET /reports.",
+      },
+    ],
+    curl: `curl ${API}/calls/3f2b7d10-…/transcript \\\n  ${AUTH}`,
+    js: `const { segments } = await (
+  await fetch(\`${API}/calls/\${callId}/transcript\`, { headers: ${HEADERS} })
+).json();`,
+    answer: `{
+  "call": { "id": "3f2b7d10-…", "…": "…" },
+  "revision": "…",
+  "duration_ms": 1520000,
+  "segments": [{ "start_ms": 0, "end_ms": 4200, "text": "…", "…": "…" }]
+}`,
+    notes: "Sensitive parts of a call are withheld.",
   },
   {
     id: "api-leads",
@@ -662,6 +784,9 @@ export const MCP_TOOLS: [string, string, string][] = [
   ["list_calls", "calls:read", "Calls, newest first"],
   ["get_call", "calls:read", "One call, with its facts when allowed"],
   ["call_facts", "reports:read", "The facts found in one call"],
+  ["list_reports", "reports:read", "Calls with a ready report; Saved reports"],
+  ["get_report", "reports:read", "One call's report"],
+  ["get_transcript", "reports:read", "One call's transcript"],
   ["list_leads", "leads:read", "Leads, by stage"],
   ["get_lead", "leads:read", "One lead with its history"],
   ["add_lead", "leads:write", "Add a lead"],
