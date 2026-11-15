@@ -774,7 +774,8 @@
 /* Home's finish on Ask Dipak (owner, 15 Nov 2026), inside Dipak's spec rules
    (section 33: theme tokens, the type scale, one transition). The welcome is a
    Home tile with a faint green corner, a size calmer; the search a tile; each
-   topic a tile that presses in, its icon a soft badge, coloured by position. */
+   topic a tile that presses in, its icon a soft badge in its topic's colour
+   (the tone rules below). */
 .hero {
   border: var(--sx-tile-edge);
   border-radius: var(--sx-tile-radius);
@@ -822,16 +823,182 @@
   height: 36px;
   place-items: center;
   border-radius: 10px;
-  background: color-mix(in oklab, var(--xr-green) 14%, transparent);
-  color: var(--xr-green);
+  background: var(--ad-tone-soft);
+  color: var(--ad-tone);
 }
 
-.topicGrid > .topicCard:nth-child(3n + 2) .topicIcon {
-  background: color-mix(in oklab, var(--sx-accent) 14%, transparent);
-  color: var(--sx-accent);
+/* ---------- The rest of Home's finish (15 Nov 2026, with live-design) ----------
+   Colour by meaning, never by position (tones.ts and the kit's --sx-tone-*);
+   each list is one tile with hairline rows; chips in their topic's colour;
+   empty states and buttons as tiles, the gloss on a screen's one main action;
+   the lesson's cards as tiles and its Deep lesson as a sunken well. Presses
+   sink and rows darken without moving: Dipak's spec keeps one transition. */
+
+.topicCard,
+.chip {
+  --ad-tone: var(--sx-tone-good);
+  --ad-tone-soft: var(--sx-tone-good-soft);
 }
 
-.topicGrid > .topicCard:nth-child(3n) .topicIcon {
-  background: color-mix(in oklab, var(--sx-warn) 18%, transparent);
-  color: var(--sx-warn);
+.good {
+  --ad-tone: var(--sx-tone-good);
+  --ad-tone-soft: var(--sx-tone-good-soft);
+}
+
+.info {
+  --ad-tone: var(--sx-tone-info);
+  --ad-tone-soft: var(--sx-tone-info-soft);
+}
+
+.action {
+  --ad-tone: var(--sx-tone-action);
+  --ad-tone-soft: var(--sx-tone-action-soft);
+}
+
+.calls {
+  --ad-tone: var(--sx-tone-calls);
+  --ad-tone-soft: var(--sx-tone-calls-soft);
+}
+
+.topicCard:active {
+  background: var(--sx-tile-fill);
+}
+
+.chip {
+  background: var(--ad-tone-soft);
+  color: var(--ad-tone);
+  font-weight: 650;
+}
+
+.realList,
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 12px;
+  overflow: hidden;
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+}
+
+.realList > * + *,
+.rows > * + * {
+  border-top: 0.5px solid var(--sx-hairline);
+}
+
+.entry,
+.questionRow {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.questionRow {
+  padding: 14px;
+}
+
+.missionsEntry {
+  margin: 0 0 12px;
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+}
+
+.entry:active,
+.questionRow:active,
+.related:active {
+  background: color-mix(in oklab, var(--sx-ink) 6%, transparent);
+}
+
+.empty,
+.questionHero,
+.panel,
+.fold {
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+}
+
+.questionHero {
+  background:
+    radial-gradient(
+      140% 100% at 100% 0%,
+      color-mix(in oklab, var(--xr-green) 8%, transparent),
+      transparent 55%
+    ),
+    var(--sx-tile-fill);
+}
+
+.panel {
+  padding: 14px;
+}
+
+.rowSkeleton {
+  border-radius: var(--sx-tile-radius);
+}
+
+.smallBtn,
+.mark {
+  border: var(--sx-tile-edge);
+  border-radius: 14px;
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+}
+
+.mark.active {
+  border-color: var(--xr-green);
+}
+
+.primary {
+  border: 0;
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+  font-weight: 700;
+}
+
+.mcq {
+  border: var(--sx-tile-edge);
+  border-radius: 16px;
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+}
+
+.mcq.selected {
+  border-color: var(--xr-green);
+  background: var(--xr-green-soft);
+}
+
+.feedback {
+  border-radius: 18px;
+}
+
+.deep {
+  border: var(--sx-well-edge);
+  border-radius: 18px;
+  background: var(--sx-well-fill);
+  box-shadow: var(--sx-well-depth);
+}
+
+.check.done::before {
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+}
+
+.related {
+  border-bottom: 0.5px solid var(--sx-hairline);
+}
+
+.searchHome:active,
+.smallBtn:active,
+.mark:active,
+.mcq:active,
+.fold:active,
+.tool:active {
+  transform: var(--sx-press-sink);
 }
