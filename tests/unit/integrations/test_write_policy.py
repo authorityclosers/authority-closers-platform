@@ -21,8 +21,16 @@ def counts(**over: object) -> policy.Counts:
 
 
 def test_defaults_notes_tasks_and_outcomes_on_and_nothing_paused() -> None:
-    # Lead updates from apps stay off until an owner turns them on (ai-writes.md).
-    assert ON == {"paused": False, "note": True, "task": True, "outcome": True, "update": False}
+    # Lead updates and stage moves from apps stay off until an owner turns them on
+    # (ai-writes.md).
+    assert ON == {
+        "paused": False,
+        "note": True,
+        "task": True,
+        "outcome": True,
+        "update": False,
+        "stage": False,
+    }
     # Stored values win; anything that isn't true or false keeps the default.
     assert policy.switch({"paused": True, "note": "yes"}) == {**ON, "paused": True}
 
@@ -36,7 +44,17 @@ def test_an_allowed_change_goes_ahead(action: str) -> None:
     ("action", "scopes", "settings", "seen", "status", "code"),
     [
         ("delete", SCOPES, ON, {}, 422, "action"),
-        ("stage", SCOPES, ON, {}, 422, "action"),
+        ("merge", SCOPES, ON, {}, 422, "action"),
+        ("stage", SCOPES, ON, {}, 403, "scope_missing"),
+        ("stage", frozenset({"leads:stage"}), ON, {}, 403, "action_off"),
+        (
+            "stage",
+            frozenset({"leads:stage"}),
+            {**ON, "stage": True},
+            {"lead": 5},
+            429,
+            "cap_reached",
+        ),
         ("note", frozenset({"leads:read", "leads:write"}), ON, {}, 403, "scope_missing"),
         ("task", frozenset({"leads:notes"}), ON, {}, 403, "scope_missing"),
         ("note", SCOPES, {**ON, "paused": True}, {}, 403, "writes_paused"),
@@ -58,6 +76,18 @@ def test_refusals_say_why(
     decision = policy.decide(action, scopes=scopes, settings=settings, counts=counts(**seen))
     assert (decision.allowed, decision.status, decision.code) == (False, status, code)
     assert decision.message
+
+
+def test_a_stage_move_goes_ahead_once_its_scope_and_switch_allow_it() -> None:
+    allowed = policy.decide(
+        "stage",
+        scopes=frozenset({"leads:stage"}),
+        settings={**ON, "stage": True},
+        counts=counts(connection={"stage": 49}, lead=4),
+    )
+    assert allowed == policy.ALLOW
+    off = policy.decide("stage", scopes=frozenset({"leads:stage"}), settings=ON, counts=counts())
+    assert off.message == "An owner has turned off stage moves from apps in this workspace."
 
 
 def test_another_actions_count_does_not_spend_this_ones_cap() -> None:

@@ -18,6 +18,7 @@ export const SCOPES = [
   "leads:notes",
   "leads:tasks",
   "leads:update",
+  "leads:stage",
   "coaching:read",
   "webhooks:manage",
 ] as const;
@@ -30,6 +31,7 @@ export const MCP_SCOPES = [
   "leads:write",
   "leads:notes",
   "leads:tasks",
+  "leads:stage",
   "coaching:read",
   "coaching:write",
 ] as const;

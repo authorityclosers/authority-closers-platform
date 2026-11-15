@@ -749,7 +749,9 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await AiWrites(lead_desk, IN_APP).save_settings(
-                body.expected_revision, body.model_dump(exclude={"expected_revision"})
+                # What the page sent; an action it doesn't show keeps what is saved.
+                body.expected_revision,
+                body.model_dump(exclude={"expected_revision"}, exclude_unset=True),
             )
 
     @router.post("/leads/{lead_id}/notes", response_model=LeadDetail, response_model_by_alias=True)

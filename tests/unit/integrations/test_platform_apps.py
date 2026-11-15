@@ -149,6 +149,7 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "get_lead_import",
         "add_note",
         "add_task",
+        "move_stage",
         "list_my_changes",
         "undo_change",
         *LESSONS,
@@ -182,7 +183,10 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
     assert notes == {"whoami", "add_note", "list_my_changes", "undo_change", *LESSONS}
     tasks = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:tasks"}))}
     assert tasks == {"whoami", "add_task", "list_my_changes", "undo_change", *LESSONS}
-    writes = {"add_lead", "import_leads", "add_note", "add_task", "undo_change"}
+    # Stage moves (15 Nov 2026): their own scope.
+    stages = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:stage"}))}
+    assert stages == {"whoami", "move_stage", "list_my_changes", "undo_change", *LESSONS}
+    writes = {"add_lead", "import_leads", "add_note", "add_task", "move_stage", "undo_change"}
     for tool in mcp_http.listed(frozenset(scopes.SCOPES)):
         assert "scope" not in tool and tool["inputSchema"]["type"] == "object"
         assert tool["annotations"]["readOnlyHint"] is (tool["name"] not in writes)

@@ -97,6 +97,7 @@ def test_the_mcp_server_lists_and_calls_tools() -> None:
         "add_lead",
         "add_note",
         "add_task",
+        "move_stage",
         "list_my_changes",
         "undo_change",
         "import_leads",
@@ -161,6 +162,41 @@ def test_notes_tasks_and_undo_from_the_command_line(capsys: pytest.CaptureFixtur
     capsys.readouterr()
     assert sx.main(["undo", "c1"], env, fake) == 0
     assert json.loads(capsys.readouterr().out)["status"] == "undone"
+
+
+def test_a_stage_move_from_the_command_line_and_the_mcp_tool() -> None:
+    env = {"SX_API_KEY": KEY, "SX_API_BASE": "https://salesxray.example.test/v1/api"}
+    fake = Fake({("POST", "/leads/l1/stage"): (200, {"change_id": "c3", "status": "applied"})})
+    move = ["stage", "l1", "interested", "--reason", "Asked for the brochure"]
+    assert sx.main([*move, "--request-id", "req-cli-0003"], env, fake) == 0
+    assert json.loads(fake.seen[0][3]) == {
+        "step": "interested",
+        "reason": "Asked for the brochure",
+        "request_id": "req-cli-0003",
+        "preview": False,
+    }
+    called = sx.handle(
+        client(fake),
+        {
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "move_stage",
+                "arguments": {
+                    "lead_id": "l1",
+                    "step": "follow_up",
+                    "reason": "Call after Diwali",
+                    "next_action_at": "2026-11-20T10:00:00+05:30",
+                    "request_id": "req-mcp-0003",
+                },
+            },
+        },
+    )
+    assert "isError" not in called["result"]
+    assert json.loads(called["result"]["content"][0]["text"])["status"] == "applied"
+    sent = json.loads(fake.seen[1][3])
+    assert sent["step"] == "follow_up" and sent["next_action_at"].startswith("2026-11-20")
+    assert "reason_code" not in sent and "expected_revision" not in sent
 
 
 def test_sx_list_leads_takes_the_organisations_own_stage_keys() -> None:

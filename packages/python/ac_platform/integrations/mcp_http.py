@@ -38,6 +38,7 @@ from ac_platform.integrations.api_http import (
     NewLeadBody,
     NoteBody,
     Reader,
+    StageBody,
     TaskBody,
     UndoBody,
     make_opener,
@@ -371,23 +372,51 @@ TOOLS: tuple[dict[str, Any], ...] = (
         "scope": "leads:tasks",
     },
     {
+        "name": "move_stage",
+        "title": "Move a lead to another stage",
+        "description": (
+            "Moves one lead to another stage of its pipeline, with the reason, as this "
+            "person. `step` is a stage key from list_leads' `stages`. Won, Lost and Junk "
+            "need a person (needs_review). Some stages also ask for a reason_code or a "
+            "next_action_at; the refusal says which. The history shows which app moved it, "
+            "and it can be undone for 7 days unless the lead moved again."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "lead_id": _ID,
+                "step": {"type": "string", "minLength": 1, "maxLength": 40},
+                "reason": {"type": "string", "minLength": 1, "maxLength": 500},
+                "reason_code": {"type": "string", "maxLength": 40},
+                "next_action_at": _WHEN,
+                "expected_revision": {"type": "integer", "minimum": 1},
+                "request_id": _REQUEST,
+                "preview": _PREVIEW,
+            },
+            "required": ["lead_id", "step", "reason", "request_id"],
+        },
+        "annotations": _WRITES,
+        "scope": "leads:stage",
+    },
+    {
         "name": "list_my_changes",
         "title": "Changes this app made",
         "description": (
-            "The notes and tasks this connection added in the last 30 days, newest first, "
-            "and whether each can still be undone."
+            "The notes, tasks and stage moves this connection made in the last 30 days, "
+            "newest first, and whether each can still be undone."
         ),
         "inputSchema": {"type": "object", "properties": {"lead_id": _ID}},
         "annotations": _READS,
-        "scope": ("leads:notes", "leads:tasks"),
+        "scope": ("leads:notes", "leads:tasks", "leads:stage"),
     },
     {
         "name": "undo_change",
         "title": "Undo a change this app made",
         "description": (
             "Undoes one change this connection made, within 7 days: a note stops showing, "
-            "an open task is cancelled. Both stay in the lead's history. A task someone "
-            "has changed since is not undone."
+            "an open task is cancelled, a moved lead goes back. All stay in the lead's "
+            "history. A task someone has changed since, or a lead moved again, is not "
+            "undone."
         ),
         "inputSchema": {
             "type": "object",
@@ -395,7 +424,7 @@ TOOLS: tuple[dict[str, Any], ...] = (
             "required": ["change_id"],
         },
         "annotations": {**_WRITES, "destructiveHint": True},
-        "scope": ("leads:notes", "leads:tasks"),
+        "scope": ("leads:notes", "leads:tasks", "leads:stage"),
     },
     # Ask Dipak's lessons and coaching loop (ask_dipak/integration.py).
     *ask_dipak.TOOLS,
@@ -685,6 +714,19 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
         )
         task = _body(TaskBody, args, task_fields)
         answer, _ = await reader.add_task(_uuid(args, "lead_id"), task)
+        return answer
+    if name == "move_stage":
+        stage_fields = (
+            "step",
+            "reason",
+            "reason_code",
+            "next_action_at",
+            "expected_revision",
+            "request_id",
+            "preview",
+        )
+        move = _body(StageBody, args, stage_fields)
+        answer, _ = await reader.move_stage(_uuid(args, "lead_id"), move)
         return answer
     if name == "list_my_changes":
         return await reader.changes(_uuid(args, "lead_id") if args.get("lead_id") else None)

@@ -21,6 +21,10 @@ command-line argument, so it stays out of shell history and process lists).
     sx task LEAD_ID --kind call_back|whatsapp|email|send_file|meeting|other
             --due 2026-10-27T10:00:00+05:30 [--title T] [--note N] [--ends AT]
             [--remind MINUTES] [--request-id ID] [--preview]  # needs leads:tasks
+    sx stage LEAD_ID STEP --reason WHY [--reason-code CODE] [--next AT]
+            [--request-id ID] [--preview]     # needs leads:stage; STEP: a stage key
+                                              # from `sx leads`; Won, Lost and Junk
+                                              # need a person; undone with `sx undo`
     sx import-leads FILE.csv|FILE.json [--name NAME] [--side inbound|cold]
             [--assign rules|none] [--duplicates skip|fill|replace]
             [--per-import N] [--wait] [--failures OUT.csv]
@@ -157,6 +161,10 @@ class Client:
     def add_task(self, lead_id: str, **fields: Any) -> Any:
         body = {k: v for k, v in fields.items() if v is not None}
         return self.call("POST", f"/leads/{urllib.parse.quote(lead_id, safe='')}/tasks", body=body)
+
+    def move_stage(self, lead_id: str, **fields: Any) -> Any:
+        body = {k: v for k, v in fields.items() if v is not None}
+        return self.call("POST", f"/leads/{urllib.parse.quote(lead_id, safe='')}/stage", body=body)
 
     def changes(self, lead_id: str | None = None) -> Any:
         return self.call("GET", "/changes", {"lead_id": lead_id})
@@ -331,9 +339,32 @@ TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "move_stage",
+        "description": "Moves one lead to another stage, with the reason. step is a stage "
+        "key from list_leads' stages; Won, Lost and Junk need a person. It can be undone "
+        "for 7 days unless the lead moved again. Needs leads:stage.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "lead_id": {"type": "string"},
+                "step": {"type": "string"},
+                "reason": {"type": "string", "minLength": 1, "maxLength": 500},
+                "reason_code": {"type": "string"},
+                "next_action_at": {
+                    "type": "string",
+                    "description": "e.g. 2026-10-27T10:00:00+05:30",
+                },
+                "expected_revision": {"type": "integer"},
+                "request_id": {"type": "string", "minLength": 8, "maxLength": 80},
+                "preview": {"type": "boolean"},
+            },
+            "required": ["lead_id", "step", "reason", "request_id"],
+        },
+    },
+    {
         "name": "list_my_changes",
-        "description": "Notes and tasks this key added in the last 30 days, and whether "
-        "each can still be undone.",
+        "description": "Notes, tasks and stage moves this key made in the last 30 days, "
+        "and whether each can still be undone.",
         "inputSchema": {"type": "object", "properties": {"lead_id": {"type": "string"}}},
     },
     {
@@ -535,6 +566,14 @@ def _tool(client: Client, name: str, args: dict[str, Any]) -> Any:
             preview=bool(args.get("preview", False)),
             **{key: args.get(key) for key in fields},
         )
+    if name == "move_stage":
+        moves = ("step", "reason", "reason_code", "next_action_at", "expected_revision")
+        return client.move_stage(
+            str(args["lead_id"]),
+            request_id=str(args["request_id"]),
+            preview=bool(args.get("preview", False)),
+            **{key: args.get(key) for key in moves},
+        )
     if name == "import_leads":
         body = {
             key: args[key]
@@ -658,6 +697,13 @@ def _parser() -> argparse.ArgumentParser:
         task.add_argument(f"--{name}")
     task.add_argument("--remind", type=int)
     task.add_argument("--preview", action="store_true")
+    stage = commands.add_parser("stage")
+    stage.add_argument("lead_id")
+    stage.add_argument("step")
+    stage.add_argument("--reason", required=True)
+    for name in ("reason-code", "next", "request-id"):
+        stage.add_argument(f"--{name}")
+    stage.add_argument("--preview", action="store_true")
     imports = commands.add_parser("import-leads")
     imports.add_argument("file")
     imports.add_argument("--name")
@@ -758,6 +804,16 @@ def main(
                 note=args.note,
                 ends_at=args.ends,
                 remind_before_minutes=args.remind,
+                request_id=args.request_id or _request_id(),
+                preview=args.preview,
+            )
+        elif args.command == "stage":
+            out = client.move_stage(
+                args.lead_id,
+                step=args.step,
+                reason=args.reason,
+                reason_code=args.reason_code,
+                next_action_at=args.next,
                 request_id=args.request_id or _request_id(),
                 preview=args.preview,
             )

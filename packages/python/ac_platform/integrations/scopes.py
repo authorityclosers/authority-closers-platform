@@ -14,6 +14,7 @@ SCOPES: dict[str, str] = {
     "leads:notes": "Add notes to leads",
     "leads:tasks": "Add tasks and reminders to leads",
     "leads:update": "Change a lead's name, company, city, interest or language",
+    "leads:stage": "Move a lead to another stage, with the reason",
     # Ask Dipak's coaching loop (14 Nov 2026): missions and their counts; the team's
     # for an organisation key or a role that sees the team.
     "coaching:read": "Read Next-call missions and on how many calls each was done",

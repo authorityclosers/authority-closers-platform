@@ -784,6 +784,8 @@ def _strings(values: Any) -> tuple[str, ...]:
 
 # An undo of a change an AI app made: the marker event's pointer (ai-writes.md).
 UNDO_OF = "undo_of"
+# What an app's stage move replaced, kept on its history line for its undo.
+APP_BEFORE = "app_before"
 # A lead field the call data engine filled from a call (call_data.engine.write_lead).
 CALL_FILL = "call_data"
 
@@ -3168,6 +3170,7 @@ class LeadDesk:
         desk_step: bool = False,
         actor: UUID | None | Literal["viewer"] = "viewer",
         amount: int | None = None,
+        by_app: Mapping[str, Any] | None = None,
     ) -> LeadEvent:
         """The one place a lead's stage changes (Lead OS). Every move goes through
         ``transitions.check`` (or ``transitions.forced`` for the desk's own) first.
@@ -3177,10 +3180,19 @@ class LeadDesk:
         writes exactly one history line: a ``stage`` event, or the event that carried
         the move (``carrier``: a call's ``result``, a capture's ``repeat``), with the
         move's fields beside that event's own keys. A move to Won with its ``amount``
-        also writes what the deal was worth (migration 0150)."""
+        also writes what the deal was worth (migration 0150). A move an app sent
+        (``by_app``) also keeps what it replaced, for its undo (``undo_app_move``)."""
         target = move.stage
         before = journey.resolve(lead.stage, lead.step)
         previous_kind, previous_step = lead.stage, lead.step
+        replaced = {
+            "stage": lead.stage,
+            "step": lead.step,
+            "stage_at": lead.stage_at.isoformat() if lead.stage_at else None,
+            "next_action_at": lead.next_action_at.isoformat() if lead.next_action_at else None,
+            "next_action_note": lead.next_action_note,
+            "outcome_reason": lead.outcome_reason,
+        }
         lead.stage = target.kind
         lead.step = None if desk_step or target is journeys.JUNK else target.key
         lead.stage_at = self.now
@@ -3223,6 +3235,9 @@ class LeadDesk:
         if won_amount is not None:
             moved["amount"] = won_amount
             moved["currency"] = DEAL_CURRENCY
+        if by_app:
+            moved["by_app"] = dict(by_app)
+            moved[APP_BEFORE] = replaced
         if carrier is not None:
             kind, data = carrier[0], {**carrier[1], **moved}
         else:
@@ -3424,6 +3439,7 @@ class LeadDesk:
         contact: str | None = None,
         suggestion: str | None = None,
         amount: int | None = None,
+        by_app: Mapping[str, Any] | None = None,
     ) -> LeadEvent:
         """A move a person asked for: checked, with its meeting and next action."""
         if next_action_at is not None and not (
@@ -3464,6 +3480,7 @@ class LeadDesk:
             suggestion=suggestion,
             nc_reason=nc_reason,
             amount=amount,
+            by_app=by_app,
         )
 
     async def _writable(self, lead_id: UUID, command_id: UUID, revision: int) -> Lead | None:
@@ -3480,8 +3497,13 @@ class LeadDesk:
             raise DeskError(409, "This lead changed. Check it and try again.")
         return lead
 
-    async def move(self, lead_id: UUID, command: StageMove) -> Lead:
-        """The board, the stage sheet, the table and the API move a lead here."""
+    async def move(
+        self, lead_id: UUID, command: StageMove, *, by_app: Mapping[str, Any] | None = None
+    ) -> Lead:
+        """The board, the stage sheet, the table and the API move a lead here.
+
+        ``by_app``: the AI app or API key that sent it (ai-writes.md); its history line
+        keeps what the lead was before, so ``undo_app_move`` can put it back."""
         lead = await self._writable(lead_id, command.command_id, command.expected_revision)
         if lead is None:
             return await self._lead(lead_id)
@@ -3503,6 +3525,7 @@ class LeadDesk:
             contact=command.contact,
             suggestion=command.suggestion_ref,
             amount=command.amount,
+            by_app=by_app,
         )
         await self.db.flush()
         return lead
@@ -4933,6 +4956,111 @@ class LeadDesk:
         )
         await self.db.flush()
         return event
+
+    async def undo_app_move(
+        self, lead_id: UUID, event_id: UUID, command_id: UUID, *, change_id: UUID
+    ) -> LeadEvent:
+        """Undo a stage move an AI app or an API key made (ai-writes.md, "stage move"):
+        the lead goes back to the stage, next action and reason the move replaced, with
+        one history line pointing at it; nothing is deleted. Refused, calmly, as a call
+        answer's undo is, when the lead moved again since or the move went outward (an ad
+        platform heard about it, or a partner app hears stage changes). The AI-write
+        service decides who may."""
+        seen = await self._command_seen(command_id)
+        if seen is not None:
+            return seen
+        lead = await self._lead(lead_id, lock=True)
+        event = await self.db.scalar(
+            select(LeadEvent).where(
+                LeadEvent.tenant_id == self.tenant_id,
+                LeadEvent.lead_id == lead.id,
+                LeadEvent.id == event_id,
+                LeadEvent.kind == "stage",
+            )
+        )
+        data = event.data if event is not None and isinstance(event.data, dict) else {}
+        before = data.get(APP_BEFORE)
+        if (
+            event is None
+            or not isinstance(before, dict)
+            or not isinstance(data.get("by_app"), dict)
+        ):
+            raise DeskError(409, "This change can't be undone here.")
+        newer = await self.db.scalar(
+            select(LeadEvent.id)
+            .where(
+                LeadEvent.tenant_id == self.tenant_id,
+                LeadEvent.lead_id == lead.id,
+                LeadEvent.kind.in_(STANDING_KINDS),
+                LeadEvent.id != event.id,
+                LeadEvent.created_at >= event.created_at,
+            )
+            .limit(1)
+        )
+        if newer is not None or lead.stage != data.get("stage"):
+            raise DeskError(409, "Can't undo: the lead moved again since.")
+        heard = await self.db.scalar(
+            select(LeadConversion.id)
+            .where(
+                LeadConversion.tenant_id == self.tenant_id,
+                LeadConversion.source_event_id == event.id,
+            )
+            .limit(1)
+        )
+        if heard is not None:
+            raise DeskError(409, "Can't undo: an ad platform already heard about it.")
+        told = await self.db.scalar(
+            text(
+                "SELECT 1 FROM partner_lead_events"
+                " WHERE tenant_id = :tenant AND source_event_id = :event"
+                " UNION ALL"
+                " SELECT 1 FROM partner_webhook_endpoints p"
+                " WHERE p.tenant_id = :tenant AND p.status = 'active' AND p.events_since <= :at"
+                " AND (jsonb_exists(CAST(p.events AS jsonb), 'lead.stage_changed')"
+                " OR jsonb_exists(CAST(p.events AS jsonb), 'lead.closed'))"
+                " LIMIT 1"
+            ),
+            {"tenant": self.tenant_id, "event": event.id, "at": event.created_at},
+        )
+        if told is not None:
+            raise DeskError(409, "Can't undo: a partner app hears about stage changes.")
+
+        def moment(key: str) -> datetime | None:
+            value = before.get(key)
+            return datetime.fromisoformat(value) if isinstance(value, str) else None
+
+        def words(key: str) -> str | None:
+            value = before.get(key)
+            return value if isinstance(value, str) else None
+
+        undone_stage = lead.stage
+        lead.stage = words("stage") or lead.stage
+        lead.step = words("step")
+        lead.stage_at = moment("stage_at") or lead.stage_at
+        lead.next_action_at = moment("next_action_at")
+        lead.next_action_note = words("next_action_note")
+        lead.outcome_reason = words("outcome_reason")
+        lead.revision += 1
+        lead.updated_at = self.now
+        journey = await self._labels(journeys.pipeline_of(lead))
+        marker = self._event(
+            lead,
+            "edited",
+            {
+                UNDO_OF: str(event.id),
+                "change": str(change_id),
+                "changed": ["stage"],
+                "stage": lead.stage,
+                "from_stage": undone_stage,
+                "step": lead.step,
+                "step_label": journey.label(lead.stage, lead.step),
+                "follow_up_at": lead.next_action_at.isoformat() if lead.next_action_at else None,
+            },
+            actor=self.viewer.person_id,
+            command_id=command_id,
+        )
+        await self.db.flush()
+        return marker
 
     async def _undone(self, event_ids: Iterable[str]) -> frozenset[str]:
         """Which of these events an undo marker points at."""

@@ -23,6 +23,9 @@ Base address: ``https://<sales x-ray host>/v1/api``.
                             /leads/imports/{id}/rows each row's outcome (leads:write)
 - PATCH /leads/{id}         change a lead's name, company, city, interest or language, as
                             an AI write with Undo (leads:update; the owner's switch decides)
+- POST /leads/{id}/stage    move a lead to another stage with the reason, as an AI write
+                            with Undo; Won, Lost and Junk wait for a person (leads:stage;
+                            the owner's switch decides)
 - POST /calls               a recording for the connected person to add to their calls;
                             it waits for them, nothing is analysed (calls:write; see
                             integrations/app_uploads.py)
@@ -124,6 +127,20 @@ class LeadUpdateBody(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     fields: dict[str, str | None] = Field(min_length=1, max_length=8)
+    expected_revision: int | None = Field(default=None, ge=1)
+    request_id: str = Field(min_length=8, max_length=80)
+    preview: bool = False
+
+
+class StageBody(BaseModel):
+    """An app moves a lead to another stage, with the reason (ai-writes.md, "stage")."""
+
+    model_config = ConfigDict(extra="forbid")
+    step: str = Field(min_length=1, max_length=40)
+    reason: str = Field(min_length=1, max_length=500)
+    # What the stage list asks for on some stages (for example why a talk is incomplete).
+    reason_code: str | None = Field(default=None, min_length=1, max_length=40)
+    next_action_at: AwareDatetime | None = None
     expected_revision: int | None = Field(default=None, ge=1)
     request_id: str = Field(min_length=8, max_length=80)
     preview: bool = False
@@ -552,6 +569,21 @@ class Reader:
             )
         )
 
+    async def move_stage(self, lead_id: UUID, body: StageBody) -> tuple[dict[str, Any], int]:
+        writes = await self._writes()
+        return await self._write(
+            writes.stage(
+                lead_id,
+                body.step,
+                reason=body.reason,
+                reason_code=body.reason_code,
+                next_action_at=body.next_action_at,
+                expected_revision=body.expected_revision,
+                request_id=body.request_id,
+                preview=body.preview,
+            )
+        )
+
     async def changes(self, lead_id: UUID | None = None) -> dict[str, Any]:
         writes = await self._writes()
         answer, _ = await self._write(writes.changes(lead_id=lead_id))
@@ -838,6 +870,12 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
     async def update_lead(lead_id: UUID, body: LeadUpdateBody, request: Request) -> JSONResponse:
         async with open_reader(request) as reader:
             answer, status = await reader.update_lead(lead_id, body)
+            return done(answer, 200 if status == 201 else status)
+
+    @router.post("/leads/{lead_id}/stage")
+    async def move_stage(lead_id: UUID, body: StageBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            answer, status = await reader.move_stage(lead_id, body)
             return done(answer, 200 if status == 201 else status)
 
     # Recordings an app sends for its person (integrations/app_uploads.py).
