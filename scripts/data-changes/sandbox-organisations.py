@@ -1148,7 +1148,11 @@ class Run:
         await desk.save_work_hours(WorkHoursCommand(**hours))
         # The owner and the coach take no leads; the sellers take all, without a limit.
         managers = [self.people["manager"]] if "manager" in self.people else []
-        for who in (self.people["owner"], self.people["admin"], *managers):
+        # Each person once: without a coach the owner is also the admin (the test world).
+        people = {
+            who.person_id: who for who in (self.people["owner"], self.people["admin"], *managers)
+        }
+        for who in people.values():
             await desk.save_rep(
                 who.person_id, RepRules(expected_revision=0, available=False, max_open=None)
             )
@@ -2131,14 +2135,17 @@ async def run_one(
     created = await service.create(org.name, owner.id, command_id, reference, reason=why)
     tenant_id = created.tenant_id
     report["stage_list"] = await _stages(db, tenant_id, approver.id, now)
-    await service.add_member(
-        tenant_id,
-        admin.id,
-        "admin",
-        uuid5(command_id, "member:admin"),
-        operator_reference=reference,
-        reason=why,
-    )
+    # "admin_email" equal to "owner_email": no coach is added (the test world's TEST
+    # workspaces: their own managers are the admins, and no real colleague joins them).
+    if admin.id != owner.id:
+        await service.add_member(
+            tenant_id,
+            admin.id,
+            "admin",
+            uuid5(command_id, "member:admin"),
+            operator_reference=reference,
+            reason=why,
+        )
     if manager_id is not None:
         await service.add_member(
             tenant_id,
