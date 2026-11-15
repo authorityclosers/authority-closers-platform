@@ -4,6 +4,7 @@ Private views never widen to an administrator's readable teammates. Reading this
 projection does not renew a claim, write progress, charge credits or call AI.
 """
 
+from collections.abc import Mapping
 from typing import Any, Literal
 from uuid import UUID
 
@@ -157,6 +158,17 @@ class CoachingLibrary:
         ).all()
         return await self._learner(actor, actor.person_id, rows, organisation=False)
 
+    async def read_authorized(
+        self, actor: ActorContext, rows: Any, allowed: Mapping[UUID, tuple[Any, Any]]
+    ) -> CoachingView:
+        """The person's own Coaching from their library rows (selected as ``read``
+        selects them) and recordings the caller already authorized and locked for share,
+        each (a scope with ``claimed_account``, recording). For an API key, which has no
+        browser session for ``read`` to admit (integrations/coaching_api.py)."""
+        return await self._learner(
+            actor, actor.person_id, rows, organisation=False, allowed=allowed
+        )
+
     async def read_shared(self, actor: ActorContext, rep_person_id: UUID) -> CoachingView:
         """A rep's own Coaching, only while they share it with this owner/admin.
 
@@ -197,7 +209,13 @@ class CoachingLibrary:
         return view.model_copy(update={"person_id": rep_person_id, "person_name": name})
 
     async def _learner(
-        self, actor: ActorContext, person_id: UUID, rows: Any, *, organisation: bool
+        self,
+        actor: ActorContext,
+        person_id: UUID,
+        rows: Any,
+        *,
+        organisation: bool,
+        allowed: Mapping[UUID, tuple[Any, Any]] | None = None,
     ) -> CoachingView:
         reports = AcquisitionReports(self.ownership)
         history: list[CallHistory] = []
@@ -228,12 +246,13 @@ class CoachingLibrary:
         # Authorize every report in one access query (orchestrator's go, 3 Nov 2026),
         # each decided as for one (readable_recordings), then read each with fresh
         # withholding, then resolve evaluator receipts for all calls in a few queries.
-        allowed = await reports.readable_recordings(
-            [usage.submission_id for usage, ready, _ in rows[:HISTORY_LIMIT] if ready],
-            actor=actor,
-            shared_identity_locks=True,
-            allow_organisation_read=organisation,
-        )
+        if allowed is None:
+            allowed = await reports.readable_recordings(
+                [usage.submission_id for usage, ready, _ in rows[:HISTORY_LIMIT] if ready],
+                actor=actor,
+                shared_identity_locks=True,
+                allow_organisation_read=organisation,
+            )
         readable: list[tuple[Any, dict[str, Any]]] = []
         for usage, ready, plan_state in reversed(rows[:HISTORY_LIMIT]):
             if not ready:

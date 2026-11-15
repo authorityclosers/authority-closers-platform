@@ -16,6 +16,8 @@ command-line argument, so it stays out of shell history and process lists).
     sx reports [--saved] [--before CALL_ID]   # calls with a ready report, 50 a page
     sx report CALL_ID [--docx FILE | --transcript]     # one call's report, its Word
                                               # file, or its transcript (reports:read)
+    sx coaching [--call CALL_ID | --team]     # Coaching: yours (as a person), one of
+                                              # your calls, or the team's counts
     sx minutes [--team]                       # analysis time given, used and left
                                               # (calls:read; --team: each member's use)
     sx leads [--stage KEY|open] [--offset N]  # KEY: one of the stages each page lists
@@ -185,6 +187,11 @@ class Client:
 
     def transcript(self, call_id: str) -> Any:
         return self.call("GET", f"/calls/{_part(call_id)}/transcript")
+
+    def coaching(self, call_id: str | None = None, team: bool = False) -> Any:
+        if call_id:
+            return self.call("GET", f"/coaching/calls/{_part(call_id)}")
+        return self.call("GET", "/coaching/team" if team else "/coaching")
 
     def report_docx(self, call_id: str) -> bytes:
         """The report as a Word file: the bytes, not JSON."""
@@ -602,6 +609,27 @@ TOOLS += [
             "required": ["call_id"],
         },
     },
+    {
+        "name": "my_coaching",
+        "description": "This person's Coaching from their analysed calls: the skills to "
+        "work on and each call's state. A connected app acting as a person only.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "call_coaching",
+        "description": "The coaching for one of this person's own calls.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"call_id": _CALL_ID},
+            "required": ["call_id"],
+        },
+    },
+    {
+        "name": "team_coaching",
+        "description": "The team's Coaching: how often each recommendation came up, as "
+        "counts, and the reps who chose to share. Owners, admins and organisation keys.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
 ]
 
 
@@ -776,6 +804,12 @@ def _tool(client: Client, name: str, args: dict[str, Any]) -> Any:
         return client.report(str(args["call_id"]))
     if name == "get_transcript":
         return client.transcript(str(args["call_id"]))
+    if name == "my_coaching":
+        return client.coaching()
+    if name == "call_coaching":
+        return client.coaching(str(args["call_id"]))
+    if name == "team_coaching":
+        return client.coaching(team=True)
     if name == "list_my_changes":
         return client.changes(args.get("lead_id"))
     if name == "undo_change":
@@ -906,6 +940,10 @@ def _parser() -> argparse.ArgumentParser:
     report_as = report.add_mutually_exclusive_group()
     report_as.add_argument("--docx", metavar="FILE")
     report_as.add_argument("--transcript", action="store_true")
+    coaching = commands.add_parser("coaching")
+    coaching_of = coaching.add_mutually_exclusive_group()
+    coaching_of.add_argument("--call", metavar="CALL_ID")
+    coaching_of.add_argument("--team", action="store_true")
     minutes = commands.add_parser("minutes")
     minutes.add_argument("--team", action="store_true")
     leads = commands.add_parser("leads")
@@ -1054,6 +1092,8 @@ def main(
             out = client.reports(args.saved, args.before)
         elif args.command == "report":
             out = _report(client, args)
+        elif args.command == "coaching":
+            out = client.coaching(args.call, args.team)
         elif args.command == "minutes":
             out = client.analysis_time(args.team)
         elif args.command == "leads":

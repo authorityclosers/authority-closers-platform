@@ -32,7 +32,7 @@ from fastapi.responses import JSONResponse
 
 from ac_platform.ask_dipak import integration as ask_dipak
 from ac_platform.http.routes import RouteContext
-from ac_platform.integrations import lead_imports, recordings_api, reports_api, tiers
+from ac_platform.integrations import coaching_api, lead_imports, recordings_api, reports_api, tiers
 from ac_platform.integrations.api_http import (
     ApiError,
     NewLeadBody,
@@ -169,6 +169,8 @@ TOOLS: tuple[dict[str, Any], ...] = (
     },
     # Call reports, transcripts and Saved reports (integrations/reports_api.py).
     *reports_api.TOOLS,
+    # Coaching from those reports (integrations/coaching_api.py).
+    *coaching_api.TOOLS,
     {
         "name": "analysis_time",
         "title": "Analysis time left",
@@ -831,6 +833,8 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
     if name == "undo_change":
         undo = _body(UndoBody, args, ("request_id",))
         return await reader.undo_change(_uuid(args, "change_id"), undo)
+    if name in coaching_api.NAMES:
+        return await coaching_api.run_tool(reader, name, args)
     if name in reports_api.NAMES:
         return await reports_api.run_tool(reader, name, args)
     if name in ask_dipak.NAMES:

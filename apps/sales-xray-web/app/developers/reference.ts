@@ -308,6 +308,61 @@ console.log(report.summary, report.next_action);`,
     notes: "Sensitive parts of a call are withheld.",
   },
   {
+    id: "api-coaching",
+    method: "GET",
+    path: "/coaching",
+    scope: "reports:read",
+    summary:
+      "This person's Coaching, as the app's Coaching tab shows it: the skills to work on, recurring focus and each call's state.",
+    params: [],
+    curl: `curl ${API}/coaching \\\n  ${AUTH}`,
+    js: `const coaching = await (
+  await fetch("${API}/coaching", { headers: ${HEADERS} })
+).json();`,
+    answer: `{ "skills": [], "calls": [], "…": "…" }`,
+    notes:
+      "A person's own: a connected app acting as that person. An organisation key is 403 person_only. Suggestions from AI reports, never a score.",
+  },
+  {
+    id: "api-coaching-call",
+    method: "GET",
+    path: "/coaching/calls/{id}",
+    scope: "reports:read",
+    summary:
+      "The coaching for one of this person's own calls: what went well, what to change and the mission for the next call.",
+    params: [
+      {
+        name: "id",
+        where: "path",
+        type: "call id",
+        text: "One of your calls, from GET /reports.",
+      },
+    ],
+    curl: `curl ${API}/coaching/calls/3f2b7d10-… \\\n  ${AUTH}`,
+    js: `const call = await (
+  await fetch(\`${API}/coaching/calls/\${callId}\`, { headers: ${HEADERS} })
+).json();`,
+    answer: `{ "…": "…" }`,
+    notes:
+      "Only your own calls: owners and admins have no private-coaching bypass.",
+  },
+  {
+    id: "api-coaching-team",
+    method: "GET",
+    path: "/coaching/team",
+    scope: "reports:read",
+    summary:
+      "The team's Coaching: how often each recommendation came up, as counts, and the reps who chose to share theirs.",
+    params: [],
+    curl: `curl ${API}/coaching/team \\\n  ${AUTH}`,
+    js: `const team = await (
+  await fetch("${API}/coaching/team", { headers: ${HEADERS} })
+).json();`,
+    answer: `{ "…": "…" }`,
+    notes:
+      "Owners, admins and organisation keys (403 team_only otherwise). Never mistakes or success rates.",
+  },
+  {
     id: "api-leads",
     method: "GET",
     path: "/leads",
@@ -787,6 +842,9 @@ export const MCP_TOOLS: [string, string, string][] = [
   ["list_reports", "reports:read", "Calls with a ready report; Saved reports"],
   ["get_report", "reports:read", "One call's report"],
   ["get_transcript", "reports:read", "One call's transcript"],
+  ["my_coaching", "reports:read", "This person's Coaching"],
+  ["call_coaching", "reports:read", "Coaching for one of their calls"],
+  ["team_coaching", "reports:read", "The team's Coaching counts"],
   ["list_leads", "leads:read", "Leads, by stage"],
   ["get_lead", "leads:read", "One lead with its history"],
   ["add_lead", "leads:write", "Add a lead"],
