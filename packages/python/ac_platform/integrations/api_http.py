@@ -19,6 +19,10 @@ Base address: ``https://<sales x-ray host>/v1/api``.
 - POST /leads/imports       up to 10,000 leads at once, filed in the background through the
                             app's own file import; ``Idempotency-Key`` (leads:write;
                             integrations/lead_imports.py)
+- POST /leads/imports/uploads  a one-time address (15 minutes) to PUT a CSV of up to 10,000
+                            leads to, without the key: it queues as one import, the same file
+                            twice once (leads:write; integrations/import_uploads.py)
+- PUT  /leads/imports/upload/{token}  the CSV itself
 - GET  /leads/imports       recent imports; /leads/imports/{id} where one stands;
                             /leads/imports/{id}/rows each row's outcome (leads:write)
 - PATCH /leads/{id}         change a lead's name, company, city, interest or language, as
@@ -75,7 +79,7 @@ from __future__ import annotations
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
@@ -90,7 +94,16 @@ from ac_platform.call_data import facts as call_facts
 from ac_platform.call_data.models import CallObject
 from ac_platform.http.rate_limits import InMemoryTokenBucketLimiter, RateLimitRule
 from ac_platform.http.routes import RouteContext
-from ac_platform.integrations import analysis_time, app_uploads, keys, lead_imports, oauth, tiers
+from ac_platform.integrations import (
+    analysis_time,
+    app_uploads,
+    import_uploads,
+    keys,
+    lead_imports,
+    oauth,
+    sealed,
+    tiers,
+)
 from ac_platform.integrations.ai_writes import AiWriteError, AiWrites, Door
 from ac_platform.integrations.models import IntegrationOAuthClient
 from ac_platform.kernel.authz import ActorContext
@@ -228,6 +241,18 @@ class BulkBody(BaseModel):
     request_id: str = Field(min_length=8, max_length=80)
     preview: bool = False
     preview_sha: str | None = Field(default=None, min_length=64, max_length=64)
+
+
+class UploadBody(BaseModel):
+    """The choices for an import whose rows come as a CSV to a one-time address."""
+
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(default="CSV upload", min_length=1, max_length=200)
+    side: Literal["inbound", "cold"] = "inbound"
+    assign: Literal["rules", "none"] = "rules"
+    duplicates: Literal["skip", "fill", "replace"] = "skip"
+    pipeline: str | None = Field(default=None, max_length=40)
+    stage: str | None = Field(default=None, max_length=40)
 
 
 class UndoRequestBody(BaseModel):
@@ -875,6 +900,25 @@ class Reader:
             now=datetime.now(UTC),
         )
 
+    async def lead_import_upload(self, body: UploadBody) -> dict[str, Any]:
+        """A one-time address to send a CSV of leads to (import_uploads.py)."""
+        door = await self.import_door()
+        seal = sealed.load_key()
+        if seal is None:
+            raise ApiError(503, "not_ready", "Uploads aren't set up on this server yet.")
+        now = datetime.now(UTC)
+        token = import_uploads.make(seal.key, door, body.model_dump(exclude_none=True), now)
+        return {
+            "upload_url": f"{self.base or ''}/v1/api/leads/imports/upload/{token}",
+            "method": "PUT",
+            "content_type": "text/csv",
+            "expires_at": (now + import_uploads.LIFETIME).isoformat(),
+            "max_bytes": import_uploads.MAX_BYTES,
+            "max_rows": lead_imports.MAX_ROWS,
+            "columns": sorted(set(import_uploads.COLUMNS.values())),
+            "then": "The PUT answers the import's id; read it with get_lead_import.",
+        }
+
     async def import_door(self) -> lead_imports.Door:
         """Who an import is from: this key or app connection, acting as its person, with the
         Lead Desk role it reaches (an organisation's key acts as its owner)."""
@@ -1055,6 +1099,50 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
     # would take "imports" for an id.
     def refused(refusal: lead_imports.ImportRefused) -> ApiError:
         return ApiError(refusal.status, refusal.code, refusal.message)
+
+    @router.post("/leads/imports/uploads")
+    async def lead_import_upload(body: UploadBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.lead_import_upload(body), 201)
+
+    @router.put("/leads/imports/upload/{token}")
+    async def lead_import_upload_file(token: str, request: Request) -> JSONResponse:
+        """The CSV, sent to its one-time address: the token is the permission, read again in
+        full (the key or app still in force, its person still able to add leads)."""
+        seal = sealed.load_key()
+        if seal is None:
+            raise ApiError(503, "not_ready", "Uploads aren't set up on this server yet.")
+        now = datetime.now(UTC)
+        raw = await request.body()
+        try:
+            upload = import_uploads.read(seal.key, token, now)
+            body = lead_imports.ImportBody(leads=import_uploads.rows(raw), **upload.choices)
+            door = upload.door
+            async with ctx.sessions() as session, session.begin():
+                if not await lead_imports.door_open(session, door.via, door.door_id, now):
+                    raise ApiError(
+                        403,
+                        "key_revoked",
+                        "The key or app that asked for this address was revoked.",
+                    )
+                role = await lead_imports.person_role(
+                    session, door.tenant_id, door.acting_person_id, door.role
+                )
+                if role is None:
+                    raise ApiError(
+                        403,
+                        "person_removed",
+                        "The person who asked for this address can no longer add leads.",
+                    )
+                answer, status = await lead_imports.create(
+                    session,
+                    replace(door, role=role),
+                    body,
+                    idempotency_key=f"upload-{upload.nonce}",
+                )
+        except lead_imports.ImportRefused as refusal:
+            raise refused(refusal) from None
+        return done(answer, status)
 
     @router.post("/leads/imports")
     async def import_leads(body: lead_imports.ImportBody, request: Request) -> JSONResponse:

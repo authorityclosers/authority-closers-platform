@@ -41,6 +41,8 @@ _SYNTHETIC_BYTES_PATH = re.compile(
 )
 _CONVERSATION_DRAFT_IMPORT_PATH = re.compile(rf"/v1/admin/conversation/runs/{_UUID}/draft")
 _BUG_FILE_PATH = re.compile(rf"/v1/bug-reports/{_UUID}/files")
+# A CSV of leads sent to its one-time address (integrations/import_uploads.py).
+_LEAD_IMPORT_UPLOAD_PATH = re.compile(r"/v1/api/leads/imports/upload/[A-Za-z0-9_.-]{1,4096}")
 # A recording an authorised app sends for a person (POST /v1/api/calls, calls:write).
 _APP_CALL_UPLOAD_PATH = re.compile(r"/v1/api/calls")
 # A seller's call an organisation's key sends (PUT, recordings:write; recordings_api.py),
@@ -66,7 +68,7 @@ def request_body_limit(scope: Scope) -> int:
         return MAX_MEDIA_CAPTION_BYTES
     if path == "/v1/bug-reports":
         return MAX_BUG_REPORT_BYTES
-    if path == "/v1/api/leads/imports":
+    if path == "/v1/api/leads/imports" or _LEAD_IMPORT_UPLOAD_PATH.fullmatch(path):
         return MAX_LEAD_IMPORT_BYTES
     if _BUG_FILE_PATH.fullmatch(path):
         return MAX_BUG_FILE_BYTES

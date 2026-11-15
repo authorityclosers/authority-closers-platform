@@ -155,6 +155,8 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "add_lead",
         "import_leads",
         "get_lead_import",
+        "create_lead_import_upload",
+        "update_lead",
         "add_note",
         "add_task",
         "move_stage",
@@ -177,7 +179,17 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
     assert uploads == {"whoami", "create_recording_upload", "recording_status", *LESSONS}
     # Many leads at once (14 Nov 2026) come with leads:write, beside add_lead.
     importing = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:write"}))}
-    assert importing == {"whoami", "add_lead", "import_leads", "get_lead_import", *LESSONS}
+    assert importing == {
+        "whoami",
+        "add_lead",
+        "import_leads",
+        "get_lead_import",
+        # A CSV to a one-time address (15 Nov 2026).
+        "create_lead_import_upload",
+        *LESSONS,
+    }
+    updating = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:update"}))}
+    assert updating == {"whoami", "update_lead", *LESSONS}
     reading = {tool["name"] for tool in mcp_http.listed(frozenset({"calls:read"}))}
     assert reading == {
         "search",
@@ -254,6 +266,8 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "snooze_task",
         "undo_change",
         "create_recording_upload",
+        "create_lead_import_upload",
+        "update_lead",
     }
     for tool in mcp_http.listed(frozenset(scopes.SCOPES)):
         assert "scope" not in tool and tool["inputSchema"]["type"] == "object"
@@ -263,7 +277,11 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         assert tool["annotations"]["destructiveHint"] is (tool["name"] == "undo_change")
         assert tool["annotations"]["openWorldHint"] is False
         # A new lead and a new upload are each a new thing; the rest repeat safely.
-        if tool["name"] in writes - {"add_lead", "create_recording_upload"}:
+        if tool["name"] in writes - {
+            "add_lead",
+            "create_recording_upload",
+            "create_lead_import_upload",
+        }:
             assert tool["annotations"]["idempotentHint"] is True
             assert "request_id" in tool["inputSchema"]["properties"]
         assert tool["title"]

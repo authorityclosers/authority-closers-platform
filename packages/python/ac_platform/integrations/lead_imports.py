@@ -374,17 +374,21 @@ async def rows(
 # ----- the runner ---------------------------------------------------------------------
 
 
-async def _door_open(session: AsyncSession, job: IntegrationLeadImport, now: datetime) -> bool:
+async def door_open(session: AsyncSession, via: str, door_id: UUID, now: datetime) -> bool:
     """The key or connection that asked is still in force: revoking it stops what waits."""
-    if job.via == "key":
-        key = await session.get(IntegrationApiKey, job.door_id)
+    if via == "key":
+        key = await session.get(IntegrationApiKey, door_id)
         return (
             key is not None
             and key.revoked_at is None
             and (key.expires_at is None or key.expires_at > now)
         )
-    grant = await session.get(IntegrationOAuthGrant, job.door_id)
+    grant = await session.get(IntegrationOAuthGrant, door_id)
     return grant is not None and grant.revoked_at is None
+
+
+async def _door_open(session: AsyncSession, job: IntegrationLeadImport, now: datetime) -> bool:
+    return await door_open(session, job.via, job.door_id, now)
 
 
 # The lesser of the role an import was queued with and the role its person holds when a
@@ -393,25 +397,32 @@ async def _door_open(session: AsyncSession, job: IntegrationLeadImport, now: dat
 _ROLE_RANK: Final[dict[str, int]] = {"owner": 4, "admin": 3, "manager": 2, "member": 1}
 
 
-async def acting_role(session: AsyncSession, job: IntegrationLeadImport) -> str | None:
-    """The role a chunk is filed with now: the lesser of the one the import was queued with
-    and the one its person holds this moment. None when they are no longer an active member
+async def person_role(
+    session: AsyncSession, tenant_id: UUID, person_id: UUID, asked_as: str
+) -> str | None:
+    """The role a person's import is filed with now: the lesser of the one it was asked
+    with and the one they hold this moment. None when they are no longer an active member
     of the workspace, or their role can only view (nothing is filed)."""
     from ac_platform.tenancy.models import Membership
     from ac_platform.tenancy.roles import READ_ONLY_ROLES
 
     current = await session.scalar(
         select(Membership.role).where(
-            Membership.tenant_id == job.tenant_id,
-            Membership.person_id == job.acting_person_id,
+            Membership.tenant_id == tenant_id,
+            Membership.person_id == person_id,
             Membership.status == "active",
             Membership.ended_at.is_(None),
         )
     )
     if current is None or current in READ_ONLY_ROLES or current not in _ROLE_RANK:
         return None
-    queued = job.role if job.role in _ROLE_RANK else "member"
-    return min((queued, current), key=lambda role: _ROLE_RANK[role])
+    asked = asked_as if asked_as in _ROLE_RANK else "member"
+    return min((asked, current), key=lambda role: _ROLE_RANK[role])
+
+
+async def acting_role(session: AsyncSession, job: IntegrationLeadImport) -> str | None:
+    """The role a queued import's chunk is filed with now (``person_role``)."""
+    return await person_role(session, job.tenant_id, job.acting_person_id, job.role)
 
 
 def failed_rows(part: IntegrationLeadImportChunk, why: str) -> dict[str, Any]:
