@@ -1257,6 +1257,67 @@ def validated(github: Any, sha: str) -> bool:
     return bool(run and run.get("status") == "completed" and run.get("conclusion") == "success")
 
 
+WEB_WORKFLOW_FILE = f".github/workflows/{WEB_WORKFLOW}"
+
+
+def web_path_filter(workflow: str) -> list[str]:
+    """The web image workflow's push path filter, read from the workflow itself.
+
+    Main builds a web image only for a commit that changes one of these paths, so they are the
+    web image's inputs. One source: the filter at the target commit, never a copied list (the
+    orchestrator, 15 Nov 2026: three releases that changed no web file stopped at staging,
+    waiting for a web build the filter never started). A filter this can't read whole (a
+    negated or ignored path) gives no list, so the caller treats the web as changed.
+    """
+    patterns: list[str] = []
+    in_push = in_paths = False
+    push_indent = paths_indent = -1
+    for line in workflow.splitlines():
+        text = line.split(" #", 1)[0].rstrip()
+        stripped = text.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(text) - len(text.lstrip())
+        if in_paths:
+            if stripped.startswith("- ") and indent > paths_indent:
+                patterns.append(stripped[2:].strip().strip("'\""))
+                continue
+            in_paths = False
+        if in_push and indent <= push_indent:
+            in_push = False
+        if stripped == "push:":
+            in_push, push_indent = True, indent
+        elif in_push and stripped == "paths-ignore:":
+            return []
+        elif in_push and stripped == "paths:":
+            in_paths, paths_indent = True, indent
+    if any(pattern.startswith("!") or not pattern for pattern in patterns):
+        return []
+    return patterns
+
+
+def _path_glob(pattern: str) -> re.Pattern[str]:
+    """GitHub's path filter glob: ``**`` any depth, ``*`` and ``?`` within one segment."""
+    out, index = "", 0
+    while index < len(pattern):
+        if pattern.startswith("**/", index):
+            out, index = out + "(?:.*/)?", index + 3
+        elif pattern.startswith("**", index):
+            out, index = out + ".*", index + 2
+        elif pattern[index] == "*":
+            out, index = out + "[^/]*", index + 1
+        elif pattern[index] == "?":
+            out, index = out + "[^/]", index + 1
+        else:
+            out, index = out + re.escape(pattern[index]), index + 1
+    return re.compile(out + r"\Z")
+
+
+def web_input_changed(paths: Sequence[str], patterns: Sequence[str]) -> bool:
+    globs = [_path_glob(pattern) for pattern in patterns]
+    return any(glob.match(path) for path in paths if path for glob in globs)
+
+
 def web_build_for(github: Any, sha: str) -> Build | None:
     run = find_push_run(github, WEB_WORKFLOW, sha)
     if run is None or run.get("status") != "completed" or run.get("conclusion") != "success":
@@ -5350,6 +5411,43 @@ class Engine:
             return web_build_for(self.github, sha)
         return None
 
+    def web_inputs_unchanged(self, source: str, target: str) -> bool:
+        """The web image built from ``source`` is the one ``target`` would build: ``source`` is
+        in ``target``'s history and no path the web workflow's filter watches changed between
+        them, so main runs no web build for ``target`` and the running image stays right."""
+        if source == target:
+            return True
+        if not self.is_ancestor(source, target):
+            return False
+        git = ["git", f"--git-dir={self.paths.mirror}"]
+        shown = self.run([*git, "show", f"{target}:{WEB_WORKFLOW_FILE}"], check=False)
+        patterns = web_path_filter(shown.stdout) if shown.returncode == 0 else []
+        if not patterns:
+            return False
+        changed = self.run(
+            [*git, "diff", "--name-only", "--no-renames", source, target], check=False
+        )
+        if changed.returncode != 0:
+            return False
+        return not web_input_changed(changed.stdout.splitlines(), patterns)
+
+    def kept_web(self, environment: str, sha: str) -> dict[str, Any] | None:
+        """No web build for ``sha`` because none was needed: keep the running web image."""
+        current, _ = self.current_web(environment)
+        if not current or not self.web_inputs_unchanged(current, sha):
+            return None
+        return {
+            "at": _now(),
+            "environment": environment,
+            "component": "web",
+            "sha": current,
+            "trigger": "manual",
+            "result": "kept",
+            "detail": (
+                f"web inputs unchanged since {current[:12]}: keeping that web image for {sha[:12]}"
+            ),
+        }
+
     def deploy(
         self, environment: str, sha: str | None, component: str, *, dry_run: bool
     ) -> list[dict[str, Any]]:
@@ -5386,6 +5484,10 @@ class Engine:
                     results.append(
                         self.attempt(environment, "web", build, dry_run=dry_run, trigger="manual")
                     )
+                elif (kept := self.kept_web(environment, sha)) is not None:
+                    # Main builds a web image only when a web input changed (the workflow's
+                    # path filter); none did, so the running image is already this release's.
+                    results.append(kept)
                 elif component == "web":
                     raise ReleaseError(f"no Sales Xray web build for {sha[:12]}")
             return results
@@ -5730,6 +5832,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     remote.add_argument("operation", choices=("backup", "canary", "prepare-native"))
     remote.add_argument("--sha")
     sub.add_parser("production-target", help="print local or remote production execution mode")
+    unchanged = sub.add_parser(
+        "web-unchanged",
+        help="exit 0 when <sha> needs no new web image: its web inputs match the running one",
+    )
+    unchanged.add_argument("environment", choices=ENVIRONMENTS)
+    unchanged.add_argument("sha")
     status = sub.add_parser("status")
     status.add_argument("--json", action="store_true")
     sub.add_parser("tick")
@@ -5796,6 +5904,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         elif args.command == "production-target":
             print("remote" if engine.remote_target() is not None else "local")
+        elif args.command == "web-unchanged":
+            running, _ = engine.current_web(args.environment)
+            same = bool(running) and engine.web_inputs_unchanged(str(running), args.sha)
+            print(json.dumps({"running_web": running, "unchanged": same}))
+            if not same:
+                return 1
         elif args.command == "remote-op":
             _print(engine.remote_operation(args.operation, args.sha), True)
         elif args.command == "status":

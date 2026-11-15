@@ -1,0 +1,37 @@
+--- a/ac-ship
++++ b/ac-ship
+@@ -51,24 +51,23 @@
+ 
+ # Verified web retention and distinct main-build identities.
+ # This is the reviewed web Dockerfile; a changed recipe requires a fresh build.
+-WEB_RECIPE_BLOB=e53913352ae1c7869698b5236bc1ed96ae760733
+-WEB_INPUTS='.dockerignore .github/workflows/sales-xray-web-image.yml apps/sales-xray-web packages/typescript infra/sales-xray-web package.json pnpm-lock.yaml pnpm-workspace.yaml infra/release/read-artifact-inventory.py infra/release/validate-artifact-pool.py infra/release/reclaim-artifact-pool.py'
+ current_web_source() {
+   local short_web
+   short_web=$(/usr/local/sbin/ac-release status 2>/dev/null | awk -v env="$1" '$1 == env {for(i=1;i<=NF;i++) if($i ~ /^web=/){sub("web=","",$i); print $i; exit}}')
+   [ -n "$short_web" ] || return 1
+   asacdev git -C "$WB" rev-parse --verify "$short_web^{commit}"
+ }
++# The web image's inputs are the web workflow's own path filter, read by the engine at the target
++# (ac-release web-unchanged). No copied input list or recipe pin: the pinned recipe blob went stale
++# on 29 Oct, so from then on every release without a web change waited for a web build that the
++# filter never started (orchestrator, 15 Nov 2026). Before the engine knows web-unchanged, this
++# answers "changed" and ac-ship waits for a web build, as it did before.
+ web_inputs_equal() {
+-  local retained="$1" target="$2" recipe f a b
+-  asacdev git -C "$WB" merge-base --is-ancestor "$retained" "$target" || return 1
+-  recipe=$(asacdev git -C "$WB" rev-parse "$retained:infra/sales-xray-web/Dockerfile") || return 1
+-  [ "$recipe" = "$WEB_RECIPE_BLOB" ] || return 1
+-  for f in $WEB_INPUTS; do
+-    a=$(asacdev git -C "$WB" ls-tree "$retained" -- "$f") || return 1
+-    b=$(asacdev git -C "$WB" ls-tree "$target" -- "$f") || return 1
+-    [ -n "$a" ] && [ "$a" = "$b" ] || return 1
+-  done
++  local retained="$1" target="$2" answer
++  answer=$(/usr/local/sbin/ac-release web-unchanged staging "$target" 2>/dev/null) || return 1
++  printf '%s' "$answer" | python3 -c 'import json, sys
++d = json.load(sys.stdin)
++sys.exit(0 if d.get("unchanged") is True and str(d.get("running_web") or "")[:12] == sys.argv[1][:12] else 1)' "$retained"
+ }
+ configure_web_build() {
+   WEB_REQUIRED=1; RETAINED_WEB=""
