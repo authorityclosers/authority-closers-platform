@@ -119,3 +119,43 @@ def test_active_app_cache_and_symlinks_are_preserved(tmp_path, cache_module):
     with pytest.raises(ValueError, match="symlink"):
         cache_module.clear(cache, set(), apply=True)
     assert outside.read_text() == "fictional retained data"
+
+
+def test_a_missing_native_image_alerts_once_and_once_back(tmp_path, monkeypatch):
+    """16 Nov 2026: the native C1 image went missing and every upload failed its audio check."""
+    sent = []
+    monkeypatch.setattr(
+        ALERT.subprocess,
+        "run",
+        lambda argv, **kwargs: sent.append(kwargs.get("input")) or SimpleNamespace(returncode=0),
+    )
+    state = tmp_path / "state.json"
+    figures = {"percent": 50, "available_bytes": 100}
+    gone = ALERT.check(state, figures, apply=True, native={"staging": False, "production": True})
+    assert gone["native_missing"] == ["staging"]
+    assert len(sent) == 1 and "missing from Docker on ac for staging" in sent[0]
+    ALERT.check(state, figures, apply=True, native={"staging": False, "production": True})
+    assert len(sent) == 1  # once
+    ALERT.check(state, figures, apply=True, native={"staging": True, "production": True})
+    assert len(sent) == 2 and "back in Docker for staging" in sent[1]
+    # A dry run reports without sending; an old state file without the key still reads.
+    state.write_text(json.dumps({"level": 0}))
+    dry = ALERT.check(state, figures, apply=False, native={"production": False})
+    assert dry["native_missing"] == ["production"] and len(sent) == 2
+
+
+def test_native_images_reads_each_units_image_ref(tmp_path, monkeypatch):
+    ref = "sha256:" + "a" * 64
+    (tmp_path / "ac-sales-xray-native-staging.service").write_text(
+        f"ExecStart=helper --image-ref {ref}\n"
+    )
+    (tmp_path / "ac-sales-xray-native-production.service").write_text("ExecStart=helper\n")
+    seen = []
+
+    def inspect(argv, **kwargs):
+        seen.append(argv)
+        return SimpleNamespace(returncode=1)
+
+    monkeypatch.setattr(ALERT.subprocess, "run", inspect)
+    assert ALERT.native_images(tmp_path) == {"staging": False}
+    assert seen == [[ALERT.DOCKER, "image", "inspect", "--format", "{{.Id}}", ref]]
