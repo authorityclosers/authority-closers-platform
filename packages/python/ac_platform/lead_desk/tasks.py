@@ -220,13 +220,16 @@ class TaskBook:
 
     async def listing(self, which: TaskBucket, person: UUID | None = None) -> TaskList:
         """A seller's open tasks: overdue, today or upcoming, earliest first, and how many
-        of each."""
+        of each. Their own, and the ones they added on someone else's lead or on a lead with
+        no owner yet (owner bugs 218-219, 15 Nov 2026: an owner who adds a task on a
+        seller's lead looks for it on his own Home and Tasks, and it was only on the
+        seller's); whose list a task is on stays the lead owner's."""
         who = person or self.desk.viewer.person_id
         if who != self.desk.viewer.person_id and not self.desk.viewer.can_manage:
             raise DeskError(403, "Only owners and admins see someone else's tasks.")
         mine = and_(
             LeadTask.tenant_id == self.tenant_id,
-            LeadTask.owner_person_id == who,
+            or_(LeadTask.owner_person_id == who, LeadTask.created_by_person_id == who),
             LeadTask.status == OPEN,
             LeadTask.kind.not_in(CALLING_KINDS),
         )
