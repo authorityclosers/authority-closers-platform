@@ -177,6 +177,12 @@ const smallTextPairs: [string, string][] = [
 describe("Lightbox token derivative", () => {
   it("keeps every source token except the documented corrections", () => {
     const changedLight = new Map([
+      // The preloaded face first (owner, 15 Nov 2026: a cold start painted in the
+      // phone's own font, then swapped; layout.tsx, next/font).
+      [
+        "font-ui",
+        'var(--sx-font-jakarta, "plus jakarta sans variable"), "plus jakarta sans variable", "plus jakarta sans", "noto sans devanagari variable", "noto sans devanagari", system-ui, sans-serif',
+      ],
       // Liquid Glass (owner, 22 Oct 2026): a cool grouped ground under white
       // cards, a near-black ink ladder and a slightly deeper teal.
       ["ink", "#0a0c10"],

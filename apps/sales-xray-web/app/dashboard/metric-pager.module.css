@@ -690,3 +690,15 @@ button.figure:focus-visible {
     column-gap: 16px;
   }
 }
+
+/* The owner's OnePlus (363 px, report 220): up to 375 px a card's title keeps
+   its line; the header chevron goes, since the whole card is the link. */
+@media (max-width: 375px) {
+  .figHead > svg:last-child {
+    display: none;
+  }
+
+  .figHead {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+}

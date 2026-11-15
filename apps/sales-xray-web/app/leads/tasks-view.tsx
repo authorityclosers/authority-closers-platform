@@ -59,12 +59,26 @@ function leadWords(task: { title: string; lead_name: string | null }): string {
   return task.title.toLowerCase().includes(name.toLowerCase()) ? "" : name;
 }
 
+/** Whose a task is when it isn't the viewer's own: "for Priya" (orchestrator, owner
+ *  bugs 218-219, 15 Nov 2026: a task added on a seller's lead stays the seller's). */
+export function forWhom(
+  task: { owner_person_id: string | null; owner_name?: string | null },
+  me: string | null | undefined,
+): string {
+  if (!me || !task.owner_person_id || task.owner_person_id === me) return "";
+  const first = task.owner_name?.trim().split(/\s+/)[0];
+  return first ? `for ${first}` : "";
+}
+
 export function TasksView({
   onOpen,
   now = () => new Date(),
+  me = null,
 }: {
   onOpen: (leadId: string) => void;
   now?: () => Date;
+  /** The viewer: a task that isn't theirs says whose it is. */
+  me?: string | null;
 }) {
   // Home's "N overdue" opens Overdue (?tasks=overdue); Today otherwise.
   const [view, setView] = useState<TaskBucket>(() => {
@@ -294,7 +308,9 @@ export function TasksView({
                 <span className={styles.text}>
                   <strong>{task.title}</strong>
                   <span>
-                    {[kind.label, leadWords(task)].filter(Boolean).join(" · ")}
+                    {[kind.label, leadWords(task), forWhom(task, me)]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
                   {task.location ? (
                     <small>

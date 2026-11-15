@@ -24,9 +24,14 @@ and C5 both go to OpenAI GPT-6 Luna (standard or Flex): the configuration must a
 carry an OpenAI GPT-6 Luna provider entry, or the caller passes one (``openai``) built from
 existing records (its credential, terms, privacy and permission references are governance,
 never made up here), and Root supplies the OpenAI stages' privacy notice and retention
-references when sealing. With ``luna_report=False`` (the hybrid, orchestrator 21 Oct 2026:
-Luna's own coaching read worse on the real-call trial), only the one-pass C4 request goes to
-Luna and C5 stays on Gemini 3.8 Flash (on Flex with ``flex``), its own profile.
+references when sealing, and the wording of the profile's Gemini stages
+(``gemini_privacy_notice``): a Luna profile's C2 (and the hybrid's C5) would otherwise copy
+the classic stage's notice, which says the audio goes to ElevenLabs (13 Nov 2026). Every
+stage of a Luna profile carries Root's one privacy revision.
+
+With ``luna_report=False`` (the hybrid, orchestrator 21 Oct 2026: Luna's own coaching read
+worse on the real-call trial), only the one-pass C4 request goes to Luna and C5 stays on
+Gemini 3.8 Flash (on Flex with ``flex``), its own profile.
 
 With ``recipe=markers.RECIPE_V2`` (P1, orchestrator 22 Oct 2026), the one-pass C4 request
 is v2: the same read plus the Brain 4.0 part (``one_pass.brain4_part``), on its own profiles
@@ -100,6 +105,11 @@ LUNA_GOVERNANCE_FIELDS: Final = (
     "retention_ref",
     "professional_gate_ref",
 )
+# ...and the wording of the same profile's Gemini stages (C2; the hybrid's C5), under the
+# same privacy revision. Without it a Luna C2 copied the classic notice ("Your audio goes to
+# ElevenLabs for transcription"), untrue for a Flash-Lite C2 (13 Nov 2026).
+LUNA_GEMINI_NOTICE_FIELD: Final = "gemini_privacy_notice"
+LUNA_SEAL_GOVERNANCE_FIELDS: Final = (*LUNA_GOVERNANCE_FIELDS, LUNA_GEMINI_NOTICE_FIELD)
 
 
 class SealError(ValueError):
@@ -337,8 +347,12 @@ def _luna_stages(
 ) -> tuple[Any, Any]:
     """The C4 (one-pass) and C5 templates on GPT-6 Luna: the classic templates' bounds,
     the configuration's OpenAI references and Root's OpenAI governance."""
-    if not isinstance(governance, dict) or set(governance) != set(LUNA_GOVERNANCE_FIELDS):
+    if not isinstance(governance, dict) or set(governance) != set(LUNA_SEAL_GOVERNANCE_FIELDS):
         raise SealError("luna_needs_roots_openai_governance")
+    if not isinstance(governance[LUNA_GEMINI_NOTICE_FIELD], str) or not (
+        governance[LUNA_GEMINI_NOTICE_FIELD].strip()
+    ):
+        raise SealError("luna_needs_the_gemini_stages_wording")
     model = LUNA_MODEL + (":flex" if flex else "")
     entry = next(
         item for item in new.providers if (item.provider_id, item.model_id) == ("openai", model)
@@ -357,7 +371,7 @@ def _luna_stages(
         "zero_cost_basis": "paid_pricing_evidence",
         "price_evidence_sha256": snapshot.evidence_sha256,
         "max_cost_paise": entry.max_cost_paise,
-        **governance,
+        **{field: governance[field] for field in LUNA_GOVERNANCE_FIELDS},
     }
     one_pass = {
         **common,
@@ -459,7 +473,12 @@ def _profile(
 
     if luna is not None:
         luna_c4, luna_c5 = _luna_stages(c4, c5, new, flex=flex, governance=luna, recipe=recipe)
-        heard = type(c2).model_validate(transcription.model_dump())
+        # The Gemini stages say what they do, under the profile's one privacy revision.
+        wording = {
+            "privacy_revision": luna["privacy_revision"],
+            "privacy_notice": luna[LUNA_GEMINI_NOTICE_FIELD],
+        }
+        heard = type(c2).model_validate(transcription.model_copy(update=wording).model_dump())
         if luna_report:
             return AcquisitionProviderProfile(
                 profile_id=versioned(LUNA_FLEX_PROFILE_ID if flex else LUNA_PROFILE_ID, recipe),
@@ -468,9 +487,14 @@ def _profile(
         # The hybrid: C5 stays on the classic Gemini 3.8 Flash template (on Flex with flex).
         if (c5.provider_id, c5.model_id) != (PROVIDER, TEXT_MODEL):
             raise SealError("policy_c5_is_not_gemini_flash")
+        report = text(c5)
         return AcquisitionProviderProfile(
             profile_id=versioned(LUNA_C4_FLEX_PROFILE_ID if flex else LUNA_C4_PROFILE_ID, recipe),
-            stages=(heard, luna_c4, text(c5)),
+            stages=(
+                heard,
+                luna_c4,
+                type(c5).model_validate(report.model_copy(update=wording).model_dump()),
+            ),
         )
     if one_pass and (c4.provider_id, c4.model_id) != (PROVIDER, TEXT_MODEL):
         raise SealError("policy_c4_is_not_gemini_flash")

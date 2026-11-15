@@ -398,11 +398,13 @@ def test_api_uploads_refuse_what_the_app_refuses(postgres_harness: Any, tmp_path
                 assert code(spent) == (409, "out_of_minutes")
                 assert "allowance" in spent.json()["error"]["message"]
 
-            # Outside local, test and development the terms can't be recorded, and an
-            # acceptance already there reads as closed.
+            # In an environment outside the open list the terms can't be recorded, and an
+            # acceptance already there reads as closed (staging and production are open
+            # since the 15 Nov 2026 approval).
             async with setup.sessions() as db, db.begin():
                 terms = upload_policy(setup.runtime.policy)["policy_sha256"]
-                for place in ("staging", "production"):
+                assert key_upload.is_open("staging") and key_upload.is_open("production")
+                for place in ("preview", "elsewhere"):
                     assert (
                         await key_upload.terms(db, setup.state.tenant_id, terms, place)
                     ).state == "closed"

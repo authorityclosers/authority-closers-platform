@@ -406,6 +406,13 @@ const CLOCK = new Intl.DateTimeFormat("en-IN", {
   timeZone: "Asia/Kolkata",
 });
 
+/** Talk time in the sellers' table, compact so it never breaks over two lines at
+ *  363 px: "7m", "1h 11m" (the owner's OnePlus, 15 Nov 2026). */
+export function talkShort(seconds: number): string {
+  const all = Math.round(seconds / 60);
+  return all < 60 ? `${all}m` : `${Math.floor(all / 60)}h ${all % 60}m`;
+}
+
 /** How many working sellers Home lists; the rest are a tap away (piece 03). */
 const SELLERS_ON_HOME = 5;
 
@@ -453,7 +460,7 @@ function SellerRow({
         <b data-zero={!day.attempted || undefined}>{day.attempted}</b>
         <b data-zero={!day.connected || undefined}>{day.connected}</b>
         <b data-zero={!day.talk_seconds || undefined}>
-          {minutes(day.talk_seconds)}
+          {talkShort(day.talk_seconds)}
         </b>
       </Link>
     </li>

@@ -3536,8 +3536,10 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
       '[aria-label="Sales Xray navigation"] [aria-current="page"]',
     )?.textContent,
   ).toBe(CALLS_PAGE_NAME);
-  // The bar names the page: a report, not "New analysis" or "Calls".
-  expect(container.querySelector("header b")?.textContent).toBe("Report");
+  // The phone names the page: a report, not "New analysis" or "Calls".
+  expect(container.querySelector("[data-page-title]")?.textContent).toBe(
+    "Report",
+  );
   const savedAudio = container.querySelector(
     '[aria-label="Call audio player"] audio',
   );

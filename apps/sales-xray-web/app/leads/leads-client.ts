@@ -982,6 +982,8 @@ export type TaskView = {
   source: string;
   revision: number;
   owner_person_id: string | null;
+  /** Whose task it is, by name (owner bugs 218-219). */
+  owner_name?: string | null;
   /** Open and a minute past its due. */
   overdue: boolean;
   bucket: TaskBucket | null;

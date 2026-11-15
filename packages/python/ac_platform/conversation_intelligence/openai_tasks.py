@@ -46,6 +46,23 @@ OPENAI_REASONING_EFFORTS = {
     "gpt-6-sol": frozenset({"none", "low", "medium", "high", "xhigh", "max"}),
     "gpt-6-astra": frozenset({"low", "medium", "high", "xhigh", "max"}),
 }
+# Luna's coaching report in Dipak's frame (owner, 15 Nov 2026: "coaching only ... whatever
+# Dipak has said to work"). On the coaching lead's 6 gold calls Luna's reports credited what
+# the salesperson did well far less than Gemini's (0.45 against 0.64 of his strengths); these
+# lines took Luna from 44% to 49% of his notes, and its next-call mission was one countable
+# action on 6 of 6 calls (Gemini 2 of 6). Appended to Luna's instructions only; the prompt view
+# takes them off again, so the C5 prompt, its template digest and every saved request keep
+# their own bytes, and a request saved without them still reads.
+LUNA_COACHING_FRAME = (
+    "STRENGTHS AS WELL AS GAPS: an expert sales coach credits what the salesperson did well as"
+    " often as what to change. Before writing, go through the call in time order and note every"
+    " moment the salesperson handled well (opening and rapport, the questions asked, listening and"
+    " acknowledging, explaining value in the prospect's own terms, handling a concern, agreeing"
+    " the next step), each with its segment ids. Fill strengths with the three strongest of them,"
+    " and name the other good moments in the dimension observations. Keep the improvements just"
+    " as concrete. Never praise a moment the transcript does not show."
+)
+_LUNA_FRAME_SUFFIX = "\n\n" + LUNA_COACHING_FRAME
 # Keep a 17K-byte margin below the published 272K-token long-context rate
 # boundary for schema/request framing and tokenizer overhead.
 OPENAI_MAX_INPUT_BYTES = 255_000
@@ -243,6 +260,8 @@ def prepare_openai_body(
     instructions = messages[0]["content"]
     user_input = messages[1]["content"]
     revision, schema = _schema_for_prompt(instructions)
+    if model in OPENAI_ONE_PASS_MODELS:
+        instructions += _LUNA_FRAME_SUFFIX
     if _input_bytes(instructions, user_input, schema) > OPENAI_MAX_INPUT_BYTES:
         _fail("openai_input_budget_exceeded")
     body = {
@@ -312,6 +331,9 @@ def openai_prompt_view(
         or body.get("truncation") != "disabled"
     ):
         _fail("openai_request_shape_invalid")
+    if model in OPENAI_ONE_PASS_MODELS and instructions.endswith(_LUNA_FRAME_SUFFIX):
+        # Luna's coaching frame is the adapter's own addition, not part of the C5 prompt.
+        instructions = instructions[: -len(_LUNA_FRAME_SUFFIX)]
     reasoning = body.get("reasoning")
     if (
         not isinstance(reasoning, Mapping)

@@ -2198,7 +2198,10 @@ export function LeadsRoute({
               }}
             />
           ) : tasks ? (
-            <TasksView onOpen={(leadId) => open(leadId)} />
+            <TasksView
+              onOpen={(leadId) => open(leadId)}
+              me={desk ? desk.me.person_id : null}
+            />
           ) : work ? (
             <MyWork
               onOpen={(leadId, at) => open(leadId, null, at)}

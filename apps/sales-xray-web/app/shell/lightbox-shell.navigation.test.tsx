@@ -342,13 +342,17 @@ it("names the current workspace in the phone header and the desktop top bar", ()
   // Phones: the workspace sits on a small line above the page title (r17),
   // and with another workspace to go to, a tap there switches (design
   // system v2, owner 20 Oct).
-  const phone = host.querySelector("header [title] b")?.parentElement;
+  // Home's bar on every page (Leads part 02, 15 Nov 2026): the name on two lines.
+  const phone = host.querySelector("header [data-home-name]");
   expect(phone?.tagName).toBe("BUTTON");
   expect(phone?.getAttribute("aria-haspopup")).toBe("dialog");
-  expect(phone?.querySelector("small")?.textContent).toBe("Authority Closers");
+  expect(phone?.getAttribute("title")).toBe("Workspace: Authority Closers");
   // The page's title is its tab's name, one setting for both (owner, 13 Nov
   // 2026: "call it Reports for now").
-  expect(phone?.querySelector("b")?.textContent).toBe(CALLS_PAGE_NAME);
+  // On a phone it heads the page's own row under the bar (Leads part 02).
+  expect(host.querySelector("[data-page-title]")?.textContent).toBe(
+    CALLS_PAGE_NAME,
+  );
   expect(
     host.querySelector(
       'nav[aria-label="Mobile Sales Xray navigation"] a[href="/analysis/calls"]',
@@ -448,7 +452,10 @@ it("puts Chats in the Leads header only (Dipak's handoff, 31 Oct 2026)", () => {
         <p>Page</p>
       </AcquisitionShell>,
     );
-    return host.querySelector('header a[aria-label="Chats"]');
+    // In the page's own row under the bar (Leads part 02, 15 Nov 2026).
+    return host.querySelector(
+      '[class*="pageRow"] a[aria-label="Chats"], header a[aria-label="Chats"]',
+    );
   };
   expect(header("leads")?.getAttribute("href")).toBe("/chats");
   expect(header("dashboard")).toBeNull();

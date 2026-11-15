@@ -15,14 +15,14 @@ what is read again on every request: conversation_intelligence/key_upload.py.
 - GET  /v1/api/recordings/{id}         waiting_for_file, expired, queued, analysing,
   report_ready (with the call), held or failed, with a plain reason.
 
-The app's own checks and nothing else: the workspace's API-upload terms (closed outside
-development until the owner decides), the seller's AI level, the seller's complete
+The app's own checks and nothing else: the workspace's API-upload terms (an owner or
+admin switches them on: Settings, Developers), the seller's AI level, the seller's complete
 contact profile, analysis time (refused when out), 100 MB and 60 minutes at most, the
 file's SHA-256 and the native media check, one upload at a time per process, and every
 hold the plan applies (short call, no conversation). No prices.
 
 Session routes, for an owner or admin in their own sign-in (the Developers screen's
-switch comes later, in the owner's UI lane):
+switch, settings/api-uploads.tsx):
 
 - GET  /v1/sales-xray/integrations/api-upload-terms
 - POST /v1/sales-xray/integrations/api-upload-terms  {"decision", "policy_sha256",
