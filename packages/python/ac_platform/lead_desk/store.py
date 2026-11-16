@@ -155,7 +155,7 @@ from ac_platform.lead_desk.contracts import (
 
 # Re-exported: many modules import DeskError from here.
 from ac_platform.lead_desk.errors import DeskError as DeskError
-from ac_platform.lead_desk.history import HISTORY, NOT_INBOUND, inbound_only, worked
+from ac_platform.lead_desk.history import HISTORY, NOT_INBOUND, inbound_only, on_desk, worked
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.journey import pipelines, signals, transitions
 from ac_platform.lead_desk.journey.engine import not_undone
@@ -981,7 +981,8 @@ class LeadDesk:
         return self._visible()
 
     async def _lead(self, lead_id: UUID, *, lock: bool = False) -> Lead:
-        query = select(Lead).where(Lead.id == lead_id, self._visible())
+        # A lead in the Bin opens nowhere and takes no change (shelf.py): restore it first.
+        query = select(Lead).where(Lead.id == lead_id, self._visible(), Lead.binned_at.is_(None))
         if lock:
             query = query.with_for_update()
         lead = await self.db.scalar(query)
@@ -1043,7 +1044,9 @@ class LeadDesk:
             ):
                 raise
         lead: Lead | None = await self.db.scalar(
-            select(Lead).where(Lead.tenant_id == self.tenant_id, Lead.id == lead_id)
+            select(Lead).where(
+                Lead.tenant_id == self.tenant_id, Lead.id == lead_id, Lead.binned_at.is_(None)
+            )
         )
         if lead is None:
             raise DeskError(404, "This lead isn't on your desk.")
@@ -1189,6 +1192,8 @@ class LeadDesk:
             and lead.stage != "new"
             and lead.next_action_at is None,
             has_email=bool(lead.email),
+            archived_at=lead.archived_at,
+            binned_at=lead.binned_at,
         )
 
     def _reason_label(self, lead: Lead) -> str | None:
@@ -2059,19 +2064,34 @@ class LeadDesk:
         when: FollowUpWhen | None = None,
         since: date | None = None,
         until: date | None = None,
+        shelf: Literal["archived", "bin"] | None = None,
     ) -> LeadPage:
         limit = max(1, min(PAGE_SIZE, limit))
         if scope != "mine" and not self.viewer.can_see_team:
             raise DeskError(403, "Your role sees your own leads only.")
         where: list[Any] = [self._seen()]
-        if created == "history":
+        if shelf is not None:
+            # The Archived list and the Bin (shelf.py): every side, no work view; the Bin
+            # is for owners and admins only.
+            if shelf == "bin":
+                if not self.viewer.can_delete:
+                    raise DeskError(403, "Only owners and admins open the Bin.")
+                where.append(Lead.binned_at.is_not(None))
+            else:
+                where.extend((Lead.archived_at.is_not(None), Lead.binned_at.is_(None)))
+            created = view = when = None
+            side = None
+        elif created == "history":
             # Old leads brought in as history (2 Nov 2026): only this filter lists them,
             # all of them; none is in To Call or Follow-ups, so the work view is set aside.
-            where.append(Lead.pipeline == HISTORY)
+            where.extend((Lead.pipeline == HISTORY, on_desk()))
             created = view = when = None
         else:
+            # A lead in the Bin is in no list but the Bin, not even a search's.
+            where.append(Lead.binned_at.is_(None))
             if not search:
-                # Nobody's work: in no list, tab or count. A search still finds them below.
+                # Nobody's work: in no list, tab or count. A search still finds them below,
+                # and archived leads too ("findable").
                 where.append(worked())
             # Inbound Leads or Cold Leads (migration 0146): every list, tab and count keeps
             # to the side picked, All Leads too (orchestrator, 15 Nov 2026, Leads part 05
@@ -2080,7 +2100,9 @@ class LeadDesk:
             # history: "this person enquired in June".
             if side is not None:
                 where.append(
-                    or_(on_side(side), Lead.pipeline == HISTORY) if search else on_side(side)
+                    or_(on_side(side), Lead.pipeline == HISTORY, Lead.archived_at.is_not(None))
+                    if search
+                    else on_side(side)
                 )
         # To Call holds the leads who rang and weren't reached since, first (#9 option A).
         waiting: dict[UUID, tuple[datetime, int]] = {}
@@ -2935,6 +2957,7 @@ class LeadDesk:
             changed=tuple(str(name) for name in data["changed"])
             if isinstance(data.get("changed"), list)
             else None,
+            shelf=text("shelf") if event.kind == "edited" else None,
             simulated=data.get("simulated") if isinstance(data.get("simulated"), bool) else None,
             estimated=True if event.kind == "call" and data.get("estimated") is True else None,
             recording=True if recording is not None or data.get("recording") is True else None,
@@ -4305,6 +4328,20 @@ class LeadDesk:
         )
         if to_inbound:
             lead.pipeline = "live"
+        # An archived or binned lead who enquires again is back on the desk (shelf.py): a
+        # returning customer is never lost in Archived or the Bin. A file never brings one back.
+        from_shelf = (
+            None
+            if source in NOT_ENQUIRIES
+            else "bin"
+            if lead.binned_at is not None
+            else "archive"
+            if lead.archived_at is not None
+            else None
+        )
+        if from_shelf is not None:
+            lead.archived_at = lead.archived_by_person_id = None
+            lead.binned_at = lead.binned_by_person_id = None
         lead.repeats += 1
         lead.updated_at = self.now
         for name in ("email", "company", "city", "language", "interest"):
@@ -4320,6 +4357,7 @@ class LeadDesk:
             "reopened": reopened,
             "to_inbound": to_inbound,
             "payload": payload,
+            **({"from_shelf": from_shelf} if from_shelf is not None else {}),
         }
         if reopened:
             journey = await self._labels(journeys.pipeline_of(lead))

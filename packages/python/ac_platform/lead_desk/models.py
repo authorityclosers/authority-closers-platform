@@ -82,6 +82,13 @@ class Lead(Base):
             unique=True,
             postgresql_where=text("source_ref IS NOT NULL"),
         ),
+        # The Bin's leads, for its list and the 30-day purge (migration 0158).
+        Index(
+            "ix_lead_desk_lead_binned",
+            "tenant_id",
+            "binned_at",
+            postgresql_where=text("binned_at IS NOT NULL"),
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
@@ -146,6 +153,13 @@ class Lead(Base):
     # the leads worked every day. Null (every lead from before) is "live". Not pipeline_key,
     # which is the Lead OS pipeline the lead is in. No screen reads it yet.
     pipeline: Mapped[str | None] = mapped_column(String(8), nullable=True, default="live")
+    # Archive and Bin (migration 0158, owner 16 Nov 2026; lead_desk/shelf.py). Archived: off
+    # every work list and count, found by search and the Archived list, restorable. Binned:
+    # deleted, restorable by owners and admins for 30 days, then purged. Null: on the desk.
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    binned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    binned_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
 
 
 class LeadEvent(Base):

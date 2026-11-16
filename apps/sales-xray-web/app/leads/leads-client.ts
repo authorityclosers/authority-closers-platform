@@ -82,6 +82,9 @@ export type LeadRow = {
   no_next_action?: boolean;
   /** It has an email address: the card offers one-tap Email. */
   has_email?: boolean;
+  /** Archive and Bin (shelf API): when it was archived or moved to the Bin. */
+  archived_at?: string | null;
+  binned_at?: string | null;
 };
 
 export type MessageTemplate = { key: string; label: string; text: string };
@@ -211,6 +214,8 @@ export type LeadEvent = {
   outcome?: "connected" | "not_connected" | "unknown" | null;
   seconds_from?: "call_log" | "recording" | null;
   changed?: string[] | null;
+  /** Archive and Bin: "archive", "bin", "restore_archive" or "restore_bin". */
+  shelf?: ShelfAction | null;
   channel?: string | null;
   template_label?: string | null;
   /** "phone": the seller's phone logged this call by itself (UX study item 5). */
@@ -1170,6 +1175,61 @@ export type LeadsDeleted = {
 export function deleteLeads(leadIds: string[], command = commandId()) {
   return request<LeadsDeleted>(
     "/leads/delete",
+    json("POST", { command_id: command, lead_ids: leadIds }),
+  );
+}
+
+/** At most this many leads go in one archive, Bin or restore. */
+export const SHELF_LIMIT = 2000;
+
+export type ShelfAction = "archive" | "bin" | "restore_archive" | "restore_bin";
+
+export type LeadsShelved = {
+  action: ShelfAction;
+  /** The leads that moved, in the order asked. */
+  changed: number;
+  lead_ids: string[];
+  /** Already where they were asked to go. */
+  unchanged: number;
+  /** Not here, or not yours. */
+  not_found: number;
+};
+
+/**
+ * Archive leads (owners, admins and managers): off every list and count,
+ * found by search and the Archived list (`/leads?shelf=archived`).
+ */
+export function archiveLeads(leadIds: string[], command = commandId()) {
+  return request<LeadsShelved>(
+    "/leads/archive",
+    json("POST", { command_id: command, lead_ids: leadIds }),
+  );
+}
+
+/** Delete to the Bin (owners and admins): restorable for 30 days. */
+export function binLeads(leadIds: string[], command = commandId()) {
+  return request<LeadsShelved>(
+    "/leads/bin",
+    json("POST", { command_id: command, lead_ids: leadIds }),
+  );
+}
+
+/** Bring leads back from Archived or from the Bin (the Bin: owners and admins). */
+export function restoreLeads(
+  leadIds: string[],
+  from: "archive" | "bin",
+  command = commandId(),
+) {
+  return request<LeadsShelved>(
+    "/leads/restore",
+    json("POST", { command_id: command, lead_ids: leadIds, from }),
+  );
+}
+
+/** Delete leads in the Bin for good now (owners and admins). */
+export function purgeLeads(leadIds: string[], command = commandId()) {
+  return request<LeadsDeleted>(
+    "/leads/purge",
     json("POST", { command_id: command, lead_ids: leadIds }),
   );
 }

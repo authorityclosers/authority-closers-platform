@@ -44,6 +44,7 @@ from ac_platform.lead_desk import (
     owner_alerts,
     push,
     revenue_push,
+    shelf,
     simulation,
     spool,
 )
@@ -95,6 +96,7 @@ from ac_platform.lead_desk.contracts import (
     LeadSince,
     LeadSort,
     LeadsPerDay,
+    LeadsShelved,
     Me,
     MergeLeads,
     MergeView,
@@ -119,6 +121,7 @@ from ac_platform.lead_desk.contracts import (
     RecordingCall,
     RecordingCommand,
     RepRules,
+    RestoreLeads,
     ResultUndo,
     RevenueBreakdownView,
     RevenueSettingsCommand,
@@ -129,6 +132,7 @@ from ac_platform.lead_desk.contracts import (
     SeedCommand,
     SellerTargets,
     SettingsCommand,
+    ShelveLeads,
     SimulationPick,
     Soon,
     Sources,
@@ -302,11 +306,13 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         older: Literal["only"] | None = None,
         since: date | None = None,
         until: date | None = None,
+        shelf: Literal["archived", "bin"] | None = None,
     ) -> LeadPage:
         no_query(
             request,
             frozenset(
                 {
+                    "shelf",
                     "scope",
                     "stage",
                     "search",
@@ -362,6 +368,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 when=when,
                 since=since,
                 until=until,
+                shelf=shelf,
             )
 
     @router.get("/sides", response_model=SideNumbers, response_model_by_alias=True)
@@ -519,6 +526,45 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await merging.unmerge(lead_desk, merge_id, command)
+
+    @router.post("/leads/archive", response_model=LeadsShelved, response_model_by_alias=True)
+    async def archive_leads(
+        command: ShelveLeads, request: Request, response: Response
+    ) -> LeadsShelved:
+        """Owners, admins and managers archive leads: off every list, restorable (shelf.py)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await shelf.move(lead_desk, "archive", command.command_id, command.lead_ids)
+
+    @router.post("/leads/bin", response_model=LeadsShelved, response_model_by_alias=True)
+    async def bin_leads(command: ShelveLeads, request: Request, response: Response) -> LeadsShelved:
+        """Owners and admins delete leads to the Bin: restorable for 30 days (shelf.py)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await shelf.move(lead_desk, "bin", command.command_id, command.lead_ids)
+
+    @router.post("/leads/restore", response_model=LeadsShelved, response_model_by_alias=True)
+    async def restore_leads(
+        command: RestoreLeads, request: Request, response: Response
+    ) -> LeadsShelved:
+        """Bring leads back from Archived (managers too) or the Bin (owners and admins)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await shelf.move(
+                lead_desk,
+                "restore_archive" if command.from_ == "archive" else "restore_bin",
+                command.command_id,
+                command.lead_ids,
+            )
+
+    @router.post("/leads/purge", response_model=LeadsDeleted, response_model_by_alias=True)
+    async def purge_leads(
+        command: DeleteLeads, request: Request, response: Response
+    ) -> LeadsDeleted:
+        """Owners and admins delete leads in the Bin for good now (the Bin's own purge)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await shelf.purge(lead_desk, command.command_id, command.lead_ids)
 
     @router.post("/leads/delete", response_model=LeadsDeleted, response_model_by_alias=True)
     async def delete_leads(
@@ -1313,6 +1359,8 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         return {"received": outcome != "skipped", "outcome": outcome, "lead_id": lead_id}
 
     application.include_router(router)
+    # The Bin's 30-day purge (shelf.py), hourly.
+    shelf.attach(application, ctx.sessions, settings.environment)
     push.attach(application, ctx.sessions, settings.environment)
     # Leads a release's hold kept for later (lead_desk/spool.py), filed every minute.
     spool.attach(application, ctx.sessions, settings.environment, app_url=app_url())

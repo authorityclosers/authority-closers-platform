@@ -13,7 +13,7 @@ from sqlalchemy import and_, func, select
 
 from ac_platform.lead_desk.contracts import SCHEMA, Model
 from ac_platform.lead_desk.errors import DeskError
-from ac_platform.lead_desk.history import inbound_only
+from ac_platform.lead_desk.history import inbound_only, on_desk
 from ac_platform.lead_desk.models import Lead
 from ac_platform.lead_desk.vocabulary import NEEDS_FOLLOW_UP
 from ac_platform.lead_desk.work_views import in_view
@@ -28,9 +28,9 @@ COLD: Final = "cold"
 
 def on_side(side: Side) -> Any:
     """SQL for the leads on one side; an empty side reads Inbound. An old lead kept as
-    history is on neither (history.py)."""
+    history is on neither (history.py), nor is an archived or binned one (shelf.py)."""
     if side == "cold":
-        return Lead.pipeline == COLD
+        return and_(Lead.pipeline == COLD, on_desk())
     return inbound_only()
 
 

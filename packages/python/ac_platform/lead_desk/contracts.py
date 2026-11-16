@@ -180,6 +180,10 @@ class LeadRow(Model):
     no_next_action: bool = False
     # It has an email address: the card offers one-tap Email (never the address itself).
     has_email: bool = False
+    # Archive and Bin (migration 0158, shelf.py): when it was archived or moved to the Bin.
+    # Lists on the desk never hold either; a search and the Archived and Bin lists do.
+    archived_at: datetime | None = None
+    binned_at: datetime | None = None
 
 
 class MessageTemplate(Model):
@@ -473,6 +477,18 @@ class LeadsDeleted(Model):
     not_found: int
 
 
+class LeadsShelved(Model):
+    """Archive, Bin or Restore (shelf.py): the leads that moved, in the order asked, the
+    ones already where they were asked to go, and ones not here (or not yours)."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    action: Literal["archive", "bin", "restore_archive", "restore_bin"]
+    changed: int
+    unchanged: int
+    not_found: int
+    lead_ids: tuple[UUID, ...]
+
+
 class FieldValue(Model):
     label: str
     value: str
@@ -504,6 +520,9 @@ class LeadEventView(Model):
     # the lead's history says "dialled", not "called · 7s" (seller Flow 1, F2, 13 Nov 2026).
     estimated: bool | None = None
     changed: tuple[str, ...] | None = None
+    # Archive and Bin (shelf.py): "archive", "bin", "restore_archive" or "restore_bin" on an
+    # edited event; its words are in allocation_reason.
+    shelf: str | None = None
     channel: str | None = None
     template_label: str | None = None
     # A call the seller's phone logged by itself (UX study item 5): "phone", and
@@ -1751,6 +1770,22 @@ class DeleteLeads(Command):
 
 class DeleteLead(Command):
     command_id: UUID
+
+
+class ShelveLeads(Command):
+    """Archive these leads, or move them to the Bin (owner, 16 Nov 2026). One command id per
+    confirm: a retry returns the first answer and audits once. Up to 2,000 at a time."""
+
+    command_id: UUID
+    lead_ids: tuple[UUID, ...] = Field(min_length=1, max_length=2000)
+
+
+class RestoreLeads(Command):
+    """Bring leads back from Archived, or from the Bin (owners and admins)."""
+
+    command_id: UUID
+    lead_ids: tuple[UUID, ...] = Field(min_length=1, max_length=2000)
+    from_: Literal["archive", "bin"] = Field(alias="from")
 
 
 class UndoImport(Command):
