@@ -8782,3 +8782,19 @@ fieldset.form {
   flex: 0 1 auto;
   min-width: 0;
 }
+
+/* A phone: New is a dot before the time, so the name keeps its room (at 363
+   "New" and "Yesterday" left one letter of it). The word stays for screen
+   readers. */
+@media (max-width: 480px) {
+  .leadFace[data-compact] .leadNew {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    padding: 0;
+    overflow: hidden;
+    background: var(--sx-accent);
+    font-size: 0;
+    line-height: 0;
+  }
+}

@@ -95,8 +95,14 @@ export function useSeenAt(): number | null {
 
 /** Leads is open: when it closes or the app goes to the background, this
  *  visit is the last, and the next visit reads it again. */
+// A close waiting one tick: React's development double mount (and any quick
+// remount) closes Leads and opens it again at once, which is not leaving it.
+let leaving: ReturnType<typeof setTimeout> | undefined;
+
 export function useMarkSeen() {
   useEffect(() => {
+    clearTimeout(leaving);
+    leaving = undefined;
     const mark = () => {
       try {
         window.localStorage.setItem(SEEN_KEY, String(Date.now()));
@@ -110,8 +116,11 @@ export function useMarkSeen() {
     document.addEventListener("visibilitychange", hidden);
     return () => {
       document.removeEventListener("visibilitychange", hidden);
-      mark();
-      lastSeen = undefined;
+      leaving = setTimeout(() => {
+        leaving = undefined;
+        mark();
+        lastSeen = undefined;
+      }, 0);
     };
   }, []);
 }

@@ -2227,6 +2227,7 @@ export function LeadsRoute({
                         <ArrivedPick
                           more={more}
                           onChange={(next) => pickWork(next)}
+                          onPerDay={can ? () => setPerDay(true) : undefined}
                         />
                       }
                       end={

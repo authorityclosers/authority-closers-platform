@@ -22,6 +22,7 @@ import {
 import styles from "./leads.module.css";
 
 const CUSTOM = "custom";
+const PER_DAY = "per-day";
 
 /** The chip's choices, in the order of the day. */
 export const ARRIVED_WORDS: Record<Exclude<ListMade, "history">, string> = {
@@ -82,9 +83,13 @@ export function rangeOf(more: ListMore, now: Date = new Date()) {
 export function ArrivedPick({
   more,
   onChange,
+  onPerDay,
 }: {
   more: ListMore;
   onChange: (next: Partial<ListMore>) => void;
+  /** Owners and managers: Leads per day, from the date chip, since the stage
+   *  views Leads opens on have no settings gear. */
+  onPerDay?: () => void;
 }) {
   const [custom, setCustom] = useState(false);
   // Each opening starts from the range on now.
@@ -108,6 +113,7 @@ export function ArrivedPick({
             label,
           })),
           { key: CUSTOM, label: range ?? "Custom dates…" },
+          ...(onPerDay ? [{ key: PER_DAY, label: "Leads per day" }] : []),
         ]}
         all={{ label: "Any day" }}
         display={
@@ -119,7 +125,8 @@ export function ArrivedPick({
           </span>
         }
         onChange={(key) => {
-          if (key === CUSTOM) {
+          if (key === PER_DAY) onPerDay?.();
+          else if (key === CUSTOM) {
             setRound((count) => count + 1);
             setCustom(true);
           } else

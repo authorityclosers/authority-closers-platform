@@ -1641,7 +1641,11 @@ export function LeadTimeline({
                   <small>{ago(at, now)}</small>
                 </>
               ) : (
-                <small>{key === "assigned" ? "Not assigned yet" : "—"}</small>
+                <small>
+                  {key === "assigned" && !lead.owner_person_id
+                    ? "Not assigned yet"
+                    : "—"}
+                </small>
               )}
             </dd>
           </div>

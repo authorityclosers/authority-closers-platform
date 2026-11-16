@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
@@ -15,8 +15,10 @@ import {
   isNewSince,
   SEEN_KEY,
   timelineWords,
+  useMarkSeen,
+  useSeenAt,
 } from "./arrival";
-import { dayInput, rangeOf, rangeWords } from "./arrived-pick";
+import { ArrivedPick, dayInput, rangeOf, rangeWords } from "./arrived-pick";
 import { LeadLine } from "./desk-view";
 import { LeadTimeline } from "./lead-sheet";
 import type { LeadRow } from "./leads-client";
@@ -152,6 +154,20 @@ it("shows a seller only Received, and a manager the whole Timeline", async () =>
   expect(keys()).toEqual(["received", "added", "updated", "assigned"]);
   expect(host.textContent).toContain("Added to Sales X-Ray");
   expect(host.textContent).toContain("Not assigned yet");
+  // An owner with no recorded hand-over time is not "not assigned".
+  await act(async () =>
+    root.render(
+      <LeadTimeline
+        lead={{ ...row, owner_person_id: "person-1", assigned_at: null }}
+        full
+        now={NOW}
+      />,
+    ),
+  );
+  expect(host.textContent).not.toContain("Not assigned yet");
+  expect(host.querySelector('[data-timeline="assigned"] dd')?.textContent).toBe(
+    "—",
+  );
 });
 
 it("turns the date choice into the days Leads per day reads", () => {
@@ -168,4 +184,73 @@ it("turns the date choice into the days Leads per day reads", () => {
     until: "2026-11-09",
   });
   expect(rangeWords("2026-11-01", "2026-11-09")).toBe("1 Nov – 9 Nov");
+});
+
+it("offers Leads per day on the date chip only to those who may see it", async () => {
+  const onPerDay = vi.fn();
+  const onChange = vi.fn();
+  const options = async () => {
+    const chip = host.querySelector<HTMLButtonElement>(
+      'button[aria-haspopup="listbox"]',
+    );
+    await act(async () => chip?.click());
+    const found = [
+      ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+    ];
+    expect(found.length).toBeGreaterThan(0);
+    return found;
+  };
+  await act(async () =>
+    root.render(<ArrivedPick more={{}} onChange={onChange} />),
+  );
+  expect(
+    (await options()).some((o) => o.textContent?.includes("Leads per day")),
+  ).toBe(false);
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <ArrivedPick more={{}} onChange={onChange} onPerDay={onPerDay} />,
+    ),
+  );
+  const perDay = (await options()).find((o) =>
+    o.textContent?.includes("Leads per day"),
+  );
+  expect(perDay).toBeTruthy();
+  await act(async () => perDay?.click());
+  expect(onPerDay).toHaveBeenCalledTimes(1);
+  expect(onChange).not.toHaveBeenCalled();
+});
+
+it("keeps the last visit through a remount, and moves it on leaving", async () => {
+  vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+  vi.setSystemTime(NOW);
+  const before = NOW.getTime() - 3 * 86_400_000;
+  window.localStorage.setItem(SEEN_KEY, String(before));
+  forgetSeen();
+  let shown: number | null = null;
+  function Leads() {
+    useMarkSeen();
+    shown = useSeenAt();
+    return null;
+  }
+  try {
+    // Development mounts twice; New marks must survive it.
+    await act(async () =>
+      root.render(
+        <StrictMode>
+          <Leads />
+        </StrictMode>,
+      ),
+    );
+    await act(async () => vi.runAllTimers());
+    expect(shown).toBe(before);
+    expect(window.localStorage.getItem(SEEN_KEY)).toBe(String(before));
+    // Leaving Leads makes this visit the last.
+    await act(async () => root.render(<></>));
+    await act(async () => vi.runAllTimers());
+    expect(window.localStorage.getItem(SEEN_KEY)).toBe(String(NOW.getTime()));
+  } finally {
+    vi.useRealTimers();
+  }
 });
