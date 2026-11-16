@@ -624,7 +624,10 @@ function LessonScreen({
       {chosen ? (
         <div className={styles.feedback} role="status">
           <strong>{COPY.feedback}</strong>
-          <p>{chosen[1]}</p>
+          {/* His word on the option, one line each, then his small example. */}
+          {chosen[1].split("\n").map((line) => (
+            <p key={line}>{line}</p>
+          ))}
           <div className={styles.take}>{chosen[2]}</div>
           <p className={styles.mutedNote}>{COPY.compare}</p>
         </div>

@@ -2,10 +2,13 @@
 
 ``library.json`` here is the same file the app shows (apps/sales-xray-web/app/ask-dipak/
 library.json; a test keeps the two equal): his 10 categories, 150 question records with stable
-IDs and the 12 complete lessons, word for word. The API, the MCP tools and the CLI read lessons
-and search from it, so every surface teaches the same text; progress is stored only against
-these IDs, and a Next-call mission only where the question has a lesson. His internal coaching
-notes are not in it.
+IDs and a lesson for every one, imported word for word from his ten category docs by
+scripts/ask-dipak/import_dipak_docs.py (16 Nov 2026). The API, the MCP tools and the CLI read
+lessons and search from it, so every surface teaches the same text; progress is stored only
+against these IDs, and a Next-call mission only where the question has a lesson. Drafts written
+for him (the app's drafts.json) are never in it, so never served. A lesson's report and coaching
+consistency lock is for Sales X-Ray's reports and is not part of the lesson served to sellers.
+His internal coaching notes are not in it.
 """
 
 from __future__ import annotations

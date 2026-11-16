@@ -258,8 +258,12 @@ describe("Homepage", () => {
 
   it.each([
     ["PB03", "What should I do when someone says it's too expensive?"],
-    ["DM02", "What if they need to ask their wife, husband or partner?"],
-    ["OB03", "What if they say 'I'll think about it'?"],
+    // His docs' wording of the question (16 Nov 2026).
+    [
+      "DM02",
+      "What if the customer says they need to ask their wife, husband or partner?",
+    ],
+    ["OB03", "What should I say when a customer says, 'I'll think about it'?"],
   ])(
     "shows the real situation %s and opens its own lesson",
     async (id, title) => {
@@ -350,7 +354,7 @@ describe("Search", () => {
 
 describe("Interactive lessons", () => {
   it.each(Object.keys(LESSONS))(
-    "shows lesson %s whole, in Dipak's order, without his coaching note",
+    "shows lesson %s whole, in Dipak's order, without his coaching note or report lock",
     async (id) => {
       await show(`/ask-dipak?lesson=${id}`);
       const lesson = LESSONS[id];
@@ -374,6 +378,9 @@ describe("Interactive lessons", () => {
       // Three options, the bookmark and the mission.
       expect(options).toHaveLength(5);
       expect(text()).not.toContain((coach.notes as Record<string, string>)[id]);
+      // The report and coaching consistency lock is for reports, not sellers.
+      for (const line of lesson.lock ?? []) expect(text()).not.toContain(line);
+      expect(host.querySelector("[data-draft]")).toBeNull();
     },
   );
 
@@ -394,11 +401,19 @@ describe("Interactive lessons", () => {
       expect(pressed).toEqual([`${"ABC"[index]}. ${lesson.options[index][0]}`]);
       const feedback = host.querySelector('[role="status"]')?.textContent;
       expect(feedback).toContain(COPY.feedback);
-      expect(feedback).toContain(lesson.options[index][1]);
+      // Dipak's word, one paragraph per line of his, then his small example.
+      const lines = lesson.options[index][1].split("\n");
+      expect(
+        Array.from(
+          host.querySelectorAll('[role="status"] > p'),
+          (p) => p.textContent,
+        ),
+      ).toEqual([...lines, COPY.compare]);
+      expect(lines.at(-1)).toMatch(/छोटा example:/);
       expect(feedback).toContain(lesson.options[index][2]);
       expect(feedback).toContain(COPY.compare);
       for (const other of [0, 1, 2].filter((item) => item !== index))
-        expect(feedback).not.toContain(lesson.options[other][1]);
+        expect(feedback).not.toContain(lesson.options[other][1].split("\n")[0]);
     }
   });
 
@@ -455,19 +470,14 @@ describe("Interactive lessons", () => {
     expect(heading()).toBe(questionLabel(questionById(related[0])!));
   });
 
-  it("shows a drafted lesson whole, tagged as a draft for Dipak, its mission not markable", async () => {
+  it("shows the questions that were drafts as Dipak's own lessons, their missions markable", async () => {
     await show("/ask-dipak?lesson=PB05");
     expect(heading()).toBe(questionById("PB05")?.title);
-    const draft = DRAFTS.PB05;
-    expect(draft.draft_for_dipak).toBe(true);
-    expect(host.querySelector("[data-draft]")?.textContent).toBe(COPY.draftTag);
-    expect(text()).toContain(draft.quick);
-    expect(text()).toContain(draft.mission);
-    expect(text()).toContain(COPY.draftMission);
-    expect(button(COPY.markMission)).toBeUndefined();
-    // Dipak's own lessons carry no draft tag and keep their mission tick.
-    await show("/ask-dipak?lesson=PB03");
+    expect(DRAFTS.PB05).toBeUndefined();
     expect(host.querySelector("[data-draft]")).toBeNull();
+    expect(text()).toContain(LESSONS.PB05.quick);
+    expect(text()).toContain(LESSONS.PB05.mission);
+    expect(text()).not.toContain(COPY.draftMission);
     expect(button(COPY.markMission)).not.toBeUndefined();
   });
 });

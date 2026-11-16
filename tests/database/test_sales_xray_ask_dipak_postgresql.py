@@ -22,8 +22,8 @@ import httpx
 import pytest
 from sqlalchemy import func, select
 
+from ac_platform.ask_dipak import catalogue, store
 from ac_platform.ask_dipak import http as ask_http
-from ac_platform.ask_dipak import store
 from ac_platform.ask_dipak.models import SalesXrayAskDipakEvent
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
@@ -144,9 +144,13 @@ def test_a_person_saves_lessons_and_marks_missions_kept_on_their_account(
                     f"{PROGRESS}/pb03", json={"item": "saved", "on": True}, headers=WRITE
                 )
                 assert malformed.status_code == 422
-                no_lesson = await http.put(
-                    f"{PROGRESS}/PB05", json={"item": "mission", "on": True}, headers=WRITE
-                )
+                # Every question has Dipak's lesson now (16 Nov 2026); one that lost its
+                # lesson would have no mission to mark.
+                with pytest.MonkeyPatch.context() as patch:
+                    patch.setattr(store, "LESSON_IDS", catalogue.LESSON_IDS - {"PB05"})
+                    no_lesson = await http.put(
+                        f"{PROGRESS}/PB05", json={"item": "mission", "on": True}, headers=WRITE
+                    )
                 assert no_lesson.status_code == 422
                 assert "no Next-call mission" in no_lesson.json()["detail"]
                 bad_item = await http.put(
