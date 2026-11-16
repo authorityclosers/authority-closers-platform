@@ -494,9 +494,19 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     value: dict[str, Any] = {}
     for key, item in pairs:
         if key in value:
+            # GPT-6 Luna can repeat a field with the very same value (production, 16 Nov
+            # 2026: a paid C4 answer was refused for it). The same value twice says nothing
+            # new, so it is accepted; a repeated field with any other value (1 and 1.0, true
+            # and 1 included) stays refused, since which one was meant is unknown.
+            if _canonical_json(value[key]) == _canonical_json(item):
+                continue
             raise ValueError("duplicate_json_field")
         value[key] = item
     return value
+
+
+def _canonical_json(item: Any) -> str:
+    return json.dumps(item, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 
 
 def _nonfinite(_value: str) -> Any:

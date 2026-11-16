@@ -29,6 +29,7 @@ import type {
 import type { Scope } from "./list-view";
 import { Picker } from "../ui/picker";
 import styles from "./leads.module.css";
+import { rangeWords } from "./arrived-pick";
 
 export type LeadFilters = {
   who: Scope;
@@ -67,6 +68,7 @@ export const SINCE_WORDS: Record<ListSince, string> = {
 };
 export const MADE_WORDS: Record<ListMade, string> = {
   today: "Came in today",
+  yesterday: "Came in yesterday",
   week: "Came in this week",
   month: "Came in this month",
   // Old leads brought in as history: in no other list (owner, 2 Nov 2026).
@@ -176,7 +178,7 @@ export function filtersOn(filters: LeadFilters, defaultWho: Scope): number {
     (more.due ? 1 : 0) +
     (more.when && more.view !== "follow_ups" ? 1 : 0) +
     (more.contact ? 1 : 0) +
-    (more.created ? 1 : 0)
+    (more.created || more.since || more.until ? 1 : 0)
   );
 }
 
@@ -187,6 +189,9 @@ export function moreWords(more: ListMore | undefined): string[] {
     more.due ? DUE_WORDS[more.due] : null,
     more.contact ? SINCE_WORDS[more.contact] : null,
     more.created ? MADE_WORDS[more.created] : null,
+    more.since || more.until
+      ? `Came in ${rangeWords(more.since, more.until)}`
+      : null,
     more.source ? (SOURCE_WORDS[more.source] ?? more.source) : null,
     more.sort ? sortLabel(more) : null,
   ].filter((word): word is string => !!word);
@@ -284,6 +289,12 @@ function filterChips(
       key: "created",
       label: MADE_WORDS[more.created],
       clear: without("created"),
+    });
+  if (more.since || more.until)
+    chips.push({
+      key: "range",
+      label: `Came in ${rangeWords(more.since, more.until)}`,
+      clear: { ...filters, more: { ...more, since: null, until: null } },
     });
   if (more.source)
     chips.push({

@@ -471,7 +471,7 @@ def test_numeric_key_guard_still_rejects_score_bearing_identifier_tokens(key: st
 
 
 def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantics() -> None:
-    assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/14"
+    assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/15"
     # AUT-311 validator semantics remain /8; AUT-347 changes only dormant v7 generation.
     # AUT-553 enables the three P-A-confirmed dimensions and bumps the validator to /9.
     # AUT-348 adds dormant v7 storage validation; v4-v6 fixture bytes remain pinned.
@@ -489,9 +489,11 @@ def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantic
     # improvement k > 0 moves that improvement first instead of being dropped.
     # 16 Nov 2026, also /14: content-free overview_drop_errors (path:type) beside
     # overview_drops; what is admitted or dropped is unchanged.
+    # 16 Nov 2026 (/15): an OpenAI answer repeating a field with the same value is
+    # admitted (openai_tasks._unique_object); any other repeat is still refused.
     source = Path(reports_module.__file__).read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
-        "a9a784863a6f017f42388695daabc9125b0a0b5834d8979672b350a6a6c93f2b"
+        "e9bba74645cdbfbf38db8fbe83591ac42e842973a56a8bab749f2e2c55a94b6b"
     )
 
 

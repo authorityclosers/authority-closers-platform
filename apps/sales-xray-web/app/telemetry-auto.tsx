@@ -38,6 +38,7 @@ import { drainPhoneTelemetry, tellPhoneTelemetry } from "./leads/native-phone";
 import {
   deviceModel,
   measureCpu,
+  SCREEN_CHANGED_EVENT,
   screenOf,
   setActionTimer,
   telemetry,
@@ -773,6 +774,19 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
   listen("popstate", () => {
     page.current.backed = true;
   });
+
+  // A lead opened or closed on Leads changes only the address's ?lead=.
+  const changed = () => {
+    try {
+      showScreen(page, window.location.pathname);
+    } catch {
+      // Nothing to record.
+    }
+  };
+  window.addEventListener(SCREEN_CHANGED_EVENT, changed);
+  cleanups.push(() =>
+    window.removeEventListener(SCREEN_CHANGED_EVENT, changed),
+  );
 
   watchVisibility(page, cleanups);
 

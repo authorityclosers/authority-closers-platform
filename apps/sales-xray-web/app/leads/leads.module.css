@@ -214,6 +214,37 @@
   text-overflow: ellipsis;
 }
 
+/* When the lead came in, at the name line's end (owner, 16 Nov 2026): "2 h",
+   "Yesterday", "12 Oct"; New before it since the last visit. The name takes
+   the rest of the line. */
+.leadWhen {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  align-items: center;
+  margin-left: auto;
+  padding-left: 6px;
+}
+
+.leadAge {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Came in since the person last opened Leads. */
+.leadNew {
+  padding: 0 6px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent-ink);
+  font-size: var(--sx-text-2xs);
+  font-weight: 700;
+  line-height: var(--sx-leading-16);
+}
+
 .leadSub {
   overflow: hidden;
   color: var(--sx-muted);
@@ -2809,6 +2840,67 @@ a.repName {
   display: grid;
   gap: 4px;
   padding-top: 6px;
+}
+
+/* The lead's Timeline (owner, 16 Nov 2026): an icon, what happened, then the
+   date and time with how long ago under it. */
+.timeline {
+  display: grid;
+  gap: 4px;
+  padding: 12px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.timelineTitle {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.timelineRows {
+  display: grid;
+  margin: 0;
+}
+
+.timelineRows > div {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 8px 0;
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.timelineRows > div:first-child {
+  border-top: 0;
+}
+
+.timelineRows svg {
+  margin-top: 2px;
+  color: var(--sx-muted);
+}
+
+.timelineRows dt {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.timelineRows dd {
+  display: grid;
+  justify-items: end;
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.timelineRows small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
 }
 
 .editForm {
@@ -6745,7 +6837,7 @@ button.leadTags {
    One compact row; Reassign opens its own sheet. */
 /* In the lead's sheet these are sections on the sheet, parted by a
    hairline, not cards inside it (native-feel spec, 3 Nov 2026). */
-[data-sheet-body] :is(.panel, .ownerLine) {
+[data-sheet-body] :is(.panel, .ownerLine, .timeline) {
   padding-inline: 0;
   border: 0;
   border-top: 1px solid var(--sx-hairline);
@@ -8161,6 +8253,14 @@ fieldset.form {
   overflow: visible;
 }
 
+/* The end of the list on a phone (owner, 16 Nov 2026: it felt "boxy" or
+   hinged): no stretch or bounce past the last row, so the pinned head and the
+   Call band never move apart from the rows. Pull to refresh is the page's own
+   touch handling, not the browser's. */
+:global(html):has(.root[data-tab]) {
+  overscroll-behavior-y: none;
+}
+
 /* Line 2: the stage's dot and name, then the source. A long source wraps
    (it ran under Call at 363), and what wraps starts under the stage's name,
    as line 3 does. */
@@ -8613,4 +8713,88 @@ fieldset.form {
    keeps one line at 363 (Leads part 05 follow-up). */
 .leadFace[data-compact] .leadWhy {
   font-size: var(--sx-text-xs);
+}
+
+/* When the leads came in (owner, 16 Nov 2026): the custom range's two days,
+   and Leads per day, one bar a day. */
+.arrivedDates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.perDay {
+  display: grid;
+  gap: 8px;
+}
+
+.perDayHead {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.perDayHead strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+}
+
+.perDayBars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 140px;
+  padding-bottom: 1px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.perDayBar {
+  flex: 1 1 0;
+  min-width: 2px;
+  min-height: 2px;
+  border-radius: 4px 4px 0 0;
+  background: var(--sx-accent);
+}
+
+.perDayBar[data-empty] {
+  background: var(--sx-line);
+}
+
+.perDayBar:hover {
+  background: var(--sx-accent-ink);
+}
+
+.perDayAxis {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+/* The name line holds the name and when it came in (owner, 16 Nov 2026). */
+.leadFace[data-compact] .leadName {
+  display: flex;
+  align-items: center;
+}
+
+.leadFace[data-compact] .leadNameText {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* A phone: New is a dot before the time, so the name keeps its room (at 363
+   "New" and "Yesterday" left one letter of it). The word stays for screen
+   readers. */
+@media (max-width: 480px) {
+  .leadFace[data-compact] .leadNew {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    padding: 0;
+    overflow: hidden;
+    background: var(--sx-accent);
+    font-size: 0;
+    line-height: 0;
+  }
 }

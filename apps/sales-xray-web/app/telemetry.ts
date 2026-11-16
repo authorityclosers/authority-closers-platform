@@ -952,6 +952,16 @@ const SCREENS: Record<string, Screen> = {
 };
 
 /** The screen a page is (the server's SCREENS); a lead open on Leads is "lead". */
+/** A screen changed without the path changing (a lead opened or closed on
+ *  Leads, ?lead=): the screen view is recorded again (owner, 16 Nov 2026: see
+ *  that a phone is on the lead page). */
+export const SCREEN_CHANGED_EVENT = "sx:screen-changed";
+
+export function screenChanged() {
+  if (typeof window !== "undefined")
+    window.dispatchEvent(new Event(SCREEN_CHANGED_EVENT));
+}
+
 export function screenOf(pathname: string, search = ""): Screen {
   const template = routeTemplate(pathname);
   const screen = (template && SCREENS[template]) || "other";
