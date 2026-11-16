@@ -6,6 +6,7 @@ import { useWorkspaceAccess } from "./workspace-access";
 import { getShellState, updateShellState } from "./shell/shell-store";
 import type { SalesXrayWorkspaceChoices } from "./sales-xray-workspaces";
 import { notify } from "./notice-center";
+import { onWorkspaceChange } from "./workspace-change";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/analysis/new",
@@ -386,6 +387,42 @@ it("opens the picker with the note when several workspaces are left", async () =
       message: "Pick a workspace to carry on.",
     }),
   ]);
+});
+
+it("changes nothing once the frame is gone mid-switch", async () => {
+  // Release PR 631 (17 Nov 2026): a switch resumed after its test page was
+  // gone, and React found no window. A late answer now ends it quietly.
+  await mount();
+  let answer!: (response: Response) => void;
+  const late = new Promise<Response>((resolve) => {
+    answer = resolve;
+  });
+  const usual = fetcher.getMockImplementation() as (
+    path: string,
+    init?: RequestInit,
+  ) => Promise<Response>;
+  fetcher.mockImplementation((path: string, init?: RequestInit) =>
+    path === "/v1/context" ? late : usual(path, init),
+  );
+  const stages: boolean[] = [];
+  const stop = onWorkspaceChange((landed) => stages.push(landed));
+  await act(async () => button("Current workspace: Personal").click());
+  const item = [
+    ...host.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]'),
+  ].find((el) => el.textContent?.includes("Closers Academy"))!;
+  await act(async () => item.click());
+  await act(async () => item.click());
+  expect(stages).toEqual([false]);
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  vi.mocked(notify).mockClear();
+  answer(Response.json({}, { status: 500 }));
+  for (let turn = 0; turn < 5; turn += 1)
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  stop();
+  // No "stayed", no "Couldn't switch workspace" from a frame that's gone.
+  expect(stages).toEqual([false]);
+  expect(notify).not.toHaveBeenCalled();
 });
 
 it("moves off the workspace on screen as soon as an answer says it ended", async () => {
