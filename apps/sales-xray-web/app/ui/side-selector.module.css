@@ -277,3 +277,17 @@
 .selector[data-tone="home"] .option:active {
   transform: scale(0.97);
 }
+
+/* A narrow phone or large text (owner, 16 Nov 2026, a test phone: the chosen
+   side's icon and the "s" of Leads ran past its pill): the gap, the padding and
+   the words step down to fit the pill; at a phone's own text size, as before. */
+.selector[data-tone="home"] {
+  container-type: inline-size;
+}
+
+.selector[data-tone="home"] .option {
+  min-width: 0;
+  gap: min(10px, 2.8cqi);
+  padding: 0 min(12px, 3cqi);
+  font-size: min(var(--sx-text-sm), 4.8cqi);
+}

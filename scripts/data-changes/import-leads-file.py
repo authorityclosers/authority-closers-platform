@@ -25,6 +25,15 @@ stage is nobody's move today (no actor, source "import"); a Lost one reads "Impo
 notes go on its lead whether the row made it or repeated it. ``actor_email`` (default: the
 approver) is the person the leads' history names, e.g. a workspace's owner whose own sheet it
 is; the audit event still names the approver (and ``approver``, the words of the approval).
+A batch may say ``"assign": "none"``: its new leads wait in the no-owner pool, whatever the
+side (Wise Life and iSolar, 17 Nov 2026: the sheets name no seller who is on the team; the
+owner gives them out). With no batch for a seller, ``seller_email`` may be left out. A batch
+may say ``"merge": "existing"``: each row must be a lead already here (by phone, else email);
+the lead comes back as it is (no "asked again", no new owner, no move to To call), the row's
+notes go on it, and the row's own ``_stage`` is set only while the lead is still at its
+pipeline's first stage, so a lead someone has worked is never moved. A row with no lead here is
+counted (``not_here``) and left out. A new lead keeps its form time (``created_time``) as when
+it was received.
 Nothing is sent to any lead. The source is "csv" with the label given: imports never reach
 Meta's conversions API, which only sends leads Meta delivered.
 
@@ -60,7 +69,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from ac_platform.application.settings import get_settings
 from ac_platform.audit.service import append_audit_event
 from ac_platform.identity.models import Person
-from ac_platform.lead_desk.capture import extract
+from ac_platform.lead_desk.capture import ALIASES, extract, key
 from ac_platform.lead_desk.history import HISTORY
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.models import Lead, LeadEvent, LeadPipeline, LeadRep
@@ -74,6 +83,8 @@ RECEIVED: Final = "Received on the form"
 TYPED: Final = "Received date typed into the sheet"
 CITY_AS_WRITTEN: Final = "City as written"
 SIDES: Final = frozenset({"live", "cold", HISTORY})
+ASSIGNS: Final = frozenset({"seller", "none"})
+MERGES: Final = frozenset({"new", "existing"})
 # A row's own instructions, never stored as its answers.
 ROW_STAGE: Final = "_stage"
 ROW_NOTES: Final = "_notes"
@@ -83,6 +94,24 @@ EXCEL_EPOCH: Final = datetime(1899, 12, 30, tzinfo=UTC)
 # Spellings of a city seen in forms, as the city is called.
 CITY_SPELLINGS: Final = {"pume": "Pune", "pube": "Pune", "poona": "Pune"}
 EMAIL_HINTS: Final = re.compile(r"(@(gamil|gmial|gmai|gmal|gnail|gmail\.con)\b)|(^www\.)")
+# A sheet's header cells, as ``key`` spells them. A row made mostly of them is the sheet's
+# own header (a tab with a title row above it), never a lead (Nature Solutions, 16 Nov
+# 2026: a header row went in as a lead named "Sr.No").
+HEADER_CELLS: Final = frozenset(
+    {
+        "sr_no",
+        "s_no",
+        "sl_no",
+        "serial_no",
+        *(alias for names in ALIASES.values() for alias in names),
+    }
+)
+
+
+def header_row(record: dict[str, str]) -> bool:
+    """Whether a row is the sheet's own header: most of its cells are header names."""
+    cells = [key(value) for value in record.values() if str(value).strip()]
+    return bool(cells) and 2 * sum(cell in HEADER_CELLS for cell in cells) > len(cells)
 
 
 def _input(path: str) -> dict[str, Any]:
@@ -334,7 +363,19 @@ async def run(
     if mode == "read":
         await db.execute(text("SET TRANSACTION READ ONLY"))
     tenant_id = await _tenant(db, str(spec["tenant"]))
-    seller = await _person(db, str(spec["seller_email"]))
+    sides = [str(batch.get("side") or "live") for batch in batches]
+    assigns = [str(batch.get("assign") or "seller") for batch in batches]
+    merges = [str(batch.get("merge") or "new") for batch in batches]
+    if any(side not in SIDES for side in sides):
+        raise SystemExit(json.dumps({"refused": "side_not_known"}))
+    if any(a not in ASSIGNS for a in assigns) or any(m not in MERGES for m in merges):
+        raise SystemExit(json.dumps({"refused": "assign_or_merge_not_known"}))
+    # A seller is needed only by a batch whose new leads go to one.
+    wants_seller = any(
+        assign == "seller" and side != HISTORY and merge == "new"
+        for assign, side, merge in zip(assigns, sides, merges, strict=True)
+    )
+    seller = await _person(db, str(spec["seller_email"])) if spec.get("seller_email") else None
     approver = await _person(db, str(spec["approver_email"]))
     actor = await _person(db, str(spec.get("actor_email") or spec["approver_email"]))
     report: dict[str, Any] = {
@@ -347,22 +388,21 @@ async def run(
         report["status"] = "read"
         report["after"] = await _readback(db, tenant_id, labels)
         return report
-    if seller is None or approver is None or actor is None:
+    if approver is None or actor is None or (wants_seller and seller is None):
         raise SystemExit(json.dumps({"refused": "person_not_found", **report}))
-    member = await db.scalar(
-        select(Membership.role).where(
-            Membership.tenant_id == tenant_id,
-            Membership.person_id == seller.id,
-            Membership.status == "active",
-            Membership.ended_at.is_(None),
+    member = None
+    if seller is not None:
+        member = await db.scalar(
+            select(Membership.role).where(
+                Membership.tenant_id == tenant_id,
+                Membership.person_id == seller.id,
+                Membership.status == "active",
+                Membership.ended_at.is_(None),
+            )
         )
-    )
-    if member is None:
-        raise SystemExit(json.dumps({"refused": "seller_not_an_active_member", **report}))
+        if member is None:
+            raise SystemExit(json.dumps({"refused": "seller_not_an_active_member", **report}))
     pipelines: list[str] = []
-    sides = [str(batch.get("side") or "live") for batch in batches]
-    if any(side not in SIDES for side in sides):
-        raise SystemExit(json.dumps({"refused": "side_not_known"}))
     for batch in batches:
         wanted = str(batch.get("pipeline") or "main")
         pipeline_found = (
@@ -401,8 +441,9 @@ async def run(
         unknown = sorted(name for name in named if lists[key].stage_for(name) is None)
         if unknown:
             raise SystemExit(json.dumps({"refused": "stage_not_on_list", "stages": unknown}))
-    rep = await db.get(LeadRep, (tenant_id, seller.id))
-    report["seller_rules"] = {"role": member, "taking_leads": rep.available if rep else True}
+    if seller is not None:
+        rep = await db.get(LeadRep, (tenant_id, seller.id))
+        report["seller_rules"] = {"role": member, "taking_leads": rep.available if rep else True}
     report["auto_reassign"] = {
         "on": bool(config.get("auto_reassign")),
         "minutes": config.get("reassign_minutes"),
@@ -420,7 +461,14 @@ async def run(
     queue.sort(key=lambda item: (item[0], item[1], item[2]))
     counts: dict[str, Counter[str]] = {label: Counter() for label in labels}
     flags: dict[str, dict[str, list[int]]] = {
-        label: {"repeat_by_email": [], "email_hint": [], "date_typed": []} for label in labels
+        label: {
+            "repeat_by_email": [],
+            "email_hint": [],
+            "date_typed": [],
+            "header_row": [],
+            "not_here": [],
+        }
+        for label in labels
     }
     for _, number, index, record, raw in queue:
         label, pipeline, side = labels[number], pipelines[number], sides[number]
@@ -429,12 +477,32 @@ async def run(
             # This run's row went in before (a repeat's history line): never twice.
             counts[label]["done_before"] += 1
             continue
+        if header_row(record):
+            flags[label]["header_row"].append(index)
+            counts[label]["header_row"] += 1
+            continue
         found = extract(record, mapping, default_country=config["default_country"])
         if found.email and EMAIL_HINTS.search(found.email):
             flags[label]["email_hint"].append(index)
         if TYPED in record:
             flags[label]["date_typed"].append(index)
-        if found.email:
+        existing = merges[number] == "existing"
+        if existing:
+            # Only a lead already here: by its phone, else (no phone) its email.
+            here = None
+            if found.phone:
+                here = await db.scalar(
+                    select(Lead.id).where(Lead.tenant_id == tenant_id, Lead.phone == found.phone)
+                )
+            elif found.email:
+                here = await db.scalar(
+                    select(Lead.id).where(Lead.tenant_id == tenant_id, Lead.email == found.email)
+                )
+            if here is None:
+                flags[label]["not_here"].append(index)
+                counts[label]["not_here"] += 1
+                continue
+        elif found.email:
             # The app dedupes by phone; a different number with an email already on a lead
             # is the same person, left out and counted.
             same = await db.scalar(
@@ -449,24 +517,58 @@ async def run(
                 counts[label]["repeat_by_email"] += 1
                 continue
         history = side == HISTORY
+        # Old leads kept as history are given to nobody, as in the app's own import; so
+        # are a no-owner batch's.
+        to_seller = not history and assigns[number] == "seller" and seller is not None
+        moment, _ = received_at(raw.get("created_time"))
         lead, outcome = await desk.ingest(
             record,
             source="csv",
             source_label=label,
             source_ref=content_ref(record),
             mapping=mapping,
-            # Old leads kept as history are given to nobody, as in the app's own import.
-            assign="none" if history else "person",
-            person_id=None if history else seller.id,
+            assign="person" if to_seller else "none",
+            person_id=seller.id if to_seller and seller is not None else None,
             actor=actor.id,
             pipeline=pipeline,
             command_id=step,
             side=HISTORY if history else None,
+            received_at=moment,
+            as_is=existing,
         )
+        if existing and outcome == "repeat":
+            outcome = "merged"
         counts[label][outcome] += 1
-        if lead is None or outcome not in ("created", "repeat"):
+        if lead is None or outcome not in ("created", "repeat", "merged"):
             continue
         wanted = raw.get(ROW_STAGE) or batches[number].get("stage")
+        if outcome == "merged" and raw.get(ROW_STAGE):
+            which = lead.pipeline_key or "main"
+            if which not in lists:
+                lists[which] = await journeys.read(db, tenant_id, which)
+            journey = lists[which]
+            stage = journey.stage_for(str(raw[ROW_STAGE]))
+            at = journey.resolve(lead.stage, lead.step)
+            # Only a lead nobody has moved yet: the sheet never undoes work done here.
+            if (
+                stage is not None
+                and (at is None or at.kind == "new")
+                and (at is None or at.key != stage.key)
+                and await desk._command_seen(uuid5(step, "stage")) is None
+            ):
+                desk.to_stage(
+                    lead,
+                    journey,
+                    stage,
+                    note=None,
+                    command_id=uuid5(step, "stage"),
+                    source="import",
+                    via="api",
+                    actor=None,
+                )
+                counts[label]["staged"] += 1
+            elif stage is not None:
+                counts[label]["stage_kept"] += 1
         if outcome == "created":
             lead.pipeline = side
             journey = lists[pipeline]
@@ -490,19 +592,24 @@ async def run(
             if not words:
                 continue
             dated = note.get("at")
+            noted = uuid5(step, f"note:{place}")
+            # A merged row leaves no event of its own: its notes say whether it went in.
+            if existing and await desk._command_seen(noted) is not None:
+                counts[label]["notes_before"] += 1
+                continue
             desk._event(
                 lead,
                 "note",
                 {"note": words, "source": "import"},
                 actor=actor.id,
-                command_id=uuid5(step, f"note:{place}"),
+                command_id=noted,
                 at=datetime.fromisoformat(dated) if dated else None,
             )
             counts[label]["notes"] += 1
     await db.flush()
     total = sum((counter for counter in counts.values()), Counter())
     # A run that changed nothing (a rerun) leaves no audit event.
-    report["audited"] = bool(total["created"] + total["repeat"] + total["notes"])
+    report["audited"] = bool(total["created"] + total["repeat"] + total["notes"] + total["staged"])
     if report["audited"]:
         await append_audit_event(
             db,
@@ -521,7 +628,7 @@ async def run(
                     {"label": label, "pipeline": pipeline, "counts": dict(counts[label])}
                     for label, pipeline in zip(labels, pipelines, strict=True)
                 ],
-                "seller_person_id": str(seller.id),
+                "seller_person_id": str(seller.id) if seller is not None else None,
                 "approver": spec.get("approver"),
                 "counts": dict(total),
             },

@@ -533,6 +533,7 @@ export function StageChips({
   counts = null,
   onChange,
   end = null,
+  after = null,
 }: {
   stages: readonly StageView[];
   side: Side;
@@ -542,6 +543,8 @@ export function StageChips({
   counts?: Readonly<Record<string, number>> | null;
   onChange: (key: string | null) => void;
   end?: ReactNode;
+  /** Beside All stages: when the leads came in (owner, 16 Nov 2026). */
+  after?: ReactNode;
 }) {
   const total = counts
     ? Object.values(counts).reduce((sum, count) => sum + count, 0)
@@ -572,25 +575,28 @@ export function StageChips({
       value={value ?? ALL_STAGES}
       onChange={(key) => onChange(key === ALL_STAGES ? null : key)}
       start={
-        <Picker
-          variant="chip"
-          title="Pipeline stage"
-          value={value}
-          options={stageOptions(stages, side, value, counts)}
-          all={{ label: "All stages", count: total }}
-          onChange={onChange}
-          display={
-            <span>
-              All stages
-              {total !== null ? (
-                <>
-                  {" "}
-                  <span className={styles.stageCount}>{tabCount(total)}</span>
-                </>
-              ) : null}
-            </span>
-          }
-        />
+        <>
+          <Picker
+            variant="chip"
+            title="Pipeline stage"
+            value={value}
+            options={stageOptions(stages, side, value, counts)}
+            all={{ label: "All stages", count: total }}
+            onChange={onChange}
+            display={
+              <span>
+                All stages
+                {total !== null ? (
+                  <>
+                    {" "}
+                    <span className={styles.stageCount}>{tabCount(total)}</span>
+                  </>
+                ) : null}
+              </span>
+            }
+          />
+          {after}
+        </>
       }
       end={end}
       format={tabCount}

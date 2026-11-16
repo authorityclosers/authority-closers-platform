@@ -86,6 +86,9 @@ import type { LeadIntent } from "./lead-sheet";
 import { publishBadge } from "./leads-badge";
 import { useImportAsked } from "./import-asked";
 import { LeadsMenu, type LeadsMenuItem } from "./leads-menu";
+import { ArrivedPick, LeadsPerDaySheet } from "./arrived-pick";
+import { useMarkSeen } from "./arrival";
+import { screenChanged } from "../telemetry";
 
 import { useNudgeCard } from "./nudge-card";
 import { StartWhenAsked } from "./start-when-asked";
@@ -201,6 +204,8 @@ function writeLeadAddress(leadId: string | null) {
     "",
     `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
   );
+  // The lead page is its own screen in the app's analytics.
+  screenChanged();
 }
 function storedToCall(contextKey: string): string | null {
   if (typeof window === "undefined") return null;
@@ -307,7 +312,8 @@ function viewHref(
 
 const DUE = new Set(["late", "today", "week", "none"]);
 const SINCE = new Set(["today", "week", "month", "never"]);
-const MADE = new Set(["today", "week", "month", "history"]);
+const MADE = new Set(["today", "yesterday", "week", "month", "history"]);
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const SORTS = new Set(["next_action", "last_contact", "name", "created"]);
 const SIDE_KEYS = new Set(["inbound", "cold"]);
 const VIEW_KEYS = new Set(["to_call", "follow_ups", "all"]);
@@ -332,6 +338,8 @@ function moreFrom(params: { get: (key: string) => string | null }): ListMore {
     due: pick("due", DUE) as ListDue | null,
     contact: pick("contact", SINCE) as ListSince | null,
     created: pick("created", MADE) as ListMade | null,
+    since: DAY.test(params.get("since") ?? "") ? params.get("since") : null,
+    until: DAY.test(params.get("until") ?? "") ? params.get("until") : null,
     sort,
     order: sort && (order === "asc" || order === "desc") ? order : null,
   };
@@ -579,6 +587,10 @@ export function LeadsRoute({
   const [pastedRows, setPastedRows] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Leads per day (owners and managers); leaving Leads ends the visit New
+  // marks count from.
+  const [perDay, setPerDay] = useState(false);
+  useMarkSeen();
   // Share out leads (owners and managers, Lead OS's distribute).
   const [sharing, setSharing] = useState(false);
   // The current tab's first lead: Start calling opens it.
@@ -1617,7 +1629,14 @@ export function LeadsRoute({
     !!query ||
     (sees && scopeChoice !== null && scopeChoice !== "team") ||
     !!sellerOwner ||
-    !!(more.source || more.due || more.contact || more.created) ||
+    !!(
+      more.source ||
+      more.due ||
+      more.contact ||
+      more.created ||
+      more.since ||
+      more.until
+    ) ||
     !!more.step ||
     (!!more.when && workView !== "follow_ups");
   // Clearing filters keeps the side, the work view and its Follow-ups split.
@@ -1789,6 +1808,20 @@ export function LeadsRoute({
               setSettingsOpen(false);
               leavingOverlay();
               router.push(settingsPath("sources"));
+            },
+          },
+        ]
+      : []),
+    ...(can
+      ? [
+          {
+            // When leads came in, day by day (owner, 16 Nov 2026).
+            key: "per-day",
+            label: "Leads per day",
+            note: "How many came in each day",
+            onPick: () => {
+              setSettingsOpen(false);
+              setPerDay(true);
             },
           },
         ]
@@ -2190,6 +2223,13 @@ export function LeadsRoute({
                               ?.key ?? null)
                       }
                       onChange={(step) => pickWork({ step })}
+                      after={
+                        <ArrivedPick
+                          more={more}
+                          onChange={(next) => pickWork(next)}
+                          onPerDay={can ? () => setPerDay(true) : undefined}
+                        />
+                      }
                       end={
                         <>
                           {wide ? (
@@ -2529,10 +2569,21 @@ export function LeadsRoute({
           onClose={() => setSettingsOpen(false)}
           items={menuItems}
         />
+        {can ? (
+          <LeadsPerDaySheet
+            open={perDay}
+            onClose={() => setPerDay(false)}
+            more={more}
+            side={more.side ?? null}
+          />
+        ) : null}
         {can && sharing ? (
           <ShareOut
             open={sharing}
-            target={{ kind: "unassigned", count: desk.counts.unassigned ?? 0 }}
+            target={{
+              kind: "unassigned",
+              count: desk.counts.unassigned ?? 0,
+            }}
             onClose={() => setSharing(false)}
             onDone={() => {
               setSharing(false);

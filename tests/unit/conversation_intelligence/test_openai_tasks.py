@@ -142,6 +142,23 @@ def test_responses_decoder_rejects_duplicate_and_nonfinite_json() -> None:
             decode_openai_object(_complete_response(text), expected_model="gpt-6-luna")
 
 
+def test_a_field_repeated_with_the_same_value_is_accepted_and_any_other_refused() -> None:
+    """Production, 16 Nov 2026: a paid Luna C4 answer was refused for a repeated field."""
+    same = '{"a":1,"a":1,"b":{"c":["x",{"d":true}],"c":["x",{"d":true}]},"e":"é","e":"é"}'
+    decoded = decode_openai_object(_complete_response(same), expected_model="gpt-6-luna")
+    assert decoded == {"a": 1, "b": {"c": ["x", {"d": True}]}, "e": "é"}
+    for text in (
+        '{"a":1,"a":2}',
+        '{"a":1,"a":1.0}',
+        '{"a":true,"a":1}',
+        '{"a":"1","a":1}',
+        '{"b":{"c":1},"b":{"c":1,"d":2}}',
+        '{"b":[1,2],"b":[2,1]}',
+    ):
+        with pytest.raises(OpenAITaskError, match="openai_response_json_invalid"):
+            decode_openai_object(_complete_response(text), expected_model="gpt-6-luna")
+
+
 @pytest.mark.parametrize("reported", [None, "", "gpt-6-sol", "gpt-6-luna-2099-01-01", 123])
 def test_returned_model_must_match_the_exact_approved_route(reported: object) -> None:
     response = _complete_response()

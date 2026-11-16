@@ -148,6 +148,10 @@ class LeadRow(Model):
     # When the person sent it, when its source said and it differs from created_at (0139):
     # "Sent 3 Oct, brought in today".
     received_at: datetime | None = None
+    # The lead page's Timeline (owner, 16 Nov 2026: "when it was added to the platform, when
+    # it was updated"): the last change to the lead and when its owner was given it.
+    updated_at: datetime | None = None
+    assigned_at: datetime | None = None
     attempts: int
     calls: int
     last_result: str | None
@@ -370,7 +374,9 @@ LeadSort = Literal["next_action", "last_contact", "name", "created"]
 LeadDue = Literal["late", "today", "week", "none"]
 LeadSince = Literal["today", "week", "month", "never"]
 # "history": old leads brought in as history, which no other filter lists (2 Nov 2026).
-LeadMade = Literal["today", "week", "month", "history"]
+# "yesterday": the business's day before today (owner, 16 Nov 2026: a date filter beside the
+# stages, by when each lead came in).
+LeadMade = Literal["today", "yesterday", "week", "month", "history"]
 WorkDay = Literal["today", "yesterday", "week", "recent"]
 
 
@@ -420,6 +426,21 @@ class LeadPage(Model):
     # Each work view's count ("to_call", "follow_ups", "all") for the same filters, on a
     # side's first page: the work views' tabs (competitor teardown #9).
     view_counts: dict[str, int] = Field(default_factory=dict)
+
+
+class DayCount(Model):
+    # The business's day (India time) and the leads that came in on it.
+    day: date
+    count: int
+
+
+class LeadsPerDay(Model):
+    """Leads that came in each day, by when the person sent them (owner, 16 Nov 2026: "when
+    did this lead actually generate?"); owners and managers only."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    days: tuple[DayCount, ...]
+    total: int
 
 
 class BulkDone(Model):
