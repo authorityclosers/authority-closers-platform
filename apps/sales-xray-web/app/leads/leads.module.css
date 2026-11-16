@@ -8798,3 +8798,12 @@ fieldset.form {
     line-height: 0;
   }
 }
+
+/* The laptop table takes the page's width (the owner's pick M2-A, 17 Nov
+   2026; study 02 §5 M2: "the main column grows to the window"): Leads' own
+   side padding goes, so at 1280 the table has 882 px and every column. */
+@media (min-width: 900px) {
+  .root:has([data-wide-table]) {
+    padding-inline: 0;
+  }
+}

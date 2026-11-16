@@ -97,15 +97,18 @@ it("shows each lead on one line, with names capitalised and the columns asked fo
     "Pipeline",
     "Owner",
     "Source",
-    "Next action",
+    "Next step",
     "Last call",
+    "Created",
   ]);
   const first = host.querySelector("tbody tr")!;
   expect(first.textContent).toContain("Meera Fictional");
   expect(first.textContent).toContain("Fictional Homes");
   expect(first.textContent).toContain("•• 3210");
   expect(first.textContent).toContain("Enrolment");
-  expect(first.textContent).toContain("Swamini Fictional");
+  // The owner as a small avatar and a first name (pick M2-A, 17 Nov 2026).
+  expect(first.textContent).toContain("Swamini");
+  expect(first.querySelector('[title="Swamini Fictional"]')).not.toBeNull();
   expect(first.textContent).toContain("Busy · 2 calls");
   const second = host.querySelectorAll("tbody tr")[1];
   expect(second.textContent).toContain("No number");
@@ -146,8 +149,9 @@ it("leaves out Owner on my own leads and Pipeline with one pipeline", async () =
     "Phone",
     "Stage",
     "Source",
-    "Next action",
+    "Next step",
     "Last call",
+    "Created",
   ]);
 });
 
@@ -173,9 +177,10 @@ it("shows and hides columns from the picker", async () => {
     "Name",
     "Stage",
     "Source",
-    "Next action",
+    "Next step",
     "Last call",
     "Reason",
+    "Created",
   ]);
   // Kept for this browser; the next test starts from the first columns.
   expect(window.localStorage.getItem("sx-leads-table-columns")).toContain(
@@ -358,7 +363,7 @@ it("opens the columns that don't fit under a row, without opening the lead", asy
     expect(host.querySelectorAll("tbody tr")[1].textContent).toContain(
       "No next step",
     );
-    expect(host.textContent).toContain("3 more columns under each row");
+    expect(host.textContent).toContain("4 more columns under each row");
     // No pencil beside a narrow name: renaming is on the lead page.
     expect(host.querySelector('[aria-label^="Rename"]')).toBeNull();
     const more = host.querySelector<HTMLButtonElement>(
@@ -370,7 +375,7 @@ it("opens the columns that don't fit under a row, without opening the lead", asy
     const under = host.querySelector(`#more-${id(1)}`)!;
     expect(
       Array.from(under.querySelectorAll("dt"), (term) => term.textContent),
-    ).toEqual(["Phone", "Source", "Last call"]);
+    ).toEqual(["Phone", "Source", "Last call", "Created"]);
     expect(under.textContent).toContain("•• 3210");
     // Only that row opened; the name still opens the lead.
     expect(host.querySelector(`#more-${id(2)}`)).toBeNull();

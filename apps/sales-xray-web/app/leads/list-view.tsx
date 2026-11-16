@@ -43,6 +43,23 @@ import { useBackClose } from "../ui/back-close";
 import { useListLoadWatch } from "./load-watch";
 import { triedLately } from "./call-round";
 import { Button } from "../ui/kit";
+import { haptic } from "../ui/haptics";
+import {
+  PhoneDock,
+  PhoneSelectTop,
+  ScopeBanner,
+  ShelfSheet,
+  TableBulkBar,
+  UNDONE_EVENT,
+  filterOf,
+  readLoadsSoon,
+  sayTagsLater,
+  selectionCount,
+  useDeskSelect,
+  useWideList,
+  type ManageActions,
+  type Selection,
+} from "./manage-bar";
 import { LoadingRows } from "./leads-skeleton";
 import {
   DeleteLeadsSheet,
@@ -59,6 +76,7 @@ import {
 } from "./day-groups";
 import { InlineEmpty, LeadLine, stepLine, type RowActions } from "./desk-view";
 import {
+  BULK_JOB_LIMIT,
   DELETE_LIMIT,
   LeadsError,
   readLeads,
@@ -303,6 +321,11 @@ const LeadsTable = dynamic(
   { ssr: false },
 );
 
+const LoadAssignSheet = dynamic(
+  () => import("./load-assign-sheet").then((m) => m.LoadAssignSheet),
+  { ssr: false },
+);
+
 export type Scope = "mine" | "team" | "unassigned";
 
 /** Test and sample leads in every stage, easy to clear (owners and admins). */
@@ -312,14 +335,14 @@ const NONE: ReadonlyMap<string, string> = new Map();
 /** List or Table, remembered per person and workspace on this device. */
 type Layout = "list" | "table";
 const layoutKey = (owner: string) => `sx:leads-layout:${owner}`;
-function storedLayout(owner: string | undefined): Layout {
-  if (!owner || typeof window === "undefined") return "list";
+/** The person's own choice, or null: a wide screen opens the table (M2-A). */
+function storedLayout(owner: string | undefined): Layout | null {
+  if (!owner || typeof window === "undefined") return null;
   try {
-    return window.localStorage.getItem(layoutKey(owner)) === "table"
-      ? "table"
-      : "list";
+    const kept = window.localStorage.getItem(layoutKey(owner));
+    return kept === "table" ? "table" : kept === "list" ? "list" : null;
   } catch {
-    return "list";
+    return null;
   }
 }
 
@@ -471,7 +494,13 @@ export function ListView({
   );
   if (layout.owner !== layoutOwner)
     setLayout({ owner: layoutOwner, value: storedLayout(layoutOwner) });
-  const asTable = hydrated && layout.value === "table";
+  // Unchosen, a computer wide enough for the table opens it (the owner's pick
+  // M2-A, 17 Nov 2026: "a huge requirement for this update"); List stays one
+  // click away and is remembered once chosen.
+  const wideList = useWideList();
+  const asTable =
+    hydrated &&
+    (layout.value === "table" || (layout.value === null && wideList));
   // The page gives a table the whole width until a lead opens (owner, 31 Oct 2026).
   const tableTold = useRef(onTable);
   useLayoutEffect(() => {
@@ -544,10 +573,21 @@ export function ListView({
     question: string;
     leads: ReadonlyMap<string, string>;
   } | null>(null);
+  // The work views manage leads (picks M1, M2, 17 Nov 2026): the laptop bar or
+  // the phone's top bar and dock, "all N matching", Archive, the Bin, Undo.
+  // Test leads keep their own Select and Delete.
+  const managed = canManage && stage === OPENING_STAGE;
+  const desk = useDeskSelect();
+  // "Select all 522 in To Call": the list's question it was asked in.
+  const [everyMatch, setEveryMatch] = useState<string | null>(null);
+  const clearPicks = () => {
+    setPicked(null);
+    setEveryMatch(null);
+  };
   // Back clears a selection first and stays on Leads, as Back closes a sheet
   // (orchestrator, 3 Nov 2026: on the Redmi it left Leads for the page before).
   useBackClose(selecting, () => {
-    setPicked(null);
+    clearPicks();
     setSelecting(false);
   });
   const [loadingAll, setLoadingAll] = useState(false);
@@ -556,12 +596,18 @@ export function ListView({
   const [bulk, setBulk] = useState<{
     round: number;
     open: boolean;
-    step?: "assign" | "stage";
+    step?: "assign" | "stage" | "whatsapp";
   } | null>(null);
   const [confirm, setConfirm] = useState<{
     round: number;
     open: boolean;
     leads: Doomed[];
+  } | null>(null);
+  // The managed bars' sheets: Assign with each seller's load, Archive, the Bin.
+  const [manage, setManage] = useState<{
+    round: number;
+    open: boolean;
+    what: "assign" | "archive" | "bin";
   } | null>(null);
   // Results remember the question they answer; until the current one is
   // answered the list shows its skeleton. A refresh of the same question
@@ -961,15 +1007,48 @@ export function ListView({
   }, [hasMore, key, rows.length]);
 
   // From the latest ticks, so quick taps in a row each count.
-  const toggle = (row: LeadRow) =>
+  const limit = managed ? BULK_JOB_LIMIT : DELETE_LIMIT;
+  const toggle = (row: LeadRow) => {
+    setEveryMatch(null);
     setPicked((current) => {
       const next = new Map(
         current?.question === question ? current.leads : NONE,
       );
       if (next.has(row.lead_id)) next.delete(row.lead_id);
-      else if (next.size < DELETE_LIMIT) next.set(row.lead_id, row.name);
+      else if (next.size < limit) next.set(row.lead_id, row.name);
       return { question, leads: next };
     });
+  };
+  // Shift-click in the table: a range, all on or all off.
+  const toggleMany = (some: LeadRow[], on: boolean) => {
+    setEveryMatch(null);
+    setSelecting(true);
+    setPicked((current) => {
+      const next = new Map(
+        current?.question === question ? current.leads : NONE,
+      );
+      for (const row of some)
+        if (!on) next.delete(row.lead_id);
+        else if (next.size < limit) next.set(row.lead_id, row.name);
+      return { question, leads: next };
+    });
+  };
+  // The table's head tick and the phone's Select all: every lead on screen.
+  const toggleAll = (on: boolean) => {
+    setEveryMatch(null);
+    if (!on) {
+      setPicked(null);
+      setSelecting(false);
+      return;
+    }
+    setSelecting(true);
+    setPicked({
+      question,
+      leads: new Map(
+        rows.slice(0, limit).map((row) => [row.lead_id, row.name]),
+      ),
+    });
+  };
   // Owner, 31 Oct 2026 (bug report 130): a long press on a phone, or the tick
   // beside a row on a computer, starts picking leads for the bulk bar.
   // Sellers keep the long press's quick actions.
@@ -980,6 +1059,8 @@ export function ListView({
   useLayoutEffect(() => {
     pickFrom.current = (row) => {
       pickedBy.current = { id: row.lead_id, at: Date.now() };
+      // A light tap on entry (study 02 §5 M1), not on every tick after.
+      if (!selecting) haptic("tap");
       setSelecting(true);
       toggle(row);
     };
@@ -987,14 +1068,113 @@ export function ListView({
   const tapToggle = (row: LeadRow) => {
     const held = pickedBy.current;
     if (held && held.id === row.lead_id && Date.now() - held.at < 700) return;
+    // Unticking the last lead on a phone ends selecting (study 02 §5 M1).
+    const last =
+      managed &&
+      !desk &&
+      everyMatch !== question &&
+      chosen.size === 1 &&
+      chosen.has(row.lead_id);
     toggle(row);
+    if (last) setSelecting(false);
   };
   const startPicking = useCallback((row: LeadRow) => pickFrom.current(row), []);
   const ownerActions = useMemo<RowActions>(
     () => ({ ...rowActions, onHold: startPicking }),
     [rowActions, startPicking],
   );
-  const picksHere = canManage && stage === OPENING_STAGE;
+  const picksHere = managed;
+  // What the bars act on: the ticked leads, or every lead this list matches.
+  const allMatching = managed && everyMatch === question && !!page;
+  const selection: Selection =
+    allMatching && page
+      ? { kind: "filter", filter: filterOf(ask), total: page.total }
+      : { kind: "ids", ids: [...chosen.keys()] };
+  const selected = selectionCount(selection);
+  const side = refine?.side === "cold" ? "cold" : "inbound";
+  // The team's loads are read as ticking starts, so Assign opens on them.
+  useEffect(() => {
+    if (selecting && managed) readLoadsSoon(side).catch(() => undefined);
+  }, [selecting, managed, side]);
+  // Esc clears the selection on a computer (a sheet's own Esc closes it first).
+  const escClear = useRef<() => void>(() => undefined);
+  useLayoutEffect(() => {
+    escClear.current = () => {
+      setPicked(null);
+      setEveryMatch(null);
+      setSelecting(false);
+    };
+  });
+  useEffect(() => {
+    if (!selecting || !managed) return;
+    const key = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (document.querySelector("dialog[open]")) return;
+      escClear.current();
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [selecting, managed]);
+  // A bulk change undone from its notice: the list and its counts read again.
+  const changedTo = useRef(onChanged);
+  useLayoutEffect(() => {
+    changedTo.current = onChanged;
+  });
+  useEffect(() => {
+    const again = () => changedTo.current?.();
+    window.addEventListener(UNDONE_EVENT, again);
+    return () => window.removeEventListener(UNDONE_EVENT, again);
+  }, []);
+  const openManage = (what: "assign" | "archive" | "bin") =>
+    setManage((current) => ({
+      round: (current?.round ?? 0) + 1,
+      open: true,
+      what,
+    }));
+  const openBulk = (step: "stage" | "whatsapp") =>
+    setBulk((current) => ({
+      round: (current?.round ?? 0) + 1,
+      open: true,
+      step,
+    }));
+  const closeManage = () =>
+    setManage((current) => current && { ...current, open: false });
+  const finished = () => {
+    closeManage();
+    setBulk((current) => current && { ...current, open: false });
+    setPicked(null);
+    setEveryMatch(null);
+    setSelecting(false);
+    onChanged?.();
+  };
+  const manageActions: ManageActions = {
+    onAssign: () => openManage("assign"),
+    onStage: () => openBulk("stage"),
+    onTag: sayTagsLater,
+    onArchive: () => openManage("archive"),
+    onWhatsApp: allMatching ? undefined : () => openBulk("whatsapp"),
+    onBin: () => openManage("bin"),
+  };
+  const owners = useMemo(
+    () => new Map(rows.map((row) => [row.lead_id, row.owner_person_id])),
+    [rows],
+  );
+  const stopSelecting = () => {
+    clearPicks();
+    setSelecting(false);
+  };
+  const banner =
+    managed && selecting && page ? (
+      <ScopeBanner
+        count={chosen.size}
+        loaded={rows.length}
+        total={page.total}
+        allMatching={allMatching}
+        where={stageLabel}
+        onAllMatching={() => setEveryMatch(question)}
+        onClear={clearPicks}
+      />
+    ) : null;
   // The table's keys: J/K or arrows, Enter opens the lead beside it, C, L, and
   // Space ticks for an owner (also while leads are picked).
   useRowKeys(
@@ -1193,6 +1373,15 @@ export function ListView({
         // groups are each their own.
         data-card={bare && stage !== TEST && !groupsShown ? "" : undefined}
       >
+        {managed && selecting && desk && page ? (
+          <TableBulkBar
+            count={selected}
+            busy={false}
+            actions={manageActions}
+            onClear={stopSelecting}
+            banner={banner}
+          />
+        ) : null}
         {heading ? <h2 className={styles.listHeading}>{heading}</h2> : null}
         {layoutSlot && rows.length && !selecting
           ? createPortal(layoutSwitch, layoutSlot)
@@ -1215,7 +1404,10 @@ export function ListView({
           <span className={styles.listTools}>
             {selecting ? null : tools}
             {rows.length && !selecting && !layoutSlot ? layoutSwitch : null}
-            {canManage && (selecting || stage === TEST) ? (
+            {canManage &&
+            (stage === TEST ||
+              (selecting && !managed) ||
+              (managed && !selecting && !asTable)) ? (
               <button
                 type="button"
                 className={`${styles.statusChip} ${styles.selectToggle}`}
@@ -1223,7 +1415,7 @@ export function ListView({
                 title={selecting ? "Cancel selection" : "Select leads"}
                 aria-pressed={selecting}
                 onClick={() => {
-                  setPicked(null);
+                  clearPicks();
                   setSelecting((value) => !value);
                 }}
               >
@@ -1299,6 +1491,9 @@ export function ListView({
                 ticks={canManage}
                 chosen={chosen}
                 onToggle={startPicking}
+                onToggleMany={canManage ? toggleMany : undefined}
+                onToggleAll={canManage ? toggleAll : undefined}
+                stageTone={stageTone}
                 keysRef={tableKeys}
                 columnsSlot={columnsSlot}
                 serverSort={
@@ -1337,6 +1532,8 @@ export function ListView({
                       row={row}
                       selected={chosen.has(row.lead_id)}
                       onToggle={tapToggle}
+                      stageWord={stageWord?.(row)}
+                      stageTone={stageTone?.(row)}
                       at={at}
                       index={index}
                       count={Math.max(rows.length, page?.total ?? 0)}
@@ -1368,7 +1565,23 @@ export function ListView({
           </>
         )}
       </section>
-      {selecting && page && rows.length ? (
+      {managed && selecting && !desk && page ? (
+        <>
+          <PhoneSelectTop
+            count={selected}
+            busy={false}
+            allOnScreen={
+              allMatching ||
+              (rows.length > 0 && chosen.size >= Math.min(rows.length, limit))
+            }
+            onClose={stopSelecting}
+            onSelectAll={() => toggleAll(true)}
+            banner={banner}
+          />
+          <PhoneDock count={selected} busy={false} actions={manageActions} />
+        </>
+      ) : null}
+      {selecting && !managed && page && rows.length ? (
         <SelectBar
           count={chosen.size}
           total={page.total}
@@ -1410,6 +1623,7 @@ export function ListView({
           key={bulk.round}
           open={bulk.open}
           leadIds={[...chosen.keys()]}
+          selection={managed ? selection : undefined}
           pipeline={pipeline}
           initialStep={bulk.step ?? "menu"}
           onClose={() =>
@@ -1422,6 +1636,28 @@ export function ListView({
             onChanged?.();
           }}
         />
+      ) : null}
+      {manage ? (
+        manage.what === "assign" ? (
+          <LoadAssignSheet
+            key={manage.round}
+            open={manage.open}
+            selection={selection}
+            side={side}
+            owners={owners}
+            onClose={closeManage}
+            onDone={finished}
+          />
+        ) : (
+          <ShelfSheet
+            key={manage.round}
+            open={manage.open}
+            action={manage.what}
+            selection={selection}
+            onClose={closeManage}
+            onDone={finished}
+          />
+        )
       ) : null}
       {confirm ? (
         <DeleteLeadsSheet

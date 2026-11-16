@@ -39,6 +39,13 @@ import {
   type RepView,
   type WaTemplate,
 } from "./leads-client";
+import {
+  failWords,
+  runWithUndo,
+  selectionCount,
+  selectionRequest,
+  type Selection,
+} from "./manage-bar";
 import { KIND_WORDS } from "./stage-tabs";
 import { several, usePipelines } from "./use-pipelines";
 import styles from "./leads.module.css";
@@ -85,13 +92,17 @@ export function BulkSheet({
   leadIds,
   pipeline,
   initialStep = "menu",
+  selection,
   onClose,
   onDone,
 }: {
   open: boolean;
   leadIds: string[];
+  /** The managed selection (Leads' bars, 17 Nov 2026): ticked leads or "all
+   *  N matching"; the change is one bulk job with Undo. */
+  selection?: Selection;
   /** Assign to… and Move stage open the sheet at their step (Back: the menu). */
-  initialStep?: "menu" | "assign" | "stage";
+  initialStep?: "menu" | "assign" | "stage" | "whatsapp";
   /** The pipeline the list shows; none: every pipeline's leads. */
   pipeline: string | null;
   onClose: () => void;
@@ -106,7 +117,9 @@ export function BulkSheet({
   const [values, setValues] = useState<string[]>([]);
   const [plan, setPlan] = useState<BulkWhatsApp | null>(null);
   const pipes = usePipelines(open);
-  const n = leadIds.length;
+  const n = selection ? selectionCount(selection) : leadIds.length;
+  // "All N matching" goes by the list's filter: a WhatsApp send needs each lead.
+  const byFilter = selection?.kind === "filter";
   const leads = `${n} lead${n === 1 ? "" : "s"}`;
   // Across several pipelines a stage belongs to one of them: pick it first.
   const stagesFrom = several(pipes) ? pipeline : "main";
@@ -229,6 +242,21 @@ export function BulkSheet({
     pipeline?: string;
   }) {
     setBusy(true);
+    if (selection) {
+      try {
+        await runWithUndo({ ...selectionRequest(selection), ...body });
+        onDone();
+      } catch (reason) {
+        notify({
+          id: "bulk-job",
+          tone: "error",
+          title: "Those leads weren't changed",
+          message: failWords(reason, "Check your connection and try again."),
+        });
+        setBusy(false);
+      }
+      return;
+    }
     try {
       const result = await bulkLeads({ ...body, lead_ids: leadIds });
       notify({
@@ -295,7 +323,12 @@ export function BulkSheet({
             <Row
               icon={<MessageCircle size={20} />}
               label="Send a WhatsApp template"
-              note="Only to leads who said yes to WhatsApp"
+              note={
+                byFilter
+                  ? "Tick the leads to send to: not for all matching"
+                  : "Only to leads who said yes to WhatsApp"
+              }
+              disabled={byFilter}
               onPick={() => setStep("whatsapp")}
             />
           </ActionList>

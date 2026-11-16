@@ -36,6 +36,7 @@ import {
 import { createPortal } from "react-dom";
 
 import { displayName } from "../display-name";
+import { Avatar } from "../ui/kit";
 import {
   displayPhone,
   ago,
@@ -102,12 +103,12 @@ const LABELS: Record<Column, string> = {
   pipeline: "Pipeline",
   owner: "Owner",
   source: "Source",
-  next: "Next action",
+  next: "Next step",
   last: "Last call",
   age: "In stage",
   contact: "Last contact",
   reason: "Reason",
-  created: "Added",
+  created: "Created",
 };
 
 /** Heads whose sort the server answers over the whole list. */
@@ -130,11 +131,13 @@ export const OPTIONAL: Column[] = [
   "created",
 ];
 // In stage starts hidden: an owner's table had no room for the name (25 Oct 2026).
+// The owner's pick M2-A (17 Nov 2026) adds Created to the first columns.
 const SHOWN_AT_FIRST: ReadonlySet<Column> = new Set([
   "phone",
   "source",
   "next",
   "last",
+  "created",
 ]);
 const COLUMNS_KEY = "sx-leads-table-columns";
 
@@ -361,6 +364,9 @@ export function LeadsTable({
   ticks = false,
   chosen,
   onToggle,
+  onToggleMany,
+  onToggleAll,
+  stageTone,
   keysRef,
   columnsSlot = null,
   quickAdd = null,
@@ -382,6 +388,12 @@ export function LeadsTable({
   ticks?: boolean;
   chosen?: ReadonlyMap<string, string>;
   onToggle?: (row: LeadRow) => void;
+  /** Shift-click: every lead from the last ticked to this one, on or off. */
+  onToggleMany?: (rows: LeadRow[], on: boolean) => void;
+  /** The head's tick: every lead on screen, or none (M2-A, 17 Nov 2026). */
+  onToggleAll?: (on: boolean) => void;
+  /** A lead's stage colour, the dot before its stage word. */
+  stageTone?: (row: LeadRow) => string | undefined;
   /** The list's row keys (J/K, Enter) read the table's rows here. */
   keysRef?: RefObject<HTMLDivElement | null>;
   /** The list's toolbar: Columns shows there instead of a row of its own. */
@@ -499,6 +511,26 @@ export function LeadsTable({
     });
   }, [edits.shown, sort]);
   const now = new Date();
+  // Shift-click ticks a range from the last lead ticked (study 02 §5 M2).
+  const anchor = useRef<string | null>(null);
+  const tickRow = (row: LeadRow, range: boolean) => {
+    const on = !chosen?.has(row.lead_id);
+    const from = anchor.current
+      ? shown.findIndex((item) => item.lead_id === anchor.current)
+      : -1;
+    const to = shown.findIndex((item) => item.lead_id === row.lead_id);
+    anchor.current = row.lead_id;
+    if (range && onToggleMany && from >= 0 && to >= 0 && from !== to) {
+      const [a, b] = from < to ? [from, to] : [to, from];
+      onToggleMany(shown.slice(a, b + 1), on);
+      return;
+    }
+    onToggle?.(row);
+  };
+  const tickedHere = chosen
+    ? shown.filter((row) => chosen.has(row.lead_id)).length
+    : 0;
+  const allTicked = shown.length > 0 && tickedHere === shown.length;
   const editColumns = columns.filter((column): column is EditColumn =>
     EDIT_COLUMNS.has(column),
   );
@@ -600,6 +632,11 @@ export function LeadsTable({
       case "name":
         return (
           <span className={styles.nameCell}>
+            {phone || fit ? null : (
+              <span className={styles.face} aria-hidden="true">
+                <Avatar name={row.name} size={32} />
+              </span>
+            )}
             <button
               type="button"
               className={styles.name}
@@ -669,6 +706,13 @@ export function LeadsTable({
           </span>
         ) : (
           <span className={styles.stage}>
+            {stageTone ? (
+              <span
+                className={styles.stageDot}
+                style={{ background: stageTone(row) }}
+                aria-hidden="true"
+              />
+            ) : null}
             {sides ? sideStage(row, row.stage_label) : row.stage_label}
           </span>
         );
@@ -676,7 +720,10 @@ export function LeadsTable({
         return pipelineNames?.get(row.pipeline ?? "main") ?? row.pipeline;
       case "owner":
         return row.owner_name ? (
-          displayName(row.owner_name)
+          <span className={styles.owner} title={displayName(row.owner_name)}>
+            <Avatar name={row.owner_name} size={20} />
+            {displayName(row.owner_name).split(" ")[0]}
+          </span>
         ) : (
           <span className={styles.quiet}>No owner</span>
         );
@@ -711,7 +758,15 @@ export function LeadsTable({
           row.outcome_reason_label ?? <span className={styles.quiet}>–</span>
         );
       case "created":
-        return when(row.created_at, now);
+        // The day it came in ("14 Nov"), the time on hover (pick M2-A).
+        return (
+          <span title={when(row.created_at, now)}>
+            {new Date(row.created_at).toLocaleDateString("en-IN", {
+              day: "numeric",
+              month: "short",
+            })}
+          </span>
+        );
     }
   };
 
@@ -807,6 +862,7 @@ export function LeadsTable({
       className={styles.wrap}
       data-fit={fit ? "" : undefined}
       data-scroll={phone ? "" : undefined}
+      data-wide-table={phone ? undefined : ""}
       ref={(node) => {
         pane.current = node;
         if (keysRef) keysRef.current = node;
@@ -854,7 +910,23 @@ export function LeadsTable({
           <tr>
             {selecting || ticks ? (
               <th scope="col" className={styles.pick}>
-                <span className={styles.srOnly}>Select</span>
+                {onToggleAll && shown.length ? (
+                  <input
+                    type="checkbox"
+                    checked={allTicked}
+                    ref={(box) => {
+                      if (box) box.indeterminate = tickedHere > 0 && !allTicked;
+                    }}
+                    onChange={() => onToggleAll(!allTicked)}
+                    aria-label={
+                      allTicked
+                        ? "Clear the leads on screen"
+                        : "Select every lead on screen"
+                    }
+                  />
+                ) : (
+                  <span className={styles.srOnly}>Select</span>
+                )}
               </th>
             ) : null}
             {rowColumns.map((column) => {
@@ -924,17 +996,30 @@ export function LeadsTable({
                 <tr
                   data-selected={chosen?.has(row.lead_id) ? "" : undefined}
                   data-open={open ? "" : undefined}
-                  onClick={() =>
-                    selecting ? onToggle?.(row) : onOpen(row.lead_id)
-                  }
+                  onClick={(event) => {
+                    // Ctrl/Cmd-click ticks instead of opening; Shift-click a range.
+                    if (
+                      ticks &&
+                      (event.ctrlKey || event.metaKey || event.shiftKey)
+                    ) {
+                      event.preventDefault();
+                      tickRow(row, event.shiftKey);
+                      return;
+                    }
+                    if (selecting) tickRow(row, false);
+                    else onOpen(row.lead_id);
+                  }}
                 >
                   {selecting || ticks ? (
                     <td className={styles.pick}>
                       <input
                         type="checkbox"
                         checked={chosen?.has(row.lead_id) ?? false}
-                        onChange={() => onToggle?.(row)}
-                        onClick={(event) => event.stopPropagation()}
+                        onChange={() => undefined}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          tickRow(row, event.shiftKey);
+                        }}
                         aria-label={`Select ${name}`}
                       />
                     </td>
