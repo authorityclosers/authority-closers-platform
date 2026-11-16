@@ -20,13 +20,13 @@
     "review": "Re-pin 14 Nov 2026 (ux-audit for the orchestrator, during the v1.60 hold while the CI queue was quiet; the 14025987287 pin from run 43402793658, made 09:40Z on 13 Nov, would pass its 36-hour window at about 21:40Z on 14 Nov): producer run 43619970592 (workbench-checks.yml, push, success) on a request whose only parent is workbench 0f33427e8 (dev/live HEAD; its lockfiles, packages, workflows and scripts/ci match main except .github/workflows/sales-xray-native-image.yml, checked by diff), and which changes only .wb-ci/request.json. Same identity 8fed5c6d; artifact digest from the API. The pinned 14025987287 bundle was deleted first so a fresh bundle could publish."
   },
   {
-    "artifact_id": 14143635883,
-    "digest": "7b494c02661fe34f9403b7b5a9eeaf67a301a8b7450f6cccb888e43876aad446",
+    "artifact_id": 14239342961,
+    "digest": "5fe205db270b6e70078fc3d22ca44aefce8768334a0e7f5b364fa1a76dde8a35",
     "identity": "df10b24de0db7bee94c7d0e374e55de165d998c577dfd93f3664144c284e3144",
     "repository": "authorityclosers/authority-closers-platform",
-    "run_id": 43668730271,
-    "source_sha": "b5fbc6538d86d6db4c2238bdc48e24574dc8ab89",
-    "reviewed_source_sha": "c0095984764408b93eb22929cd52a105d06274c8",
-    "review": "Pin 15 Nov 2026 for dev/live's new identity (ux-audit for the orchestrator; wb-ci was blocked at ci-prerequisites by the 1 GiB bundle cap): Home v2 (c00959847) changed the web dependencies, so dev/live's identity is df10b24d while main keeps 8fed5c6d (its pin stays, for release cuts). Producer run 43668730271 (workbench-checks.yml, push, success) on a request whose only parent is workbench c00959847 (dev/live HEAD) and which changes only .wb-ci/request.json; artifact digest from the API. An earlier df10b24d bundle (14142024282, run 43666110109) was deleted first: its run failed at lint, so it could never be pinned, and it held the second bundle slot."
+    "run_id": 43895623197,
+    "source_sha": "6b3e26a8d93612c1eda6cd10b00ae6bb56f38a18",
+    "reviewed_source_sha": "73f6a5f058db17f31b4550195759ea71ef49c827",
+    "review": "Re-pin 16 Nov 2026 (ux-audit for the orchestrator; wb-ci was blocked at ci-prerequisites by the 1 GiB bundle cap once the df10b24d pin, 14143635883, passed its 36-hour window at 14:42Z): producer run 43895623197 (workbench-checks.yml, push, success) on a request whose only parent is workbench 73f6a5f05 (dev/live HEAD) and which changes only .wb-ci/request.json; identity df10b24d; artifact digest from the API. The stale bundles 14123972796 (8fed5c6d) and 14143635883 (df10b24d) were deleted at 14:50Z; a release-side run (43889830551, application.yml, never pinnable) then published 14236207227, deleted once that run had finished, so a workbench producer could publish."
   }
 ]
