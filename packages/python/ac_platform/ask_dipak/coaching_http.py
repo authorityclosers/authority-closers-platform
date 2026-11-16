@@ -2,7 +2,9 @@
 2026 meeting, section 5; owner via the orchestrator, 14 Nov 2026; migration 0155).
 
 GET  /v1/sales-xray/ask-dipak/lessons?q=            search Dipak's 150 questions (keywords only)
-GET  /v1/sales-xray/ask-dipak/lessons/{id}          a question and its lesson (null while none)
+GET  /v1/sales-xray/ask-dipak/lessons/{id}          a question and its lesson (null while none),
+                                                    from the newest import (migration 0157),
+                                                    with the library's version
 GET  /v1/sales-xray/ask-dipak/how-to-improve?skills=&objections=
                                                     Dipak's questions for a report's weaknesses
 GET  /v1/sales-xray/ask-dipak/growth                my ticked and active missions, with counts
@@ -26,7 +28,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from ac_platform.ask_dipak import catalogue, coaching, how_to_improve, store, team
+from ac_platform.ask_dipak import catalogue, coaching, how_to_improve, library, store, team
 from ac_platform.http.auth import AuthenticatedTransaction, require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.kernel.errors import DomainError
@@ -130,7 +132,12 @@ def install_ask_dipak_coaching_http(app: FastAPI, ctx: RouteContext) -> None:
         found = catalogue.question(question_id)
         if found is None:
             raise HTTPException(404, "No such question.", headers=PRIVATE)
-        return {"question": found.public(), "lesson": catalogue.lesson(question_id)}
+        served = await library.served(auth.database)
+        return {
+            "version": served.version,
+            "question": found.public(),
+            "lesson": catalogue.lesson(question_id, served.lessons),
+        }
 
     @router.get("/how-to-improve")
     async def improve(

@@ -3,7 +3,8 @@
 /**
  * Ask Dipak for screenshots on the dev workbench and GitHub (wb-ci
  * --visual): Dipak's own library, with fictional progress (two lessons
- * saved, one mission marked) answered in the browser. Nothing leaves it.
+ * saved, one mission marked) answered in the browser. Only the lessons
+ * themselves are read from the dev API, as the real page reads them.
  */
 
 import { useState } from "react";
@@ -11,6 +12,7 @@ import { useState } from "react";
 import { AcquisitionShell } from "../../acquisition-shell";
 import { AskDipakView } from "../../ask-dipak/ask-dipak-view";
 import { COPY } from "../../ask-dipak/copy";
+import { LESSON_PATH } from "../../ask-dipak/lessons";
 import { PROGRESS_PATH, loadProgress } from "../../ask-dipak/progress";
 import { PageHeader } from "../../ui/kit";
 import { WorkspaceAccessContext } from "../../workspace-access";
@@ -32,6 +34,8 @@ function install() {
         status: 200,
         headers: { "content-type": "application/json" },
       });
+    // Dipak's lessons come from the dev API itself (16 Nov 2026).
+    if (path.startsWith(LESSON_PATH)) return real(input, init);
     if (path.startsWith("/v1/"))
       return new Response(JSON.stringify({ detail: "Sample data only." }), {
         status: 404,

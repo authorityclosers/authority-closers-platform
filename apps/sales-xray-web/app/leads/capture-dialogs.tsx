@@ -32,6 +32,7 @@ import { ImportHistory, UndoImportButton } from "./import-undo";
 import { ImportCheck, resultLines, SkippedDownload } from "./import-check";
 import checkStyles from "./import-check.module.css";
 import { OldLeadsCheck, useOldLeads, waitReason } from "./old-leads";
+import { FileCheckLines, ownedByFile, useFileCheck } from "./import-file-check";
 import {
   addLead,
   matchLead,
@@ -1021,22 +1022,47 @@ export function ImportDialog({
   }, [open, pasted]);
 
   const fresh = preview ? freshRows(preview) : 0;
+  // New leads: their stages, owners and columns, before Import (owner's import
+  // study, 16 Nov 2026). Rows that name a teammate keep that teammate whatever
+  // is picked under Assign; only the rest are shared.
+  const fileCheck = useFileCheck({
+    on: open && !history && (step === "check" || step === "who") && !result,
+    preview,
+    mapping,
+    side: choices.side === "cold" ? "cold" : "live",
+    step: choices.step,
+    pipeline,
+  });
+  const owned = Math.min(fresh, ownedByFile(fileCheck));
+  const toShare = fresh - owned;
+  // The owners the file names are still being checked: the split waits for them.
+  const ownersPending =
+    !history &&
+    canManage &&
+    Boolean(mapping.owner) &&
+    fileCheck.check === null &&
+    fileCheck.error === null;
+  const whoLine = owned
+    ? toShare
+      ? `${owned} keep their owner from your file; the other ${toShare}: ${sharesLine(choices, team, toShare)}`
+      : "All keep their owner from your file."
+    : sharesLine(choices, team, fresh);
   // Old leads go to nobody: who gets them never holds Import back.
   const assigning = !history && sharing(choices.assign);
   const overGiven =
     assigning &&
     team !== null &&
-    Object.values(countsFor(choices, team, fresh)).reduce(
+    Object.values(countsFor(choices, team, toShare)).reduce(
       (sum, count) => sum + count,
       0,
-    ) > fresh;
+    ) > toShare;
   // An even split needs the team: Import waits for it.
   const teamPending = canManage && assigning && team === null;
   // "One seller" waits for the seller to be picked.
   const nobodyPicked = !history && choices.assign === "one" && !choices.one;
   const noColumn = !mapping.name && !mapping.phone;
   const limits =
-    canManage && !history ? overLimitLines(choices, team, fresh) : [];
+    canManage && !history ? overLimitLines(choices, team, toShare) : [];
   const old = useOldLeads({
     on: open && history && step === "check" && !result,
     preview,
@@ -1071,7 +1097,7 @@ export function ImportDialog({
             : {
                 side: choices.side,
                 ...(sharing(choices.assign) && team
-                  ? { shares: sharesFor(choices, team, fresh) }
+                  ? { shares: sharesFor(choices, team, toShare) }
                   : {}),
                 ...(choices.step ? { step: choices.step } : {}),
                 ...(duplicates !== "skip" ? { duplicates } : {}),
@@ -1167,6 +1193,7 @@ export function ImportDialog({
                 onClick={run}
                 disabled={
                   busy ||
+                  ownersPending ||
                   overGiven ||
                   teamPending ||
                   nobodyPicked ||
@@ -1259,7 +1286,8 @@ export function ImportDialog({
         {result?.unmatched_stages?.length ? (
           <p className={styles.hint}>
             No stage called {result.unmatched_stages.join(", ")}: those leads
-            stay New.
+            start in {fileCheck.check?.unmatched_stage ?? "the first stage"},
+            and keep the file&apos;s word on the lead.
           </p>
         ) : null}
         {/* People the import took past their limit (Lead OS, 25 Oct 2026):
@@ -1449,8 +1477,9 @@ export function ImportDialog({
             ) : mapping.stage || (canManage && mapping.owner) ? (
               <p className={styles.hint}>
                 Stages are matched by name to the pipeline&apos;s stages, and
-                owners to your team. One that doesn&apos;t match stays New, or
-                goes by the lead rules.
+                owners to your team. A stage that doesn&apos;t match starts in
+                the first stage, or the one you pick, and keeps the file&apos;s
+                word on the lead. Leads whose owner matches keep that owner.
               </p>
             ) : null}
             <p className={styles.hint}>
@@ -1502,6 +1531,9 @@ export function ImportDialog({
               duplicates={duplicates}
               onDuplicates={setDuplicates}
             />
+            {history ? null : (
+              <FileCheckLines state={fileCheck} stageColumn={mapping.stage} />
+            )}
             {history ? (
               <>
                 {/* Old leads: each stage word and what it becomes (no Assign step). */}
@@ -1516,7 +1548,7 @@ export function ImportDialog({
               /* Who gets them, in a line; Change opens the last step. */
               <p className={styles.hint} data-import-who="">
                 {canManage
-                  ? `About ${fresh} new ${fresh === 1 ? "lead" : "leads"}: ${sharesLine(choices, team, fresh)}`
+                  ? `About ${fresh} new ${fresh === 1 ? "lead" : "leads"}: ${whoLine}`
                   : "They go on your desk."}{" "}
                 <button
                   type="button"
@@ -1535,15 +1567,14 @@ export function ImportDialog({
               part="who"
               canManage={canManage}
               team={team}
-              fresh={fresh}
+              fresh={toShare}
               pipeline={pipeline}
               value={choices}
               onChange={setChoices}
             />
             {canManage ? (
               <p className={styles.hint}>
-                About {fresh} new {fresh === 1 ? "lead" : "leads"}:{" "}
-                {sharesLine(choices, team, fresh)}
+                About {fresh} new {fresh === 1 ? "lead" : "leads"}: {whoLine}
               </p>
             ) : null}
             {limitBox}

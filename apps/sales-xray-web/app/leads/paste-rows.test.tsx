@@ -8,6 +8,14 @@ vi.mock("./leads-client", async (original) => ({
   ...(await original<typeof import("./leads-client")>()),
   previewImport: (...args: unknown[]) => previewImport(...args),
   commitImport: (...args: unknown[]) => commitImport(...args),
+  // The Check's read of the file's stages, owners and columns (16 Nov 2026).
+  checkFile: async () => ({
+    stages: [],
+    unmatched_stage: "New Lead",
+    owners: [],
+    owned_new: 0,
+    columns: [],
+  }),
 }));
 
 // One pipeline: Import doesn't ask which (and reads nothing to know it).
@@ -224,7 +232,9 @@ it("maps stage and owner columns, says which numbers are already leads, and what
   const text = dialog.textContent ?? "";
   expect(text).toContain("Given their stage2");
   expect(text).toContain("Given the owner named1");
-  expect(text).toContain("No stage called Hot lead: those leads stay New.");
+  expect(text).toContain(
+    "No stage called Hot lead: those leads start in New Lead, and keep the file's word on the lead.",
+  );
   expect(text).toContain(
     "Nobody on your team called Nobody Known: those leads went by the lead rules.",
   );

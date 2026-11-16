@@ -5,14 +5,27 @@ Next-call missions: every save, unsave, mission marked done and mission undone i
 written once. Where a person stands is folded from their rows (``store.progress_for``), and
 missions marked done stay countable per lesson for Growth (the 13 Nov meeting's "one thing
 tracked"). A mission marked done is the seller's own word, never proof of a call.
+
+``sales_xray_ask_dipak_library_versions`` (migration 0157) is the append-only history of
+Dipak's imported lessons: one row per import of his docs, the newest served (``library``).
 """
 
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKeyConstraint, Index, String, Uuid
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    DateTime,
+    ForeignKeyConstraint,
+    Index,
+    Integer,
+    String,
+    Uuid,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ac_platform.db.base import Base
@@ -48,4 +61,28 @@ class SalesXrayAskDipakEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
-__all__ = ["KINDS", "SalesXrayAskDipakEvent"]
+class SalesXrayAskDipakLibraryVersion(Base):
+    """One import of Dipak's lessons, word for word; written once, the newest is served."""
+
+    __tablename__ = "sales_xray_ask_dipak_library_versions"
+    __table_args__ = (
+        CheckConstraint("length(content_sha256) = 64", name="sx_adl_sha256"),
+        CheckConstraint("lesson_count > 0", name="sx_adl_count"),
+        Index("ix_sx_ask_dipak_library_created", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    #: The hash of ``lessons`` in canonical JSON: the same import twice adds no row.
+    content_sha256: Mapped[str] = mapped_column(String(64))
+    #: Question id -> the lesson, as the bundled library.json holds it (lock included, never
+    #: served to sellers), plus each question's title from his doc.
+    lessons: Mapped[dict[str, Any]] = mapped_column(JSON)
+    #: His docs' file names and sha256, and the importer's note.
+    source: Mapped[dict[str, Any]] = mapped_column(JSON)
+    lesson_count: Mapped[int] = mapped_column(Integer)
+    approved_by: Mapped[str] = mapped_column(String(120))
+    issue: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+__all__ = ["KINDS", "SalesXrayAskDipakEvent", "SalesXrayAskDipakLibraryVersion"]
