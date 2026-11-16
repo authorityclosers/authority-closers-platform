@@ -17,6 +17,14 @@ transaction:
   3. a row without a phone match whose email is already a lead's is counted and left out;
   4. every new lead goes to the seller, in its batch's pipeline, at its first stage;
   5. one audit event naming the approver and the issue.
+A batch may also say its ``side`` ("live", "cold", or "history": old leads kept out of every
+work list and given to nobody, as the app's own history import does) and its ``stage`` (a key
+of the pipeline's stage list); a row may say its own ``_stage`` and carry ``_notes`` (its
+history from the sheet: ``[{"text", "at"?}]``, dated when the sheet dates it). An imported
+stage is nobody's move today (no actor, source "import"); a Lost one reads "Imported". A row's
+notes go on its lead whether the row made it or repeated it. ``actor_email`` (default: the
+approver) is the person the leads' history names, e.g. a workspace's owner whose own sheet it
+is; the audit event still names the approver (and ``approver``, the words of the approval).
 Nothing is sent to any lead. The source is "csv" with the label given: imports never reach
 Meta's conversions API, which only sends leads Meta delivered.
 
@@ -53,8 +61,10 @@ from ac_platform.application.settings import get_settings
 from ac_platform.audit.service import append_audit_event
 from ac_platform.identity.models import Person
 from ac_platform.lead_desk.capture import extract
+from ac_platform.lead_desk.history import HISTORY
+from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.models import Lead, LeadEvent, LeadPipeline, LeadRep
-from ac_platform.lead_desk.store import LeadDesk, Viewer, content_ref
+from ac_platform.lead_desk.store import LeadDesk, Viewer, content_ref, person_name
 from ac_platform.tenancy.models import Membership
 
 Mode = Literal["dry-run", "apply", "read"]
@@ -63,6 +73,10 @@ ACTION: Final = "lead_desk.file_import_data_change"
 RECEIVED: Final = "Received on the form"
 TYPED: Final = "Received date typed into the sheet"
 CITY_AS_WRITTEN: Final = "City as written"
+SIDES: Final = frozenset({"live", "cold", HISTORY})
+# A row's own instructions, never stored as its answers.
+ROW_STAGE: Final = "_stage"
+ROW_NOTES: Final = "_notes"
 # Columns a lead form export carries that say nothing about the lead.
 DROPPED: Final = frozenset({"lead_status", "ad_name"})
 EXCEL_EPOCH: Final = datetime(1899, 12, 30, tzinfo=UTC)
@@ -137,6 +151,8 @@ def record_of(
     city = mapping.get("city")
     record: dict[str, str] = {}
     for header, raw in row.items():
+        if header in (ROW_STAGE, ROW_NOTES):
+            continue
         value = as_text(raw)
         if not value or header in DROPPED:
             continue
@@ -197,17 +213,22 @@ async def _readback(db: AsyncSession, tenant_id: UUID, labels: list[str]) -> dic
     for label in labels:
         leads = (
             await db.execute(
-                select(Lead.owner_person_id, Lead.stage, Lead.pipeline_key, Lead.test_data).where(
-                    Lead.tenant_id == tenant_id, Lead.source_label == label
-                )
+                select(
+                    Lead.owner_person_id,
+                    Lead.stage,
+                    Lead.pipeline_key,
+                    Lead.test_data,
+                    Lead.pipeline,
+                ).where(Lead.tenant_id == tenant_id, Lead.source_label == label)
             )
         ).all()
         out[label] = {
             "leads": len(leads),
-            "by_owner": dict(Counter(str(o)[:8] if o else "nobody" for o, _, _, _ in leads)),
-            "by_stage": dict(Counter(stage for _, stage, _, _ in leads)),
-            "by_pipeline": dict(Counter(key for _, _, key, _ in leads)),
-            "test_data": sum(1 for *_, test in leads if test),
+            "by_owner": dict(Counter(str(o)[:8] if o else "nobody" for o, *_ in leads)),
+            "by_stage": dict(Counter(stage for _, stage, *_ in leads)),
+            "by_pipeline": dict(Counter(key for _, _, key, *_ in leads)),
+            "by_side": dict(Counter(side or "live" for *_, side in leads)),
+            "test_data": sum(1 for *_, test, _ in leads if test),
         }
     return out
 
@@ -315,6 +336,7 @@ async def run(
     tenant_id = await _tenant(db, str(spec["tenant"]))
     seller = await _person(db, str(spec["seller_email"]))
     approver = await _person(db, str(spec["approver_email"]))
+    actor = await _person(db, str(spec.get("actor_email") or spec["approver_email"]))
     report: dict[str, Any] = {
         "mode": mode,
         "tenant_id": str(tenant_id),
@@ -325,7 +347,7 @@ async def run(
         report["status"] = "read"
         report["after"] = await _readback(db, tenant_id, labels)
         return report
-    if seller is None or approver is None:
+    if seller is None or approver is None or actor is None:
         raise SystemExit(json.dumps({"refused": "person_not_found", **report}))
     member = await db.scalar(
         select(Membership.role).where(
@@ -338,6 +360,9 @@ async def run(
     if member is None:
         raise SystemExit(json.dumps({"refused": "seller_not_an_active_member", **report}))
     pipelines: list[str] = []
+    sides = [str(batch.get("side") or "live") for batch in batches]
+    if any(side not in SIDES for side in sides):
+        raise SystemExit(json.dumps({"refused": "side_not_known"}))
     for batch in batches:
         wanted = str(batch.get("pipeline") or "main")
         pipeline_found = (
@@ -355,10 +380,27 @@ async def run(
         pipelines.append(pipeline_found.key if pipeline_found is not None else "main")
     desk = LeadDesk(
         db,
-        Viewer(person_id=approver.id, tenant_id=tenant_id, role="owner", name="Data change"),
+        Viewer(
+            person_id=actor.id,
+            tenant_id=tenant_id,
+            role="owner",
+            name=person_name(actor) if actor.id != approver.id else "Data change",
+        ),
         now=now,
     )
     _, config = await desk.settings()
+    # Every stage named (a batch's or a row's) is on its pipeline's list before anything is
+    # written.
+    lists: dict[str, journeys.Journey] = {}
+    for number, batch in enumerate(batches):
+        key = pipelines[number]
+        if key not in lists:
+            lists[key] = await journeys.read(db, tenant_id, key)
+        named = {str(batch["stage"])} if batch.get("stage") else set()
+        named |= {str(r[ROW_STAGE]) for r in batch.get("rows") or [] if r.get(ROW_STAGE)}
+        unknown = sorted(name for name in named if lists[key].stage_for(name) is None)
+        if unknown:
+            raise SystemExit(json.dumps({"refused": "stage_not_on_list", "stages": unknown}))
     rep = await db.get(LeadRep, (tenant_id, seller.id))
     report["seller_rules"] = {"role": member, "taking_leads": rep.available if rep else True}
     report["auto_reassign"] = {
@@ -367,19 +409,21 @@ async def run(
     }
     report["before"] = await _readback(db, tenant_id, labels)
     # Every row of every batch, in the order the forms were received.
-    queue: list[tuple[datetime, int, int, dict[str, str]]] = []
+    queue: list[tuple[datetime, int, int, dict[str, str], dict[str, Any]]] = []
     for number, batch in enumerate(batches):
         for index, raw in enumerate(batch.get("rows") or [], start=1):
             record = record_of(dict(raw), mapping, batch.get("add"))
             moment, _ = received_at(dict(raw).get("created_time"))
-            queue.append((moment or datetime.max.replace(tzinfo=UTC), number, index, record))
+            queue.append(
+                (moment or datetime.max.replace(tzinfo=UTC), number, index, record, dict(raw))
+            )
     queue.sort(key=lambda item: (item[0], item[1], item[2]))
     counts: dict[str, Counter[str]] = {label: Counter() for label in labels}
     flags: dict[str, dict[str, list[int]]] = {
         label: {"repeat_by_email": [], "email_hint": [], "date_typed": []} for label in labels
     }
-    for _, number, index, record in queue:
-        label, pipeline = labels[number], pipelines[number]
+    for _, number, index, record, raw in queue:
+        label, pipeline, side = labels[number], pipelines[number], sides[number]
         step = uuid5(command_id, f"{number}:{index}")
         if await desk._command_seen(step) is not None:
             # This run's row went in before (a repeat's history line): never twice.
@@ -404,23 +448,61 @@ async def run(
                 flags[label]["repeat_by_email"].append(index)
                 counts[label]["repeat_by_email"] += 1
                 continue
-        _, outcome = await desk.ingest(
+        history = side == HISTORY
+        lead, outcome = await desk.ingest(
             record,
             source="csv",
             source_label=label,
             source_ref=content_ref(record),
             mapping=mapping,
-            assign="person",
-            person_id=seller.id,
-            actor=approver.id,
+            # Old leads kept as history are given to nobody, as in the app's own import.
+            assign="none" if history else "person",
+            person_id=None if history else seller.id,
+            actor=actor.id,
             pipeline=pipeline,
             command_id=step,
+            side=HISTORY if history else None,
         )
         counts[label][outcome] += 1
+        if lead is None or outcome not in ("created", "repeat"):
+            continue
+        wanted = raw.get(ROW_STAGE) or batches[number].get("stage")
+        if outcome == "created":
+            lead.pipeline = side
+            journey = lists[pipeline]
+            stage = journey.stage_for(str(wanted)) if wanted else None
+            at = journey.resolve(lead.stage, lead.step)
+            if stage is not None and (at is None or at.key != stage.key):
+                # Where the sheet says the lead stands: nobody's move today.
+                desk.to_stage(
+                    lead,
+                    journey,
+                    stage,
+                    note=None,
+                    command_id=uuid5(step, "stage"),
+                    source="import",
+                    via="api",
+                    actor=None,
+                )
+                counts[label]["staged"] += 1
+        for place, note in enumerate(raw.get(ROW_NOTES) or []):
+            words = str(note.get("text") or "").strip()[:2000]
+            if not words:
+                continue
+            dated = note.get("at")
+            desk._event(
+                lead,
+                "note",
+                {"note": words, "source": "import"},
+                actor=actor.id,
+                command_id=uuid5(step, f"note:{place}"),
+                at=datetime.fromisoformat(dated) if dated else None,
+            )
+            counts[label]["notes"] += 1
     await db.flush()
     total = sum((counter for counter in counts.values()), Counter())
     # A run that changed nothing (a rerun) leaves no audit event.
-    report["audited"] = bool(total["created"] + total["repeat"])
+    report["audited"] = bool(total["created"] + total["repeat"] + total["notes"])
     if report["audited"]:
         await append_audit_event(
             db,
@@ -440,6 +522,7 @@ async def run(
                     for label, pipeline in zip(labels, pipelines, strict=True)
                 ],
                 "seller_person_id": str(seller.id),
+                "approver": spec.get("approver"),
                 "counts": dict(total),
             },
         )
@@ -447,11 +530,12 @@ async def run(
         {
             "label": label,
             "pipeline": pipeline,
+            "side": side,
             "rows": len(batch.get("rows") or []),
             "counts": dict(counts[label]),
             **{name: rows for name, rows in flags[label].items() if rows},
         }
-        for label, pipeline, batch in zip(labels, pipelines, batches, strict=True)
+        for label, pipeline, side, batch in zip(labels, pipelines, sides, batches, strict=True)
     ]
     report["counts"] = dict(total)
     report["after"] = await _readback(db, tenant_id, labels)

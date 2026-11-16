@@ -84,6 +84,7 @@ import {
 } from "./lead-handoff";
 import type { LeadIntent } from "./lead-sheet";
 import { publishBadge } from "./leads-badge";
+import { useImportAsked } from "./import-asked";
 import { LeadsMenu, type LeadsMenuItem } from "./leads-menu";
 
 import { useNudgeCard } from "./nudge-card";
@@ -688,6 +689,13 @@ export function LeadsRoute({
     setRounds((current) => ({ ...current, [which]: current[which] + 1 }));
     show(true);
   };
+  // Import asked for while Leads is already open (the + sheet's Import leads
+  // on Leads, owner 16 Nov 2026: it changed the address and opened nothing).
+  useImportAsked(params, (ask) => {
+    setPastedRows(null);
+    setGoogleImport(ask === "google");
+    begin("importing", setImporting);
+  });
 
   const refresh = useCallback(() => setVersion((value) => value + 1), []);
   // A lead added from the + sheet, or Home's "Call <name>", opens here
