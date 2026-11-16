@@ -1894,7 +1894,7 @@ def _normalise_findings(
 
 # Bump when report admission/adaptation semantics change. Retained recovery
 # freezes this source-owned identity separately from the caller's command key.
-REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/13"
+REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/14"
 
 
 def _evidence_limit(model: type[BaseModel]) -> int:
@@ -1916,10 +1916,45 @@ def _truncate_evidence(
             counts[field] = counts.get(field, 0) + 1
 
 
+_DROP_ERRORS_PER_FIELD = 5
+
+
+def _overview_field_names() -> frozenset[str]:
+    """Every field name of the overview's own models: the only keys a drop note may name."""
+    from ac_platform.conversation_intelligence import report_overview
+
+    return frozenset(
+        name
+        for value in vars(report_overview).values()
+        if isinstance(value, type) and issubclass(value, BaseModel)
+        for name in value.model_fields
+    )
+
+
+def _note_drop_errors(
+    found: dict[str, list[str]], field: str, errors: Sequence[Mapping[str, Any]]
+) -> None:
+    """Each schema error of a dropped overview item as ``path:type``, content-free: list
+    positions and the overview models' own field names (any other key, a provider's own,
+    shows as ``*``) and pydantic's error type, never a value. 16 Nov 2026: a production report
+    lost its next-call mission to item_schema_invalid and nothing said which field or why."""
+    known = _overview_field_names()
+    noted = found.setdefault(field, [])
+    for error in errors:
+        path = ".".join(
+            str(part) if isinstance(part, int) or part in known else "*"
+            for part in error.get("loc", ())
+        )
+        entry = f"{path or 'item'}:{error.get('type')}"
+        if entry not in noted and len(noted) < _DROP_ERRORS_PER_FIELD:
+            noted.append(entry)
+
+
 def _sanitize_provider_overview(
     payload: Mapping[str, Any],
     transcript: Mapping[str, Any],
     salvaged: dict[str, int] | None = None,
+    drop_errors: dict[str, list[str]] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     # Validate all citations before dropping anything, including malformed/duplicate items.
     overview = normalize_overview_evidence(
@@ -2011,6 +2046,8 @@ def _sanitize_provider_overview(
                     raise ReportError("report_evidence_invalid") from None
                 else:
                     drop(field, "item_schema_invalid")
+                    if drop_errors is not None:
+                        _note_drop_errors(drop_errors, field, errors)
                     continue
             ref: Any = None
             if field in detail_fields:
@@ -2058,6 +2095,58 @@ def _sanitize_provider_overview(
                 drop(field, reason)
                 overview[field] = None
     return {**payload, "overview": overview}, drops
+
+
+def _lead_with_mission_improvement(
+    payload: Mapping[str, Any],
+) -> tuple[dict[str, Any], int | None]:
+    """Put the improvement the next-call mission is about first, instead of dropping the mission.
+
+    The mission (next_call_focus and practice) is about improvement 0, the biggest one. On the
+    staging gold call rc-06 (16 Nov 2026) GPT-6 Luna listed its biggest improvement second and
+    pointed both mission fields at index 1, so a valid, countable mission was dropped and the
+    report's fix_first, first improvement and mission disagreed. When both fields name the same
+    valid improvement k > 0, that improvement moves to the front, the others keep their order,
+    and every improvement reference follows (the findings' own finding_index, the improvement
+    details, the mission). Anything else is left to the strict checks that follow. Returns the
+    payload and the moved index (None when nothing moved).
+    """
+
+    unchanged = dict(payload), None
+    overview = payload.get("overview")
+    improvements = payload.get("improvements")
+    if not isinstance(overview, Mapping) or not isinstance(improvements, list):
+        return unchanged
+    focus, practice = overview.get("next_call_focus"), overview.get("practice")
+    if not isinstance(focus, Mapping) or not isinstance(practice, Mapping):
+        return unchanged
+    first, second = focus.get("improvement_index"), practice.get("improvement_index")
+    if type(first) is not int or type(second) is not int or first != second:
+        return unchanged
+    if not 0 < first < len(improvements):
+        return unchanged
+    order = [first, *(index for index in range(len(improvements)) if index != first)]
+    position = {old: new for new, old in enumerate(order)}
+    moved: list[Any] = []
+    for new, old in enumerate(order):
+        item = improvements[old]
+        if isinstance(item, Mapping) and "finding_index" in item:
+            item = {**item, "finding_index": new}
+        moved.append(item)
+    adapted = dict(overview)
+    details = overview.get("improvement_details")
+    if isinstance(details, list):
+        adapted["improvement_details"] = [
+            {**detail, "finding_index": position[detail["finding_index"]]}
+            if isinstance(detail, Mapping)
+            and type(detail.get("finding_index")) is int
+            and detail["finding_index"] in position
+            else detail
+            for detail in details
+        ]
+    adapted["next_call_focus"] = {**focus, "improvement_index": 0}
+    adapted["practice"] = {**practice, "improvement_index": 0}
+    return {**payload, "improvements": moved, "overview": adapted}, first
 
 
 def _adapt_unbound_provider_findings(
@@ -3255,12 +3344,20 @@ def parse_report_draft(
         consumed_provider_keys.update({"summary_evidence", "verdict_evidence"})
     salvaged: dict[str, int] = {}
     truncated: dict[str, int] = {}
-    payload, overview_drops = _sanitize_provider_overview(payload, validated_transcript, salvaged)
+    payload, mission_moved = _lead_with_mission_improvement(payload)
+    overview_drop_errors: dict[str, list[str]] = {}
+    payload, overview_drops = _sanitize_provider_overview(
+        payload, validated_transcript, salvaged, overview_drop_errors
+    )
     payload, compatibility_extras = _adapt_unbound_provider_findings(payload)
+    if mission_moved is not None:
+        compatibility_extras["mission_improvement_moved_first"] = {"from_index": mission_moved}
     if v8 and sensitive_drops:
         compatibility_extras["sensitive_segments_dropped"] = sensitive_drops
     if overview_drops:
         compatibility_extras["overview_drops"] = overview_drops
+    if overview_drop_errors:
+        compatibility_extras["overview_drop_errors"] = overview_drop_errors
     normalized = dict(payload)
     if "report_content" in payload:
         if not canonical_read:

@@ -20,6 +20,10 @@ reach a root-only file without anyone typing or seeing it.
   key. Refused unless the workspace's plan allows API keys and ``recordings:write``. Run again
   while that maker's live key of this name exists, it makes none (``already_minted``) and
   prints no key (release PR #623 review, 15 Nov 2026): a key can't be shown twice.
+- ``revoke-key``: once the proof is done (orchestrator, 16 Nov 2026), that maker's live keys
+  of this name are revoked as Admin revokes one (``integrations.keys.revoke``, audited as
+  ``integration.api_key_revoked`` with the approval). None live: nothing changes
+  (``no_live_key``).
 
 Refused for any workspace whose name doesn't say it is a test, sandbox or fictional one.
 Owner-approved data change (AGENTS.md): dry run by default, one transaction, idempotent for
@@ -31,7 +35,7 @@ In staging or production, inside the deployed API container:
     docker exec -i ac-application-staging-api-1 python - --environment staging \\
       --tenant <workspace id> --maker-email <owner or admin> \\
       --approver "<approver>" --issue <reference> --reason "<their words>" \\
-      status|terms|mint-key [--apply] < scripts/data-changes/api-upload-proof-setup.py
+      status|terms|mint-key|revoke-key [--apply] < scripts/data-changes/api-upload-proof-setup.py
 
     ... mint-key --apply < ... | sudo sh -c 'umask 077; f=/root/<file>; cat > "$f.new";
           if [ -s "$f.new" ]; then mv "$f.new" "$f"; else rm -f "$f.new"; fi'
@@ -54,7 +58,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-ACTIONS = ("status", "terms", "mint-key")
+ACTIONS = ("status", "terms", "mint-key", "revoke-key")
 SCOPE = "recordings:write"
 KEY_DAYS = 30
 TEST_NAME = re.compile(r"^test\b|sandbox|fictional", re.IGNORECASE)
@@ -283,11 +287,36 @@ async def execute(
         )
         after = await key_upload.terms(db, tenant.id, policy, command.environment)
         return {**result, "terms_after": after.state, "status": "applied"}
-    if not tier.api_keys or not tier.allows(SCOPE):
-        raise Refused("the_plan_does_not_allow_recordings_write_keys")
     mine = [
         key for key in live if key.name == command.key_name and key.created_by_person_id == maker.id
     ]
+    if command.action == "revoke-key":
+        revoked = []
+        for item in mine:
+            view, _ = await db.run_sync(
+                lambda sync, key_id=item.id: keys.revoke(
+                    sync.connection(),
+                    tenant_id=tenant.id,
+                    key_id=key_id,
+                    person_id=maker.id,
+                    now=now,
+                )
+            )
+            await AuditRepository(db).append(
+                tenant_id=tenant.id,
+                actor_person_id=maker.id,
+                actor_type="data_change",
+                action="integration.api_key_revoked",
+                resource_type="integration_api_key",
+                resource_id=view["id"],
+                payload={"name": view["name"], "prefix": view["prefix"], **approval},
+                reason=command.reason,
+                now=now,
+            )
+            revoked.append({"key_id": view["id"], "key_prefix": view["prefix"]})
+        return {**result, "revoked": revoked, "status": "applied" if revoked else "no_live_key"}
+    if not tier.api_keys or not tier.allows(SCOPE):
+        raise Refused("the_plan_does_not_allow_recordings_write_keys")
     if mine:
         # A key is shown once, when it is made; this one exists already.
         return {
