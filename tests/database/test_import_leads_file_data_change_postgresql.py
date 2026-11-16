@@ -20,7 +20,7 @@ from sqlalchemy import Engine, func, select
 
 from ac_platform.audit.models import AuditEvent
 from ac_platform.identity.models import Person
-from ac_platform.lead_desk.models import Lead
+from ac_platform.lead_desk.models import Lead, LeadEvent
 from tests.database.conversation_harness import conversation_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_lead_os_acceptance_postgresql import BASE, ROOT, WRITE, world
@@ -192,5 +192,133 @@ def test_dry_run_apply_dedupe_and_rerun(postgres_harness: Any, tmp_path: Path) -
             assert len(await labelled()) == 2
             read = await tool.execute(sessions, spec, mode="read", now=now)
             assert read["after"][LABEL]["leads"] == 2 and read["after"][SECOND]["leads"] == 1
+
+    run(exercise())
+
+
+HISTORY_LABEL = "File: Fictional sheet / history"
+
+
+def test_history_side_stages_and_dated_notes(postgres_harness: Any, tmp_path: Path) -> None:
+    """A batch kept as history goes to nobody and stays out of the work lists, at the stage
+    the sheet gives it (Lost reads "Imported", nobody's move); a live row may name its own
+    stage; a row's dated remarks become notes on that day, on a repeat too; the history names
+    the actor; an unknown stage refuses the whole run; a rerun adds no note twice."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            sessions = here.setup.sessions
+            async with sessions() as db:
+                admin = await db.scalar(
+                    select(Person.email).where(Person.id == here.setup.state.person_id)
+                )
+                seller = await db.scalar(
+                    select(Person.email).where(Person.id == here.seller.person_id)
+                )
+            assert admin and seller
+            dated = {
+                "text": "Remark of 11 Aug 2025: called, will think",
+                "at": "2025-08-11T12:00:00+05:30",
+            }
+            spec: dict[str, Any] = {
+                "command_id": str(uuid4()),
+                "tenant": str(here.tenant_id)[:8],
+                "seller_email": seller,
+                "approver_email": admin,
+                "actor_email": seller,
+                "approver": "Fictional owner, in chat",
+                "issue": "AUT-test",
+                "mapping": {"name": "full_name", "phone": "phone_number", "email": "email"},
+                "batches": [
+                    {
+                        "label": LABEL,
+                        "rows": [
+                            {
+                                **row("919876074001", "Fictional Live", "live@example.com"),
+                                "_notes": [dated, {"text": "Status in the sheet: Hot"}],
+                            },
+                            {
+                                **row("919876074002", "Fictional Hot", "hot@example.com"),
+                                "_stage": "interested",
+                            },
+                        ],
+                    },
+                    {
+                        "label": HISTORY_LABEL,
+                        "side": "history",
+                        "stage": "lost",
+                        "rows": [
+                            {
+                                **row("919876074003", "Fictional Old", "old@example.com"),
+                                "_notes": [dated],
+                            },
+                            {
+                                **row("919876074004", "Fictional Customer", "cust@example.com"),
+                                "_stage": "won",
+                            },
+                            # The same number as a live lead: a repeat, its note still kept.
+                            {
+                                **row("919876074001", "Fictional Live", "live@example.com"),
+                                "created_time": "2026-06-01T10:00:00.000Z",
+                                "_notes": [{"text": "Also in the old sheet"}],
+                            },
+                        ],
+                    },
+                ],
+            }
+            now = datetime.now(UTC)
+            bad = {**spec, "batches": [{**spec["batches"][0], "stage": "no_such_stage"}]}
+            with pytest.raises(SystemExit, match="stage_not_on_list"):
+                await tool.execute(sessions, bad, mode="dry-run", now=now)
+
+            dry = await tool.execute(sessions, spec, mode="dry-run", now=now)
+            assert dry["counts"] == {"created": 4, "repeat": 1, "notes": 4, "staged": 3}
+            assert dry["after"][HISTORY_LABEL]["by_side"] == {"history": 2}
+            done = await tool.execute(sessions, spec, mode="apply", now=now)
+            assert done["counts"] == dry["counts"]
+            async with sessions() as db:
+                leads = {
+                    lead.phone: lead
+                    for lead in (
+                        await db.scalars(select(Lead).where(Lead.tenant_id == here.tenant_id))
+                    ).all()
+                }
+                live, hot = leads["+919876074001"], leads["+919876074002"]
+                old, customer = leads["+919876074003"], leads["+919876074004"]
+                assert live.pipeline == "live" and live.stage == "new"
+                assert live.owner_person_id == here.seller.person_id and live.repeats == 1
+                assert hot.stage == "interested" and hot.owner_person_id == here.seller.person_id
+                assert old.pipeline == "history" and old.owner_person_id is None
+                assert old.stage == "lost" and old.outcome_reason == "imported"
+                assert customer.pipeline == "history" and customer.stage == "won"
+                assert "_notes" not in live.payload and "_stage" not in hot.payload
+                notes = (
+                    await db.scalars(
+                        select(LeadEvent).where(
+                            LeadEvent.tenant_id == here.tenant_id, LeadEvent.kind == "note"
+                        )
+                    )
+                ).all()
+                assert len(notes) == 4
+                assert {n.actor_person_id for n in notes} == {here.seller.person_id}
+                on_day = [n for n in notes if n.lead_id == old.id]
+                assert on_day[0].created_at.date().isoformat() == "2025-08-11"
+                assert sum(1 for n in notes if n.lead_id == live.id) == 3
+                stages = (
+                    await db.scalars(
+                        select(LeadEvent).where(
+                            LeadEvent.lead_id == old.id, LeadEvent.kind == "stage"
+                        )
+                    )
+                ).all()
+                assert stages and all(s.actor_person_id is None for s in stages)
+                audit = await db.scalar(
+                    select(AuditEvent).where(
+                        AuditEvent.action == tool.ACTION, AuditEvent.tenant_id == here.tenant_id
+                    )
+                )
+                assert audit is not None and audit.payload["approver"] == "Fictional owner, in chat"
+            again = await tool.execute(sessions, spec, mode="apply", now=now)
+            assert again["audited"] is False and "notes" not in again["counts"]
 
     run(exercise())
