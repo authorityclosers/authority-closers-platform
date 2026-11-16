@@ -77,6 +77,7 @@ from ac_platform.lead_desk.contracts import (
     ConversionView,
     Counts,
     DayCalls,
+    DayCount,
     DayOutcome,
     DeleteLeads,
     Desk,
@@ -98,6 +99,7 @@ from ac_platform.lead_desk.contracts import (
     LeadsDeleted,
     LeadSince,
     LeadSort,
+    LeadsPerDay,
     Me,
     MeetingClosed,
     MeetingCommand,
@@ -253,6 +255,15 @@ REVIVING_KINDS = frozenset(
 WORK_PAGE = 100
 # Days back from today's start for "this week" and "this month".
 BACK_DAYS: dict[str, int] = {"today": 0, "week": 6, "month": 29}
+# Leads per day reads at most this many days at once.
+PER_DAY_MAX = 92
+
+
+def business_day(day: date) -> datetime:
+    """The business's day ``day`` starts at midnight in India: as UTC."""
+    return datetime.combine(day, time.min, tzinfo=IST).astimezone(UTC)
+
+
 DEVICES_PER_PERSON = 5
 DEFAULT_MAX_OPEN = 50
 # Calls the phone logged by itself (UX study item 5): the phone book is the leads
@@ -1155,6 +1166,8 @@ class LeadDesk:
             next_action_at=lead.next_action_at,
             created_at=lead.created_at,
             received_at=lead.received_at,
+            updated_at=lead.updated_at,
+            assigned_at=lead.assigned_at,
             attempts=lead.attempts,
             calls=lead.calls,
             last_result=lead.last_result,
@@ -2044,6 +2057,8 @@ class LeadDesk:
         view: WorkView | None = None,
         step: str | None = None,
         when: FollowUpWhen | None = None,
+        since: date | None = None,
+        until: date | None = None,
     ) -> LeadPage:
         limit = max(1, min(PAGE_SIZE, limit))
         if scope != "mine" and not self.viewer.can_see_team:
@@ -2130,7 +2145,16 @@ class LeadDesk:
             if len(digits) >= 4:
                 terms.append(Lead.phone.like(f"%{digits}%"))
             where.append(or_(*terms))
-        where.extend(self._list_filters(source=source, due=due, contact=contact, created=created))
+        where.extend(
+            self._list_filters(
+                source=source,
+                due=due,
+                contact=contact,
+                created=created,
+                since=since,
+                until=until,
+            )
+        )
         # Each of the owner's stages' count for the same filters, before the stage pick:
         # the Pipeline stage picker's numbers (owner, 31 Oct 2026).
         step_counts: dict[str, int] = {}
@@ -2264,9 +2288,12 @@ class LeadDesk:
         due: LeadDue | None,
         contact: LeadSince | None,
         created: LeadMade | None,
+        since: date | None = None,
+        until: date | None = None,
     ) -> list[Any]:
         """The list's filters, by the business's day (India time, as the desk counts days):
-        where the lead came from, its next follow-up, the last contact, when it came."""
+        where the lead came from, its next follow-up, the last contact, when it came.
+        ``since`` and ``until``: a range of the business's days, both days in."""
         day = self._day_start()
         where: list[Any] = []
         if source is not None:
@@ -2297,10 +2324,17 @@ class LeadDesk:
             where.append(Lead.last_contact_at.is_(None))
         elif contact is not None:
             where.append(Lead.last_contact_at >= day - timedelta(days=BACK_DAYS[contact]))
-        if created is not None:
+        if created == "yesterday":
+            # The day before today, by when it came in (owner, 16 Nov 2026).
+            where.append(and_(day - timedelta(days=1) <= ARRIVED, day > ARRIVED))
+        elif created is not None:
             # When it came in, as the person sent it: an older enquiry brought in today
             # came in on its own day, not today (owner, 2 Nov 2026).
             where.append(day - timedelta(days=BACK_DAYS[created]) <= ARRIVED)
+        if since is not None:
+            where.append(business_day(since) <= ARRIVED)
+        if until is not None:
+            where.append(business_day(until + timedelta(days=1)) > ARRIVED)
         return where
 
     @staticmethod
@@ -2311,11 +2345,41 @@ class LeadDesk:
             "next_action": Lead.next_action_at,
             "last_contact": Lead.last_contact_at,
             "name": func.lower(Lead.name),
-            "created": Lead.created_at,
+            # Newest first by when it came in, as the person sent it, not when it was
+            # brought into Sales X-Ray (owner, 16 Nov 2026).
+            "created": ARRIVED,
         }[sort]
         down = descending if descending is not None else sort in ("last_contact", "created")
         primary = column.desc() if down else column.asc()
         return (primary.nulls_last(), Lead.id)
+
+    async def leads_per_day(
+        self, *, since: date, until: date, side: Side | None = None
+    ) -> LeadsPerDay:
+        """Leads that came in on each of the business's days from ``since`` to ``until``
+        (both in), by when the person sent them, for the same leads the list shows: owners
+        and managers only (owner, 16 Nov 2026). Every day is listed, a quiet day as 0."""
+        if not self.viewer.can_see_team:
+            raise DeskError(403, "Only owners and managers see leads per day.")
+        if until < since or (until - since).days >= PER_DAY_MAX:
+            raise DeskError(422, f"Choose up to {PER_DAY_MAX} days.")
+        where: list[Any] = [
+            self._seen(),
+            worked(),
+            business_day(since) <= ARRIVED,
+            business_day(until + timedelta(days=1)) > ARRIVED,
+        ]
+        if side is not None:
+            where.append(on_side(side))
+        counts: dict[date, int] = {}
+        for (arrived,) in (await self.db.execute(select(ARRIVED).where(*where))).all():
+            local = arrived.astimezone(IST).date() if arrived.tzinfo else arrived.date()
+            counts[local] = counts.get(local, 0) + 1
+        days = tuple(
+            DayCount(day=since + timedelta(days=n), count=counts.get(since + timedelta(days=n), 0))
+            for n in range((until - since).days + 1)
+        )
+        return LeadsPerDay(days=days, total=sum(day.count for day in days))
 
     async def activity(
         self,

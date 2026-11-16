@@ -26,7 +26,7 @@ vi.mock("./leads/native-phone", () => ({
   tellPhoneTelemetry: phone.tell,
 }));
 
-import { telemetry, timeAction } from "./telemetry";
+import { screenChanged, telemetry, timeAction } from "./telemetry";
 import {
   actionOf,
   apiTiming,
@@ -770,4 +770,23 @@ it("captures XHR completion and network failures even without Resource Timing", 
   } finally {
     vi.unstubAllGlobals();
   }
+});
+
+it("records the lead page as a screen when a lead opens on Leads", async () => {
+  // owner, 16 Nov 2026: see that a phone is on the lead page. Opening a lead
+  // changes only the address's ?lead=, never the path.
+  const track = vi.spyOn(telemetry, "track");
+  const root = await mount();
+  window.history.replaceState({}, "", "/leads?lead=L1");
+  now = 2_000;
+  await act(async () => screenChanged());
+  window.history.replaceState({}, "", "/leads");
+  now = 3_000;
+  await act(async () => screenChanged());
+  const views = tracked(track, "sx.screen_viewed");
+  expect(views.map((view) => view.screen)).toEqual(["leads", "lead", "leads"]);
+  expect(views[1]).toMatchObject({ from: "leads", nav: "push" });
+  // Nothing about the lead itself.
+  expect(JSON.stringify(views)).not.toContain("L1");
+  await act(async () => root.unmount());
 });

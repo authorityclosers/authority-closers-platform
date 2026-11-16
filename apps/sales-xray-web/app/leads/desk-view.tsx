@@ -20,6 +20,13 @@ import { ChannelMark } from "../chats/channel-mark";
 import { haptic } from "../ui/haptics";
 import { Avatar, Badge, Button, Kpi, Panel, Tiles, type Tone } from "../ui/kit";
 import { useRowKeys } from "../ui/row-keys";
+import {
+  arrivedAt,
+  arrivedShort,
+  fullTime,
+  isNewSince,
+  useSeenAt,
+} from "./arrival";
 import { firstTap } from "./first-tap";
 import { useRowGestures } from "./gestures";
 import {
@@ -276,8 +283,20 @@ export function LeadLine({
   // source, and an older enquiry's day; then, when someone needs to act, the
   // next step (a new enquiry's wait among them).
   const step = compact ? stepLine(row) : null;
-  const line = step ? step.text : whyLine(row);
+  // An owner's row for a lead nobody has (owner, 16 Nov 2026: "new meta ad ·
+  // no owner yet · waiting for an owner" read lopsided): one status line,
+  // "New · Meta ad · No owner", and no owner or waiting line under it.
+  const unowned = compact && showOwner && !row.owner_name;
+  const line = step
+    ? unowned && !step.late && row.why_kind === "waiting"
+      ? ""
+      : step.text
+    : whyLine(row);
   const older = compact ? olderEnquiry(row) : null;
+  // When it came in, short, at the name's end; New since the last visit.
+  const seenAt = useSeenAt();
+  const arrived = arrivedAt(row);
+  const isNew = isNewSince(row, seenAt);
   const sub = compact ? (
     <>
       <span
@@ -294,6 +313,7 @@ export function LeadLine({
         {shortSource(row).split(" · ")[0]}
       </span>
       {older ? ` · ${older}` : null}
+      {unowned ? " · No owner" : null}
     </>
   ) : (
     [row.interest, row.company, row.city].filter(Boolean).join(" · ")
@@ -385,10 +405,26 @@ export function LeadLine({
           <span className={styles.leadMain}>
             <span className={styles.leadName}>
               <span className={styles.leadNameText}>{row.name}</span>
+              {/* When it came in, at the line's end; New since the last
+                visit (owner, 16 Nov 2026). */}
+              <span className={styles.leadWhen}>
+                {isNew ? (
+                  <span className={styles.leadNew} data-lead-new="">
+                    New
+                  </span>
+                ) : null}
+                <span
+                  className={styles.leadAge}
+                  title={`Came in ${fullTime(arrived)}`}
+                  data-lead-age=""
+                >
+                  {arrivedShort(arrived)}
+                </span>
+              </span>
             </span>
             {sub ? <span className={styles.leadSub}>{sub}</span> : null}
             {/* The owner's view: who owns the lead, on its own line (part 01). */}
-            {compact && showOwner ? (
+            {compact && showOwner && !unowned ? (
               <span className={styles.leadOwnerLine}>
                 {row.owner_name ? `Owner: ${row.owner_name}` : "No owner yet"}
               </span>

@@ -94,6 +94,7 @@ from ac_platform.lead_desk.contracts import (
     LeadsDeleted,
     LeadSince,
     LeadSort,
+    LeadsPerDay,
     Me,
     MergeLeads,
     MergeView,
@@ -299,6 +300,8 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         step: str | None = Query(default=None, max_length=40),
         when: FollowUpWhen | None = None,
         older: Literal["only"] | None = None,
+        since: date | None = None,
+        until: date | None = None,
     ) -> LeadPage:
         no_query(
             request,
@@ -323,9 +326,13 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                     "view",
                     "step",
                     "when",
+                    "since",
+                    "until",
                 }
             ),
         )
+        if since is not None and until is not None and until < since:
+            raise HTTPException(422, "Choose a start date before the end date.", headers=PRIVATE)
         if pipeline is not None and not 0 < len(pipeline) <= 40:
             raise HTTPException(422, "Choose a pipeline.", headers=PRIVATE)
         if stage is not None and stage != "open" and stage not in STAGES:
@@ -353,6 +360,8 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 view=view,
                 step=step,
                 when=when,
+                since=since,
+                until=until,
             )
 
     @router.get("/sides", response_model=SideNumbers, response_model_by_alias=True)
@@ -425,6 +434,20 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
             raise HTTPException(422, "Enter a phone number.", headers=PRIVATE)
         async with desk_for(request, response) as lead_desk:
             return await lead_desk.match(phone)
+
+    @router.get("/leads/per-day", response_model=LeadsPerDay, response_model_by_alias=True)
+    async def leads_per_day(
+        request: Request,
+        response: Response,
+        since: date,
+        until: date,
+        side: Side | None = None,
+    ) -> LeadsPerDay:
+        """Leads that came in each day, by when the person sent them: owners and managers
+        (owner, 16 Nov 2026)."""
+        no_query(request, frozenset({"since", "until", "side"}))
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.leads_per_day(since=since, until=until, side=side)
 
     @router.post("/leads/bulk", response_model=BulkDone, response_model_by_alias=True)
     async def bulk_leads(command: BulkLeads, request: Request, response: Response) -> BulkDone:

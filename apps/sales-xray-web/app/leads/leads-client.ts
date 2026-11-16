@@ -51,6 +51,10 @@ export type LeadRow = {
   /** When the person sent it, when its source said and that differs from created_at
    *  (a Meta form's time): an older enquiry brought in later says its own day. */
   received_at?: string | null;
+  /** The lead's last change, and when its owner was given it (the lead page's
+   *  Timeline, owner, 16 Nov 2026). */
+  updated_at?: string | null;
+  assigned_at?: string | null;
   attempts: number;
   calls: number;
   last_result: string | null;
@@ -824,7 +828,7 @@ export type ListSort = "next_action" | "last_contact" | "name" | "created";
 export type ListDue = "late" | "today" | "week" | "none";
 export type ListSince = "today" | "week" | "month" | "never";
 /** "history": old leads brought in as history, which no other list shows (2 Nov 2026). */
-export type ListMade = "today" | "week" | "month" | "history";
+export type ListMade = "today" | "yesterday" | "week" | "month" | "history";
 /** Inbound Leads or Cold Leads (Dipak's Home + Leads handoff, 31 Oct 2026). */
 export type LeadSide = "inbound" | "cold";
 /** A work view, not a stage: To Call, Follow-ups or All Leads. */
@@ -841,6 +845,9 @@ export type ListMore = {
   due?: ListDue | null;
   contact?: ListSince | null;
   created?: ListMade | null;
+  /** A range of days by when each lead came in, both days in ("2026-11-02"). */
+  since?: string | null;
+  until?: string | null;
   sort?: ListSort | null;
   order?: "asc" | "desc" | null;
 };
@@ -860,6 +867,8 @@ export function moreParams(
       ["due", more.due],
       ["contact", more.contact],
       ["created", more.created],
+      ["since", more.since],
+      ["until", more.until],
       ["sort", more.sort],
       ["order", more.sort ? more.order : null],
     ] as [string, string | null | undefined][]
@@ -903,6 +912,23 @@ export function readLeads(
   if (offset) params.set("offset", String(offset));
   if (test) params.set("test", "only");
   return request<LeadPage>(`/leads?${params}`, { signal });
+}
+
+/** Leads that came in each day (India's days), for owners and managers. */
+export type LeadsPerDay = {
+  days: { day: string; count: number }[];
+  total: number;
+};
+
+export function readLeadsPerDay(
+  since: string,
+  until: string,
+  side?: LeadSide | null,
+  signal?: AbortSignal,
+) {
+  const params = new URLSearchParams({ since, until });
+  if (side) params.set("side", side);
+  return request<LeadsPerDay>(`/leads/per-day?${params}`, { signal });
 }
 
 /** Each side's numbers: every Inbound lead and the Cold leads imported tell

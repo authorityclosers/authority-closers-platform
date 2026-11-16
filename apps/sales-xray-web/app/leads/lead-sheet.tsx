@@ -44,6 +44,11 @@ import {
   Sparkles,
   Upload,
   UserPlus,
+  Inbox,
+  CalendarPlus,
+  RefreshCw,
+  UserCheck,
+  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -98,6 +103,7 @@ import {
   type Desk,
   type LeadDetail,
   type LeadEvent,
+  type LeadRow,
   type Stage,
   undoResult,
 } from "./leads-client";
@@ -132,6 +138,7 @@ import { dueWords, whyLine } from "./desk-view";
 import type { Kind, StageView } from "./journey/journey-client";
 import { stageTone as stageDot } from "./journey/stage-look";
 import { firstCallWords, ownerNote } from "./owner-words";
+import { arrivedAt, fullTime } from "./arrival";
 import { phoneCallText } from "./phone-call-text";
 import { several, usePipelines } from "./use-pipelines";
 import { afterCall } from "./after-call";
@@ -1566,6 +1573,82 @@ function heardLine(call: NativeCall): string {
   if (call.connected === false)
     return `Your phone says ${HEARD_MISSED[call.result] ?? "the call didn't connect"}.`;
   return "";
+}
+
+/* ---------- Timeline ---------- */
+
+/**
+ * When the lead came in, was added, last changed and given out (owner, 16 Nov
+ * 2026: "when did this lead actually generate? ... without cluttering, add
+ * these in icons"): each a date and time and how long ago. Owners and managers
+ * see all four; a seller sees when it was received.
+ */
+export function LeadTimeline({
+  lead,
+  full,
+  now = new Date(),
+}: {
+  lead: LeadRow;
+  full: boolean;
+  now?: Date;
+}) {
+  const rows: {
+    key: string;
+    icon: LucideIcon;
+    label: string;
+    at: string | null;
+  }[] = [
+    { key: "received", icon: Inbox, label: "Received", at: arrivedAt(lead) },
+    ...(full
+      ? [
+          {
+            key: "added",
+            icon: CalendarPlus,
+            label: "Added to Sales X-Ray",
+            at: lead.created_at,
+          },
+          {
+            key: "updated",
+            icon: RefreshCw,
+            label: "Last updated",
+            at: lead.updated_at ?? null,
+          },
+          {
+            key: "assigned",
+            icon: UserCheck,
+            label: "Assigned",
+            at: lead.owner_person_id ? (lead.assigned_at ?? null) : null,
+          },
+        ]
+      : []),
+  ];
+  return (
+    <section
+      className={styles.timeline}
+      aria-label="Timeline"
+      data-lead-timeline=""
+    >
+      <h3 className={styles.timelineTitle}>Timeline</h3>
+      <dl className={styles.timelineRows}>
+        {rows.map(({ key, icon: Icon, label, at }) => (
+          <div key={key} data-timeline={key}>
+            <Icon size={16} aria-hidden="true" />
+            <dt>{label}</dt>
+            <dd>
+              {at ? (
+                <>
+                  <time dateTime={at}>{fullTime(at)}</time>
+                  <small>{ago(at, now)}</small>
+                </>
+              ) : (
+                <small>{key === "assigned" ? "Not assigned yet" : "—"}</small>
+              )}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
 }
 
 /* ---------- History ---------- */
@@ -4445,6 +4528,7 @@ export function LeadCard({
             .join(" · ")}
         </small>
       </section>
+      <LeadTimeline lead={lead} full={!!me?.can_manage} />
       {detail.can_assign && detail.reps.length ? (
         <ReassignSheet
           open={picking}
