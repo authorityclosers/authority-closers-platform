@@ -25,6 +25,7 @@ _spec.loader.exec_module(importer)
 # second with RP01's labels ("एक छोटा example", "याद रखने वाली बात").
 DOC = """﻿IM01 — Why is understanding the problem alone not enough?
 05 — Value Creation & Quantification
+इस answer से कौन-सी सोच बदलनी है:
 पहले की गलत सोच: Problem पता चल गई, तो value अपने आप clear।
 नई सोच: Problem के साथ उसका असर भी समझना है।
 
@@ -162,6 +163,7 @@ def test_a_doc_splits_into_lessons_by_id_with_every_section_verbatim() -> None:
     assert (first.category_id, first.category_name) == ("05", "Value Creation & Quantification")
     assert first.before == "Problem पता चल गई, तो value अपने आप clear।"
     assert first.after == "Problem के साथ उसका असर भी समझना है।"
+    assert first.shift == "इस answer से कौन-सी सोच बदलनी है:"
     # Paragraphs split on blank lines; a line break inside one stays.
     assert first.quick == [
         "Customer कहता है, “हमारी team follow-up late करती है।”\nदूसरी line उसी paragraph में।",
@@ -173,6 +175,7 @@ def test_a_doc_splits_into_lessons_by_id_with_every_section_verbatim() -> None:
     assert a.dipak == ["Frequency जानना सही कदम है।", "लेकिन असर अभी पता नहीं।"]
     assert a.example == "छोटा example: दस quotations late हों।"
     assert a.better == "Frequency के साथ असर भी पूछें।"
+    assert a.better_label == "Better सोच"
     assert [option.letter for option in first.options] == ["A", "B", "C"]
     assert first.deep == ["Tiffin 20 minutes late पहुँचती है।", "Problem एक, impact अलग।"]
     assert first.cue == "Problem जानना शुरुआत है।"
@@ -186,6 +189,8 @@ def test_a_doc_splits_into_lessons_by_id_with_every_section_verbatim() -> None:
     assert second.id == "RP01" and second.deep == ["Wi-Fi signal गायब।"]
     assert second.options[0].example == "एक छोटा example: Reminder पहले से था।"
     assert second.options[0].better == "पहले gap समझें।"
+    assert second.options[0].better_label == "याद रखने वाली बात"
+    assert second.shift is None
 
 
 def test_a_lesson_maps_onto_the_apps_fields_as_the_sample_lessons_do() -> None:
@@ -197,7 +202,11 @@ def test_a_lesson_maps_onto_the_apps_fields_as_the_sample_lessons_do() -> None:
         "Frequency पूछूँगा।",
         "Frequency जानना सही कदम है।\nलेकिन असर अभी पता नहीं।\nछोटा example: दस quotations late हों।",
         "Frequency के साथ असर भी पूछें।",
+        "Better सोच",
     ]
+    assert mapped["title"] == "Why is understanding the problem alone not enough?"
+    assert mapped["shift"] == "इस answer से कौन-सी सोच बदलनी है:"
+    assert "shift" not in importer.app_lesson(importer.parse_doc(DOC).lessons[1])
     assert mapped["deep"] == lesson.deep and mapped["next"] == ["IM02", "RP01"]
     assert mapped["lock"] == lesson.lock
     assert (mapped["before"], mapped["after"]) == (lesson.before, lesson.after)
@@ -293,12 +302,39 @@ def test_the_cli_refuses_to_write_while_a_lesson_is_broken(
     assert summary["problems"] and summary["ids_found_count"] == 1
 
 
-def test_the_apps_library_holds_an_imported_lesson_for_every_question() -> None:
-    app = json.loads(importer.APP_LIBRARY.read_text("utf-8"))
-    codes = [question["id"] for category in app["categories"] for question in category["questions"]]
-    assert sorted(app["lessons"]) == sorted(codes) and len(codes) == 150
-    for code, lesson in app["lessons"].items():
+def test_the_server_library_holds_an_imported_lesson_for_every_question() -> None:
+    server = json.loads(importer.SERVER_LIBRARY.read_text("utf-8"))
+    codes = [q["id"] for category in server["categories"] for q in category["questions"]]
+    assert sorted(server["lessons"]) == sorted(codes) and len(codes) == 150
+    for code, lesson in server["lessons"].items():
         assert len(lesson["options"]) == 3, code
-        assert lesson["before"] and lesson["after"] and lesson["lock"], code
+        assert all(len(option) == 4 for option in lesson["options"]), code
+        assert lesson["before"] and lesson["after"] and lesson["lock"] and lesson["title"], code
         assert all(next_code in codes for next_code in lesson["next"]), code
-    assert len(app["lessonsSource"]["docs"]) == 11
+    assert len(server["lessonsSource"]["docs"]) == 11
+    # Doc 01's lessons carry his heading above the before/after lines.
+    assert sum("shift" in lesson for lesson in server["lessons"].values()) == 14
+
+
+def test_the_apps_copy_is_the_index_without_any_lesson() -> None:
+    server = json.loads(importer.SERVER_LIBRARY.read_text("utf-8"))
+    app = json.loads(importer.APP_LIBRARY.read_text("utf-8"))
+    assert app == importer.app_index(server)
+    assert "lessons" not in app
+    # The lock never reaches the browser, and the index stays small.
+    assert "CONSISTENCY" not in importer.APP_LIBRARY.read_text("utf-8")
+    assert importer.APP_LIBRARY.stat().st_size < 80_000
+
+
+def test_the_bundle_for_the_database_import_is_every_lesson(tmp_path: Path) -> None:
+    folder = _folder(tmp_path)
+    lessons, source, report = importer.library_lessons(folder)
+    assert list(lessons) == ["RP01", "IM01"]
+    assert lessons["IM01"] == importer.app_lesson(importer.parse_doc(DOC).lessons[0])
+    assert source["docs"] == report["docs"]
+    out = tmp_path / "bundle.json"
+    assert importer.main(["--docs", str(folder), "--bundle", str(out)]) == 0
+    assert json.loads(out.read_text("utf-8"))["lessons"] == lessons
+    broken = _folder(tmp_path, DOC.replace("5. NEXT-CALL MISSION\n", "", 1))
+    with pytest.raises(importer.DocError):
+        importer.library_lessons(broken)

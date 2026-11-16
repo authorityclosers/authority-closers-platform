@@ -24,7 +24,7 @@ from fastapi import APIRouter, FastAPI, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from ac_platform.ask_dipak import catalogue, coaching, how_to_improve, store, team
+from ac_platform.ask_dipak import catalogue, coaching, how_to_improve, library, store, team
 from ac_platform.http.routes import RouteContext
 from ac_platform.integrations.api_http import ApiError, Reader, make_opener
 
@@ -254,11 +254,13 @@ def search(query: str) -> dict[str, Any]:
     return {"questions": [item.public() for item in catalogue.search(query[:200])]}
 
 
-def lesson(question_id: str) -> dict[str, Any]:
+async def lesson(reader: Reader, question_id: str) -> dict[str, Any]:
+    """The question and its lesson from the newest import (migration 0157), never its lock."""
     found = catalogue.question(question_id)
     if found is None:
         raise ApiError(404, "question_missing", "No such question.")
-    return {"question": found.public(), "lesson": catalogue.lesson(question_id)}
+    served = await library.served(reader.session)
+    return {"question": found.public(), "lesson": catalogue.lesson(question_id, served.lessons)}
 
 
 def improve(skills: list[str], objections: list[str]) -> dict[str, Any]:
@@ -410,7 +412,7 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
     if name == "ask_dipak_search":
         return search(_text(args, "query", required=False))
     if name == "ask_dipak_lesson":
-        return lesson(_text(args, "question_id"))
+        return await lesson(reader, _text(args, "question_id"))
     if name == "ask_dipak_how_to_improve":
         return improve(_keys(args, "skills"), _keys(args, "objections"))
     if name == "ask_dipak_my_missions":
@@ -457,8 +459,8 @@ def install_ask_dipak_api(app: FastAPI, ctx: RouteContext) -> None:
 
     @router.get("/lessons/{question_id}")
     async def lesson_route(question_id: str, request: Request) -> JSONResponse:
-        async with open_reader(request):
-            return done(lesson(question_id))
+        async with open_reader(request) as reader:
+            return done(await lesson(reader, question_id))
 
     @router.get("/how-to-improve")
     async def improve_route(

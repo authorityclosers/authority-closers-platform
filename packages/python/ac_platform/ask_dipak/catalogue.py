@@ -9,11 +9,17 @@ against these IDs, and a Next-call mission only where the question has a lesson.
 for him (the app's drafts.json) are never in it, so never served. A lesson's report and coaching
 consistency lock is for Sales X-Ray's reports and is not part of the lesson served to sellers.
 His internal coaching notes are not in it.
+
+Since migration 0157 (16 Nov 2026) the lessons served are the newest import in the database
+(library.py, ``served``), and this file's lessons are the fallback until the first import. The
+question ids, categories and search stay here. ``served`` records the lessons it found with
+``use_lessons``, so ``lesson`` and ``mission_text`` teach the newest import everywhere.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cache
 from importlib import resources
@@ -96,20 +102,56 @@ def question(question_id: str) -> Question | None:
     return _BY_ID.get(question_id)
 
 
-def lesson(question_id: str) -> dict[str, Any] | None:
-    """A complete lesson in Dipak's order, or None while the question has none."""
-    raw = _library()["lessons"].get(question_id)
+def bundled_lessons() -> Mapping[str, Any]:
+    """The lessons bundled with the code: served until the first import."""
+    lessons: Mapping[str, Any] = _library()["lessons"]
+    return lessons
+
+
+#: The lessons the newest ``library.served`` read found (the bundled ones until then).
+_CURRENT: dict[str, Mapping[str, Any]] = {}
+
+
+def use_lessons(lessons: Mapping[str, Any]) -> None:
+    _CURRENT["lessons"] = lessons
+
+
+def current_lessons() -> Mapping[str, Any]:
+    return _CURRENT.get("lessons") or bundled_lessons()
+
+
+def _option(index: int, option: list[str]) -> dict[str, Any]:
+    choice, why, takeaway = option[:3]
+    # His label on the takeaway: "Better सोच", or RP01's "याद रखने वाली बात".
+    label = option[3] if len(option) > 3 else "Better सोच"
+    return {
+        "letter": "ABC"[index],
+        "choice": choice,
+        "why": why,
+        "takeaway": takeaway,
+        "takeaway_label": label,
+    }
+
+
+def lesson(question_id: str, lessons: Mapping[str, Any] | None = None) -> dict[str, Any] | None:
+    """A complete lesson in Dipak's order, or None while the question has none. The report
+    and coaching consistency lock is never in it."""
+    raw = (current_lessons() if lessons is None else lessons).get(question_id)
     found = _BY_ID.get(question_id)
     if raw is None or found is None:
         return None
     return {
         **found.public(),
+        "title": raw.get("title") or found.title,
+        # "इस answer से कौन-सी सोच बदलनी है": his before and after lines, word for word.
+        "mindset_shift": {
+            "heading": raw.get("shift"),
+            "before": raw.get("before"),
+            "after": raw.get("after"),
+        },
         "quick_answer": raw["quick"],
         "scenario": raw["scenario"],
-        "options": [
-            {"letter": "ABC"[index], "choice": choice, "why": why, "takeaway": takeaway}
-            for index, (choice, why, takeaway) in enumerate(raw["options"])
-        ],
+        "options": [_option(index, option) for index, option in enumerate(raw["options"])],
         "deep_lesson": list(raw["deep"]),
         "remember": raw["cue"],
         "next_call_mission": raw["mission"],
@@ -118,7 +160,7 @@ def lesson(question_id: str) -> dict[str, Any] | None:
 
 
 def mission_text(question_id: str) -> str | None:
-    raw = _library()["lessons"].get(question_id)
+    raw = current_lessons().get(question_id)
     return None if raw is None else str(raw["mission"])
 
 
@@ -150,8 +192,11 @@ __all__ = [
     "QUESTION_IDS",
     "SUGGESTIONS",
     "Question",
+    "bundled_lessons",
+    "current_lessons",
     "lesson",
     "mission_text",
     "question",
     "search",
+    "use_lessons",
 ]

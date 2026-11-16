@@ -17,9 +17,11 @@ APP_LIBRARY = ROOT / "apps/sales-xray-web/app/ask-dipak/library.json"
 SERVER_LIBRARY = ROOT / "packages/python/ac_platform/ask_dipak/library.json"
 
 
-def test_the_server_library_is_the_apps_word_for_word() -> None:
-    app = json.loads(APP_LIBRARY.read_text(encoding="utf-8"))
-    assert json.loads(SERVER_LIBRARY.read_text(encoding="utf-8")) == app
+def test_the_server_library_is_the_apps_index_plus_every_lesson() -> None:
+    app = json.loads(SERVER_LIBRARY.read_text(encoding="utf-8"))
+    # The app's copy is the same library without its lessons (they come from the API).
+    index = json.loads(APP_LIBRARY.read_text(encoding="utf-8"))
+    assert index == {key: value for key, value in app.items() if key != "lessons"}
     assert {
         category["id"]: tuple(question["id"] for question in category["questions"])
         for category in app["categories"]
@@ -41,13 +43,22 @@ def test_a_lesson_reads_in_dipaks_order_and_none_is_invented() -> None:
     assert lesson["remember"] == "“Expensive” सुनते ही discount नहीं; पहले पूछिए “किसके comparison में?”"
     assert lesson["quick_answer"].startswith("Buyer बोले “Price बहुत ज्यादा है,” तो तुरंत discount")
     assert [item["id"] for item in lesson["related"]] == ["PB04", "NEW-030", "PB05"]
-    # Once a draft, now his lesson; the report lock and his before/after lines stay out.
+    # His before/after lines are served (shown above the quick answer); the lock never is.
+    assert lesson["mindset_shift"]["before"] and lesson["mindset_shift"]["after"]
+    assert lesson["options"][0]["takeaway_label"] == "Better सोच"
+    assert catalogue.lesson("CF01")["mindset_shift"]["heading"] == (  # type: ignore[index]
+        "इस answer से कौन-सी सोच बदलनी है:"
+    )
+    assert catalogue.lesson("RP01")["options"][0]["takeaway_label"] == (  # type: ignore[index]
+        "याद रखने वाली बात"
+    )
+    # Once a draft, now his lesson.
     assert catalogue.lesson("PB05") is not None
     assert str(catalogue.mission_text("PB05")).startswith("अगली तीन price objections में")
-    app = json.loads(APP_LIBRARY.read_text(encoding="utf-8"))["lessons"]
+    app = json.loads(SERVER_LIBRARY.read_text(encoding="utf-8"))["lessons"]
     for code in sorted(catalogue.QUESTION_IDS):
         served = catalogue.lesson(code)
-        assert served is not None and not {"lock", "before", "after"} & set(served)
+        assert served is not None and "lock" not in served
         text = json.dumps(served, ensure_ascii=False)
         assert all(line not in text for line in app[code]["lock"]), code
     assert catalogue.lesson("ZZ99") is None and catalogue.mission_text("ZZ99") is None
@@ -157,3 +168,18 @@ def test_progress_is_the_newest_row_per_question_and_item() -> None:
         "missions": ["PB03"],
         "missions_done": 1,
     }
+
+
+def test_a_lesson_reads_from_the_lessons_it_is_given() -> None:
+    """The newest import's lessons (library.served) replace the bundled ones."""
+    bundled = dict(catalogue.bundled_lessons())
+    edited = {**bundled, "PB03": {**bundled["PB03"], "cue": "Dipak's edit", "title": "New words"}}
+    lesson = catalogue.lesson("PB03", edited)
+    assert lesson is not None and lesson["remember"] == "Dipak's edit"
+    assert lesson["title"] == "New words"
+    try:
+        catalogue.use_lessons(edited)
+        assert catalogue.mission_text("PB03") == bundled["PB03"]["mission"]
+        assert catalogue.lesson("PB03")["remember"] == "Dipak's edit"  # type: ignore[index]
+    finally:
+        catalogue.use_lessons(bundled)

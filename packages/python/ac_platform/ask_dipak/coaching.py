@@ -22,7 +22,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ac_platform.ask_dipak import catalogue
+from ac_platform.ask_dipak import catalogue, library
 from ac_platform.ask_dipak.coaching_models import (
     SalesXrayAskDipakCallCheck,
     SalesXrayAskDipakFocusEvent,
@@ -76,6 +76,8 @@ def mission_public(question_id: str) -> dict[str, Any]:
 
 async def active_missions(db: AsyncSession, person_id: UUID) -> tuple[str, ...]:
     """The seller's active missions, in the order they were made active."""
+    # Their mission text is the newest import's (migration 0157), as the lessons are.
+    await library.served(db)
     rows = await db.execute(
         select(SalesXrayAskDipakFocusEvent.question_id, SalesXrayAskDipakFocusEvent.kind)
         .where(SalesXrayAskDipakFocusEvent.person_id == person_id)
