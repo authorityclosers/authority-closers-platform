@@ -1305,6 +1305,72 @@ export function readSellerLoads(
   return request<SellerLoads>(`/team/load?side=${side}`, { signal });
 }
 
+export type ServerView = {
+  view_id: string;
+  name: string;
+  visibility: "me" | "team";
+  owner_person_id: string;
+  mine: boolean;
+  can_change: boolean;
+  filter: LeadFilter;
+  display: Record<string, unknown>;
+  position: number;
+  revision: number;
+  /** Its number for me, when asked for; null when my role can't open it. */
+  count: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Saved views on the server: the team's, then mine. */
+export function readServerViews(counts = false, signal?: AbortSignal) {
+  return request<{ views: ServerView[] }>(
+    counts ? "/views?counts=true" : "/views",
+    { signal },
+  );
+}
+
+/** Save a view: only me, or the team (owners, admins and managers). */
+export function saveServerView(
+  view: {
+    name: string;
+    visibility?: "me" | "team";
+    filter: LeadFilter;
+    display?: Record<string, unknown>;
+  },
+  command = commandId(),
+) {
+  return request<ServerView>(
+    "/views",
+    json("POST", { command_id: command, ...view }),
+  );
+}
+
+/** Change a view (only what is sent changes); a stale revision is refused (409). */
+export function editServerView(
+  viewId: string,
+  change: {
+    expected_revision: number;
+    name?: string;
+    visibility?: "me" | "team";
+    filter?: LeadFilter;
+    display?: Record<string, unknown>;
+    position?: number;
+  },
+) {
+  return request<ServerView>(
+    `/views/${encodeURIComponent(viewId)}`,
+    json("PUT", change),
+  );
+}
+
+export function deleteServerView(viewId: string, expectedRevision: number) {
+  return request<{ views: ServerView[] }>(
+    `/views/${encodeURIComponent(viewId)}/delete`,
+    json("POST", { expected_revision: expectedRevision }),
+  );
+}
+
 /** At most this many leads go in one archive, Bin or restore. */
 export const SHELF_LIMIT = 2000;
 

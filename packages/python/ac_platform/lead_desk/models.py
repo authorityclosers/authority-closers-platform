@@ -698,6 +698,36 @@ class LeadRep(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class LeadSavedView(Base):
+    """A saved Leads list (migration 0159, saved_views.py): one person's ("me") or the team's
+    ("team"; owners, admins and managers make those). ``query`` holds GET /leads options,
+    ``display`` how it shows; never a lead's data."""
+
+    __tablename__ = "lead_desk_saved_views"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_desk_view_tenant"),
+        ForeignKeyConstraint(["owner_person_id"], ["persons.id"], name="fk_lead_desk_view_owner"),
+        CheckConstraint("visibility IN ('me', 'team')", name="lead_desk_view_visibility"),
+        CheckConstraint("length(trim(name)) > 0", name="lead_desk_view_name"),
+        CheckConstraint("revision >= 1", name="lead_desk_view_revision"),
+        Index("ix_lead_desk_view_tenant", "tenant_id", "visibility", "position"),
+        Index("uq_lead_desk_view_command", "tenant_id", "command_id", unique=True),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    owner_person_id: Mapped[UUID] = mapped_column(Uuid)
+    visibility: Mapped[str] = mapped_column(String(8))
+    name: Mapped[str] = mapped_column(String(40))
+    query: Mapped[dict[str, Any]] = mapped_column(JSON)
+    display: Mapped[dict[str, Any]] = mapped_column(JSON)
+    position: Mapped[int] = mapped_column(Integer)
+    revision: Mapped[int] = mapped_column(Integer)
+    command_id: Mapped[UUID] = mapped_column(Uuid)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class LeadSource(Base):
     """A connected capture source. Webhook tokens are stored only as a SHA-256."""
 

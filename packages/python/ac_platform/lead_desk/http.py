@@ -46,6 +46,7 @@ from ac_platform.lead_desk import (
     owner_alerts,
     push,
     revenue_push,
+    saved_views,
     shelf,
     simulation,
     spool,
@@ -134,6 +135,11 @@ from ac_platform.lead_desk.contracts import (
     RevenueTargetsCommand,
     RevenueTargetsView,
     RevenueView,
+    SavedView,
+    SavedViewCommand,
+    SavedViewDelete,
+    SavedViewEdit,
+    SavedViews,
     SearchResult,
     SeedCommand,
     SellerLoads,
@@ -542,6 +548,39 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request, frozenset({"side"}))
         async with desk_for(request, response) as lead_desk:
             return await load.seller_loads(lead_desk, side)
+
+    @router.get("/views", response_model=SavedViews, response_model_by_alias=True)
+    async def saved_views_list(
+        request: Request, response: Response, counts: bool = False
+    ) -> SavedViews:
+        """The team's saved views, then my own; ``counts=true`` adds each view's number."""
+        no_query(request, frozenset({"counts"}))
+        async with desk_for(request, response) as lead_desk:
+            return await saved_views.listed(lead_desk, counts=counts)
+
+    @router.post("/views", response_model=SavedView, response_model_by_alias=True, status_code=201)
+    async def save_view(
+        command: SavedViewCommand, request: Request, response: Response
+    ) -> SavedView:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await saved_views.create(lead_desk, command)
+
+    @router.put("/views/{view_id}", response_model=SavedView, response_model_by_alias=True)
+    async def edit_view(
+        view_id: UUID, command: SavedViewEdit, request: Request, response: Response
+    ) -> SavedView:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await saved_views.edit(lead_desk, view_id, command)
+
+    @router.post("/views/{view_id}/delete", response_model=SavedViews, response_model_by_alias=True)
+    async def delete_view(
+        view_id: UUID, command: SavedViewDelete, request: Request, response: Response
+    ) -> SavedViews:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await saved_views.delete(lead_desk, view_id, command)
 
     @router.post("/leads/bulk-jobs", response_model=BulkJob, response_model_by_alias=True)
     async def run_bulk_job(

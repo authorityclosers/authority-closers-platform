@@ -105,3 +105,28 @@ outcome_reason?, reason_note?, next_action_at?}`.
   (`role: null`), so the numbers add up: per-seller stages = their `open`, sellers +
   `unassigned` = `totals`.
 - The assign sheet's "after: N" is the screen's own sum (`open` + the leads it is giving).
+
+## 4. Saved views (`lead_desk/saved_views.py`, migration 0159)
+
+| Route | Who | Answer |
+|---|---|---|
+| `GET /views?counts=true` | everyone | `{views: SavedView[]}`: the team's, then mine |
+| `POST /views` | everyone ("me"); owners, admins, managers ("team") | `SavedView` (201) |
+| `PUT /views/{view_id}` | the view's owner ("me"); owners, admins, managers ("team") | `SavedView` |
+| `POST /views/{view_id}/delete` | the same | `{views}` |
+
+- Create: `{command_id, name (1–40), visibility: "me" | "team", filter, display}`; `filter` is
+  the bulk change's `LeadFilter` (the GET /leads options), `display` the screen's own JSON
+  (columns, density, sort; up to 4,000 bytes). Idempotent by `command_id`; a name already used in
+  the same place is 409; up to 40 views per person and 40 team views.
+- Edit: `{expected_revision, name?, visibility?, filter?, display?, position?}`; a stale
+  revision is 409. Delete: `{expected_revision}`; the view is removed (a preference, not history).
+- `SavedView = {view_id, name, visibility, owner_person_id, mine, can_change, filter, display,
+  position, revision, count, created_at, updated_at}`. `count` (only with `counts=true`) is the
+  list's own total for the person asking; null when their role can't open that list.
+- A person never sees someone else's "me" views. The phone's on-device views
+  (`app/leads/saved-views.ts`) are untouched; the UI task moves them here.
+- Starter views (spec §4.6) are the screen's presets, made from the same filters: Unassigned
+  (`scope: "unassigned"`), Late follow-ups (`due: "late"`), Not worked for 30 days
+  (`contact: "never"` or an older `contact`), Possible duplicates (`duplicates: true`), Archived
+  (`shelf: "archived"`).

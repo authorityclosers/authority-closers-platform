@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
@@ -1874,6 +1874,56 @@ class BulkJobCommand(Command):
     outcome_reason: str | None = Field(default=None, max_length=40)
     reason_note: str | None = Field(default=None, max_length=500)
     next_action_at: AwareDatetime | None = None
+
+
+class SavedViewCommand(Command):
+    """Save a Leads list as a view (saved_views.py): only me, or the team (owners, admins and
+    managers). ``display``: how it shows (columns, density, sort), the screen's own JSON."""
+
+    command_id: UUID
+    name: str = Field(min_length=1, max_length=40)
+    visibility: Literal["me", "team"] = "me"
+    filter: LeadFilter
+    display: dict[str, Any] = Field(default_factory=dict)
+
+
+class SavedViewEdit(Command):
+    """Change a view: only what is sent changes."""
+
+    expected_revision: int = Field(ge=1)
+    name: str | None = Field(default=None, min_length=1, max_length=40)
+    visibility: Literal["me", "team"] | None = None
+    filter: LeadFilter | None = None
+    display: dict[str, Any] | None = None
+    position: int | None = Field(default=None, ge=0, le=10_000)
+
+
+class SavedViewDelete(Command):
+    expected_revision: int = Field(ge=1)
+
+
+class SavedView(Model):
+    """A saved Leads list (saved_views.py). ``count``: its number for the person asking, when
+    asked for (None: not asked, or a list their role can't open)."""
+
+    view_id: UUID
+    name: str
+    visibility: Literal["me", "team"]
+    owner_person_id: UUID
+    mine: bool
+    can_change: bool
+    filter: LeadFilter
+    display: dict[str, Any]
+    position: int
+    revision: int
+    count: int | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SavedViews(Model):
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    views: tuple[SavedView, ...]
 
 
 class MovePipeline(Command):
