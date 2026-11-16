@@ -6,8 +6,9 @@
  * its lesson (quick answer, your turn with three options and Dipak's word on
  * each, the Deep lesson, the line to remember, the Next-call mission, what
  * to learn next); Search and Saved lessons beside them. Dipak's own lessons
- * show as they are; a lesson drafted for him carries a "Draft · Dipak to
- * confirm" tag, and its mission can't be marked until he confirms it.
+ * show as they are, his before/after lines first, each loaded from the API
+ * when opened (lessons.ts); a lesson drafted for him carries a "Draft ·
+ * Dipak to confirm" tag, and its mission can't be marked until he confirms it.
  */
 
 import { useSearchParams } from "next/navigation";
@@ -27,6 +28,7 @@ import { useTabAgain } from "../shell/tab-again";
 import styles from "./ask-dipak.module.css";
 import { COPY } from "./copy";
 import { AskIcon } from "./icons";
+import { retryLesson, useLesson } from "./lessons";
 import { MissionsScreen } from "./missions-screen";
 import {
   CATEGORIES,
@@ -39,9 +41,9 @@ import {
   categoryQuestions,
   featuredById,
   featuredQuestions,
+  draftFor,
   isDraft,
   lessonChip,
-  lessonFor,
   questionById,
   questionLabel,
   searchQuestions,
@@ -529,6 +531,8 @@ function LessonScreen({
   back: () => void;
 }) {
   const deepId = useId();
+  // Dipak's lesson from the API (or the phone's copy of it); a draft is local.
+  const served = useLesson(id);
   const question = questionById(id);
   if (!question)
     return (
@@ -537,7 +541,7 @@ function LessonScreen({
         <div className={styles.empty}>{COPY.notFound}</div>
       </>
     );
-  const lesson = lessonFor(id);
+  const lesson = draftFor(id) ?? served.lesson;
   const head = (
     <Breadcrumb onBack={back}>
       <span
@@ -553,18 +557,28 @@ function LessonScreen({
         {head}
         <div className={styles.questionHero}>
           <h2 className={styles.pageTitle}>{questionLabel(question)}</h2>
-          <p className={styles.pageSub}>{COPY.notReadyChip}</p>
+          <p className={styles.pageSub}>{COPY.parts}</p>
         </div>
-        <div className={styles.panel} data-lesson-state="not-ready">
-          <p className={styles.copy}>{COPY.notReady}</p>
-          <button
-            type="button"
-            className={`${styles.smallBtn} ${styles.primary}`}
-            onClick={back}
+        {served.status === "failed" ? (
+          <div className={styles.panel} data-lesson-state="failed">
+            <p className={styles.copy}>{COPY.loadFailed}</p>
+            <button
+              type="button"
+              className={`${styles.smallBtn} ${styles.primary}`}
+              onClick={() => void retryLesson(id)}
+            >
+              {COPY.retry}
+            </button>
+          </div>
+        ) : (
+          <div
+            className={styles.panel}
+            data-lesson-state="loading"
+            role="status"
           >
-            {COPY.backToQuestions}
-          </button>
-        </div>
+            <p className={styles.copy}>{COPY.loading}</p>
+          </div>
+        )}
       </>
     );
   const draft = isDraft(id);
@@ -579,7 +593,12 @@ function LessonScreen({
       {head}
       <div className={styles.detailTop}>
         <div className={styles.questionHero}>
-          <h2 className={styles.pageTitle}>{questionLabel(question)}</h2>
+          <h2 className={styles.pageTitle}>
+            {/* The homepage's wording if it has one, else his doc's, as served. */}
+            {questionLabel(question) !== question.title
+              ? questionLabel(question)
+              : (served.title ?? question.title)}
+          </h2>
           <p className={styles.pageSub}>{COPY.parts}</p>
           {draft ? (
             <p className={styles.draftTag} data-draft="">
@@ -597,6 +616,17 @@ function LessonScreen({
           <AskIcon name="bookmark" size={21} />
         </button>
       </div>
+
+      {lesson.before && lesson.after ? (
+        <>
+          {/* His before and after lines, word for word (his doc's opening). */}
+          <h3 className={styles.sectionH}>{COPY.shift}</h3>
+          <div className={styles.panel} data-mindset="">
+            <p className={styles.copy}>{`${COPY.before}: ${lesson.before}`}</p>
+            <p className={styles.copy}>{`${COPY.after}: ${lesson.after}`}</p>
+          </div>
+        </>
+      ) : null}
 
       <h3 className={styles.sectionH}>{COPY.quick}</h3>
       <div className={styles.panel}>
@@ -628,7 +658,10 @@ function LessonScreen({
           {chosen[1].split("\n").map((line) => (
             <p key={line}>{line}</p>
           ))}
-          <div className={styles.take}>{chosen[2]}</div>
+          {/* His takeaway with his own label ("Better सोच"). */}
+          <div
+            className={styles.take}
+          >{`${chosen[3] ?? COPY.better}: ${chosen[2]}`}</div>
           <p className={styles.mutedNote}>{COPY.compare}</p>
         </div>
       ) : null}

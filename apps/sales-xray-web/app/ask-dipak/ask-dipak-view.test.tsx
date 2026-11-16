@@ -48,11 +48,18 @@ import {
   CATEGORIES,
   CATEGORY_ICONS,
   DRAFTS,
-  LESSONS,
   questionById,
   questionLabel,
 } from "./library";
+import {
+  KEEP,
+  LESSON_PATH,
+  loadLesson,
+  primeLessons,
+  resetLessons,
+} from "./lessons";
 import { PROGRESS_PATH, loadProgress, resetProgress } from "./progress";
+import { LESSONS, SELLER_LESSONS, servedLesson } from "./test-lessons";
 
 let host: HTMLDivElement;
 let root: Root;
@@ -177,6 +184,10 @@ const crumb = () => host.querySelector('button[class*="breadcrumb"]');
 beforeEach(() => {
   fake.notices.length = 0;
   resetProgress();
+  // Dipak's lessons as already served this visit (lessons.ts); the tests under
+  // "Lessons from the API" start without them.
+  resetLessons();
+  primeLessons(SELLER_LESSONS);
   installServer();
 });
 
@@ -364,12 +375,16 @@ describe("Interactive lessons", () => {
         (h) => h.textContent,
       );
       expect(sections).toEqual([
+        COPY.shift,
         COPY.quick,
         COPY.turn,
         COPY.cue,
         COPY.mission,
         COPY.related,
       ]);
+      // His before/after lines first, word for word.
+      expect(text()).toContain(`${COPY.before}: ${lesson.before}`);
+      expect(text()).toContain(`${COPY.after}: ${lesson.after}`);
       expect(text()).toContain(lesson.quick);
       expect(text()).toContain(lesson.scenario);
       expect(text()).toContain(lesson.cue);
@@ -410,7 +425,10 @@ describe("Interactive lessons", () => {
         ),
       ).toEqual([...lines, COPY.compare]);
       expect(lines.at(-1)).toMatch(/छोटा example:/);
-      expect(feedback).toContain(lesson.options[index][2]);
+      // His takeaway with his label ("Better सोच").
+      expect(host.querySelector('[role="status"] > div')?.textContent).toBe(
+        `${lesson.options[index][3]}: ${lesson.options[index][2]}`,
+      );
       expect(feedback).toContain(COPY.compare);
       for (const other of [0, 1, 2].filter((item) => item !== index))
         expect(feedback).not.toContain(lesson.options[other][1].split("\n")[0]);
@@ -627,4 +645,124 @@ it("never writes an unknown lesson's progress", async () => {
   expect(text()).toContain(COPY.notFound);
   expect(host.querySelectorAll("button[aria-pressed]")).toHaveLength(0);
   expect(crumb()?.textContent).toContain(COPY.title);
+});
+
+describe("Lessons from the API (16 Nov 2026: served from the database)", () => {
+  function serveLessons(answer: (id: string) => Response | Promise<Response>) {
+    const asked: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith(`${LESSON_PATH}/`)) {
+          const id = decodeURIComponent(url.slice(LESSON_PATH.length + 1));
+          asked.push(id);
+          return answer(id);
+        }
+        return new Response(JSON.stringify({ saved: [], missions: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+    return asked;
+  }
+  const json = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+
+  beforeEach(() => {
+    resetLessons();
+    window.localStorage.clear();
+  });
+
+  it("loads a lesson when it is opened, once, with his before/after and labels", async () => {
+    const asked = serveLessons((id) => json(servedLesson(id)));
+    await show("/ask-dipak?lesson=RP01");
+    await act(async () => {
+      await loadLesson("RP01");
+    });
+    expect(asked).toEqual(["RP01"]);
+    const lesson = LESSONS.RP01;
+    expect(text()).toContain(lesson.quick);
+    expect(text()).toContain(`${COPY.before}: ${lesson.before}`);
+    await click(
+      host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")[1],
+    );
+    // RP01's own label for the takeaway.
+    expect(host.querySelector('[role="status"] > div')?.textContent).toBe(
+      `याद रखने वाली बात: ${lesson.options[0][2]}`,
+    );
+    for (const line of lesson.lock) expect(text()).not.toContain(line);
+    // Kept on the phone for next time.
+    expect(
+      window.localStorage.getItem("sales-xray:ask-dipak:lesson:RP01"),
+    ).toContain(lesson.cue);
+  });
+
+  it("shows his heading above the before/after lines where he wrote one", async () => {
+    serveLessons((id) => json(servedLesson(id)));
+    await show("/ask-dipak?lesson=CF01");
+    await act(async () => {
+      await loadLesson("CF01");
+    });
+    expect(LESSONS.CF01.shift).toBe("इस answer से कौन-सी सोच बदलनी है:");
+    expect(host.querySelector("h3")?.textContent).toBe(COPY.shift);
+    expect(host.querySelector("[data-mindset]")?.textContent).toContain(
+      LESSONS.CF01.after,
+    );
+  });
+
+  it("says it is loading, then offers a retry when the lesson can't be reached", async () => {
+    let down = true;
+    serveLessons((id) =>
+      down ? new Response("{}", { status: 503 }) : json(servedLesson(id)),
+    );
+    await show("/ask-dipak?lesson=DM02");
+    await act(async () => {
+      await loadLesson("DM02");
+    });
+    expect(
+      host.querySelector('[data-lesson-state="failed"]')?.textContent,
+    ).toContain(COPY.loadFailed);
+    down = false;
+    await click(button(COPY.retry));
+    await act(async () => {
+      await loadLesson("DM02");
+    });
+    expect(host.querySelector("[data-lesson-state]")).toBeNull();
+    expect(text()).toContain(LESSONS.DM02.quick);
+  });
+
+  it("opens a lesson kept on the phone without a connection", async () => {
+    serveLessons((id) => json(servedLesson(id)));
+    await show("/ask-dipak?lesson=OB03");
+    await act(async () => {
+      await loadLesson("OB03");
+    });
+    await act(async () => root.unmount());
+    host.remove();
+    // A new visit, offline.
+    resetLessons();
+    serveLessons(() => Promise.reject(new TypeError("offline")));
+    await show("/ask-dipak?lesson=OB03");
+    await act(async () => {
+      await loadLesson("OB03");
+    });
+    expect(text()).toContain(LESSONS.OB03.quick);
+    expect(host.querySelector("[data-lesson-state]")).toBeNull();
+  });
+
+  it("keeps only the last few lessons on the phone", async () => {
+    serveLessons((id) => json(servedLesson(id)));
+    const ids = Object.keys(LESSONS).slice(0, KEEP + 3);
+    for (const id of ids) await loadLesson(id);
+    const kept = ids.filter((id) =>
+      window.localStorage.getItem(`sales-xray:ask-dipak:lesson:${id}`),
+    );
+    expect(kept).toEqual(ids.slice(3));
+    await show();
+  });
 });

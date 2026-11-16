@@ -143,6 +143,9 @@ ALIASES: Final[dict[str, tuple[str, ...]]] = {
         "person_city",
         "lead_city",
         "city_name",
+        # "City/Town", "Town/City" (owner's import study, 16 Nov 2026).
+        "city_town",
+        "town_city",
     ),
     "language": ("language", "preferred_language", "lang", "languages", "speaks"),
     "interest": (

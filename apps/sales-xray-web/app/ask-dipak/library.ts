@@ -1,16 +1,17 @@
 /**
  * Ask Dipak's library (Dipak's spec and clickable sample, 13 Nov 2026): a
  * predefined sales-learning library, not a chatbot. Ten categories and 150
- * questions with stable IDs, read from library.json. Every question's lesson
- * is Dipak's own, imported word for word from his ten category docs by
- * scripts/ask-dipak/import_dipak_docs.py (owner, 16 Nov 2026: every question
- * updated with his text); the question titles are his docs' wording. A lesson
- * also keeps his "पहले की गलत सोच / नई सोच" lines and the report and coaching
- * consistency lock, which is for Sales X-Ray's reports and never shown to the
- * seller. The sample's internal coaching notes stay apart in
- * coach-notes.json. drafts.json is kept for any question his docs stop
- * answering: such a draft is marked draft_for_dipak and shown with a
- * "Draft · Dipak to confirm" tag, so nothing written for him passes as his.
+ * questions with stable IDs, read from library.json: since 16 Nov 2026 only
+ * the small index (categories, titles, labels, search words), which loads with
+ * the page. Each lesson is Dipak's own, imported word for word from his ten
+ * category docs, and comes from the API when it is opened (lessons.ts), so
+ * his edits reach the app as a database update and the report and coaching
+ * consistency lock never reaches the browser. A lesson shows his "पहले की
+ * गलत सोच / नई सोच" lines above the quick answer. The sample's internal
+ * coaching notes stay apart in coach-notes.json. drafts.json is kept for any
+ * question his docs stop answering: such a draft is marked draft_for_dipak and
+ * shown with a "Draft · Dipak to confirm" tag, so nothing written for him
+ * passes as his.
  */
 
 import drafts from "./drafts.json";
@@ -33,8 +34,13 @@ export type Question = Readonly<{
   source: string;
 }>;
 
-/** One MCQ option: what the seller says, why it works or not, the takeaway. */
-export type Option = readonly [choice: string, why: string, takeaway: string];
+/**
+ * One MCQ option: what the seller says, why it works or not, the takeaway and
+ * its label in his doc ("Better सोच", RP01's "याद रखने वाली बात").
+ */
+export type Option =
+  | readonly [choice: string, why: string, takeaway: string]
+  | readonly [choice: string, why: string, takeaway: string, label: string];
 
 export type Lesson = Readonly<{
   quick: string;
@@ -44,11 +50,11 @@ export type Lesson = Readonly<{
   cue: string;
   mission: string;
   next: readonly string[];
-  /** His "पहले की गलत सोच" and "नई सोच" lines, as data. */
+  /** His "पहले की गलत सोच" and "नई सोच" lines, shown above the quick answer. */
   before?: string;
   after?: string;
-  /** His report and coaching consistency lock: for Sales X-Ray's reports, never the seller's screen. */
-  lock?: readonly string[];
+  /** His heading above them, where he wrote one ("इस answer से कौन-सी सोच बदलनी है:"). */
+  shift?: string;
   /** A draft written for Dipak to confirm, never his approved teaching. */
   draft_for_dipak?: true;
 }>;
@@ -63,10 +69,6 @@ export type Featured = Readonly<{
 
 export const CATEGORIES: readonly Category[] = data.categories;
 export const FEATURED: readonly Featured[] = data.featured;
-/** Dipak's own lessons, word for word from his docs. */
-export const LESSONS = data.lessons as unknown as Readonly<
-  Record<string, Lesson>
->;
 /** Drafts for any question his docs don't answer yet, for him to confirm. */
 export const DRAFTS = drafts.lessons as unknown as Readonly<
   Record<string, Lesson>
@@ -108,12 +110,11 @@ export const featuredById = (id: string): Featured | null =>
   FEATURED.find((topic) => topic.id === id) ?? null;
 const own = (record: object, id: string) =>
   Object.prototype.hasOwnProperty.call(record, id);
-/** The question's lesson: Dipak's own, else its draft for him to confirm. */
-export const lessonFor = (id: string): Lesson | null =>
-  own(LESSONS, id) ? LESSONS[id] : own(DRAFTS, id) ? DRAFTS[id] : null;
+/** A question's draft for Dipak to confirm, if it has one (his lessons come from the API). */
+export const draftFor = (id: string): Lesson | null =>
+  own(DRAFTS, id) ? DRAFTS[id] : null;
 /** True while the question's lesson is a draft waiting for Dipak. */
-export const isDraft = (id: string): boolean =>
-  !own(LESSONS, id) && own(DRAFTS, id);
+export const isDraft = (id: string): boolean => own(DRAFTS, id);
 
 /** The words a question is shown with: its real-situation wording, if any. */
 export const questionLabel = (question: Question): string =>

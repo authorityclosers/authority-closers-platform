@@ -40,6 +40,15 @@ export const COPY = {
   savedSub: "अपने जरूरी questions फिर से खोलिए।",
   savedEmpty: "अभी कुछ save नहीं किया",
   savedEmptyHint: "किसी lesson का bookmark tap करके उसे यहाँ रख सकते हैं।",
+  // His words above the before/after lines (doc 01), for every lesson's pair.
+  shift: "इस answer से कौन-सी सोच बदलनी है",
+  before: "पहले की गलत सोच",
+  after: "नई सोच",
+  better: "Better सोच",
+  // A lesson comes from the API when opened (16 Nov 2026); words to redesign.
+  loading: "Lesson खुल रहा है…",
+  loadFailed: "यह lesson अभी नहीं खुल पाया। Internet check करके फिर try करें।",
+  retry: "फिर try करें",
   quick: "Dipak का quick answer",
   turn: "अब आपकी बारी",
   feedback: "Dipak की बात",

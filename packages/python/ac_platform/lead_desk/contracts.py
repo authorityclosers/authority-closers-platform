@@ -1383,6 +1383,42 @@ class StageWord(Model):
     word: str
     rows: int
     stage: str | None
+    # The stage's own name, for the screen (the import's check, 16 Nov 2026).
+    label: str | None = None
+
+
+class OwnerWord(Model):
+    """One name in a file's owner column, how many rows say it, and the teammate it is
+    (None: nobody on the team by that name; those rows go the way the owner picked)."""
+
+    name: str
+    rows: int
+    person_id: UUID | None
+    person_name: str | None
+
+
+class ColumnFate(Model):
+    """What becomes of one of the file's columns (owner's import study, 16 Nov 2026: every
+    column accounted for). "matched": it fills ``field``; "kept": it shows on each lead as a
+    detail; "empty": it has no values; "not_imported": a source's own id, never shown."""
+
+    header: str
+    fate: Literal["matched", "kept", "empty", "not_imported"]
+    field: str | None = None
+
+
+class FileCheck(Model):
+    """What a file would bring in, before anything is written (the import's Check step):
+    the stage each of its stage words becomes, and the stage a word that matches none starts
+    in (its words stay on the lead as the file's own column); whose its owner names are, and
+    how many of the new leads already have an owner from the file (they keep that owner;
+    only the rest are shared); and what becomes of every column."""
+
+    stages: tuple[StageWord, ...]
+    unmatched_stage: str | None
+    owners: tuple[OwnerWord, ...]
+    owned_new: int
+    columns: tuple[ColumnFate, ...]
 
 
 class HistoryCheck(Model):
@@ -1815,6 +1851,9 @@ class ImportCommand(Command):
     file_name: str = Field(min_length=1, max_length=200)
     mapping: dict[str, str]
     rows: tuple[dict[str, str], ...] = Field(min_length=1, max_length=2000)
+    # The file's columns in order (the preview's headers), so the Check accounts for a
+    # column whose cells are all empty too; none: the columns the rows have.
+    headers: tuple[str, ...] = Field(default=(), max_length=500)
     # Bulk upload (section 5): "people" gives new leads to the salespeople in `shares`, in
     # order and as many as each takes, the rest unassigned; "none" leaves them all unassigned.
     assign: Literal["rules", "me", "people", "none"] = "rules"

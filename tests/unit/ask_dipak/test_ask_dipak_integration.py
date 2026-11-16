@@ -12,7 +12,7 @@ from uuid import uuid4
 
 import pytest
 
-from ac_platform.ask_dipak import coaching, integration, team
+from ac_platform.ask_dipak import coaching, integration, library, team
 from ac_platform.integrations import mcp_http, scopes
 from ac_platform.integrations.api_http import ApiError
 
@@ -96,7 +96,16 @@ def test_every_tool_says_what_it_does_to_the_directories() -> None:
     assert integration.NAMES == LESSONS | READS | WRITES
 
 
-async def test_lessons_read_dipaks_words_with_any_key() -> None:
+async def test_lessons_read_dipaks_words_with_any_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The served library is the newest import (database paths: tests/database); here, the
+    # bundled one.
+    seen: list[Any] = []
+
+    async def served(session: Any) -> library.Served:
+        seen.append(session)
+        return library.bundled()
+
+    monkeypatch.setattr(library, "served", served)
     anyone = reader()
     found = await integration.run_tool(anyone, "ask_dipak_search", {"query": "mahanga"})
     assert found["questions"][0]["id"] == "PB03"
@@ -110,6 +119,7 @@ async def test_lessons_read_dipaks_words_with_any_key() -> None:
         integration.run_tool(anyone, "ask_dipak_lesson", {"question_id": "ZZ99"})
     )
     assert missing.status == 404
+    assert seen == [anyone.session, anyone.session]
     improve = await integration.run_tool(
         anyone, "ask_dipak_how_to_improve", {"skills": ["closing_decision_management"]}
     )

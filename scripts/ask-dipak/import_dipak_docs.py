@@ -21,7 +21,14 @@ paragraph stay, and only trailing spaces at line ends are dropped. Nothing is re
 The question titles take his docs' wording. A question his docs stop answering keeps (or gets
 back from git) its draft in drafts.json; the import never writes a draft.
 
-Usage (dry run prints the report; --write updates both library.json copies and drafts.json,
+Where it goes (16 Nov 2026, migration 0157): the server's library.json holds every lesson (the
+bundled fallback, served until the first import into the database); the app's library.json is
+only the small index (categories, titles, labels, search words) that loads with the page, and
+each lesson comes from the API when it is opened. To put Dipak's edits in the database without
+a code release, use scripts/data-changes/ask-dipak-import-lessons.py, which reads the docs with
+this parser.
+
+Usage (dry run prints the report; --write updates both library.json files and drafts.json,
 then formats them with the repository's Prettier):
 
     python scripts/ask-dipak/import_dipak_docs.py --docs <folder> [--write] [--report out.json]
@@ -64,7 +71,7 @@ OPTION = re.compile(r"^([ABC])\.\s+(.+)$")
 DIPAK = re.compile(r"^DIPAK की बात\s+[—–-]\s+(.+)$")
 # RP01 words these two as "एक छोटा example:" and "याद रखने वाली बात:"; both are his.
 EXAMPLE = re.compile(r"^(?:एक )?छोटा example:")
-BETTER = re.compile(r"^(?:Better सोच|याद रखने वाली बात):\s*(.+)$")
+BETTER = re.compile(r"^(Better सोच|याद रखने वाली बात):\s*(.+)$")
 BEFORE = re.compile(r"^पहले की गलत सोच:\s*(.+)$")
 AFTER = re.compile(r"^नई सोच:\s*(.+)$")
 SCENARIO = "SCENARIO"
@@ -82,6 +89,7 @@ class Option:
     dipak: list[str]
     example: str
     better: str
+    better_label: str = "Better सोच"
 
 
 @dataclass
@@ -93,6 +101,8 @@ class Lesson:
     doc: str
     before: str
     after: str
+    # The heading above them in some lessons: "इस answer से कौन-सी सोच बदलनी है:".
+    shift: str | None
     quick: list[str]
     scenario: list[str]
     options: list[Option]
@@ -179,7 +189,8 @@ def _options(lines: list[str], where: str) -> tuple[list[str], list[Option]]:
                 choice="\n".join(choice_rows),
                 dipak=dipak,
                 example="\n".join(rows[example_at:better_at]),
-                better=better.group(1),
+                better=better.group(2),
+                better_label=better.group(1),
             )
         )
     if [option.letter for option in options] != ["A", "B", "C"]:
@@ -235,6 +246,10 @@ def _lesson(lesson_id: str, title: str, rest: list[str], doc: str, where: str) -
     after = next((m.group(1) for row in intro_lines if (m := AFTER.match(row))), None)
     if before is None or after is None:
         raise DocError(f"{where}: no 'पहले की गलत सोच' / 'नई सोच' lines")
+    others = [row for row in intro_lines if not (BEFORE.match(row) or AFTER.match(row))]
+    if len(others) > 1:
+        raise DocError(f"{where}: unexpected lines above the before/after: {others!r}")
+    shift = others[0].strip() if others else None
     scenario, options = _options(part("2"), where)
     next_ids: list[str] = []
     for row in part("7"):
@@ -253,6 +268,7 @@ def _lesson(lesson_id: str, title: str, rest: list[str], doc: str, where: str) -
         doc=doc,
         before=before,
         after=after,
+        shift=shift,
         quick=_paragraphs(part("1")) or _fail(f"{where}: QUICK ANSWER is empty"),
         scenario=scenario,
         options=options,
@@ -288,14 +304,24 @@ def app_lesson(lesson: Lesson) -> dict[str, Any]:
 
     quick/scenario: paragraphs joined by a blank line (the app shows them with pre-line).
     options: [choice, Dipak's word (his lines, then the small example, one per line), takeaway
-    (the Better सोच line)]. deep: paragraphs. lock, before, after: kept as data; lock is for
-    Sales X-Ray's reports and is not shown to sellers.
+    (the Better सोच text), its label ("Better सोच", RP01's "याद रखने वाली बात")]. deep:
+    paragraphs. title: his doc's question wording. before and after, with shift (the heading
+    above them, where he wrote one), are shown above the quick answer. lock is for Sales
+    X-Ray's reports: kept on the server, never sent to sellers.
     """
+    shift = {"shift": lesson.shift} if lesson.shift else {}
     return {
+        "title": lesson.title,
+        **shift,
         "quick": "\n\n".join(lesson.quick),
         "scenario": "\n\n".join(lesson.scenario),
         "options": [
-            [option.choice, "\n".join([*option.dipak, option.example]), option.better]
+            [
+                option.choice,
+                "\n".join([*option.dipak, option.example]),
+                option.better,
+                option.better_label,
+            ]
             for option in lesson.options
         ],
         "deep": list(lesson.deep),
@@ -410,14 +436,44 @@ def _dump(data: dict[str, Any]) -> str:
     return json.dumps(data, ensure_ascii=False, indent=2) + "\n"
 
 
+def app_index(library: dict[str, Any]) -> dict[str, Any]:
+    """The app's copy: the library without its lessons, which come from the API."""
+    return {key: value for key, value in library.items() if key != "lessons"}
+
+
+def library_lessons(folder: Path) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Parse the docs into (lessons in the app's format, their source, the report) for an
+    import into the database. Refuses (DocError) unless every lesson parsed once."""
+    result = import_docs(folder)
+    if result.report["problems"] or result.report["duplicates"]:
+        raise DocError(
+            f"problems {result.report['problems']}, duplicates {result.report['duplicates']}"
+        )
+    library = json.loads(SERVER_LIBRARY.read_text("utf-8"))
+    order = [q["id"] for c in library["categories"] for q in c["questions"]]
+    lessons = {code: app_lesson(result.lessons[code]) for code in order if code in result.lessons}
+    source = {"docs": result.report["docs"], "importer": "scripts/ask-dipak/import_dipak_docs.py"}
+    return lessons, source, result.report
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     parser.add_argument("--docs", type=Path, required=True, help="folder of Dipak's .txt docs")
     parser.add_argument("--write", action="store_true", help="update library.json and drafts")
     parser.add_argument("--report", type=Path, help="write the full report as JSON here")
+    parser.add_argument(
+        "--bundle",
+        type=Path,
+        help="write {lessons, source} here for scripts/data-changes/ask-dipak-import-lessons.py",
+    )
     args = parser.parse_args(argv)
+    if args.bundle:
+        lessons, source, _ = library_lessons(args.docs)
+        args.bundle.write_text(_dump({"lessons": lessons, "source": source}), "utf-8")
+        print(f"{len(lessons)} lessons written to {args.bundle}")
+        return 0
     result = import_docs(args.docs)
-    library = json.loads(APP_LIBRARY.read_text("utf-8"))
+    library = json.loads(SERVER_LIBRARY.read_text("utf-8"))
     drafts = json.loads(APP_DRAFTS.read_text("utf-8"))
     changes = apply(library, drafts, result)
     report = {**result.report, "changes": changes}
@@ -439,9 +495,8 @@ def main(argv: list[str] | None = None) -> int:
         print("refusing to write: fix the problems above first", file=sys.stderr)
         return 1
     if args.write:
-        text = _dump(library)
-        APP_LIBRARY.write_text(text, "utf-8")
-        SERVER_LIBRARY.write_text(text, "utf-8")
+        SERVER_LIBRARY.write_text(_dump(library), "utf-8")
+        APP_LIBRARY.write_text(_dump(app_index(library)), "utf-8")
         APP_DRAFTS.write_text(_dump(drafts), "utf-8")
         # The repository keeps these files in Prettier's layout; both copies stay byte-equal.
         prettier = ROOT / "node_modules/.bin/prettier"

@@ -42,6 +42,8 @@ from ac_platform.lead_desk.capture import (
 )
 from ac_platform.lead_desk.capture import key as header_key
 from ac_platform.lead_desk.contracts import (
+    ColumnFate,
+    FileCheck,
     HistoryCheck,
     ImportCommand,
     ImportGiven,
@@ -49,6 +51,7 @@ from ac_platform.lead_desk.contracts import (
     ImportResult,
     ImportSkip,
     NewSource,
+    OwnerWord,
     ReasonCount,
     SeedCommand,
     Sources,
@@ -495,20 +498,7 @@ class Intake:
         owner_header = (
             (command.mapping.get("owner") or None) if self.desk.viewer.can_manage else None
         )
-        people: dict[str, UUID | None] = {}
-        if owner_header:
-            team = [rep.state.person_id for rep in reps]
-            emails = (
-                await self.db.execute(
-                    select(Person.id, Person.email).where(
-                        Person.id.in_(team), Person.email.is_not(None)
-                    )
-                )
-            ).tuples()
-            people = people_index(
-                ((rep.state.person_id, rep.state.name) for rep in reps),
-                ((person_id, str(email)) for person_id, email in emails),
-            )
+        people = await self._people(reps) if owner_header else {}
         journeys_read: dict[str, journeys.Journey] = {}
         staged = owned = 0
         missing_stages: dict[str, None] = {}
@@ -621,10 +611,15 @@ class Intake:
                 # The stage the owner said each of the file's words means (checked above).
                 stage = placed.get(wanted) if wanted else None
             else:
-                stage = match_stage(journey, wanted) if wanted else journey.stage_for(start or "")
-            if stage is None:
-                if wanted:
+                stage = match_stage(journey, wanted) if wanted else None
+                if stage is None and wanted:
+                    # A word that is no stage here starts where the owner picked, else in
+                    # the first stage; the word stays on the lead as the file's own column
+                    # and the Check step said so (owner's import study, 16 Nov 2026).
                     missing_stages.setdefault(wanted[:80])
+                if stage is None and start is not None:
+                    stage = journey.stage_for(start)
+            if stage is None:
                 continue
             staged += 1
             now = journey.resolve(lead.stage, lead.step)
@@ -742,6 +737,142 @@ class Intake:
                 422, "New leads start in the first stage, an in-talks stage or an interested one."
             )
         return None if stage.kind == "new" else stage.key
+
+    async def _people(self, reps: Iterable[Any]) -> dict[str, UUID | None]:
+        """Who a file's owner column can name on this team (people_index)."""
+        reps = list(reps)
+        team = [rep.state.person_id for rep in reps]
+        emails = (
+            await self.db.execute(
+                select(Person.id, Person.email).where(
+                    Person.id.in_(team), Person.email.is_not(None)
+                )
+            )
+        ).tuples()
+        return people_index(
+            ((rep.state.person_id, rep.state.name) for rep in reps),
+            ((person_id, str(email)) for person_id, email in emails),
+        )
+
+    async def check(self, command: ImportCommand) -> FileCheck:
+        """What a file of new leads would bring in, before anything is written (the import's
+        Check step; owner's import study, 16 Nov 2026). Its stage words and the stage each
+        becomes, and where a word that is no stage here starts; its owner names and who
+        each is, and how many new leads already have an owner from the file (commit gives
+        them that owner whatever the owner picked, so only the rest are shared); and what
+        becomes of every column. Reads the rows as commit does; writes nothing."""
+        history = command.side == HISTORY
+        journey, placed, words = await self._old_leads(command)
+        start = None if history else await self._start(command)
+        fallback = journey.stage_for(start) if start else journey.resolve("new", None)
+        owner_header = (
+            (command.mapping.get("owner") or None) if self.desk.viewer.can_manage else None
+        )
+        reps = await self.desk._reps() if owner_header else []
+        names = {rep.state.person_id: rep.state.name for rep in reps}
+        people = await self._people(reps) if owner_header else {}
+        fields = {name: header for name, header in command.mapping.items() if name in FIELDS}
+        _, config = await self.desk.settings()
+        found = [
+            (
+                extract(
+                    {str(k): v for k, v in row.items() if v not in (None, "")},
+                    fields,
+                    default_country=config["default_country"],
+                ),
+                row,
+            )
+            for row in command.rows
+        ]
+        phones = {item.phone for item, _ in found if item.phone}
+        emails = {item.email for item, _ in found if not item.phone and item.email}
+        known: set[str | None] = set()
+        if phones:
+            known.update(
+                (
+                    await self.db.scalars(
+                        select(Lead.phone).where(
+                            Lead.tenant_id == self.tenant_id, Lead.phone.in_(phones)
+                        )
+                    )
+                ).all()
+            )
+        if emails:
+            known.update(
+                (
+                    await self.db.scalars(
+                        select(Lead.email).where(
+                            Lead.tenant_id == self.tenant_id, Lead.email.in_(emails)
+                        )
+                    )
+                ).all()
+            )
+        owners: Counter[str] = Counter()
+        seen: set[str] = set()
+        owned_new = 0
+        for item, row in found:
+            named = clean(row.get(owner_header)) if owner_header else None
+            if named:
+                owners[named[:80]] += 1
+            if not (item.name or item.phone or item.email) or unreadable_number(item):
+                continue
+            ident = item.phone or item.email
+            if ident is not None:
+                if ident in known or ident in seen:
+                    continue
+                seen.add(ident)
+            if named and people.get(header_key(named)) is not None:
+                owned_new += 1
+        used = {
+            header: name
+            for name, header in command.mapping.items()
+            if header
+            and (
+                name in FIELDS
+                or name in ("stage", "source")
+                or (name == "owner" and owner_header)
+                or (history and name in ("received", "campaign"))
+            )
+        }
+        headers = list(
+            dict.fromkeys([*command.headers, *(str(name) for row in command.rows for name in row)])
+        )
+        columns: list[ColumnFate] = []
+        for header in headers:
+            if header in used:
+                columns.append(ColumnFate(header=header, fate="matched", field=used[header]))
+            elif not any(clean(row.get(header)) for row in command.rows):
+                columns.append(ColumnFate(header=header, fate="empty"))
+            elif header.startswith("_") or header in REFERENCE_KEYS:
+                # LeadDesk._source_fields never shows these on the lead.
+                columns.append(ColumnFate(header=header, fate="not_imported"))
+            else:
+                columns.append(ColumnFate(header=header, fate="kept"))
+        return FileCheck(
+            stages=tuple(
+                StageWord(
+                    word=word,
+                    rows=count,
+                    stage=stage.key if stage else None,
+                    label=stage.label if stage else None,
+                )
+                for word, count in words.most_common()
+                for stage in (placed[word],)
+            ),
+            unmatched_stage=fallback.label if fallback else None,
+            owners=tuple(
+                OwnerWord(
+                    name=name,
+                    rows=count,
+                    person_id=person,
+                    person_name=names.get(person) if person else None,
+                )
+                for name, count in owners.most_common()
+                for person in (people.get(header_key(name)),)
+            ),
+            owned_new=owned_new,
+            columns=tuple(columns),
+        )
 
     async def _old_leads(
         self, command: ImportCommand
