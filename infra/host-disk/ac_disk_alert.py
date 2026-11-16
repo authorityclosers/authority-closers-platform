@@ -25,9 +25,10 @@ NATIVE_ENVIRONMENTS = ("staging", "production")
 _IMAGE_REF = re.compile(r"--image-ref (sha256:[0-9a-f]{64})")
 
 
-def native_images(units: Path = NATIVE_UNITS) -> dict[str, bool]:
-    """Whether each environment's native C1 image is present in Docker (inspect only)."""
-    found: dict[str, bool] = {}
+def native_images(units: Path = NATIVE_UNITS) -> dict[str, bool | None]:
+    """Whether each environment's native C1 image is present in Docker (inspect only); None
+    (unknown) when Docker gives no answer in time, so the disk alerts still go out."""
+    found: dict[str, bool | None] = {}
     for environment in NATIVE_ENVIRONMENTS:
         unit = units / f"ac-sales-xray-native-{environment}.service"
         if not unit.is_file() or unit.is_symlink():
@@ -35,13 +36,17 @@ def native_images(units: Path = NATIVE_UNITS) -> dict[str, bool]:
         match = _IMAGE_REF.search(unit.read_text())
         if match is None:
             continue
-        inspected = subprocess.run(  # noqa: S603 - fixed host executable and a checked digest
-            [DOCKER, "image", "inspect", "--format", "{{.Id}}", match.group(1)],
-            capture_output=True,
-            text=True,
-            timeout=20,
-            check=False,
-        )
+        try:
+            inspected = subprocess.run(  # noqa: S603 - fixed host executable, a checked digest
+                [DOCKER, "image", "inspect", "--format", "{{.Id}}", match.group(1)],
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            found[environment] = None
+            continue
         found[environment] = inspected.returncode == 0
     return found
 
@@ -83,7 +88,7 @@ def check(
     figures: dict[str, int],
     *,
     apply: bool,
-    native: dict[str, bool] | None = None,
+    native: dict[str, bool | None] | None = None,
 ) -> dict:
     previous_missing: list[str] = []
     if state_path.exists():
@@ -99,7 +104,14 @@ def check(
     else:
         previous = 0
     level, event = transition(previous, figures["percent"])
-    missing = sorted(env for env, present in (native or {}).items() if not present)
+    native = native or {}
+    # Unknown (Docker gave no answer) keeps what was last known: no alert either way.
+    missing = sorted(
+        env
+        for env, present in native.items()
+        if present is False or (present is None and env in previous_missing)
+    )
+    unknown = sorted(env for env, present in native.items() if present is None)
     gone = [env for env in missing if env not in previous_missing]
     back = [env for env in previous_missing if env not in missing]
     result = {
@@ -108,6 +120,7 @@ def check(
         "event": event,
         "applied": apply,
         "native_missing": missing,
+        "native_unknown": unknown,
     }
     if not apply:
         return result

@@ -159,3 +159,35 @@ def test_native_images_reads_each_units_image_ref(tmp_path, monkeypatch):
     monkeypatch.setattr(ALERT.subprocess, "run", inspect)
     assert ALERT.native_images(tmp_path) == {"staging": False}
     assert seen == [[ALERT.DOCKER, "image", "inspect", "--format", "{{.Id}}", ref]]
+
+
+def test_a_docker_timeout_is_unknown_and_the_disk_alert_still_goes(tmp_path, monkeypatch):
+    """Release PR #627 review (P2): an image inspection that takes over 20 s must not stop the
+    disk alerts; the native check is unknown and keeps its last known state."""
+    ref = "sha256:" + "b" * 64
+    (tmp_path / "ac-sales-xray-native-staging.service").write_text(
+        f"ExecStart=helper --image-ref {ref}\n"
+    )
+
+    def slow(argv, **kwargs):
+        raise ALERT.subprocess.TimeoutExpired(argv, kwargs["timeout"])
+
+    monkeypatch.setattr(ALERT.subprocess, "run", slow)
+    assert ALERT.native_images(tmp_path) == {"staging": None}
+
+    sent = []
+    monkeypatch.setattr(
+        ALERT.subprocess,
+        "run",
+        lambda argv, **kwargs: sent.append(kwargs.get("input")) or SimpleNamespace(returncode=0),
+    )
+    state = tmp_path / "state.json"
+    figures = {"percent": 90, "available_bytes": 100}
+    result = ALERT.check(state, figures, apply=True, native={"staging": None})
+    assert result["event"] == "warning" and len(sent) == 1 and "disk warning" in sent[0]
+    assert result["native_missing"] == [] and result["native_unknown"] == ["staging"]
+    # A known-missing image stays missing while unknown: no "back" alert, no second one.
+    ALERT.check(state, figures, apply=True, native={"staging": False})
+    assert len(sent) == 2 and "missing from Docker" in sent[1]
+    unknown = ALERT.check(state, figures, apply=True, native={"staging": None})
+    assert unknown["native_missing"] == ["staging"] and len(sent) == 2
