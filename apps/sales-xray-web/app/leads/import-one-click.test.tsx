@@ -8,6 +8,14 @@ vi.mock("./leads-client", async (original) => ({
   ...(await original<typeof import("./leads-client")>()),
   previewImport: (...args: unknown[]) => previewImport(...args),
   commitImport: (...args: unknown[]) => commitImport(...args),
+  // The Check's read of the file's stages, owners and columns (16 Nov 2026).
+  checkFile: async () => ({
+    stages: [],
+    unmatched_stage: null,
+    owners: [],
+    owned_new: 0,
+    columns: [],
+  }),
 }));
 
 vi.mock("next/link", () => ({

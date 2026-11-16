@@ -413,6 +413,32 @@ export type HistoryCheck = {
   campaigns: { label: string; count: number }[];
 };
 
+/** A file of new leads before it is brought in (owner's import study, 16 Nov 2026): each
+ *  stage word and the stage it becomes (null: none here, so it starts in
+ *  `unmatched_stage` and the word stays on the lead), each owner name and the teammate it
+ *  is, how many new leads keep an owner from the file, and what becomes of every column. */
+export type FileCheck = {
+  stages: {
+    word: string;
+    rows: number;
+    stage: string | null;
+    label?: string | null;
+  }[];
+  unmatched_stage: string | null;
+  owners: {
+    name: string;
+    rows: number;
+    person_id: string | null;
+    person_name: string | null;
+  }[];
+  owned_new: number;
+  columns: {
+    header: string;
+    fate: "matched" | "kept" | "empty" | "not_imported";
+    field: string | null;
+  }[];
+};
+
 /** A row an import didn't use, by its index in the preview's rows, and why. */
 export type ImportSkip = { row: number; reason: string };
 
@@ -1728,6 +1754,31 @@ export function checkHistory(
       rows: preview.rows,
       side: "history",
       stages,
+      ...(pipeline ? { pipeline } : {}),
+    }),
+    signal,
+  });
+}
+
+/** A file of new leads before it is brought in: stages, owners and columns. Writes
+ *  nothing. */
+export function checkFile(
+  preview: ImportPreview,
+  mapping: Record<string, string>,
+  side: "live" | "cold",
+  step: string,
+  pipeline: string | null = null,
+  signal?: AbortSignal,
+) {
+  return request<FileCheck>("/imports/check", {
+    ...json("POST", {
+      command_id: commandId(),
+      file_name: preview.file_name,
+      mapping,
+      rows: preview.rows,
+      headers: preview.headers,
+      side,
+      ...(step ? { step } : {}),
       ...(pipeline ? { pipeline } : {}),
     }),
     signal,

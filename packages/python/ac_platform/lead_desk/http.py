@@ -77,6 +77,7 @@ from ac_platform.lead_desk.contracts import (
     DuplicateCompare,
     DuplicateQueue,
     Effort,
+    FileCheck,
     FollowUp,
     HistoryCheck,
     ImportCommand,
@@ -1177,6 +1178,15 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await Intake(lead_desk, app_url=app_url()).commit(command)
+
+    @router.post("/imports/check", response_model=FileCheck)
+    async def file_check(command: ImportCommand, request: Request, response: Response) -> FileCheck:
+        """A file of new leads before it is brought in: what each stage word becomes, whose
+        each owner name is and how many new leads keep it, and what becomes of every column.
+        Writes nothing (owner's import study, 16 Nov 2026)."""
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await Intake(lead_desk, app_url=app_url()).check(command)
 
     @router.post("/imports/history-check", response_model=HistoryCheck)
     async def history_check(
