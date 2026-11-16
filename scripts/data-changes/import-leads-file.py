@@ -60,7 +60,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from ac_platform.application.settings import get_settings
 from ac_platform.audit.service import append_audit_event
 from ac_platform.identity.models import Person
-from ac_platform.lead_desk.capture import extract
+from ac_platform.lead_desk.capture import ALIASES, extract, key
 from ac_platform.lead_desk.history import HISTORY
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.models import Lead, LeadEvent, LeadPipeline, LeadRep
@@ -83,6 +83,24 @@ EXCEL_EPOCH: Final = datetime(1899, 12, 30, tzinfo=UTC)
 # Spellings of a city seen in forms, as the city is called.
 CITY_SPELLINGS: Final = {"pume": "Pune", "pube": "Pune", "poona": "Pune"}
 EMAIL_HINTS: Final = re.compile(r"(@(gamil|gmial|gmai|gmal|gnail|gmail\.con)\b)|(^www\.)")
+# A sheet's header cells, as ``key`` spells them. A row made mostly of them is the sheet's
+# own header (a tab with a title row above it), never a lead (Nature Solutions, 16 Nov
+# 2026: a header row went in as a lead named "Sr.No").
+HEADER_CELLS: Final = frozenset(
+    {
+        "sr_no",
+        "s_no",
+        "sl_no",
+        "serial_no",
+        *(alias for names in ALIASES.values() for alias in names),
+    }
+)
+
+
+def header_row(record: dict[str, str]) -> bool:
+    """Whether a row is the sheet's own header: most of its cells are header names."""
+    cells = [key(value) for value in record.values() if str(value).strip()]
+    return bool(cells) and 2 * sum(cell in HEADER_CELLS for cell in cells) > len(cells)
 
 
 def _input(path: str) -> dict[str, Any]:
@@ -420,7 +438,8 @@ async def run(
     queue.sort(key=lambda item: (item[0], item[1], item[2]))
     counts: dict[str, Counter[str]] = {label: Counter() for label in labels}
     flags: dict[str, dict[str, list[int]]] = {
-        label: {"repeat_by_email": [], "email_hint": [], "date_typed": []} for label in labels
+        label: {"repeat_by_email": [], "email_hint": [], "date_typed": [], "header_row": []}
+        for label in labels
     }
     for _, number, index, record, raw in queue:
         label, pipeline, side = labels[number], pipelines[number], sides[number]
@@ -428,6 +447,10 @@ async def run(
         if await desk._command_seen(step) is not None:
             # This run's row went in before (a repeat's history line): never twice.
             counts[label]["done_before"] += 1
+            continue
+        if header_row(record):
+            flags[label]["header_row"].append(index)
+            counts[label]["header_row"] += 1
             continue
         found = extract(record, mapping, default_country=config["default_country"])
         if found.email and EMAIL_HINTS.search(found.email):

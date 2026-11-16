@@ -322,3 +322,58 @@ def test_history_side_stages_and_dated_notes(postgres_harness: Any, tmp_path: Pa
             assert again["audited"] is False and "notes" not in again["counts"]
 
     run(exercise())
+
+
+def test_header_rows_left_out_and_a_mobile_no_column_read(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """A tab whose header sits under a title row: a header row is the sheet's own, never a
+    lead ("Sr.No", Nature Solutions, 16 Nov 2026), counted and left out. A tab that keeps its
+    phones under "Mobile No " has them read even when the mapping names another column."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            sessions = here.setup.sessions
+            async with sessions() as db:
+                admin = await db.scalar(
+                    select(Person.email).where(Person.id == here.setup.state.person_id)
+                )
+                seller = await db.scalar(
+                    select(Person.email).where(Person.id == here.seller.person_id)
+                )
+            assert admin and seller
+            spec: dict[str, Any] = {
+                "command_id": str(uuid4()),
+                "tenant": str(here.tenant_id)[:8],
+                "seller_email": seller,
+                "approver_email": admin,
+                "issue": "AUT-test",
+                "mapping": {"name": "Customer Name ", "phone": "Phone"},
+                "batches": [
+                    {
+                        "label": LABEL,
+                        "rows": [
+                            {"Customer Name ": "Sr.No"},
+                            {
+                                "Sr.No ": "Sr.No ",
+                                "Customer Name ": "Customer Name ",
+                                "Mobile No ": "Mobile No ",
+                                "City ": "City ",
+                            },
+                            {"Customer Name ": "Fictional Hot", "Mobile No ": "98760 75101"},
+                        ],
+                    }
+                ],
+            }
+            done = await tool.execute(sessions, spec, mode="apply", now=datetime.now(UTC))
+            assert done["counts"] == {"header_row": 2, "created": 1}
+            assert done["batches"][0]["header_row"] == [1, 2]
+            async with sessions() as db:
+                leads = (
+                    await db.scalars(select(Lead).where(Lead.tenant_id == here.tenant_id))
+                ).all()
+            assert [(lead.name, lead.phone) for lead in leads] == [
+                ("Fictional Hot", "+919876075101")
+            ]
+
+    run(exercise())
