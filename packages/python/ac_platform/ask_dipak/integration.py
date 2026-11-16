@@ -163,8 +163,8 @@ TOOLS: tuple[dict[str, Any], ...] = (
         "title": "Tick or untick a Next-call mission",
         "description": (
             "Ticks a lesson's Next-call mission, which keeps it in this person's missions, or "
-            "unticks it (which also drops it from the active ones). Only the 12 questions "
-            "with a lesson have one."
+            "unticks it (which also drops it from the active ones). Every question with one "
+            "of Dipak's lessons has one."
         ),
         "inputSchema": {
             "type": "object",

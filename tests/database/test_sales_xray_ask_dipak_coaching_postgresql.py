@@ -21,7 +21,7 @@ import httpx
 import pytest
 from sqlalchemy import func, select
 
-from ac_platform.ask_dipak import coaching, store, team
+from ac_platform.ask_dipak import catalogue, coaching, store, team
 from ac_platform.ask_dipak.coaching_http import install_ask_dipak_coaching_http
 from ac_platform.ask_dipak.coaching_models import SalesXrayAskDipakCallCheck
 from ac_platform.conversation_intelligence.acquisition_models import ConversationAcquisitionUsage
@@ -170,7 +170,10 @@ def test_missions_active_answers_counts_and_the_team_read(
                         on=True,
                         now=NOW,
                     )
-                with pytest.raises(store.NoMission):
+                # Every question has Dipak's lesson now (16 Nov 2026); one without would
+                # have no mission to make active.
+                with pytest.MonkeyPatch.context() as patch, pytest.raises(store.NoMission):
+                    patch.setattr(catalogue, "LESSON_IDS", catalogue.LESSON_IDS - {"PB05"})
                     await coaching.set_active(
                         db,
                         person_id=seller,
@@ -335,7 +338,7 @@ def test_missions_active_answers_counts_and_the_team_read(
                 found = (await http.get(f"{BASE}/lessons", params={"q": "mahanga"})).json()
                 assert found["questions"][0]["id"] == "PB03"
                 lesson = (await http.get(f"{BASE}/lessons/PB03")).json()
-                assert lesson["lesson"]["next_call_mission"].startswith("अगली तीन price")
+                assert lesson["lesson"]["next_call_mission"].startswith("अगली तीन real price")
                 assert "coach" not in str(lesson)
                 improve = await http.get(
                     f"{BASE}/how-to-improve",

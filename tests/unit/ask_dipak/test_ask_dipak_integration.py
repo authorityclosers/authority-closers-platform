@@ -101,9 +101,11 @@ async def test_lessons_read_dipaks_words_with_any_key() -> None:
     found = await integration.run_tool(anyone, "ask_dipak_search", {"query": "mahanga"})
     assert found["questions"][0]["id"] == "PB03"
     lesson = await integration.run_tool(anyone, "ask_dipak_lesson", {"question_id": "PB03"})
-    assert lesson["lesson"]["quick_answer"].startswith("‘Too expensive’")
-    unready = await integration.run_tool(anyone, "ask_dipak_lesson", {"question_id": "PB05"})
-    assert unready["lesson"] is None
+    assert lesson["lesson"]["quick_answer"].startswith("Buyer बोले “Price बहुत ज्यादा है,”")
+    # A former draft is now Dipak's own lesson, served like the rest.
+    former = await integration.run_tool(anyone, "ask_dipak_lesson", {"question_id": "PB05"})
+    assert former["lesson"]["lesson_ready"] is True
+    assert former["lesson"]["next_call_mission"].startswith("अगली तीन price objections में")
     missing = await refused(
         integration.run_tool(anyone, "ask_dipak_lesson", {"question_id": "ZZ99"})
     )

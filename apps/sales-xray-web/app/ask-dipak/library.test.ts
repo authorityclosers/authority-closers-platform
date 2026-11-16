@@ -37,7 +37,7 @@ const SPEC_CATEGORIES = [
   ["10", "Sales Growth & Performance", 21],
 ] as const;
 
-/** Spec section 24: the twelve complete lessons. */
+/** Spec section 24: the sample's twelve lessons, which carry its coaching notes. */
 const SPEC_LESSONS = [
   "CF01",
   "RP01",
@@ -94,70 +94,47 @@ describe("the topic library (spec sections 8, 24, 26, 27, 33)", () => {
     }
   });
 
-  it("holds exactly the twelve complete lessons, each whole", () => {
-    expect(Object.keys(LESSONS).sort()).toEqual([...SPEC_LESSONS].sort());
-    for (const id of SPEC_LESSONS) {
+  it("holds Dipak's own lesson for all 150 questions, each whole (his docs, 16 Nov 2026)", () => {
+    expect(Object.keys(LESSONS).sort()).toEqual(ids(QUESTIONS).sort());
+    for (const { id } of QUESTIONS) {
       const lesson = lessonFor(id);
-      expect(questionById(id), id).not.toBeNull();
-      expect(lesson?.quick, id).toBeTruthy();
-      expect(lesson?.scenario, id).toBeTruthy();
+      expect(lesson, id).toBe(LESSONS[id]);
+      expect(lesson?.quick.trim(), id).toBeTruthy();
+      expect(lesson?.scenario.trim(), id).toBeTruthy();
       expect(lesson?.options, id).toHaveLength(3);
       for (const option of lesson?.options ?? [])
-        expect(
-          option.every((part) => part.trim().length > 0),
-          id,
-        ).toBe(true);
-      expect(new Set(lesson?.options.map((option) => option[1])).size).toBe(3);
-      expect(lesson?.deep.length, id).toBeGreaterThan(0);
-      expect(lesson?.cue, id).toBeTruthy();
-      expect(lesson?.mission, id).toBeTruthy();
-      expect(lesson?.next.length, id).toBeGreaterThan(0);
-      for (const next of lesson?.next ?? [])
-        expect(questionById(next), `${id} → ${next}`).not.toBeNull();
-    }
-  });
-
-  it("answers every question: Dipak's twelve as written, the other 138 as drafts for him (owner, 16 Nov 2026)", () => {
-    expect(QUESTIONS.filter((question) => !lessonFor(question.id))).toEqual([]);
-    const drafted = QUESTIONS.filter((question) => isDraft(question.id));
-    expect(drafted).toHaveLength(138);
-    expect(Object.keys(DRAFTS)).toHaveLength(138);
-    for (const id of SPEC_LESSONS) {
-      expect(isDraft(id), id).toBe(false);
-      expect(id in DRAFTS, id).toBe(false);
-      expect(lessonFor(id)).toBe(LESSONS[id]);
-    }
-    for (const question of drafted) {
-      const id = question.id;
-      const lesson = DRAFTS[id];
-      expect(lesson.draft_for_dipak, id).toBe(true);
-      expect(lessonFor(id), id).toBe(lesson);
-      for (const field of [
-        lesson.quick,
-        lesson.scenario,
-        lesson.cue,
-        lesson.mission,
-      ])
-        expect(field.trim(), id).not.toBe("");
-      expect(lesson.options, id).toHaveLength(3);
-      for (const option of lesson.options)
         expect(
           option.length === 3 && option.every((part) => part.trim().length > 0),
           id,
         ).toBe(true);
-      expect(new Set(lesson.options.map((option) => option[1])).size, id).toBe(
+      expect(new Set(lesson?.options.map((option) => option[1])).size, id).toBe(
         3,
       );
-      expect(lesson.deep.length, id).toBeGreaterThan(0);
-      expect(lesson.next.length, id).toBeGreaterThan(0);
-      for (const next of lesson.next) {
+      expect(lesson?.deep.length, id).toBeGreaterThan(0);
+      expect(lesson?.cue.trim(), id).toBeTruthy();
+      expect(lesson?.mission.trim(), id).toBeTruthy();
+      expect(lesson?.next.length, id).toBeGreaterThan(0);
+      for (const next of lesson?.next ?? []) {
         expect(next, id).not.toBe(id);
         expect(questionById(next), `${id} → ${next}`).not.toBeNull();
       }
+      // His wrong and new thinking, and the report lock, kept as data.
+      expect(lesson?.before?.trim(), id).toBeTruthy();
+      expect(lesson?.after?.trim(), id).toBeTruthy();
+      expect(lesson?.lock?.length, id).toBe(5);
     }
-    // Dipak's own lessons carry no draft flag; his file holds no draft.
+  });
+
+  it("has no drafts left: every question is Dipak's own, none tagged for him to confirm", () => {
+    expect(QUESTIONS.filter((question) => !lessonFor(question.id))).toEqual([]);
+    expect(QUESTIONS.filter((question) => isDraft(question.id))).toEqual([]);
+    expect(Object.keys(DRAFTS)).toEqual([]);
     expect(JSON.stringify(data.lessons)).not.toContain("draft_for_dipak");
     expect(drafts.note).toMatch(/Dipak to confirm/);
+    // The import records which of his docs it read.
+    expect(Object.keys(data.lessonsSource.docs)).toHaveLength(11);
+    for (const sha of Object.values(data.lessonsSource.docs))
+      expect(sha).toMatch(/^[0-9a-f]{64}$/);
     expect(lessonFor("toString")).toBeNull();
     expect(isDraft("toString")).toBe(false);
   });
@@ -180,10 +157,13 @@ describe("the topic library (spec sections 8, 24, 26, 27, 33)", () => {
 
   it("keeps Dipak's Hindi-English words as written", () => {
     expect(lessonFor("PB03")?.cue).toBe(
-      "“Expensive” सुनते ही discount नहीं; पहले पूछिए किस comparison में।",
+      "“Expensive” सुनते ही discount नहीं; पहले पूछिए “किसके comparison में?”",
     );
     expect(lessonFor("PB03")?.mission).toBe(
-      "अगली तीन price objections में discount से पहले actual comparison पूछें।",
+      "अगली तीन real price objections में किसी concession से पहले buyer का comparison या expected range एक respectful question से समझें।",
+    );
+    expect(lessonFor("IM01")?.cue).toBe(
+      "Problem जानना शुरुआत है; उसका असली असर समझना अगला कदम है।",
     );
     expect(data.sourceSha256).toMatch(/^[0-9a-f]{64}$/);
   });
