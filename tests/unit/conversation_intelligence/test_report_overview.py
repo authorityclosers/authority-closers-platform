@@ -633,3 +633,124 @@ def test_focus_and_practice_without_improvements_are_dropped() -> None:
         "next_call_focus": {"reference_out_of_range": 1},
         "practice": {"reference_out_of_range": 1},
     }
+
+
+def _three_improvements(transcript: dict[str, Any]) -> dict[str, Any]:
+    payload = _payload(transcript)
+    payload["improvements"] = [
+        {**payload["improvements"][0], "title": f"Improvement {index}"} for index in range(3)
+    ]
+    payload["overview"] = overview_for(payload)
+    return payload
+
+
+def test_the_missions_improvement_moves_first_instead_of_the_mission_being_dropped() -> None:
+    """Staging gold call rc-06 (16 Nov 2026): Luna pointed next_call_focus and practice at
+    improvement 1. Both name one valid improvement, so it leads; nothing is dropped."""
+
+    transcript = _transcript()
+    payload = _three_improvements(transcript)
+    for index, detail in enumerate(payload["overview"]["improvement_details"]):
+        detail["why_it_matters"] = f"Reason {index}."
+    for field in ("next_call_focus", "practice"):
+        payload["overview"][field]["improvement_index"] = 1
+    payload["improvements"][1]["finding_index"] = 1
+    original = deepcopy(payload)
+
+    report = parse_report_draft(payload, transcript)
+
+    assert payload == original
+    assert [item.title for item in report.improvements] == [
+        "Improvement 1",
+        "Improvement 0",
+        "Improvement 2",
+    ]
+    assert report.overview is not None
+    assert report.overview.next_call_focus is not None and report.overview.practice is not None
+    assert report.overview.next_call_focus.improvement_index == 0
+    assert report.overview.practice.improvement_index == 0
+    details = {
+        detail.finding_index: detail.why_it_matters
+        for detail in report.overview.improvement_details
+    }
+    assert details == {0: "Reason 1.", 1: "Reason 0.", 2: "Reason 2."}
+    compatibility = report.provider_extras["compatibility"]
+    assert compatibility["mission_improvement_moved_first"] == {"from_index": 1}
+    assert "overview_drops" not in compatibility
+
+
+@pytest.mark.parametrize(
+    ("focus", "practice", "drops"),
+    [
+        (
+            1,
+            2,
+            {"next_call_focus": {"item_schema_invalid": 1}, "practice": {"item_schema_invalid": 1}},
+        ),
+        (
+            3,
+            3,
+            {"next_call_focus": {"item_schema_invalid": 1}, "practice": {"item_schema_invalid": 1}},
+        ),
+        (0, 0, None),
+    ],
+)
+def test_a_mission_that_names_no_single_valid_improvement_keeps_the_strict_rules(
+    focus: int, practice: int, drops: dict[str, Any] | None
+) -> None:
+    transcript = _transcript()
+    payload = _three_improvements(transcript)
+    payload["overview"]["next_call_focus"]["improvement_index"] = focus
+    payload["overview"]["practice"]["improvement_index"] = practice
+
+    report = parse_report_draft(payload, transcript)
+
+    assert [item.title for item in report.improvements] == [
+        "Improvement 0",
+        "Improvement 1",
+        "Improvement 2",
+    ]
+    compatibility = report.provider_extras.get("compatibility", {})
+    assert "mission_improvement_moved_first" not in compatibility
+    assert compatibility.get("overview_drops") == drops
+    assert report.overview is not None
+    assert (report.overview.next_call_focus is None) is (drops is not None)
+
+
+def test_a_dropped_mission_says_which_field_failed_and_why_without_content() -> None:
+    """Production R01 (16 Nov 2026): next_call_focus was dropped as item_schema_invalid and
+    the valid practice as unpaired, with no word on the cause. Each schema error is noted as
+    path:type; a provider's own key shows as *, and no value is kept."""
+
+    transcript = _transcript()
+    payload = _three_improvements(transcript)
+    payload["overview"]["next_call_focus"]["improvement_index"] = 1
+    payload["overview"]["next_call_focus"]["private words of the call"] = "a quoted line"
+
+    report = parse_report_draft(payload, transcript)
+
+    compatibility = report.provider_extras["compatibility"]
+    assert compatibility["overview_drops"] == {
+        "next_call_focus": {"item_schema_invalid": 1},
+        "practice": {"focus_practice_unpaired": 1},
+    }
+    assert compatibility["overview_drop_errors"] == {
+        "next_call_focus": ["improvement_index:less_than_equal", "*:extra_forbidden"]
+    }
+    noted = json.dumps(compatibility)
+    assert "private words" not in noted and "a quoted line" not in noted
+
+
+def test_drop_errors_name_the_whole_item_and_stay_bounded() -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    payload["overview"]["diagnosis"] = "broken"
+    payload["overview"]["golden_moments"] = ["broken"] * 8
+
+    report = parse_report_draft(payload, transcript)
+
+    errors = report.provider_extras["compatibility"]["overview_drop_errors"]
+    assert errors["diagnosis"] and all(entry.startswith("item:") for entry in errors["diagnosis"])
+    assert len(errors["golden_moments"]) <= 5
+    assert len(set(errors["golden_moments"])) == len(errors["golden_moments"])

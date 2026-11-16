@@ -148,6 +148,28 @@ def test_a_test_workspace_gets_its_terms_and_a_key_once(
                     )
                 )
             assert len(made_twice) == 1
+            # The proof done (16 Nov 2026): revoke-key revokes it, audited; then none is live.
+            gone = await _run(setup, _command(setup, email, "revoke-key", "--apply"))
+            assert gone["status"] == "applied"
+            assert gone["revoked"] == [
+                {"key_id": minted["key_id"], "key_prefix": minted["key_prefix"]}
+            ]
+            async with setup.sessions() as db:
+                after = await db.run_sync(
+                    lambda sync: keys.authenticate(
+                        sync.connection(), key, environment="test", now=datetime.now(UTC)
+                    )
+                )
+                revoked = await db.scalar(
+                    select(AuditEvent).where(
+                        AuditEvent.action == "integration.api_key_revoked",
+                        AuditEvent.resource_id == minted["key_id"],
+                    )
+                )
+            assert after is None
+            assert revoked is not None and revoked.payload["issue"] == APPROVAL[3]
+            none = await _run(setup, _command(setup, email, "revoke-key", "--apply"))
+            assert (none["status"], none["revoked"]) == ("no_live_key", [])
         finally:
             await setup.engine.dispose()
 
