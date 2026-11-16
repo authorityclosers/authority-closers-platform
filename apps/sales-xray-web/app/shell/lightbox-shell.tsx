@@ -390,6 +390,16 @@ function LightboxShellFrame({
   // holds it between a tap and the next render, so two quick taps switch once).
   const [switchingTo, setSwitchingTo] = useState<string | null>(null);
   const switching = useRef<string | null>(null);
+  // False once this frame unmounts: a switch whose answer (or landing wait)
+  // comes back after that changes nothing (release PR 631, 17 Nov 2026: a
+  // switch resumed after its test page was gone, and React found no window).
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   // This frame mounted as a switch landed: its page settles in gently.
   const [arrived] = useState(() => justArrived());
   // The confirmed server context owns selection across mounts and sessions.
@@ -895,8 +905,10 @@ function LightboxShellFrame({
         cache: "no-store",
         redirect: "error",
       });
+      if (!mounted.current) return false;
       if (res.ok) {
         const selected: unknown = await res.json();
+        if (!mounted.current) return false;
         if (
           typeof selected !== "object" ||
           selected === null ||
@@ -928,6 +940,7 @@ function LightboxShellFrame({
         const wait = SWITCH_LAND_MS - (Date.now() - tappedAt);
         if (wait > 0)
           await new Promise((resolve) => window.setTimeout(resolve, wait));
+        if (!mounted.current) return false;
         // In place: every store forgets the old workspace's answers, then a
         // new round of the app frame shows this one, each screen reading
         // for it afresh.
@@ -938,6 +951,7 @@ function LightboxShellFrame({
         return true;
       }
     } catch {}
+    if (!mounted.current) return false;
     // Nothing changed: the old workspace comes back, and the corner says so.
     announceWorkspaceChange("stayed");
     switching.current = null;
