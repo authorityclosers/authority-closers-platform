@@ -487,9 +487,11 @@ def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantic
     # plus defined outcome kinds and names to spell); validator semantics are unchanged.
     # 16 Nov 2026 (/14): a next-call mission whose two fields name the same valid
     # improvement k > 0 moves that improvement first instead of being dropped.
+    # 16 Nov 2026, also /14: content-free overview_drop_errors (path:type) beside
+    # overview_drops; what is admitted or dropped is unchanged.
     source = Path(reports_module.__file__).read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
-        "82bf0f8a7ab79ebdd4d0266a208f8e7b3f7cd11c675802c6dab91b912e0578b8"
+        "a9a784863a6f017f42388695daabc9125b0a0b5834d8979672b350a6a6c93f2b"
     )
 
 

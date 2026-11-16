@@ -715,3 +715,42 @@ def test_a_mission_that_names_no_single_valid_improvement_keeps_the_strict_rules
     assert compatibility.get("overview_drops") == drops
     assert report.overview is not None
     assert (report.overview.next_call_focus is None) is (drops is not None)
+
+
+def test_a_dropped_mission_says_which_field_failed_and_why_without_content() -> None:
+    """Production R01 (16 Nov 2026): next_call_focus was dropped as item_schema_invalid and
+    the valid practice as unpaired, with no word on the cause. Each schema error is noted as
+    path:type; a provider's own key shows as *, and no value is kept."""
+
+    transcript = _transcript()
+    payload = _three_improvements(transcript)
+    payload["overview"]["next_call_focus"]["improvement_index"] = 1
+    payload["overview"]["next_call_focus"]["private words of the call"] = "a quoted line"
+
+    report = parse_report_draft(payload, transcript)
+
+    compatibility = report.provider_extras["compatibility"]
+    assert compatibility["overview_drops"] == {
+        "next_call_focus": {"item_schema_invalid": 1},
+        "practice": {"focus_practice_unpaired": 1},
+    }
+    assert compatibility["overview_drop_errors"] == {
+        "next_call_focus": ["improvement_index:less_than_equal", "*:extra_forbidden"]
+    }
+    noted = json.dumps(compatibility)
+    assert "private words" not in noted and "a quoted line" not in noted
+
+
+def test_drop_errors_name_the_whole_item_and_stay_bounded() -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    payload["overview"]["diagnosis"] = "broken"
+    payload["overview"]["golden_moments"] = ["broken"] * 8
+
+    report = parse_report_draft(payload, transcript)
+
+    errors = report.provider_extras["compatibility"]["overview_drop_errors"]
+    assert errors["diagnosis"] and all(entry.startswith("item:") for entry in errors["diagnosis"])
+    assert len(errors["golden_moments"]) <= 5
+    assert len(set(errors["golden_moments"])) == len(errors["golden_moments"])
