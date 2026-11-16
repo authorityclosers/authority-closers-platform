@@ -5,6 +5,7 @@ approval. Fictional fixture only."""
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import sys
 from pathlib import Path
@@ -410,6 +411,79 @@ def test_luna_from_records_on_the_standard_tier_with_c5_on_gemini(
             assert switch.payload["variant"] == "luna_c4" and switch.payload["tier"] == "standard"
             assert "OpenAI DPA" in switch.payload["reason"]
             assert switch.payload["approval"]["issue"] == "AUT-2177"
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_the_classic_one_is_the_scribe_configuration_last_in_use(
+    postgres_harness: Any, tmp_path: Any
+) -> None:
+    """Staging, 16 Nov 2026 (Luna step 7b): a newer Scribe row, saved but never in use and
+    carrying its own GPT-6 Luna entry, was taken for the classic one once the switch made the
+    Luna configuration active; the switch refused its own read-back and ``back`` would have
+    activated that row. The classic one is the Scribe configuration last in use."""
+    from ac_platform.conversation_intelligence.application import ConversationApplication
+    from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
+    from ac_platform.identity.models import Person
+
+    async def exercise() -> None:
+        setup = await _setup(
+            postgres_harness, tmp_path, text_provider="gemini", funded=True, text_cost_paise=25
+        )
+        try:
+            unsealed = _with_policy(setup)
+            do = await _runner(setup, unsealed)
+            luna = {"tier": "standard", "one_pass": True, "luna": True, "openai": REFS}
+            classic = parse_registry_config(setup.config.as_dict())
+            # Today's Scribe configuration is the one in use.
+            assert (await do("back", apply=True))["status"] == "applied"
+            before = (await do("status", apply=False, **luna))["before"]
+            assert before["active"] == before["classic"]
+            # A newer Scribe row with its own GPT-6 Luna entry, saved and never activated.
+            entry = script._openai_entry(
+                script.Command("status", "test", "x@y", openai=REFS), classic
+            )
+            other = dataclasses.replace(classic, providers=(*classic.providers, entry))
+            async with setup.sessions() as db, db.begin():
+                email = (await db.get(Person, setup.actor.person_id)).email
+                actor = await script._actor(
+                    db, script.Command("status", "test", email), setup.prepared.state.tenant_id
+                )
+                await ConversationProviderAdmin(ConversationApplication(db)).save(
+                    actor,
+                    other.as_dict(),
+                    expected_revision=before["latest_revision"],
+                    key="test-newer-scribe-row-with-luna",
+                )
+            status = await do("status", apply=False, **luna)
+            assert status["before"]["classic"] == before["classic"]
+            digest = status["before"]["luna_c4_digest"]
+            assert digest == before["luna_c4_digest"]
+            assert (await do("prepare", apply=True, **luna))["status"] == "applied"
+            derived = c2_route.derive_configuration(
+                classic, one_pass=True, luna=True, openai=entry, luna_report=False
+            )
+            assert derived.digest == digest
+            sealed = c2_route.seal(
+                unsealed, classic, derived, one_pass=True, luna=GOVERNANCE, luna_report=False
+            )
+            # The dry run and the switch read back the same classic configuration.
+            dry = await do("switch", apply=False, digest=digest, bundle=sealed, **luna)
+            assert dry["status"] == "dry_run"
+            assert dry["after"]["classic"] == before["classic"]
+            switched = await do("switch", apply=True, digest=digest, bundle=sealed, **luna)
+            assert switched["status"] == "applied"
+            assert switched["after"]["active"]["configuration_sha256"] == digest
+            assert switched["after"]["classic"] == before["classic"]
+            after = await do("status", apply=False, **luna)
+            assert after["before"]["classic"] == before["classic"]
+            assert after["before"]["luna_c4_digest"] == digest
+            # Back is the Scribe configuration that was in use, not the newer row.
+            back = await do("back", apply=True, bundle=sealed)
+            assert back["status"] == "applied"
+            assert back["after"]["active"] == before["classic"]
         finally:
             await setup.engine.dispose()
 
