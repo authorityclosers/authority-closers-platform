@@ -5151,7 +5151,12 @@ class Engine:
         if source == target:
             return True
         if not self.is_ancestor(source, target):
-            return False
+            # A release merged since the mirror last synced isn't in it yet (v1.71, 16 Nov 2026:
+            # ac-ship asked while staging was paused between ships, no tick had fetched main,
+            # and the answer was "changed"). Sync once and ask again before saying so.
+            self.sync_mirror()
+            if not self.is_ancestor(source, target):
+                return False
         git = ["git", f"--git-dir={self.paths.mirror}"]
         shown = self.run([*git, "show", f"{target}:{WEB_WORKFLOW_FILE}"], check=False)
         patterns = web_path_filter(shown.stdout) if shown.returncode == 0 else []

@@ -1,0 +1,27 @@
+--- a/ac-ship
++++ b/ac-ship
+@@ -63,11 +63,20 @@
+ # filter never started (orchestrator, 15 Nov 2026). Before the engine knows web-unchanged, this
+ # answers "changed" and ac-ship waits for a web build, as it did before.
+ web_inputs_equal() {
+-  local retained="$1" target="$2" answer
+-  answer=$(/usr/local/sbin/ac-release web-unchanged staging "$target" 2>/dev/null) || return 1
+-  printf '%s' "$answer" | python3 -c 'import json, sys
++  local retained="$1" target="$2" answer try
++  # Asked once more after a short wait: one "changed" just after a merge (v1.71, 16 Nov 2026:
++  # the engine's mirror had not fetched the release yet) made ac-ship wait for a web build that
++  # never starts.
++  for try in 1 2; do
++    if answer=$(/usr/local/sbin/ac-release web-unchanged staging "$target" 2>/dev/null) &&
++      printf '%s' "$answer" | python3 -c 'import json, sys
+ d = json.load(sys.stdin)
+-sys.exit(0 if d.get("unchanged") is True and str(d.get("running_web") or "")[:12] == sys.argv[1][:12] else 1)' "$retained"
++sys.exit(0 if d.get("unchanged") is True and str(d.get("running_web") or "")[:12] == sys.argv[1][:12] else 1)' "$retained"; then
++      return 0
++    fi
++    [ "$try" = 2 ] || sleep 30
++  done
++  return 1
+ }
+ configure_web_build() {
+   WEB_REQUIRED=1; RETAINED_WEB=""
