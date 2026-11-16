@@ -73,6 +73,40 @@
       calc(40dvh - var(--work-head-h, 0px))
     );
   }
+
+  /* The app bar is 56 px on most phones, so rows showed through a thin band
+     between it and the head (owner, 16 Nov 2026): the head's own colour runs
+     up under the bar. */
+  .head::before {
+    position: absolute;
+    right: 0;
+    bottom: 100%;
+    left: 0;
+    height: 12px;
+    background: var(--sx-paper);
+    content: "";
+    pointer-events: none;
+  }
+
+  /* Only once the list moves under it: at rest, Inbound | Cold's glow above
+     stays whole. */
+  @supports (animation-timeline: scroll()) {
+    .head::before {
+      animation: head-fill linear both;
+      animation-timeline: scroll(nearest block);
+      animation-range: 0 24px;
+    }
+  }
+}
+
+@keyframes head-fill {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 /* Large text on a phone: the view tabs step down to fit their row rather than
