@@ -825,6 +825,8 @@ class LeadDesk:
         # Each pipeline's own stages, read once per request (lists build many rows).
         self._journeys: dict[str, journeys.Journey] = {}
         self._pipelines: tuple[pipelines.Pipeline, ...] | None = None
+        # A bulk change's frozen selection (``leads(freeze=...)``).
+        self.frozen_ids: list[UUID] = []
 
     # ----- shared reads --------------------------------------------------------
 
@@ -2065,7 +2067,11 @@ class LeadDesk:
         since: date | None = None,
         until: date | None = None,
         shelf: Literal["archived", "bin"] | None = None,
+        freeze: int | None = None,
     ) -> LeadPage:
+        """One page of leads. ``freeze``: a bulk change's selection instead (bulk_jobs.py):
+        no rows or counts, only ``total``, and up to ``freeze`` matching ids kept in
+        ``self.frozen_ids`` (none when more match)."""
         limit = max(1, min(PAGE_SIZE, limit))
         if scope != "mine" and not self.viewer.can_see_team:
             raise DeskError(403, "Your role sees your own leads only.")
@@ -2120,7 +2126,7 @@ class LeadDesk:
             when_clause = in_when(when, self._day_start())
             where.append(when_clause)
         # The stage picker's numbers come with a side's first page (owner, 31 Oct 2026).
-        counting = side is not None and offset == 0
+        counting = side is not None and offset == 0 and freeze is None
         journey: journeys.Journey | None = None
         if step is not None or counting:
             journey_key = (
@@ -2238,6 +2244,15 @@ class LeadDesk:
             where.append(Lead.stage.in_(OPEN_STAGES))
         elif stage is not None:
             where.append(Lead.stage == stage)
+        if freeze is not None:
+            # "All 522 matching", frozen now: the ids, or none past the cap.
+            matching = int(await self.db.scalar(select(func.count()).where(*where)) or 0)
+            self.frozen_ids = (
+                list(await self.db.scalars(select(Lead.id).where(*where).order_by(Lead.id)))
+                if matching <= freeze
+                else []
+            )
+            return LeadPage(leads=(), total=matching, next_offset=None)
         owner_counts: dict[str, int] = {}
         if scope == "team":
             # Per seller for the same filters, the seller picked left out (25 Oct 2026).

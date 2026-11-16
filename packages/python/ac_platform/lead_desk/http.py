@@ -33,12 +33,14 @@ from ac_platform.identity.models import Person
 from ac_platform.integrations.ai_writes import IN_APP, AiWrites, AiWritesSettings
 from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk import (
+    bulk_jobs,
     capture_guard,
     choices,
     digest_push,
     due_soon,
     duplicate_queue,
     finder,
+    load,
     merging,
     notify_prefs,
     owner_alerts,
@@ -57,7 +59,11 @@ from ac_platform.lead_desk.contracts import (
     AlertText,
     Badge,
     BulkDone,
+    BulkJob,
+    BulkJobCommand,
+    BulkJobs,
     BulkLeads,
+    BulkUndone,
     CallOutcomes,
     CallOutcomesResult,
     CallPrivacy,
@@ -130,6 +136,7 @@ from ac_platform.lead_desk.contracts import (
     RevenueView,
     SearchResult,
     SeedCommand,
+    SellerLoads,
     SellerTargets,
     SettingsCommand,
     ShelveLeads,
@@ -526,6 +533,49 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await merging.unmerge(lead_desk, merge_id, command)
+
+    @router.get("/team/load", response_model=SellerLoads, response_model_by_alias=True)
+    async def seller_loads(
+        request: Request, response: Response, side: Side = "inbound"
+    ) -> SellerLoads:
+        """Each seller's open, late, due-today and untouched leads on one side (load.py)."""
+        no_query(request, frozenset({"side"}))
+        async with desk_for(request, response) as lead_desk:
+            return await load.seller_loads(lead_desk, side)
+
+    @router.post("/leads/bulk-jobs", response_model=BulkJob, response_model_by_alias=True)
+    async def run_bulk_job(
+        command: BulkJobCommand, request: Request, response: Response
+    ) -> BulkJob:
+        """A bulk change on a frozen selection (ids, or a list's filter), undoable for 30
+        minutes (bulk_jobs.py)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await bulk_jobs.run(lead_desk, command)
+
+    @router.get("/leads/bulk-jobs", response_model=BulkJobs, response_model_by_alias=True)
+    async def bulk_job_history(request: Request, response: Response, limit: int = 20) -> BulkJobs:
+        """The workspace's recent bulk changes, newest first: the action history."""
+        no_query(request, frozenset({"limit"}))
+        async with desk_for(request, response) as lead_desk:
+            return await bulk_jobs.history(lead_desk, limit)
+
+    @router.get("/leads/bulk-jobs/{job_id}", response_model=BulkJob, response_model_by_alias=True)
+    async def bulk_job(job_id: UUID, request: Request, response: Response) -> BulkJob:
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await bulk_jobs.one_job(lead_desk, job_id)
+
+    @router.post(
+        "/leads/bulk-jobs/{job_id}/undo",
+        response_model=BulkUndone,
+        response_model_by_alias=True,
+    )
+    async def undo_bulk_job(job_id: UUID, request: Request, response: Response) -> BulkUndone:
+        """Undo a bulk change: every lead not changed since goes back; once per job."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await bulk_jobs.undo(lead_desk, job_id)
 
     @router.post("/leads/archive", response_model=LeadsShelved, response_model_by_alias=True)
     async def archive_leads(

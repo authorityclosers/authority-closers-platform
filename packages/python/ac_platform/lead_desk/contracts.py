@@ -477,6 +477,82 @@ class LeadsDeleted(Model):
     not_found: int
 
 
+class BulkFailure(Model):
+    reason: str
+    count: int
+
+
+class BulkJob(Model):
+    """One bulk change (bulk_jobs.py): what was asked, what changed, and whether it can still
+    be undone. ``lead_ids``: the leads that changed, in the order asked."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    job_id: UUID
+    action: str
+    selection: Literal["ids", "filter"]
+    selected: int
+    changed: int
+    unchanged: int
+    not_found: int
+    failed: tuple[BulkFailure, ...] = ()
+    lead_ids: tuple[UUID, ...] = ()
+    words: str
+    by_person_id: UUID | None = None
+    at: datetime
+    undo_until: datetime
+    undoable: bool
+    undone_at: datetime | None = None
+
+
+class BulkJobs(Model):
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    jobs: tuple[BulkJob, ...]
+
+
+class BulkUndone(Model):
+    """An undone bulk change: the leads put back, and the ones changed since (left as they
+    are)."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    job_id: UUID
+    restored: int
+    skipped: int
+
+
+class LoadCounts(Model):
+    """Open leads on one side, late, due today, untouched for 7 days, and per desk stage
+    (load.py)."""
+
+    open: int
+    late: int
+    due_today: int
+    untouched_7d: int
+    by_stage: dict[str, int]
+
+
+class SellerLoad(Model):
+    person_id: UUID
+    name: str
+    # Their role here; None: someone who holds leads but no longer works them.
+    role: str | None
+    takes_new_leads: bool
+    # Their open-lead limit (Inbound); None: no limit.
+    max_open: int | None
+    load: LoadCounts
+
+
+class SellerLoads(Model):
+    """Each seller's load for the assign sheet and "By seller" (load.py): the sellers plus
+    ``unassigned`` add up to ``totals``."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    side: Literal["inbound", "cold"]
+    generated_at: datetime
+    sellers: tuple[SellerLoad, ...]
+    unassigned: LoadCounts
+    totals: LoadCounts
+
+
 class LeadsShelved(Model):
     """Archive, Bin or Restore (shelf.py): the leads that moved, in the order asked, the
     ones already where they were asked to go, and ones not here (or not yours)."""
@@ -1747,6 +1823,54 @@ class BulkLeads(Command):
     pipeline: str | None = Field(default=None, max_length=40)
     # A move to Lost or Junk gives one reason for all; a move that needs a next action
     # gives one time for all (Lead OS). A lead the move doesn't suit is skipped.
+    outcome_reason: str | None = Field(default=None, max_length=40)
+    reason_note: str | None = Field(default=None, max_length=500)
+    next_action_at: AwareDatetime | None = None
+
+
+class LeadFilter(Command):
+    """A Leads list as GET /leads names it (the same options), for a bulk change on "all N
+    matching": frozen when the request arrives (bulk_jobs.py)."""
+
+    scope: Literal["mine", "team", "unassigned"] = "team"
+    side: Literal["inbound", "cold"] | None = None
+    view: Literal["to_call", "follow_ups", "all"] | None = None
+    stage: str | None = Field(default=None, max_length=16)
+    step: str | None = Field(default=None, max_length=40)
+    search: str | None = Field(default=None, max_length=80)
+    owner: UUID | None = None
+    pipeline: str | None = Field(default=None, max_length=40)
+    source: str | None = Field(default=None, max_length=120)
+    due: LeadDue | None = None
+    contact: LeadSince | None = None
+    created: LeadMade | None = None
+    when: Literal["today", "overdue", "upcoming"] | None = None
+    since: date | None = None
+    until: date | None = None
+    test: bool = False
+    older: bool = False
+    duplicates: bool = False
+    shelf: Literal["archived", "bin"] | None = None
+
+
+class BulkJobCommand(Command):
+    """One bulk change (owner, 16 Nov 2026; bulk_jobs.py): the leads by id, or a list's filter
+    frozen now; up to 2,000. ``expected_total``: the count the screen showed ("Select all 522"),
+    refused with 409 when the list changed since. One command id is one job: a retry returns
+    it, and Undo names it."""
+
+    command_id: UUID
+    lead_ids: tuple[UUID, ...] | None = Field(default=None, min_length=1, max_length=2000)
+    filter: LeadFilter | None = None
+    expected_total: int | None = Field(default=None, ge=1)
+    action: Literal[
+        "assign", "stage", "pipeline", "archive", "bin", "restore_archive", "restore_bin"
+    ]
+    # assign: the person (none: the lead rules pick). stage: the business's stage key, with a
+    # Lost or Junk reason and a next action when the move asks. pipeline: its key.
+    person_id: UUID | None = None
+    step: str | None = Field(default=None, max_length=40)
+    pipeline: str | None = Field(default=None, max_length=40)
     outcome_reason: str | None = Field(default=None, max_length=40)
     reason_note: str | None = Field(default=None, max_length=500)
     next_action_at: AwareDatetime | None = None

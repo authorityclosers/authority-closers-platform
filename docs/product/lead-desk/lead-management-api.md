@@ -47,3 +47,61 @@ workspace (or not the caller's).
   The new screens should send Delete to `/leads/bin` and use `/leads/purge` from the Bin only.
 - Merged leads: a lead merged away keeps pointing at the lead it was merged into; if that lead is
   binned, opening the merged one finds nothing until it is restored (duplicates.md).
+
+## 2. Bulk changes on a frozen selection, with Undo (`lead_desk/bulk_jobs.py`)
+
+| Route | Who | Answer |
+|---|---|---|
+| `POST /leads/bulk-jobs` | owners, admins, managers (Bin and restore from it: owners, admins) | `BulkJob` |
+| `POST /leads/bulk-jobs/{job_id}/undo` (empty body) | the same as the job's action | `BulkUndone` |
+| `GET /leads/bulk-jobs?limit=20` | owners, admins, managers | `{jobs: BulkJob[]}`, newest first |
+| `GET /leads/bulk-jobs/{job_id}` | owners, admins, managers | `BulkJob` |
+
+Request: `{command_id, lead_ids | filter, expected_total?, action, person_id?, step?, pipeline?,
+outcome_reason?, reason_note?, next_action_at?}`.
+
+- **Selection:** `lead_ids` (up to 2,000), or `filter`, the same options as `GET /leads`
+  (`scope`, `side`, `view`, `stage`, `step`, `search`, `owner`, `pipeline`, `source`, `due`,
+  `contact`, `created`, `when`, `since`, `until`, `test`, `older`, `duplicates`, `shelf`). The
+  filter is frozen when the request arrives: the leads matching then are the selection. More
+  than 2,000 matching is refused (422, "N leads match. Up to 2,000 at a time."). Send
+  `expected_total` (the "Select all 522" number) to get 409 "The list changed: N leads match
+  now" instead of acting on a different set.
+- **Actions:** `assign` (`person_id`, or none for the lead rules), `stage` (`step`, plus
+  `outcome_reason` / `next_action_at` when the move asks), `pipeline`, `archive`, `bin`,
+  `restore_archive`, `restore_bin`. Each lead changes as its own action would (store `bulk`,
+  shelf `move`), with its own history line; a lead that can't change is counted in `unchanged`
+  and grouped in `failed[{reason, count}]`. Tags are not offered: leads have no tags yet.
+- **Answer:** `BulkJob = {job_id (= command_id), action, selection: "ids" | "filter", selected,
+  changed, unchanged, not_found, failed, lead_ids (changed, in the order asked), words,
+  by_person_id, at, undo_until, undoable, undone_at}`. A retry with the same `command_id` returns
+  the same job.
+- **Undo:** for 30 minutes (`undo_until`), once per job. Every changed lead whose revision is
+  still the one the job left goes back to what it was (owner and hand-over time; stage, step,
+  stage time, follow-up, reason and pipeline; archived or binned). A lead changed since is left
+  as it is and counted in `skipped`. Stage news the undone move queued and nobody sent yet is
+  dropped; news already sent to an ad platform or partner stays sent. Tasks a stage move closed
+  are not reopened.
+- **History and audit:** each lead's history line for the change keeps `bulk_job` and
+  `bulk_before` (what Undo restores); the undo is a new `edited` line naming it. The job is one
+  audit event `lead_desk.bulk_job.applied` (resource `lead_desk.bulk_job`, id = job id; ids,
+  counts and revisions; a filter's search words are kept only as `true`), the undo one more
+  (`lead_desk.bulk_job.undone`, id `undo:<job id>`).
+- The older `POST /leads/bulk` (ids, up to 500, no undo) still works for today's screens.
+
+## 3. Seller load (`lead_desk/load.py`)
+
+`GET /team/load?side=inbound|cold` (owners, admins, managers, viewers; sellers 403) →
+`SellerLoads = {side, generated_at, sellers[], unassigned, totals}`; each seller is
+`{person_id, name, role, takes_new_leads, max_open, load}` and each `load` is
+`{open, late, due_today, untouched_7d, by_stage{stage: n}}`.
+
+- **open:** leads in the six working stages on that side, never history, archived or binned.
+- **late:** open leads more than an hour past their follow-up, or new leads past their first hour
+  (the badge's and the rows' rule). **due_today:** follow-up today (India time), not late.
+  **untouched_7d:** no contact for 7 days and in the desk for 7 days or more.
+- The counts are one grouped read; people come from the team list (whether they take new leads,
+  their limit). Someone who holds open leads but no longer works them still has a row
+  (`role: null`), so the numbers add up: per-seller stages = their `open`, sellers +
+  `unassigned` = `totals`.
+- The assign sheet's "after: N" is the screen's own sum (`open` + the leads it is giving).

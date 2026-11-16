@@ -1179,6 +1179,132 @@ export function deleteLeads(leadIds: string[], command = commandId()) {
   );
 }
 
+/** At most this many leads go in one bulk change (ids or "all N matching"). */
+export const BULK_JOB_LIMIT = 2000;
+
+export type BulkJobAction = "assign" | "stage" | "pipeline" | ShelfAction;
+
+/** A Leads list as `GET /leads` names it, frozen when the bulk change arrives. */
+export type LeadFilter = {
+  scope?: "mine" | "team" | "unassigned";
+  side?: "inbound" | "cold" | null;
+  view?: "to_call" | "follow_ups" | "all" | null;
+  stage?: string | null;
+  step?: string | null;
+  search?: string | null;
+  owner?: string | null;
+  pipeline?: string | null;
+  source?: string | null;
+  due?: "late" | "today" | "week" | "none" | null;
+  contact?: "today" | "week" | "month" | "never" | null;
+  created?: "today" | "yesterday" | "week" | "month" | "history" | null;
+  when?: "today" | "overdue" | "upcoming" | null;
+  since?: string | null;
+  until?: string | null;
+  test?: boolean;
+  older?: boolean;
+  duplicates?: boolean;
+  shelf?: "archived" | "bin" | null;
+};
+
+export type BulkJobRequest = {
+  /** The leads by id, or `filter` ("Select all 522"); never both. */
+  lead_ids?: string[];
+  filter?: LeadFilter;
+  /** The count the screen showed: refused (409) when the list changed since. */
+  expected_total?: number;
+  action: BulkJobAction;
+  person_id?: string | null;
+  step?: string | null;
+  pipeline?: string | null;
+  outcome_reason?: string | null;
+  reason_note?: string | null;
+  next_action_at?: string | null;
+};
+
+export type BulkJob = {
+  job_id: string;
+  action: BulkJobAction;
+  selection: "ids" | "filter";
+  selected: number;
+  changed: number;
+  unchanged: number;
+  not_found: number;
+  failed: { reason: string; count: number }[];
+  /** The leads that changed, in the order asked. */
+  lead_ids: string[];
+  words: string;
+  by_person_id: string | null;
+  at: string;
+  undo_until: string;
+  undoable: boolean;
+  undone_at: string | null;
+};
+
+export type BulkUndone = { job_id: string; restored: number; skipped: number };
+
+/**
+ * One bulk change on a frozen selection (owners, admins and managers; the
+ * Bin: owners and admins). Keep one command id per confirm: a retry returns
+ * the same job. Undo it with `undoBulkJob` for 30 minutes.
+ */
+export function runBulkJob(change: BulkJobRequest, command = commandId()) {
+  return request<BulkJob>(
+    "/leads/bulk-jobs",
+    json("POST", { command_id: command, ...change }),
+  );
+}
+
+/** Put a bulk change back: leads changed since stay as they are. */
+export function undoBulkJob(jobId: string) {
+  return request<BulkUndone>(
+    `/leads/bulk-jobs/${encodeURIComponent(jobId)}/undo`,
+    json("POST", {}),
+  );
+}
+
+/** The workspace's recent bulk changes, newest first (the action history). */
+export function readBulkJobs(signal?: AbortSignal) {
+  return request<{ jobs: BulkJob[] }>("/leads/bulk-jobs", { signal });
+}
+
+/** Open leads on one side, late, due today, untouched 7 days, per desk stage. */
+export type LoadCounts = {
+  open: number;
+  late: number;
+  due_today: number;
+  untouched_7d: number;
+  by_stage: Record<string, number>;
+};
+
+export type SellerLoad = {
+  person_id: string;
+  name: string;
+  /** Their role here; null: holds leads but no longer works them. */
+  role: string | null;
+  takes_new_leads: boolean;
+  /** Open-lead limit (Inbound); null: no limit. */
+  max_open: number | null;
+  load: LoadCounts;
+};
+
+/** Sellers plus `unassigned` add up to `totals`. */
+export type SellerLoads = {
+  side: "inbound" | "cold";
+  generated_at: string;
+  sellers: SellerLoad[];
+  unassigned: LoadCounts;
+  totals: LoadCounts;
+};
+
+/** Each seller's load (owners, admins, managers, viewers): the assign sheet. */
+export function readSellerLoads(
+  side: "inbound" | "cold" = "inbound",
+  signal?: AbortSignal,
+) {
+  return request<SellerLoads>(`/team/load?side=${side}`, { signal });
+}
+
 /** At most this many leads go in one archive, Bin or restore. */
 export const SHELF_LIMIT = 2000;
 
