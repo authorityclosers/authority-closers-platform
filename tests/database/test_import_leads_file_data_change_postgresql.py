@@ -13,7 +13,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import Engine, func, select
@@ -375,5 +375,128 @@ def test_header_rows_left_out_and_a_mobile_no_column_read(
             assert [(lead.name, lead.phone) for lead in leads] == [
                 ("Fictional Hot", "+919876075101")
             ]
+
+    run(exercise())
+
+
+NEW_LABEL = "File: Fictional sheet / new campaign"
+MERGE_LABEL = "File: Fictional sheet / already here"
+
+
+def test_no_owner_batch_and_merge_into_leads_already_here(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Wise Life and iSolar, 17 Nov 2026: a sheet that names no seller on the team. With no
+    seller at all, a no-owner batch's new leads wait in the pool at the sheet's stage, with
+    their form time as received; a merge batch touches only leads already here, as they are
+    (no repeat, same owner), adds the sheet's notes and sets its stage only on a lead still
+    New; a worked lead keeps its stage; a row with no lead here is left out; a rerun adds
+    nothing and writes nothing twice."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            sessions = here.setup.sessions
+            async with sessions() as db:
+                admin = await db.scalar(
+                    select(Person.email).where(Person.id == here.setup.state.person_id)
+                )
+            assert admin
+            fresh_id = await here.add("Fictional Meta", "98760 76001")
+            worked_id = await here.add("Fictional Worked", "98760 76002")
+            async with sessions() as db:
+                worked = await db.get(Lead, UUID(worked_id))
+                assert worked is not None
+                worked.stage = "interested"
+                await db.commit()
+            spec: dict[str, Any] = {
+                "command_id": str(uuid4()),
+                "tenant": str(here.tenant_id)[:8],
+                "approver_email": admin,
+                "approver": "Fictional owner, in chat",
+                "issue": "AUT-test",
+                "mapping": {"name": "full_name", "phone": "phone_number", "email": "email"},
+                "batches": [
+                    {
+                        "label": NEW_LABEL,
+                        "assign": "none",
+                        "rows": [
+                            {
+                                **row("919876076003", "Fictional Pool", "pool@example.com"),
+                                "created_time": "2026-11-10T09:00:00+05:30",
+                                "_stage": "not_connected",
+                            }
+                        ],
+                    },
+                    {
+                        "label": MERGE_LABEL,
+                        "merge": "existing",
+                        "rows": [
+                            {
+                                **row("919876076001", "Fictional Meta", "meta@example.com"),
+                                "_stage": "interested",
+                                "_notes": [{"text": "From the sheet: Connected"}],
+                            },
+                            {
+                                **row("919876076002", "Fictional Worked", "w@example.com"),
+                                "_stage": "interested",
+                                "_notes": [{"text": "From the sheet: Hot"}],
+                            },
+                            row("919876076009", "Fictional Elsewhere", "else@example.com"),
+                        ],
+                    },
+                ],
+            }
+            bad = {**spec, "batches": [{**spec["batches"][0], "assign": "everyone"}]}
+            with pytest.raises(SystemExit, match="assign_or_merge_not_known"):
+                await tool.execute(sessions, bad, mode="dry-run", now=datetime.now(UTC))
+            now = datetime.now(UTC)
+            dry = await tool.execute(sessions, spec, mode="dry-run", now=now)
+            assert dry["counts"] == {
+                "created": 1,
+                "staged": 2,
+                "merged": 2,
+                "not_here": 1,
+                "stage_kept": 1,
+                "notes": 2,
+            }
+            assert dry["batches"][1]["not_here"] == [3]
+            done = await tool.execute(sessions, spec, mode="apply", now=now)
+            assert done["counts"] == dry["counts"] and done["audited"] is True
+            async with sessions() as db:
+                leads = {
+                    lead.phone: lead
+                    for lead in (
+                        await db.scalars(select(Lead).where(Lead.tenant_id == here.tenant_id))
+                    ).all()
+                }
+                assert "+919876076009" not in leads
+                pool = leads["+919876076003"]
+                assert pool.owner_person_id is None and pool.stage == "not_connected"
+                assert pool.pipeline == "live" and pool.source_label == NEW_LABEL
+                assert pool.received_at is not None
+                assert pool.received_at.isoformat().startswith("2026-11-10T03:30")
+                meta, worked = leads["+919876076001"], leads["+919876076002"]
+                assert str(meta.id) == fresh_id and meta.stage == "interested"
+                assert meta.owner_person_id == here.seller.person_id and meta.repeats == 0
+                assert meta.source_label != MERGE_LABEL
+                assert worked.stage == "interested" and worked.repeats == 0
+                notes = (
+                    await db.scalars(
+                        select(LeadEvent).where(
+                            LeadEvent.tenant_id == here.tenant_id, LeadEvent.kind == "note"
+                        )
+                    )
+                ).all()
+                assert sorted(str(n.lead_id) for n in notes) == sorted([fresh_id, worked_id])
+                repeats = await db.scalar(
+                    select(func.count())
+                    .select_from(LeadEvent)
+                    .where(LeadEvent.tenant_id == here.tenant_id, LeadEvent.kind == "repeat")
+                )
+                assert repeats == 0
+            again = await tool.execute(sessions, spec, mode="apply", now=now)
+            assert again["audited"] is False
+            assert again["counts"]["notes_before"] == 2 and "notes" not in again["counts"]
+            assert "staged" not in again["counts"]
 
     run(exercise())
