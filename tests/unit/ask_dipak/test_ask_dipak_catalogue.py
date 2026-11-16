@@ -26,8 +26,11 @@ def test_the_server_library_is_the_apps_word_for_word() -> None:
     } == catalogue.QUESTIONS_BY_CATEGORY
     assert len(catalogue.QUESTION_IDS) == 150 and len(catalogue.CATEGORIES) == 10
     assert set(app["lessons"]) == catalogue.LESSON_IDS
-    assert len(catalogue.LESSON_IDS) == 12 and catalogue.LESSON_IDS <= catalogue.QUESTION_IDS
-    assert "coach" not in json.dumps(app["lessons"])
+    # Every question has Dipak's own lesson from his docs (16 Nov 2026); no draft is here.
+    assert catalogue.LESSON_IDS == catalogue.QUESTION_IDS
+    # His coaching notes are not here (his lock text itself speaks of coaching).
+    assert all("coach" not in lesson for lesson in app["lessons"].values())
+    assert "draft_for_dipak" not in json.dumps(app["lessons"])
 
 
 def test_a_lesson_reads_in_dipaks_order_and_none_is_invented() -> None:
@@ -35,10 +38,19 @@ def test_a_lesson_reads_in_dipaks_order_and_none_is_invented() -> None:
     assert lesson is not None
     assert lesson["label"] == "Customer कहता है, “Price बहुत high है।” क्या करूँ?"
     assert [option["letter"] for option in lesson["options"]] == ["A", "B", "C"]
-    assert lesson["remember"].startswith("“Expensive” सुनते ही discount नहीं")
+    assert lesson["remember"] == "“Expensive” सुनते ही discount नहीं; पहले पूछिए “किसके comparison में?”"
+    assert lesson["quick_answer"].startswith("Buyer बोले “Price बहुत ज्यादा है,” तो तुरंत discount")
     assert [item["id"] for item in lesson["related"]] == ["PB04", "NEW-030", "PB05"]
-    assert catalogue.lesson("PB05") is None and catalogue.question("PB05") is not None
-    assert catalogue.lesson("ZZ99") is None and catalogue.mission_text("PB05") is None
+    # Once a draft, now his lesson; the report lock and his before/after lines stay out.
+    assert catalogue.lesson("PB05") is not None
+    assert str(catalogue.mission_text("PB05")).startswith("अगली तीन price objections में")
+    app = json.loads(APP_LIBRARY.read_text(encoding="utf-8"))["lessons"]
+    for code in sorted(catalogue.QUESTION_IDS):
+        served = catalogue.lesson(code)
+        assert served is not None and not {"lock", "before", "after"} & set(served)
+        text = json.dumps(served, ensure_ascii=False)
+        assert all(line not in text for line in app[code]["lock"]), code
+    assert catalogue.lesson("ZZ99") is None and catalogue.mission_text("ZZ99") is None
 
 
 @pytest.mark.parametrize(
