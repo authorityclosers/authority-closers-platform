@@ -495,7 +495,7 @@ def legacy_tree():
     # the remote additions are unchanged.
     assert (
         hashlib.sha256(ast.dump(engine).encode()).hexdigest()
-        == "449e91159b09d664886ae502361dedb2ef9caa7aaea0acd9b9d22a303fb7b424"
+        == "f8c0e9b8c909523ebbeedccc08a6f261d0a2b98761960260d09904632a9fcaf3"
     )
     return ast.fix_missing_locations(tree)
 

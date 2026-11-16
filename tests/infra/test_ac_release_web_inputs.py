@@ -105,6 +105,46 @@ def test_a_release_with_no_web_change_keeps_the_running_web_image(tmp_path: Path
     assert shown and shown[0][-1] == f"{HEAD}:{MODULE.WEB_WORKFLOW_FILE}"
 
 
+class LateRunner(FilesRunner):
+    """A mirror that learns of the release only when it fetches."""
+
+    def __call__(self, argv, **kwargs) -> subprocess.CompletedProcess[str]:
+        if "fetch" in list(argv):
+            self.ancestors.add((OLD, HEAD))
+        return super().__call__(argv, **kwargs)
+
+
+def test_a_release_merged_since_the_mirror_synced_is_fetched_before_answering(
+    tmp_path: Path,
+) -> None:
+    # v1.71 (16 Nov 2026): ac-ship asked before the engine's mirror had the merge.
+    runner = LateRunner(["packages/python/ac_platform/x.py"])
+    engine = staging(tmp_path, runner)
+    assert engine.web_inputs_unchanged(OLD, HEAD)
+    assert sum("fetch" in call for call in runner.calls) == 1
+    # Already in the mirror: no fetch at all.
+    again = FilesRunner(["packages/python/ac_platform/x.py"])
+    again.ancestors.add((OLD, HEAD))
+    assert staging(tmp_path / "again", again).web_inputs_unchanged(OLD, HEAD)
+    assert not any("fetch" in call for call in again.calls)
+
+
+def test_ac_ship_asks_the_engine_twice_before_waiting_for_a_web_build() -> None:
+    """infra/release/web_inputs/ac-ship-retry.patch, for the ac-ship that already carries
+    ac-ship.patch: one more answer after a short wait; nothing else in ac-ship changes."""
+    patch = (ROOT / "infra/release/web_inputs/ac-ship-retry.patch").read_text(encoding="utf-8")
+    removed = [
+        line[1:] for line in patch.splitlines() if line.startswith("-") and line[:3] != "---"
+    ]
+    added = [line[1:] for line in patch.splitlines() if line.startswith("+") and line[:3] != "+++"]
+    assert any("for try in 1 2; do" in line for line in added)
+    assert any("sleep 30" in line for line in added)
+    assert any('ac-release web-unchanged staging "$target"' in line for line in added)
+    assert all(
+        "deploy" not in line and "fail " not in line and "promote" not in line for line in removed
+    )
+
+
 def test_a_web_change_without_a_web_build_still_stops(tmp_path: Path) -> None:
     runner = FilesRunner(["apps/sales-xray-web/app/page.tsx"])
     runner.ancestors.add((OLD, HEAD))
