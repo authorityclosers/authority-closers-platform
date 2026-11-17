@@ -96,6 +96,45 @@ Selections: `--lead-id` (repeatable) or the Leads list's own filter: `--where-ow
 when the count changed since you looked. Every bulk change can be undone in the app for 30 minutes (its job id is in
 the receipt).
 
+## API and MCP parity
+
+The same primitives for an organisation's API key (`/v1/api`) and its MCP tools (`/v1/mcp`), in
+`packages/python/ac_platform/integrations/admin_api.py`. Every change needs an organisation's key held by an owner or
+admin (a connected app or a seller's key is refused), takes a `request_id` (the same one again changes nothing) and
+goes through the same app service as the CLI, with the app's own rules (seats: a full workspace refuses an invite with
+`seats_full`; only the owner changes roles).
+
+| Primitive                                      | API (`/v1/api`)                                 | MCP tool                                    | Scope                 |
+| ---------------------------------------------- | ----------------------------------------------- | ------------------------------------------- | --------------------- |
+| people list                                    | `GET /team`                                     | `list_team`                                 | `team:read`           |
+| workspace show                                 | `GET /workspace`                                | `get_workspace`                             | `team:read`           |
+| pending invites                                | `GET /team/invites`                             | `list_invites`                              | `team:read`           |
+| invite                                         | `POST /team/invites`                            | `invite_member`                             | `team:manage` (new)   |
+| resend invite                                  | `POST /team/invites/{id}/resend`                | `resend_invite`                             | `team:manage`         |
+| cancel invite                                  | `POST /team/invites/{id}/revoke`                | `revoke_invite`                             | `team:manage`         |
+| set role (the owner's key only, as in the app) | `POST /team/{person_id}/role`                   | `set_member_role`                           | `team:manage`         |
+| remove member                                  | `POST /team/{person_id}/remove`                 | `remove_member`                             | `team:manage`         |
+| leads list/find                                | `GET /leads?stage=&search=`                     | `list_leads`, `search`                      | `leads:read`          |
+| lead add                                       | `POST /leads`                                   | `add_lead`                                  | `leads:write`         |
+| import                                         | `POST /leads/imports`, `/leads/imports/uploads` | `import_leads`, `create_lead_import_upload` | `leads:write`         |
+| assign                                         | `POST /leads/{id}/assign`, `POST /leads/bulk`   | `assign_lead`, `update_leads`               | `leads:assign`        |
+| reassign by person                             | `POST /leads/reassign`                          | `reassign_leads`                            | `leads:assign`        |
+| stage                                          | `POST /leads/{id}/stage`, `POST /leads/bulk`    | `move_stage`, `update_leads`                | `leads:stage`         |
+| archive / bin / restore                        | `POST /leads/shelf`                             | `shelve_leads`                              | `leads:archive` (new) |
+
+Lead changes over 5 leads are previewed first (`preview: true` returns the counts and a `preview_sha`; send it back to
+apply), the owner's pause in Organisation → AI apps stops them, and each is a Leads bulk job that can be undone in the
+app for 30 minutes.
+
+**CLI only, by design** (an operator with the owner's approval): transfer ownership, rename a person's account, rename
+the workspace, its verified e-mail domains (the app proves those by DNS), the AI-apps switch itself (a key never widens
+what keys may do), making or listing workspaces (a key belongs to one) and the Bin's purge.
+
+**Scope grants.** Saved tier settings beat the code's defaults, so `team:manage` and `leads:archive` reach no tier until
+granted per environment with `scripts/data-changes/developer-platform-override.py --grant-scope tier=scope` (dev:
+organisation, enterprise and unbilled, as for `leads:assign`). Production grants are the orchestrator's, after the
+release that carries these routes, with a snapshot first.
+
 ## Examples (dev)
 
 ```sh
@@ -113,5 +152,12 @@ admin.py workspaces switches --tenant-id T --environment development   # shows t
   derived command ids, masked output.
 - `tests/database/test_admin_cli_data_change_postgresql.py`: every command on PostgreSQL: dry run leaves nothing and
   audits nothing, apply audits once, a rerun replays.
+- `tests/database/test_integrations_admin_api_postgresql.py` and `tests/unit/integrations/test_platform_apps.py`: the
+  API routes and MCP tools.
 - Dev proof 17 Nov 2026 in "API Import Proof (Fictional)": leads add, archive, restore-archive, bin, restore-bin
   (dry, apply, rerun), the AI-apps switch on and off, rename unchanged, a refused stage move with the app's reason.
+- Dev API proof 17 Nov 2026 in AC Sales Sandbox, with a key of `team:read`, `leads:read`, `leads:archive` and
+  `leads:assign` (revoked after): the workspace and invites read, one lead archived and restored (a retry returned the
+  same job), a preview of archiving 1,989 leads changed nothing, an invite without `team:manage` refused, MCP listing
+  the new tools. Dev tiers granted `team:manage` and `leads:archive` (organisation, enterprise, unbilled; settings
+  revision 8).
