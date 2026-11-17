@@ -500,3 +500,82 @@ def test_no_owner_batch_and_merge_into_leads_already_here(
             assert "staged" not in again["counts"]
 
     run(exercise())
+
+
+def test_a_merge_batch_adds_notes_and_stage_to_a_row_imported_before(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """A row a first file brought in as a new lead comes back in a merge batch with its stage
+    and notes (they aren't part of the row's source reference, so the lead is "known"): it
+    is merged like any lead already here, its notes and stage go in once, and a rerun adds
+    nothing (PR review, 17 Nov 2026)."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            sessions = here.setup.sessions
+            async with sessions() as db:
+                admin = await db.scalar(
+                    select(Person.email).where(Person.id == here.setup.state.person_id)
+                )
+            assert admin
+            base: dict[str, Any] = {
+                "tenant": str(here.tenant_id)[:8],
+                "approver_email": admin,
+                "approver": "Fictional owner, in chat",
+                "issue": "AUT-test",
+                "mapping": {"name": "full_name", "phone": "phone_number", "email": "email"},
+            }
+            first = {
+                **base,
+                "command_id": str(uuid4()),
+                "batches": [
+                    {
+                        "label": NEW_LABEL,
+                        "assign": "none",
+                        "rows": [row("919876076101", "Fictional Known", "known@example.com")],
+                    }
+                ],
+            }
+            now = datetime.now(UTC)
+            made = await tool.execute(sessions, first, mode="apply", now=now)
+            assert made["counts"]["created"] == 1
+            merge = {
+                **base,
+                "command_id": str(uuid4()),
+                "batches": [
+                    {
+                        "label": MERGE_LABEL,
+                        "merge": "existing",
+                        "rows": [
+                            {
+                                **row("919876076101", "Fictional Known", "known@example.com"),
+                                "_stage": "not_connected",
+                                "_notes": [{"text": "From the sheet: call after 6"}],
+                            }
+                        ],
+                    }
+                ],
+            }
+            done = await tool.execute(sessions, merge, mode="apply", now=now)
+            assert done["counts"]["merged"] == 1 and "known" not in done["counts"]
+            assert done["counts"]["notes"] == 1 and done["counts"]["staged"] == 1
+            async with sessions() as db:
+                lead = await db.scalar(
+                    select(Lead).where(
+                        Lead.tenant_id == here.tenant_id, Lead.phone == "+919876076101"
+                    )
+                )
+                assert lead is not None and lead.stage == "not_connected"
+                notes = (
+                    await db.scalars(
+                        select(LeadEvent).where(
+                            LeadEvent.lead_id == lead.id, LeadEvent.kind == "note"
+                        )
+                    )
+                ).all()
+                assert [note.data["note"] for note in notes] == ["From the sheet: call after 6"]
+            again = await tool.execute(sessions, merge, mode="apply", now=now)
+            assert again["audited"] is False
+            assert again["counts"]["notes_before"] == 1 and "notes" not in again["counts"]
+
+    run(exercise())

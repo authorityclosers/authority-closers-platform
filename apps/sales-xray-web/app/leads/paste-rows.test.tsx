@@ -27,6 +27,7 @@ vi.mock("./use-pipelines", () => ({
 
 import { resetBackCloseForTests } from "../ui/back-close";
 import { ImportDialog } from "./capture-dialogs";
+import { fieldsFor } from "./import-match";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -114,8 +115,9 @@ it("reads rows pasted into quick add as it opens, and adds them all", async () =
     "Name,Phone\nAsha Example,98765 43210\nRavi Sample,91234 56789",
   );
   expect(dialog.textContent).toContain("Pasted: 2 rows");
-  // Columns, then Check (competitor teardown 5).
-  await act(async () => press(dialog, "Next").click());
+  // Match columns, then Check (owner's pick I2-A).
+  await act(async () => press(dialog, "Continue to check leads").click());
+  await settle();
   const add = press(dialog, "Import 2 leads");
   await act(async () => add.click());
   await settle();
@@ -212,16 +214,17 @@ it("maps stage and owner columns, says which numbers are already leads, and what
   );
   await settle();
   const dialog = host.querySelector("dialog")!;
-  const labels = Array.from(
-    dialog.querySelectorAll("label > span:first-child"),
-    (span) => span.textContent?.trim(),
-  );
-  expect(labels).toEqual(expect.arrayContaining(["Stage", "Owner"]));
-  expect(dialog.textContent).toContain(
-    "Stages are matched by name to the pipeline's stages",
-  );
+  // Each of the file's columns says where it goes (I2-A).
+  const goes = (header: string) =>
+    dialog.querySelector(
+      `[data-column="${header}"] button[aria-haspopup="listbox"]`,
+    )?.textContent;
+  expect(goes("Status")).toContain("Stage");
+  expect(goes("Assigned to")).toContain("Owner");
+  expect(dialog.textContent).toContain("Every column is accounted for.");
   // Check: the number already a lead is skipped unless asked otherwise.
-  await act(async () => press(dialog, "Next").click());
+  await act(async () => press(dialog, "Continue to check leads").click());
+  await settle();
   expect(dialog.textContent).toContain("1 number is already a lead");
   expect(
     dialog.querySelector(
@@ -250,10 +253,8 @@ it("maps stage and owner columns, says which numbers are already leads, and what
 
 it("leaves Owner out for a seller", async () => {
   const dialog = await mount("Name\tPhone\nAsha Example\t98765 43210");
-  const labels = Array.from(
-    dialog.querySelectorAll("label > span:first-child"),
-    (span) => span.textContent?.trim(),
-  );
-  expect(labels).toContain("Stage");
-  expect(labels).not.toContain("Owner");
+  expect(dialog.querySelector('[data-column="Phone"]')).not.toBeNull();
+  expect(fieldsFor(false, false)).toContain("stage");
+  expect(fieldsFor(false, false)).not.toContain("owner");
+  expect(fieldsFor(false, true)).toContain("owner");
 });

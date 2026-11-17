@@ -536,7 +536,10 @@ async def run(
             received_at=moment,
             as_is=existing,
         )
-        if existing and outcome == "repeat":
+        # A row an earlier file brought in comes back "known" (same source reference;
+        # _stage and _notes aren't part of it): in a merge batch it is a merge too, so its
+        # stage and notes still go in, each once (their own command ids).
+        if existing and outcome in ("repeat", "known"):
             outcome = "merged"
         counts[label][outcome] += 1
         if lead is None or outcome not in ("created", "repeat", "merged"):

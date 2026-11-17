@@ -1455,6 +1455,11 @@ class ImportPreview(Model):
     # An Excel file's sheets in order, and the one these rows come from (none for a CSV).
     sheets: tuple[SheetTab, ...] = ()
     sheet: str | None = None
+    # The workspace's earlier choices (lead import I2, intake_memory.py): the headers whose
+    # match came from them, and the headers it starts as not imported (remembered, or a
+    # Facebook lead form's own ids).
+    remembered: tuple[str, ...] = ()
+    skip: tuple[str, ...] = ()
 
 
 class ImportSkip(Model):
@@ -1513,6 +1518,8 @@ class StageWord(Model):
     stage: str | None
     # The stage's own name, for the screen (the import's check, 16 Nov 2026).
     label: str | None = None
+    # Placed by the workspace's earlier import (lead import I2), not by its name.
+    remembered: bool = False
 
 
 class OwnerWord(Model):
@@ -1523,6 +1530,8 @@ class OwnerWord(Model):
     rows: int
     person_id: UUID | None
     person_name: str | None
+    # Said by the workspace's earlier import (lead import I2), not matched by name.
+    remembered: bool = False
 
 
 class ColumnFate(Model):
@@ -1533,6 +1542,22 @@ class ColumnFate(Model):
     header: str
     fate: Literal["matched", "kept", "empty", "not_imported"]
     field: str | None = None
+
+
+class RowFate(Model):
+    """What one of the file's rows becomes (lead import I3, 17 Nov 2026: "Here's what
+    happens to each row"; every row has exactly one outcome). ``row``: its index in the
+    rows sent. "new": a new lead; "known": a lead already here (``lead_id``, ``lead_name``),
+    kept as it is unless Fill blanks or Replace; "repeat": an earlier row of the file has
+    the same number or email, so it is added once; "bad": its number can't be read and it
+    has no email (fixable); "blank": no name, phone or email."""
+
+    row: int
+    outcome: Literal["new", "known", "repeat", "bad", "blank"]
+    lead_id: UUID | None = None
+    lead_name: str | None = None
+    # The earlier row of the file a repeat repeats.
+    same_as: int | None = None
 
 
 class FileCheck(Model):
@@ -1547,6 +1572,8 @@ class FileCheck(Model):
     owners: tuple[OwnerWord, ...]
     owned_new: int
     columns: tuple[ColumnFate, ...]
+    # Every row's outcome, in order (lead import I3); empty from an older server.
+    rows: tuple[RowFate, ...] = ()
 
 
 class HistoryCheck(Model):
@@ -2108,6 +2135,13 @@ class ImportCommand(Command):
     # The file's stage words and the stage key each one means (history imports): a word
     # left out is read as before (match_stage), and history refuses a word neither places.
     stages: dict[str, str] = Field(default_factory=dict, max_length=200)
+    # The file's owner names and the teammate each one is (lead import I2): a name left out
+    # is matched as before (people_index), then by the workspace's earlier import.
+    owners: dict[str, UUID] = Field(default_factory=dict, max_length=200)
+    # Columns the importer chose not to bring in (their cells are not sent) and to keep on
+    # the lead as details: remembered for the next import with the mapping (I2).
+    skipped: tuple[str, ...] = Field(default=(), max_length=500)
+    kept: tuple[str, ...] = Field(default=(), max_length=500)
     # The stage new leads start in (a stage key); none: the first stage.
     step: str | None = Field(default=None, max_length=40)
     # A pipeline picked by hand; None: the one that takes file imports.

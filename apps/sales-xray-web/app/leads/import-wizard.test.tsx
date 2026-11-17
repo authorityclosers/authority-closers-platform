@@ -8,6 +8,13 @@ vi.mock("./leads-client", async (original) => ({
   ...(await original<typeof import("./leads-client")>()),
   previewImport: (...args: unknown[]) => previewImport(...args),
   commitImport: (...args: unknown[]) => commitImport(...args),
+  checkFile: async () => ({
+    stages: [],
+    unmatched_stage: null,
+    owners: [],
+    owned_new: 0,
+    columns: [],
+  }),
   readTeam: async () => ({
     // Sellers who take new leads, and an owner who doesn't (owner, 2 Nov 2026).
     reps: [
@@ -140,16 +147,22 @@ const current = (dialog: HTMLElement) =>
 it("walks File, Match columns, Check and Assign, and imports with the choices made", async () => {
   const dialog = await mount();
   expect(current(dialog)).toBe("2Match columns");
-  // Three of each matched column's values under it.
-  expect(dialog.querySelector('[data-samples="phone"]')?.textContent).toBe(
+  // Every column of the file with three of its values (I2-A).
+  expect(dialog.querySelector('[data-samples="Mobile"]')?.textContent).toBe(
     "98760 75001 · call after 6 · 98760 75003",
   );
-  expect(dialog.querySelector('[data-samples="city"]')?.textContent).toBe(
+  expect(dialog.querySelector('[data-samples="Town"]')?.textContent).toBe(
     "Pune · Nashik · Nagpur",
   );
-  expect(dialog.querySelector('[data-samples="name"]')).toBeNull();
+  // "Customer" wasn't matched: it stays on the lead under its own name.
+  expect(
+    dialog.querySelector(
+      '[data-column="Customer"] button[aria-haspopup="listbox"]',
+    )?.textContent,
+  ).toContain("Keep on the lead");
 
-  await act(async () => button(dialog, "Next")!.click());
+  await act(async () => button(dialog, "Continue to check leads")!.click());
+  await settle();
   expect(current(dialog)).toBe("3Check");
   const counts = Object.fromEntries(
     [...dialog.querySelectorAll("[data-check]")].map((line) => [

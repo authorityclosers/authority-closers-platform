@@ -109,7 +109,17 @@ async function mount(
     ),
   );
   await settle();
-  return host.querySelector("dialog")!;
+  const dialog = host.querySelector("dialog")!;
+  // Match columns first, every time (owner's pick I2-A, 17 Nov 2026).
+  if (importable > 1) {
+    await act(async () =>
+      Array.from(dialog.querySelectorAll("button"))
+        .find((item) => item.textContent === "Continue to check leads")!
+        .click(),
+    );
+    await settle();
+  }
+  return dialog;
 }
 
 afterEach(async () => {
@@ -125,15 +135,10 @@ const button = (dialog: HTMLElement, text: string) =>
     item.textContent?.trim().startsWith(text),
   );
 
-it("says which CRM's export it is and imports in one press, columns tucked away", async () => {
+it("says which CRM's export it is and imports from Check, columns tucked away", async () => {
   const dialog = await mount(2);
   expect(dialog.textContent).toContain("Zoho CRM export.");
   expect(dialog.textContent).toContain("Columns matched: Phone, Stage");
-  // The first rows as leads, before Import (phone personas ph1-48).
-  const first = dialog.querySelector('[aria-label="The first rows, as leads"]');
-  expect(
-    [...(first?.querySelectorAll("li") ?? [])].map((row) => row.textContent),
-  ).toEqual(["98760 72001", "98760 72002"]);
   expect(
     dialog.querySelectorAll('button[aria-haspopup="listbox"]'),
   ).toHaveLength(0);

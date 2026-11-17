@@ -22,7 +22,14 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { displayName } from "../display-name";
 import { askFeedback } from "../feedback/ask";
@@ -31,6 +38,7 @@ import { useBackClose } from "../ui/back-close";
 import { BrandTile } from "../ui/brand-tile";
 import { Button, Field } from "../ui/kit";
 import { Picker } from "../ui/picker";
+import { useNarrow } from "./import-narrow";
 import {
   countsFor,
   firstChoices,
@@ -49,14 +57,31 @@ import {
 } from "./google-files-client";
 import { PICKER_FAILED, pickGoogleSheet } from "./google-picker";
 import { ImportCheck, resultLines, SkippedDownload } from "./import-check";
-import checkStyles from "./import-check.module.css";
 import { FileCheckLines, ownedByFile, useFileCheck } from "./import-file-check";
 import styles from "./import-flow.module.css";
+import {
+  columnRows,
+  COLUMN_LABELS,
+  isSerialColumn,
+  KEEP,
+  MatchCounts,
+  MatchedCard,
+  MatchPairs,
+  MatchQuestion,
+  MatchSheet,
+  questionsOf,
+  SKIP,
+  useImportStages,
+  type MatchProps,
+  type MatchState,
+  type Question,
+} from "./import-match";
+import matchStyles from "./import-match.module.css";
+import { RowsCheck } from "./import-rows";
 import { ImportHistory, UndoImportButton } from "./import-undo";
 import {
   commandId,
   commitImport,
-  FIELD_LABELS,
   LeadsError,
   previewImport,
   readTeam,
@@ -77,29 +102,6 @@ import {
 } from "./upload-choices";
 import { several, usePipelines } from "./use-pipelines";
 
-const MAPPABLE = [
-  "name",
-  "phone",
-  "email",
-  "company",
-  "city",
-  "language",
-  "interest",
-];
-
-/** A file's stage and owner columns (owner P0, 23 Oct 2026): names, matched by the server. */
-const COLUMN_LABELS: Record<string, string> = {
-  ...FIELD_LABELS,
-  stage: "Stage",
-  owner: "Owner",
-  source: "Source",
-  // Old leads kept as history (owner, 2 Nov 2026).
-  received: "Enquiry date",
-  campaign: "Campaign",
-};
-/** An old lead's columns: its own day, stage, campaign and salesperson. */
-const HISTORY_COLUMNS = ["received", "stage", "campaign", "source", "owner"];
-
 /** The import's steps (owner's pick I1-A, 17 Nov 2026: File · Match columns · Check
  *  · Assign). */
 type ImportStep = "file" | "columns" | "check" | "who";
@@ -109,29 +111,6 @@ const IMPORT_STEPS: { key: ImportStep; label: string }[] = [
   { key: "check", label: "Check" },
   { key: "who", label: "Assign" },
 ];
-
-/** The columns matched and nearly every row makes a lead: the file opens on
- *  Check, its column list one tap away (universal intake, 25 Oct 2026). */
-function columnsMatched(
-  preview: ImportPreview,
-  mapping: Record<string, string>,
-): boolean {
-  return (
-    preview.importable !== undefined &&
-    Boolean(mapping.name || mapping.phone) &&
-    preview.importable >= Math.ceil(preview.total_rows * 0.9)
-  );
-}
-
-/** Up to three of a column's values, to see it is the right one. */
-function samplesOf(preview: ImportPreview, header: string | undefined) {
-  if (!header) return "";
-  return preview.rows
-    .map((row) => row[header]?.trim())
-    .filter(Boolean)
-    .slice(0, 3)
-    .join(" · ");
-}
 
 const plural = (count: number, one: string, many: string) =>
   `${count.toLocaleString("en-IN")} ${count === 1 ? one : many}`;
@@ -378,16 +357,24 @@ export function ImportFlow({
     firstChoices(canManage),
   );
   const [team, setTeam] = useState<RepView[] | null>(null);
+  // Everyone on the team: a file's owner names may be any of them (I2).
+  const [everyone, setEveryone] = useState<RepView[] | null>(null);
   useEffect(() => {
     if (!open || !canManage) return;
     let live = true;
     readTeam().then(
       (next) => {
         // New leads are shared between sellers only (owner, 2 Nov 2026).
-        if (live) setTeam(sellersOf(next.reps));
+        if (live) {
+          setTeam(sellersOf(next.reps));
+          setEveryone(next.reps);
+        }
       },
       () => {
-        if (live) setTeam([]);
+        if (live) {
+          setTeam([]);
+          setEveryone([]);
+        }
       },
     );
     return () => {
@@ -414,15 +401,50 @@ export function ImportFlow({
   // owner or admin picks Fill blanks or Replace.
   const [step, setStep] = useState<ImportStep>("file");
   const [duplicates, setDuplicates] = useState<Duplicates>("skip");
+  // Matching (I2): columns not imported, columns looked at, the stage each unknown
+  // stage word is, the teammate each unknown owner name is ("" = the lead rules).
+  const [skip, setSkip] = useState<string[]>([]);
+  const [answered, setAnswered] = useState<string[]>([]);
+  const [stagePicks, setStagePicks] = useState<Record<string, string>>({});
+  const [ownerPicks, setOwnerPicks] = useState<Record<string, string>>({});
+  // I2-B, the sheet with labels: "Advanced" on a computer.
+  const [advanced, setAdvanced] = useState(false);
+  // I2-C on a phone: the matched pairs on demand, the questions passed and the one
+  // on screen (kept there once answered, until Next question).
+  const [seeAll, setSeeAll] = useState(false);
+  const [passed, setPassed] = useState<string[]>([]);
+  const [held, setHeld] = useState<Question | null>(null);
+  const narrow = useNarrow();
   // Old leads (owner, 2 Nov 2026): the file says each lead's day, stage, campaign and
   // salesperson, so there is no Assign step; Check says what each stage word becomes.
   const history = choices.side === "history";
+  // Every file goes through Match columns (owner's pick: I2-A is the default progression).
   const go = (next: ImportPreview) => {
     const start = history
       ? { ...next.mapping, ...next.history_mapping }
       : next.mapping;
     setMapping(start);
-    setStep(columnsMatched(next, start) ? "check" : "columns");
+    // Row numbers ("Sr No") start as not imported, as do the server's own picks
+    // (remembered, or a Facebook lead form's ids).
+    const used = new Set(Object.values(start));
+    const remembered = new Set(next.remembered ?? []);
+    setSkip([
+      ...new Set([
+        ...(next.skip ?? []),
+        ...next.headers.filter(
+          (header) =>
+            isSerialColumn(header) &&
+            !used.has(header) &&
+            !remembered.has(header),
+        ),
+      ]),
+    ]);
+    setAnswered([]);
+    setStagePicks({});
+    setOwnerPicks({});
+    setPassed([]);
+    setHeld(null);
+    setStep("columns");
   };
   const landed = (next: ImportPreview) => {
     setPreview(next);
@@ -554,18 +576,120 @@ export function ImportFlow({
     reading.current(pasted);
   }, [open, pasted]);
 
-  const fresh = preview ? freshRows(preview) : 0;
+  const sent = useMemo(() => {
+    if (!preview || !skip.length) return preview;
+    const out = new Set(skip);
+    return {
+      ...preview,
+      headers: preview.headers.filter((header) => !out.has(header)),
+      rows: preview.rows.map((row) =>
+        Object.fromEntries(
+          Object.entries(row).filter(([header]) => !out.has(header)),
+        ),
+      ),
+    };
+  }, [preview, skip]);
+  const ownersSent = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(ownerPicks).filter(([, person]) => person),
+      ),
+    [ownerPicks],
+  );
+  // A number fixed on Check (I3): the row changes and the check runs again.
+  const [fixes, setFixes] = useState(0);
+  const fixPhone = (row: number, phone: string) => {
+    const header = mapping.phone;
+    if (!header) return;
+    setPreview((current) =>
+      current
+        ? {
+            ...current,
+            rows: current.rows.map((line, index) =>
+              index === row ? { ...line, [header]: phone } : line,
+            ),
+          }
+        : current,
+    );
+    setFixes((count) => count + 1);
+  };
   // New leads: their stages, owners and columns, before Import (owner's import
   // study, 16 Nov 2026). Rows that name a teammate keep that teammate whatever
   // is picked under Assign; only the rest are shared.
   const fileCheck = useFileCheck({
-    on: open && !history && (step === "check" || step === "who") && !result,
-    preview,
+    on:
+      open &&
+      ((!history && (step === "check" || step === "who")) ||
+        step === "columns") &&
+      !result,
+    preview: sent,
     mapping,
     side: choices.side === "cold" ? "cold" : "live",
     step: choices.step,
     pipeline,
+    stages: stagePicks,
+    owners: ownersSent,
+    version: fixes,
   });
+  // New leads: the check's count of new rows when it has one, else the preview's.
+  const checkedRows = fileCheck.check?.rows ?? [];
+  const fresh = !preview
+    ? 0
+    : checkedRows.length && !history
+      ? checkedRows.filter((item) => item.outcome === "new").length
+      : freshRows(preview);
+  const stagesList = useImportStages(open && step === "columns", pipeline);
+  const match: MatchState | null = preview
+    ? {
+        preview,
+        mapping,
+        skip,
+        answered,
+        check: fileCheck.check,
+        stagePicks,
+        ownerPicks,
+        history,
+        canManage,
+      }
+    : null;
+  // A column's new place: a field (taken from the column that had it), kept on the
+  // lead, or not imported.
+  const placeColumn = (header: string, choice: string) => {
+    setMapping((current) => {
+      const next: Record<string, string> = {};
+      for (const [field, column] of Object.entries(current))
+        if (column !== header && field !== choice) next[field] = column;
+      if (choice !== KEEP && choice !== SKIP) next[choice] = header;
+      return next;
+    });
+    setSkip((current) =>
+      choice === SKIP
+        ? [...current.filter((item) => item !== header), header]
+        : current.filter((item) => item !== header),
+    );
+  };
+  const questions = match && step === "columns" ? questionsOf(match) : [];
+  const waiting = questions.filter((item) => !passed.includes(item.id));
+  const current =
+    held && !passed.includes(held.id) ? held : (waiting[0] ?? null);
+  const hold = () => {
+    if (current) setHeld(current);
+  };
+  const matchProps: MatchProps = {
+    match: match!,
+    stages: stagesList,
+    side: choices.side,
+    people: everyone,
+    onColumn: placeColumn,
+    onStage: (word, stage) =>
+      setStagePicks((picks) => ({ ...picks, [word]: stage })),
+    onOwner: (name, person) =>
+      setOwnerPicks((picks) => ({ ...picks, [name]: person })),
+  };
+  const nextQuestion = () => {
+    if (current) setPassed((ids) => [...ids, current.id]);
+    setHeld(null);
+  };
   const owned = Math.min(fresh, ownedByFile(fileCheck));
   const toShare = fresh - owned;
   // The owners the file names are still being checked: the split waits for them.
@@ -598,7 +722,7 @@ export function ImportFlow({
     canManage && !history ? overLimitLines(choices, team, toShare) : [];
   const old = useOldLeads({
     on: open && history && step === "check" && !result,
-    preview,
+    preview: sent,
     mapping,
     pipeline,
   });
@@ -614,9 +738,19 @@ export function ImportFlow({
     setBusy(true);
     setError(null);
     try {
+      // Remembered for the next import: the columns kept or left out on purpose.
+      const kept = answered.filter(
+        (header) =>
+          !skip.includes(header) && !Object.values(mapping).includes(header),
+      );
+      const memory = {
+        ...(Object.keys(ownersSent).length ? { owners: ownersSent } : {}),
+        ...(skip.length ? { skipped: skip } : {}),
+        ...(kept.length ? { kept } : {}),
+      };
       setResult(
         await commitImport(
-          preview,
+          sent ?? preview,
           mapping,
           history ? "none" : serverAssign(choices.assign),
           command.current,
@@ -624,11 +758,16 @@ export function ImportFlow({
           history
             ? {
                 side: "history",
-                stages: old.chosen,
+                stages: { ...stagePicks, ...old.chosen },
+                ...memory,
                 ...(duplicates !== "skip" ? { duplicates } : {}),
               }
             : {
                 side: choices.side,
+                ...(Object.keys(stagePicks).length
+                  ? { stages: stagePicks }
+                  : {}),
+                ...memory,
                 ...(sharing(choices.assign) && team
                   ? { shares: sharesFor(choices, team, toShare) }
                   : {}),
@@ -739,19 +878,27 @@ export function ImportFlow({
         Back
       </Button>
       {step === "columns" ? (
-        <Button
-          variant="primary"
-          onClick={() => setStep("check")}
-          disabled={noColumn}
-        >
-          Next
-        </Button>
+        narrow && current ? (
+          <Button variant="primary" onClick={nextQuestion}>
+            Next question
+          </Button>
+        ) : (
+          <Button
+            variant="primary"
+            onClick={() => setStep("check")}
+            disabled={noColumn}
+          >
+            {narrow ? "Continue" : "Continue to check leads"}
+          </Button>
+        )
       ) : (
         <Button
           variant="primary"
           onClick={run}
           disabled={
             busy ||
+            // The check of what is on screen now must be back (PR 634 P2).
+            (!history && fileCheck.check === null) ||
             ownersPending ||
             overGiven ||
             teamPending ||
@@ -1129,85 +1276,107 @@ export function ImportFlow({
                     </div>
                   ) : null}
                 </div>
-              ) : step === "columns" ? (
-                <>
+              ) : step === "columns" && match ? (
+                <div className={styles.match} data-import-match="">
                   {fileLine}
-                  {/* Each column with up to three of its values (HubSpot's three
-                      rows under each column; teardown 5). */}
-                  <div className={leadStyles.formGrid}>
-                    {(history
-                      ? [...MAPPABLE, ...HISTORY_COLUMNS]
-                      : [
-                          ...MAPPABLE,
-                          "stage",
-                          "source",
-                          ...(canManage ? ["owner"] : []),
-                        ]
-                    ).map((field) => (
-                      <div key={field} className={checkStyles.column}>
-                        <Field
-                          label={
-                            history && field === "owner"
-                              ? "Salesperson"
-                              : COLUMN_LABELS[field]
-                          }
-                        >
-                          <Picker
-                            title={
-                              history && field === "owner"
-                                ? "Salesperson"
-                                : (COLUMN_LABELS[field] ?? field)
-                            }
-                            mode="inline"
-                            value={mapping[field] || null}
-                            all={{ label: "Not in this file" }}
-                            options={preview.headers.map((header) => ({
-                              key: header,
-                              label: header,
-                            }))}
-                            onChange={(key) =>
-                              setMapping((current) => {
-                                const next = { ...current };
-                                if (key) next[field] = key;
-                                else delete next[field];
-                                return next;
-                              })
+                  <div className={matchStyles.top}>
+                    <div>
+                      <h3 className={matchStyles.title}>Match your columns</h3>
+                      <p className={matchStyles.muted}>
+                        We matched what we recognised.
+                        {narrow ? "" : " Check the marked rows."}
+                      </p>
+                    </div>
+                    {narrow ? null : <MatchCounts rows={columnRows(match)} />}
+                  </div>
+                  {narrow ? (
+                    <>
+                      <MatchedCard
+                        rows={columnRows(match)}
+                        open={seeAll}
+                        onToggle={() => setSeeAll((on) => !on)}
+                      />
+                      {seeAll ? <MatchPairs {...matchProps} /> : null}
+                      {current ? (
+                        <>
+                          <p className={matchStyles.qCount}>
+                            Question {passed.length + 1} of{" "}
+                            {passed.length +
+                              waiting.length +
+                              (waiting.some((item) => item.id === current.id)
+                                ? 0
+                                : 1)}
+                          </p>
+                          <MatchQuestion
+                            key={current.id}
+                            question={current}
+                            props={{
+                              ...matchProps,
+                              onColumn: (header, choice) => {
+                                hold();
+                                placeColumn(header, choice);
+                              },
+                              onStage: (word, stage) => {
+                                hold();
+                                matchProps.onStage(word, stage);
+                              },
+                              onOwner: (name, person) => {
+                                hold();
+                                matchProps.onOwner(name, person);
+                              },
+                            }}
+                            onAnswered={(header) =>
+                              setAnswered((list) =>
+                                list.includes(header)
+                                  ? list
+                                  : [...list, header],
+                              )
                             }
                           />
-                        </Field>
-                        {mapping[field] ? (
-                          <small
-                            className={checkStyles.samples}
-                            data-samples={field}
+                          <button
+                            type="button"
+                            className={`${matchStyles.link} ${matchStyles.skipFor}`}
+                            onClick={nextQuestion}
                           >
-                            {samplesOf(preview, mapping[field]) ||
-                              "Empty in this file"}
-                          </small>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                  {history ? (
-                    <p className={leadStyles.hint}>
-                      The next step shows what each stage name becomes.
-                      Salespeople are matched to your team; one that
-                      doesn&apos;t match leaves the lead with nobody.
-                    </p>
-                  ) : mapping.stage || (canManage && mapping.owner) ? (
-                    <p className={leadStyles.hint}>
-                      Stages are matched by name to the pipeline&apos;s stages,
-                      and owners to your team. A stage that doesn&apos;t match
-                      starts in the first stage, or the one you pick, and keeps
-                      the file&apos;s word on the lead. Leads whose owner
-                      matches keep that owner.
-                    </p>
-                  ) : null}
-                  <p className={leadStyles.hint}>
+                            Skip for now
+                          </button>
+                        </>
+                      ) : (
+                        <p className={matchStyles.foot}>
+                          No questions: every column is accounted for.
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {advanced ? (
+                        <MatchSheet {...matchProps} />
+                      ) : (
+                        <MatchPairs {...matchProps} />
+                      )}
+                      <button
+                        type="button"
+                        className={`${matchStyles.link} ${matchStyles.advanced}`}
+                        onClick={() => setAdvanced((on) => !on)}
+                      >
+                        {advanced
+                          ? "Back to the list of columns"
+                          : "Advanced: match on your sheet"}
+                      </button>
+                    </>
+                  )}
+                  <p
+                    className={matchStyles.foot}
+                    data-warn={noColumn ? "" : undefined}
+                    role={noColumn ? "alert" : undefined}
+                  >
                     {noColumn
                       ? "Choose the column with the name or the phone number."
-                      : "Every other column is kept on the lead."}
+                      : history
+                        ? "Every column is accounted for. Salespeople are matched to your team; one that doesn't match leaves the lead with nobody."
+                        : "Every column is accounted for. A column kept on the lead shows under its own name."}
                   </p>
-                </>
+                </div>
               ) : step === "check" ? (
                 <>
                   {fileLine}
@@ -1226,40 +1395,59 @@ export function ImportFlow({
                       Change columns
                     </button>
                   </p>
-                  {/* The first rows as they will be leads, before Import (phone
+                  {history || !checkedRows.length ? null : (
+                    <RowsCheck
+                      preview={sent ?? preview}
+                      mapping={mapping}
+                      check={fileCheck.check}
+                      narrow={narrow}
+                      canManage={canManage}
+                      duplicates={duplicates}
+                      onDuplicates={setDuplicates}
+                      onFix={fixPhone}
+                    />
+                  )}
+                  {/* Old leads: the first rows as they will be, before Import (phone
                       personas ph1-48 and competitor teardown 5). */}
-                  <ul
-                    className={leadStyles.hint}
-                    aria-label="The first rows, as leads"
-                  >
-                    {preview.rows.slice(0, 3).map((row, index) => (
-                      <li key={index}>
-                        {[
-                          mapping.name,
-                          mapping.phone,
-                          history ? mapping.received : null,
-                          history ? mapping.stage : null,
-                          mapping.campaign ?? mapping.source,
-                        ]
-                          .map((column) => (column ? row[column]?.trim() : ""))
-                          .filter(Boolean)
-                          .join(" · ") || "No name or phone in this row"}
-                      </li>
-                    ))}
-                  </ul>
-                  <ImportCheck
-                    preview={preview}
-                    fresh={fresh}
-                    canManage={canManage}
-                    duplicates={duplicates}
-                    onDuplicates={setDuplicates}
-                  />
-                  {history ? null : (
+                  {history ? (
+                    <ul
+                      className={leadStyles.hint}
+                      aria-label="The first rows, as leads"
+                    >
+                      {preview.rows.slice(0, 3).map((row, index) => (
+                        <li key={index}>
+                          {[
+                            mapping.name,
+                            mapping.phone,
+                            history ? mapping.received : null,
+                            history ? mapping.stage : null,
+                            mapping.campaign ?? mapping.source,
+                          ]
+                            .map((column) =>
+                              column ? row[column]?.trim() : "",
+                            )
+                            .filter(Boolean)
+                            .join(" · ") || "No name or phone in this row"}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {/* Old leads, or a check without rows (still reading, or an
+                      older server): the counts as before. */}
+                  {history || !checkedRows.length ? (
+                    <ImportCheck
+                      preview={preview}
+                      fresh={fresh}
+                      canManage={canManage}
+                      duplicates={duplicates}
+                      onDuplicates={setDuplicates}
+                    />
+                  ) : fileCheck.error ? (
                     <FileCheckLines
                       state={fileCheck}
                       stageColumn={mapping.stage}
                     />
-                  )}
+                  ) : null}
                   {history ? (
                     <>
                       {/* Old leads: each stage word and what it becomes (no Assign step). */}

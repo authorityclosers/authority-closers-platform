@@ -120,6 +120,13 @@ it("opens the Picker when it arrived for a Google Sheet, and previews the Sheet 
   await mount(true);
   expect(calls.pick).toHaveBeenCalledOnce();
   expect(calls.preview).toHaveBeenCalledWith("sheet-1");
+  // Match columns first (I2-A), then Check with Import.
+  await act(async () =>
+    [...document.querySelectorAll("button")]
+      .find((button) => button.textContent === "Continue to check leads")!
+      .click(),
+  );
+  await settle();
   expect(
     [...document.querySelectorAll("button")].some(
       (button) => button.textContent === "Import 2 leads",

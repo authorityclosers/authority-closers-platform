@@ -25,7 +25,7 @@ from ac_platform.conversation_intelligence.synthetic_import_models import (
     ConversationSyntheticRecord,
 )
 from ac_platform.identity.models import Person
-from ac_platform.lead_desk import enquiry_dates, imports
+from ac_platform.lead_desk import enquiry_dates, imports, intake_memory
 from ac_platform.lead_desk.capture import (
     CRM_EXPORTS,
     FIELDS,
@@ -53,6 +53,7 @@ from ac_platform.lead_desk.contracts import (
     NewSource,
     OwnerWord,
     ReasonCount,
+    RowFate,
     SeedCommand,
     SheetTab,
     Sources,
@@ -397,10 +398,38 @@ class Intake:
             raise DeskError(422, str(error)) from None
         mapping = suggest_mapping(sheet.headers)
         mapping.update(suggest_columns(sheet.headers, mapping))
+        rows = sheet.rows
+        detected = detect_crm(sheet.headers)
+        skip: tuple[str, ...] = ()
+        # A Facebook lead form export (lead import I2's preset): its ids aren't imported and
+        # Meta's cell prefixes ("p:+9198…") come off.
+        if intake_memory.is_meta_form(sheet.headers):
+            rows = intake_memory.meta_rows(rows)
+            detected = detected or intake_memory.META_FORM
+            skip = tuple(
+                header
+                for header in sheet.headers
+                if header_key(header) in intake_memory.META_SKIP and header not in mapping.values()
+            )
+        # The workspace's earlier choices win over the guesses (lead import I2).
+        memory = await intake_memory.read(self.db, self.tenant_id)
+        mapping, remembered, skipped = intake_memory.remembered_mapping(
+            sheet.headers, mapping, memory
+        )
+        skip = tuple(
+            dict.fromkeys(
+                [*(h for h in skip if h not in remembered and h not in mapping.values()), *skipped]
+            )
+        )
         _, config = await self.desk.settings()
         fields = {name: header for name, header in mapping.items() if name in FIELDS}
         found = [
-            extract(row, fields, default_country=config["default_country"]) for row in sheet.rows
+            extract(
+                {name: value for name, value in row.items() if name not in skip},
+                fields,
+                default_country=config["default_country"],
+            )
+            for row in rows
         ]
         phones = [item.phone for item in found if item.phone is not None]
         emails = {item.email for item in found if item.phone is None and item.email}
@@ -424,14 +453,14 @@ class Intake:
         return ImportPreview(
             file_name=file_name[:200],
             headers=sheet.headers,
-            rows=sheet.rows,
-            total_rows=len(sheet.rows),
+            rows=rows,
+            total_rows=len(rows),
             truncated=sheet.truncated,
             mapping=mapping,
             with_phone=len(phones),
             repeats_in_file=len(phones) - len(set(phones)),
             known_leads=known,
-            detected=detect_crm(sheet.headers),
+            detected=detected,
             importable=sum(
                 1
                 for item in found
@@ -443,6 +472,8 @@ class Intake:
                 SheetTab(name=tab.name, rows=tab.rows, columns=tab.columns) for tab in sheet.tabs
             ),
             sheet=sheet.tab,
+            remembered=remembered,
+            skip=skip,
         )
 
     async def commit(
@@ -469,7 +500,7 @@ class Intake:
         campaign_header = (command.mapping.get("campaign") or None) if history else None
         if history:
             self.desk._require_manager()
-            _, placed, _ = await self._old_leads(command)
+            _, placed, _, _ = await self._old_leads(command)
             unplaced = [word for word, stage in placed.items() if stage is None]
             if unplaced:
                 raise DeskError(
@@ -505,7 +536,11 @@ class Intake:
         owner_header = (
             (command.mapping.get("owner") or None) if self.desk.viewer.can_manage else None
         )
-        people = await self._people(reps) if owner_header else {}
+        people, memory, team = (
+            await self._owners(command, reps)
+            if owner_header
+            else ({}, await intake_memory.read(self.db, self.tenant_id), set())
+        )
         journeys_read: dict[str, journeys.Journey] = {}
         staged = owned = 0
         missing_stages: dict[str, None] = {}
@@ -532,7 +567,7 @@ class Intake:
                 continue
             named = clean(row.get(owner_header)) if owner_header else None
             listed = clean(row.get(source_header)) if source_header else None
-            person = people.get(header_key(named)) if named else None
+            person = self._owner_of(named, command, people, memory, team)[0] if named else None
             if named and person is None:
                 missing_owners.setdefault(named[:80])
             # Picked salespeople get theirs after the lead is made: it is made unassigned.
@@ -618,7 +653,15 @@ class Intake:
                 # The stage the owner said each of the file's words means (checked above).
                 stage = placed.get(wanted) if wanted else None
             else:
-                stage = match_stage(journey, wanted) if wanted else None
+                # The importer's pick for the word, else the workspace's earlier import,
+                # else its name (lead import I2: "Call back → which stage?").
+                stage = None
+                if wanted:
+                    live = {item.key: item for item in journey.stages if not item.archived}
+                    stage = live.get(command.stages.get(wanted) or "") or live.get(
+                        memory.stage(wanted) or ""
+                    )
+                    stage = stage or match_stage(journey, wanted)
                 if stage is None and wanted:
                     # A word that is no stage here starts where the owner picked, else in
                     # the first stage; the word stays on the lead as the file's own column
@@ -647,6 +690,21 @@ class Intake:
                     actor=None if history else "viewer",
                 )
         await self.db.flush()
+        # The choices made here start the workspace's next import (owners and admins).
+        if self.desk.viewer.can_manage and any(outcome == "created" for outcome in outcomes):
+            await intake_memory.remember(
+                self.db,
+                self.tenant_id,
+                self.desk.viewer.person_id,
+                self.desk.now,
+                columns={
+                    **{header: intake_memory.KEEP for header in command.kept},
+                    **{header: name for name, header in command.mapping.items() if header},
+                    **{header: intake_memory.SKIP for header in command.skipped},
+                },
+                stages=command.stages,
+                owners=command.owners,
+            )
         if report is not None:
             report.extend(
                 (outcome, None if lead is None else lead.id)
@@ -761,6 +819,43 @@ class Intake:
             ((person_id, str(email)) for person_id, email in emails),
         )
 
+    async def _owners(
+        self, command: ImportCommand, reps: Iterable[Any]
+    ) -> tuple[dict[str, UUID | None], intake_memory.Memory, set[UUID]]:
+        """Who a file's owner names can be: the team's index (people_index), the workspace's
+        import memory, and the teammates' ids (picks and memory must name one of them)."""
+        reps = list(reps)
+        team = {rep.state.person_id for rep in reps}
+        for person in command.owners.values():
+            if person not in team:
+                raise DeskError(422, "Pick the owners from your team.")
+        return (
+            await self._people(reps),
+            await intake_memory.read(self.db, self.tenant_id),
+            team,
+        )
+
+    @staticmethod
+    def _owner_of(
+        named: str,
+        command: ImportCommand,
+        people: Mapping[str, UUID | None],
+        memory: intake_memory.Memory,
+        team: set[UUID],
+    ) -> tuple[UUID | None, bool]:
+        """The teammate a file's owner name is: the importer's pick, else the team's own
+        name or email, else the workspace's earlier import. (person, from memory)."""
+        picked = command.owners.get(named)
+        if picked is not None:
+            return picked, False
+        person = people.get(header_key(named))
+        if person is not None:
+            return person, False
+        remembered = memory.owner(named)
+        if remembered is not None and remembered in team:
+            return remembered, True
+        return None, False
+
     async def check(self, command: ImportCommand) -> FileCheck:
         """What a file of new leads would bring in, before anything is written (the import's
         Check step; owner's import study, 16 Nov 2026). Its stage words and the stage each
@@ -769,7 +864,7 @@ class Intake:
         them that owner whatever the owner picked, so only the rest are shared); and what
         becomes of every column. Reads the rows as commit does; writes nothing."""
         history = command.side == HISTORY
-        journey, placed, words = await self._old_leads(command)
+        journey, placed, words, by_memory = await self._old_leads(command)
         start = None if history else await self._start(command)
         fallback = journey.stage_for(start) if start else journey.resolve("new", None)
         owner_header = (
@@ -777,7 +872,11 @@ class Intake:
         )
         reps = await self.desk._reps() if owner_header else []
         names = {rep.state.person_id: rep.state.name for rep in reps}
-        people = await self._people(reps) if owner_header else {}
+        people, memory, team = (
+            await self._owners(command, reps)
+            if owner_header
+            else ({}, intake_memory.Memory(), set())
+        )
         fields = {name: header for name, header in command.mapping.items() if name in FIELDS}
         _, config = await self.desk.settings()
         found = [
@@ -793,42 +892,60 @@ class Intake:
         ]
         phones = {item.phone for item, _ in found if item.phone}
         emails = {item.email for item, _ in found if not item.phone and item.email}
-        known: set[str | None] = set()
+        # The leads already here by number, else (no number) email: id and name, oldest first.
+        known: dict[str, tuple[UUID, str | None]] = {}
         if phones:
-            known.update(
-                (
-                    await self.db.scalars(
-                        select(Lead.phone).where(
-                            Lead.tenant_id == self.tenant_id, Lead.phone.in_(phones)
-                        )
-                    )
-                ).all()
-            )
+            for lead_id, phone, name in (
+                await self.db.execute(
+                    select(Lead.id, Lead.phone, Lead.name)
+                    .where(Lead.tenant_id == self.tenant_id, Lead.phone.in_(phones))
+                    .order_by(Lead.created_at)
+                )
+            ).tuples():
+                if phone is not None:
+                    known.setdefault(phone, (lead_id, name))
         if emails:
-            known.update(
-                (
-                    await self.db.scalars(
-                        select(Lead.email).where(
-                            Lead.tenant_id == self.tenant_id, Lead.email.in_(emails)
-                        )
-                    )
-                ).all()
-            )
+            for lead_id, email, name in (
+                await self.db.execute(
+                    select(Lead.id, Lead.email, Lead.name)
+                    .where(Lead.tenant_id == self.tenant_id, Lead.email.in_(emails))
+                    .order_by(Lead.created_at)
+                )
+            ).tuples():
+                if email is not None:
+                    known.setdefault(email, (lead_id, name))
         owners: Counter[str] = Counter()
-        seen: set[str] = set()
+        seen: dict[str, int] = {}
         owned_new = 0
-        for item, row in found:
+        fates: list[RowFate] = []
+        for index, (item, row) in enumerate(found):
             named = clean(row.get(owner_header)) if owner_header else None
             if named:
                 owners[named[:80]] += 1
-            if not (item.name or item.phone or item.email) or unreadable_number(item):
+            if not (item.name or item.phone or item.email):
+                fates.append(RowFate(row=index, outcome="blank"))
+                continue
+            if unreadable_number(item):
+                fates.append(RowFate(row=index, outcome="bad"))
                 continue
             ident = item.phone or item.email
             if ident is not None:
-                if ident in known or ident in seen:
+                if ident in known:
+                    # Only owners and admins see which lead it is (anyone's lead).
+                    known_id: UUID | None = None
+                    known_name: str | None = None
+                    if self.desk.viewer.can_manage:
+                        known_id, known_name = known[ident]
+                    fates.append(
+                        RowFate(row=index, outcome="known", lead_id=known_id, lead_name=known_name)
+                    )
                     continue
-                seen.add(ident)
-            if named and people.get(header_key(named)) is not None:
+                if ident in seen:
+                    fates.append(RowFate(row=index, outcome="repeat", same_as=seen[ident]))
+                    continue
+                seen[ident] = index
+            fates.append(RowFate(row=index, outcome="new"))
+            if named and self._owner_of(named, command, people, memory, team)[0] is not None:
                 owned_new += 1
         used = {
             header: name
@@ -862,6 +979,7 @@ class Intake:
                     rows=count,
                     stage=stage.key if stage else None,
                     label=stage.label if stage else None,
+                    remembered=word in by_memory,
                 )
                 for word, count in words.most_common()
                 for stage in (placed[word],)
@@ -873,20 +991,22 @@ class Intake:
                     rows=count,
                     person_id=person,
                     person_name=names.get(person) if person else None,
+                    remembered=remembered,
                 )
                 for name, count in owners.most_common()
-                for person in (people.get(header_key(name)),)
+                for person, remembered in (self._owner_of(name, command, people, memory, team),)
             ),
             owned_new=owned_new,
             columns=tuple(columns),
+            rows=tuple(fates),
         )
 
     async def _old_leads(
         self, command: ImportCommand
-    ) -> tuple[journeys.Journey, dict[str, journeys.Stage | None], Counter[str]]:
-        """A file of old leads: the pipeline they go to, each of the file's stage words with
-        the stage it means (the owner's pick, else match_stage; None: not placed yet), and
-        how many rows say each word."""
+    ) -> tuple[journeys.Journey, dict[str, journeys.Stage | None], Counter[str], set[str]]:
+        """A file's pipeline, each of the file's stage words with the stage it means (the
+        importer's pick, else the workspace's earlier import, else match_stage; None: not
+        placed yet), how many rows say each word, and the words placed by memory."""
         key = (
             (await self.desk._pipeline(command.pipeline)).key
             if command.pipeline is not None
@@ -898,17 +1018,23 @@ class Intake:
         if header:
             words.update(word for row in command.rows if (word := clean(row.get(header))))
         live = {stage.key: stage for stage in journey.stages if not stage.archived}
+        memory = await intake_memory.read(self.db, self.tenant_id) if words else None
         placed: dict[str, journeys.Stage | None] = {}
+        remembered: set[str] = set()
         for word in words:
-            picked = command.stages.get(word)
-            placed[word] = live.get(picked) if picked else match_stage(journey, word)
-        return journey, placed, words
+            picked = live.get(command.stages.get(word) or "")
+            if picked is None and memory is not None:
+                picked = live.get(memory.stage(word) or "")
+                if picked is not None:
+                    remembered.add(word)
+            placed[word] = picked or match_stage(journey, word)
+        return journey, placed, words, remembered
 
     async def history_check(self, command: ImportCommand) -> HistoryCheck:
         """What a file of old leads would bring in, before anything is written (the import's
         Check step): its stage words and their stages, how its dates read, its campaigns."""
         self.desk._require_manager()
-        _, placed, words = await self._old_leads(command)
+        _, placed, words, _ = await self._old_leads(command)
         dates = command.mapping.get("received") or None
         cells = [row.get(dates) for row in command.rows] if dates else []
         order = enquiry_dates.order_of(cells)

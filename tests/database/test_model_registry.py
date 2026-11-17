@@ -228,6 +228,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "sales_xray_ask_dipak_call_checks",
         "sales_xray_ask_dipak_library_versions",
         "lead_desk_saved_views",
+        "lead_desk_import_memory",
         "bug_issues",
         "bug_issue_reports",
         "bug_issue_events",

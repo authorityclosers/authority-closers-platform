@@ -413,6 +413,10 @@ export type ImportPreview = {
   /** An Excel file's sheets, with their leads and columns, and the one read (I1-B). */
   sheets?: { name: string; rows: number; columns: number }[];
   sheet?: string | null;
+  /** Headers matched by the workspace's earlier import, and headers it starts as not
+   *  imported (remembered, or a Facebook lead form's ids) (lead import I2). */
+  remembered?: string[];
+  skip?: string[];
 };
 
 /** A file of old leads before it is brought in (history imports, 2 Nov 2026). */
@@ -435,6 +439,8 @@ export type FileCheck = {
     rows: number;
     stage: string | null;
     label?: string | null;
+    /** Placed by the workspace's earlier import (I2). */
+    remembered?: boolean;
   }[];
   unmatched_stage: string | null;
   owners: {
@@ -442,6 +448,7 @@ export type FileCheck = {
     rows: number;
     person_id: string | null;
     person_name: string | null;
+    remembered?: boolean;
   }[];
   owned_new: number;
   columns: {
@@ -449,6 +456,19 @@ export type FileCheck = {
     fate: "matched" | "kept" | "empty" | "not_imported";
     field: string | null;
   }[];
+  /** Every row's outcome, in order (lead import I3); none from an older server. */
+  rows?: RowFate[];
+};
+
+/** What one of the file's rows becomes (lead import I3). */
+export type RowFate = {
+  row: number;
+  outcome: "new" | "known" | "repeat" | "bad" | "blank";
+  /** The lead already here (owners and admins only). */
+  lead_id?: string | null;
+  lead_name?: string | null;
+  /** The earlier row a repeat repeats. */
+  same_as?: number | null;
 };
 
 /** A row an import didn't use, by its index in the preview's rows, and why. */
@@ -510,8 +530,13 @@ export type ImportOptions = {
   shares?: { person_id: string; count: number }[];
   step?: string;
   duplicates?: Duplicates;
-  /** Old leads: the stage key each of the file's stage words means. */
+  /** The stage key each of the file's stage words means (old leads; and I2's picks). */
   stages?: Record<string, string>;
+  /** The teammate each of the file's unknown owner names is (I2). */
+  owners?: Record<string, string>;
+  /** Columns left out and columns kept on the lead on purpose: remembered (I2). */
+  skipped?: string[];
+  kept?: string[];
 };
 
 export type SourceView = {
@@ -2052,6 +2077,10 @@ export function checkFile(
   step: string,
   pipeline: string | null = null,
   signal?: AbortSignal,
+  picks: {
+    stages?: Record<string, string>;
+    owners?: Record<string, string>;
+  } = {},
 ) {
   return request<FileCheck>("/imports/check", {
     ...json("POST", {
@@ -2063,6 +2092,12 @@ export function checkFile(
       side,
       ...(step ? { step } : {}),
       ...(pipeline ? { pipeline } : {}),
+      ...(picks.stages && Object.keys(picks.stages).length
+        ? { stages: picks.stages }
+        : {}),
+      ...(picks.owners && Object.keys(picks.owners).length
+        ? { owners: picks.owners }
+        : {}),
     }),
     signal,
   });

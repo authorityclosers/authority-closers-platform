@@ -728,6 +728,30 @@ class LeadSavedView(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class LeadImportMemory(Base):
+    """What a workspace chose in an earlier import (migration 0160, intake_memory.py; lead
+    import I2, 17 Nov 2026: "We'll remember this for your next import"). ``kind`` "column":
+    a file header (as key()) and the field it fills, or "_keep" / "_skip"; "stage": a stage
+    word and the stage key it means; "owner": a name and the teammate's person id. Words and
+    choices only, never a lead's data."""
+
+    __tablename__ = "lead_desk_import_memory"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_import_memory_tenant"),
+        CheckConstraint("kind IN ('column', 'stage', 'owner')", name="lead_import_memory_kind"),
+        CheckConstraint("length(word) > 0", name="lead_import_memory_word"),
+        UniqueConstraint("tenant_id", "kind", "word", name="uq_lead_import_memory_word"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    kind: Mapped[str] = mapped_column(String(8))
+    word: Mapped[str] = mapped_column(String(120))
+    value: Mapped[str] = mapped_column(String(80))
+    updated_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class LeadSource(Base):
     """A connected capture source. Webhook tokens are stored only as a SHA-256."""
 

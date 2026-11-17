@@ -10,7 +10,7 @@
  * Nothing is written until Import.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { displayName } from "../display-name";
 import {
@@ -22,9 +22,40 @@ import {
 import styles from "./import-check.module.css";
 
 export type FileCheckState = {
+  /** The check of the inputs on screen now; null while they are being checked. */
   check: FileCheck | null;
   error: string | null;
 };
+
+/** One key for everything a check reads: a check of other inputs is never shown
+ *  as this one's (PR 634 P2: Import waits until the current inputs are checked). */
+export function checkKey(parts: {
+  preview: ImportPreview | null;
+  mapping: Record<string, string>;
+  side: string;
+  step: string;
+  pipeline: string;
+  stages?: Record<string, string>;
+  owners?: Record<string, string>;
+  /** Bumped when a row is fixed in place (I3). */
+  version?: number;
+}): string {
+  const sorted = (record: Record<string, string> | undefined) =>
+    Object.entries(record ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  return JSON.stringify([
+    parts.preview?.file_name ?? null,
+    parts.preview?.sheet ?? null,
+    parts.preview?.headers ?? null,
+    parts.preview?.rows.length ?? 0,
+    sorted(parts.mapping),
+    parts.side,
+    parts.step,
+    parts.pipeline,
+    sorted(parts.stages),
+    sorted(parts.owners),
+    parts.version ?? 0,
+  ]);
+}
 
 export function useFileCheck({
   on,
@@ -33,45 +64,84 @@ export function useFileCheck({
   side,
   step,
   pipeline,
+  stages,
+  owners,
+  version = 0,
 }: {
-  /** New leads (not Old leads), on the Check or Assign step. */
+  /** New leads on Check or Assign, or any file on Match columns. */
   on: boolean;
   preview: ImportPreview | null;
   mapping: Record<string, string>;
   side: "live" | "cold";
   step: string;
   pipeline: string;
+  /** The stage picked for each of the file's unknown stage words (I2). */
+  stages?: Record<string, string>;
+  /** The teammate picked for each of the file's unknown owner names (I2). */
+  owners?: Record<string, string>;
+  /** Bumped when a row is fixed in place (I3). */
+  version?: number;
 }): FileCheckState {
-  const [check, setCheck] = useState<FileCheck | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const key = checkKey({
+    preview,
+    mapping,
+    side,
+    step,
+    pipeline,
+    stages,
+    owners,
+    version,
+  });
+  const [state, setState] = useState<{
+    key: string;
+    check: FileCheck | null;
+    error: string | null;
+  }>({ key: "", check: null, error: null });
+  // The latest inputs, read when the key changes.
+  const inputs = useRef({
+    preview,
+    mapping,
+    side,
+    step,
+    pipeline,
+    stages,
+    owners,
+  });
   useEffect(() => {
-    if (!on || !preview) return;
+    inputs.current = { preview, mapping, side, step, pipeline, stages, owners };
+  });
+  useEffect(() => {
+    const now = inputs.current;
+    if (!on || !now.preview) return;
     const controller = new AbortController();
     checkFile(
-      preview,
-      mapping,
-      side,
-      step,
-      pipeline || null,
+      now.preview,
+      now.mapping,
+      now.side,
+      now.step,
+      now.pipeline || null,
       controller.signal,
+      { stages: now.stages, owners: now.owners },
     ).then(
-      (next) => {
-        setCheck(next);
-        setError(null);
-      },
+      (next) => setState({ key, check: next, error: null }),
       (reason: unknown) => {
         if (reason instanceof DOMException && reason.name === "AbortError")
           return;
-        setError(
-          reason instanceof LeadsError
-            ? reason.message
-            : "The file couldn't be checked.",
-        );
+        setState({
+          key,
+          check: null,
+          error:
+            reason instanceof LeadsError
+              ? reason.message
+              : "The file couldn't be checked.",
+        });
       },
     );
     return () => controller.abort();
-  }, [on, preview, mapping, side, step, pipeline]);
-  return { check, error };
+  }, [on, key]);
+  return state.key === key
+    ? { check: state.check, error: state.error }
+    : { check: null, error: null };
 }
 
 /** New leads that keep an owner the file names: only the rest are shared. */

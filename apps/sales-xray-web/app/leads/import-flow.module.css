@@ -357,6 +357,13 @@
   background: var(--sx-surface);
 }
 
+/* ---- S2 Match columns (import-match.module.css holds its parts) ---- */
+
+.match {
+  display: grid;
+  gap: 16px;
+}
+
 /* ---- S1 after reading: the file, its sheets, its first rows ---- */
 
 .read {

@@ -191,13 +191,13 @@ it("asks which sheet has the leads, shows its first rows and reads another sheet
     dialog.querySelectorAll('[role="radio"]')[2].getAttribute("aria-checked"),
   ).toBe("true");
 
-  // Match columns: every column matched, so it opens on Check.
+  // Match columns (I2-A): every file goes through it.
   await act(async () =>
     buttons(dialog)
       .find((item) => item.textContent === "Match columns")!
       .click(),
   );
-  expect(current(dialog)).toBe("3Check");
+  expect(current(dialog)).toBe("2Match columns");
   expect(dialog.textContent).toContain("expo-leads.xlsx (Old): 1 rows");
 });
 

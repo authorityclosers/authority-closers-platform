@@ -209,6 +209,13 @@ it("shares only the leads without an owner in the file", async () => {
   );
   await settle();
   const dialog = host.querySelector("dialog")!;
+  // Match columns first (I2-A), then Check.
+  await act(async () =>
+    Array.from(dialog.querySelectorAll("button"))
+      .find((item) => item.textContent === "Continue to check leads")!
+      .click(),
+  );
+  await settle();
   const importButton = () =>
     Array.from(dialog.querySelectorAll("button")).find((item) =>
       item.textContent?.trim().startsWith("Import 4"),
@@ -222,6 +229,7 @@ it("shares only the leads without an owner in the file", async () => {
     "",
     null,
     expect.anything(),
+    { stages: {}, owners: {} },
   );
   await act(async () => answer(CHECK));
   await settle();
