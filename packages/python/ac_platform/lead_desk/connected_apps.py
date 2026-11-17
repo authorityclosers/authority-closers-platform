@@ -1006,9 +1006,29 @@ def _require(configured: object) -> Any:
     return configured
 
 
+def _not_ours(error: meta.MetaError) -> bool:
+    """Meta's #110 on a delete: the earlier test lead was made by someone else's Facebook
+    account (or the Testing Tool), so this Page's connection may not delete it."""
+    detail = (getattr(error, "detail", None) or str(error)).lower()
+    return getattr(error, "code", None) == 110 or "owned by session user" in detail
+
+
+KEPT_WORDS: Final[str] = (
+    "The form's earlier test lead was made by another Facebook account, so Sales Xray "
+    "can't delete it; it asked Meta for a new one anyway."
+)
+KEPT_REFUSED: Final[str] = (
+    "Meta keeps one test lead per form, and the one there now was made by another Facebook "
+    "account. Delete it in Meta's Lead Ads Testing Tool (developers.facebook.com/tools/"
+    "lead-ads-testing) as that account, then send a test lead again."
+)
+
+
 async def test_lead(desk: LeadDesk, page_id: str, form_id: str, *, api: Any = None) -> TestResult:
     """Meta makes a test lead on the form (its earlier one deleted first: Meta keeps one
-    at a time); Sales Xray then waits for it in Leads."""
+    at a time); Sales Xray then waits for it in Leads. An earlier test lead this connection
+    doesn't own (Meta's #110, Wise Life 17 Nov 2026) is left alone and a new one asked for;
+    if Meta then refuses, the manager is told plainly what to do."""
     cfg = _require(meta.config())
     if not re.fullmatch(r"[0-9]{5,32}", form_id):
         raise DeskError(422, "Pick one of the Page's forms.")
@@ -1025,10 +1045,16 @@ async def test_lead(desk: LeadDesk, page_id: str, form_id: str, *, api: Any = No
     token = meta.unseal(cfg.token_key, source.config["token"], page_id=page_id)
     client = api or meta.Graph(cfg)
     clear = CLEAR_LABEL
+    kept: list[str] = []
     try:
         earlier = await client.test_leads(form_id, token)
         for lead_id in earlier:
-            await client.delete_lead(lead_id, token)
+            try:
+                await client.delete_lead(lead_id, token)
+            except meta.MetaError as error:
+                if not _not_ours(error):
+                    raise
+                kept.append(lead_id)
     except meta.MetaError as error:
         return TestResult(
             app="meta_leads",
@@ -1040,12 +1066,15 @@ async def test_lead(desk: LeadDesk, page_id: str, form_id: str, *, api: Any = No
                 Step(label=WAIT_LABEL, state="skipped"),
             ],
         )
+    gone = len(earlier) - len(kept)
     cleared = Step(
         label=clear,
-        state="done" if earlier else "skipped",
+        state="done" if gone else "skipped",
         at=desk.now,
-        words=f"Deleted {_count(len(earlier), 'test lead', 'test leads')}."
-        if earlier
+        words=KEPT_WORDS
+        if kept
+        else f"Deleted {_count(gone, 'test lead', 'test leads')}."
+        if gone
         else "There was none.",
     )
     try:
@@ -1054,7 +1083,7 @@ async def test_lead(desk: LeadDesk, page_id: str, form_id: str, *, api: Any = No
         return TestResult(
             app="meta_leads",
             status="failed",
-            words=f"Meta didn't make the test lead. {meta_said(error)}",
+            words=KEPT_REFUSED if kept else f"Meta didn't make the test lead. {meta_said(error)}",
             steps=[
                 cleared,
                 Step(label=ASK_LABEL, state="failed", words=meta_said(error)),

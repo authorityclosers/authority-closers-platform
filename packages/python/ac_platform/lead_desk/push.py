@@ -6,10 +6,14 @@ many calls are waiting. The app then asks Sales Xray for the words to show, on
 the seller's own session (``GET /v1/lead-desk/leads/{id}/alert``), so names and
 numbers never pass through Google.
 
-A new lead's owner in the organisation (role owner) hears of it too, in the same pass
-(owner, 26 Oct 2026, dev report #3): the app reads "New lead for Rohan: Asha" for one,
-and "5 new leads" or "40+ new leads" for several, counts only. Leads someone typed in
-by hand don't alert the owner. The sender looks every 10 seconds.
+A new lead's owner and admins in the organisation (its managers) hear of it too, in the
+same pass (owner, 26 Oct 2026, dev report #3): the app reads "New lead for Rohan: Asha" for
+one, and "5 new leads" or "40+ new leads" for several, counts only. A new lead the rules
+could give to nobody (everyone at their open-lead limit, or nobody taking leads) "waits for
+a manager": its managers hear "New lead waiting: Asha" (Wise Life, 17 Nov 2026: such leads
+told nobody, and admins never heard of any new lead). A lead held for work hours is not
+waiting: its seller hears at opening. Leads someone typed in by hand don't alert the
+managers. The sender looks every 10 seconds.
 
 Each assignment and each due time alerts once (``Lead.alerted_assigned_at`` and
 ``Lead.alerted_due_at``). A booked meeting reminds its seller before it starts, once per
@@ -52,7 +56,7 @@ from uuid import UUID
 
 import httpx
 from fastapi import FastAPI
-from sqlalchemy import and_, delete, exists, or_, select, text
+from sqlalchemy import and_, delete, exists, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.lead_desk import (
@@ -70,7 +74,7 @@ from ac_platform.lead_desk.contracts import PushConfig
 from ac_platform.lead_desk.history import inbound_only
 from ac_platform.lead_desk.meetings import REMIND_BEFORE
 from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadDevice, LeadMeeting
-from ac_platform.lead_desk.store import LeadDesk, Viewer
+from ac_platform.lead_desk.store import MANAGERS, LeadDesk, Viewer
 from ac_platform.lead_desk.vocabulary import OPEN_STAGES
 from ac_platform.tenancy.models import Membership
 
@@ -230,20 +234,20 @@ def _has_device() -> Any:
     )
 
 
-def _owner_has_device() -> Any:
-    """An owner of the lead's organisation has a phone for alerts."""
+def _manager_has_device() -> Any:
+    """An owner or admin of the lead's organisation has a phone for alerts."""
     return exists().where(
         LeadDevice.tenant_id == Lead.tenant_id,
         Membership.tenant_id == Lead.tenant_id,
         Membership.person_id == LeadDevice.person_id,
-        Membership.role == "owner",
+        Membership.role.in_(MANAGERS),
         Membership.status == "active",
         Membership.ended_at.is_(None),
     )
 
 
-async def _owners(database: AsyncSession, tenant_ids: set[UUID]) -> dict[UUID, list[UUID]]:
-    """Each organisation's owners."""
+async def _managers(database: AsyncSession, tenant_ids: set[UUID]) -> dict[UUID, list[UUID]]:
+    """Each organisation's owners and admins."""
     if not tenant_ids:
         return {}
     found: dict[UUID, list[UUID]] = defaultdict(list)
@@ -251,7 +255,7 @@ async def _owners(database: AsyncSession, tenant_ids: set[UUID]) -> dict[UUID, l
         await database.execute(
             select(Membership.tenant_id, Membership.person_id).where(
                 Membership.tenant_id.in_(tenant_ids),
-                Membership.role == "owner",
+                Membership.role.in_(MANAGERS),
                 Membership.status == "active",
                 Membership.ended_at.is_(None),
             )
@@ -271,7 +275,7 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
             .where(
                 Lead.owner_person_id.is_not(None),
                 Lead.stage.in_(OPEN_STAGES),
-                or_(_has_device(), _owner_has_device()),
+                or_(_has_device(), _manager_has_device()),
                 Lead.assigned_at > since,
                 Lead.assigned_at <= now,
                 # Cold leads come in lists: a new one is never an alert (phone personas,
@@ -284,6 +288,31 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
                 ),
             )
             .order_by(Lead.assigned_at)
+            .limit(BATCH)
+            .with_for_update(skip_locked=True)
+        )
+    ).all()
+    # New leads the rules gave to nobody: they wait for a manager, who hears of them once.
+    waiting = (
+        await database.scalars(
+            select(Lead)
+            .where(
+                Lead.owner_person_id.is_(None),
+                Lead.assigned_at.is_(None),
+                Lead.alerted_assigned_at.is_(None),
+                Lead.stage.in_(OPEN_STAGES),
+                Lead.merged_into_id.is_(None),
+                Lead.created_by_person_id.is_(None),
+                Lead.created_at > since,
+                Lead.created_at <= now,
+                # Just in: an old lead brought in later is no news (dev report #7).
+                func.coalesce(Lead.received_at, Lead.created_at) > since,
+                # A lead held for work hours goes to a seller at opening, who hears then.
+                or_(Lead.owner_reason.is_(None), ~Lead.owner_reason.startswith(hours.HELD)),
+                _manager_has_device(),
+                inbound_only(),
+            )
+            .order_by(Lead.created_at)
             .limit(BATCH)
             .with_for_update(skip_locked=True)
         )
@@ -311,7 +340,9 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
         for tenant_id, config in (
             await database.execute(
                 select(LeadDeskSettings.tenant_id, LeadDeskSettings.config).where(
-                    LeadDeskSettings.tenant_id.in_({lead.tenant_id for lead in (*assigned, *due)})
+                    LeadDeskSettings.tenant_id.in_(
+                        {lead.tenant_id for lead in (*assigned, *waiting, *due)}
+                    )
                 )
             )
         ).tuples()
@@ -355,30 +386,36 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
         meeting.reminded_for = meeting.starts_at
         reminded.append(lead)
     promised = await task_push.collect(database, now)
-    owners = await _owners(
-        database, {lead.tenant_id for lead in assigned if lead.created_by_person_id is None}
+    managers = await _managers(
+        database,
+        {lead.tenant_id for lead in (*assigned, *waiting) if lead.created_by_person_id is None},
     )
     alerts: dict[tuple[UUID, UUID], Alert] = {}
     seen: set[UUID] = set()
-    for kind, leads in (("new", assigned), ("due", due), ("due", reminded), ("due", promised)):
+    batches = (("new", assigned), ("new", waiting), ("due", due), ("due", reminded))
+    for kind, leads in (*batches, ("due", promised)):
         for lead in leads:
             if kind == "new":
-                lead.alerted_assigned_at = lead.assigned_at
+                # A waiting lead is marked at its arrival: once it is given out, its
+                # seller still hears (assigned later than this).
+                lead.alerted_assigned_at = lead.assigned_at or lead.created_at
             # Marked either way: an assignment that is also due alerts once.
             if lead.next_action_at is not None and lead.next_action_at <= now:
                 lead.alerted_due_at = lead.next_action_at
-            if lead.id in seen or lead.owner_person_id is None:
+            if lead.id in seen or (lead.owner_person_id is None and kind != "new"):
                 continue
             seen.add(lead.id)
             hear: list[UUID] = []
             # A lead someone added for themselves needs no alert.
-            if kind != "new" or lead.created_by_person_id != lead.owner_person_id:
+            if lead.owner_person_id is not None and (
+                kind != "new" or lead.created_by_person_id != lead.owner_person_id
+            ):
                 hear.append(lead.owner_person_id)
-            # The organisation's owners hear of a lead that came in by itself, and just
-            # now: an old lead brought in later is no news (dev report #7).
+            # The organisation's owners and admins hear of a lead that came in by itself,
+            # and just now: an old lead brought in later is no news (dev report #7).
             arrived = lead.received_at or lead.created_at
             if kind == "new" and lead.created_by_person_id is None and arrived > since:
-                hear.extend(owner for owner in owners.get(lead.tenant_id, ()) if owner not in hear)
+                hear.extend(p for p in managers.get(lead.tenant_id, ()) if p not in hear)
             # Each person hears this kind or not, by their own choice (teardown 26).
             choice: notify_prefs.Kind | None = (
                 "new_enquiry"
