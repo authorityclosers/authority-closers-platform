@@ -342,7 +342,12 @@ export function ActiveFilters({
   /** Clears every filter at once (the sort stays). */
   onClear?: () => void;
 }) {
-  const chips = filterChips(filters, defaultWho, pipes, sellers);
+  // The sort is not a chip: "Sort: ..." over the list already says it and
+  // changes it (owner's review, 17 Nov 2026: sorting added an extra chip on
+  // top that took room and broke the layout).
+  const chips = filterChips(filters, defaultWho, pipes, sellers).filter(
+    (chip) => chip.key !== "sort",
+  );
   if (!chips.length) return null;
   return (
     <ul className={styles.activeFilters} aria-label="Filters on">
