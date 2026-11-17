@@ -155,6 +155,7 @@ import { leaveTo } from "./leave-to";
 import { haptic, tick } from "../ui/haptics";
 import { DueSoonWatch } from "../leads/due-soon";
 import { PushKeeper } from "./push-keeper";
+import { MissedAlert } from "./missed-alert";
 import { LeadsTabIcon, useLeadsBadgeWords } from "../leads/leads-badge";
 import { ReviewBarChip, ReviewRailLink } from "../review/review-badge";
 import {
@@ -2378,6 +2379,13 @@ function LightboxShellFrame({
       />
       {/* Lead alerts reach every signed-in phone, not only from Leads (17 Nov 2026). */}
       <PushKeeper accountKey={updatesContextKey} />
+      {/* "Missed alert, come back" (owner, 17 Nov 2026): a lead rang the bell while this phone's alerts were off. */}
+      <MissedAlert
+        lines={updates.notifications}
+        ready={updates.notifications_status === "ready"}
+        accountKey={updatesContextKey}
+        openLead={navigateEvent}
+      />
       {authenticated ? (
         <Sheet
           open={workspaceSheetOpen}
