@@ -13,7 +13,6 @@ import {
   ArrowRightLeft,
   ArrowUp,
   BellPlus,
-  Ban,
   CalendarCheck,
   CalendarClock,
   Check,
@@ -138,7 +137,7 @@ import { dueWords, whyLine } from "./desk-view";
 import type { Kind, StageView } from "./journey/journey-client";
 import { stageTone as stageDot } from "./journey/stage-look";
 import { firstCallWords, ownerNote } from "./owner-words";
-import { arrivedAt, fullTime } from "./arrival";
+import { arrivedAt, fullTime, metaWhen } from "./arrival";
 import { phoneCallText } from "./phone-call-text";
 import { several, usePipelines } from "./use-pipelines";
 import { afterCall } from "./after-call";
@@ -206,7 +205,7 @@ import lens from "../ui/call-lens/call-lens.module.css";
 import { LeadBrief } from "./lead-brief";
 import { LeadPageFrame } from "./lead-page-frame";
 import page from "./lead-page.module.css";
-import { shortSource } from "./source-mark";
+import { shortSource, sourceKind } from "./source-mark";
 import { mainPath, StageStepper } from "./stage-stepper";
 
 // Sources whose leads arrive with a form's own answers worth showing.
@@ -1587,10 +1586,16 @@ export function LeadTimeline({
   lead,
   full,
   now = new Date(),
+  meta = null,
+  children,
 }: {
   lead: LeadRow;
   full: boolean;
   now?: Date;
+  /** Beside the title: the honest count, "Tried 3 times, talked once". */
+  meta?: string | null;
+  /** Every update, under the four rows (the lead's history). */
+  children?: ReactNode;
 }) {
   const rows: {
     key: string;
@@ -1628,7 +1633,10 @@ export function LeadTimeline({
       aria-label="Timeline"
       data-lead-timeline=""
     >
-      <h3 className={styles.timelineTitle}>Timeline</h3>
+      <div className={page.cardHead}>
+        <h3 className={styles.timelineTitle}>Timeline</h3>
+        {meta ? <span className={page.cardMeta}>{meta}</span> : null}
+      </div>
       <dl className={styles.timelineRows}>
         {rows.map(({ key, icon: Icon, label, at }) => (
           <div key={key} data-timeline={key}>
@@ -1651,6 +1659,7 @@ export function LeadTimeline({
           </div>
         ))}
       </dl>
+      {children}
     </section>
   );
 }
@@ -3593,7 +3602,6 @@ export function LeadCard({
     more ||
     menuOpen ||
     messaging !== null;
-  const historyId = useId();
   // The call's recording: near the top while there is one to act on now
   // (back from a call, or the phone found or is still finding it), else
   // under the call history, so an idle "Add the recording" doesn't sit
@@ -3780,10 +3788,17 @@ export function LeadCard({
   // Side" under the name, then the follow-up a tap from its picker, late said
   // in words; then the stage as a step strip, or its chip when closed.
   const closed = ["won", "lost", "junk"].includes(lead.stage);
+  // A Meta lead says when Meta made it, at the top (Shivam's review, 17 Nov
+  // 2026: "Meta ad · 16 Nov, 10:42"); the time it reached Sales X-Ray stays in
+  // the Timeline for owners and managers.
+  const metaTime =
+    sourceKind(lead) === "meta" && lead.received_at
+      ? `Meta ad · ${metaWhen(lead.received_at)}`
+      : null;
   const facts = [
     lead.city,
     // The source's kind; the page they came from is the brief's (Leads part 06).
-    shortSource(lead).split(" · ")[0],
+    metaTime ? null : shortSource(lead).split(" · ")[0],
     lead.side === "cold" ? "Cold" : "Inbound",
   ]
     .filter(Boolean)
@@ -3854,21 +3869,48 @@ export function LeadCard({
       {wonWorth ? ` · ${wonWorth}` : ""}
     </span>
   );
+  // The lead's stage first, a tap from changing it (Shivam's review, 17 Nov
+  // 2026: "everyone must see this is the lead's stage at once"; it was in
+  // More). Change opens the stages, Lost and Junk with their reasons among
+  // them; a step on the strip under it still moves there in one tap.
+  const stageTop = (
+    <div className={page.stageTop}>
+      <span className={page.stageNow}>
+        <small>Stage</small>
+        <strong>
+          {lead.stage_label}
+          {wonWorth ? ` · ${wonWorth}` : ""}
+        </strong>
+      </span>
+      {canMove ? (
+        <button
+          type="button"
+          className={page.stageChange}
+          aria-haspopup="dialog"
+          aria-label={`Change stage: ${lead.stage_label}`}
+          onClick={() => setStaging(true)}
+        >
+          Change
+          <ChevronDown size={16} aria-hidden="true" />
+        </button>
+      ) : null}
+    </div>
+  );
   const stageBlock = closed ? (
-    <span className={page.closedChip}>
-      {lead.stage_label}
-      {wonWorth ? ` · ${wonWorth}` : ""}
-    </span>
+    stageTop
   ) : currentStep && steps.some((step) => step.key === currentStep) ? (
-    <StageStepper
-      steps={steps}
-      current={currentStep}
-      movable={movable}
-      onPick={(key) => {
-        setStageTarget(key);
-        setStaging(true);
-      }}
-    />
+    <>
+      {stageTop}
+      <StageStepper
+        steps={steps}
+        current={currentStep}
+        movable={movable}
+        onPick={(key) => {
+          setStageTarget(key);
+          setStaging(true);
+        }}
+      />
+    </>
   ) : canMove ? (
     // No path to draw (the stages not read yet, or a stage beside it): the
     // stage's chip, which opens the stages.
@@ -3891,9 +3933,6 @@ export function LeadCard({
   );
   const firstName = displayFirst(lead.name);
   const noPhoneFix = () => afterMore(editDetails);
-  const lostMove = (detail.moves ?? []).find(
-    (move) => move.group === "lost" || move.group === "junk",
-  );
   // The honest count over the history: "Tried 3 times, talked once".
   const tries =
     storyLines(detail)
@@ -3927,6 +3966,11 @@ export function LeadCard({
           <Avatar name={lead.name} size={48} />
           <div className={page.headWords}>
             <h2 className={page.name}>{lead.name}</h2>
+            {metaTime ? (
+              <p className={page.facts} data-meta-time="">
+                {metaTime}
+              </p>
+            ) : null}
             {facts ? <p className={page.facts}>{facts}</p> : null}
             {/* Whose lead it is, for whoever sees the team's (Leads part 06). */}
             {me?.can_manage && lead.owner_name ? (
@@ -4077,7 +4121,7 @@ export function LeadCard({
                 className={page.moreItem}
                 onClick={() =>
                   afterMore(() => {
-                    // The recording's place is under the call history.
+                    // The recording's place is under the Timeline.
                     window.requestAnimationFrame(() =>
                       document
                         .querySelector<HTMLElement>(
@@ -4151,25 +4195,6 @@ export function LeadCard({
                   </button>
                 )}
               </li>
-              <li>
-                <button
-                  type="button"
-                  className={page.moreItem}
-                  aria-disabled={!canMove || undefined}
-                  onClick={() =>
-                    canMove
-                      ? afterMore(() => setStaging(true))
-                      : notify({
-                          id: "why-move",
-                          tone: "info",
-                          title: "No other stage to move to",
-                        })
-                  }
-                >
-                  <ArrowRightLeft size={20} aria-hidden="true" />
-                  Move stage
-                </button>
-              </li>
             </>
           ) : null}
           {detail.can_assign && detail.reps.length ? (
@@ -4181,23 +4206,6 @@ export function LeadCard({
               >
                 <Shuffle size={20} aria-hidden="true" />
                 {lead.owner_name ? "Reassign" : "Assign"}
-              </button>
-            </li>
-          ) : null}
-          {canMove && lostMove ? (
-            <li>
-              <button
-                type="button"
-                className={page.moreItem}
-                onClick={() =>
-                  afterMore(() => {
-                    setStageTarget(lostMove.step);
-                    setStaging(true);
-                  })
-                }
-              >
-                <Ban size={20} aria-hidden="true" />
-                Close as lost / junk
               </button>
             </li>
           ) : null}
@@ -4357,19 +4365,16 @@ export function LeadCard({
       ) : null}
       {recordingNow ? recording : null}
 
-      {/* The call history (lead page P5): every call, chat, note and move
-          in one column, the follow-up to come pinned first; then the latest
-          note, which opens Notes. The calls' recording and what they told
-          us follow, then the chats themselves, then about the lead. */}
-      <section className={page.card} aria-labelledby={historyId}>
-        <div className={page.cardHead}>
-          <h3 id={historyId} className={page.cardTitle}>
-            Call history
-          </h3>
-          {tries ? <span className={page.cardMeta}>{tries}</span> : null}
-        </div>
+      {/* The Timeline (Shivam's review, 17 Nov 2026: a Call history repeated
+          it): when the lead came in, was added, changed and given out, then
+          every call ("tried calling", connected, how long), chat, note and
+          move in one column, the follow-up to come pinned first; its "came
+          in" line is the Received row. Then the latest note, which opens
+          Notes; the calls' recording and what they told us follow, then the
+          chats themselves, then about the lead. */}
+      <LeadTimeline lead={lead} full={!!me?.can_manage} meta={tries}>
         <History
-          events={detail.events}
+          events={detail.events.filter((event) => event.kind !== "captured")}
           onChanged={onChanged}
           leadId={lead.lead_id}
           chats={chats}
@@ -4382,7 +4387,7 @@ export function LeadCard({
           onGenerate={recording && !recordingNow ? toRecording : undefined}
           shown={3}
         />
-      </section>
+      </LeadTimeline>
       {latestNote ? (
         <button
           type="button"
@@ -4532,7 +4537,6 @@ export function LeadCard({
             .join(" · ")}
         </small>
       </section>
-      <LeadTimeline lead={lead} full={!!me?.can_manage} />
       {detail.can_assign && detail.reps.length ? (
         <ReassignSheet
           open={picking}

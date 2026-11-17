@@ -963,6 +963,86 @@ button.stepButton:focus-visible {
   overflow-wrap: normal;
 }
 
+/* The strip as a slider (Shivam's review, 17 Nov 2026: at 360 px with large
+   text "Unworked" ran into "Follow-up", "Interested" and "Demo booked"). Each
+   step a column of at least 72 dp with 8 dp between, its name a plain block
+   that wraps between words, so a column is never narrower than its longest
+   word; a path wider than the card scrolls, the current step in view and the
+   next one peeking at the edge. */
+.stepper {
+  column-gap: 8px;
+  padding-inline-end: 24px;
+  scroll-padding-inline: 24px;
+}
+
+.stepper > .step {
+  min-width: 72px;
+}
+
+.stepper .stepLabel {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: none;
+  line-clamp: none;
+}
+
+/* The lead's stage on top (Shivam's review, 17 Nov 2026): "Stage", its name,
+   and Change, which opens the stages (Lost and Junk among them). */
+.stageTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-block: -8px -12px;
+}
+
+.stageNow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.stageNow small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.stageNow strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  line-height: var(--sx-leading-20);
+  overflow-wrap: anywhere;
+}
+
+.stageChange {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  min-height: 48px;
+  padding: 0 4px 0 12px;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  line-height: var(--sx-leading-20);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.stageChange:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+  border-radius: var(--sx-radius-sm);
+}
+
 /* The one Call band look: the Leads band's glossy finish. */
 a.callBand {
   background: var(--sx-gloss);

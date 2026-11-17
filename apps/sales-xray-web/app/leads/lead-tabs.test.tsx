@@ -115,18 +115,24 @@ async function show(outcome: ReactNode = null) {
   );
 }
 
+// The calls live in the Timeline (Shivam's review, 17 Nov 2026: no Call history).
 const historyCard = () =>
-  [...host.querySelectorAll<HTMLElement>("section[aria-labelledby]")].find(
-    (section) => section.querySelector("h3")?.textContent === "Call history",
-  )!;
+  host.querySelector<HTMLElement>('section[aria-label="Timeline"]')!;
 const noteCard = () =>
   [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
     button.textContent?.startsWith("Latest note"),
   );
 
-it("puts the call history and the latest note on one page, no tabs (lead page P5)", async () => {
+it("puts the calls in the Timeline and the latest note on one page, no tabs (lead page P5)", async () => {
   await show();
   expect(host.querySelector('[role="tab"], [role="tablist"]')).toBeNull();
+  // One Timeline, no Call history beside it.
+  expect(host.querySelectorAll('section[aria-label="Timeline"]')).toHaveLength(
+    1,
+  );
+  expect(
+    [...host.querySelectorAll("h3")].map((title) => title.textContent),
+  ).not.toContain("Call history");
   const card = historyCard();
   // The honest count beside the title.
   expect(card.textContent).toContain("Tried 1 time, talked once");

@@ -145,14 +145,64 @@ it("calls an open lead by first name, the stage a strip it can move along", asyn
   expect(strip?.querySelector('[aria-current="step"]')?.textContent).toBe(
     "Follow-up",
   );
-  // Lost is never a step: it is in More.
+  // Lost is never a step: it is under the stage's Change.
   expect(strip?.textContent).not.toContain("Lost");
   expect(
     strip?.querySelector('button[aria-label="Move to Interested"]'),
   ).not.toBeNull();
 });
 
-it("shows a closed lead's state as a chip, no follow-up, and Call again", async () => {
+// Shivam's review, 17 Nov 2026: the stage on top, a tap from changing it;
+// More no longer moves the stage or closes the lead.
+it("puts the lead's stage on top with Change, and takes Move stage and Close as lost out of More", async () => {
+  await show(base);
+  const change = host.querySelector<HTMLButtonElement>(
+    'button[aria-label="Change stage: Follow-up"]',
+  );
+  expect(change).not.toBeNull();
+  // The stage row comes before the strip, in the page's head.
+  const strip = host.querySelector('ol[aria-label="Stage"]')!;
+  expect(
+    change!.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(change!.closest("section")?.textContent).toContain("StageFollow-up");
+  const more = buttons().find(
+    (button) =>
+      button.getAttribute("aria-label") === `More for ${base.lead.name}`,
+  )!;
+  await act(async () => more.click());
+  const sheet = [...document.querySelectorAll("dialog")].find(
+    (dialog) => dialog.open,
+  );
+  const items = [...(sheet?.querySelectorAll("li") ?? [])].map((item) =>
+    item.textContent?.trim(),
+  );
+  expect(items).not.toContain("Move stage");
+  expect(items).not.toContain("Close as lost / junk");
+  expect(items).toContain("Ask Dipak about Shrikant");
+});
+
+it("says when Meta made a Meta lead at the top, not the source twice", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-11-17T06:00:00Z"));
+  await show({
+    ...base,
+    lead: {
+      ...base.lead,
+      source: "meta",
+      source_label: "Meta · Wise Fictional",
+      received_at: "2026-11-16T05:12:00Z",
+      created_at: "2026-11-16T05:12:09Z",
+    },
+  } as LeadDetail);
+  const line = host.querySelector("[data-meta-time]");
+  // 05:12 UTC is 10:42 in India.
+  expect(line?.textContent).toMatch(/^Meta ad · 16 Nov, \d{1,2}:12 (am|pm)$/);
+  expect(host.querySelector("h2")?.nextElementSibling).toBe(line);
+  expect(line?.nextElementSibling?.textContent).toBe("Pune · Inbound");
+});
+
+it("shows a closed lead's state on top, no follow-up, and Call again", async () => {
   await show({
     ...base,
     lead: { ...base.lead, stage: "won", stage_label: "Won", group: "won" },
