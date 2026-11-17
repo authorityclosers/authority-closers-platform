@@ -9,7 +9,9 @@
  * step. Names sit under the dots, up to two lines. A step ahead or behind
  * that the lead may move to opens the stage sheet on it, which asks what the
  * move needs (a meeting's time, a reason) before it moves anything. Lost and
- * Junk aren't on the path: they are in More.
+ * Junk aren't on the path: they are under the stage's Change, above the strip
+ * (Shivam's review, 17 Nov 2026). A path wider than the card slides sideways,
+ * each step at least 72 dp, so no name runs into the next at large text.
  */
 
 import { sideScrollFades, useSideScroll } from "@ac/ui/kit";
@@ -117,10 +119,12 @@ export function StageStepper({
       className={`${styles.stepper} ${sideScrollFades}`}
       aria-label="Stage"
       style={{
-        // Each column as wide as its step's longest word, at least 36 dp,
-        // spread across the card, so a path of six fits at 363 (Leads part
-        // 06: Meeting Done and Won sat off the card); longer still scrolls.
-        gridTemplateColumns: `repeat(${steps.length}, minmax(36px, min-content))`,
+        // Each column as wide as its step's longest word and at least 72 dp
+        // (the step's own min-width), spread across the card when they fit;
+        // a longer path slides, the next step peeking (Shivam's review, 17
+        // Nov 2026: minmax(36px, min-content) never grew past 36 dp in a
+        // full strip, so the names ran into each other).
+        gridTemplateColumns: `repeat(${steps.length}, min-content)`,
       }}
     >
       {steps.map((step, index) => {

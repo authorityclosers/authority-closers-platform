@@ -206,6 +206,43 @@ function hubChat(now: number) {
   };
 }
 
+/** `?path=long`: a seven-step path with longer names (Shivam's review, 17 Nov
+ *  2026: the strip drew "Unworked" into "Follow-up" at 360 px), the lead's moves
+ *  to every step, Lost and Junk with their reasons (wb_overlap.mjs). */
+const longPath = () =>
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).get("path") === "long";
+
+const LONG_PATH = [
+  ["Unworked", "new"],
+  ["Follow-up", "follow_up"],
+  ["Interested", "interested"],
+  ["Demo booked", "interested"],
+  ["Proposal sent", "interested"],
+  ["Payment pending", "interested"],
+  ["Won", "won"],
+  ["Not interested", "lost"],
+  ["Junk", "junk"],
+] as const;
+
+function longMoves() {
+  return LONG_PATH.slice(1).map(([label, kind], index) => ({
+    step: `long_${index + 1}`,
+    label,
+    kind,
+    group:
+      kind === "won" || kind === "lost" || kind === "junk" ? kind : "active",
+    action:
+      kind === "won" || kind === "lost" || kind === "junk" ? "close" : "move",
+    needs: kind === "lost" || kind === "junk" ? ["reason"] : [],
+    asks: [],
+    reasons:
+      kind === "lost" || kind === "junk"
+        ? [{ key: "price", label: "Price too high" }]
+        : [],
+  }));
+}
+
 const twoPipelines = () =>
   typeof window !== "undefined" &&
   new URLSearchParams(window.location.search).get("pipelines") === "2";
@@ -634,7 +671,9 @@ function answers(now: number, path: string): unknown {
               attempts: 2,
               created_at: new Date(Date.now() - 27 * 60 * MINUTE).toISOString(),
             }
-          : row,
+          : longPath() && row.stage === "new"
+            ? { ...row, stage_label: "Unworked" }
+            : row,
       phone: "+91 98765 43210",
       email: null,
       owner_reason: null,
@@ -653,6 +692,7 @@ function answers(now: number, path: string): unknown {
       can_assign: true,
       reps: [],
       call_mode: "phone",
+      ...(longPath() ? { moves: longMoves() } : {}),
       first_call_minutes: null,
       stage_suggestion: null,
       tasks:
@@ -712,6 +752,27 @@ function answers(now: number, path: string): unknown {
       pipeline: "partner_outreach",
       stages: PARTNER_STAGES.map(([label, kind], index) => ({
         key: `partner_${index}`,
+        label,
+        kind,
+        kindWords: "",
+        milestone: "",
+        meaning: "",
+        archived: false,
+        origin: "",
+        leads: 1,
+      })),
+    };
+  if (path === "/v1/lead-desk/journey" && longPath())
+    return {
+      version: 2,
+      industry: null,
+      savedAt: null,
+      savedBy: null,
+      canEdit: true,
+      kinds: {},
+      meanings: {},
+      stages: LONG_PATH.map(([label, kind], index) => ({
+        key: `long_${index}`,
         label,
         kind,
         kindWords: "",

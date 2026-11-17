@@ -5202,11 +5202,12 @@ class LeadDesk:
         """The words on a phone alert for one lead: who, why now, from where."""
         lead = await self._lead(lead_id)
         mine = lead.owner_person_id == self.viewer.person_id
-        # An organisation's owner hears of each new lead too, and whose it is (owner, 26
-        # Oct 2026, dev report #3).
+        # An organisation's owners and admins hear of each new lead too, and whose it is
+        # (owner, 26 Oct 2026, dev report #3), or that it waits for them (Wise Life, 17 Nov
+        # 2026: a lead the rules gave to nobody told nobody).
         told = (
             not mine
-            and self.viewer.role == "owner"
+            and self.viewer.can_manage
             and lead.stage == "new"
             and lead.next_action_at is None
         )
@@ -5225,12 +5226,15 @@ class LeadDesk:
                 for part in (
                     source,
                     lead.interest,
+                    None if seller else "No owner yet: tap to assign",
                     ago_text(lead.received_at or lead.created_at, self.now),
                 )
                 if part
             )
             return AlertText(
-                title=(f"New lead for {seller}: {name}" if seller else f"New lead: {name}")[:120],
+                title=(f"New lead for {seller}: {name}" if seller else f"New lead waiting: {name}")[
+                    :120
+                ],
                 body=body[:240],
                 lead_id=lead.id,
                 url=f"/leads#lead={lead.id}",
@@ -5272,8 +5276,8 @@ class LeadDesk:
 
     async def _just_in(self) -> int:
         """New leads that came in within JUST_IN and wait for their first call: this
-        seller's, or for an owner, the organisation's that nobody typed in by hand."""
-        mine = self.viewer.role != "owner"
+        seller's, or for an owner or admin, the organisation's that nobody typed in by hand."""
+        mine = not self.viewer.can_manage
         return int(
             await self.db.scalar(
                 select(func.count())
@@ -5307,7 +5311,7 @@ class LeadDesk:
         now. Counts only: a grouped alert names nobody."""
         fresh = await self._just_in()
         if fresh >= 2:
-            owner = self.viewer.role == "owner"
+            owner = self.viewer.can_manage
             return AlertText(
                 title=f"{MANY_NEW}+ new leads" if fresh >= MANY_NEW else f"{fresh} new leads",
                 body="Your lead rules gave them out. Tap to see who has them."

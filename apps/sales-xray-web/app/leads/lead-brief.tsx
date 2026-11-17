@@ -95,6 +95,28 @@ export function lastTalkOf(events: readonly LeadEvent[]): LeadEvent | null {
   return null;
 }
 
+/** With no conversation yet, the honest tries (Redmi tester, 17 Nov 2026:
+ *  "None logged yet" under two not-connected dials): "Tried 2 times, not
+ *  reached", or "None logged yet" when nobody has tried. The same count as
+ *  the call history's "Tried N times" (lead-sheet's triesOf, not imported
+ *  here: lead-sheet imports this file). */
+export function lastCallWords(detail: {
+  events: readonly LeadEvent[];
+  lead: { attempts?: number | null; calls?: number | null };
+}): string {
+  const phoneTalks = detail.events.filter(
+    (event) =>
+      event.kind === "call" && event.via === "phone" && event.connected,
+  ).length;
+  const tries = Math.max(
+    detail.lead.attempts ?? 0,
+    detail.lead.calls ?? 0,
+    phoneTalks,
+  );
+  if (!tries) return "None logged yet";
+  return `Tried ${tries} time${tries === 1 ? "" : "s"}, not reached`;
+}
+
 /** "3 Nov · 12 min": its day, and its length only where the phone or the
  *  recording measured it (never an estimate). */
 export function talkNote(event: LeadEvent): string {
@@ -306,7 +328,7 @@ export function LeadBrief({
           value: detail.lead.interest?.trim() || null,
         },
         ...(cameFrom ? [{ label: "Came from", value: cameFrom }] : []),
-        { label: "Last call", value: "None logged yet" },
+        { label: "Last call", value: lastCallWords(detail) },
       ];
 
   return (
