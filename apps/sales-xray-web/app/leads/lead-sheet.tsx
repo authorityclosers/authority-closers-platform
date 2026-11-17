@@ -13,6 +13,7 @@ import {
   ArrowRightLeft,
   ArrowUp,
   BellPlus,
+  Ban,
   CalendarCheck,
   CalendarClock,
   Check,
@@ -3602,6 +3603,7 @@ export function LeadCard({
     more ||
     menuOpen ||
     messaging !== null;
+  const historyId = useId();
   // The call's recording: near the top while there is one to act on now
   // (back from a call, or the phone found or is still finding it), else
   // under the call history, so an idle "Add the recording" doesn't sit
@@ -3933,6 +3935,9 @@ export function LeadCard({
   );
   const firstName = displayFirst(lead.name);
   const noPhoneFix = () => afterMore(editDetails);
+  const lostMove = (detail.moves ?? []).find(
+    (move) => move.group === "lost" || move.group === "junk",
+  );
   // The honest count over the history: "Tried 3 times, talked once".
   const tries =
     storyLines(detail)
@@ -4121,7 +4126,7 @@ export function LeadCard({
                 className={page.moreItem}
                 onClick={() =>
                   afterMore(() => {
-                    // The recording's place is under the Timeline.
+                    // The recording's place is under the call history.
                     window.requestAnimationFrame(() =>
                       document
                         .querySelector<HTMLElement>(
@@ -4195,6 +4200,28 @@ export function LeadCard({
                   </button>
                 )}
               </li>
+              {/* The owner's review, 17 Nov 2026: More keeps its old options
+                  ("junk mark ... caamgalam vaattatam"), beside the stage row
+                  on top. */}
+              <li>
+                <button
+                  type="button"
+                  className={page.moreItem}
+                  aria-disabled={!canMove || undefined}
+                  onClick={() =>
+                    canMove
+                      ? afterMore(() => setStaging(true))
+                      : notify({
+                          id: "why-move",
+                          tone: "info",
+                          title: "No other stage to move to",
+                        })
+                  }
+                >
+                  <ArrowRightLeft size={20} aria-hidden="true" />
+                  Move stage
+                </button>
+              </li>
             </>
           ) : null}
           {detail.can_assign && detail.reps.length ? (
@@ -4206,6 +4233,23 @@ export function LeadCard({
               >
                 <Shuffle size={20} aria-hidden="true" />
                 {lead.owner_name ? "Reassign" : "Assign"}
+              </button>
+            </li>
+          ) : null}
+          {canMove && lostMove ? (
+            <li>
+              <button
+                type="button"
+                className={page.moreItem}
+                onClick={() =>
+                  afterMore(() => {
+                    setStageTarget(lostMove.step);
+                    setStaging(true);
+                  })
+                }
+              >
+                <Ban size={20} aria-hidden="true" />
+                Close as lost / junk
               </button>
             </li>
           ) : null}
@@ -4365,16 +4409,21 @@ export function LeadCard({
       ) : null}
       {recordingNow ? recording : null}
 
-      {/* The Timeline (Shivam's review, 17 Nov 2026: a Call history repeated
-          it): when the lead came in, was added, changed and given out, then
-          every call ("tried calling", connected, how long), chat, note and
-          move in one column, the follow-up to come pinned first; its "came
-          in" line is the Received row. Then the latest note, which opens
-          Notes; the calls' recording and what they told us follow, then the
-          chats themselves, then about the lead. */}
-      <LeadTimeline lead={lead} full={!!me?.can_manage} meta={tries}>
+      {/* The call history (lead page P5): every call, chat, note and move
+          in one column, the follow-up to come pinned first; then the latest
+          note, which opens Notes. The calls' recording and what they told
+          us follow, then the chats themselves, then about the lead, then the
+          Timeline. The owner's review, 17 Nov 2026: Call history and Timeline
+          stay two sections ("don vegallyaac gossttii"). */}
+      <section className={page.card} aria-labelledby={historyId}>
+        <div className={page.cardHead}>
+          <h3 id={historyId} className={page.cardTitle}>
+            Call history
+          </h3>
+          {tries ? <span className={page.cardMeta}>{tries}</span> : null}
+        </div>
         <History
-          events={detail.events.filter((event) => event.kind !== "captured")}
+          events={detail.events}
           onChanged={onChanged}
           leadId={lead.lead_id}
           chats={chats}
@@ -4387,7 +4436,7 @@ export function LeadCard({
           onGenerate={recording && !recordingNow ? toRecording : undefined}
           shown={3}
         />
-      </LeadTimeline>
+      </section>
       {latestNote ? (
         <button
           type="button"
@@ -4537,6 +4586,7 @@ export function LeadCard({
             .join(" · ")}
         </small>
       </section>
+      <LeadTimeline lead={lead} full={!!me?.can_manage} />
       {detail.can_assign && detail.reps.length ? (
         <ReassignSheet
           open={picking}

@@ -115,25 +115,27 @@ async function show(outcome: ReactNode = null) {
   );
 }
 
-// The calls live in the Timeline (Shivam's review, 17 Nov 2026: no Call history).
 const historyCard = () =>
-  host.querySelector<HTMLElement>('section[aria-label="Timeline"]')!;
+  [...host.querySelectorAll<HTMLElement>("section[aria-labelledby]")].find(
+    (section) => section.querySelector("h3")?.textContent === "Call history",
+  )!;
 const noteCard = () =>
   [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
     button.textContent?.startsWith("Latest note"),
   );
 
-it("puts the calls in the Timeline and the latest note on one page, no tabs (lead page P5)", async () => {
+it("puts the call history and the latest note on one page, no tabs (lead page P5)", async () => {
   await show();
   expect(host.querySelector('[role="tab"], [role="tablist"]')).toBeNull();
-  // One Timeline, no Call history beside it.
-  expect(host.querySelectorAll('section[aria-label="Timeline"]')).toHaveLength(
-    1,
-  );
-  expect(
-    [...host.querySelectorAll("h3")].map((title) => title.textContent),
-  ).not.toContain("Call history");
+  // The owner's review, 17 Nov 2026: Call history and the Timeline stay two
+  // sections, the calls in Call history, the Timeline after it.
   const card = historyCard();
+  const timeline = host.querySelector('section[aria-label="Timeline"]');
+  expect(timeline).not.toBeNull();
+  expect(timeline?.querySelector('ol[aria-label="History"]')).toBeNull();
+  expect(
+    card.compareDocumentPosition(timeline!) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
   // The honest count beside the title.
   expect(card.textContent).toContain("Tried 1 time, talked once");
   // Newest first, one row each, the day and time under the title.

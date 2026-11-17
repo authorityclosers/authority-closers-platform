@@ -145,7 +145,7 @@ it("calls an open lead by first name, the stage a strip it can move along", asyn
   expect(strip?.querySelector('[aria-current="step"]')?.textContent).toBe(
     "Follow-up",
   );
-  // Lost is never a step: it is under the stage's Change.
+  // Lost is never a step: it is under Change and in More.
   expect(strip?.textContent).not.toContain("Lost");
   expect(
     strip?.querySelector('button[aria-label="Move to Interested"]'),
@@ -153,8 +153,9 @@ it("calls an open lead by first name, the stage a strip it can move along", asyn
 });
 
 // Shivam's review, 17 Nov 2026: the stage on top, a tap from changing it;
-// More no longer moves the stage or closes the lead.
-it("puts the lead's stage on top with Change, and takes Move stage and Close as lost out of More", async () => {
+// The owner's review, 17 Nov 2026: More keeps its old options too ("junk
+// mark ... caamgalam vaattatam").
+it("puts the lead's stage on top with Change, and keeps Move stage and Close as lost in More", async () => {
   await show(base);
   const change = host.querySelector<HTMLButtonElement>(
     'button[aria-label="Change stage: Follow-up"]',
@@ -177,8 +178,8 @@ it("puts the lead's stage on top with Change, and takes Move stage and Close as 
   const items = [...(sheet?.querySelectorAll("li") ?? [])].map((item) =>
     item.textContent?.trim(),
   );
-  expect(items).not.toContain("Move stage");
-  expect(items).not.toContain("Close as lost / junk");
+  expect(items).toContain("Move stage");
+  expect(items).toContain("Close as lost / junk");
   expect(items).toContain("Ask Dipak about Shrikant");
 });
 
