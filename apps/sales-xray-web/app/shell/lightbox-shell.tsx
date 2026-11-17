@@ -154,6 +154,7 @@ import { leavingOverlay } from "../ui/back-close";
 import { leaveTo } from "./leave-to";
 import { haptic, tick } from "../ui/haptics";
 import { DueSoonWatch } from "../leads/due-soon";
+import { PushKeeper } from "./push-keeper";
 import { LeadsTabIcon, useLeadsBadgeWords } from "../leads/leads-badge";
 import { ReviewBarChip, ReviewRailLink } from "../review/review-badge";
 import {
@@ -1438,7 +1439,12 @@ function LightboxShellFrame({
   // mark, the workspace on two lines, the same tiles); a page's own title and
   // action sit in the row under it (pageRow).
   const homeBar = authenticated && !guest;
-  const pageRow = homeBar && barTitle && barTitle !== "Home" ? barTitle : null;
+  // Ask Dipak shows no title row: the tab bar already says it (owner, 17
+  // Nov 2026: "no big Ask Dipak page title").
+  const pageRow =
+    homeBar && barTitle && barTitle !== "Home" && phoneTab !== "ask"
+      ? barTitle
+      : null;
   const homeWords = (workspaceLabel ?? "").trim().split(/\s+/);
   const homeNameTop =
     homeWords.length > 1 ? homeWords.slice(0, -1).join(" ") : null;
@@ -2370,6 +2376,8 @@ function LightboxShellFrame({
         openNews={openNews}
         openEvent={navigateEvent}
       />
+      {/* Lead alerts reach every signed-in phone, not only from Leads (17 Nov 2026). */}
+      <PushKeeper accountKey={updatesContextKey} />
       {authenticated ? (
         <Sheet
           open={workspaceSheetOpen}
