@@ -129,6 +129,18 @@ def test_return_addresses_are_https_or_this_computer(uri: str, allowed: bool) ->
 
 # Ask Dipak's lessons need no scope: Dipak's content is the same for everyone.
 LESSONS = ("ask_dipak_search", "ask_dipak_lesson", "ask_dipak_how_to_improve")
+# The admin primitives (integrations/admin_api.py, 17 Nov 2026).
+ADMIN_READS = ("get_workspace", "list_invites")
+ADMIN_WRITES = (
+    "invite_member",
+    "resend_invite",
+    "revoke_invite",
+    "set_member_role",
+    "remove_member",
+    "shelve_leads",
+    "reassign_leads",
+)
+DESTRUCTIVE = {"undo_change", "revoke_invite", "remove_member", "shelve_leads"}
 
 
 def test_mcp_tools_follow_the_connection_scopes() -> None:
@@ -173,7 +185,23 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "ask_dipak_team_missions",
         "create_recording_upload",
         "recording_status",
+        *ADMIN_READS,
+        *ADMIN_WRITES,
     }
+    # The admin primitives (17 Nov 2026): reads with team:read, people with team:manage,
+    # Archive and Bin with leads:archive, reassign with leads:assign.
+    managing = {tool["name"] for tool in mcp_http.listed(frozenset({"team:manage"}))}
+    assert managing == {
+        "whoami",
+        "invite_member",
+        "resend_invite",
+        "revoke_invite",
+        "set_member_role",
+        "remove_member",
+        *LESSONS,
+    }
+    shelving = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:archive"}))}
+    assert shelving == {"whoami", "shelve_leads", *LESSONS}
     # A seller's call by an organisation's key (API gap 2, 15 Nov 2026): its own scope.
     uploads = {tool["name"] for tool in mcp_http.listed(frozenset({"recordings:write"}))}
     assert uploads == {"whoami", "create_recording_upload", "recording_status", *LESSONS}
@@ -214,7 +242,7 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
     }
     # The team (15 Nov 2026): names, never emails, its own scope.
     team = {tool["name"] for tool in mcp_http.listed(frozenset({"team:read"}))}
-    assert team == {"whoami", "list_team", *LESSONS}
+    assert team == {"whoami", "list_team", *ADMIN_READS, *LESSONS}
     assert {tool["name"] for tool in mcp_http.listed(frozenset({"webhooks:manage"}))} == {
         "whoami",
         *LESSONS,
@@ -250,11 +278,13 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "whoami",
         "assign_lead",
         "update_leads",
+        "reassign_leads",
         "list_my_changes",
         "undo_change",
         *LESSONS,
     }
     writes = {
+        *ADMIN_WRITES,
         "add_lead",
         "import_leads",
         "add_note",
@@ -272,9 +302,10 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
     for tool in mcp_http.listed(frozenset(scopes.SCOPES)):
         assert "scope" not in tool and tool["inputSchema"]["type"] == "object"
         assert tool["annotations"]["readOnlyHint"] is (tool["name"] not in writes)
-        # The directories ask for every hint, true or false, never left out. Only undo
-        # takes something away (a note stops showing).
-        assert tool["annotations"]["destructiveHint"] is (tool["name"] == "undo_change")
+        # The directories ask for every hint, true or false, never left out. Undo takes
+        # something away (a note stops showing), and so do the admin tools that end an
+        # invite or a membership, or archive or bin leads.
+        assert tool["annotations"]["destructiveHint"] is (tool["name"] in DESTRUCTIVE)
         assert tool["annotations"]["openWorldHint"] is False
         # A new lead and a new upload are each a new thing; the rest repeat safely.
         if tool["name"] in writes - {
