@@ -18,21 +18,21 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  type MouseEvent,
   type ReactNode,
   type RefObject,
 } from "react";
 
-import { notify } from "../notice-center";
 import { useTabAgain } from "../shell/tab-again";
 import styles from "./ask-dipak.module.css";
 import { COPY } from "./copy";
+import { CoachMark, TopicArt } from "./art";
+import { ContinueCard, MissionStrip } from "./home-desk";
+import { Breadcrumb, ScreenButton, type Open } from "./bits";
 import { AskIcon } from "./icons";
-import { retryLesson, useLesson } from "./lessons";
+import { LessonScreen } from "./lesson-screen";
 import { MissionsScreen } from "./missions-screen";
 import {
   CATEGORIES,
-  CATEGORY_ICONS,
   CATEGORY_LABELS,
   FEATURED,
   QUESTIONS,
@@ -41,8 +41,6 @@ import {
   categoryQuestions,
   featuredById,
   featuredQuestions,
-  draftFor,
-  isDraft,
   lessonChip,
   questionById,
   questionLabel,
@@ -63,8 +61,9 @@ import {
   viewHref,
   type AskView,
 } from "./nav";
-import { loadProgress, setItem, useProgress, type Progress } from "./progress";
-import { toneOfCategory, toneOfFeatured } from "./tones";
+import { loadProgress, useProgress, type Progress } from "./progress";
+import { rememberLesson } from "./recent";
+import { toneOfCategory, toneOfFeatured, type Tone } from "./tones";
 
 /** The element that scrolls this page: the shell's panel, or the window. */
 function scrollerOf(node: HTMLElement | null): Element {
@@ -79,71 +78,32 @@ function scrollerOf(node: HTMLElement | null): Element {
   return document.scrollingElement ?? document.documentElement;
 }
 
-type Open = (view: AskView) => void;
-
-/** A row or card that opens a screen: a real link, moved in place. */
-function ScreenButton({
-  view,
+/**
+ * One question of a topic, its own bordered card with its number in the
+ * topic's colour (Dipak's report 227, 16 Nov 2026: "no differentiation
+ * between the points … make borders").
+ */
+function QuestionRow({
+  question,
   open,
-  className,
-  children,
-  label,
+  number,
 }: {
-  view: AskView;
+  question: Question;
   open: Open;
-  className: string;
-  children: ReactNode;
-  label?: string;
+  number: number;
 }) {
-  return (
-    <a
-      className={className}
-      href={viewHref(view)}
-      aria-label={label}
-      onClick={(event: MouseEvent<HTMLAnchorElement>) => {
-        if (
-          event.defaultPrevented ||
-          event.button !== 0 ||
-          event.metaKey ||
-          event.ctrlKey ||
-          event.shiftKey ||
-          event.altKey
-        )
-          return;
-        event.preventDefault();
-        open(view);
-      }}
-    >
-      {children}
-    </a>
-  );
-}
-
-function QuestionRow({ question, open }: { question: Question; open: Open }) {
   return (
     <ScreenButton
       view={{ kind: "lesson", id: question.id }}
       open={open}
       className={styles.questionRow}
     >
-      <span>{questionLabel(question)}</span>
+      <span className={styles.rowNumber} aria-hidden="true">
+        {number}
+      </span>
+      <span className={styles.rowWords}>{questionLabel(question)}</span>
       <AskIcon name="right" size={18} />
     </ScreenButton>
-  );
-}
-
-function Breadcrumb({
-  onBack,
-  children,
-}: {
-  onBack: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button type="button" className={styles.breadcrumb} onClick={onBack}>
-      <AskIcon name="left" size={19} />
-      {children}
-    </button>
   );
 }
 
@@ -172,64 +132,98 @@ function Tools({ view, open }: { view: AskView; open: Open }) {
 }
 
 /**
- * Dipak's greeting, compact (owner, 16 Nov 2026: the paragraph "is taking lot
- * of space … nobody seeing explore topics"): his hello and his question show,
- * and his three intro lines fold behind "Dipak के बारे में", sliding open and
- * shut (none with reduced motion). Saved lessons opens from its corner, as
- * the bar keeps Home's set.
+ * Dipak's card, the Coach's desk (owner's pick H-A, 17 Nov 2026), the strong
+ * card at the top (owner, 17 Nov 2026): his monogram until an approved photo
+ * exists (never a generated face), his hello and his question, and the lesson
+ * to Continue inside it; his three intro lines fold behind "Dipak के बारे में"
+ * (owner, 16 Nov 2026: keep it compact), sliding open and shut (none with
+ * reduced motion). Saved lessons opens from its corner. No listen pill until
+ * Dipak records his own voice.
  */
 function Greeting({ open }: { open: Open }) {
   const [more, setMore] = useState(false);
   const moreId = useId();
   return (
     <section className={styles.hero} data-more={more || undefined}>
-      <div className={styles.heroTop}>
-        <p className={styles.eyebrow}>{COPY.eyebrow}</p>
+      <div className={styles.heroMain}>
+        <div className={styles.coachRow}>
+          <CoachMark />
+          <div className={styles.coachWords}>
+            <p className={styles.eyebrow}>{COPY.eyebrow}</p>
+            <h2 className={styles.hello}>{COPY.hello}</h2>
+            <p className={styles.heroAsk}>
+              <strong>{COPY.introAsk}</strong>
+            </p>
+          </div>
+          <button
+            type="button"
+            className={styles.heroSaved}
+            aria-label={COPY.savedLessons}
+            onClick={() => open({ kind: "saved" })}
+          >
+            <AskIcon name="bookmark" size={20} />
+          </button>
+        </div>
+        <div
+          className={styles.introMore}
+          id={moreId}
+          aria-hidden={!more}
+          inert={!more}
+        >
+          <div>
+            {COPY.intro.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+          </div>
+        </div>
         <button
           type="button"
-          className={styles.heroSaved}
-          aria-label={COPY.savedLessons}
-          onClick={() => open({ kind: "saved" })}
+          className={styles.introToggle}
+          aria-expanded={more}
+          aria-controls={moreId}
+          onClick={() => setMore((now) => !now)}
         >
-          <AskIcon name="bookmark" size={20} />
+          {more ? COPY.introLess : COPY.introMore}
+          <span className={styles.foldArrow} data-open={more || undefined}>
+            <AskIcon name="right" size={16} />
+          </span>
         </button>
       </div>
-      <h2 className={styles.hello}>{COPY.hello}</h2>
-      <p className={styles.heroAsk}>
-        <strong>{COPY.introAsk}</strong>
-      </p>
-      <div
-        className={styles.introMore}
-        id={moreId}
-        aria-hidden={!more}
-        inert={!more}
-      >
-        <div>
-          {COPY.intro.map((line) => (
-            <p key={line}>{line}</p>
-          ))}
-        </div>
-      </div>
-      <button
-        type="button"
-        className={styles.introToggle}
-        aria-expanded={more}
-        aria-controls={moreId}
-        onClick={() => setMore((now) => !now)}
-      >
-        {more ? COPY.introLess : COPY.introMore}
-        <span className={styles.foldArrow} data-open={more || undefined}>
-          <AskIcon name="right" size={16} />
-        </span>
-      </button>
+      <ContinueCard open={open} />
     </section>
   );
 }
 
+/**
+ * The three real situations each look like their own moment (Dipak's report
+ * 226, 16 Nov 2026: "teenhi goshti ek distay", the three look the same): the
+ * colour and drawing of what the customer's words are about, by meaning:
+ * price (Price & Objections), a decision someone else shares (Qualification
+ * & Decision Process) and "I'll think about it", a follow-up (Closing &
+ * Follow-Up).
+ */
+const SITUATION_LOOK: Readonly<
+  Record<string, { tone: Tone; category: string }>
+> = {
+  PB03: { tone: "action", category: "08" },
+  DM02: { tone: "info", category: "06" },
+  OB03: { tone: "good", category: "09" },
+};
+
+/**
+ * The Coach's desk, top to bottom (redesign study §5 S1, with H-B's situation
+ * block): Dipak's card; Continue; today's mission and its check-in (only while
+ * one is active); search; real situations as the customer's own words; the
+ * four topics, each with its drawing; My missions. Computers lay the same
+ * blocks on a wider grid (the stylesheet).
+ */
 function HomeScreen({ open }: { open: Open }) {
   return (
     <>
-      <Greeting open={open} />
+      <div className={styles.desk}>
+        <Greeting open={open} />
+        <MissionStrip open={open} />
+      </div>
       <ScreenButton
         view={{ kind: "search" }}
         open={open}
@@ -238,6 +232,39 @@ function HomeScreen({ open }: { open: Open }) {
         <AskIcon name="search" size={21} />
         <span>{COPY.searchPlaceholder}</span>
       </ScreenButton>
+      <div className={`${styles.hrow} ${styles.realTitle}`}>
+        <h2>{COPY.real}</h2>
+      </div>
+      <div className={styles.situations}>
+        {REAL_SITUATIONS.map((id) => {
+          const question = questionById(id);
+          if (!question) return null;
+          const look = SITUATION_LOOK[id];
+          return (
+            <ScreenButton
+              key={id}
+              view={{ kind: "lesson", id }}
+              open={open}
+              className={`${styles.situation} ${styles[look?.tone ?? toneOfCategory(question.categoryId)]}`}
+            >
+              <span className={styles.situationTop}>
+                <span className={styles.situationArt} aria-hidden="true">
+                  <TopicArt
+                    category={look?.category ?? question.categoryId}
+                    size={36}
+                  />
+                </span>
+                <span className={styles.chip}>{lessonChip(question)}</span>
+              </span>
+              <span className={styles.bubble}>{questionLabel(question)}</span>
+              <span className={styles.situationFoot}>
+                <span className={styles.entryMeta}>{COPY.parts}</span>
+                <AskIcon name="right" size={18} />
+              </span>
+            </ScreenButton>
+          );
+        })}
+      </div>
       <div className={styles.hrow}>
         <h2>{COPY.explore}</h2>
         <ScreenButton
@@ -245,20 +272,20 @@ function HomeScreen({ open }: { open: Open }) {
           open={open}
           className={styles.see}
         >
-          {COPY.seeAll}
+          {`${COPY.seeAll} ${CATEGORIES.length}`}
           <AskIcon name="right" size={16} />
         </ScreenButton>
       </div>
-      <div className={styles.topicGrid}>
+      <div className={`${styles.topicGrid} ${styles.homeTopics}`}>
         {FEATURED.map((topic) => (
           <ScreenButton
             key={topic.id}
             view={{ kind: "topic", id: topic.id }}
             open={open}
-            className={`${styles.topicCard} ${styles[toneOfFeatured(topic.id)]}`}
+            className={`${styles.topicCard} ${styles.topicTile} ${styles[toneOfFeatured(topic.id)]}`}
           >
-            <span className={styles.topicIcon}>
-              <AskIcon name={topic.icon} />
+            <span className={styles.topicArt}>
+              <TopicArt featured={topic.id} size={56} />
             </span>
             <span className={styles.topicTitle}>{topic.name}</span>
             <span className={styles.topicSub}>{topic.sub}</span>
@@ -267,31 +294,6 @@ function HomeScreen({ open }: { open: Open }) {
             </span>
           </ScreenButton>
         ))}
-      </div>
-      <div className={`${styles.hrow} ${styles.realTitle}`}>
-        <h2>{COPY.real}</h2>
-      </div>
-      <div className={styles.realList}>
-        {REAL_SITUATIONS.map((id) => {
-          const question = questionById(id);
-          if (!question) return null;
-          return (
-            <ScreenButton
-              key={id}
-              view={{ kind: "lesson", id }}
-              open={open}
-              className={styles.entry}
-            >
-              <span className={styles.entryCopy}>
-                <span className={styles.entryTitle}>
-                  {questionLabel(question)}
-                </span>
-                <span className={styles.entryMeta}>{COPY.parts}</span>
-              </span>
-              <AskIcon name="right" size={18} />
-            </ScreenButton>
-          );
-        })}
       </div>
       <ScreenButton
         view={{ kind: "missions" }}
@@ -309,6 +311,39 @@ function HomeScreen({ open }: { open: Open }) {
   );
 }
 
+/**
+ * A topic's cover (owner's pick C-A, 17 Nov 2026; redesign study §5 S2): its
+ * drawing on its soft colour, its number or kind, name, short line and real
+ * lesson count.
+ */
+function Cover({
+  tone,
+  eyebrow,
+  title,
+  sub,
+  count,
+  art,
+}: {
+  tone: string;
+  eyebrow: string;
+  title: string;
+  sub: string;
+  count: number;
+  art: ReactNode;
+}) {
+  return (
+    <div className={`${styles.cover} ${styles[tone]}`} data-cover="">
+      <div className={styles.coverWords}>
+        <p className={styles.coverEyebrow}>{eyebrow}</p>
+        <h2 className={styles.pageTitle}>{title}</h2>
+        <p className={styles.coverSub}>{sub}</p>
+        <p className={styles.coverCount}>{COPY.lessonCount(count)}</p>
+      </div>
+      <span className={styles.coverArt}>{art}</span>
+    </div>
+  );
+}
+
 function TopicsScreen({ open, back }: { open: Open; back: () => void }) {
   return (
     <>
@@ -321,10 +356,10 @@ function TopicsScreen({ open, back }: { open: Open; back: () => void }) {
             key={category.id}
             view={{ kind: "category", id: category.id }}
             open={open}
-            className={`${styles.topicCard} ${styles[toneOfCategory(category.id)]}`}
+            className={`${styles.topicCard} ${styles.topicTile} ${styles[toneOfCategory(category.id)]}`}
           >
-            <span className={styles.topicIcon}>
-              <AskIcon name={CATEGORY_ICONS[category.id] ?? "layers"} />
+            <span className={styles.topicArt}>
+              <TopicArt category={category.id} size={52} />
             </span>
             <span className={styles.topicTitle}>{category.name}</span>
             <span className={styles.topicSub}>
@@ -353,16 +388,23 @@ function TopicScreen({
   return (
     <>
       <Breadcrumb onBack={back}>{COPY.title}</Breadcrumb>
-      <div className={`${styles.chip} ${styles[toneOfFeatured(topic.id)]}`}>
-        {COPY.topicChip}
-      </div>
-      <h2 className={styles.pageTitle}>{topic.name}</h2>
-      <p className={styles.pageSub}>
-        {topic.sub} · {COPY.topicSub}
-      </p>
-      <div className={styles.rows}>
-        {featuredQuestions(topic).map((question) => (
-          <QuestionRow key={question.id} question={question} open={open} />
+      <Cover
+        tone={toneOfFeatured(topic.id)}
+        eyebrow={COPY.topicChip}
+        title={topic.name}
+        sub={topic.sub}
+        count={featuredQuestions(topic).length}
+        art={<TopicArt featured={topic.id} size={64} />}
+      />
+      <p className={styles.pageSub}>{COPY.topicSub}</p>
+      <div className={`${styles.rows} ${styles[toneOfFeatured(topic.id)]}`}>
+        {featuredQuestions(topic).map((question, index) => (
+          <QuestionRow
+            key={question.id}
+            question={question}
+            open={open}
+            number={index + 1}
+          />
         ))}
       </div>
     </>
@@ -382,14 +424,23 @@ function CategoryScreen({
   return (
     <>
       <Breadcrumb onBack={back}>{COPY.allTitle}</Breadcrumb>
-      <div className={`${styles.chip} ${styles[toneOfCategory(category.id)]}`}>
-        {CATEGORY_LABELS[category.id]}
-      </div>
-      <h2 className={styles.pageTitle}>{category.name}</h2>
+      <Cover
+        tone={toneOfCategory(category.id)}
+        eyebrow={category.id}
+        title={category.name}
+        sub={CATEGORY_LABELS[category.id]}
+        count={categoryQuestions(category).length}
+        art={<TopicArt category={category.id} size={64} />}
+      />
       <p className={styles.pageSub}>{COPY.categorySub}</p>
-      <div className={styles.rows}>
-        {categoryQuestions(category).map((question) => (
-          <QuestionRow key={question.id} question={question} open={open} />
+      <div className={`${styles.rows} ${styles[toneOfCategory(category.id)]}`}>
+        {categoryQuestions(category).map((question, index) => (
+          <QuestionRow
+            key={question.id}
+            question={question}
+            open={open}
+            number={index + 1}
+          />
         ))}
       </div>
     </>
@@ -433,9 +484,14 @@ function SearchScreen({
       </label>
       <div aria-live="polite" data-results="">
         {results.length ? (
-          <div className={styles.rows}>
-            {results.map((question) => (
-              <QuestionRow key={question.id} question={question} open={open} />
+          <div className={`${styles.rows} ${styles.good}`}>
+            {results.map((question, index) => (
+              <QuestionRow
+                key={question.id}
+                question={question}
+                open={open}
+                number={index + 1}
+              />
             ))}
           </div>
         ) : (
@@ -466,9 +522,14 @@ function SavedScreen({
       <h2 className={styles.pageTitle}>{COPY.savedTitle}</h2>
       <p className={styles.pageSub}>{COPY.savedSub}</p>
       {saved.length ? (
-        <div className={styles.rows}>
-          {saved.map((question) => (
-            <QuestionRow key={question.id} question={question} open={open} />
+        <div className={`${styles.rows} ${styles.good}`}>
+          {saved.map((question, index) => (
+            <QuestionRow
+              key={question.id}
+              question={question}
+              open={open}
+              number={index + 1}
+            />
           ))}
         </div>
       ) : waiting ? (
@@ -495,249 +556,6 @@ function SavedScreen({
   );
 }
 
-function saveFailed(retry: () => void) {
-  notify({
-    id: "ask-dipak-save",
-    tone: "error",
-    title: "Couldn’t save that",
-    message: "Check your connection, then try again.",
-    action: { label: "Try again", run: retry },
-  });
-}
-
-function toggle(id: string, item: "saved" | "mission", on: boolean) {
-  void setItem(id, item, on).then((done) => {
-    if (!done) saveFailed(() => toggle(id, item, on));
-  });
-}
-
-function LessonScreen({
-  id,
-  progress,
-  picked,
-  onPick,
-  deepOpen,
-  onDeep,
-  open,
-  back,
-}: {
-  id: string;
-  progress: Progress;
-  picked: number | undefined;
-  onPick: (choice: number) => void;
-  deepOpen: boolean;
-  onDeep: () => void;
-  open: Open;
-  back: () => void;
-}) {
-  const deepId = useId();
-  // Dipak's lesson from the API (or the phone's copy of it); a draft is local.
-  const served = useLesson(id);
-  const question = questionById(id);
-  if (!question)
-    return (
-      <>
-        <Breadcrumb onBack={back}>{COPY.title}</Breadcrumb>
-        <div className={styles.empty}>{COPY.notFound}</div>
-      </>
-    );
-  const lesson = draftFor(id) ?? served.lesson;
-  const head = (
-    <Breadcrumb onBack={back}>
-      <span
-        className={`${styles.chip} ${styles[toneOfCategory(question.categoryId)]}`}
-      >
-        {lessonChip(question)}
-      </span>
-    </Breadcrumb>
-  );
-  if (!lesson)
-    return (
-      <>
-        {head}
-        <div className={styles.questionHero}>
-          <h2 className={styles.pageTitle}>{questionLabel(question)}</h2>
-          <p className={styles.pageSub}>{COPY.parts}</p>
-        </div>
-        {served.status === "failed" ? (
-          <div className={styles.panel} data-lesson-state="failed">
-            <p className={styles.copy}>{COPY.loadFailed}</p>
-            <button
-              type="button"
-              className={`${styles.smallBtn} ${styles.primary}`}
-              onClick={() => void retryLesson(id)}
-            >
-              {COPY.retry}
-            </button>
-          </div>
-        ) : (
-          <div
-            className={styles.panel}
-            data-lesson-state="loading"
-            role="status"
-          >
-            <p className={styles.copy}>{COPY.loading}</p>
-          </div>
-        )}
-      </>
-    );
-  const draft = isDraft(id);
-  const saved = progress.saved.has(id);
-  const done = progress.missions.has(id);
-  const chosen = picked === undefined ? null : lesson.options[picked];
-  const related = lesson.next
-    .map((code) => questionById(code))
-    .filter((item): item is Question => Boolean(item));
-  return (
-    <>
-      {head}
-      <div className={styles.detailTop}>
-        <div className={styles.questionHero}>
-          <h2 className={styles.pageTitle}>
-            {/* The homepage's wording if it has one, else his doc's, as served. */}
-            {questionLabel(question) !== question.title
-              ? questionLabel(question)
-              : (served.title ?? question.title)}
-          </h2>
-          <p className={styles.pageSub}>{COPY.parts}</p>
-          {draft ? (
-            <p className={styles.draftTag} data-draft="">
-              {COPY.draftTag}
-            </p>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          className={`${styles.mark} ${saved ? styles.active : ""}`}
-          aria-pressed={saved}
-          aria-label={saved ? COPY.unsave : COPY.save}
-          onClick={() => toggle(id, "saved", !saved)}
-        >
-          <AskIcon name="bookmark" size={21} />
-        </button>
-      </div>
-
-      {lesson.before && lesson.after ? (
-        <>
-          {/* His before and after lines, word for word (his doc's opening). */}
-          <h3 className={styles.sectionH}>{COPY.shift}</h3>
-          <div className={styles.panel} data-mindset="">
-            <p className={styles.copy}>{`${COPY.before}: ${lesson.before}`}</p>
-            <p className={styles.copy}>{`${COPY.after}: ${lesson.after}`}</p>
-          </div>
-        </>
-      ) : null}
-
-      <h3 className={styles.sectionH}>{COPY.quick}</h3>
-      <div className={styles.panel}>
-        <p className={styles.copy}>{lesson.quick}</p>
-      </div>
-
-      <h3 className={styles.sectionH}>{COPY.turn}</h3>
-      <div className={styles.panel}>
-        <p className={styles.copy}>{lesson.scenario}</p>
-      </div>
-      <div className={styles.options}>
-        {lesson.options.map((option, index) => (
-          <button
-            key={option[0]}
-            type="button"
-            className={`${styles.mcq} ${picked === index ? styles.selected : ""}`}
-            aria-pressed={picked === index}
-            onClick={() => onPick(index)}
-          >
-            <span className={styles.radio} aria-hidden="true" />
-            <span>{`${"ABC"[index]}. ${option[0]}`}</span>
-          </button>
-        ))}
-      </div>
-      {chosen ? (
-        <div className={styles.feedback} role="status">
-          <strong>{COPY.feedback}</strong>
-          {/* His word on the option, one line each, then his small example. */}
-          {chosen[1].split("\n").map((line) => (
-            <p key={line}>{line}</p>
-          ))}
-          {/* His takeaway with his own label ("Better सोच"). */}
-          <div
-            className={styles.take}
-          >{`${chosen[3] ?? COPY.better}: ${chosen[2]}`}</div>
-          <p className={styles.mutedNote}>{COPY.compare}</p>
-        </div>
-      ) : null}
-
-      <button
-        type="button"
-        className={styles.fold}
-        aria-expanded={deepOpen}
-        aria-controls={deepId}
-        onClick={onDeep}
-      >
-        <AskIcon name="layers" size={22} />
-        <span className={styles.foldMain}>
-          <strong>{COPY.deep}</strong>
-          <small>{COPY.deepSub}</small>
-        </span>
-        <span className={styles.foldArrow} data-open={deepOpen || undefined}>
-          <AskIcon name="right" size={22} />
-        </span>
-      </button>
-      {deepOpen ? (
-        <div className={styles.deep} id={deepId}>
-          {lesson.deep.map((paragraph) => (
-            <p key={paragraph}>{paragraph}</p>
-          ))}
-        </div>
-      ) : null}
-
-      <h3 className={styles.sectionH}>{COPY.cue}</h3>
-      <div className={styles.panel}>
-        <p className={styles.cue}>{lesson.cue}</p>
-      </div>
-
-      <h3 className={styles.sectionH}>{COPY.mission}</h3>
-      <div className={`${styles.panel} ${styles.mission}`}>
-        {draft ? null : (
-          <button
-            type="button"
-            className={`${styles.check} ${done ? styles.done : ""}`}
-            aria-pressed={done}
-            aria-label={done ? COPY.undoMission : COPY.markMission}
-            onClick={() => toggle(id, "mission", !done)}
-          >
-            {done ? <AskIcon name="check" size={19} /> : null}
-          </button>
-        )}
-        <div className={styles.missionText}>
-          {lesson.mission}
-          <p className={styles.mutedNote}>
-            {draft
-              ? COPY.draftMission
-              : done
-                ? COPY.missionDone
-                : COPY.missionTodo}
-          </p>
-        </div>
-      </div>
-
-      <h3 className={styles.sectionH}>{COPY.related}</h3>
-      <div className={`${styles.panel} ${styles.relatedList}`}>
-        {related.map((item) => (
-          <ScreenButton
-            key={item.id}
-            view={{ kind: "lesson", id: item.id }}
-            open={open}
-            className={styles.related}
-          >
-            <span>{questionLabel(item)}</span>
-            <AskIcon name="right" size={17} />
-          </ScreenButton>
-        ))}
-      </div>
-    </>
-  );
-}
-
 export function AskDipakView({
   initial,
 }: {
@@ -759,6 +577,12 @@ export function AskDipakView({
   const [picked, setPicked] = useState<Record<string, number>>(
     () => initial?.picked ?? {},
   );
+  // Options looked at per lesson this visit, for their "देखा" tags.
+  const [tried, setTried] = useState<Record<string, readonly number[]>>(() =>
+    Object.fromEntries(
+      Object.entries(initial?.picked ?? {}).map(([id, at]) => [id, [at]]),
+    ),
+  );
   const [deep, setDeep] = useState<Record<string, boolean>>(
     () => initial?.deep ?? {},
   );
@@ -778,6 +602,12 @@ export function AskDipakView({
     if (move === "push" && href === viewHref({ kind: "search" }))
       inputRef.current?.focus({ preventScroll: true });
   }, [href]);
+
+  // The home's Continue card opens the lesson last opened here.
+  const lessonId = view.kind === "lesson" ? view.id : null;
+  useEffect(() => {
+    if (lessonId && questionById(lessonId)) rememberLesson(lessonId);
+  }, [lessonId]);
 
   // Leaving a screen notes how far it was scrolled, so Back returns there.
   useEffect(
@@ -840,9 +670,14 @@ export function AskDipakView({
           id={view.id}
           progress={progress}
           picked={picked[view.id]}
-          onPick={(choice) =>
-            setPicked((now) => ({ ...now, [view.id]: choice }))
-          }
+          tried={tried[view.id] ?? []}
+          onPick={(choice) => {
+            setPicked((now) => ({ ...now, [view.id]: choice }));
+            setTried((now) => ({
+              ...now,
+              [view.id]: [...new Set([...(now[view.id] ?? []), choice])],
+            }));
+          }}
           deepOpen={Boolean(deep[view.id])}
           onDeep={() =>
             setDeep((now) => ({ ...now, [view.id]: !now[view.id] }))

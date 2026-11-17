@@ -15,13 +15,13 @@ const css = readFileSync(
   "utf8",
 ).replace(/\/\*[\s\S]*?\*\//g, "");
 
-/** The declarations of a rule whose selector list is exactly this. */
+/** The declarations of every rule whose selector list is exactly this, in order. */
 function rule(selector: string): string {
-  const found = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find(
+  const found = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(
     ([, head]) => head.trim() === selector,
   );
-  if (!found) throw new Error(`no rule ${selector}`);
-  return found[2];
+  if (!found.length) throw new Error(`no rule ${selector}`);
+  return found.map(([, , body]) => body).join(";");
 }
 
 const px = (body: string, property: string) => {
@@ -58,6 +58,10 @@ it.each([
   [".fold", "min-height"],
   [".mark", "height"],
   [".heroSaved", "height"],
+  [".continueGo", "min-height"],
+  [".root .missionAsk", "min-height"],
+  [".situation", "min-height"],
+  [".topicTile", "min-height"],
   [".introToggle", "min-height"],
   [".check", "height"],
   [".related", "min-height"],
@@ -80,10 +84,16 @@ it("colours from the theme's tokens only, so light and dark both read", () => {
   const used = new Set(
     [...css.matchAll(/var\((--[\w-]+)\)/g)].map(([, name]) => name),
   );
-  // The page's own --ad-tone only carries a topic's --sx-tone-* colour.
+  // The page's own --ad-* only carry the theme's colours and Ask Dipak's
+  // type steps (redesign, 17 Nov 2026), each set once on .root.
   for (const name of used)
     expect(name).toMatch(
-      /^--(sx|xr)-|^--lx-leading-devanagari$|^--ad-tone(-soft)?$/,
+      /^--(sx|xr)-|^--lx-leading-devanagari$|^--ad-(tone(-soft)?|mint|accent|memory|example|bar-top)$/,
+    );
+  const own = rule(".root").match(/--ad-[\w-]+:\s*[^;]+/g) ?? [];
+  for (const set of own)
+    expect(set).toMatch(
+      /^--ad-(mint|accent|memory|example):\s*var\(--(sx|xr)-[\w-]+\)$/,
     );
   // The sample's green, as the app's green: selected, saved and done.
   expect(rule(".mcq.selected")).toContain("var(--xr-green)");
@@ -158,4 +168,20 @@ it("moves only the Deep lesson's arrow and the greeting, and nothing for reduced
     expect(ms).toBeGreaterThanOrEqual(200);
     expect(ms).toBeLessThanOrEqual(250);
   }
+});
+
+it("sets Ask Dipak in one self-hosted family for Hindi and English (owner's pick, 17 Nov 2026)", () => {
+  const faces = [...css.matchAll(/@font-face\s*\{([^}]*)\}/g)].map(
+    ([, body]) => body,
+  );
+  expect(faces).toHaveLength(8);
+  for (const face of faces) {
+    expect(face).toMatch(/font-family:\s*"Ask Dipak Mukta"/);
+    expect(face).toMatch(
+      /src:\s*url\("\.\/fonts\/mukta-(latin|devanagari)-[4-7]00-normal\.woff2"\)/,
+    );
+    expect(face).toMatch(/font-display:\s*swap/);
+    expect(face).not.toMatch(/https?:/);
+  }
+  expect(rule(".root")).toMatch(/font-family:\s*"Ask Dipak Mukta"/);
 });

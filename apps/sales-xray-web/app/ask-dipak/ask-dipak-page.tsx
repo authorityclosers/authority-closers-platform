@@ -6,14 +6,21 @@ import { useEffect } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
-import { PageHeader } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
 import { AskDipakView } from "./ask-dipak-view";
 import styles from "./ask-dipak.module.css";
 import { COPY } from "./copy";
 import { progressFor } from "./progress";
 
-/** The page's own shape while the session settles: the title and a quiet card. */
+/**
+ * The page's name for screen readers only: no big "Ask Dipak" title on the
+ * page, the tab bar already says it (owner, 17 Nov 2026: page titles go).
+ */
+export function AskDipakName() {
+  return <h1 className={styles.srOnly}>{COPY.title}</h1>;
+}
+
+/** The page's own shape while the session settles: a quiet card. */
 export function AskDipakSkeleton() {
   return (
     <AcquisitionShell
@@ -22,7 +29,7 @@ export function AskDipakSkeleton() {
       active="coaching"
       pageName={COPY.title}
     >
-      <PageHeader title={COPY.title} titleInBar />
+      <AskDipakName />
       <div className={styles.root} aria-busy="true">
         <div className={styles.hero} style={{ minHeight: 140 }} />
       </div>
@@ -34,7 +41,7 @@ function Signed({ personId }: { personId: string }) {
   useEffect(() => progressFor(personId), [personId]);
   return (
     <AcquisitionShell authenticated active="coaching" pageName={COPY.title}>
-      <PageHeader title={COPY.title} titleInBar />
+      <AskDipakName />
       <AskDipakView />
     </AcquisitionShell>
   );

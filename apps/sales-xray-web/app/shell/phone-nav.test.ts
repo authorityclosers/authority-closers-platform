@@ -35,6 +35,8 @@ it("lights Ask Dipak on his library, whatever the page says (Dipak's spec, 13 No
   expect(phoneTabFor("/ask-dipak", "coaching")).toBe("ask");
   expect(phoneTabFor("/ask-dipak/", undefined)).toBe("ask");
   expect(phoneTabFor("/ask-dipaks", undefined)).toBeNull();
+  // Its review fixture says "coaching" to the shell, and still lights Ask Dipak.
+  expect(phoneTabFor("/review-fixture/ask-dipak", "coaching")).toBe("ask");
   // Its page keeps Coaching lit on a computer's rail.
   expect(shellActiveFor("/ask-dipak", "coaching")).toBe("coaching");
 });
