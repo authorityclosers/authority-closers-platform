@@ -338,6 +338,18 @@ def test_whatsapp_files_sequences_broadcasts_and_numbers(
                 talker = await add_lead("Sunita Joshi", "+919811100032")
                 mover = await add_lead("Vikram Das", "+919811100033")
                 stopper = await add_lead("Neha Iyer", "+919811100034")
+                # A lead on nobody's desk (not the connector's) still gets automatic steps.
+                async with setup.sessions() as db, db.begin():
+                    await db.execute(
+                        update(Lead)
+                        .where(Lead.id == quiet.id)
+                        .values(
+                            owner_person_id=None,
+                            owner_reason=None,
+                            assigned_at=None,
+                            created_by_person_id=None,
+                        )
+                    )
                 now = datetime.now(UTC)
                 first_pass = await loop(now)
                 assert first_pass["joined"] == 4 and first_pass["sent"] == 4, first_pass

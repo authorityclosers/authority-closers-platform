@@ -541,6 +541,18 @@ async def _lead(desk: LeadDesk, lead_id: UUID) -> Lead:
     return lead
 
 
+async def _auto_lead(desk: LeadDesk, lead_id: UUID) -> Lead:
+    """The lead an automatic message goes to: in this workspace and not in the Bin, locked."""
+    lead = await desk.db.scalar(
+        select(Lead)
+        .where(Lead.id == lead_id, Lead.tenant_id == desk.tenant_id, Lead.binned_at.is_(None))
+        .with_for_update()
+    )
+    if lead is None:
+        raise DeskError(404, "That lead isn't here.")
+    return lead
+
+
 def _chat_filter(lead: Lead) -> Any:
     wa = cloud.wa_id(lead.phone)
     by_wa = LeadWhatsAppMessage.wa_id == wa if wa else LeadWhatsAppMessage.id.is_(None)
@@ -724,7 +736,10 @@ async def send(
         if existing is not None:
             return existing
         raise DeskError(409, "That request was already used.")
-    lead = await desk._lead(lead_id, lock=True) if auto else await _lead(desk, lead_id)
+    # An automatic message (first reply, after hours, a sequence step, a broadcast) goes to
+    # any of the workspace's leads, whoever's desk it is on: the "system" sender is no
+    # manager, so the desk's own lookup would see only the connector's leads.
+    lead = await _auto_lead(desk, lead_id) if auto else await _lead(desk, lead_id)
     wa = cloud.wa_id(lead.phone)
     if wa is None:
         raise DeskError(422, "Add a phone number with its country code to WhatsApp this lead.")
