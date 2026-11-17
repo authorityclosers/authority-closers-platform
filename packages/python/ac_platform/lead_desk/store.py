@@ -1286,6 +1286,10 @@ class LeadDesk:
             Lead.owner_person_id == me,
             Lead.stage.in_(OPEN_STAGES),
             in_pipeline,
+            # A test lead is nobody's work: not in the queue, the cards, the countdown or
+            # the next lead (Redmi tester, 17 Nov 2026: Meta's "<test lead: dummy data for
+            # full_name>" sat in AC's To Call 7 and led Call Next Lead).
+            *await self._counted_leads(),
         )
         due = (
             await self.db.scalars(
@@ -2025,6 +2029,8 @@ class LeadDesk:
             Lead.owner_person_id == self.viewer.person_id,
             Lead.stage.in_(OPEN_STAGES),
             on_side("inbound"),
+            # As its To Call list: test leads aren't due for anyone.
+            *await self._counted_leads(),
         )
         if waiting is None:
             waiting = await self._waiting_call_back()
@@ -2050,6 +2056,8 @@ class LeadDesk:
             Lead.owner_person_id == me,
             Lead.stage.in_(OPEN_STAGES),
             worked(),
+            # "Start calling" never dials a test lead (Redmi tester, 17 Nov 2026).
+            *await self._counted_leads(),
         )
         if pipeline is not None:
             mine = and_(mine, journeys.lead_in((await self._pipeline(pipeline)).key))
@@ -2146,6 +2154,10 @@ class LeadDesk:
         if view is not None and view != "all":
             # A work view (Dipak's mockup, 31 Oct 2026): what to call today, the follow-ups.
             view_clause = in_view(view, day_end, waiting)
+            if not test_only:
+                # Test leads are in no one's To Call or Follow-ups, as on the badge and
+                # Home (Redmi tester, 17 Nov 2026); All Leads and Test data still list them.
+                view_clause = and_(view_clause, *await self._counted_leads())
             where.append(view_clause)
         when_clause: Any = None
         if when is not None:
@@ -2253,6 +2265,12 @@ class LeadDesk:
             ]
             to_call = in_view("to_call", day_end, waiting)
             follow_ups = in_view("follow_ups", day_end)
+            if not test_only:
+                # The tabs count their lists: no test leads ("To Call 7" over a Meta test
+                # lead, Redmi tester, 17 Nov 2026).
+                counted = await self._counted_leads()
+                to_call = and_(to_call, *counted)
+                follow_ups = and_(follow_ups, *counted)
             found = (
                 await self.db.execute(
                     select(
