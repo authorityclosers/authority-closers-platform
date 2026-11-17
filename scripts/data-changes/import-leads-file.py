@@ -88,6 +88,16 @@ MERGES: Final = frozenset({"new", "existing"})
 # A row's own instructions, never stored as its answers.
 ROW_STAGE: Final = "_stage"
 ROW_NOTES: Final = "_notes"
+# A note is the seller's own words (Shivam Patil's review, 17 Nov 2026: "Call notes in the
+# sheet (New Sheet CAmp tab): ..." read as if the seller wrote our label). A label the spec
+# put in front ("From the sheet (<tab> tab): ", "Call notes in the sheet (<tab> tab): ",
+# "Remark in the EPC outbound sheet: ") is taken off and kept beside the note as where it
+# came from, never in its text; so is "(not a member of this workspace)".
+NOTE_LABEL: Final = re.compile(
+    r"^(?:From the sheet|[A-Z][\w ,/&-]{0,60}? in the [\w ,/&-]{0,60}?sheet)"
+    r"(?: \([^)]{0,80}\))?:\s+"
+)
+NOT_MEMBER: Final = " (not a member of this workspace)"
 # Columns a lead form export carries that say nothing about the lead.
 DROPPED: Final = frozenset({"lead_status", "ad_name"})
 EXCEL_EPOCH: Final = datetime(1899, 12, 30, tzinfo=UTC)
@@ -112,6 +122,15 @@ def header_row(record: dict[str, str]) -> bool:
     """Whether a row is the sheet's own header: most of its cells are header names."""
     cells = [key(value) for value in record.values() if str(value).strip()]
     return bool(cells) and 2 * sum(cell in HEADER_CELLS for cell in cells) > len(cells)
+
+
+def seller_words(note: str) -> tuple[str, str | None]:
+    """A row note's text without the importer's label: (the seller's words, the label)."""
+    words = note.strip().replace(NOT_MEMBER, "")
+    found = NOTE_LABEL.match(words)
+    if found is None:
+        return words, None
+    return words[found.end() :].strip(), found.group(0).rstrip().rstrip(":")
 
 
 def _input(path: str) -> dict[str, Any]:
@@ -591,7 +610,8 @@ async def run(
                 )
                 counts[label]["staged"] += 1
         for place, note in enumerate(raw.get(ROW_NOTES) or []):
-            words = str(note.get("text") or "").strip()[:2000]
+            words, sheet_label = seller_words(str(note.get("text") or ""))
+            words = words[:2000]
             if not words:
                 continue
             dated = note.get("at")
@@ -603,7 +623,11 @@ async def run(
             desk._event(
                 lead,
                 "note",
-                {"note": words, "source": "import"},
+                {
+                    "note": words,
+                    "source": "import",
+                    **({"sheet_label": sheet_label} if sheet_label else {}),
+                },
                 actor=actor.id,
                 command_id=noted,
                 at=datetime.fromisoformat(dated) if dated else None,

@@ -235,7 +235,10 @@ def test_history_side_stages_and_dated_notes(postgres_harness: Any, tmp_path: Pa
                         "rows": [
                             {
                                 **row("919876074001", "Fictional Live", "live@example.com"),
-                                "_notes": [dated, {"text": "Status in the sheet: Hot"}],
+                                "_notes": [
+                                    dated,
+                                    {"text": "Call notes in the sheet (Camp tab): call after 6"},
+                                ],
                             },
                             {
                                 **row("919876074002", "Fictional Hot", "hot@example.com"),
@@ -304,6 +307,11 @@ def test_history_side_stages_and_dated_notes(postgres_harness: Any, tmp_path: Pa
                 on_day = [n for n in notes if n.lead_id == old.id]
                 assert on_day[0].created_at.date().isoformat() == "2025-08-11"
                 assert sum(1 for n in notes if n.lead_id == live.id) == 3
+                # The seller's words only; the importer's label stays beside them.
+                worded = [n for n in notes if n.data.get("sheet_label")]
+                assert [(n.data["note"], n.data["sheet_label"]) for n in worded] == [
+                    ("call after 6", "Call notes in the sheet (Camp tab)")
+                ]
                 stages = (
                     await db.scalars(
                         select(LeadEvent).where(
@@ -550,7 +558,12 @@ def test_a_merge_batch_adds_notes_and_stage_to_a_row_imported_before(
                             {
                                 **row("919876076101", "Fictional Known", "known@example.com"),
                                 "_stage": "not_connected",
-                                "_notes": [{"text": "From the sheet: call after 6"}],
+                                "_notes": [
+                                    {
+                                        "text": "From the sheet (Nov tab): Seller in the sheet:"
+                                        " Fictional (not a member of this workspace)"
+                                    }
+                                ],
                             }
                         ],
                     }
@@ -573,7 +586,7 @@ def test_a_merge_batch_adds_notes_and_stage_to_a_row_imported_before(
                         )
                     )
                 ).all()
-                assert [note.data["note"] for note in notes] == ["From the sheet: call after 6"]
+                assert [note.data["note"] for note in notes] == ["Seller in the sheet: Fictional"]
             again = await tool.execute(sessions, merge, mode="apply", now=now)
             assert again["audited"] is False
             assert again["counts"]["notes_before"] == 1 and "notes" not in again["counts"]
