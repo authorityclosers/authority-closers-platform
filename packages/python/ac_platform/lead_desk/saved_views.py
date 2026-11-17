@@ -88,6 +88,7 @@ async def _count(desk: LeadDesk, query: LeadFilter) -> int | None:
             until=query.until,
             shelf=query.shelf,
             freeze=0,
+            tag=query.tag,
         )
     except DeskError:
         return None

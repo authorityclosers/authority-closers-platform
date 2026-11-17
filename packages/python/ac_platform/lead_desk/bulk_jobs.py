@@ -30,6 +30,7 @@ from sqlalchemy import select, update
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository
 from ac_platform.lead_desk import shelf
+from ac_platform.lead_desk import tags as lead_tags
 from ac_platform.lead_desk.contracts import (
     BulkFailure,
     BulkJob,
@@ -55,6 +56,8 @@ UNDONE: Final = "lead_desk.bulk_job.undone"
 BEFORE: Final = "bulk_before"
 JOB: Final = "bulk_job"
 SHELF_ACTIONS: Final = frozenset({"archive", "bin", "restore_archive", "restore_bin"})
+# Tags (tags.py): never the lead's revision, so these count what changed by their own links.
+TAG_ACTIONS: Final = frozenset({"tag", "untag"})
 # What each lead's snapshot keeps (the lead's own fields; its history holds them).
 _FIELDS: Final = (
     "owner_person_id",
@@ -149,6 +152,14 @@ async def _words(desk: LeadDesk, payload: Mapping[str, Any]) -> str:
         return f"{leads} moved to {payload.get('step_label') or payload.get('step')}"
     if action == "pipeline":
         return f"{leads} moved to the {payload.get('pipeline_label') or payload.get('pipeline')}"
+    if action in TAG_ACTIONS:
+        names = [
+            tag.name
+            for tag in (await lead_tags.listed(desk, counts=False)).tags
+            if str(tag.tag_id) in payload.get("tag_ids", ())
+        ]
+        named = ", ".join(names) or "a tag"
+        return f"{leads} tagged {named}" if action == "tag" else f"{named} taken off {leads}"
     return f"{leads} {shelf.EVENT_WORDS[action].lower()}" if action in shelf.EVENT_WORDS else leads
 
 
@@ -214,6 +225,7 @@ async def _selection(desk: LeadDesk, command: BulkJobCommand) -> list[UUID]:
         until=chosen.until,
         shelf=chosen.shelf,
         freeze=MAX_LEADS,
+        tag=chosen.tag,
     )
     if page.total > MAX_LEADS:
         raise DeskError(422, f"{page.total:,} leads match. Up to {MAX_LEADS:,} at a time.")
@@ -247,7 +259,17 @@ async def run(desk: LeadDesk, command: BulkJobCommand) -> BulkJob:
     before = {lead.id: _snapshot(lead) for lead in leads}
     failed: dict[str, int] = {}
     extra: dict[str, Any] = {}
-    if shelved:
+    tagged: set[UUID] | None = None
+    if command.action in TAG_ACTIONS:
+        # Tags on or off (tags.py), each changed lead with its own history line.
+        tagged = set(
+            await lead_tags.bulk(
+                desk, leads, command.tag_ids, add=command.action == "tag", job_id=job_id
+            )
+        )
+        one = lead_tags.tag_one
+        extra["tag_ids"] = [str(tag_id) for tag_id in dict.fromkeys(command.tag_ids)]
+    elif shelved:
         if leads:
             await shelf.move(
                 desk,
@@ -288,7 +310,13 @@ async def run(desk: LeadDesk, command: BulkJobCommand) -> BulkJob:
             extra["pipeline_label"] = (await desk._pipeline(command.pipeline)).name
         if command.action == "assign" and command.person_id is not None:
             extra["person_id"] = str(command.person_id)
-    changed = [lead for lead in leads if lead.revision > before[lead.id]["revision"]]
+    changed = [
+        lead
+        for lead in leads
+        if (
+            lead.id in tagged if tagged is not None else lead.revision > before[lead.id]["revision"]
+        )
+    ]
     # Each changed lead's own history line keeps what it was before (for Undo).
     await desk.db.flush()
     events = {
@@ -381,7 +409,13 @@ async def undo(desk: LeadDesk, job_id: UUID) -> BulkUndone:
     earlier = await _audit(desk, resource, UNDONE)
     if earlier is not None:
         return BulkUndone(**{k: earlier.payload[k] for k in ("restored", "skipped")}, job_id=job_id)
-    one = _shelf_one if action in SHELF_ACTIONS else _one
+    one = (
+        lead_tags.tag_one
+        if action in TAG_ACTIONS
+        else _shelf_one
+        if action in SHELF_ACTIONS
+        else _one
+    )
     marks = {
         event.lead_id: event
         for event in await desk.db.scalars(
@@ -393,7 +427,8 @@ async def undo(desk: LeadDesk, job_id: UUID) -> BulkUndone:
     }
     restored: list[UUID] = []
     undone_events: list[UUID] = []
-    for lead in leads:
+    # A tag job puts its own links back (tags.undo_bulk), below.
+    for lead in leads if action not in TAG_ACTIONS else ():
         mark = marks.get(lead.id)
         was = mark.data.get(BEFORE) if mark is not None else None
         if lead.revision != after[lead.id] or not isinstance(was, dict) or mark is None:
@@ -452,6 +487,14 @@ async def undo(desk: LeadDesk, job_id: UUID) -> BulkUndone:
                 undone_events.append(mark.id)
             desk._event(lead, "edited", data, actor=desk.viewer.person_id, command_id=again)
         restored.append(lead.id)
+    if action in TAG_ACTIONS:
+        restored = await lead_tags.undo_bulk(
+            desk,
+            job_id,
+            list(after),
+            [UUID(tag_id) for tag_id in job.payload.get("tag_ids", ())],
+            added=action == "tag",
+        )
     await _drop_sends(desk, undone_events)
     result = {"restored": len(restored), "skipped": len(after) - len(restored)}
     await AuditRepository(desk.db).append(

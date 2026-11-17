@@ -120,6 +120,17 @@ class Counts(Model):
     call_back: int = 0
 
 
+TagColour = Literal["mint", "sky", "violet", "amber", "rose", "slate"]
+
+
+class TagChip(Model):
+    """A tag on a lead's row and page (tags.py)."""
+
+    tag_id: UUID
+    name: str
+    colour: str
+
+
 class LeadRow(Model):
     lead_id: UUID
     revision: int
@@ -184,6 +195,8 @@ class LeadRow(Model):
     # Lists on the desk never hold either; a search and the Archived and Bin lists do.
     archived_at: datetime | None = None
     binned_at: datetime | None = None
+    # The workspace's tags on it, by name (migration 0161, tags.py).
+    tags: tuple[TagChip, ...] = ()
 
 
 class MessageTemplate(Model):
@@ -599,6 +612,9 @@ class LeadEventView(Model):
     # Archive and Bin (shelf.py): "archive", "bin", "restore_archive" or "restore_bin" on an
     # edited event; its words are in allocation_reason.
     shelf: str | None = None
+    # Tags (tags.py): on an edited event that changed "tags", the names put on and taken off.
+    tags_added: tuple[str, ...] | None = None
+    tags_removed: tuple[str, ...] | None = None
     channel: str | None = None
     template_label: str | None = None
     # A call the seller's phone logged by itself (UX study item 5): "phone", and
@@ -1890,6 +1906,8 @@ class LeadFilter(Command):
     older: bool = False
     duplicates: bool = False
     shelf: Literal["archived", "bin"] | None = None
+    # The leads carrying this tag (tags.py).
+    tag: UUID | None = None
 
 
 class BulkJobCommand(Command):
@@ -1903,7 +1921,15 @@ class BulkJobCommand(Command):
     filter: LeadFilter | None = None
     expected_total: int | None = Field(default=None, ge=1)
     action: Literal[
-        "assign", "stage", "pipeline", "archive", "bin", "restore_archive", "restore_bin"
+        "assign",
+        "stage",
+        "pipeline",
+        "archive",
+        "bin",
+        "restore_archive",
+        "restore_bin",
+        "tag",
+        "untag",
     ]
     # assign: the person (none: the lead rules pick). stage: the business's stage key, with a
     # Lost or Junk reason and a next action when the move asks. pipeline: its key.
@@ -1913,6 +1939,8 @@ class BulkJobCommand(Command):
     outcome_reason: str | None = Field(default=None, max_length=40)
     reason_note: str | None = Field(default=None, max_length=500)
     next_action_at: AwareDatetime | None = None
+    # tag / untag: the workspace's tags to put on or take off (tags.py).
+    tag_ids: tuple[UUID, ...] = Field(default=(), max_length=5)
 
 
 class SavedViewCommand(Command):
@@ -2144,6 +2172,8 @@ class ImportCommand(Command):
     kept: tuple[str, ...] = Field(default=(), max_length=500)
     # The stage new leads start in (a stage key); none: the first stage.
     step: str | None = Field(default=None, max_length=40)
+    # The workspace's tags every new lead gets (lead import I4-A "Source and tags").
+    tags: tuple[UUID, ...] = Field(default=(), max_length=5)
     # A pipeline picked by hand; None: the one that takes file imports.
     pipeline: str | None = Field(default=None, max_length=40)
     # The CRM the preview recognised: the leads' source says "<CRM> export: <file>".
@@ -2510,3 +2540,52 @@ class RevenueBreakdownView(Model):
     amount_not_set: int
     by_seller: tuple[RevenueSplitLine, ...]
     by_side: tuple[RevenueSplitLine, ...]
+
+
+# ----- tags (migration 0161, tags.py) ------------------------------------------------
+
+
+class Tag(Model):
+    tag_id: UUID
+    name: str
+    colour: str
+    revision: int
+    # Leads carrying it that this person may see (the Bin aside); None when not counted.
+    leads: int | None = None
+    created_at: datetime
+
+
+class Tags(Model):
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    tags: tuple[Tag, ...]
+    # Owners, admins and managers make, rename and delete tags.
+    can_change: bool = False
+
+
+class TagCommand(Command):
+    command_id: UUID
+    name: str = Field(min_length=1, max_length=32)
+    colour: TagColour = "mint"
+
+
+class TagEdit(Command):
+    expected_revision: int = Field(ge=1)
+    name: str | None = Field(default=None, min_length=1, max_length=32)
+    colour: TagColour | None = None
+
+
+class TagDelete(Command):
+    expected_revision: int = Field(ge=1)
+
+
+class LeadTagsChange(Command):
+    """One lead's tags from its page: the workspace's tags to put on and to take off."""
+
+    command_id: UUID
+    add: tuple[UUID, ...] = Field(default=(), max_length=10)
+    remove: tuple[UUID, ...] = Field(default=(), max_length=10)
+
+
+class LeadTags(Model):
+    lead_id: UUID
+    tags: tuple[TagChip, ...]

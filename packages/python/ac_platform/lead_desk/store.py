@@ -42,6 +42,7 @@ from ac_platform.lead_desk import (
 from ac_platform.lead_desk import breaks as call_breaks
 from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk import meetings as meeting_rows
+from ac_platform.lead_desk import tags as lead_tags
 from ac_platform.lead_desk import tasks as task_book
 from ac_platform.lead_desk.capture import (
     REFERENCE_KEYS,
@@ -1218,9 +1219,13 @@ class LeadDesk:
         day_end = self._day_start() + timedelta(days=1)
         full = bool((await self.settings())[1].get("show_full_phones"))
         kinds = await self._next_task_kinds(leads)
-        return tuple(
-            self._row(lead, names, day_end, full_phone=full, task_kind=kinds.get(lead.id))
-            for lead in leads
+        # Each row's tags (tags.py), one look-up for the page.
+        return await lead_tags.on_rows(
+            self,
+            [
+                self._row(lead, names, day_end, full_phone=full, task_kind=kinds.get(lead.id))
+                for lead in leads
+            ],
         )
 
     async def _next_task_kinds(self, leads: Sequence[Lead]) -> dict[UUID, str]:
@@ -2068,6 +2073,7 @@ class LeadDesk:
         until: date | None = None,
         shelf: Literal["archived", "bin"] | None = None,
         freeze: int | None = None,
+        tag: UUID | None = None,
     ) -> LeadPage:
         """One page of leads. ``freeze``: a bulk change's selection instead (bulk_jobs.py):
         no rows or counts, only ``total``, and up to ``freeze`` matching ids kept in
@@ -2157,6 +2163,9 @@ class LeadDesk:
         if older_only:
             # Older enquiries from a Facebook Page, to give out in bulk or leave on Cold.
             where.append(older_enquiry())
+        if tag is not None:
+            # The leads carrying one of the workspace's tags (tags.py).
+            where.append(lead_tags.has_tag(self.tenant_id, tag))
         if duplicates:
             # Leads that may be one person, for owners and managers to review (D4).
             if not self.viewer.can_manage:
@@ -2736,7 +2745,7 @@ class LeadDesk:
             )
             if value
         )
-        row = self._row(lead, names, day_end)
+        row = (await lead_tags.on_rows(self, [self._row(lead, names, day_end)]))[0]
         # After-call answers their seller undid: marked, so they count nowhere (ph2-37).
         answers_undone = frozenset(
             str(event.data[transitions.UNDONE_RESULT])
@@ -2973,6 +2982,12 @@ class LeadDesk:
             if isinstance(data.get("changed"), list)
             else None,
             shelf=text("shelf") if event.kind == "edited" else None,
+            tags_added=tuple(str(name) for name in data[lead_tags.ADDED])
+            if event.kind == "edited" and isinstance(data.get(lead_tags.ADDED), list)
+            else None,
+            tags_removed=tuple(str(name) for name in data[lead_tags.REMOVED])
+            if event.kind == "edited" and isinstance(data.get(lead_tags.REMOVED), list)
+            else None,
             simulated=data.get("simulated") if isinstance(data.get("simulated"), bool) else None,
             estimated=True if event.kind == "call" and data.get("estimated") is True else None,
             recording=True if recording is not None or data.get("recording") is True else None,

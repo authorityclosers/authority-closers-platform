@@ -26,6 +26,7 @@ from ac_platform.conversation_intelligence.synthetic_import_models import (
 )
 from ac_platform.identity.models import Person
 from ac_platform.lead_desk import enquiry_dates, imports, intake_memory
+from ac_platform.lead_desk import tags as lead_tags
 from ac_platform.lead_desk.capture import (
     CRM_EXPORTS,
     FIELDS,
@@ -690,6 +691,18 @@ class Intake:
                     actor=None if history else "viewer",
                 )
         await self.db.flush()
+        # The tags picked on Assign go on every new lead (I4-A "Source and tags").
+        if command.tags:
+            await lead_tags.on_import(
+                self.desk,
+                [
+                    lead.id
+                    for lead, outcome in zip(leads, outcomes, strict=True)
+                    if lead is not None and outcome == "created"
+                ],
+                command.tags,
+                import_id=command.command_id,
+            )
         # The choices made here start the workspace's next import (owners and admins).
         if self.desk.viewer.can_manage and any(outcome == "created" for outcome in outcomes):
             await intake_memory.remember(

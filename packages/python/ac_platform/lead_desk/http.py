@@ -52,6 +52,7 @@ from ac_platform.lead_desk import (
     spool,
 )
 from ac_platform.lead_desk import revenue as revenue_engine
+from ac_platform.lead_desk import tags as lead_tags
 from ac_platform.lead_desk import tasks as task_book
 from ac_platform.lead_desk import team as team_engine
 from ac_platform.lead_desk.activity_summary import ActivitySummary, summarize
@@ -104,6 +105,8 @@ from ac_platform.lead_desk.contracts import (
     LeadSort,
     LeadsPerDay,
     LeadsShelved,
+    LeadTags,
+    LeadTagsChange,
     Me,
     MergeLeads,
     MergeView,
@@ -150,6 +153,11 @@ from ac_platform.lead_desk.contracts import (
     Soon,
     Sources,
     SourceView,
+    Tag,
+    TagCommand,
+    TagDelete,
+    TagEdit,
+    Tags,
     TakingLeads,
     TargetsCommand,
     TaskAction,
@@ -320,11 +328,13 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         since: date | None = None,
         until: date | None = None,
         shelf: Literal["archived", "bin"] | None = None,
+        tag: UUID | None = None,
     ) -> LeadPage:
         no_query(
             request,
             frozenset(
                 {
+                    "tag",
                     "shelf",
                     "scope",
                     "stage",
@@ -382,6 +392,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 since=since,
                 until=until,
                 shelf=shelf,
+                tag=tag,
             )
 
     @router.get("/sides", response_model=SideNumbers, response_model_by_alias=True)
@@ -581,6 +592,44 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await saved_views.delete(lead_desk, view_id, command)
+
+    @router.get("/tags", response_model=Tags, response_model_by_alias=True)
+    async def tags_list(request: Request, response: Response, counts: bool = True) -> Tags:
+        """The workspace's tags by name, each with its number of leads (tags.py)."""
+        no_query(request, frozenset({"counts"}))
+        async with desk_for(request, response) as lead_desk:
+            return await lead_tags.listed(lead_desk, counts=counts)
+
+    @router.post("/tags", response_model=Tag, response_model_by_alias=True, status_code=201)
+    async def make_tag(command: TagCommand, request: Request, response: Response) -> Tag:
+        """Owners, admins and managers make a tag; a name already here gives that tag."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_tags.create(lead_desk, command)
+
+    @router.put("/tags/{tag_id}", response_model=Tag, response_model_by_alias=True)
+    async def edit_tag(tag_id: UUID, command: TagEdit, request: Request, response: Response) -> Tag:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_tags.edit(lead_desk, tag_id, command)
+
+    @router.post("/tags/{tag_id}/delete", response_model=Tags, response_model_by_alias=True)
+    async def delete_tag(
+        tag_id: UUID, command: TagDelete, request: Request, response: Response
+    ) -> Tags:
+        """The tag comes off every lead; their history keeps its name."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_tags.delete_tag(lead_desk, tag_id, command)
+
+    @router.post("/leads/{lead_id}/tags", response_model=LeadTags, response_model_by_alias=True)
+    async def lead_tags_change(
+        lead_id: UUID, command: LeadTagsChange, request: Request, response: Response
+    ) -> LeadTags:
+        """One lead's tags: what to put on and take off, a history line when it changed."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_tags.set_on_lead(lead_desk, lead_id, command)
 
     @router.post("/leads/bulk-jobs", response_model=BulkJob, response_model_by_alias=True)
     async def run_bulk_job(

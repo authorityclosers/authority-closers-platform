@@ -752,6 +752,66 @@ class LeadImportMemory(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class LeadTag(Base):
+    """A workspace's tag (migration 0161, tags.py; owner's picks 17 Nov 2026): a short name
+    its staff chose and a colour from the app's palette. ``name_key`` keeps one per name."""
+
+    __tablename__ = "lead_desk_tags"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_desk_tag_tenant"),
+        CheckConstraint("length(trim(name)) > 0", name="lead_desk_tag_name"),
+        CheckConstraint(
+            "colour IN ('mint', 'sky', 'violet', 'amber', 'rose', 'slate')",
+            name="lead_desk_tag_colour",
+        ),
+        CheckConstraint("revision >= 1", name="lead_desk_tag_revision"),
+        UniqueConstraint("tenant_id", "name_key", name="uq_lead_desk_tag_name"),
+        UniqueConstraint("tenant_id", "command_id", name="uq_lead_desk_tag_command"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    name: Mapped[str] = mapped_column(String(32))
+    name_key: Mapped[str] = mapped_column(String(32))
+    colour: Mapped[str] = mapped_column(String(12))
+    revision: Mapped[int] = mapped_column(Integer)
+    command_id: Mapped[UUID] = mapped_column(Uuid)
+    created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadTagLink(Base):
+    """A tag on a lead (migration 0161): who put it on, when, and the command that did, so a
+    bulk job's Undo takes off only what it put on."""
+
+    __tablename__ = "lead_desk_lead_tags"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_desk_lead_tag_tenant"),
+        ForeignKeyConstraint(
+            ["lead_id"],
+            ["lead_desk_leads.id"],
+            name="fk_lead_desk_lead_tag_lead",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tag_id"],
+            ["lead_desk_tags.id"],
+            name="fk_lead_desk_lead_tag_tag",
+            ondelete="CASCADE",
+        ),
+        Index("ix_lead_desk_lead_tag_tag", "tenant_id", "tag_id"),
+        Index("ix_lead_desk_lead_tag_command", "tenant_id", "command_id"),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tag_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    added_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    command_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class LeadSource(Base):
     """A connected capture source. Webhook tokens are stored only as a SHA-256."""
 
