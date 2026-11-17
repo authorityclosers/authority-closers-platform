@@ -118,6 +118,8 @@ it("reads rows pasted into quick add as it opens, and adds them all", async () =
   // Match columns, then Check (owner's pick I2-A).
   await act(async () => press(dialog, "Continue to check leads").click());
   await settle();
+  await act(async () => press(dialog, "Continue to assign").click());
+  await settle();
   const add = press(dialog, "Import 2 leads");
   await act(async () => add.click());
   await settle();
@@ -129,7 +131,7 @@ it("reads rows pasted into quick add as it opens, and adds them all", async () =
     null,
     { side: "cold" },
   );
-  expect(dialog.textContent).toContain("New leads");
+  expect(dialog.textContent).toContain("2 leads imported");
 });
 
 it("reads rows pasted into its box, and says when the text holds none", async () => {
@@ -231,6 +233,8 @@ it("maps stage and owner columns, says which numbers are already leads, and what
       '[aria-label="Numbers already leads"] [aria-pressed="true"]',
     )?.textContent,
   ).toBe("Skip");
+  await act(async () => press(dialog, "Continue to assign").click());
+  await settle();
   const add = Array.from(dialog.querySelectorAll("button")).find((button) =>
     button.textContent?.trim().startsWith("Import"),
   )!;
@@ -241,8 +245,8 @@ it("maps stage and owner columns, says which numbers are already leads, and what
     owner: "Assigned to",
   });
   const text = dialog.textContent ?? "";
-  expect(text).toContain("Given their stage2");
-  expect(text).toContain("Given the owner named1");
+  expect(text).toContain("Stage· from your file (2)");
+  expect(text).toContain("Owners from your file· 1 lead");
   expect(text).toContain(
     "No stage called Hot lead: those leads start in New Lead, and keep the file's word on the lead.",
   );

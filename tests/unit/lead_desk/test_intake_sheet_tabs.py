@@ -89,6 +89,16 @@ def test_a_sheet_without_leads_says_why_and_an_unknown_name_is_refused() -> None
         read_xlsx(_book({"Summary": [["Total"]]}))
 
 
+def test_a_summary_sheet_with_a_row_gives_way_to_the_leads_sheet() -> None:
+    book = {
+        "Summary": [["Month", "Leads"], ["November", "5"]],
+        "Leads": [["Customer Name", "Mobile No."], ["Asha Example", "98760 75001"]],
+    }
+    sheet = read_xlsx(_book(book))
+    assert sheet.tab == "Leads"
+    assert [tab.rows for tab in sheet.tabs] == [1, 1]
+
+
 def test_a_csv_has_no_sheets() -> None:
     sheet = read_csv(b"Name,Phone\nAsha Example,98760 75001\n")
     assert sheet.tabs == ()

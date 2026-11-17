@@ -348,6 +348,11 @@ it("asks the phone's questions one at a time and imports with the answers", asyn
     "No questions: every column is accounted for.",
   );
   await press("Continue");
+  // Check, then Assign (I4-A) with the phone's summary line.
+  await press("Continue");
+  expect(host!.querySelector("[data-phone-summary]")?.textContent).toBe(
+    "2 new leads · 1 seller",
+  );
   await press("Import 2 leads");
   const [sent, mapping, , , , options] = commitImport.mock.calls[0];
   // "Sr No" isn't sent; the answers are.

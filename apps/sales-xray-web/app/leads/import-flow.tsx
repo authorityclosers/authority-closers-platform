@@ -31,7 +31,6 @@ import {
   type ReactNode,
 } from "react";
 
-import { displayName } from "../display-name";
 import { askFeedback } from "../feedback/ask";
 import { settingsPath } from "../settings/settings-sections";
 import { useBackClose } from "../ui/back-close";
@@ -56,8 +55,13 @@ import {
   type GoogleFiles,
 } from "./google-files-client";
 import { PICKER_FAILED, pickGoogleSheet } from "./google-picker";
-import { ImportCheck, resultLines, SkippedDownload } from "./import-check";
-import { FileCheckLines, ownedByFile, useFileCheck } from "./import-file-check";
+import { ImportCheck } from "./import-check";
+import {
+  FileCheckLines,
+  fileOwnersLine,
+  ownedByFile,
+  useFileCheck,
+} from "./import-file-check";
 import styles from "./import-flow.module.css";
 import {
   columnRows,
@@ -77,8 +81,16 @@ import {
   type Question,
 } from "./import-match";
 import matchStyles from "./import-match.module.css";
-import { RowsCheck } from "./import-rows";
-import { ImportHistory, UndoImportButton } from "./import-undo";
+import {
+  FileOwnersNote,
+  phoneSummary,
+  SummaryCard,
+  summaryLines,
+} from "./import-assign";
+import assignStyles from "./import-assign.module.css";
+import { ImportReceipt } from "./import-receipt";
+import { outcomeCounts, rowViews, RowsCheck } from "./import-rows";
+import { ImportHistory } from "./import-undo";
 import {
   commandId,
   commitImport,
@@ -638,7 +650,10 @@ export function ImportFlow({
     : checkedRows.length && !history
       ? checkedRows.filter((item) => item.outcome === "new").length
       : freshRows(preview);
-  const stagesList = useImportStages(open && step === "columns", pipeline);
+  const stagesList = useImportStages(
+    open && (step === "columns" || step === "who"),
+    pipeline,
+  );
   const match: MatchState | null = preview
     ? {
         preview,
@@ -814,6 +829,12 @@ export function ImportFlow({
     else back();
   };
 
+  const again = () => {
+    setResult(null);
+    command.current = commandId();
+    setDuplicates("skip");
+    another();
+  };
   const finish = () => {
     // Old leads land in no list: the page stays where it was.
     if (result?.side && result.side !== "history" && onLanded)
@@ -846,6 +867,37 @@ export function ImportFlow({
     </div>
   ) : null;
 
+  // I4-A: what Import does, line by line, beside who gets the leads.
+  const summaryRows =
+    preview && checkedRows.length
+      ? rowViews(sent ?? preview, mapping, fileCheck.check)
+      : [];
+  const fileOwners = fileOwnersLine(fileCheck.check);
+  const startStage = stagesList?.find((stage) => stage.key === choices.step);
+  const stageLine = mapping.stage
+    ? `Stages from your file${startStage ? `; the rest start in ${startStage.label}` : ""}`
+    : startStage
+      ? `Starting in ${startStage.label}`
+      : `Starting in ${stagesList?.[0]?.label ?? "the first stage"}`;
+  const notImported = summaryRows.length
+    ? (() => {
+        const counts = outcomeCounts(summaryRows);
+        return counts.known + counts.repeat + counts.cant;
+      })()
+    : 0;
+  const sellersGiven = new Set([
+    ...(fileCheck.check?.owners ?? [])
+      .map((owner) => owner.person_id)
+      .filter(Boolean),
+    ...(team && sharing(choices.assign) && toShare
+      ? Object.entries(countsFor(choices, team, toShare))
+          .filter(([, count]) => count > 0)
+          .map(([person]) => person)
+      : choices.assign === "one" && choices.one
+        ? [choices.one]
+        : []),
+  ]).size;
+
   const visibleSteps = IMPORT_STEPS.filter(
     (item) => !history || item.key !== "who",
   );
@@ -855,10 +907,38 @@ export function ImportFlow({
   );
   const fileRead = step === "file" && preview !== null && !result;
 
-  const actions = result ? (
-    <Button variant="primary" onClick={finish}>
-      Done
+  const importButton = (
+    <Button
+      variant="primary"
+      onClick={run}
+      disabled={
+        busy ||
+        // The check of what is on screen now must be back (PR 634 P2).
+        (!history && fileCheck.check === null) ||
+        ownersPending ||
+        overGiven ||
+        teamPending ||
+        nobodyPicked ||
+        noColumn ||
+        (step === "check" && oldWait !== null)
+      }
+    >
+      {busy
+        ? "Importing…"
+        : fresh
+          ? `Import ${fresh} ${history ? "old " : ""}lead${fresh === 1 ? "" : "s"}`
+          : "Import"}
     </Button>
+  );
+  const actions = result ? (
+    <>
+      <Button onClick={again}>Import another file</Button>
+      <Button variant="primary" onClick={finish}>
+        {result.side === "history" || !result.created
+          ? "Done"
+          : `See the ${result.created} ${result.created === 1 ? "lead" : "leads"}`}
+      </Button>
+    </>
   ) : step === "file" && !preview ? null : fileRead ? (
     <>
       <Button onClick={another} disabled={busy}>
@@ -891,28 +971,17 @@ export function ImportFlow({
             {narrow ? "Continue" : "Continue to check leads"}
           </Button>
         )
-      ) : (
+      ) : step === "check" && !history ? (
+        // Import only on Assign, after who gets them (study 01 §3: never skipped).
         <Button
           variant="primary"
-          onClick={run}
-          disabled={
-            busy ||
-            // The check of what is on screen now must be back (PR 634 P2).
-            (!history && fileCheck.check === null) ||
-            ownersPending ||
-            overGiven ||
-            teamPending ||
-            nobodyPicked ||
-            noColumn ||
-            (step === "check" && oldWait !== null)
-          }
+          onClick={() => setStep("who")}
+          disabled={fileCheck.check === null || noColumn}
         >
-          {busy
-            ? "Importing…"
-            : fresh
-              ? `Import ${fresh} ${history ? "old " : ""}lead${fresh === 1 ? "" : "s"}`
-              : "Import"}
+          {narrow ? "Continue" : "Continue to assign"}
         </Button>
+      ) : (
+        importButton
       )}
     </>
   );
@@ -981,46 +1050,14 @@ export function ImportFlow({
           )}
           <div className={styles.body}>
             <div className={styles.content}>
-              {result ? (
-                <dl className={leadStyles.result}>
-                  {/* The rows by what became of them, in the check's words. */}
-                  {resultLines(result, duplicates).map((line) => (
-                    <div key={line.key} data-result={line.key}>
-                      <dt>{line.label}</dt>
-                      <dd>{line.count}</dd>
-                    </div>
-                  ))}
-                  {result.side === "history" ? null : (
-                    <>
-                      <div>
-                        <dt>Given an owner</dt>
-                        <dd>{result.assigned}</dd>
-                      </div>
-                      <div>
-                        <dt>Waiting for an owner</dt>
-                        <dd>{result.waiting}</dd>
-                      </div>
-                    </>
-                  )}
-                  {result.staged ? (
-                    <div>
-                      <dt>Given their stage</dt>
-                      <dd>{result.staged}</dd>
-                    </div>
-                  ) : null}
-                  {result.owned ? (
-                    <div>
-                      <dt>Given the owner named</dt>
-                      <dd>{result.owned}</dd>
-                    </div>
-                  ) : null}
-                  {result.given?.map((item) => (
-                    <div key={item.person_id}>
-                      <dt>Given to {displayName(item.name)}</dt>
-                      <dd>{item.leads}</dd>
-                    </div>
-                  ))}
-                </dl>
+              {result && preview ? (
+                <ImportReceipt
+                  result={result}
+                  preview={sent ?? preview}
+                  duplicates={duplicates}
+                  stageFromFile={Boolean(mapping.stage)}
+                  onUndone={onDone}
+                />
               ) : null}
               {result?.side === "history" ? (
                 <p className={leadStyles.hint}>
@@ -1029,11 +1066,6 @@ export function ImportFlow({
                   {result.undated
                     ? ` ${result.undated} had no enquiry date we could read: ${result.undated === 1 ? "it shows" : "they show"} today.`
                     : ""}
-                </p>
-              ) : result?.side ? (
-                <p className={leadStyles.hint}>
-                  The new leads are in{" "}
-                  {result.side === "cold" ? "Cold Leads" : "Inbound Leads"}.
                 </p>
               ) : null}
               {result?.unmatched_stages?.length ? (
@@ -1068,17 +1100,6 @@ export function ImportFlow({
                     ? " those old leads have no salesperson."
                     : " those leads went by the lead rules."}
                 </p>
-              ) : null}
-              {/* The rows it didn't use, with why, to fix and import again. */}
-              {result && preview ? (
-                <SkippedDownload preview={preview} result={result} />
-              ) : null}
-              {/* Undo import (competitor teardown 22). */}
-              {result?.import_id && result.undo_until ? (
-                <UndoImportButton
-                  importId={result.import_id}
-                  onUndone={onDone}
-                />
               ) : null}
               {result ? null : fileRead && preview ? (
                 <FileRead
@@ -1480,24 +1501,61 @@ export function ImportFlow({
                   {limitBox}
                 </>
               ) : (
-                <>
-                  <UploadChoicesFields
-                    part="who"
-                    canManage={canManage}
-                    team={team}
-                    fresh={toShare}
-                    pipeline={pipeline}
-                    value={choices}
-                    onChange={setChoices}
-                  />
-                  {canManage ? (
-                    <p className={leadStyles.hint}>
-                      About {fresh} new {fresh === 1 ? "lead" : "leads"}:{" "}
-                      {whoLine}
+                <div className={assignStyles.layout} data-import-assign="">
+                  <div className={assignStyles.head}>
+                    <h3 className={assignStyles.title}>
+                      Assign owners and other details
+                    </h3>
+                    <p className={assignStyles.muted}>
+                      {fresh} new {fresh === 1 ? "lead" : "leads"} will be
+                      created.
                     </p>
-                  ) : null}
-                  {limitBox}
-                </>
+                  </div>
+                  <div className={assignStyles.choices}>
+                    <FileOwnersNote owners={fileOwners} rest={toShare} />
+                    <UploadChoicesFields
+                      part="who"
+                      canManage={canManage}
+                      team={team}
+                      fresh={toShare}
+                      pipeline={pipeline}
+                      value={choices}
+                      onChange={setChoices}
+                    />
+                    {canManage ? (
+                      <p className={leadStyles.hint}>
+                        About {fresh} new {fresh === 1 ? "lead" : "leads"}:{" "}
+                        {whoLine}
+                      </p>
+                    ) : null}
+                    {limitBox}
+                  </div>
+                  <SummaryCard
+                    lines={summaryLines({
+                      rows: summaryRows,
+                      fresh,
+                      side: choices.side === "cold" ? "cold" : "live",
+                      owners: fileOwners,
+                      whoLine: canManage ? whoLine : "On your desk.",
+                      stageLine,
+                      keptWords:
+                        duplicates === "fill"
+                          ? "empty details filled"
+                          : duplicates === "replace"
+                            ? "details replaced"
+                            : "left as it is",
+                    })}
+                    action={null}
+                    footnote={
+                      canManage
+                        ? "You can undo this import for 48 hours in Recent imports."
+                        : null
+                    }
+                  />
+                  <p className={assignStyles.phoneLine} data-phone-summary="">
+                    {phoneSummary(fresh, sellersGiven, notImported)}
+                  </p>
+                </div>
               )}
               {error ? (
                 <p className={leadStyles.error} role="alert">

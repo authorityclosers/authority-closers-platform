@@ -142,6 +142,9 @@ it("says which CRM's export it is and imports from Check, columns tucked away", 
   expect(
     dialog.querySelectorAll('button[aria-haspopup="listbox"]'),
   ).toHaveLength(0);
+  // Import is on Assign (I4-A).
+  await act(async () => button(dialog, "Continue to assign")!.click());
+  await settle();
   await act(async () => button(dialog, "Import 2 leads")!.click());
   await settle();
   expect(commitImport).toHaveBeenCalledWith(
@@ -176,6 +179,9 @@ it("shows the columns when many rows make no lead", async () => {
 it("says who the import took past their limit, as a warning with Change limits", async () => {
   const warning = "Asha now has 58 open leads, 8 over their limit of 50.";
   const dialog = await mount(2, { warnings: [warning], canManage: true });
+  // Import is on Assign (I4-A).
+  await act(async () => button(dialog, "Continue to assign")!.click());
+  await settle();
   await act(async () => button(dialog, "Import 2 leads")!.click());
   await settle();
   const box = dialog.querySelector("[data-import-warnings]")!;
@@ -189,6 +195,9 @@ it("says who the import took past their limit, as a warning with Change limits",
 
 it("shows no warning box when the import stayed within every limit", async () => {
   const dialog = await mount(2, { warnings: [], canManage: true });
+  // Import is on Assign (I4-A).
+  await act(async () => button(dialog, "Continue to assign")!.click());
+  await settle();
   await act(async () => button(dialog, "Import 2 leads")!.click());
   await settle();
   expect(dialog.querySelector("[data-import-warnings]")).toBeNull();

@@ -216,12 +216,12 @@ it("shares only the leads without an owner in the file", async () => {
       .click(),
   );
   await settle();
-  const importButton = () =>
+  const pressable = (words: string) =>
     Array.from(dialog.querySelectorAll("button")).find((item) =>
-      item.textContent?.trim().startsWith("Import 4"),
+      item.textContent?.trim().startsWith(words),
     )!;
-  // The file's owners are still being checked: no split, no Import yet.
-  expect(importButton().disabled).toBe(true);
+  // The file is still being checked: no going on to Assign, no Import yet.
+  expect(pressable("Continue to assign").disabled).toBe(true);
   expect(checkFile).toHaveBeenCalledWith(
     expect.objectContaining({ file_name: "fictional-ns.csv" }),
     expect.objectContaining({ owner: "Assigned To" }),
@@ -236,7 +236,12 @@ it("shares only the leads without an owner in the file", async () => {
   expect(dialog.querySelector("[data-import-who]")?.textContent).toContain(
     "About 4 new leads: 2 keep their owner from your file; the other 2: Asha Example 1 · Ravi Sample 1.",
   );
-  await act(async () => importButton().click());
+  await act(async () => pressable("Continue to assign").click());
+  await settle();
+  expect(dialog.querySelector("[data-file-owners]")?.textContent).toContain(
+    "Owners from your file keep their leads",
+  );
+  await act(async () => pressable("Import 4").click());
   await settle();
   // Share between my sellers covers only the two rows without an owner.
   expect(commitImport.mock.calls[0][5]).toMatchObject({

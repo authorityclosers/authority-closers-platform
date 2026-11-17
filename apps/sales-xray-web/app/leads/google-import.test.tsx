@@ -17,6 +17,18 @@ vi.mock("./google-files-client", async (original) => ({
   readGoogleFiles: calls.read,
   previewGoogleSheet: calls.preview,
 }));
+// The check of the file's rows (I3): nothing to report.
+vi.mock("./leads-client", async (original) => ({
+  ...(await original<typeof import("./leads-client")>()),
+  checkFile: async () => ({
+    stages: [],
+    unmatched_stage: null,
+    owners: [],
+    owned_new: 0,
+    columns: [],
+  }),
+  readTeam: async () => ({ reps: [] }),
+}));
 vi.mock("next/link", () => ({
   default: ({
     href,
@@ -124,6 +136,13 @@ it("opens the Picker when it arrived for a Google Sheet, and previews the Sheet 
   await act(async () =>
     [...document.querySelectorAll("button")]
       .find((button) => button.textContent === "Continue to check leads")!
+      .click(),
+  );
+  await settle();
+  // Then Assign, where Import is (I4-A).
+  await act(async () =>
+    [...document.querySelectorAll("button")]
+      .find((button) => button.textContent === "Continue to assign")!
       .click(),
   );
   await settle();

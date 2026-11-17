@@ -185,6 +185,12 @@ it("walks File, Match columns, Check and Assign, and imports with the choices ma
   await act(async () => button(dialog, "Back")!.click());
   expect(current(dialog)).toBe("3Check");
 
+  // Import is on Assign (I4-A), beside "When you import".
+  await act(async () => button(dialog, "Continue to assign")!.click());
+  await settle();
+  expect(dialog.querySelector('[data-summary="new"]')?.textContent).toContain(
+    "2 new leads",
+  );
   await act(async () => button(dialog, "Import 2 leads")!.click());
   await settle();
   expect(commitImport).toHaveBeenCalledWith(
@@ -202,19 +208,11 @@ it("walks File, Match columns, Check and Assign, and imports with the choices ma
       duplicates: "fill",
     },
   );
-  // The result: what was filled in, and the skipped rows as a file.
-  expect(
-    [...dialog.querySelectorAll("[data-result]")].map((line) => [
-      line.getAttribute("data-result"),
-      line.querySelector("dd")?.textContent,
-    ]),
-  ).toEqual([
-    ["new", "3"],
-    ["known", "1"],
-    ["updated", "1"],
-    ["left", "1"],
-  ]);
-  expect(dialog.textContent).toContain("Details filled in1");
+  // The receipt (I4-B): what was filled in, what wasn't imported, the rows as a file.
+  const receipt = dialog.querySelector("[data-import-receipt]")!;
+  expect(receipt.querySelector("h3")?.textContent).toBe("3 leads imported");
+  expect(receipt.textContent).toContain("Details filled in· 1 lead");
+  expect(receipt.textContent).toContain("2 rows not imported");
   expect(
     [...dialog.querySelectorAll("a")].find((link) =>
       link.textContent?.startsWith("Download rows not added"),

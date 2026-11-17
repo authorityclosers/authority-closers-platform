@@ -869,8 +869,21 @@ def read_xlsx(data: bytes, tab: str | None = None) -> Sheet:
         if chosen is None:
             raise CaptureError(f"This file has no sheet called {tab[:100]}.")
     else:
-        # The first sheet with leads; none has any: the first sheet's own reason.
-        chosen = next((entry for entry in read if entry[1] is not None), read[0])
+        # The sheet that looks like leads: one whose columns name a name or a phone, the
+        # most rows first; else the first sheet with any; none: the first sheet's reason.
+        def looks_like_leads(entry: tuple[str, Sheet | None, CaptureError | None]) -> int:
+            found = entry[1]
+            if found is None:
+                return -1
+            named = suggest_mapping(found.headers)
+            return len(found.rows) if ("name" in named or "phone" in named) else 0
+
+        best = max(read, key=looks_like_leads)
+        chosen = (
+            best
+            if looks_like_leads(best) > 0
+            else next((entry for entry in read if entry[1] is not None), read[0])
+        )
     name, found, problem = chosen
     if found is None:
         raise problem or CaptureError("The spreadsheet's first sheet is missing.")
