@@ -107,6 +107,38 @@ it("says why a new lead enquired, and that nobody has talked to them yet", async
   ]);
 });
 
+// Redmi tester, 17 Nov 2026: two dials nobody answered read "None logged yet".
+it("counts the tries on a lead nobody has reached yet", async () => {
+  await show(
+    detailWith(
+      {
+        events: [
+          event({
+            kind: "call",
+            at: "2026-11-17T10:05:00Z",
+            connected: false,
+          }),
+          event({
+            kind: "result",
+            at: "2026-11-17T10:01:00Z",
+            connected: false,
+          }),
+          event({
+            kind: "call",
+            at: "2026-11-17T10:00:00Z",
+            connected: false,
+          }),
+        ],
+      },
+      { calls: 2, attempts: 2, interest: "Free masterclass" },
+    ),
+  );
+  expect(rows().map(({ label, value }) => [label, value])).toEqual([
+    ["Interested in", "Free masterclass"],
+    ["Last call", "Tried 2 times, not reached"],
+  ]);
+});
+
 it("reads Not known yet where nothing is known, never a guess", async () => {
   await show(
     detailWith(

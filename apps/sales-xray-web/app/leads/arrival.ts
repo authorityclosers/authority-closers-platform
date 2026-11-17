@@ -45,6 +45,25 @@ export function arrivedShort(iso: string, now: Date = new Date()): string {
   });
 }
 
+/** "16 Nov, 10:42 am" (with the year when it isn't this one): when Meta made
+ *  a lead, at the top of its page (Shivam's review, 17 Nov 2026). */
+export function metaWhen(iso: string, now: Date = new Date()): string {
+  const at = new Date(iso);
+  const day = at.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    ...(at.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+  });
+  const time = at
+    .toLocaleTimeString("en-IN", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    })
+    .replace(/\s(am|pm)$/i, " $1");
+  return `${day}, ${time}`;
+}
+
 /** "16 Nov 2026, 3:16 pm": a moment in full, one format whatever the locale. */
 export function fullTime(iso: string): string {
   return new Date(iso)

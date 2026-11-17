@@ -74,6 +74,12 @@ class FakeMeta:
         return list(FakeMeta.earlier)
 
     async def delete_lead(self, lead_id: str, page_token: str) -> None:
+        if lead_id.startswith("theirs"):
+            raise meta.MetaError(
+                "Meta refused the request.",
+                code=110,
+                detail="(#110) Can only delete leads owned by session user",
+            )
         FakeMeta.deleted.append(lead_id)
         FakeMeta.earlier.remove(lead_id)
 
@@ -289,6 +295,31 @@ def test_connected_apps_health_and_real_tests(
                     ("Wait for it in Leads", "waiting"),
                 ]
                 assert made.json()["steps"][0]["words"] == "Deleted 1 test lead."
+                # A test lead another Facebook account made can't be deleted (Meta's #110,
+                # Wise Life 17 Nov 2026): it is left alone and a new one asked for.
+                FakeMeta.earlier, FakeMeta.made = ["theirs-1"], []
+                again = await http.post(
+                    f"{BASE}/meta_leads/test",
+                    json={"pageId": PAGE, "formId": FORM},
+                    headers=WRITE,
+                )
+                assert again.status_code == 200, again.text
+                assert again.json()["status"] == "waiting" and FakeMeta.made == [FORM]
+                assert FakeMeta.deleted == ["5550000000000"]
+                assert [(s["label"], s["state"]) for s in again.json()["steps"]][:2] == [
+                    ("Clear the form's earlier test lead", "skipped"),
+                    ("Ask Meta for a test lead", "done"),
+                ]
+                assert "another Facebook account" in again.json()["steps"][0]["words"]
+                # Meta then refusing (one test lead per form): plain words, no code.
+                refused = await http.post(
+                    f"{BASE}/meta_leads/test",
+                    json={"pageId": PAGE, "formId": "999999999"},
+                    headers=WRITE,
+                )
+                assert refused.json()["status"] == "failed"
+                assert "Lead Ads Testing Tool" in refused.json()["words"]
+                FakeMeta.earlier = []
                 test_id = made.json()["testId"]
                 assert (await http.get(f"{BASE}/tests/{test_id}")).json()["status"] == "waiting"
                 async with setup.sessions() as db, db.begin():

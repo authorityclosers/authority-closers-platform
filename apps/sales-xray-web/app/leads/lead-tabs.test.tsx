@@ -127,7 +127,15 @@ const noteCard = () =>
 it("puts the call history and the latest note on one page, no tabs (lead page P5)", async () => {
   await show();
   expect(host.querySelector('[role="tab"], [role="tablist"]')).toBeNull();
+  // The owner's review, 17 Nov 2026: Call history and the Timeline stay two
+  // sections, the calls in Call history, the Timeline after it.
   const card = historyCard();
+  const timeline = host.querySelector('section[aria-label="Timeline"]');
+  expect(timeline).not.toBeNull();
+  expect(timeline?.querySelector('ol[aria-label="History"]')).toBeNull();
+  expect(
+    card.compareDocumentPosition(timeline!) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
   // The honest count beside the title.
   expect(card.textContent).toContain("Tried 1 time, talked once");
   // Newest first, one row each, the day and time under the title.

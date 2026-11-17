@@ -122,6 +122,8 @@ def test_stage_moves_reach_meta_and_moves_between_pipelines_do_not(
             here.as_seller()
             mover = await meta_lead(here, "Fictional Mover", "98760 81001", "120000000081001")
             switched = await meta_lead(here, "Fictional Switch", "98760 81002", "120000000081002")
+            away = await meta_lead(here, "Fictional Away", "98760 81004", "120000000081004")
+            legacy = await meta_lead(here, "Fictional Legacy", "98760 81005", "120000000081005")
             # Sending starts after both captures: what these two reach comes from their moves.
             since = datetime.now(UTC).replace(microsecond=0) + timedelta(seconds=1)
             names = await switch_meta_on(here, since)
@@ -153,6 +155,24 @@ def test_stage_moves_reach_meta_and_moves_between_pipelines_do_not(
                 ("partner_outreach", "main"),
             ]
 
+            # A move made while the lead was in another pipeline (its line names that
+            # pipeline), the lead back in main since: no main stage. A line from before Lead OS
+            # names no pipeline and counts as the lead's own.
+            for lead_id in (away, legacy):
+                done = await here.dispose(
+                    lead_id, connected=True, step="interested", follow_up_at=later(days=1)
+                )
+                assert done.status_code == 200, done.text
+            [away_line] = await lines(here, away, "result")
+            [legacy_line] = await lines(here, legacy, "result")
+            async with here.setup.sessions() as db, db.begin():
+                line = await db.get(LeadEvent, away_line.id)
+                assert line is not None
+                line.data = {**line.data, "pipeline": "partner_outreach"}
+                line = await db.get(LeadEvent, legacy_line.id)
+                assert line is not None
+                line.data = {key: value for key, value in line.data.items() if key != "pipeline"}
+
             captured = await meta_lead(here, "Fictional New", "98760 81003", "120000000081003")
 
             collected = await engine.collect(
@@ -180,6 +200,13 @@ def test_stage_moves_reach_meta_and_moves_between_pipelines_do_not(
             # From one pipeline into another and back: no stage reached, nothing sent.
             assert await conversions(here, switched) == []
 
+            # Stages reached in another pipeline: nothing; a line naming no pipeline: as before.
+            assert await conversions(here, away) == []
+            old = await conversions(here, legacy)
+            assert sorted((c.event_name, c.source_event_id) for c in old) == sorted(
+                (names[key], legacy_line.id) for key in by_answer
+            )
+
             # A capture after sending began: the first stage ("Lead" at Wise Life), as before.
             [new_line] = await lines(here, captured, "captured")
             first_stage = journey.resolve("new", None)
@@ -188,7 +215,7 @@ def test_stage_moves_reach_meta_and_moves_between_pipelines_do_not(
             assert [(c.event_name, c.source_event_id) for c in first] == [
                 (names[first_stage.key], new_line.id)
             ]
-            assert collected == len(sent) + len(first)
+            assert collected == len(sent) + len(first) + len(old)
 
             # Collecting again (the cursor rewound) makes nothing twice.
             async with here.setup.sessions() as db, db.begin():

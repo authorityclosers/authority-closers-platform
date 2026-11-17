@@ -128,6 +128,14 @@ def _with_meta_on() -> Any:
     )
 
 
+def in_other_pipeline(data: Mapping[str, Any], pipeline: str) -> bool:
+    """The move was made while the lead was in another pipeline: every move since Lead OS
+    (24 Oct 2026) names the lead's pipeline then; an older line without it counts as the
+    lead's pipeline now."""
+    recorded = data.get("pipeline")
+    return isinstance(recorded, str) and recorded != pipeline
+
+
 async def collect(
     sessions: async_sessionmaker[AsyncSession], *, environment: str, now: datetime
 ) -> int:
@@ -200,9 +208,11 @@ async def _collect_one(
         last = (event.created_at, event.id)
         data = event.data if isinstance(event.data, dict) else {}
         # Ad platforms learn from the main pipeline's stages (its matches are the ones
-        # saved); a lead moving between pipelines reached no stage.
+        # saved); a lead moving between pipelines reached no stage, and a stage reached in
+        # another pipeline is no main stage, even once the lead is back in main (PR 637).
         if (
             journeys.pipeline_of(lead) != journey.pipeline
+            or in_other_pipeline(data, journey.pipeline)
             or between_pipelines(data)
             or data.get("history") is True
         ):

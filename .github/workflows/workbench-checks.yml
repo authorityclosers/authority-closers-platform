@@ -251,7 +251,7 @@ jobs:
     needs: [plan, ci-prerequisites]
     if: needs.plan.outputs.visual == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
@@ -272,6 +272,13 @@ jobs:
       - name: Screenshots at 390 and 1440, light and dark, fictional data only (${{ needs.plan.outputs.scope }})
         timeout-minutes: 10
         run: node scripts/ci/wb_screens.mjs "$RUNNER_TEMP/wb-screens" .wb-ci/request.json
+      # Owner, 17 Nov 2026 (Shivam's review: the lead page's stage strip overlapped, "How did this get through?"):
+      # the lead page and the Leads list at 360, 363 and 412 px, 100% and 130% text, light and dark. Fails when
+      # visible text runs into other text or is cut off with no ellipsis.
+      - name: Phone overlap check, lead page and Leads list, fictional data only
+        if: always()
+        timeout-minutes: 15
+        run: node --test scripts/ci/wb_overlap_lib.test.mjs && node scripts/ci/wb_overlap.mjs "$RUNNER_TEMP/wb-overlap"
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -280,6 +287,9 @@ jobs:
           path: |
             ${{ runner.temp }}/wb-screens/*.png
             ${{ runner.temp }}/wb-screens/receipt.json
+            ${{ runner.temp }}/wb-overlap/report.md
+            ${{ runner.temp }}/wb-overlap/overlap.json
+            ${{ runner.temp }}/wb-overlap/*.jpg
           if-no-files-found: warn
           retention-days: 1
 
