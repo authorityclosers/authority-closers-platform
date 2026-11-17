@@ -107,6 +107,15 @@ def reached(journey: Journey, kind: str, data: Mapping[str, Any]) -> str | None:
     return stage.key if stage else None
 
 
+def between_pipelines(data: Mapping[str, Any]) -> bool:
+    """A lead moved from one pipeline to another (``store._to_pipeline``): it reached no
+    stage. Every stage move also names the lead's own pipeline (``"pipeline"``, Lead OS,
+    24 Oct 2026), so that key alone is no such move; skipping on it kept every stage move
+    from ever reaching an ad platform (found 16 Nov 2026, Wise Life)."""
+    origin = data.get("from_pipeline")
+    return isinstance(origin, str) and origin != data.get("pipeline")
+
+
 # ----- collecting -----------------------------------------------------------------------
 
 
@@ -194,7 +203,7 @@ async def _collect_one(
         # saved); a lead moving between pipelines reached no stage.
         if (
             journeys.pipeline_of(lead) != journey.pipeline
-            or "pipeline" in data
+            or between_pipelines(data)
             or data.get("history") is True
         ):
             continue
