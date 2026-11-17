@@ -111,6 +111,8 @@ export const COPY = {
   missionOff: "Mission हटाएँ",
   missionOn: "Mission on",
   missionAfter: "आपकी अगली calls के बाद हम पूछेंगे।",
+  lessonCount: (count: number) =>
+    `${count} ${count === 1 ? "lesson" : "lessons"}`,
   missionFull:
     "3 missions पहले से active हैं। My missions में एक हटाकर इसे active करें।",
 } as const;

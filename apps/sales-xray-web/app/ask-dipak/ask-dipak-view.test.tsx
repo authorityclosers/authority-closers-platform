@@ -44,13 +44,7 @@ vi.mock("next/navigation", async () => {
 import coach from "./coach-notes.json";
 import { AskDipakView } from "./ask-dipak-view";
 import { COPY } from "./copy";
-import {
-  CATEGORIES,
-  CATEGORY_ICONS,
-  DRAFTS,
-  questionById,
-  questionLabel,
-} from "./library";
+import { CATEGORIES, DRAFTS, questionById, questionLabel } from "./library";
 import {
   KEEP,
   LESSON_PATH,
@@ -325,9 +319,10 @@ describe("Topic library", () => {
     expect(
       cards.map((card) => card.querySelector("span + span")?.textContent),
     ).toEqual(CATEGORIES.map((category) => category.name));
+    // Each with its own drawing (owner's pick, 17 Nov 2026).
     cards.forEach((card, index) =>
-      expect(card.querySelector("svg")?.getAttribute("data-icon")).toBe(
-        CATEGORY_ICONS[CATEGORIES[index].id],
+      expect(card.querySelector("svg")?.getAttribute("data-art")).toBe(
+        CATEGORIES[index].id,
       ),
     );
   });
@@ -338,6 +333,13 @@ describe("Topic library", () => {
     expect(view()).toBe("category");
     expect(heading()).toBe("Qualification & Decision Process");
     expect(text()).toContain(COPY.categorySub);
+    // Its cover: number, line and the real lesson count.
+    const cover = host.querySelector("[data-cover]")?.textContent ?? "";
+    expect(cover).toContain("06");
+    expect(cover).toContain(COPY.lessonCount(CATEGORIES[5].questions.length));
+    expect(
+      host.querySelector('[data-cover] svg[data-art="06"]'),
+    ).not.toBeNull();
     expect(rows()).toEqual(CATEGORIES[5].questions.map((q) => q.id));
   });
 });

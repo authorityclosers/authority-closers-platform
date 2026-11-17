@@ -33,7 +33,6 @@ import { LessonScreen } from "./lesson-screen";
 import { MissionsScreen } from "./missions-screen";
 import {
   CATEGORIES,
-  CATEGORY_ICONS,
   CATEGORY_LABELS,
   FEATURED,
   QUESTIONS,
@@ -268,6 +267,39 @@ function HomeScreen({ open }: { open: Open }) {
   );
 }
 
+/**
+ * A topic's cover (owner's pick C-A, 17 Nov 2026; redesign study §5 S2): its
+ * drawing on its soft colour, its number or kind, name, short line and real
+ * lesson count.
+ */
+function Cover({
+  tone,
+  eyebrow,
+  title,
+  sub,
+  count,
+  art,
+}: {
+  tone: string;
+  eyebrow: string;
+  title: string;
+  sub: string;
+  count: number;
+  art: ReactNode;
+}) {
+  return (
+    <div className={`${styles.cover} ${styles[tone]}`} data-cover="">
+      <div className={styles.coverWords}>
+        <p className={styles.coverEyebrow}>{eyebrow}</p>
+        <h2 className={styles.pageTitle}>{title}</h2>
+        <p className={styles.coverSub}>{sub}</p>
+        <p className={styles.coverCount}>{COPY.lessonCount(count)}</p>
+      </div>
+      <span className={styles.coverArt}>{art}</span>
+    </div>
+  );
+}
+
 function TopicsScreen({ open, back }: { open: Open; back: () => void }) {
   return (
     <>
@@ -280,10 +312,10 @@ function TopicsScreen({ open, back }: { open: Open; back: () => void }) {
             key={category.id}
             view={{ kind: "category", id: category.id }}
             open={open}
-            className={`${styles.topicCard} ${styles[toneOfCategory(category.id)]}`}
+            className={`${styles.topicCard} ${styles.topicTile} ${styles[toneOfCategory(category.id)]}`}
           >
-            <span className={styles.topicIcon}>
-              <AskIcon name={CATEGORY_ICONS[category.id] ?? "layers"} />
+            <span className={styles.topicArt}>
+              <TopicArt category={category.id} size={52} />
             </span>
             <span className={styles.topicTitle}>{category.name}</span>
             <span className={styles.topicSub}>
@@ -312,13 +344,15 @@ function TopicScreen({
   return (
     <>
       <Breadcrumb onBack={back}>{COPY.title}</Breadcrumb>
-      <div className={`${styles.chip} ${styles[toneOfFeatured(topic.id)]}`}>
-        {COPY.topicChip}
-      </div>
-      <h2 className={styles.pageTitle}>{topic.name}</h2>
-      <p className={styles.pageSub}>
-        {topic.sub} · {COPY.topicSub}
-      </p>
+      <Cover
+        tone={toneOfFeatured(topic.id)}
+        eyebrow={COPY.topicChip}
+        title={topic.name}
+        sub={topic.sub}
+        count={featuredQuestions(topic).length}
+        art={<TopicArt featured={topic.id} size={64} />}
+      />
+      <p className={styles.pageSub}>{COPY.topicSub}</p>
       <div className={styles.rows}>
         {featuredQuestions(topic).map((question) => (
           <QuestionRow key={question.id} question={question} open={open} />
@@ -341,10 +375,14 @@ function CategoryScreen({
   return (
     <>
       <Breadcrumb onBack={back}>{COPY.allTitle}</Breadcrumb>
-      <div className={`${styles.chip} ${styles[toneOfCategory(category.id)]}`}>
-        {CATEGORY_LABELS[category.id]}
-      </div>
-      <h2 className={styles.pageTitle}>{category.name}</h2>
+      <Cover
+        tone={toneOfCategory(category.id)}
+        eyebrow={category.id}
+        title={category.name}
+        sub={CATEGORY_LABELS[category.id]}
+        count={categoryQuestions(category).length}
+        art={<TopicArt category={category.id} size={64} />}
+      />
       <p className={styles.pageSub}>{COPY.categorySub}</p>
       <div className={styles.rows}>
         {categoryQuestions(category).map((question) => (
