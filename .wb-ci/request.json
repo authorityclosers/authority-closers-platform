@@ -1,0 +1,41 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "815cf62ddf49f8c68a485c8e3454e708dd6db516",
+  "full": false,
+  "checks": [
+    "py"
+  ],
+  "changed_files": [
+    "db/migrations/versions/20261117_0161_lead_desk_tags.py",
+    "infra/application/scripts/restore-drill.py",
+    "infra/vps-foundation/scripts/ac-postgres-backup.py",
+    "infra/vps-foundation/scripts/ac-restic-postgres-restore-proof.py",
+    "packages/python/ac_platform/lead_desk/bulk_jobs.py",
+    "packages/python/ac_platform/lead_desk/contracts.py",
+    "packages/python/ac_platform/lead_desk/http.py",
+    "packages/python/ac_platform/lead_desk/intake.py",
+    "packages/python/ac_platform/lead_desk/models.py",
+    "packages/python/ac_platform/lead_desk/saved_views.py",
+    "packages/python/ac_platform/lead_desk/store.py",
+    "packages/python/ac_platform/lead_desk/tags.py",
+    "tests/database/test_lead_desk_tags_postgresql.py",
+    "tests/database/test_model_registry.py",
+    "tests/infra/test_lead_tags_backup_parity.py"
+  ],
+  "routes": [],
+  "py_tests": [
+    "tests/database/test_lead_desk_tags_postgresql.py",
+    "tests/database/test_lead_desk_bulk_jobs_postgresql.py",
+    "tests/database/test_lead_desk_saved_views_postgresql.py",
+    "tests/database/test_model_registry.py",
+    "tests/database/test_conversation_postgresql.py",
+    "tests/infra/test_lead_tags_backup_parity.py",
+    "tests/infra/test_lead_import_memory_backup_parity.py",
+    "tests/database/test_lead_desk_import_memory_postgresql.py",
+    "tests/database/test_lead_desk_shelf_postgresql.py",
+    "tests/infra/test_migration_schema_gate.py"
+  ],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
