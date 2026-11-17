@@ -58,6 +58,7 @@ import {
   primeLessons,
   resetLessons,
 } from "./lessons";
+import { paragraphs } from "./lesson-screen";
 import { PROGRESS_PATH, loadProgress, resetProgress } from "./progress";
 import { LESSONS, SELLER_LESSONS, servedLesson } from "./test-lessons";
 
@@ -183,6 +184,8 @@ const crumb = () => host.querySelector('button[class*="breadcrumb"]');
 
 beforeEach(() => {
   fake.notices.length = 0;
+  // The home's Continue card reads the last lesson opened on this device.
+  window.localStorage.removeItem("sales-xray:ask-dipak:last-lesson");
   resetProgress();
   // Dipak's lessons as already served this visit (lessons.ts); the tests under
   // "Lessons from the API" start without them.
@@ -205,6 +208,28 @@ describe("Homepage", () => {
     expect(view()).toBe("home");
     for (const line of [COPY.eyebrow, COPY.hello, ...COPY.intro, COPY.introAsk])
       expect(text()).toContain(line);
+  });
+
+  it("is the Coach's desk: Dipak's monogram (no generated face), Continue, search, situations, topics (owner's pick H-A, 17 Nov 2026)", async () => {
+    await show();
+    expect(
+      host.querySelector('[role="img"][aria-label="Dipak Vishwakarma"]')
+        ?.textContent,
+    ).toBe("DV");
+    expect(host.querySelector("img")).toBeNull();
+    expect(host.querySelector("a[data-continue]")).not.toBeNull();
+    // No active mission (the coaching API isn't served here): no strip.
+    expect(host.querySelector("[data-mission-strip]")).toBeNull();
+    expect(host.querySelectorAll("svg[data-art]")).toHaveLength(4);
+  });
+
+  it("offers Continue for the lesson just opened", async () => {
+    await show("/ask-dipak?lesson=OB03");
+    await click(crumb());
+    expect(view()).toBe("home");
+    expect(host.querySelector("a[data-continue]")?.getAttribute("href")).toBe(
+      "/ask-dipak?lesson=OB03",
+    );
   });
 
   it("keeps the greeting short: Dipak's intro lines fold until asked for (owner, 16 Nov 2026)", async () => {
@@ -285,7 +310,8 @@ describe("Homepage", () => {
       await click(entry);
       expect(view()).toBe("lesson");
       expect(heading()).toBe(questionLabel(questionById(id)!));
-      expect(text()).toContain(LESSONS[id].quick);
+      for (const beat of paragraphs(LESSONS[id].quick))
+        expect(text()).toContain(beat);
     },
   );
 });
@@ -382,15 +408,29 @@ describe("Interactive lessons", () => {
         COPY.mission,
         COPY.related,
       ]);
-      // His before/after lines first, word for word.
-      expect(text()).toContain(`${COPY.before}: ${lesson.before}`);
-      expect(text()).toContain(`${COPY.after}: ${lesson.after}`);
-      expect(text()).toContain(lesson.quick);
-      expect(text()).toContain(lesson.scenario);
+      // His before/after lines first, word for word, under his labels.
+      const mindset = host.querySelector("[data-mindset]")?.textContent ?? "";
+      expect(mindset).toContain(COPY.before);
+      expect(mindset).toContain(lesson.before);
+      expect(mindset).toContain(COPY.after);
+      expect(mindset).toContain(lesson.after);
+      // His quick answer, one beat per paragraph, in order and whole.
+      expect(
+        Array.from(
+          host.querySelectorAll('[data-part="quick"] li p'),
+          (p) => p.textContent,
+        ),
+      ).toEqual(paragraphs(lesson.quick));
+      for (const line of paragraphs(lesson.scenario))
+        expect(text()).toContain(line);
+      // The track shows every part, the first one current.
+      const steps = host.querySelectorAll("ol[aria-label] > li");
+      expect(steps).toHaveLength(7);
+      expect(steps[0].getAttribute("aria-current")).toBe("step");
       expect(text()).toContain(lesson.cue);
       expect(text()).toContain(lesson.mission);
       const options = host.querySelectorAll("button[aria-pressed]");
-      // Three options, the bookmark and the mission.
+      // Three options, the bookmark and the mission's commit.
       expect(options).toHaveLength(5);
       expect(text()).not.toContain((coach.notes as Record<string, string>)[id]);
       // The report and coaching consistency lock is for reports, not sellers.
@@ -407,29 +447,39 @@ describe("Interactive lessons", () => {
         index + 1
       ];
     expect(host.querySelector('[role="status"]')).toBeNull();
+    expect(text()).toContain(COPY.pickHint);
+    const seen = new Set<number>();
     for (const index of [0, 1, 2, 1]) {
       await click(option(index));
+      seen.add(index);
       const pressed = Array.from(
         host.querySelectorAll("button[aria-pressed='true']"),
         (item) => item.textContent,
       );
       expect(pressed).toEqual([`${"ABC"[index]}. ${lesson.options[index][0]}`]);
-      const feedback = host.querySelector('[role="status"]')?.textContent;
+      const status = host.querySelector('[role="status"]');
+      const feedback = status?.textContent;
       expect(feedback).toContain(COPY.feedback);
+      // Right under the option picked, in the same card.
+      expect(status?.previousElementSibling?.getAttribute("aria-pressed")).toBe(
+        "true",
+      );
       // Dipak's word, one paragraph per line of his, then his small example.
       const lines = lesson.options[index][1].split("\n");
       expect(
         Array.from(
-          host.querySelectorAll('[role="status"] > p'),
+          status?.querySelectorAll("p[class*='feedbackLine']") ?? [],
           (p) => p.textContent,
         ),
-      ).toEqual([...lines, COPY.compare]);
+      ).toEqual(lines);
       expect(lines.at(-1)).toMatch(/छोटा example:/);
       // His takeaway with his label ("Better सोच").
-      expect(host.querySelector('[role="status"] > div')?.textContent).toBe(
+      expect(status?.querySelector("[data-takeaway]")?.textContent).toBe(
         `${lesson.options[index][3]}: ${lesson.options[index][2]}`,
       );
-      expect(feedback).toContain(COPY.compare);
+      // Until all three are seen, it offers the others; then says so.
+      if (seen.size === 3) expect(feedback).toContain(COPY.allSeen);
+      else expect(feedback).toContain(COPY.compare);
       for (const other of [0, 1, 2].filter((item) => item !== index))
         expect(feedback).not.toContain(lesson.options[other][1].split("\n")[0]);
     }
@@ -460,7 +510,7 @@ describe("Interactive lessons", () => {
     ]);
     expect(server.missions).toEqual(["NX02"]);
     expect(button(COPY.undoMission)?.getAttribute("aria-pressed")).toBe("true");
-    expect(text()).toContain(COPY.missionDone);
+    expect(text()).toContain(COPY.missionOn);
     await click(button(COPY.undoMission));
     expect(server.missions).toEqual([]);
     expect(text()).toContain(COPY.missionTodo);
@@ -493,7 +543,8 @@ describe("Interactive lessons", () => {
     expect(heading()).toBe(questionById("PB05")?.title);
     expect(DRAFTS.PB05).toBeUndefined();
     expect(host.querySelector("[data-draft]")).toBeNull();
-    expect(text()).toContain(LESSONS.PB05.quick);
+    for (const beat of paragraphs(LESSONS.PB05.quick))
+      expect(text()).toContain(beat);
     expect(text()).toContain(LESSONS.PB05.mission);
     expect(text()).not.toContain(COPY.draftMission);
     expect(button(COPY.markMission)).not.toBeUndefined();
@@ -686,13 +737,13 @@ describe("Lessons from the API (16 Nov 2026: served from the database)", () => {
     });
     expect(asked).toEqual(["RP01"]);
     const lesson = LESSONS.RP01;
-    expect(text()).toContain(lesson.quick);
-    expect(text()).toContain(`${COPY.before}: ${lesson.before}`);
+    for (const beat of paragraphs(lesson.quick)) expect(text()).toContain(beat);
+    expect(text()).toContain(lesson.before);
     await click(
       host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")[1],
     );
     // RP01's own label for the takeaway.
-    expect(host.querySelector('[role="status"] > div')?.textContent).toBe(
+    expect(host.querySelector("[data-takeaway]")?.textContent).toBe(
       `याद रखने वाली बात: ${lesson.options[0][2]}`,
     );
     for (const line of lesson.lock) expect(text()).not.toContain(line);
@@ -733,7 +784,8 @@ describe("Lessons from the API (16 Nov 2026: served from the database)", () => {
       await loadLesson("DM02");
     });
     expect(host.querySelector("[data-lesson-state]")).toBeNull();
-    expect(text()).toContain(LESSONS.DM02.quick);
+    for (const beat of paragraphs(LESSONS.DM02.quick))
+      expect(text()).toContain(beat);
   });
 
   it("opens a lesson kept on the phone without a connection", async () => {
@@ -751,7 +803,8 @@ describe("Lessons from the API (16 Nov 2026: served from the database)", () => {
     await act(async () => {
       await loadLesson("OB03");
     });
-    expect(text()).toContain(LESSONS.OB03.quick);
+    for (const beat of paragraphs(LESSONS.OB03.quick))
+      expect(text()).toContain(beat);
     expect(host.querySelector("[data-lesson-state]")).toBeNull();
   });
 

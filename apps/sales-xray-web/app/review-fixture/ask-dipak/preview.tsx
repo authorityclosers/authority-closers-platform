@@ -23,6 +23,47 @@ const SESSION = "00000000-0000-4000-8000-000000000005";
 
 const PROGRESS = { saved: ["PB03", "DM02"], missions: ["DM02"] };
 
+/** The coaching API's answers for the Coach's desk (fictional: one active
+ * mission, one call waiting for the seller's word; &checkin=0 answers it). */
+const COACH = "/v1/sales-xray/ask-dipak";
+
+async function growth(real: typeof fetch) {
+  // The mission line is Dipak's own, read from the dev API's lesson.
+  let mission: string | null = null;
+  try {
+    const answer = await real(`${LESSON_PATH}/DM02`, {
+      credentials: "same-origin",
+    });
+    const body = (await answer.json()) as {
+      lesson?: { next_call_mission?: string };
+    };
+    mission = body.lesson?.next_call_mission ?? null;
+  } catch {
+    mission = null;
+  }
+  return {
+    max_active: 3,
+    active: ["DM02"],
+    missions: [
+      {
+        question_id: "DM02",
+        title: "Partner question",
+        mission,
+        active: true,
+        ticked: true,
+        done_calls: 1,
+        not_done_calls: 0,
+      },
+    ],
+  };
+}
+
+const json = (value: unknown) =>
+  new Response(JSON.stringify(value), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+
 function install() {
   if (typeof window === "undefined") return true;
   const real = window.fetch.bind(window);
@@ -34,6 +75,23 @@ function install() {
         status: 200,
         headers: { "content-type": "application/json" },
       });
+    if (path === `${COACH}/growth`) return json(await growth(real));
+    if (path === `${COACH}/calls`) {
+      const waiting =
+        new URLSearchParams(window.location.search).get("checkin") !== "0";
+      return json({
+        active: [{ question_id: "DM02", title: "Partner question" }],
+        calls: [
+          {
+            call_id: "sample-call",
+            lead_name: "Sample lead",
+            called_at: "2026-11-17T11:30:00+05:30",
+            answered: waiting ? [] : ["DM02"],
+            waiting: waiting ? ["DM02"] : [],
+          },
+        ],
+      });
+    }
     // Dipak's lessons come from the dev API itself (16 Nov 2026).
     if (path.startsWith(LESSON_PATH)) return real(input, init);
     if (path.startsWith("/v1/"))
