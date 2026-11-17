@@ -208,6 +208,9 @@ from ac_platform.tenancy.models import Membership
 from ac_platform.tenancy.roles import roles_with
 
 MANAGERS = frozenset(roles_with("leads.manage"))
+# A lead that came in by itself rings the bell only this soon after it arrived
+# (push.WINDOW): one a source delivers later is no news.
+NEW_LEAD_FRESH = timedelta(hours=2)
 # Deleting leads stays with owners and admins (Roles B: not Sales managers).
 DELETERS = frozenset(roles_with("leads.delete"))
 # Reading the team's leads (team.view): managers, and Viewers who change nothing.
@@ -3203,7 +3206,33 @@ class LeadDesk:
             pass  # the owner gives it out later (bulk upload, section 5)
         else:
             await self._allocate(lead, reps=reps)
+        # A lead that came in by itself, just now, rings the bell (bell.NEW; owner, 17 Nov
+        # 2026): never one typed in, imported, kept as history or Cold, nor one a source
+        # sends late (a Meta backfill).
+        arrived = lead.received_at or lead.created_at
+        if (
+            actor is None
+            and batch is None
+            and side != HISTORY
+            and lead_side(lead.pipeline) != "cold"
+            and arrived > self.now - NEW_LEAD_FRESH
+        ):
+            await self._tell_new_lead(lead, config)
         return lead, "created"
+
+    async def _tell_new_lead(self, lead: Lead, config: Mapping[str, Any]) -> None:
+        name = " ".join(word[:1].upper() + word[1:] for word in lead.name.split()) or "Someone"
+        source = lead.source_label or SOURCE_LABELS.get(lead.source or "", "") or "New"
+        owner = await self._name(lead.owner_person_id) if lead.owner_person_id else ""
+        await bell.announce(
+            self.db,
+            lead,
+            self.now,
+            config=config,
+            title=f"New lead: {name}",
+            waiting=f"{source} · No one has it yet. Call now or give it to a seller.",
+            owned=f"{source} · Given to {owner}." if owner else source,
+        )
 
     async def move_pipeline(
         self, lead_id: UUID, *, pipeline: str, expected_revision: int, command_id: UUID
@@ -4483,7 +4512,17 @@ class LeadDesk:
             await task_book.follow_owner(self, lead, person_id)
             # The one who had it is told no more: their "is your lead now" goes quiet.
             if previous is not None:
-                await bell.retire(self.db, lead.tenant_id, [lead.id], self.now, person_id=previous)
+                await bell.retire(
+                    self.db,
+                    lead.tenant_id,
+                    [lead.id],
+                    self.now,
+                    person_id=previous,
+                    kinds=(bell.KIND,),
+                )
+            # Someone took a waiting lead: its "New lead" goes quiet for everyone (bell.NEW).
+            elif person_id is not None:
+                await bell.retire(self.db, lead.tenant_id, [lead.id], self.now, kinds=(bell.NEW,))
         # The bell's "<name> is your lead now" (owner, 27 Oct 2026; migration 0142): for a
         # seller someone else gave it to (the lead rules, a manager), never for their own pick
         # (an add for oneself passes no actor, so the person asking counts too).

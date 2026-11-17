@@ -75,7 +75,7 @@ def shown_here(tenant_id: UUID | None) -> Any:
             ~Notification.dedupe_key.startswith(CAPTURE_KEY),
             Notification.tenant_id == tenant_id,
         ),
-        or_(Notification.kind != bell.KIND, Notification.tenant_id == tenant_id),
+        or_(Notification.kind.not_in(bell.KINDS), Notification.tenant_id == tenant_id),
     )
 
 
@@ -103,12 +103,12 @@ async def lead_lines(
     events = [
         event
         for event in await listed(database, person_id, tenant_id)
-        if event.kind == bell.KIND and event.read_at is None
+        if event.kind in bell.KINDS and event.read_at is None
     ]
     if not events:
         return []
     stale = await bell.stale(
-        database, tenant_id, person_id, [(event.id, event.href) for event in events]
+        database, tenant_id, person_id, [(event.id, event.href, event.kind) for event in events]
     )
     return [
         {
@@ -288,10 +288,10 @@ class ProductUpdatesReading:
         stale: set[UUID] = set()
         if self.actor.tenant_id is not None:
             found = await self.database.execute(
-                select(Notification.id, Notification.href).where(
+                select(Notification.id, Notification.href, Notification.kind).where(
                     Notification.person_id == self.actor.person_id,
                     Notification.tenant_id == self.actor.tenant_id,
-                    Notification.kind == bell.KIND,
+                    Notification.kind.in_(bell.KINDS),
                     Notification.read_at.is_(None),
                 )
             )
@@ -302,10 +302,14 @@ class ProductUpdatesReading:
                 self.actor.person_id,
                 [
                     *unread_leads,
-                    *((event.id, event.href) for event in events if event.kind == bell.KIND),
+                    *(
+                        (event.id, event.href, event.kind)
+                        for event in events
+                        if event.kind in bell.KINDS
+                    ),
                 ],
             )
-            unread -= sum(1 for line_id, _ in unread_leads if line_id in stale)
+            unread -= sum(1 for line_id, _, _ in unread_leads if line_id in stale)
         for event in events:
             # The capture reminder stays in the bell and names its day, older rows too,
             # with that day's count now: the calls it opens say the same (ph1-53).
