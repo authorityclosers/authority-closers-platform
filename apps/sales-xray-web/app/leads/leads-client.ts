@@ -410,6 +410,9 @@ export type ImportPreview = {
   bad_numbers?: number;
   /** Old leads kept as history: the enquiry date ("received") and campaign columns. */
   history_mapping?: Record<string, string>;
+  /** An Excel file's sheets, with their leads and columns, and the one read (I1-B). */
+  sheets?: { name: string; rows: number; columns: number }[];
+  sheet?: string | null;
 };
 
 /** A file of old leads before it is brought in (history imports, 2 Nov 2026). */
@@ -1981,12 +1984,14 @@ export function runSweep() {
   return request<{ moved: number }>("/sweep", { method: "POST" });
 }
 
-export async function previewImport(file: File) {
+export async function previewImport(file: File, sheet?: string) {
   return request<ImportPreview>("/imports/preview", {
     method: "POST",
     headers: {
       "content-type": file.type || "application/octet-stream",
       "x-file-name": file.name.replace(/[^\w .()-]+/g, "").slice(0, 200),
+      // An Excel file's sheet, by name (lead import I1-B).
+      ...(sheet ? { "x-sheet": encodeURIComponent(sheet.slice(0, 100)) } : {}),
     },
     body: file,
   });

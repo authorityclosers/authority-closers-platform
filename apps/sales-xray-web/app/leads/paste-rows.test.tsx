@@ -132,6 +132,14 @@ it("reads rows pasted into quick add as it opens, and adds them all", async () =
 
 it("reads rows pasted into its box, and says when the text holds none", async () => {
   const dialog = await mount();
+  // Paste rows is one of the "Other ways" (lead import I1-A): it opens the box.
+  await act(async () =>
+    [...dialog.querySelectorAll("button")]
+      .find(
+        (item) => item.querySelector("strong")?.textContent === "Paste rows",
+      )!
+      .click(),
+  );
   const box = dialog.querySelector<HTMLTextAreaElement>(
     'textarea[aria-label="Paste rows"]',
   )!;

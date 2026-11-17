@@ -1420,6 +1420,15 @@ class Performance(Model):
     daily: tuple[DayOutcome, ...] = ()
 
 
+class SheetTab(Model):
+    """One sheet of an Excel file: how many leads and columns it has (0 when none), so the
+    import asks which sheet has the leads when there are several (lead import I1-B)."""
+
+    name: str
+    rows: int
+    columns: int
+
+
 class ImportPreview(Model):
     file_name: str
     headers: tuple[str, ...]
@@ -1443,6 +1452,9 @@ class ImportPreview(Model):
     # For old leads kept as history: the enquiry date ("received") and campaign columns a
     # header names (owner, 2 Nov 2026), added to ``mapping`` when the file is Old leads.
     history_mapping: dict[str, str] = Field(default_factory=dict)
+    # An Excel file's sheets in order, and the one these rows come from (none for a CSV).
+    sheets: tuple[SheetTab, ...] = ()
+    sheet: str | None = None
 
 
 class ImportSkip(Model):

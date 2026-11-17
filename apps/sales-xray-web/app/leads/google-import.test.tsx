@@ -132,8 +132,8 @@ it("offers the Picker beside the file when Google is connected", async () => {
   calls.pick.mockResolvedValue(null);
   await mount(false);
   expect(calls.pick).not.toHaveBeenCalled();
-  const button = [...document.querySelectorAll("button")].find((item) =>
-    item.textContent?.endsWith("Pick a Google Sheet"),
+  const button = [...document.querySelectorAll("button")].find(
+    (item) => item.querySelector("strong")?.textContent === "Google Sheet",
   );
   expect(button).toBeDefined();
   await act(async () => button!.click());
@@ -150,8 +150,8 @@ it("says where to connect Google when the Picker finds it gone", async () => {
   );
   await mount(false);
   const pickButton = () =>
-    [...document.querySelectorAll("button")].find((item) =>
-      item.textContent?.endsWith("Pick a Google Sheet"),
+    [...document.querySelectorAll("button")].find(
+      (item) => item.querySelector("strong")?.textContent === "Google Sheet",
     );
   await act(async () => pickButton()!.click());
   await settle();
@@ -175,8 +175,9 @@ it("says to connect Google first when it isn't", async () => {
     "Connect Google Sheets and Drive first: Settings → Connected apps.",
   );
   expect(
-    [...document.querySelectorAll("button")].some((button) =>
-      button.textContent?.endsWith("Pick a Google Sheet"),
+    [...document.querySelectorAll("button")].some(
+      (button) =>
+        button.querySelector("strong")?.textContent === "Google Sheet",
     ),
   ).toBe(false);
 });

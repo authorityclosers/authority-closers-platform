@@ -14,7 +14,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import date
 from typing import Any, Literal
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, unquote
 from uuid import UUID
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
@@ -1325,9 +1325,11 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
     async def preview(request: Request, response: Response) -> ImportPreview:
         no_query(request)
         name = _FILE_NAME.sub("", request.headers.get("x-file-name", "leads.csv"))[:200] or "leads"
+        # An Excel file's sheet picked by name (URL-encoded); none: the first with leads.
+        sheet = unquote(request.headers.get("x-sheet", ""))[:100].strip() or None
         data = await _body(request, MAX_FILE_BYTES)
         async with desk_for(request, response, write=True) as lead_desk:
-            return await Intake(lead_desk, app_url=app_url()).preview(name, data)
+            return await Intake(lead_desk, app_url=app_url()).preview(name, data, sheet)
 
     @router.post("/imports", response_model=ImportResult)
     async def commit_import(

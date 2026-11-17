@@ -54,6 +54,7 @@ from ac_platform.lead_desk.contracts import (
     OwnerWord,
     ReasonCount,
     SeedCommand,
+    SheetTab,
     Sources,
     SourceView,
     StageWord,
@@ -381,7 +382,9 @@ class Intake:
 
     # ----- files -----------------------------------------------------------------
 
-    async def preview(self, file_name: str, data: bytes) -> ImportPreview:
+    async def preview(
+        self, file_name: str, data: bytes, sheet_name: str | None = None
+    ) -> ImportPreview:
         if not data:
             raise DeskError(422, "The file is empty.")
         if len(data) > MAX_FILE_BYTES:
@@ -389,7 +392,7 @@ class Intake:
                 413, "Files can be up to 900 KB (about 5,000 leads). Split bigger files."
             )
         try:
-            sheet = read_file(file_name, data)
+            sheet = read_file(file_name, data, sheet_name)
         except CaptureError as error:
             raise DeskError(422, str(error)) from None
         mapping = suggest_mapping(sheet.headers)
@@ -436,6 +439,10 @@ class Intake:
             ),
             bad_numbers=sum(1 for item in found if unreadable_number(item)),
             history_mapping=suggest_history(sheet.headers, mapping),
+            sheets=tuple(
+                SheetTab(name=tab.name, rows=tab.rows, columns=tab.columns) for tab in sheet.tabs
+            ),
+            sheet=sheet.tab,
         )
 
     async def commit(

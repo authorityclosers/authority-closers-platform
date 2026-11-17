@@ -59,7 +59,7 @@ import { ImportDialog } from "./capture-dialogs";
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-// Competitor teardown 5 (1 Nov 2026): the import in four steps, File, Columns,
+// Competitor teardown 5 (1 Nov 2026): the import in four steps, File, Match columns,
 // Check and Assign, with the check before anything is written. A file
 // whose columns didn't all match starts on Columns, each with three of its
 // values. Made-up people only.
@@ -137,9 +137,9 @@ const current = (dialog: HTMLElement) =>
   dialog.querySelector('[aria-label="Import steps"] [aria-current="step"]')
     ?.textContent;
 
-it("walks File, Columns, Check and Assign, and imports with the choices made", async () => {
+it("walks File, Match columns, Check and Assign, and imports with the choices made", async () => {
   const dialog = await mount();
-  expect(current(dialog)).toBe("2Columns");
+  expect(current(dialog)).toBe("2Match columns");
   // Three of each matched column's values under it.
   expect(dialog.querySelector('[data-samples="phone"]')?.textContent).toBe(
     "98760 75001 · call after 6 · 98760 75003",
@@ -210,7 +210,7 @@ it("walks File, Columns, Check and Assign, and imports with the choices made", a
   expect(dialog.querySelector('[aria-label="Import steps"]')).toBeNull();
 });
 
-it("goes back from Columns to choose another file", async () => {
+it("goes back from Match columns to choose another file", async () => {
   const dialog = await mount();
   await act(async () => button(dialog, "Back")!.click());
   expect(current(dialog)).toBe("1File");
