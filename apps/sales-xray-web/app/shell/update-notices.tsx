@@ -24,6 +24,7 @@ import {
   type UpdateNotification,
 } from "./updates-client";
 import type { useShellUpdates } from "./updates-store";
+import { ringNewLead } from "./new-lead-ring";
 
 type Updates = ReturnType<typeof useShellUpdates>;
 
@@ -33,6 +34,7 @@ export const ACTIVITY_BANNER_MS = 8_000;
 const VERB: Record<UpdateNotification["kind"], string> = {
   report_ready: "Open report",
   lead_assigned: "Open lead",
+  lead_new: "Open lead",
   analysis_paused: "See why",
   invite_received: "Open invite",
   bug_solved: "Open",
@@ -88,6 +90,12 @@ function raiseNewest(to: Raiser, entries: readonly UpdateNotification[]) {
   const id = `event:${to.contextKey}:${event.id}`;
   to.active.add(id);
   const href = event.href;
+  // A new lead that came in by itself rings and, in a background tab, pops on
+  // the computer (owner, 17 Nov 2026).
+  if (event.kind === "lead_new")
+    ringNewLead(event.id, event.title, event.body, () => {
+      if (isRelativeUpdateHref(href)) to.openEvent(href);
+    });
   raiseAlert({
     id,
     level: "normal",

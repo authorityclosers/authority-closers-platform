@@ -1,4 +1,4 @@
-"""admin.py arguments and runtime gates; no runtime secrets or data."""
+"""admin.py arguments, command groups and runtime gates; no runtime secrets or data."""
 
 import importlib.util
 from pathlib import Path
@@ -57,7 +57,7 @@ def arguments(
         argv.append("--allow-production")
     if apply:
         argv += ["--apply", "--snapshot-reference", "snapshot-fixture"]
-    return tool._parser().parse_args(argv)
+    return tool.parse(argv)
 
 
 def test_commands_take_only_their_own_options_and_names_are_normalised():
@@ -129,3 +129,124 @@ def test_a_refusal_prints_one_fixed_line(monkeypatch, capsys):
     out = capsys.readouterr()
     assert "Private Person" not in out.out + out.err
     assert "refused or failed" in out.err
+
+
+def grouped(*argv, write=True, environment="development"):
+    given = [*argv, "--environment", environment]
+    if argv[:2] not in (("workspaces", "list"), ("workspaces", "create")):
+        given += ["--tenant-id", str(uuid4())]
+    if write:
+        given += [
+            "--actor-person-id",
+            str(uuid4()),
+            "--approver",
+            "owner-chat-20261117",
+            "--issue",
+            "orch:admin-cli-20261117",
+        ]
+    return tool.parse(given)
+
+
+def test_every_group_and_command_is_handled_and_flat_names_still_work():
+    for group, names in tool.COMMANDS.items():
+        for name in names:
+            assert (group, name) in tool.HANDLERS
+    legacy = arguments("rename-person")
+    assert (legacy.group, legacy.command, legacy.legacy) == ("people", "rename", "rename-person")
+    assert legacy.json is True
+    assert arguments("reassign-leads", extra=("--to-person-id", str(uuid4()))).group == "leads"
+    assert grouped("people", "list", write=False).json is False
+
+
+def test_reads_need_no_approver_and_writes_need_one():
+    for argv in (
+        ("people", "list"),
+        ("workspaces", "list"),
+        ("workspaces", "show"),
+        ("workspaces", "switches"),
+        ("leads", "list"),
+    ):
+        args = grouped(*argv, write=False)
+        assert not tool._writes(args)
+        tool._check_command(args)
+    args = grouped("workspaces", "switches", "--stage", "on", write=False)
+    assert tool._writes(args)
+    with pytest.raises(OrganisationCommandError, match="approver"):
+        tool._check_command(args)
+    tool._check_command(grouped("workspaces", "switches", "--stage", "on"))
+    with pytest.raises(OrganisationCommandError):
+        grouped("workspaces", "switches", "--stage", "maybe")
+
+
+def test_lead_selections_are_ids_or_a_filter():
+    lead = str(uuid4())
+    tool._check_command(grouped("leads", "archive", "--lead-id", lead))
+    tool._check_command(grouped("leads", "bin", "--where-step", "new", "--where-side", "cold"))
+    for argv in (
+        ("leads", "archive"),
+        ("leads", "archive", "--lead-id", lead, "--where-step", "new"),
+        ("leads", "assign", "--lead-id", lead),
+        ("leads", "assign", "--lead-id", lead, "--rules", "--to-person-id", lead),
+        (
+            "leads",
+            "reassign",
+            "--person-id",
+            lead,
+            "--to-person-id",
+            str(uuid4()),
+            "--lead-id",
+            lead,
+        ),
+    ):
+        with pytest.raises(OrganisationCommandError):
+            tool._check_command(grouped(*argv))
+    tool._check_command(grouped("leads", "assign", "--lead-id", lead, "--rules"))
+    with pytest.raises(OrganisationCommandError):
+        tool._check_command(grouped("workspaces", "domains"))
+    with pytest.raises(OrganisationCommandError):
+        tool._check_command(grouped("workspaces", "domains", "--clear", "--auto-join"))
+    tool._check_command(grouped("workspaces", "domains", "--domain", "example.com"))
+    with pytest.raises(OrganisationCommandError):
+        grouped("people", "set-role", "--person-id", lead, "--role", "owner")
+    assert grouped("people", "set-role", "--person-id", lead, "--role", "viewer").role == "viewer"
+
+
+def test_a_rerun_gets_the_same_command_id_and_a_new_change_another():
+    tenant, person, actor = str(uuid4()), str(uuid4()), str(uuid4())
+
+    def made(role):
+        args = tool.parse(
+            [
+                "people",
+                "set-role",
+                "--environment",
+                "staging",
+                "--tenant-id",
+                tenant,
+                "--person-id",
+                person,
+                "--role",
+                role,
+                "--actor-person-id",
+                actor,
+                "--approver",
+                "a",
+                "--issue",
+                "b",
+            ]
+        )
+        return tool._command_id(args, tool._intent(args))
+
+    assert made("admin") == made("admin")
+    assert made("admin") != made("member")
+    given = uuid4()
+    args = arguments(command_id=given)
+    assert tool._command_id(args, tool._intent(args)) == given
+
+
+def test_receipts_read_as_lines_and_hide_lead_names_and_emails():
+    lines = tool._words(
+        {"status": "read", "people": [{"person_id": "p", "email": tool._mask("asha@example.com")}]}
+    )
+    assert lines == ["status: read", "people:", "  - person_id=p, email=a***@example.com"]
+    assert tool._mask(None) is None

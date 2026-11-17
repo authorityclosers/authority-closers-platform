@@ -65,6 +65,9 @@ Base address: ``https://<sales x-ray host>/v1/api``.
                             integrations/analysis_time.py)
 - GET  /analysis-time/team  the same, and what each member used of it (calls:read; an
                             organisation's key, or its owners and admins)
+- GET  /workspace, /team/invites; POST /team/invites, /team/invites/{id}/resend and /revoke,
+  /team/{person_id}/role and /remove, /leads/shelf, /leads/reassign: the admin primitives
+  (team:read, team:manage, leads:archive, leads:assign; integrations/admin_api.py)
 
 Who sees what:
 - An API key, or a token from an app an organisation connected, sees what an
@@ -1573,6 +1576,10 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
             return done(await reader.undo_change(change_id, body or UndoBody()))
 
     application.include_router(router)
+    # The admin primitives on the same address (owner, 17 Nov 2026; integrations/admin_api.py).
+    from ac_platform.integrations.admin_api import install_admin_api
+
+    install_admin_api(application, ctx)
     # The importer files waiting chunks in the background (servers only).
     lead_imports.attach(
         application,

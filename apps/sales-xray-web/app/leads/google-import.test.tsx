@@ -17,6 +17,18 @@ vi.mock("./google-files-client", async (original) => ({
   readGoogleFiles: calls.read,
   previewGoogleSheet: calls.preview,
 }));
+// The check of the file's rows (I3): nothing to report.
+vi.mock("./leads-client", async (original) => ({
+  ...(await original<typeof import("./leads-client")>()),
+  checkFile: async () => ({
+    stages: [],
+    unmatched_stage: null,
+    owners: [],
+    owned_new: 0,
+    columns: [],
+  }),
+  readTeam: async () => ({ reps: [] }),
+}));
 vi.mock("next/link", () => ({
   default: ({
     href,
@@ -120,6 +132,20 @@ it("opens the Picker when it arrived for a Google Sheet, and previews the Sheet 
   await mount(true);
   expect(calls.pick).toHaveBeenCalledOnce();
   expect(calls.preview).toHaveBeenCalledWith("sheet-1");
+  // Match columns first (I2-A), then Check with Import.
+  await act(async () =>
+    [...document.querySelectorAll("button")]
+      .find((button) => button.textContent === "Continue to check leads")!
+      .click(),
+  );
+  await settle();
+  // Then Assign, where Import is (I4-A).
+  await act(async () =>
+    [...document.querySelectorAll("button")]
+      .find((button) => button.textContent === "Continue to assign")!
+      .click(),
+  );
+  await settle();
   expect(
     [...document.querySelectorAll("button")].some(
       (button) => button.textContent === "Import 2 leads",
@@ -132,8 +158,8 @@ it("offers the Picker beside the file when Google is connected", async () => {
   calls.pick.mockResolvedValue(null);
   await mount(false);
   expect(calls.pick).not.toHaveBeenCalled();
-  const button = [...document.querySelectorAll("button")].find((item) =>
-    item.textContent?.endsWith("Pick a Google Sheet"),
+  const button = [...document.querySelectorAll("button")].find(
+    (item) => item.querySelector("strong")?.textContent === "Google Sheet",
   );
   expect(button).toBeDefined();
   await act(async () => button!.click());
@@ -150,8 +176,8 @@ it("says where to connect Google when the Picker finds it gone", async () => {
   );
   await mount(false);
   const pickButton = () =>
-    [...document.querySelectorAll("button")].find((item) =>
-      item.textContent?.endsWith("Pick a Google Sheet"),
+    [...document.querySelectorAll("button")].find(
+      (item) => item.querySelector("strong")?.textContent === "Google Sheet",
     );
   await act(async () => pickButton()!.click());
   await settle();
@@ -175,8 +201,9 @@ it("says to connect Google first when it isn't", async () => {
     "Connect Google Sheets and Drive first: Settings → Connected apps.",
   );
   expect(
-    [...document.querySelectorAll("button")].some((button) =>
-      button.textContent?.endsWith("Pick a Google Sheet"),
+    [...document.querySelectorAll("button")].some(
+      (button) =>
+        button.querySelector("strong")?.textContent === "Google Sheet",
     ),
   ).toBe(false);
 });

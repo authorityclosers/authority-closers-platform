@@ -7,6 +7,7 @@
  */
 
 import {
+  Archive,
   ChartNoAxesCombined,
   FlaskConical,
   Import,
@@ -14,6 +15,7 @@ import {
   Plug,
   Route,
   Split,
+  Trash2,
   UsersRound,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -38,12 +40,17 @@ const ICONS: Record<string, ReactNode> = {
   notes: <NotebookPen size={20} />,
   import: <Import size={20} />,
   test: <FlaskConical size={20} />,
+  archived: <Archive size={20} />,
+  bin: <Trash2 size={20} />,
 };
 
 const GROUPS = [
   { label: "Your work", keys: ["notes"] },
   { label: "Set up leads", keys: ["sources", "stages", "team"] },
-  { label: "Manage leads", keys: ["share", "import", "numbers", "test"] },
+  {
+    label: "Manage leads",
+    keys: ["share", "import", "numbers", "test", "archived", "bin"],
+  },
 ];
 
 export function LeadsMenu({

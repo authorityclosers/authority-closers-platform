@@ -32,7 +32,14 @@ from fastapi.responses import JSONResponse
 
 from ac_platform.ask_dipak import integration as ask_dipak
 from ac_platform.http.routes import RouteContext
-from ac_platform.integrations import coaching_api, lead_imports, recordings_api, reports_api, tiers
+from ac_platform.integrations import (
+    admin_api,
+    coaching_api,
+    lead_imports,
+    recordings_api,
+    reports_api,
+    tiers,
+)
 from ac_platform.integrations.api_http import (
     ApiError,
     AssignBody,
@@ -650,6 +657,9 @@ TOOLS: tuple[dict[str, Any], ...] = (
     *ask_dipak.TOOLS,
     # A seller's call uploaded by an organisation's key (integrations/recordings_api.py).
     *recordings_api.TOOLS,
+    # The admin primitives: the workspace, invites and roles, Archive, Bin and reassign
+    # (integrations/admin_api.py; owner, 17 Nov 2026).
+    *admin_api.TOOLS,
 )
 _BY_NAME = {tool["name"]: tool for tool in TOOLS}
 
@@ -1005,6 +1015,8 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
         return await ask_dipak.run_tool(reader, name, args)
     if name in recordings_api.NAMES:
         return await recordings_api.run_tool(reader, name, args)
+    if name in admin_api.NAMES:
+        return await admin_api.run_tool(reader, name, args)
     raise KeyError(name)
 
 

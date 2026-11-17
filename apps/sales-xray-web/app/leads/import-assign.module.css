@@ -1,0 +1,195 @@
+/* The import's Assign step (owner's pick I4-A, 17 Nov 2026, "more colourful"; study 01
+   §5 S3). Tokens only: each summary line has its own tinted icon tile from the Home
+   tones. Phone first: the choices, then the card; from 900 px side by side (680 · 380). */
+
+.layout {
+  display: grid;
+  gap: 16px;
+}
+
+.title {
+  margin: 0;
+  font: var(--sx-text-title);
+  font-size: var(--sx-text-xl);
+}
+
+.muted {
+  margin: 0;
+  color: var(--sx-muted);
+  font: var(--sx-text-secondary);
+}
+
+.choices {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.owners {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-tone-info-soft, var(--sx-accent-soft));
+}
+
+.owners p {
+  display: grid;
+  margin: 0;
+  font: var(--sx-text-label);
+}
+
+.owners small {
+  color: var(--sx-ink-2);
+  font: var(--sx-text-secondary);
+}
+
+.card {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.cardTitle {
+  margin: 0 0 6px;
+  font: var(--sx-text-heading);
+  font-weight: 650;
+}
+
+.lines {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lines li {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.lines li + li {
+  border-top: 1px solid var(--sx-line);
+}
+
+.icon {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  place-items: center;
+  border-radius: var(--sx-radius-sm);
+}
+
+.icon[data-tone="good"] {
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-tone-good);
+}
+
+.icon[data-tone="info"] {
+  background: var(--sx-tone-info-soft);
+  color: var(--sx-tone-info);
+}
+
+.icon[data-tone="action"] {
+  background: var(--sx-tone-action-soft);
+  color: var(--sx-tone-action);
+}
+
+.icon[data-tone="calls"] {
+  background: var(--sx-tone-calls-soft);
+  color: var(--sx-tone-calls);
+}
+
+.icon[data-tone="muted"] {
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+}
+
+.icon[data-tone="problem"] {
+  background: var(--sx-tone-problem-soft);
+  color: var(--sx-tone-problem);
+}
+
+.text {
+  display: grid;
+  min-width: 0;
+  font: var(--sx-text-body);
+}
+
+.text strong {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.text small {
+  color: var(--sx-muted);
+  font: var(--sx-text-secondary);
+}
+
+.text[data-tone="problem"] {
+  color: var(--sx-tone-problem);
+}
+
+.action {
+  display: grid;
+  margin-top: 10px;
+}
+
+.action > button {
+  min-height: 52px;
+  border-radius: var(--sx-radius-pill);
+  font-size: var(--sx-text-md);
+}
+
+.footnote {
+  margin: 4px 0 0;
+  color: var(--sx-muted);
+  font: var(--sx-text-meta);
+  text-align: center;
+}
+
+.phoneLine {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font: var(--sx-text-secondary);
+  text-align: center;
+}
+
+@media (min-width: 900px) {
+  .title {
+    font-size: var(--sx-text-2xl);
+  }
+
+  .layout {
+    grid-template-columns: minmax(0, 1fr) 380px;
+    align-items: start;
+    gap: 24px;
+  }
+
+  .layout > .head {
+    grid-column: 1 / -1;
+  }
+
+  .card {
+    position: sticky;
+    top: 0;
+  }
+
+  .phoneLine {
+    display: none;
+  }
+}

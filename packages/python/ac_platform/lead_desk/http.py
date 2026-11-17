@@ -14,7 +14,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import date
 from typing import Any, Literal
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, unquote
 from uuid import UUID
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
@@ -33,17 +33,21 @@ from ac_platform.identity.models import Person
 from ac_platform.integrations.ai_writes import IN_APP, AiWrites, AiWritesSettings
 from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk import (
+    bulk_jobs,
     capture_guard,
     choices,
     digest_push,
     due_soon,
     duplicate_queue,
     finder,
+    load,
     merging,
     notify_prefs,
     owner_alerts,
     push,
     revenue_push,
+    saved_views,
+    shelf,
     simulation,
     spool,
 )
@@ -56,7 +60,11 @@ from ac_platform.lead_desk.contracts import (
     AlertText,
     Badge,
     BulkDone,
+    BulkJob,
+    BulkJobCommand,
+    BulkJobs,
     BulkLeads,
+    BulkUndone,
     CallOutcomes,
     CallOutcomesResult,
     CallPrivacy,
@@ -95,6 +103,7 @@ from ac_platform.lead_desk.contracts import (
     LeadSince,
     LeadSort,
     LeadsPerDay,
+    LeadsShelved,
     Me,
     MergeLeads,
     MergeView,
@@ -119,16 +128,24 @@ from ac_platform.lead_desk.contracts import (
     RecordingCall,
     RecordingCommand,
     RepRules,
+    RestoreLeads,
     ResultUndo,
     RevenueBreakdownView,
     RevenueSettingsCommand,
     RevenueTargetsCommand,
     RevenueTargetsView,
     RevenueView,
+    SavedView,
+    SavedViewCommand,
+    SavedViewDelete,
+    SavedViewEdit,
+    SavedViews,
     SearchResult,
     SeedCommand,
+    SellerLoads,
     SellerTargets,
     SettingsCommand,
+    ShelveLeads,
     SimulationPick,
     Soon,
     Sources,
@@ -302,11 +319,13 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         older: Literal["only"] | None = None,
         since: date | None = None,
         until: date | None = None,
+        shelf: Literal["archived", "bin"] | None = None,
     ) -> LeadPage:
         no_query(
             request,
             frozenset(
                 {
+                    "shelf",
                     "scope",
                     "stage",
                     "search",
@@ -362,6 +381,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 when=when,
                 since=since,
                 until=until,
+                shelf=shelf,
             )
 
     @router.get("/sides", response_model=SideNumbers, response_model_by_alias=True)
@@ -519,6 +539,121 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await merging.unmerge(lead_desk, merge_id, command)
+
+    @router.get("/team/load", response_model=SellerLoads, response_model_by_alias=True)
+    async def seller_loads(
+        request: Request, response: Response, side: Side = "inbound"
+    ) -> SellerLoads:
+        """Each seller's open, late, due-today and untouched leads on one side (load.py)."""
+        no_query(request, frozenset({"side"}))
+        async with desk_for(request, response) as lead_desk:
+            return await load.seller_loads(lead_desk, side)
+
+    @router.get("/views", response_model=SavedViews, response_model_by_alias=True)
+    async def saved_views_list(
+        request: Request, response: Response, counts: bool = False
+    ) -> SavedViews:
+        """The team's saved views, then my own; ``counts=true`` adds each view's number."""
+        no_query(request, frozenset({"counts"}))
+        async with desk_for(request, response) as lead_desk:
+            return await saved_views.listed(lead_desk, counts=counts)
+
+    @router.post("/views", response_model=SavedView, response_model_by_alias=True, status_code=201)
+    async def save_view(
+        command: SavedViewCommand, request: Request, response: Response
+    ) -> SavedView:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await saved_views.create(lead_desk, command)
+
+    @router.put("/views/{view_id}", response_model=SavedView, response_model_by_alias=True)
+    async def edit_view(
+        view_id: UUID, command: SavedViewEdit, request: Request, response: Response
+    ) -> SavedView:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await saved_views.edit(lead_desk, view_id, command)
+
+    @router.post("/views/{view_id}/delete", response_model=SavedViews, response_model_by_alias=True)
+    async def delete_view(
+        view_id: UUID, command: SavedViewDelete, request: Request, response: Response
+    ) -> SavedViews:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await saved_views.delete(lead_desk, view_id, command)
+
+    @router.post("/leads/bulk-jobs", response_model=BulkJob, response_model_by_alias=True)
+    async def run_bulk_job(
+        command: BulkJobCommand, request: Request, response: Response
+    ) -> BulkJob:
+        """A bulk change on a frozen selection (ids, or a list's filter), undoable for 30
+        minutes (bulk_jobs.py)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await bulk_jobs.run(lead_desk, command)
+
+    @router.get("/leads/bulk-jobs", response_model=BulkJobs, response_model_by_alias=True)
+    async def bulk_job_history(request: Request, response: Response, limit: int = 20) -> BulkJobs:
+        """The workspace's recent bulk changes, newest first: the action history."""
+        no_query(request, frozenset({"limit"}))
+        async with desk_for(request, response) as lead_desk:
+            return await bulk_jobs.history(lead_desk, limit)
+
+    @router.get("/leads/bulk-jobs/{job_id}", response_model=BulkJob, response_model_by_alias=True)
+    async def bulk_job(job_id: UUID, request: Request, response: Response) -> BulkJob:
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await bulk_jobs.one_job(lead_desk, job_id)
+
+    @router.post(
+        "/leads/bulk-jobs/{job_id}/undo",
+        response_model=BulkUndone,
+        response_model_by_alias=True,
+    )
+    async def undo_bulk_job(job_id: UUID, request: Request, response: Response) -> BulkUndone:
+        """Undo a bulk change: every lead not changed since goes back; once per job."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await bulk_jobs.undo(lead_desk, job_id)
+
+    @router.post("/leads/archive", response_model=LeadsShelved, response_model_by_alias=True)
+    async def archive_leads(
+        command: ShelveLeads, request: Request, response: Response
+    ) -> LeadsShelved:
+        """Owners, admins and managers archive leads: off every list, restorable (shelf.py)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await shelf.move(lead_desk, "archive", command.command_id, command.lead_ids)
+
+    @router.post("/leads/bin", response_model=LeadsShelved, response_model_by_alias=True)
+    async def bin_leads(command: ShelveLeads, request: Request, response: Response) -> LeadsShelved:
+        """Owners and admins delete leads to the Bin: restorable for 30 days (shelf.py)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await shelf.move(lead_desk, "bin", command.command_id, command.lead_ids)
+
+    @router.post("/leads/restore", response_model=LeadsShelved, response_model_by_alias=True)
+    async def restore_leads(
+        command: RestoreLeads, request: Request, response: Response
+    ) -> LeadsShelved:
+        """Bring leads back from Archived (managers too) or the Bin (owners and admins)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await shelf.move(
+                lead_desk,
+                "restore_archive" if command.from_ == "archive" else "restore_bin",
+                command.command_id,
+                command.lead_ids,
+            )
+
+    @router.post("/leads/purge", response_model=LeadsDeleted, response_model_by_alias=True)
+    async def purge_leads(
+        command: DeleteLeads, request: Request, response: Response
+    ) -> LeadsDeleted:
+        """Owners and admins delete leads in the Bin for good now (the Bin's own purge)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await shelf.purge(lead_desk, command.command_id, command.lead_ids)
 
     @router.post("/leads/delete", response_model=LeadsDeleted, response_model_by_alias=True)
     async def delete_leads(
@@ -1190,9 +1325,11 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
     async def preview(request: Request, response: Response) -> ImportPreview:
         no_query(request)
         name = _FILE_NAME.sub("", request.headers.get("x-file-name", "leads.csv"))[:200] or "leads"
+        # An Excel file's sheet picked by name (URL-encoded); none: the first with leads.
+        sheet = unquote(request.headers.get("x-sheet", ""))[:100].strip() or None
         data = await _body(request, MAX_FILE_BYTES)
         async with desk_for(request, response, write=True) as lead_desk:
-            return await Intake(lead_desk, app_url=app_url()).preview(name, data)
+            return await Intake(lead_desk, app_url=app_url()).preview(name, data, sheet)
 
     @router.post("/imports", response_model=ImportResult)
     async def commit_import(
@@ -1313,6 +1450,8 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         return {"received": outcome != "skipped", "outcome": outcome, "lead_id": lead_id}
 
     application.include_router(router)
+    # The Bin's 30-day purge (shelf.py), hourly.
+    shelf.attach(application, ctx.sessions, settings.environment)
     push.attach(application, ctx.sessions, settings.environment)
     # Leads a release's hold kept for later (lead_desk/spool.py), filed every minute.
     spool.attach(application, ctx.sessions, settings.environment, app_url=app_url())

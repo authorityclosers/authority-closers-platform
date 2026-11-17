@@ -1,0 +1,490 @@
+/* Matching a file's columns (owner's picks I2-A, I2-B, I2-C, 17 Nov 2026; study 01
+   §5 S2). Tokens only. Phone first: stacked cards and one question at a time; from
+   900 px the pair rows (file column 400 · arrow 40 · field 340 · state) and the sheet. */
+
+.top {
+  display: grid;
+  gap: 12px;
+}
+
+.title {
+  margin: 0;
+  font: var(--sx-text-title);
+  font-size: var(--sx-text-xl);
+}
+
+.muted {
+  margin: 0;
+  color: var(--sx-muted);
+  font: var(--sx-text-secondary);
+}
+
+/* "8 matched · 2 to check · 1 not imported". */
+.counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.counts span {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: var(--sx-radius-pill);
+  font: var(--sx-text-label);
+  font-variant-numeric: tabular-nums;
+}
+
+.counts [data-state="matched"] {
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.counts [data-state="check"] {
+  border: 1px solid color-mix(in oklab, var(--sx-warn) 60%, transparent);
+  background: color-mix(in oklab, var(--sx-warn) 14%, transparent);
+  color: var(--sx-ink);
+}
+
+.counts [data-state="skipped"] {
+  background: var(--sx-fill);
+  color: var(--sx-muted);
+}
+
+/* ---- I2-A pairs ---- */
+
+.pairs {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.pair[data-state="check"] {
+  box-shadow: inset 3px 0 0 var(--sx-warn);
+}
+
+.pair[data-state="skipped"] .from strong,
+.pair[data-state="skipped"] .samples {
+  color: var(--sx-muted);
+}
+
+.from,
+.to,
+.status {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.inFile {
+  color: var(--sx-muted);
+  font: var(--sx-text-meta);
+}
+
+.from strong {
+  font: var(--sx-text-heading);
+  font-weight: 600;
+}
+
+.samples {
+  overflow: hidden;
+  color: var(--sx-muted);
+  font: var(--sx-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arrowSide {
+  display: none;
+  color: var(--sx-muted);
+}
+
+.arrowDown {
+  justify-self: center;
+  color: var(--sx-muted);
+}
+
+.pick {
+  width: 100%;
+}
+
+.status small {
+  color: var(--sx-muted);
+  font: var(--sx-text-meta);
+}
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--sx-text-label);
+}
+
+.state[data-state="matched"] {
+  color: var(--sx-accent);
+}
+
+.state[data-state="check"] {
+  color: var(--sx-ink);
+}
+
+.state[data-state="check"] svg {
+  color: var(--sx-warn);
+}
+
+.state[data-state="skipped"] {
+  color: var(--sx-muted);
+}
+
+/* A stage or owner column's words: "New → New Lead", "Call back → Choose a stage". */
+.values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.values li {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  font: var(--sx-text-secondary);
+}
+
+.values li[data-open] {
+  border-color: color-mix(in oklab, var(--sx-warn) 60%, transparent);
+  background: color-mix(in oklab, var(--sx-warn) 12%, transparent);
+}
+
+.word {
+  font-weight: 600;
+}
+
+.becomes {
+  padding-inline-end: 8px;
+  color: var(--sx-ink-2);
+}
+
+.valuePick {
+  min-width: 0;
+}
+
+/* ---- I2-B sheet ---- */
+
+.sheetWrap {
+  overflow: auto;
+  max-height: min(60vh, 520px);
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.sheet {
+  border-collapse: separate;
+  border-spacing: 0;
+  font: var(--sx-text-secondary);
+}
+
+.sheet th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  min-width: 132px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--sx-line);
+  background: var(--sx-surface);
+  text-align: start;
+  vertical-align: bottom;
+}
+
+.label {
+  margin-bottom: 6px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-accent-soft);
+}
+
+.label[data-state="check"] {
+  background: color-mix(in oklab, var(--sx-warn) 18%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklab, var(--sx-warn) 60%, transparent);
+}
+
+.label[data-state="skipped"] {
+  background: var(--sx-fill);
+}
+
+.chipPick {
+  width: 100%;
+}
+
+.head {
+  display: block;
+  color: var(--sx-ink-2);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sheet td {
+  max-width: 200px;
+  overflow: hidden;
+  padding: 10px;
+  border-bottom: 1px solid var(--sx-line);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet td[data-state="check"] {
+  background: color-mix(in oklab, var(--sx-warn) 8%, transparent);
+}
+
+.sheet td[data-state="skipped"] {
+  color: var(--sx-muted);
+}
+
+/* ---- I2-C phone ---- */
+
+.matched {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-accent-soft);
+}
+
+.matched p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font: var(--sx-text-label);
+}
+
+.matched p svg {
+  flex: none;
+  color: var(--sx-accent);
+}
+
+.matched p strong {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.link {
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: var(--sx-text-label);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chips li {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid color-mix(in oklab, var(--sx-accent) 30%, transparent);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  font: var(--sx-text-meta);
+  font-weight: 500;
+}
+
+.qCount {
+  margin: 4px 0 0;
+  color: var(--sx-muted);
+  font: var(--sx-text-secondary);
+}
+
+.question {
+  display: grid;
+  gap: 12px;
+  padding: 18px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.question h3 {
+  margin: 0;
+  font: var(--sx-text-heading);
+  font-weight: 600;
+}
+
+.answers {
+  display: grid;
+  gap: 8px;
+}
+
+.answer {
+  display: flex;
+  min-height: 52px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px 8px;
+  padding: 6px 14px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: var(--sx-text-label);
+  font-size: var(--sx-text-md);
+  cursor: pointer;
+}
+
+.answer small {
+  flex-basis: 100%;
+  color: var(--sx-muted);
+  font: var(--sx-text-meta);
+  text-align: center;
+}
+
+.answer[aria-pressed="true"] {
+  border: 1.5px solid var(--sx-accent);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.answerPick {
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px dashed var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  font: var(--sx-text-secondary);
+}
+
+.stageChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: var(--sx-text-label);
+  cursor: pointer;
+}
+
+.chip[aria-pressed="true"] {
+  border: 1.5px solid var(--sx-accent);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.skipFor {
+  justify-self: start;
+}
+
+.answer:focus-visible,
+.chip:focus-visible,
+.link:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 2px;
+}
+
+.foot {
+  margin: 0;
+  color: var(--sx-muted);
+  font: var(--sx-text-secondary);
+}
+
+.foot[data-warn] {
+  color: var(--sx-ink);
+}
+
+.advanced {
+  justify-self: start;
+}
+
+@media (min-width: 900px) {
+  .top {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+
+  .title {
+    font-size: var(--sx-text-2xl);
+  }
+
+  .pairs {
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid var(--sx-line);
+    border-radius: var(--sx-radius-lg);
+    background: var(--sx-surface);
+  }
+
+  .pair {
+    grid-template-columns: minmax(0, 400px) 40px minmax(0, 340px) minmax(
+        140px,
+        1fr
+      );
+    align-items: start;
+    gap: 0 12px;
+    padding: 14px 20px;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .pair + .pair {
+    border-top: 1px solid var(--sx-line);
+  }
+
+  .inFile {
+    display: none;
+  }
+
+  .arrowSide {
+    display: block;
+    margin-top: 12px;
+  }
+
+  .arrowDown {
+    display: none;
+  }
+
+  .status {
+    padding-top: 10px;
+  }
+}

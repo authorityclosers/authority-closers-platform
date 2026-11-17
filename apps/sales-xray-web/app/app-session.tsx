@@ -38,6 +38,8 @@ const SHELL_ROUTES = new Set([
   "/leads",
   // Notes, all written on the seller's leads (owner, 25 Oct 2026).
   "/leads/notes",
+  // Archived and the Bin, each with Restore (owner's M3-A, 17 Nov 2026).
+  "/leads/shelf",
   // An owner alert's list and the day's summary (competitor teardown 19 and
   // 20, 1 Nov 2026); without them they stayed a skeleton, as Performance did.
   "/leads/alerts",

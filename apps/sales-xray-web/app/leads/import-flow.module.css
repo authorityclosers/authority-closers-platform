@@ -1,0 +1,697 @@
+/* Lead import as a full-page workspace (owner's picks I1-A and I1-B, 17 Nov 2026;
+   study 01 §5 S1). Tokens only: light and dark come from them. Phone first: full
+   screen with a 4-part bar and the button fixed at the bottom; from 900 px a wide card
+   (max 1104) over Leads with the numbered steps. */
+
+.flow {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: var(--sx-paper);
+  color: var(--sx-ink);
+  font: var(--sx-text-body);
+}
+
+.flow,
+.flow * {
+  box-sizing: border-box;
+}
+
+.flow::backdrop {
+  background: var(--sx-scrim);
+}
+
+.frame {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Top bar: back, "Import leads", "1 of 4" on the phone, ✕ on a computer. */
+.head {
+  display: flex;
+  min-height: 56px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 4px;
+  padding-top: max(4px, env(safe-area-inset-top));
+}
+
+.icon {
+  display: inline-grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink);
+  cursor: pointer;
+}
+
+.icon:hover {
+  background: var(--sx-fill-soft);
+}
+
+.icon:focus-visible,
+.way:focus-visible,
+.sheet:focus-visible,
+.textLink:focus-visible,
+.sample:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 2px;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: var(--sx-text-title);
+  font-size: var(--sx-text-xl);
+}
+
+.count {
+  color: var(--sx-muted);
+  font: var(--sx-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.close {
+  display: none;
+}
+
+/* Numbered steps (computer). */
+.steps {
+  display: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Four-part bar (phone). */
+.bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 6px;
+  padding: 0 16px 12px;
+}
+
+.bar i {
+  height: 4px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-line);
+  transition: background var(--sx-dur-base, 180ms) cubic-bezier(0.2, 0, 0, 1);
+}
+
+.bar i[data-on] {
+  background: var(--sx-accent);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.content {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  max-width: 1104px;
+  margin: 0 auto;
+  padding: 8px 16px 24px;
+}
+
+.foot {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--sx-line);
+  background: var(--sx-surface);
+}
+
+/* Phone: one fixed full-width pill (the second button); Back/Cancel beside it. */
+.foot > :last-child {
+  min-height: 48px;
+  flex: 1;
+  border-radius: var(--sx-radius-pill);
+}
+
+.foot > :first-child:not(:last-child) {
+  min-height: 48px;
+  border-radius: var(--sx-radius-pill);
+}
+
+/* ---- S1 File ---- */
+
+.start {
+  display: grid;
+  gap: 16px;
+}
+
+.intro {
+  display: grid;
+  gap: 4px;
+}
+
+.hero {
+  margin: 0;
+  font: var(--sx-text-title);
+  font-size: var(--sx-text-xl);
+  letter-spacing: var(--sx-tracking-title, -0.01em);
+}
+
+.muted {
+  margin: 0;
+  color: var(--sx-muted);
+  font: var(--sx-text-secondary);
+}
+
+.h3 {
+  margin: 0 0 8px;
+  font: var(--sx-text-heading);
+  font-weight: 600;
+}
+
+.ways {
+  display: grid;
+  gap: 12px;
+}
+
+.drop {
+  position: relative;
+  display: grid;
+  min-height: 140px;
+  place-content: center;
+  justify-items: center;
+  gap: 6px;
+  padding: 20px 16px;
+  border: 2px dashed var(--sx-line-strong);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color 160ms cubic-bezier(0.2, 0, 0, 1),
+    background 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.drop:hover,
+.drop:focus-within {
+  border-color: var(--sx-accent);
+  background: color-mix(in oklab, var(--sx-accent-soft) 40%, var(--sx-surface));
+}
+
+.drop[data-busy] {
+  cursor: progress;
+}
+
+.drop input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.dropTitle {
+  font: var(--sx-text-heading);
+  font-weight: 600;
+}
+
+.pill {
+  display: inline-flex;
+  min-width: 176px;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  font: var(--sx-text-label);
+  font-size: var(--sx-text-md);
+}
+
+.wide {
+  display: none;
+}
+
+.other {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.way {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.way:hover {
+  border-color: var(--sx-line-strong);
+}
+
+.way[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+}
+
+.way:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.wayIcon {
+  display: inline-flex;
+  flex: none;
+}
+
+.wayText {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.wayText strong {
+  font: var(--sx-text-label);
+  font-size: var(--sx-text-md);
+}
+
+.wayText small {
+  color: var(--sx-muted);
+  font: var(--sx-text-meta);
+}
+
+.chev {
+  flex: none;
+  color: var(--sx-muted);
+}
+
+.paste {
+  display: grid;
+  gap: 8px;
+}
+
+.paste textarea {
+  width: 100%;
+  min-height: 96px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: var(--sx-text-secondary);
+  resize: vertical;
+}
+
+.paste button {
+  justify-self: end;
+}
+
+.sample {
+  justify-self: center;
+  color: var(--sx-accent);
+  font: var(--sx-text-label);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.where {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.recent:empty {
+  display: none;
+}
+
+.recent > section {
+  padding: 4px 16px 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+
+/* ---- S2 Match columns (import-match.module.css holds its parts) ---- */
+
+.match {
+  display: grid;
+  gap: 16px;
+}
+
+/* ---- S1 after reading: the file, its sheets, its first rows ---- */
+
+.read {
+  display: grid;
+  gap: 20px;
+}
+
+.fileCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.fileName {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.fileName strong {
+  overflow: hidden;
+  font: var(--sx-text-heading);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileName small {
+  color: var(--sx-muted);
+  font: var(--sx-text-secondary);
+}
+
+.textLink {
+  flex: none;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: var(--sx-text-label);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.sheets {
+  display: grid;
+  gap: 8px;
+}
+
+.sheet {
+  display: flex;
+  min-height: 56px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: var(--sx-text-body);
+  text-align: start;
+  cursor: pointer;
+  transition:
+    border-color 160ms cubic-bezier(0.2, 0, 0, 1),
+    background 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.sheet strong {
+  margin-inline-start: 8px;
+  font-weight: 600;
+}
+
+.sheet[aria-checked="true"] {
+  border: 1.5px solid var(--sx-accent);
+  background: var(--sx-accent-soft);
+}
+
+.sheet:disabled {
+  cursor: progress;
+}
+
+.radio {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  place-items: center;
+  border: 1.5px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  color: var(--sx-accent-ink);
+}
+
+.sheet[aria-checked="true"] .radio {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent);
+}
+
+.tableWrap {
+  overflow: auto;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.firstRows {
+  width: 100%;
+  border-collapse: collapse;
+  font: var(--sx-text-secondary);
+}
+
+.firstRows th,
+.firstRows td {
+  max-width: 220px;
+  overflow: hidden;
+  padding: 10px 14px;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.firstRows th {
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+  font-weight: 600;
+}
+
+.firstRows tr + tr td,
+.firstRows tbody tr:first-child td {
+  border-top: 1px solid var(--sx-line);
+}
+
+/* Phone: the first two columns, then "+ 9 more columns". */
+.firstRows [data-extra] {
+  display: none;
+}
+
+.moreColumns {
+  margin: 8px 0 0;
+  color: var(--sx-muted);
+  font: var(--sx-text-meta);
+}
+
+.found {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-accent-soft);
+  color: var(--sx-ink);
+  font: var(--sx-text-secondary);
+}
+
+.found svg {
+  flex: none;
+  color: var(--sx-accent);
+}
+
+.warn {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: var(--sx-radius-md);
+  background: color-mix(in oklab, var(--sx-warn) 14%, transparent);
+  color: var(--sx-ink);
+  font: var(--sx-text-secondary);
+}
+
+@media (min-width: 900px) {
+  .flow {
+    inset: 24px;
+    width: min(1104px, calc(100% - 48px));
+    height: calc(100% - 48px);
+    margin: auto;
+    border: 1px solid var(--sx-line);
+    border-radius: var(--sx-radius-lg);
+    background: var(--sx-surface);
+    box-shadow: var(--sx-shadow-float);
+  }
+
+  .head {
+    min-height: 64px;
+    padding: 8px 16px 8px 12px;
+    border-bottom: 1px solid var(--sx-line);
+  }
+
+  .count,
+  .bar {
+    display: none;
+  }
+
+  .close {
+    display: inline-grid;
+  }
+
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    padding: 12px 24px 0;
+    border-bottom: 1px solid var(--sx-line);
+  }
+
+  .steps li {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    padding-bottom: 12px;
+    color: var(--sx-muted);
+    font: var(--sx-text-secondary);
+  }
+
+  /* The line between the numbers. */
+  .steps li + li::before {
+    position: absolute;
+    top: 13px;
+    right: calc(50% + 18px);
+    left: calc(-50% + 18px);
+    height: 1px;
+    background: var(--sx-line-strong);
+    content: "";
+  }
+
+  .steps li span {
+    display: inline-grid;
+    width: 26px;
+    height: 26px;
+    place-items: center;
+    border: 1px solid var(--sx-line-strong);
+    border-radius: var(--sx-radius-pill);
+    background: var(--sx-surface);
+    font: var(--sx-text-meta);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .steps li[data-done] span {
+    border-color: var(--sx-accent);
+    color: var(--sx-accent);
+  }
+
+  .steps li[aria-current="step"] {
+    color: var(--sx-accent);
+    font-weight: 600;
+  }
+
+  .steps li[aria-current="step"] span {
+    border-color: var(--sx-accent);
+    background: var(--sx-accent);
+    color: var(--sx-accent-ink);
+  }
+
+  /* The current step is underlined, as in the picked design. */
+  .steps li[aria-current="step"]::after {
+    position: absolute;
+    bottom: -1px;
+    left: calc(50% - 22px);
+    width: 44px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--sx-accent);
+    content: "";
+  }
+
+  .content {
+    padding: 24px;
+  }
+
+  .hero {
+    font-size: var(--sx-text-2xl);
+  }
+
+  .ways {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 24px;
+  }
+
+  .drop {
+    min-height: 220px;
+  }
+
+  .wide {
+    display: revert;
+  }
+
+  .pill.wide {
+    display: inline-flex;
+  }
+
+  .narrow {
+    display: none;
+  }
+
+  .sample {
+    justify-self: start;
+  }
+
+  .firstRows [data-extra] {
+    display: table-cell;
+  }
+
+  .moreColumns {
+    display: none;
+  }
+
+  .foot {
+    justify-content: flex-end;
+    padding: 16px 24px;
+  }
+
+  .foot > :last-child,
+  .foot > :first-child:not(:last-child) {
+    min-width: 120px;
+    flex: none;
+  }
+
+  .foot > :last-child {
+    min-width: 176px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar i,
+  .drop,
+  .sheet {
+    transition: none;
+  }
+}

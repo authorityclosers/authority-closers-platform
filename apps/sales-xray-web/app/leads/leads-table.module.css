@@ -61,7 +61,7 @@
 
 .table td {
   overflow: hidden;
-  height: 48px;
+  height: 52px;
   padding: 0 12px;
   border-bottom: 1px solid var(--sx-line);
   text-overflow: ellipsis;
@@ -813,4 +813,101 @@
 
 .wrap[data-scroll] .table .pick ~ [data-column="name"] {
   left: 44px;
+}
+
+/* The owner's pick M2-A (17 Nov 2026; study 02 §5 M2): an avatar before each
+   name, the stage as a dot and its word, the owner as a small avatar and a
+   first name. */
+.face {
+  display: grid;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin-right: 8px;
+}
+
+.stage:has(.stageDot) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  background: none;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+}
+
+.stageDot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sx-muted);
+}
+
+.owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table thead .pick input,
+.table td.pick input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--sx-accent);
+  cursor: pointer;
+}
+
+/* M2-A: names stay on one line; the tick cell never shows an ellipsis. */
+.wrap[data-wide-table]:not([data-fit]) .nameCell .name strong,
+.wrap[data-wide-table]:not([data-fit]) .nameCell .name small {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.table td.pick {
+  padding: 0;
+  text-overflow: clip;
+}
+
+.table [data-column="created"] {
+  width: 8%;
+}
+
+/* M2-A columns (17 Nov 2026: "Akash Jadh", "New Lea" cut at 1280): the name
+   and stage word whole, any other cut cell ends in an ellipsis (its full text
+   in the tooltip). Widths are set on the head from leads-table.tsx. */
+.wrap[data-wide-table]:not([data-fit]) .nameCell .name strong,
+.wrap[data-wide-table]:not([data-fit]) .nameCell .name small {
+  max-width: 100%;
+}
+
+.stage:has(.stageDot) {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.stageWord,
+.ownerWord {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.owner,
+.source {
+  max-width: 100%;
+}
+
+/* M2-A: 10 px either side of a wide table's cells, so every column fits 1280. */
+.wrap[data-wide-table]:not([data-fit]) .table td:not(.pick),
+.wrap[data-wide-table]:not([data-fit]) .table .sort {
+  padding-inline: 10px;
 }
