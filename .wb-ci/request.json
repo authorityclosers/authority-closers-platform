@@ -1,0 +1,20 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "0a25023ecccb45de56a7cc0b17406e4181d21320",
+  "full": false,
+  "checks": [
+    "py"
+  ],
+  "changed_files": [
+    "packages/python/ac_platform/lead_desk/store.py",
+    "tests/database/test_lead_desk_new_lead_push_postgresql.py"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [
+    "packages/python/ac_platform/lead_desk/store.py",
+    "tests/database/test_lead_desk_new_lead_push_postgresql.py"
+  ],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
