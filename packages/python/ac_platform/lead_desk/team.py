@@ -143,6 +143,8 @@ async def facts(desk: LeadDesk, person: UUID, since: datetime) -> list[goals.Fac
                 LeadEvent.created_at <= desk.now,
                 # An answer its seller undid connected nothing (ph1-40).
                 not_undone(),
+                # Work on a test lead moves no target (owner, 17 Nov 2026).
+                *await desk._counted_leads(),
             )
         )
     ).tuples()

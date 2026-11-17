@@ -771,9 +771,19 @@
   min-width: 100%;
 }
 
+/* Columns narrow enough that a whole one shows beside the pinned name at
+   360-412 px (owner's review, 17 Nov 2026, his OnePlus: the columns sat apart,
+   half wouldn't scroll and nothing could be read). At 164 px each beside a
+   254 px name only 73 px was left, so a mandatory snap had no whole column to
+   stop on. */
 .wrap[data-scroll] .table [data-column] {
-  width: 140px;
-  max-width: 140px;
+  width: 104px;
+  max-width: 104px;
+}
+
+.wrap[data-scroll] .table td:not(.pick),
+.wrap[data-scroll] .table .sort {
+  padding-inline: 8px;
 }
 
 .wrap[data-scroll] .table .pick,
@@ -790,9 +800,15 @@
 }
 
 .wrap[data-scroll] .table [data-column="name"] {
-  width: 168px;
-  max-width: 168px;
+  width: 128px;
+  max-width: 128px;
   box-shadow: 1px 0 0 var(--sx-line);
+}
+
+/* On a phone the pinned name keeps its words, not the avatar (M2-A's avatar
+   is the computer's table). */
+.wrap[data-scroll] .table [data-column="name"] .face {
+  display: none;
 }
 
 .wrap[data-scroll] .table .pick ~ [data-column="name"] {

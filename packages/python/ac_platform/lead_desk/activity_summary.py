@@ -166,7 +166,8 @@ async def summarize(
                 func.count(),
             )
             .join(Lead, and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id))
-            .where(*window, LeadEvent.kind != "captured")
+            # Work on a test lead is no one's activity in the numbers (owner, 17 Nov 2026).
+            .where(*window, LeadEvent.kind != "captured", *await desk._counted_leads())
             .group_by(LeadEvent.actor_person_id, local_day)
         )
     ).all()
