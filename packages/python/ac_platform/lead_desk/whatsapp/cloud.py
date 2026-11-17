@@ -179,6 +179,22 @@ def template_text(components: list[Any]) -> str:
     return ""
 
 
+MEDIA_HEADERS: Final[dict[str, str]] = {
+    "DOCUMENT": "document",
+    "IMAGE": "image",
+    "VIDEO": "video",
+}
+
+
+def media_header(components: list[Any]) -> str | None:
+    """The kind of file a template's header carries ("document", "image", "video"), or None
+    for a template with no header or a text one."""
+    for component in components:
+        if isinstance(component, Mapping) and str(component.get("type")).upper() == "HEADER":
+            return MEDIA_HEADERS.get(str(component.get("format") or "").upper())
+    return None
+
+
 def placeholders(text: str) -> int:
     """How many {{n}} values a template's body asks for."""
     numbers = {int(found) for found in re.findall(r"\{\{(\d{1,2})\}\}", text)}
@@ -545,15 +561,26 @@ class Cloud:
         name: str,
         language: str,
         values: list[str],
+        header: Mapping[str, str] | None = None,
     ) -> str:
+        """``header`` fills a file header: {"kind", "id", "filename"} (Meta's upload id)."""
         template: dict[str, Any] = {"name": name, "language": {"code": language}}
+        components: list[dict[str, Any]] = []
+        if header:
+            kind = header["kind"]
+            part: dict[str, Any] = {"id": header["id"]}
+            if kind == "document" and header.get("filename"):
+                part["filename"] = header["filename"]
+            components.append({"type": "header", "parameters": [{"type": kind, kind: part}]})
         if values:
-            template["components"] = [
+            components.append(
                 {
                     "type": "body",
                     "parameters": [{"type": "text", "text": value[:1024]} for value in values],
                 }
-            ]
+            )
+        if components:
+            template["components"] = components
         reply = await self._call(
             "POST",
             f"{phone_number_id}/messages",
@@ -567,6 +594,67 @@ class Cloud:
             },
         )
         return _wamid(reply)
+
+    async def send_media(
+        self,
+        phone_number_id: str,
+        token: str,
+        *,
+        to: str,
+        kind: str,
+        media_id: str,
+        filename: str | None = None,
+        caption: str | None = None,
+    ) -> str:
+        """A file inside the 24-hour window (a document, picture or video by Meta's id)."""
+        part: dict[str, Any] = {"id": media_id}
+        if caption:
+            part["caption"] = caption[:1024]
+        if kind == "document" and filename:
+            part["filename"] = filename
+        reply = await self._call(
+            "POST",
+            f"{phone_number_id}/messages",
+            token=token,
+            json={
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": to,
+                "type": kind,
+                kind: part,
+            },
+        )
+        return _wamid(reply)
+
+    async def upload_media(
+        self, phone_number_id: str, token: str, *, data: bytes, content_type: str, filename: str
+    ) -> str:
+        """Put one file at Meta for this number; Meta keeps it for 30 days."""
+        client = self._client or httpx.AsyncClient(timeout=max(self.timeout, 60))
+        try:
+            response = await client.post(
+                f"{self.cfg.graph}/{phone_number_id}/media",
+                headers={"Authorization": f"Bearer {token}"},
+                data={"messaging_product": "whatsapp", "type": content_type},
+                files={"file": (filename, data, content_type)},
+                timeout=60,
+            )
+        except httpx.HTTPError:
+            raise WhatsAppError("WhatsApp didn't answer. Try again in a minute.") from None
+        finally:
+            if self._client is None:
+                await client.aclose()
+        try:
+            body = response.json()
+        except ValueError:
+            body = {}
+        if response.status_code >= 400 or (isinstance(body, dict) and "error" in body):
+            error = body.get("error", {}) if isinstance(body, dict) else {}
+            raise refusal(error if isinstance(error, Mapping) else {})
+        media_id = str(body.get("id") or "") if isinstance(body, dict) else ""
+        if not META_ID.fullmatch(media_id):
+            raise WhatsAppError("WhatsApp didn't take the file. Try again.")
+        return media_id
 
     async def mark_read(self, phone_number_id: str, token: str, wamid: str) -> None:
         await self._call(
@@ -608,10 +696,22 @@ class Cloud:
         category: str,
         body: str,
         example: list[str],
+        header: Mapping[str, str] | None = None,
     ) -> dict[str, Any]:
+        """``header``: a file header, {"kind", "handle"} (an example from ``upload_handle``)."""
         component: dict[str, Any] = {"type": "BODY", "text": body}
         if example:
             component["example"] = {"body_text": [example]}
+        components: list[dict[str, Any]] = [component]
+        if header:
+            components.insert(
+                0,
+                {
+                    "type": "HEADER",
+                    "format": header["kind"].upper(),
+                    "example": {"header_handle": [header["handle"]]},
+                },
+            )
         return await self._call(
             "POST",
             f"{waba_id}/message_templates",
@@ -620,9 +720,48 @@ class Cloud:
                 "name": name,
                 "language": language,
                 "category": category,
-                "components": [component],
+                "components": components,
             },
         )
+
+    async def upload_handle(
+        self, token: str, *, data: bytes, content_type: str, filename: str
+    ) -> str:
+        """An example file for a template's header, through Meta's resumable upload (AC's
+        app): Meta reviews the template with it."""
+        started = await self._call(
+            "POST",
+            f"{self.cfg.app_id}/uploads",
+            token=token,
+            file_name=filename,
+            file_length=len(data),
+            file_type=content_type,
+        )
+        session = str(started.get("id") or "")
+        if not session.startswith("upload:"):
+            raise WhatsAppError("WhatsApp didn't take the file. Try again.")
+        client = self._client or httpx.AsyncClient(timeout=max(self.timeout, 60))
+        try:
+            response = await client.post(
+                f"{self.cfg.graph}/{session}",
+                headers={"Authorization": f"OAuth {token}", "file_offset": "0"},
+                content=data,
+                timeout=60,
+            )
+        except httpx.HTTPError:
+            raise WhatsAppError("WhatsApp didn't answer. Try again in a minute.") from None
+        finally:
+            if self._client is None:
+                await client.aclose()
+        try:
+            body = response.json()
+        except ValueError:
+            body = {}
+        handle = str(body.get("h") or "") if isinstance(body, dict) else ""
+        if response.status_code >= 400 or not handle:
+            error = body.get("error", {}) if isinstance(body, dict) else {}
+            raise refusal(error if isinstance(error, Mapping) else {})
+        return handle
 
     async def delete_template(self, waba_id: str, token: str, *, name: str) -> None:
         await self._call("DELETE", f"{waba_id}/message_templates", token=token, name=name)

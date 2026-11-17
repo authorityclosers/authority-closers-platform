@@ -2,6 +2,8 @@
 
 - Auto replies (an instant first reply to new ad leads who said yes on their form, and
   a reply to messages after work hours), while AC's WhatsApp app is set up.
+- Campaigns (0162): leads join live sequences; due sequence steps and broadcasts go out
+  at each campaign's pace (campaigns.py).
 - Templates: each connected number's templates are read from Meta once a day (a
   template's review result also arrives by webhook).
 - First-response SLA: new breaches are kept and the seller (and managers, if wanted)
@@ -27,7 +29,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.lead_desk import push, sla
 from ac_platform.lead_desk.models import LeadWhatsAppNumber, LeadWhatsAppTemplate
-from ac_platform.lead_desk.whatsapp import cloud, inbox
+from ac_platform.lead_desk.whatsapp import campaigns, cloud, inbox
+from ac_platform.lead_desk.whatsapp.media import MediaStore
 
 log = logging.getLogger(__name__)
 
@@ -50,16 +53,23 @@ async def whatsapp_pass(
     api: cloud.Cloud,
     *,
     now: datetime,
+    store: MediaStore | None = None,
 ) -> dict[str, int]:
-    out = {"first": 0, "late": 0, "synced": 0, "erased": 0}
+    out = {"first": 0, "late": 0, "synced": 0, "erased": 0, "joined": 0, "campaign": 0}
     async with sessions() as db, db.begin():
         if not await _locked(db):
             return out
-        out["first"] = await inbox.first_replies(db, cfg, api, now=now)
+        out["first"] = await inbox.first_replies(db, cfg, api, now=now, store=store)
     async with sessions() as db, db.begin():
         if not await _locked(db):
             return out
         out["late"] = await inbox.out_of_hours_replies(db, cfg, api, now=now)
+    async with sessions() as db, db.begin():
+        if not await _locked(db):
+            return out
+        out["joined"] = await campaigns.enrol(db, now=now)
+        sent = await campaigns.send_due(db, cfg, api, now=now, store=store)
+        out["campaign"] = sent["sent"]
     async with sessions() as db:
         rows = (
             await db.scalars(
@@ -114,7 +124,11 @@ async def sla_pass(
 
 
 async def run(
-    sessions: async_sessionmaker[AsyncSession], stop: asyncio.Event, *, first_delay: int = _TICK
+    sessions: async_sessionmaker[AsyncSession],
+    stop: asyncio.Event,
+    *,
+    first_delay: int = _TICK,
+    store: MediaStore | None = None,
 ) -> None:
     with suppress(TimeoutError):
         await asyncio.wait_for(stop.wait(), timeout=first_delay)
@@ -130,7 +144,9 @@ async def run(
             cfg = cloud.config()
             if cfg is not None:
                 try:
-                    await whatsapp_pass(sessions, cfg, cloud.Cloud(cfg, client, timeout=8), now=now)
+                    await whatsapp_pass(
+                        sessions, cfg, cloud.Cloud(cfg, client, timeout=8), now=now, store=store
+                    )
                 except Exception:  # noqa: BLE001 - the loop must survive a bad tick
                     log.warning("whatsapp tick failed", exc_info=True)
             with suppress(TimeoutError):
@@ -138,7 +154,11 @@ async def run(
 
 
 def attach(
-    application: FastAPI, sessions: async_sessionmaker[AsyncSession], environment: str
+    application: FastAPI,
+    sessions: async_sessionmaker[AsyncSession],
+    environment: str,
+    *,
+    storage_root: str | None = None,
 ) -> None:
     """Run the loop for the API's lifetime by wrapping the app's own lifespan."""
     if environment in {"local", "test"}:
@@ -149,7 +169,10 @@ def attach(
     async def lifespan(app: FastAPI) -> AsyncIterator[Any]:
         async with inner(app) as state:
             stop = asyncio.Event()
-            task = asyncio.create_task(run(sessions, stop), name="lead-desk-whatsapp-sla")
+            task = asyncio.create_task(
+                run(sessions, stop, store=MediaStore(storage_root)),
+                name="lead-desk-whatsapp-sla",
+            )
             try:
                 yield state
             finally:

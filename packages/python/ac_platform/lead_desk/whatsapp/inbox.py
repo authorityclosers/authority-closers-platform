@@ -32,6 +32,7 @@ from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk.models import (
     Lead,
     LeadEvent,
+    LeadWhatsAppCampaignMessage,
     LeadWhatsAppMessage,
     LeadWhatsAppNumber,
     LeadWhatsAppTemplate,
@@ -63,9 +64,15 @@ DEFAULT_CONFIG: Final[dict[str, Any]] = {
         "who": "form_yes",
         "agreed_by": None,
         "agreed_at": None,
+        # A file from the workspace's WhatsApp files (0162): in the template's header when
+        # it has one; otherwise sent after it while the chat is open. ``media_rules`` let
+        # the stage or the ad form pick another file.
+        "media_id": None,
+        "media_rules": [],
     },
     "out_of_hours": {"on": False, "text": None},
 }
+MEDIA_RULES_LIMIT: Final[int] = 20
 
 
 def number_config(number: LeadWhatsAppNumber) -> dict[str, Any]:
@@ -229,11 +236,15 @@ def save_auto_replies(
     *,
     by: UUID | None = None,
     now: datetime | None = None,
+    files: Mapping[UUID, str] | None = None,
+    headers: Mapping[tuple[str, str], str | None] | None = None,
 ) -> None:
     """A manager's auto replies for one number. A first reply needs an approved template,
     and either the lead form's WhatsApp consent question (ad leads who said yes) or, for
     every new lead, the manager's word that the people who reach them agreed to WhatsApp
-    (kept with who gave it and when)."""
+    (kept with who gave it and when). ``files`` are the workspace's live files (id: kind)
+    and ``headers`` each approved template's file header, if any: a template with a file
+    header needs a file of that kind."""
     first = dict(settings.get("first_reply") or {})
     late = dict(settings.get("out_of_hours") or {})
     before = number_config(row)["first_reply"]
@@ -242,10 +253,33 @@ def save_auto_replies(
         raise DeskError(422, "Choose who gets the first reply.")
     question = str(first.get("consent_question") or "").strip()[:200] or None
     agreed_by, agreed_at = None, None
+    known = dict(files or {})
+    media_id = first.get("media_id")
+    if media_id is not None and UUID(str(media_id)) not in known:
+        raise DeskError(422, "Pick a file from your WhatsApp files.")
+    rules: list[dict[str, str]] = []
+    for rule in list(first.get("media_rules") or [])[:MEDIA_RULES_LIMIT]:
+        rule = dict(rule)
+        file_id = rule.get("media_id")
+        stage = str(rule.get("stage") or "").strip()[:16]
+        form = str(rule.get("form") or "").strip()[:120]
+        if not (stage or form) or file_id is None:
+            raise DeskError(422, "Each file rule needs a stage or an ad form, and a file.")
+        if UUID(str(file_id)) not in known:
+            raise DeskError(422, "Pick a file from your WhatsApp files.")
+        rules.append({"stage": stage, "form": form, "media_id": str(file_id)})
     if first.get("on"):
         pair = (str(first.get("template") or ""), str(first.get("language") or ""))
         if pair not in approved:
             raise DeskError(422, "Pick an approved template for the first reply.")
+        needs = (headers or {}).get(pair)
+        if needs:
+            chosen = [UUID(str(media_id))] if media_id is not None else []
+            chosen += [UUID(rule["media_id"]) for rule in rules]
+            if not chosen:
+                raise DeskError(422, f"This template sends a {needs}: pick the file.")
+            if any(known[file_id] != needs for file_id in chosen):
+                raise DeskError(422, f"This template sends a {needs}: pick a {needs}.")
         if who == "every_lead":
             if not first.get("agreed"):
                 raise DeskError(
@@ -276,6 +310,8 @@ def save_auto_replies(
             "who": who,
             "agreed_by": agreed_by,
             "agreed_at": agreed_at,
+            "media_id": str(media_id) if media_id is not None else None,
+            "media_rules": rules,
         },
         "out_of_hours": {"on": bool(late.get("on")), "text": late["text"]},
     }
@@ -291,6 +327,37 @@ class Received:
     leads_created: int = 0
     statuses: int = 0
     templates: int = 0
+    stops: int = 0
+
+
+async def _stop_word(
+    db: AsyncSession,
+    row: LeadWhatsAppNumber,
+    lead: Lead,
+    words: str | None,
+    *,
+    now: datetime,
+) -> bool:
+    """They wrote STOP (or "band karo", "बंद करो", "थांबवा"): their no is recorded on the
+    lead, so no first reply, sequence step or broadcast goes to them again (whether or not
+    AI replies are on)."""
+    from ac_platform.lead_desk.ai_replies import rules as ai_rules
+
+    if not ai_rules.opt_out(words) or await said_no(db, lead):
+        return False
+    desk = LeadDesk(
+        db,
+        Viewer(
+            person_id=row.connected_by_person_id,
+            tenant_id=row.tenant_id,
+            role="system",
+            name="WhatsApp",
+        ),
+        now=now,
+    )
+    desk._event(lead, "edited", {OPT_IN: False, "how": "They wrote STOP on WhatsApp"}, actor=None)
+    await db.flush()
+    return True
 
 
 async def receive(db: AsyncSession, delivery: cloud.Delivery, *, now: datetime) -> Received:
@@ -340,6 +407,10 @@ async def receive(db: AsyncSession, delivery: cloud.Delivery, *, now: datetime) 
             out.leads_created += created
             if lead is not None:
                 lead.updated_at = now
+                if message.kind in ("text", "button") and await _stop_word(
+                    db, row, lead, message.body, now=now
+                ):
+                    out.stops += 1
     for echo in delivery.echoes:
         # Sent from the WhatsApp Business app on the phone: kept in the chat, never a new
         # lead (the business wrote it, the person didn't).
@@ -625,9 +696,20 @@ async def send(
     language: str | None,
     values: Sequence[str],
     auto: str | None = None,
+    media_id: UUID | None = None,
+    store: Any = None,
+    campaign_id: UUID | None = None,
+    campaign_step: int = 0,
 ) -> LeadWhatsAppMessage:
-    """Send one WhatsApp to a lead from one of the organisation's numbers."""
+    """Send one WhatsApp to a lead from one of the organisation's numbers. ``media_id`` is a
+    file from the workspace's WhatsApp files (``store`` holds it): in the header of a
+    template that has a file header, or on its own (with ``body`` as its caption) inside
+    the 24-hour window."""
+    from ac_platform.lead_desk.whatsapp import media as files
+
     parts = 0
+    header_kind: str | None = None
+    attached = await files.one(desk.db, desk.tenant_id, media_id) if media_id is not None else None
     seen = await desk.db.scalar(
         select(LeadEvent).where(
             LeadEvent.tenant_id == desk.tenant_id, LeadEvent.command_id == command_id
@@ -656,19 +738,27 @@ async def send(
     shown: str | None
     if template is None:
         text_value = (body or "").strip()
-        if not text_value:
+        if not text_value and attached is None:
             raise DeskError(422, "Write a message.")
         if not cloud.window_open(last_inbound, desk.now):
             raise DeskError(
                 409,
                 "It's more than 24 hours since their last message: send an approved template.",
             )
-        shown, kind = text_value[: cloud.TEXT_LIMIT], "text"
+        shown = text_value[: cloud.TEXT_LIMIT] or None
+        kind = attached.kind if attached is not None else "text"
     else:
         approved = {(t.name, t.language): t for t in await approved_templates(desk.db, row)}
         chosen = approved.get((template, language or ""))
         if chosen is None:
             raise DeskError(422, "Pick an approved template.")
+        header_kind = cloud.media_header(chosen.components)
+        if header_kind is not None and attached is None:
+            raise DeskError(422, f"This template sends a {header_kind}: pick the file.")
+        if header_kind is not None and attached is not None and attached.kind != header_kind:
+            raise DeskError(422, f"This template sends a {header_kind}: pick a {header_kind}.")
+        if header_kind is None and attached is not None:
+            raise DeskError(422, "This template has no file: send the file in the chat.")
         parts = needed = cloud.placeholders(cloud.template_text(chosen.components))
         if len([v for v in values if v]) < needed:
             raise DeskError(422, f"Fill in all {needed} parts of the template.")
@@ -694,16 +784,61 @@ async def send(
         body=shown,
         template_name=template,
         template_language=language if template else None,
+        media={
+            "library_id": str(attached.id),
+            "filename": attached.filename,
+            "mime_type": attached.content_type,
+        }
+        if attached is not None
+        else None,
         status="queued",
         sent_by_person_id=None if auto else desk.viewer.person_id,
         auto=auto,
         created_at=desk.now,
     )
     desk.db.add(message)
+    if campaign_id is not None:
+        desk.db.add(
+            LeadWhatsAppCampaignMessage(
+                message_id=message.id,
+                tenant_id=desk.tenant_id,
+                campaign_id=campaign_id,
+                lead_id=lead.id,
+                step=campaign_step,
+                created_at=desk.now,
+            )
+        )
     try:
-        if template is None:
+        uploaded: str | None = None
+        if attached is not None:
+            if store is None or not getattr(store, "available", False):
+                raise cloud.WhatsAppError("Files for WhatsApp can't be sent from here yet.")
+            uploaded = await files.meta_id(
+                desk.db, cfg, api, store, attached, row, token=token(cfg, row), now=desk.now
+            )
+        if template is None and attached is not None and uploaded is not None:
+            wamid = await api.send_media(
+                row.phone_number_id,
+                token(cfg, row),
+                to=wa,
+                kind=attached.kind,
+                media_id=uploaded,
+                filename=attached.filename,
+                caption=shown,
+            )
+        elif template is None:
             wamid = await api.send_text(
                 row.phone_number_id, token(cfg, row), to=wa, body=shown or ""
+            )
+        elif attached is not None and uploaded is not None and header_kind is not None:
+            wamid = await api.send_template(
+                row.phone_number_id,
+                token(cfg, row),
+                to=wa,
+                name=template,
+                language=language or "",
+                values=values[:parts],
+                header={"kind": header_kind, "id": uploaded, "filename": attached.filename},
             )
         else:
             wamid = await api.send_template(
@@ -732,6 +867,8 @@ async def send(
             "message_id": str(message.id),
             "auto": auto,
             "failed": message.status == "failed",
+            **({"file": attached.label} if attached is not None else {}),
+            **({"campaign_id": str(campaign_id)} if campaign_id is not None else {}),
         },
         actor=None if auto else desk.viewer.person_id,
         command_id=command_id,
@@ -1005,8 +1142,14 @@ async def create_template(
     category: str,
     body: str,
     example: list[str],
+    media_id: UUID | None = None,
+    store: Any = None,
 ) -> None:
-    """Send a new template to Meta for review; it shows as pending until Meta decides."""
+    """Send a new template to Meta for review; it shows as pending until Meta decides. With
+    ``media_id`` (a file from the workspace's WhatsApp files) it gets a file header of that
+    kind, with the file as Meta's example; each send then carries a file of that kind."""
+    from ac_platform.lead_desk.whatsapp import media as files
+
     desk._require_manager()
     if not cloud.TEMPLATE_NAME.fullmatch(name):
         raise DeskError(422, "Use lower-case letters, numbers and underscores for the name.")
@@ -1020,6 +1163,24 @@ async def create_template(
     needed = cloud.placeholders(text_value)
     if len([value for value in example if value.strip()]) < needed:
         raise DeskError(422, f"Give an example for each of the {needed} parts in braces.")
+    header: dict[str, str] | None = None
+    components: list[dict[str, Any]] = [{"type": "BODY", "text": text_value}]
+    if media_id is not None:
+        attached = await files.one(desk.db, desk.tenant_id, media_id)
+        if store is None or not getattr(store, "available", False):
+            raise DeskError(409, "Files for WhatsApp can't be kept here yet.")
+        try:
+            data = store.read(attached.storage_key, expected_sha256=attached.sha256)
+        except files.MediaError as error:
+            raise DeskError(409, str(error)) from None
+        handle = await api.upload_handle(
+            token(cfg, row),
+            data=data,
+            content_type=attached.content_type,
+            filename=attached.filename,
+        )
+        header = {"kind": attached.kind, "handle": handle}
+        components.insert(0, {"type": "HEADER", "format": attached.kind.upper()})
     made = await api.create_template(
         row.waba_id,
         token(cfg, row),
@@ -1028,6 +1189,7 @@ async def create_template(
         category=category,
         body=text_value,
         example=[value.strip() for value in example[:needed]],
+        **({"header": header} if header else {}),
     )
     await desk.db.execute(
         insert(LeadWhatsAppTemplate)
@@ -1041,7 +1203,7 @@ async def create_template(
             language=language,
             category=category,
             status=str(made.get("status") or "PENDING")[:24],
-            components=[{"type": "BODY", "text": text_value}],
+            components=components,
             synced_at=desk.now,
             created_at=desk.now,
             updated_at=desk.now,
@@ -1080,12 +1242,34 @@ def first_name(name: str) -> str:
     return words[0][:60] if words and not words[0].startswith("+") else "there"
 
 
+async def business_name(db: AsyncSession, row: LeadWhatsAppNumber) -> str:
+    """The name a template's {{2}} carries in an automatic message: the workspace's name, or
+    the number's WhatsApp name."""
+    from ac_platform.tenancy.models import Tenant
+
+    name = await db.scalar(select(Tenant.name).where(Tenant.id == row.tenant_id))
+    return " ".join(str(name or row.verified_name or "us").split())[:60]
+
+
+def auto_values(lead: Lead, business: str) -> list[str]:
+    """An automatic template's values: {{1}} the lead's first name, {{2}} the business."""
+    return [first_name(lead.name), business]
+
+
 async def first_replies(
-    db: AsyncSession, cfg: cloud.WhatsAppConfig, api: cloud.Cloud, *, now: datetime
+    db: AsyncSession,
+    cfg: cloud.WhatsAppConfig,
+    api: cloud.Cloud,
+    *,
+    now: datetime,
+    store: Any = None,
 ) -> int:
     """An instant first reply to new ad leads who said yes to WhatsApp on their form, or
     to every new lead when a manager chose that (never one already in a WhatsApp chat, nor
-    one who said no to WhatsApp)."""
+    one who said no to WhatsApp). With a file chosen, it goes in the template's header, or,
+    for a template without one, right after it while the chat is open (they wrote first)."""
+    from ac_platform.lead_desk.whatsapp import media as files
+
     sent = 0
     for row in (
         await db.scalars(select(LeadWhatsAppNumber).where(LeadWhatsAppNumber.status == "active"))
@@ -1094,6 +1278,16 @@ async def first_replies(
         every = rule.get("who") == "every_lead"
         if not (rule["on"] and rule["template"] and rule["language"]):
             continue
+        chosen = next(
+            (
+                t
+                for t in await approved_templates(db, row)
+                if (t.name, t.language) == (rule["template"], rule["language"])
+            ),
+            None,
+        )
+        header = cloud.media_header(chosen.components) if chosen is not None else None
+        business = await business_name(db, row)
         if not (rule.get("agreed_at") if every else rule["consent_question"]):
             continue
         chat = select(LeadWhatsAppMessage.id).where(LeadWhatsAppMessage.lead_id == Lead.id)
@@ -1130,20 +1324,52 @@ async def first_replies(
                 ),
                 now=now,
             )
-            message = await send(
-                desk,
-                cfg,
-                api,
-                lead.id,
-                command_id=uuid4(),
-                number_id=row.id,
-                body=None,
-                template=rule["template"],
-                language=rule["language"],
-                values=[first_name(lead.name)],
-                auto="first_reply",
-            )
+            file_id = files.pick(rule.get("media_rules"), lead, rule.get("media_id"))
+            try:
+                message = await send(
+                    desk,
+                    cfg,
+                    api,
+                    lead.id,
+                    command_id=uuid4(),
+                    number_id=row.id,
+                    body=None,
+                    template=rule["template"],
+                    language=rule["language"],
+                    values=auto_values(lead, business),
+                    auto="first_reply",
+                    media_id=file_id if header else None,
+                    store=store,
+                )
+            except DeskError as error:
+                # A file archived since, or a template changed at Meta: never a loop.
+                log.warning("whatsapp first reply to %s not sent: %s", lead.id, error)
+                continue
             sent += message.status == "sent"
+            if (
+                message.status == "sent"
+                and file_id is not None
+                and header is None
+                and cloud.window_open(await _last_inbound(db, lead), now)
+            ):
+                try:
+                    await send(
+                        desk,
+                        cfg,
+                        api,
+                        lead.id,
+                        command_id=uuid4(),
+                        number_id=row.id,
+                        body=None,
+                        template=None,
+                        language=None,
+                        values=[],
+                        auto="first_reply",
+                        media_id=file_id,
+                        store=store,
+                    )
+                except DeskError as error:
+                    log.warning("whatsapp first-reply file to %s not sent: %s", lead.id, error)
     return sent
 
 
@@ -1238,7 +1464,22 @@ _GONE = """
 """
 
 
+_GONE_PROOF = """
+    UPDATE lead_desk_whatsapp_campaign_leads c SET proof = NULL, updated_at = :now
+    WHERE c.id IN (
+      SELECT x.id FROM lead_desk_whatsapp_campaign_leads x
+      WHERE x.proof IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM lead_desk_leads l WHERE l.tenant_id = x.tenant_id AND l.id = x.lead_id
+        )
+      LIMIT 500
+    )
+"""
+
+
 async def erasure_sweep(db: AsyncSession, now: datetime) -> int:
-    """A lead that leaves Lead Desk takes its WhatsApp words with it."""
+    """A lead that leaves Lead Desk takes its WhatsApp words with it, and the note of how
+    they agreed to a campaign (the campaign keeps only its counts)."""
     result = await db.execute(text(_GONE), {"now": now})
+    await db.execute(text(_GONE_PROOF), {"now": now})
     return int(getattr(result, "rowcount", 0) or 0)
