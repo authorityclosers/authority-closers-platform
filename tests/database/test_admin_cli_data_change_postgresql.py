@@ -18,7 +18,8 @@ from sqlalchemy import Engine, func, select, update
 
 from ac_platform.audit.models import AuditEvent
 from ac_platform.identity.models import Person
-from ac_platform.lead_desk.models import Lead
+from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadRep
+from ac_platform.lead_desk.store import DEFAULT_SETTINGS, default_cap
 from ac_platform.tenancy.models import Membership, OrganisationInvite, Tenant
 from tests.database.conversation_harness import conversation_harness
 from tests.database.test_conversation_postgresql import run, seed
@@ -120,6 +121,44 @@ def test_people_and_workspaces(postgres_harness: Any, tmp_path: Path) -> None:
             roles = {row["person_id"]: row["role"] for row in listed["people"]}
             assert roles[seller] == "member"
             assert all("***@" in (row["email"] or "***@") for row in listed["people"])
+
+            # Team's "Taking new leads" switch: a seller takes leads until switched off; only
+            # the switch changes (the limit stays the workspace's default).
+            async with cli.sessions() as db:
+                had = await db.get(LeadRep, (here.tenant_id, here.seller.person_id))
+                start = had.revision if had else 0
+                limit = had.max_open if had else None
+            dry, done, _ = await cli.twice(
+                "people", "taking-leads", "--person-id", seller, "--taking", "off"
+            )
+            assert dry["before"] == {"taking": True} and done["after"] == {"taking": False}
+            async with cli.sessions() as db:
+                rules = await db.get(LeadRep, (here.tenant_id, here.seller.person_id))
+                assert rules is not None and rules.available is False
+                assert rules.revision == start + 1
+                desk = await db.get(LeadDeskSettings, here.tenant_id)
+                default = default_cap(desk.config if desk else DEFAULT_SETTINGS)
+                assert rules.max_open == (limit if had else default)
+            idle = await cli(
+                "people",
+                "taking-leads",
+                "--person-id",
+                seller,
+                "--taking",
+                "off",
+                "--command-id",
+                str(uuid4()),
+                apply=True,
+            )
+            assert idle["status"] == "already_off" and idle["before"] == {"taking": False}
+            _, back, _ = await cli.twice(
+                "people", "taking-leads", "--person-id", seller, "--taking", "on"
+            )
+            assert back["after"] == {"taking": True}
+            async with cli.sessions() as db:
+                rules = await db.get(LeadRep, (here.tenant_id, here.seller.person_id))
+                assert rules is not None and rules.available is True
+                assert rules.revision == start + 2
 
             dry, done, _ = await cli.twice(
                 "people", "set-role", "--person-id", seller, "--role", "manager"

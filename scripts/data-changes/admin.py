@@ -22,6 +22,9 @@ People (--tenant-id T):
                                                    are e-mailed
     people rename --person-id P --name NAME        the account's display name
     people remove-member --person-id P             the membership ends (never the owner)
+    people taking-leads --person-id P --taking on|off
+                                                   Team's "Taking new leads" switch: off, the
+                                                   lead rules skip P (P's open leads stay)
 
 Workspaces:
     workspaces list                                every organisation (no --tenant-id)
@@ -125,6 +128,7 @@ COMMANDS: dict[str, tuple[str, ...]] = {
         "transfer-owner",
         "rename",
         "remove-member",
+        "taking-leads",
     ),
     "workspaces": ("list", "show", "create", "rename", "domains", "switches"),
     "leads": (
@@ -252,8 +256,9 @@ def _parser() -> argparse.ArgumentParser:
                 sub.add_argument("--tenant-id", type=UUID, required=True)
             made[(group, name)] = sub
     roles = ASSIGNABLE_ROLES
-    for name in ("show", "set-role", "transfer-owner", "rename", "remove-member"):
+    for name in ("show", "set-role", "transfer-owner", "rename", "remove-member", "taking-leads"):
         made[("people", name)].add_argument("--person-id", type=UUID, required=True)
+    made[("people", "taking-leads")].add_argument("--taking", type=_on_off, required=True)
     made[("people", "set-role")].add_argument("--role", choices=roles, required=True)
     made[("people", "rename")].add_argument("--name", type=_name, required=True)
     for name in ("invite", "resend-invite"):
@@ -753,6 +758,37 @@ async def people_remove_member(ctx: Context) -> Result:
     }
 
 
+async def people_taking_leads(ctx: Context) -> Result:
+    """Team's "Taking new leads" switch, through the app's own save of a seller's rules
+    (LeadDesk.save_rep): only the switch changes; the open-lead limit, languages, areas and
+    interests stay as they are (owner, 17 Nov 2026: Wise Life's new leads wait in the no-owner
+    pool and Shivam assigns them)."""
+    from ac_platform.lead_desk.contracts import RepRules
+    from ac_platform.lead_desk.models import LeadRep
+    from ac_platform.lead_desk.store import default_cap, takes_new_leads
+
+    args = ctx.args
+    _, membership = await _member(ctx, args.person_id)
+    desk = ctx.desk()
+    row = await ctx.database.get(LeadRep, (ctx.tenant_id, args.person_id), with_for_update=True)
+    before = {"taking": takes_new_leads(membership.role, row)}
+    if before["taking"] == args.taking:
+        word = "taking" if args.taking else "off"
+        return {"status": f"already_{word}", "before": before, "after": before}
+    rules = RepRules(
+        expected_revision=row.revision if row else 0,
+        available=args.taking,
+        max_open=row.max_open if row else default_cap((await desk.settings())[1]),
+        languages=tuple(row.languages or ()) if row else (),
+        areas=tuple(row.areas or ()) if row else (),
+        interests=tuple(row.interests or ()) if row else (),
+    )
+    await desk.save_rep(args.person_id, rules)
+    saved = await ctx.database.get(LeadRep, (ctx.tenant_id, args.person_id))
+    after = {"taking": takes_new_leads(membership.role, saved)}
+    return {"status": "eligible", "before": before, "after": after}
+
+
 # ----- workspaces ----------------------------------------------------------------------------
 
 
@@ -1172,6 +1208,7 @@ HANDLERS: dict[tuple[str, str], Handler] = {
     ("people", "transfer-owner"): people_transfer_owner,
     ("people", "rename"): people_rename,
     ("people", "remove-member"): people_remove_member,
+    ("people", "taking-leads"): people_taking_leads,
     ("workspaces", "list"): workspaces_list,
     ("workspaces", "show"): workspaces_show,
     ("workspaces", "create"): workspaces_create,
@@ -1190,6 +1227,7 @@ RESOURCES = {
     "people rename": "person",
     "people invite": "organisation_invite",
     "people resend-invite": "organisation_invite",
+    "people taking-leads": "lead_rep",
     "workspaces create": "organisation",
     "workspaces rename": "organisation",
     "workspaces domains": "organisation_domains",
