@@ -773,6 +773,7 @@ function ExplainSheet({
   worked: workedList,
   calls,
   tones,
+  side,
 }: {
   what: Explaining | null;
   onClose: () => void;
@@ -784,6 +785,7 @@ function ExplainSheet({
   worked: SellerEffort[];
   calls: string;
   tones: ReturnType<typeof faceTones>;
+  side: Side;
 }) {
   // The shared pop-up (owner, 15 Nov 2026: every pop-up the same): the kit
   // Sheet springs in, drags down and closes; the words stay while it slides away.
@@ -797,6 +799,11 @@ function ExplainSheet({
   const notYet = sellers.filter((x) => !workedList.includes(x));
   const people =
     k === "worked" ? workedList : k === "notyet" ? notYet : sellers;
+  // Who made the calls (owner's review, 17 Nov 2026: "total calls, connected
+  // and 100% don't say who called"): each seller with calls on this side.
+  const callers = sellers
+    .filter((x) => x[side].attempted > 0)
+    .sort((a, b) => b[side].attempted - a[side].attempted);
   const head: Record<
     Explaining,
     { title: string; line: string; href: string; see: string }
@@ -891,6 +898,27 @@ function ExplainSheet({
               </div>
             ) : null}
           </dl>
+          {callers.length ? (
+            <>
+              <h3 className={styles.explainWho}>Who called</h3>
+              <ul className={styles.explainPeople} aria-label="Who called">
+                {callers.map((x, n) => (
+                  <li
+                    key={x.person_id}
+                    style={{ animationDelay: `${n * 35}ms` }}
+                  >
+                    <Face seller={x} tone={tones.get(x.person_id)} />
+                    <span>{x.name}</span>
+                    <small data-worked="">
+                      {x[side].attempted}{" "}
+                      {x[side].attempted === 1 ? "call" : "calls"} ·{" "}
+                      {x[side].connected} connected
+                    </small>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
         </>
       ) : (
         <ul className={styles.explainPeople}>
@@ -1179,6 +1207,7 @@ function FloorHero({
         worked={done}
         calls={calls}
         tones={tones}
+        side={side}
       />
     </section>
   );

@@ -69,10 +69,41 @@
   font: var(--sx-text-headline);
 }
 
-.speedNone {
+/* No speed yet: a proper empty state across the tile, not a word at its
+   edge (owner's review, 17 Nov 2026: "Not yet" read like a small toast). */
+.speed[data-empty] {
+  flex-wrap: wrap;
+  padding: 14px;
+}
+
+.speedEmpty {
+  display: flex;
+  flex-basis: 100%;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--sx-ink) 5%, transparent);
+  color: var(--sx-ink);
+  font: var(--sx-text-meta);
+}
+
+.speedEmpty svg {
   flex: none;
+  margin-top: 1px;
+  color: var(--sx-accent);
+}
+
+.whoCalled {
+  margin: 0;
   color: var(--sx-muted);
-  font: var(--sx-text-label);
+  font: var(--sx-text-meta);
+}
+
+.whoCalled b {
+  color: var(--sx-ink);
+  font-weight: 600;
 }
 
 /* G1: two columns of equal tiles; a tile's figure shrinks with its width. */
@@ -167,11 +198,14 @@ a.tile:focus-visible {
   font: var(--sx-text-meta);
 }
 
-/* The tile's ring grows with the text, so its percent keeps clear of the
-   stroke at any size (the owner's Redmi at 130 %: "40%" touched it). */
+/* The tile's ring is sized by its own text, so even "100%" keeps clear of
+   the stroke at any text size (the owner's Redmi at 130 %: "40%" touched it;
+   his OnePlus, 17 Nov 2026: "100%" ran over the ring). The hole is 70 % of
+   the ring; "100%" is under 2.6 em wide. */
 .tile .ring {
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 4.2em;
+  height: 4.2em;
+  font: var(--sx-text-badge);
 }
 
 .figure {
@@ -205,7 +239,8 @@ a.tile:focus-visible {
 }
 
 .ringTrack {
-  stroke: var(--sx-line);
+  /* Seen on a dark tile too (owner's review, 17 Nov 2026: dark mode). */
+  stroke: color-mix(in oklab, var(--sx-ink) 16%, transparent);
 }
 
 .ringValue {
@@ -216,6 +251,8 @@ a.tile:focus-visible {
 .ringWords {
   color: var(--sx-ink);
   font: var(--sx-text-badge);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 /* Needs attention: a dot whose colour says late (red) or still to do (amber). */
