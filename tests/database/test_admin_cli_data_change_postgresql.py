@@ -1,7 +1,8 @@
 """The admin CLI (scripts/data-changes/admin.py) on PostgreSQL, every command group through the
 app's own services: a dry run makes the change and rolls it back (nothing stays, no audit); an
 apply commits once with one ``admin.data_change_applied`` event naming the approver and the
-issue; the same command again replays and changes nothing. Made-up people and leads only
+issue; the same command again replays and changes nothing. A change that finds nothing to do
+keeps its receipt and audit too, so its retry replays (PR 637). Made-up people and leads only
 (owner, 17 Nov 2026: "every base-level primitive", not just adding people)."""
 
 from __future__ import annotations
@@ -139,7 +140,8 @@ def test_people_and_workspaces(postgres_harness: Any, tmp_path: Path) -> None:
                 desk = await db.get(LeadDeskSettings, here.tenant_id)
                 default = default_cap(desk.config if desk else DEFAULT_SETTINGS)
                 assert rules.max_open == (limit if had else default)
-            idle = await cli(
+            audits = await cli.audits()
+            off_again = (
                 "people",
                 "taking-leads",
                 "--person-id",
@@ -148,9 +150,10 @@ def test_people_and_workspaces(postgres_harness: Any, tmp_path: Path) -> None:
                 "off",
                 "--command-id",
                 str(uuid4()),
-                apply=True,
             )
+            idle = await cli(*off_again, apply=True)
             assert idle["status"] == "already_off" and idle["before"] == {"taking": False}
+            assert idle["audit"] == "written" and await cli.audits() == audits + 1
             _, back, _ = await cli.twice(
                 "people", "taking-leads", "--person-id", seller, "--taking", "on"
             )
@@ -338,17 +341,26 @@ def test_leads(postgres_harness: Any, tmp_path: Path) -> None:
                 async with cli.sessions() as db:
                     value = await db.scalar(select(column).where(Lead.id == UUID(second)))
                 assert (value is None) == action.startswith("restore"), action
-            # Nothing left to restore: the change is "unchanged" and audits nothing.
+            # Nothing left to restore: the change is "unchanged", and its receipt and audit
+            # are kept, so a retry of the same id replays it (PR 637).
             audits = await cli.audits()
-            idle = await cli(
-                "leads",
-                "restore-bin",
-                "--lead-id",
-                second,
-                "--command-id",
-                str(uuid4()),
-                apply=True,
+            idle_args = ("leads", "restore-bin", "--lead-id", second, "--command-id", str(uuid4()))
+            dry = await cli(*idle_args)
+            assert dry["status"] == "unchanged" and dry["rolled_back"] is True
+            assert await cli.audits() == audits
+            idle = await cli(*idle_args, apply=True)
+            assert idle["status"] == "unchanged" and idle["audit"] == "written"
+            assert await cli.audits() == audits + 1
+            # Binned again in the app meanwhile: the retry still replays, and binned it stays.
+            _, rebinned, _ = await cli.twice(
+                "leads", "bin", "--lead-id", second, "--command-id", str(uuid4())
             )
-            assert idle["status"] == "unchanged" and await cli.audits() == audits
+            assert rebinned["after"]["changed"] == 1
+            retry = await cli(*idle_args, apply=True)
+            assert retry["status"] == "replayed"
+            assert retry["applied_result"]["status"] == "unchanged"
+            async with cli.sessions() as db:
+                binned = await db.scalar(select(Lead.binned_at).where(Lead.id == UUID(second)))
+            assert binned is not None
 
     run(exercise())

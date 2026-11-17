@@ -34,7 +34,8 @@ stdin; run the importer directly there).
 - **Named approval.** `--actor-person-id` (the operator's person), `--approver` and `--issue` are required for every
   change. References are short ids, never personal data.
 - **One audit event** per applied change: `admin.data_change_applied`, naming the approver, the issue, the operator,
-  the run and the command's intent. A change that finds nothing to do (`already_admin`, `unchanged`) writes none.
+  the run and the command's intent. A change that finds nothing to do (`already_admin`, `no_leads`, `unchanged`) is
+  recorded the same way, so a retry of its command id replays it rather than acting later.
 - **A rerun changes nothing.** The command id defaults to one derived from the environment, the issue and the
   command's intent, so running the same command again returns `replayed`. Pass `--command-id <uuid>` for a fresh run
   of the same change (for example, turning a switch on again later under the same issue). A used command id with a
@@ -62,6 +63,9 @@ stdin; run the importer directly there).
 | `people transfer-owner --person-id P`    | P owns; the old owner becomes an admin; both e-mailed                                                       | `transfer_ownership`                                  |
 | `people rename --person-id P --name N`   | the account's display name                                                                                  | direct (the app lets a person rename only themselves) |
 | `people remove-member --person-id P`     | the membership ends; never the owner                                                                        | `remove_member`                                       |
+
+`people taking-leads --person-id P --taking on|off` is Team's "Taking new leads" switch (`save_rep`, only the switch
+changes; P's open leads stay). Off, the lead rules skip P, so new leads wait unassigned for a manager.
 
 Old names: `set-role`, `transfer-owner`, `rename-person`, `remove-member`.
 

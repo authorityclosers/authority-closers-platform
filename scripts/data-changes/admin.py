@@ -60,7 +60,8 @@ Selections by filter (``--where-owner``, ``--where-unassigned``, ``--where-step`
 
 Every changing command: a dry run by default, made in full inside its transaction and rolled
 back, printing before and after; ``--apply`` commits once and writes one audit event
-(``admin.data_change_applied``) naming the approver, the issue, the operator and the run.
+(``admin.data_change_applied``) naming the approver, the issue, the operator and the run; a
+change that finds nothing to do records its receipt the same way, so a retry replays it.
 ``--approver`` and ``--issue`` are required. The command ID defaults to one derived from the
 command and its issue, so a rerun replays and changes nothing; pass ``--command-id`` for a
 fresh run of the same change. Staging and production need ``--snapshot-reference`` to apply;
@@ -1301,31 +1302,32 @@ async def _batch(database: AsyncSession, settings: Settings, args: argparse.Name
     child = uuid5(command_id, "canonical-app-command")
     ctx = Context(database, settings, args, child, service)
     result = await HANDLERS[key](ctx)
-    if result["status"] == "eligible":
-        if args.apply:
-            result["status"] = "applied"
-        tenant_id = args.tenant_id if key not in NO_TENANT else UUID(str(result["tenant_id"]))
-        await append_audit_event(
-            database,
-            tenant_id=tenant_id,
-            actor_person_id=args.actor_person_id,
-            actor_type="operator",
-            action=ACTION,
-            resource_type=RESOURCES.get(
-                f"{args.group} {args.command}",
-                "lead" if args.group == "leads" else "organisation_membership",
-            ),
-            resource_id=str(getattr(args, "person_id", None) or tenant_id),
-            request_id=str(command_id),
-            reason=reason,
-            payload={
-                "intent": intent,
-                "result": result,
-                "snapshot_reference": args.snapshot_reference,
-                "canonical_command_id": str(child),
-            },
-        )
-        result["audit"] = "written" if args.apply else "rehearsed"
+    if result["status"] == "eligible" and args.apply:
+        result["status"] = "applied"
+    # A change that finds nothing to do (already_*, no_leads, unchanged) keeps its receipt
+    # and audit too (PR 637): a retry of the same command id replays it, and never acts later.
+    tenant_id = args.tenant_id if key not in NO_TENANT else UUID(str(result["tenant_id"]))
+    await append_audit_event(
+        database,
+        tenant_id=tenant_id,
+        actor_person_id=args.actor_person_id,
+        actor_type="operator",
+        action=ACTION,
+        resource_type=RESOURCES.get(
+            f"{args.group} {args.command}",
+            "lead" if args.group == "leads" else "organisation_membership",
+        ),
+        resource_id=str(getattr(args, "person_id", None) or tenant_id),
+        request_id=str(command_id),
+        reason=reason,
+        payload={
+            "intent": intent,
+            "result": result,
+            "snapshot_reference": args.snapshot_reference,
+            "canonical_command_id": str(child),
+        },
+    )
+    result["audit"] = "written" if args.apply else "rehearsed"
     return {**report, **result}
 
 
