@@ -5353,6 +5353,9 @@ class LeadDesk:
                 body=body[:240],
                 lead_id=lead.id,
                 url=f"/leads#lead={lead.id}",
+                # A new lead must grab attention at once (owner, 17 Nov 2026): the app puts
+                # it on its Urgent work channel, heads-up with the urgent sound.
+                urgency="urgent",
             )
         meeting = await meeting_rows.open_meeting(self.db, self.tenant_id, lead.id)
         if meeting is not None and meeting.starts_at - self.now <= 2 * meeting_rows.REMIND_BEFORE:
@@ -5380,13 +5383,19 @@ class LeadDesk:
                 if part
             )
             title = f"New lead: {name}"
+            urgency: Literal["urgent"] | None = "urgent"
         else:
             _, why = self._why(lead, self._day_start() + timedelta(days=1))
             when = f"was {clock_text(lead.next_action_at)}" if lead.next_action_at else None
             body = " · ".join(part for part in (why, when) if part)
             title = f"Call {name} now"
+            urgency = None
         return AlertText(
-            title=title[:120], body=body[:240], lead_id=lead.id, url=f"/leads#lead={lead.id}"
+            title=title[:120],
+            body=body[:240],
+            lead_id=lead.id,
+            url=f"/leads#lead={lead.id}",
+            urgency=urgency,
         )
 
     async def _just_in(self) -> int:
