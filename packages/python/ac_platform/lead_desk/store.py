@@ -780,6 +780,18 @@ def _short(name: str, limit: int = 60) -> str:
     return name if len(name) <= limit else name[: limit - 1] + "…"
 
 
+def _proper(name: str) -> str:
+    """A name as the alert shows it: "asha patil" reads "Asha Patil" (the bell's "New lead"
+    line does the same); a name already written with capitals keeps them."""
+    return " ".join(word[:1].upper() + word[1:] for word in name.split())
+
+
+def arrived_text(at: datetime, now: datetime) -> str:
+    """When a new lead came in, on its phone alert: "7:42 PM, 2 min ago" (owner, 17 Nov 2026:
+    the alert says the time)."""
+    return f"{clock_text(at)}, {ago_text(at, now)}"
+
+
 def takes_new_leads(role: str | None, rules: LeadRep | None) -> bool:
     """Whether the lead rules give this person new leads by themselves (owner, 2 Nov 2026:
     leads go to sellers, not owners). A seller does unless they switched "Taking new leads"
@@ -5359,7 +5371,7 @@ class LeadDesk:
         )
         if lead.stage in CLOSED_STAGES or not (mine or told):
             raise DeskError(404, "This lead isn't waiting on you.")
-        name = _short(lead.name)
+        name = _proper(_short(lead.name))
         source = lead.source_label or SOURCE_LABELS.get(lead.source, lead.source)
         if told:
             seller = (
@@ -5373,7 +5385,7 @@ class LeadDesk:
                     source,
                     lead.interest,
                     None if seller else "No owner yet: tap to assign",
-                    ago_text(lead.received_at or lead.created_at, self.now),
+                    arrived_text(lead.received_at or lead.created_at, self.now),
                 )
                 if part
             )
@@ -5410,7 +5422,11 @@ class LeadDesk:
         if lead.stage == "new" and lead.next_action_at is None:
             body = " · ".join(
                 part
-                for part in (source, lead.interest, ago_text(lead.created_at, self.now))
+                for part in (
+                    source,
+                    lead.interest,
+                    arrived_text(lead.received_at or lead.created_at, self.now),
+                )
                 if part
             )
             title = f"New lead: {name}"
