@@ -317,6 +317,26 @@ def test_the_stage_each_lead_desk_event_reaches() -> None:
     assert engine.reached(journey, "captured", {"source": "template"}) == "new"
 
 
+def test_only_a_move_between_pipelines_is_skipped() -> None:
+    # Every stage move names the lead's own pipeline (store._move); that alone is a stage
+    # move, and it reaches the ad platforms (16 Nov 2026: none ever had).
+    stage_move = {
+        "stage": "interested",
+        "from_stage": "new",
+        "step": "site_visit_booked",
+        "from_step": "new",
+        "v": 2,
+        "to_key": "site_visit_booked",
+        "pipeline": "main",
+    }
+    assert engine.between_pipelines(stage_move) is False
+    # store._to_pipeline: from one pipeline into another.
+    assert engine.between_pipelines({**stage_move, "from_pipeline": "partner"}) is True
+    # Captures and older lines without either key are untouched.
+    assert engine.between_pipelines({}) is False
+    assert engine.between_pipelines({"source": "meta"}) is False
+
+
 def test_the_template_map_picks_where_todays_leads_go() -> None:
     before = saved(from_template("simple", default_journey(), {}))
     after = saved(from_template("inside_sales_demos", before, {"follow_up": 2}), version=2)
