@@ -863,3 +863,35 @@
 .table [data-column="created"] {
   width: 8%;
 }
+
+/* M2-A columns (17 Nov 2026: "Akash Jadh", "New Lea" cut at 1280): the name
+   and stage word whole, any other cut cell ends in an ellipsis (its full text
+   in the tooltip). Widths are set on the head from leads-table.tsx. */
+.wrap[data-wide-table]:not([data-fit]) .nameCell .name strong,
+.wrap[data-wide-table]:not([data-fit]) .nameCell .name small {
+  max-width: 100%;
+}
+
+.stage:has(.stageDot) {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.stageWord,
+.ownerWord {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.owner,
+.source {
+  max-width: 100%;
+}
+
+/* M2-A: 10 px either side of a wide table's cells, so every column fits 1280. */
+.wrap[data-wide-table]:not([data-fit]) .table td:not(.pick),
+.wrap[data-wide-table]:not([data-fit]) .table .sort {
+  padding-inline: 10px;
+}

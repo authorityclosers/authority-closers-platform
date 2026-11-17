@@ -170,7 +170,10 @@ function keepShown(shown: ReadonlySet<Column>) {
    name, a 44 px chevron and the tick column while selecting. Widths include
    the cells' padding. A narrow row's Stage cell carries the next action under
    it; with no room for a column, both go under the name. */
-const FIT_BELOW = 860;
+// A computer's pane above this keeps whole names and drops its lowest-value
+// columns instead (wideColumns); 640 keeps a 1100 px screen's 700 px pane wide
+// (17 Nov 2026).
+const FIT_BELOW = 640;
 const NAME_MIN = 132;
 const KEY_MIN = 116;
 // "tomorrow 12:00 AM" under a stage is 124 px at 12.5 px: 144 with the cell's padding.
@@ -291,6 +294,99 @@ export function fitColumns<C extends string>(
     ),
   };
 }
+
+/* A computer's table (owner's pick M2-A, 17 Nov 2026: "Akash Jadh", "New Lea"
+   were cut at 1280): each column a fixed width with its padding, the name what
+   is left and never under NAME_FULL (a 22-letter name beside its avatar), so
+   every name and stage word reads whole. Where the pane is short the
+   lowest-value columns go first; nothing scrolls sideways. */
+// Widths are the text measured on dev plus the cells' 10 px padding each side:
+// 164 px of name at 22 letters beside its 44 px avatar.
+const NAME_FULL = 228;
+const WIDE_WIDTH: Record<Exclude<Column, "name">, number> = {
+  // "•• 0332" (50 px).
+  phone: 72,
+  // "Meeting Scheduled" (130 px) after its dot.
+  stage: 166,
+  pipeline: 120,
+  // An avatar and a first name ("Sneha", 70 px); a long one ends in "…".
+  owner: 96,
+  // "Website" beside its mark.
+  source: 100,
+  // "Yesterday" in bold (69 px).
+  next: 92,
+  last: 132,
+  age: 84,
+  contact: 108,
+  reason: 124,
+  created: 68,
+};
+/** A whole number ("+91 98765 43210") rather than its last four digits. */
+const WIDE_PHONE_FULL = 128;
+const DROP_FIRST: Column[] = [
+  "last",
+  "created",
+  "contact",
+  "age",
+  "reason",
+  "pipeline",
+  "source",
+  "phone",
+  "owner",
+  "next",
+];
+
+/** A wide column's width in px, its padding included. */
+export function wideWidth(column: Column, fullPhone: boolean): number | null {
+  if (column === "name") return null;
+  return column === "phone" && fullPhone ? WIDE_PHONE_FULL : WIDE_WIDTH[column];
+}
+
+/** The columns a computer's pane holds beside a whole name, lowest-value
+ *  dropped first; all of them while the width is unknown. */
+export function wideColumns<C extends Column>(
+  width: number,
+  columns: readonly C[],
+  ticks: boolean,
+  fullPhone = false,
+): C[] {
+  if (!width) return [...columns];
+  const kept = new Set<C>(columns);
+  const used = () =>
+    (ticks ? TAP : 0) +
+    NAME_FULL +
+    [...kept].reduce(
+      (sum, column) => sum + (wideWidth(column, fullPhone) ?? 0),
+      0,
+    );
+  for (const column of DROP_FIRST) {
+    if (used() <= width) break;
+    kept.delete(column as C);
+  }
+  return columns.filter((column) => kept.has(column));
+}
+
+/** A next step's day, short ("Today", "1 Nov"); its time is in the tooltip. */
+export function stepDay(iso: string, now = new Date()): string {
+  const at = new Date(iso);
+  const shift = (days: number) => {
+    const day = new Date(now);
+    day.setDate(now.getDate() + days);
+    return day.toDateString();
+  };
+  const day = at.toDateString();
+  if (day === shift(0)) return "Today";
+  if (day === shift(1)) return "Tomorrow";
+  if (day === shift(-1)) return "Yesterday";
+  return at.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+
+/** A source in a word beside its mark ("Meta", "Google", "Website"). */
+const SOURCE_WORD: Partial<Record<ReturnType<typeof sourceKind>, string>> = {
+  meta: "Meta",
+  google: "Google",
+  website: "Website",
+};
 
 /** How long a lead has sat in its stage, in words ("3 days"). */
 export function inStage(
@@ -475,8 +571,15 @@ export function LeadsTable({
         KEY_ORDER,
         selecting || ticks,
       );
+  // A computer's wide table: fixed widths, the name whole (pick M2-A).
+  const wide = !phone && !fit;
+  const fullPhone = rows.some((row) => !!row.phone);
   // In a narrow pane: Name and the key columns in the row, the rest under it.
-  const rowColumns: Column[] = fit ? ["name", ...fit.keys] : columns;
+  const rowColumns: Column[] = fit
+    ? ["name", ...fit.keys]
+    : wide
+      ? wideColumns(paneWidth, columns, selecting || ticks, fullPhone)
+      : columns;
   // The next action rides under the stage (or under the name, with no room
   // for a column) rather than waiting in the opened row.
   const nextWithStage =
@@ -684,7 +787,9 @@ export function LeadsTable({
         // The whole number when the organisation shows full numbers (owner,
         // 25 Oct 2026); else its last four digits.
         return row.phone ? (
-          <span className={styles.phone}>{displayPhone(row.phone)}</span>
+          <span className={styles.phone} title={displayPhone(row.phone)}>
+            {displayPhone(row.phone)}
+          </span>
         ) : row.phone_last4 ? (
           <span className={styles.phone}>{`•• ${row.phone_last4}`}</span>
         ) : (
@@ -705,7 +810,10 @@ export function LeadsTable({
             )}
           </span>
         ) : (
-          <span className={styles.stage}>
+          <span
+            className={styles.stage}
+            title={sides ? sideStage(row, row.stage_label) : row.stage_label}
+          >
             {stageTone ? (
               <span
                 className={styles.stageDot}
@@ -713,7 +821,9 @@ export function LeadsTable({
                 aria-hidden="true"
               />
             ) : null}
-            {sides ? sideStage(row, row.stage_label) : row.stage_label}
+            <span className={styles.stageWord}>
+              {sides ? sideStage(row, row.stage_label) : row.stage_label}
+            </span>
           </span>
         );
       case "pipeline":
@@ -722,7 +832,9 @@ export function LeadsTable({
         return row.owner_name ? (
           <span className={styles.owner} title={displayName(row.owner_name)}>
             <Avatar name={row.owner_name} size={20} />
-            {displayName(row.owner_name).split(" ")[0]}
+            <span className={styles.ownerWord}>
+              {displayName(row.owner_name).split(" ")[0]}
+            </span>
           </span>
         ) : (
           <span className={styles.quiet}>No owner</span>
@@ -732,19 +844,25 @@ export function LeadsTable({
         return (
           <span className={styles.source} title={row.source_label || undefined}>
             <SourceMark kind={sourceKind(row)} />
-            {shortSource(row)}
+            {(wide && SOURCE_WORD[sourceKind(row)]) || shortSource(row)}
           </span>
         );
       case "next":
+        // A wide table: the day ("1 Nov"), its time on hover (pick M2-A).
         return row.next_action_at ? (
-          <span data-late={row.overdue ? "" : undefined}>
-            {when(row.next_action_at, now)}
+          <span
+            data-late={row.overdue ? "" : undefined}
+            title={wide ? when(row.next_action_at, now) : undefined}
+          >
+            {wide
+              ? stepDay(row.next_action_at, now)
+              : when(row.next_action_at, now)}
           </span>
         ) : (
           <span className={styles.quiet}>None</span>
         );
       case "last":
-        return lastCall(row);
+        return <span title={lastCall(row)}>{lastCall(row)}</span>;
       case "age":
         return inStage(row, now) ?? <span className={styles.quiet}>–</span>;
       case "contact":
@@ -940,6 +1058,11 @@ export function LeadsTable({
                   key={column}
                   scope="col"
                   data-column={column}
+                  style={
+                    wide && wideWidth(column, fullPhone)
+                      ? { width: `${wideWidth(column, fullPhone)}px` }
+                      : undefined
+                  }
                   aria-sort={
                     sorted ? (down ? "descending" : "ascending") : "none"
                   }
@@ -1095,7 +1218,7 @@ export function LeadsTable({
               onAdded={quickAdd.onAdded}
               onPasteRows={quickAdd.onPasteRows}
               before={selecting || ticks ? 1 : 0}
-              after={columns.length - 3}
+              after={Math.max(1, rowColumns.length - 3)}
             />
           </tfoot>
         ) : null}

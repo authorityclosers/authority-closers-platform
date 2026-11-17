@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import type { LeadRow } from "./leads-client";
-import { fitColumns, LeadsTable } from "./leads-table";
+import { fitColumns, LeadsTable, stepDay, wideColumns } from "./leads-table";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -269,11 +269,69 @@ it("fits Name and the key columns to the pane's width", () => {
   expect(fitColumns(358, shown, order, true)?.keys).toEqual(["stage"]);
   // 130% text on a small phone: no room for a column; all goes under the name.
   expect(fitColumns(234, shown, order, false)?.keys).toEqual([]);
-  // A tablet holds four, in the table's own order.
-  expect(fitColumns(736, shown, order, false)).toEqual({
-    keys: ["stage", "source", "next", "last"],
-    keyWidth: 140,
+  // A narrow pane holds three, in the table's own order; from 640 px a
+  // computer's pane is the wide table (pick M2-A, 17 Nov 2026).
+  expect(fitColumns(600, shown, order, false)).toEqual({
+    keys: ["stage", "next", "last"],
+    keyWidth: 141,
   });
+  expect(fitColumns(736, shown, order, false)).toBeNull();
+});
+
+// Pick M2-A at 1280 (17 Nov 2026: "Akash Jadh", "New Lea"): every name and
+// stage word whole; the lowest-value columns go first where the pane is short.
+it("keeps a whole name in a computer's pane, dropping Last call, then Created", () => {
+  const all = [
+    "name",
+    "phone",
+    "stage",
+    "owner",
+    "source",
+    "next",
+    "last",
+    "created",
+  ] as const;
+  expect(wideColumns(0, all, true)).toEqual([...all]);
+  // 1440 x 900 beside the sidebar: every column.
+  expect(wideColumns(1042, all, true)).toEqual([...all]);
+  // 1280 x 800: 882 px, Last call goes.
+  expect(wideColumns(882, all, true)).toEqual([
+    "name",
+    "phone",
+    "stage",
+    "owner",
+    "source",
+    "next",
+    "created",
+  ]);
+  // 1100 x 800: 708 px, then Created and Source.
+  expect(wideColumns(708, all, true)).toEqual([
+    "name",
+    "phone",
+    "stage",
+    "owner",
+    "next",
+  ]);
+  // Narrower still: Phone, then Owner.
+  expect(wideColumns(620, all, true)).toEqual(["name", "stage", "next"]);
+  // Whole numbers take more room than the last four digits.
+  expect(wideColumns(882, all, true, true)).not.toContain("created");
+});
+
+it("says a next step's day, short", () => {
+  const now = new Date(2026, 10, 17, 9, 0);
+  expect(stepDay(new Date(2026, 10, 17, 15, 0).toISOString(), now)).toBe(
+    "Today",
+  );
+  expect(stepDay(new Date(2026, 10, 18, 10, 0).toISOString(), now)).toBe(
+    "Tomorrow",
+  );
+  expect(stepDay(new Date(2026, 10, 16, 10, 0).toISOString(), now)).toBe(
+    "Yesterday",
+  );
+  expect(stepDay(new Date(2026, 10, 1, 10, 0).toISOString(), now)).toBe(
+    "1 Nov",
+  );
 });
 
 const atWidth = async (width: number, run: () => Promise<void>) => {
