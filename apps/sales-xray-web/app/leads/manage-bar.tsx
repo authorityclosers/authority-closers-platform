@@ -20,9 +20,9 @@
  *   dock of four (Assign, Stage, Tag, More) where the Call band was. No red
  *   button in the dock: Archive and the Bin live in More.
  *
- * Archive and Move to Bin stay hidden (SHELF_ACTIONS_ENABLED) until Leads has
- * its Archived and Bin lists with Restore (M3-A): after the 10-second Undo
- * there is no way back yet (v1.78 review, PR 637).
+ * Archive and Move to Bin show (SHELF_ACTIONS_ENABLED) now that Leads has its
+ * Archived and Bin lists with Restore (M3-A, /leads/shelf); v1.78 hid them
+ * while the 10-second Undo was the only way back (PR 637 review).
  */
 
 import {
@@ -254,9 +254,9 @@ export function tagLeads(change: TagChange): Promise<BulkJob> {
   );
 }
 
-/** Archive and Move to Bin in the bars: off until the Archived and Bin lists
- * with Restore are reachable (M3-A; v1.78 review, PR 637). */
-export const SHELF_ACTIONS_ENABLED = false;
+/** Archive and Move to Bin in the bars: on, as the Archived and Bin lists with
+ * Restore are reachable from the Leads menu (M3-A; off in v1.78, PR 637). */
+export const SHELF_ACTIONS_ENABLED = true;
 
 /** The bars' actions with Archive and the Bin taken off while
  * SHELF_ACTIONS_ENABLED is false. */

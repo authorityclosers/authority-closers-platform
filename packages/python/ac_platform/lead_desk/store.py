@@ -1046,6 +1046,18 @@ class LeadDesk:
         try:
             return await self._lead(lead_id), False
         except DeskError:
+            if self.viewer.can_delete:
+                # A lead in the Bin, to read only (owners and admins, the Bin's own list;
+                # owner's M3-A, 17 Nov 2026): every change still refuses it until restored.
+                binned: Lead | None = await self.db.scalar(
+                    select(Lead).where(
+                        Lead.tenant_id == self.tenant_id,
+                        Lead.id == lead_id,
+                        Lead.binned_at.is_not(None),
+                    )
+                )
+                if binned is not None:
+                    return binned, True
             if not team and (
                 self.viewer.can_manage or not await duplicate_queue.worked_before(self, lead_id)
             ):

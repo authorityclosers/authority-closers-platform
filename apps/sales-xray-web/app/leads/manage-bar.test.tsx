@@ -268,11 +268,12 @@ it("gives the phone a dock of four, Archive and the Bin under More", async () =>
   expect(button("Assign")?.disabled).toBe(true);
 });
 
-it("keeps Archive and the Bin off both bars until they can be restored (v1.78)", async () => {
-  // No Archived or Bin list with Restore yet (M3-A): nothing hides a lead
-  // beyond its 10-second Undo.
-  expect(SHELF_ACTIONS_ENABLED).toBe(false);
-  const act1 = withShelf(actions());
+it("keeps Archive and the Bin off both bars while the switch is off (v1.78)", async () => {
+  // On since the Archived and Bin lists with Restore (M3-A); off, nothing
+  // hides a lead beyond its 10-second Undo.
+  expect(SHELF_ACTIONS_ENABLED).toBe(true);
+  expect(withShelf(actions()).onArchive).toBeDefined();
+  const act1 = withShelf(actions(), false);
   expect(act1.onArchive).toBeUndefined();
   expect(act1.onBin).toBeUndefined();
   expect(withShelf(actions(), true).onBin).toBeDefined();

@@ -1,0 +1,198 @@
+/* Archived and the Bin (/leads/shelf, owner's M3-A, 17 Nov 2026): a list of
+   leads taken off Leads, each with Restore. Phones first; tokens only. */
+.shelf,
+.shelf * {
+  box-sizing: border-box;
+}
+
+.shelf {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  /* Room under the list for the sticky Restore bar. */
+  padding-bottom: 72px;
+}
+
+.shelf :is(ol, p, dl, dd) {
+  margin: 0;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-sunken);
+}
+
+.tab {
+  min-height: 40px;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.tab[aria-current="page"] {
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+}
+
+.tab:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.lede {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.list {
+  display: grid;
+  padding: 0;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  list-style: none;
+  overflow: hidden;
+}
+
+.list > li + li {
+  border-top: 1px solid var(--sx-hairline, var(--sx-line));
+}
+
+.item {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.tick {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--sx-accent);
+}
+
+.row {
+  display: grid;
+  min-width: 0;
+  min-height: 48px;
+  gap: 2px;
+  padding: 4px 0;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.row:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.row strong {
+  overflow: hidden;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row small {
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row span {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+}
+
+.row span[data-tone="warn"],
+.warn {
+  color: var(--sx-bad);
+}
+
+.skeleton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+/* Several ticked: one Restore for them all, over the tab bar. */
+.bar {
+  position: sticky;
+  bottom: calc(var(--sx-tabbar-h, 0px) + 8px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-elevated);
+  box-shadow: var(--sx-shadow-float);
+  color: var(--sx-ink);
+  font-weight: 600;
+}
+
+.bar > span {
+  flex: 1;
+}
+
+.read {
+  display: grid;
+  gap: 12px;
+}
+
+.warn {
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.facts {
+  display: grid;
+  gap: 8px;
+}
+
+.facts > div {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.facts dt {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.facts dd {
+  overflow-wrap: anywhere;
+  color: var(--sx-ink);
+}
+
+.notes {
+  display: grid;
+  gap: 6px;
+  padding-left: 18px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}

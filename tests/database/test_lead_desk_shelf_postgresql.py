@@ -140,9 +140,15 @@ def test_archive_bin_restore_and_purge(postgres_harness: Any, tmp_path: Path) ->
                 assert await listed("scope=team&shelf=archived") == {str(a)}
                 assert await listed("scope=team&side=inbound") == {str(d)}
                 assert await listed("scope=team&search=Shelf") == {str(a), str(d)}
-                assert (await client.get(f"{BASE}/leads/{c}")).status_code == 404
+                # Owners and admins open a binned lead to read only (M3-A); nobody changes it.
+                opened = await client.get(f"{BASE}/leads/{c}")
+                assert opened.status_code == 200, opened.text
+                assert opened.json()["lead"]["binned_at"] and opened.json()["worked_before"]
                 noted = await post(f"/leads/{c}/notes", {"command_id": str(uuid4()), "note": "x"})
                 assert noted.status_code == 404
+                as_(manager_token)
+                assert (await client.get(f"{BASE}/leads/{c}")).status_code == 404
+                as_(setup.token)
 
                 # Restore from the Bin puts a lead back where it was (B was archived).
                 back = await post(
