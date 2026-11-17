@@ -81,7 +81,9 @@ def test_summary_counts_boundaries_and_actor_not_lead_owner(
                     summary = await summarize(desk, team=True)
                 finally:
                     sql_event.remove(here.setup.engine.sync_engine, "before_cursor_execute", record)
-                assert len(queries) == 2  # One grouped event read and one people directory read.
+                # One grouped event read, one people directory read, and one sandbox check
+                # (test leads count only in a sandbox organisation; owner, 17 Nov 2026).
+                assert len(queries) == 3
                 assert sum("GROUP BY" in query for query in queries) == 1
                 assert summary.current.model_dump() == dict(
                     calls=3, conversations=2, notes=1, moves=0, work=7

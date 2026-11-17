@@ -16,7 +16,7 @@
  * Only real numbers: a missing value is a dash, a real zero shows 0.
  */
 
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Timer } from "lucide-react";
 import Link from "next/link";
 import {
   useEffect,
@@ -129,15 +129,26 @@ function Units({ value }: { value: string }) {
 export function SpeedTile({ effort }: { effort: Effort }) {
   const minutes = effort.inbound.first_call_minutes;
   return (
-    <section className={styles.speed} aria-label="Speed to new lead">
+    <section
+      className={styles.speed}
+      aria-label="Speed to new lead"
+      data-empty={minutes === null ? "" : undefined}
+    >
       <span className={styles.speedWords}>
         <span className={styles.label}>Speed to new lead</span>
         <span className={styles.meta}>Inbound, median to the first call</span>
       </span>
       {minutes === null ? (
         // No new Inbound lead called yet: words, never a lone dash (owner,
-        // 13 Nov 2026, Growth on the Redmi: "a stray small dash").
-        <span className={styles.speedNone}>Not yet</span>
+        // 13 Nov 2026: "a stray small dash"), and a real empty state, not a
+        // word at the edge (owner's review, 17 Nov 2026: it read like a toast).
+        <p className={styles.speedEmpty}>
+          <Timer size={18} aria-hidden="true" />
+          <span>
+            No new Inbound lead called yet. The time to the first call shows
+            here once one is.
+          </span>
+        </p>
       ) : (
         <strong className={styles.speedFigure}>
           {breakLength(Math.round(minutes))}
@@ -298,8 +309,16 @@ export function PulseTiles({
   const sellers = [...effort.sellers].sort(
     (a, b) => sellerCalls(b) - sellerCalls(a),
   );
-  const most = Math.max(1, ...sellers.map(sellerCalls));
+  // Each bar is the seller's share of the team's calls (owner's review, 17 Nov
+  // 2026: the bars didn't match the numbers; scaled to the busiest seller, one
+  // call read as a full bar).
+  const teamCalls = Math.max(
+    1,
+    sellers.reduce((sum, seller) => sum + sellerCalls(seller), 0),
+  );
   const working = sellers.filter((seller) => sellerCalls(seller) > 0);
+  const percent = (part: number, whole: number) =>
+    `${Math.round((part / Math.max(1, whole)) * 100)}%`;
   const idle = sellers.length - working.length;
   return (
     <section
@@ -354,6 +373,19 @@ export function PulseTiles({
           />
         </Tile>
       </div>
+      {/* Who made the calls the tiles count (owner's review, 17 Nov 2026). */}
+      {effort.team && working.length ? (
+        <p className={styles.whoCalled} data-who-called="">
+          Called by{" "}
+          {working.slice(0, 3).map((seller, index) => (
+            <span key={seller.person_id}>
+              {index ? " · " : ""}
+              <b>{displayName(seller.name)}</b> {n(sellerCalls(seller))}
+            </span>
+          ))}
+          {working.length > 3 ? ` · ${working.length - 3} more` : ""}
+        </p>
+      ) : null}
 
       <div className={styles.card}>
         <h3 className={styles.cardTitle}>Needs attention</h3>
@@ -409,7 +441,7 @@ export function PulseTiles({
                     >
                       <span
                         className={styles.sellerTried}
-                        style={{ width: `${(tried / most) * 100}%` }}
+                        style={{ width: `${(tried / teamCalls) * 100}%` }}
                       >
                         <span
                           className={styles.sellerSpoke}
@@ -420,7 +452,8 @@ export function PulseTiles({
                       </span>
                     </span>
                     <span className={styles.meta}>
-                      {n(tried)} attempted · {n(spoke)} connected
+                      {n(tried)} attempted · {n(spoke)} connected ·{" "}
+                      {percent(tried, teamCalls)} of the team&apos;s calls
                     </span>
                   </button>
                 </li>
@@ -712,7 +745,15 @@ export function DayRhythm({
     .filter((row) => row.seconds > 0)
     .sort((a, b) => b.seconds - a.seconds)
     .slice(0, 4);
-  const longest = Math.max(1, ...talkers.map((row) => row.seconds));
+  // A bar is the seller's share of the team's talk time, as its title says
+  // (owner's review, 17 Nov 2026: a 2-minute talker drew a full bar).
+  const teamTalk = Math.max(
+    1,
+    effort.sellers.reduce(
+      (sum, seller) => sum + both(seller, "talk_seconds"),
+      0,
+    ),
+  );
   const rhythm = useRhythm(period, effort.team);
   const top = rhythm.status === "ready" ? busiest(rhythm.slots) : null;
   return (
@@ -736,14 +777,17 @@ export function DayRhythm({
                   <span className={styles.sellerName}>
                     {displayName(seller.name)}
                   </span>
-                  <span className={styles.meta}>{talkTime(seconds)}</span>
+                  <span className={styles.meta}>
+                    {talkTime(seconds)} ·{" "}
+                    {Math.round((seconds / teamTalk) * 100)}%
+                  </span>
                 </span>
                 <span className={styles.talkTrack} aria-hidden="true">
                   <span
                     className={styles.talkBar}
                     style={{
                       ...step(index),
-                      width: `${(seconds / longest) * 100}%`,
+                      width: `${(seconds / teamTalk) * 100}%`,
                     }}
                   />
                 </span>

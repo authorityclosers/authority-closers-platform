@@ -822,6 +822,8 @@ class LeadDesk:
         self.sandbox = sandbox
         self.now = now or utcnow()
         self._sequence = 0
+        # Which leads the numbers count, read once per request (_counted_leads).
+        self._counted: tuple[Any, ...] | None = None
         # Each pipeline's own stages, read once per request (lists build many rows).
         self._journeys: dict[str, journeys.Journey] = {}
         self._pipelines: tuple[pipelines.Pipeline, ...] | None = None
@@ -1535,13 +1537,22 @@ class LeadDesk:
         return (await self._windows(rows, {"": (start, end)}))[("", None)]
 
     async def _call_rows(
-        self, start: datetime, end: datetime, *, person: UUID | None = None, team: bool = False
+        self,
+        start: datetime,
+        end: datetime,
+        *,
+        person: UUID | None = None,
+        team: bool = False,
+        counted: bool = True,
     ) -> list[CallRow]:
         """The calls Recent Calls and My work list between two moments, newest first:
         mine, a seller's (``person``) or the whole team's (``team``), for those who may
-        see them. A call its seller made private (a personal call) stays out."""
+        see them. A call its seller made private (a personal call) stays out. The numbers
+        (``counted``, the default) leave calls on test leads out (_counted_leads); a feed
+        that lists the calls passes ``counted=False``."""
         from ac_platform.lead_desk.activity_summary import activity_window
 
+        only = await self._counted_leads() if counted else ()
         joined = and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id)
         found = (
             await self.db.execute(
@@ -1557,6 +1568,7 @@ class LeadDesk:
                 .where(
                     *activity_window(self, start, end, person=person, team=team),
                     LeadEvent.kind == "call",
+                    *only,
                 )
                 .order_by(LeadEvent.created_at.desc())
                 .limit(CALL_ROWS)
@@ -2437,7 +2449,8 @@ class LeadDesk:
         # Calls as Home counts them (_call_rows): a dial its phone's call log never showed
         # was not placed, and connected is call_answered, never a dial's time away (phone
         # QA ph1-50, 1 Nov 2026: five "You called" rows that were back-outs from the dialler).
-        placed = await self._call_rows(after, upto, person=person, team=team)
+        # A feed: calls on test leads stay listed here (only the numbers leave them out).
+        placed = await self._call_rows(after, upto, person=person, team=team, counted=False)
         placed_ids = {row.event_id for row in placed}
         unplaced: dict[UUID, datetime] = {
             event_id: at
@@ -3787,6 +3800,16 @@ class LeadDesk:
             )
         )
         return found is not None
+
+    async def _counted_leads(self) -> tuple[Any, ...]:
+        """SQL for the leads every number counts: test leads stay out of totals, rates,
+        seller bars and charts (owner, 17 Nov 2026: "test leads pollute karuu naye data ...
+        data clean disaayalaa paahije"), except in a sandbox organisation, whose leads are
+        all test data. Lists still show test leads; only counting leaves them out."""
+        if self._counted is None:
+            sandbox = self.sandbox or await self._sandbox_organisation()
+            self._counted = () if sandbox else (Lead.test_data.is_(False),)
+        return self._counted
 
     async def pipeline_report(
         self,
@@ -5238,6 +5261,9 @@ class LeadDesk:
                 body=body[:240],
                 lead_id=lead.id,
                 url=f"/leads#lead={lead.id}",
+                # A new lead must grab attention at once (owner, 17 Nov 2026): the app puts
+                # it on its Urgent work channel, heads-up with the urgent sound.
+                urgency="urgent",
             )
         meeting = await meeting_rows.open_meeting(self.db, self.tenant_id, lead.id)
         if meeting is not None and meeting.starts_at - self.now <= 2 * meeting_rows.REMIND_BEFORE:
@@ -5265,13 +5291,19 @@ class LeadDesk:
                 if part
             )
             title = f"New lead: {name}"
+            urgency: Literal["urgent"] | None = "urgent"
         else:
             _, why = self._why(lead, self._day_start() + timedelta(days=1))
             when = f"was {clock_text(lead.next_action_at)}" if lead.next_action_at else None
             body = " · ".join(part for part in (why, when) if part)
             title = f"Call {name} now"
+            urgency = None
         return AlertText(
-            title=title[:120], body=body[:240], lead_id=lead.id, url=f"/leads#lead={lead.id}"
+            title=title[:120],
+            body=body[:240],
+            lead_id=lead.id,
+            url=f"/leads#lead={lead.id}",
+            urgency=urgency,
         )
 
     async def _just_in(self) -> int:
@@ -6298,7 +6330,8 @@ class LeadDesk:
         )
         rows = await self._call_rows(begin, until, team=team)
         acted = () if team else (LeadEvent.actor_person_id == me,)
-        owned = () if team else (Lead.owner_person_id == me,)
+        counted = await self._counted_leads()
+        owned = (*(() if team else (Lead.owner_person_id == me,)), *counted)
         moves = (
             await self.db.execute(
                 select(
@@ -6308,6 +6341,9 @@ class LeadDesk:
                     LeadEvent.data,
                     LeadEvent.created_at,
                 )
+                .join(
+                    Lead, and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id)
+                )
                 .where(
                     LeadEvent.tenant_id == self.tenant_id,
                     LeadEvent.kind.in_(("result", "stage", "meeting")),
@@ -6315,6 +6351,7 @@ class LeadDesk:
                     LeadEvent.created_at < until,
                     LeadEvent.actor_person_id.is_not(None),
                     *acted,
+                    *counted,
                     # An answer its seller undid moved nobody (ph1-40).
                     not_undone(),
                 )
@@ -6678,6 +6715,7 @@ class LeadDesk:
         self._require_team_view()
         reps = await self._reps()
         day_start = self._day_start()
+        counted = await self._counted_leads()
         due: dict[UUID | None, int] = dict(
             (
                 await self.db.execute(
@@ -6686,6 +6724,7 @@ class LeadDesk:
                         Lead.tenant_id == self.tenant_id,
                         Lead.stage.in_(OPEN_STAGES),
                         Lead.next_action_at <= self.now,
+                        *counted,
                     )
                     .group_by(Lead.owner_person_id)
                 )
@@ -6696,10 +6735,14 @@ class LeadDesk:
         activity = (
             await self.db.execute(
                 select(LeadEvent.id, LeadEvent.actor_person_id, LeadEvent.kind, LeadEvent.data)
+                .join(
+                    Lead, and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id)
+                )
                 .where(
                     LeadEvent.tenant_id == self.tenant_id,
                     LeadEvent.kind.in_(("result", "call")),
                     LeadEvent.created_at >= day_start,
+                    *counted,
                 )
                 .limit(20000)
             )
@@ -6720,7 +6763,7 @@ class LeadDesk:
             (
                 await self.db.execute(
                     select(Lead.stage, func.count())
-                    .where(Lead.tenant_id == self.tenant_id, worked())
+                    .where(Lead.tenant_id == self.tenant_id, worked(), *counted)
                     .group_by(Lead.stage)
                 )
             )
@@ -6731,7 +6774,7 @@ class LeadDesk:
             (
                 await self.db.execute(
                     select(Lead.source, func.count())
-                    .where(Lead.tenant_id == self.tenant_id, worked())
+                    .where(Lead.tenant_id == self.tenant_id, worked(), *counted)
                     .group_by(Lead.source)
                 )
             )
@@ -6745,6 +6788,7 @@ class LeadDesk:
                     Lead.owner_person_id.is_(None),
                     Lead.stage.in_(OPEN_STAGES),
                     worked(),
+                    *counted,
                 )
             )
             or 0
@@ -6756,6 +6800,7 @@ class LeadDesk:
                     Lead.stage == "new",
                     Lead.attempts == 0,
                     worked(),
+                    *counted,
                 )
             )
             or 0
@@ -6767,6 +6812,7 @@ class LeadDesk:
                     Lead.tenant_id == self.tenant_id,
                     Lead.first_contact_at.is_not(None),
                     Lead.created_at >= self.now - timedelta(days=7),
+                    *counted,
                 )
                 .limit(20000)
             )
@@ -6848,12 +6894,17 @@ class LeadDesk:
                     LeadEvent.kind,
                     LeadEvent.data,
                     LeadEvent.created_at,
-                ).where(
+                )
+                .join(
+                    Lead, and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id)
+                )
+                .where(
                     LeadEvent.tenant_id == self.tenant_id,
                     LeadEvent.kind.in_(("call", "result")),
                     LeadEvent.created_at >= begin,
                     LeadEvent.created_at < finish,
                     LeadEvent.actor_person_id.is_not(None),
+                    *await self._counted_leads(),
                 )
             )
         ).all()
@@ -6925,12 +6976,17 @@ class LeadDesk:
                     LeadEvent.kind,
                     LeadEvent.data,
                     LeadEvent.created_at,
-                ).where(
+                )
+                .join(
+                    Lead, and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id)
+                )
+                .where(
                     LeadEvent.tenant_id == self.tenant_id,
                     LeadEvent.kind.in_(("result", "stage")),
                     LeadEvent.created_at >= before,
                     # An answer its seller undid moved nobody (ph1-40).
                     not_undone(),
+                    *await self._counted_leads(),
                 )
             )
         ).all()
@@ -6982,9 +7038,7 @@ class LeadDesk:
 
         arrivals_by_day: dict[date, int] = {}
         # A sandbox organisation's leads are all test data: they count there.
-        counted: tuple[Any, ...] = (
-            () if await self._sandbox_organisation() else (Lead.test_data.is_(False),)
-        )
+        counted = await self._counted_leads()
 
         async def arrived(since: datetime, until: datetime | None) -> tuple[int, int | None]:
             # New leads and their first call's speed are Inbound: an imported Cold list is
@@ -7037,6 +7091,7 @@ class LeadDesk:
                     Lead.next_action_at < self.now,
                     inbound_only(),
                     Lead.owner_person_id.is_not(None),
+                    *counted,
                 )
                 .group_by(Lead.owner_person_id)
             )
@@ -7073,7 +7128,7 @@ class LeadDesk:
         for owner_pipeline, stage, count in (
             await self.db.execute(
                 select(key, Lead.stage, func.count())
-                .where(Lead.tenant_id == self.tenant_id, Lead.stage.in_(OPEN_STAGES))
+                .where(Lead.tenant_id == self.tenant_id, Lead.stage.in_(OPEN_STAGES), *counted)
                 .group_by(key, Lead.stage)
             )
         ).all():

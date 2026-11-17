@@ -177,6 +177,12 @@ it("draws G1's four tiles from the real totals, with no table", () => {
     rows.map((row) => row.querySelector("span span")?.textContent),
   ).toEqual(["Priya Kulkarni", "Rohan Deshmukh"]);
   expect(rows[0].textContent).toContain("52 attempted · 18 connected");
+  // Each bar is the seller's share of the team's calls, said in words too.
+  expect(rows[0].textContent).toMatch(/\d+% of the team's calls$/);
+  // Who made the calls the tiles count (owner's review, 17 Nov 2026).
+  expect(host.querySelector("[data-who-called]")?.textContent).toMatch(
+    /^Called by Priya Kulkarni 52 · Rohan Deshmukh \d+$/,
+  );
   act(() => (rows[1] as HTMLButtonElement).click());
   expect(opened).toHaveBeenCalledWith(effort.sellers[0]);
 });
@@ -215,10 +221,12 @@ it("keeps speed to a new lead small, and says Not yet when there is none", () =>
       />,
     ),
   );
-  // Words, never a lone dash (owner, 13 Nov 2026).
+  // Words, never a lone dash (owner, 13 Nov 2026), as an empty state across
+  // the tile, not a word at its edge (owner's review, 17 Nov 2026).
   expect(host.querySelector("strong")).toBeNull();
-  expect(host.textContent).toBe(
-    "Speed to new leadInbound, median to the first callNot yet",
+  expect(host.querySelector("section")?.hasAttribute("data-empty")).toBe(true);
+  expect(host.querySelector("p")?.textContent).toBe(
+    "No new Inbound lead called yet. The time to the first call shows here once one is.",
   );
 });
 
@@ -328,7 +336,15 @@ it("names today's busiest hour on G4's fourth card, from the team's calls", asyn
     [...host.querySelectorAll('[aria-label="Talk time by seller"] li')].map(
       (row) => row.textContent,
     ),
-  ).toEqual(["Priya Kulkarni1 h", "Rohan Deshmukh30 min"]);
+  ).toEqual(["Priya Kulkarni1 h · 67%", "Rohan Deshmukh30 min · 33%"]);
+  // Each bar is a share of the team's talk, never scaled to the top talker.
+  expect(
+    [
+      ...host.querySelectorAll<HTMLElement>(
+        '[aria-label="Talk time by seller"] li > span:last-child > span',
+      ),
+    ].map((bar) => Math.round(parseFloat(bar.style.width))),
+  ).toEqual([67, 33]);
 });
 
 it("draws a seller's own Growth the same way, with no list of sellers", async () => {

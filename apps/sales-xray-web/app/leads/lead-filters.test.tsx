@@ -294,7 +294,7 @@ it("Old leads open in All Leads, never under To Call", async () => {
   });
 });
 
-it("the sort and the new filters show as chips that remove themselves", async () => {
+it("the new filters show as chips that remove themselves; the sort is no chip", async () => {
   const onChange = vi.fn();
   const on: LeadFilters = {
     ...NONE,
@@ -313,11 +313,9 @@ it("the sort and the new filters show as chips that remove themselves", async ()
   const labels = [...host.querySelectorAll("button")].map((item) =>
     item.getAttribute("aria-label"),
   );
-  expect(labels).toEqual([
-    "Remove filter Late",
-    "Remove filter File upload",
-    "Back to the list's own order (Sort: Name, reversed)",
-  ]);
+  // The sort shows only in "Sort: ..." over the list (owner's review, 17 Nov
+  // 2026: its chip took a row on top).
+  expect(labels).toEqual(["Remove filter Late", "Remove filter File upload"]);
   await act(async () =>
     host
       .querySelector<HTMLButtonElement>('[aria-label="Remove filter Late"]')!

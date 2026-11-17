@@ -1826,14 +1826,22 @@ a.row:focus-visible {
     transform: none;
   }
 }
-@media (prefers-color-scheme: dark) {
-  .ringSide,
-  .stats > .stat,
-  .stats > .team {
-    box-shadow:
-      inset 0 1px 0 color-mix(in oklab, white 8%, transparent),
-      0 10px 26px -16px color-mix(in oklab, black 60%, transparent);
-  }
+/* The app's own dark theme (data-theme), never the phone's setting: the app
+   goes dark only by its own switch (owner's review, 17 Nov 2026: dark mode). */
+:global(:root[data-theme="dark"]) .ringSide,
+:global(:root[data-theme="dark"]) .stats > .stat,
+:global(:root[data-theme="dark"]) .stats > .team {
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 8%, transparent),
+    0 10px 26px -16px color-mix(in oklab, black 60%, transparent);
+}
+
+/* Amber words darkened toward black read on white only; on a dark surface
+   they lighten instead. */
+:global(:root[data-theme="dark"]) .chip[data-tone="wait"],
+:global(:root[data-theme="dark"]) .explainPeople small:not([data-worked]) {
+  background: color-mix(in oklab, var(--sx-warn) 18%, transparent);
+  color: color-mix(in oklab, var(--sx-warn) 75%, white);
 }
 @media (prefers-reduced-motion: reduce) {
   .ringSide,
@@ -2001,6 +2009,11 @@ button.chip {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
   font-weight: 600;
+}
+.explainWho {
+  margin: 14px 0 2px;
+  color: var(--sx-muted);
+  font: var(--sx-text-label);
 }
 .explainPeople {
   display: grid;

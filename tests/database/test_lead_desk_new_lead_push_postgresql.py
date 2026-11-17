@@ -108,11 +108,14 @@ def test_new_leads_reach_the_seller_and_the_owner(postgres_harness: Any, tmp_pat
                 as_(seller_token)
                 mine = (await client.get(f"{BASE}/leads/{first}/alert")).json()
                 assert mine["title"] == "New lead: Fictional Lead 1"
+                # New leads ring on the app's Urgent work channel (owner, 17 Nov 2026).
+                assert mine["urgency"] == "urgent"
                 as_(setup.token)
                 told = (await client.get(f"{BASE}/leads/{first}/alert")).json()
                 assert told["title"].startswith("New lead for ")
                 assert told["title"].endswith(": Fictional Lead 1")
                 assert told["url"] == f"/leads#lead={first}"
+                assert told["urgency"] == "urgent"
 
                 # Four more together: one alert each, "5 new leads", nobody named.
                 await arrive(4, start=2)
@@ -238,6 +241,7 @@ def test_admins_hear_and_a_lead_nobody_got_waits_for_them(
                 words = (await client.get(f"{BASE}/leads/{waits}/alert")).json()
                 assert words["title"] == "New lead waiting: Fictional Waiting"
                 assert "tap to assign" in words["body"]
+                assert words["urgency"] == "urgent"
                 as_(seller_token)
                 hidden = await client.get(f"{BASE}/leads/{waits}/alert")
                 assert hidden.status_code != 200
