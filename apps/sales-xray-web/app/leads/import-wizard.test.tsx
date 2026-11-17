@@ -8,6 +8,13 @@ vi.mock("./leads-client", async (original) => ({
   ...(await original<typeof import("./leads-client")>()),
   previewImport: (...args: unknown[]) => previewImport(...args),
   commitImport: (...args: unknown[]) => commitImport(...args),
+  checkFile: async () => ({
+    stages: [],
+    unmatched_stage: null,
+    owners: [],
+    owned_new: 0,
+    columns: [],
+  }),
   readTeam: async () => ({
     // Sellers who take new leads, and an owner who doesn't (owner, 2 Nov 2026).
     reps: [
@@ -59,7 +66,7 @@ import { ImportDialog } from "./capture-dialogs";
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-// Competitor teardown 5 (1 Nov 2026): the import in four steps, File, Columns,
+// Competitor teardown 5 (1 Nov 2026): the import in four steps, File, Match columns,
 // Check and Assign, with the check before anything is written. A file
 // whose columns didn't all match starts on Columns, each with three of its
 // values. Made-up people only.
@@ -137,19 +144,25 @@ const current = (dialog: HTMLElement) =>
   dialog.querySelector('[aria-label="Import steps"] [aria-current="step"]')
     ?.textContent;
 
-it("walks File, Columns, Check and Assign, and imports with the choices made", async () => {
+it("walks File, Match columns, Check and Assign, and imports with the choices made", async () => {
   const dialog = await mount();
-  expect(current(dialog)).toBe("2Columns");
-  // Three of each matched column's values under it.
-  expect(dialog.querySelector('[data-samples="phone"]')?.textContent).toBe(
+  expect(current(dialog)).toBe("2Match columns");
+  // Every column of the file with three of its values (I2-A).
+  expect(dialog.querySelector('[data-samples="Mobile"]')?.textContent).toBe(
     "98760 75001 · call after 6 · 98760 75003",
   );
-  expect(dialog.querySelector('[data-samples="city"]')?.textContent).toBe(
+  expect(dialog.querySelector('[data-samples="Town"]')?.textContent).toBe(
     "Pune · Nashik · Nagpur",
   );
-  expect(dialog.querySelector('[data-samples="name"]')).toBeNull();
+  // "Customer" wasn't matched: it stays on the lead under its own name.
+  expect(
+    dialog.querySelector(
+      '[data-column="Customer"] button[aria-haspopup="listbox"]',
+    )?.textContent,
+  ).toContain("Keep on the lead");
 
-  await act(async () => button(dialog, "Next")!.click());
+  await act(async () => button(dialog, "Continue to check leads")!.click());
+  await settle();
   expect(current(dialog)).toBe("3Check");
   const counts = Object.fromEntries(
     [...dialog.querySelectorAll("[data-check]")].map((line) => [
@@ -172,6 +185,12 @@ it("walks File, Columns, Check and Assign, and imports with the choices made", a
   await act(async () => button(dialog, "Back")!.click());
   expect(current(dialog)).toBe("3Check");
 
+  // Import is on Assign (I4-A), beside "When you import".
+  await act(async () => button(dialog, "Continue to assign")!.click());
+  await settle();
+  expect(dialog.querySelector('[data-summary="new"]')?.textContent).toContain(
+    "2 new leads",
+  );
   await act(async () => button(dialog, "Import 2 leads")!.click());
   await settle();
   expect(commitImport).toHaveBeenCalledWith(
@@ -189,19 +208,11 @@ it("walks File, Columns, Check and Assign, and imports with the choices made", a
       duplicates: "fill",
     },
   );
-  // The result: what was filled in, and the skipped rows as a file.
-  expect(
-    [...dialog.querySelectorAll("[data-result]")].map((line) => [
-      line.getAttribute("data-result"),
-      line.querySelector("dd")?.textContent,
-    ]),
-  ).toEqual([
-    ["new", "3"],
-    ["known", "1"],
-    ["updated", "1"],
-    ["left", "1"],
-  ]);
-  expect(dialog.textContent).toContain("Details filled in1");
+  // The receipt (I4-B): what was filled in, what wasn't imported, the rows as a file.
+  const receipt = dialog.querySelector("[data-import-receipt]")!;
+  expect(receipt.querySelector("h3")?.textContent).toBe("3 leads imported");
+  expect(receipt.textContent).toContain("Details filled in· 1 lead");
+  expect(receipt.textContent).toContain("2 rows not imported");
   expect(
     [...dialog.querySelectorAll("a")].find((link) =>
       link.textContent?.startsWith("Download rows not added"),
@@ -210,7 +221,7 @@ it("walks File, Columns, Check and Assign, and imports with the choices made", a
   expect(dialog.querySelector('[aria-label="Import steps"]')).toBeNull();
 });
 
-it("goes back from Columns to choose another file", async () => {
+it("goes back from Match columns to choose another file", async () => {
   const dialog = await mount();
   await act(async () => button(dialog, "Back")!.click());
   expect(current(dialog)).toBe("1File");

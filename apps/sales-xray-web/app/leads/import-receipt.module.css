@@ -1,0 +1,127 @@
+/* The receipt after Import (owner's pick I4-B, 17 Nov 2026; study 01 §5 S4). Tokens
+   only. A 640 px column on a computer, the same stacked on a phone. */
+
+.receipt {
+  display: grid;
+  width: 100%;
+  max-width: 640px;
+  gap: 16px;
+  margin: 0 auto;
+}
+
+.head {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.done {
+  display: inline-grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+  animation: pop 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+}
+
+.title {
+  margin: 0;
+  font: var(--sx-text-title);
+  font-size: var(--sx-text-2xl);
+}
+
+.muted {
+  margin: 0;
+  color: var(--sx-muted);
+  font: var(--sx-text-secondary);
+}
+
+.card {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 4px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  list-style: none;
+}
+
+.card > li {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 10px;
+  font: var(--sx-text-body);
+}
+
+.card > li + li {
+  border-top: 1px solid var(--sx-line);
+}
+
+.card > li svg {
+  flex: none;
+  color: var(--sx-muted);
+}
+
+.card > li strong {
+  font-weight: 600;
+}
+
+.card > li span {
+  color: var(--sx-muted);
+}
+
+.cardTitle {
+  margin: 10px 0 4px;
+  font: var(--sx-text-heading);
+  font-weight: 600;
+}
+
+.why {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.why li {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid var(--sx-line);
+  font: var(--sx-text-secondary);
+}
+
+.why li svg {
+  color: var(--sx-muted);
+}
+
+.card > a {
+  display: inline-block;
+  margin: 8px 0 10px;
+}
+
+.undo {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .done {
+    animation: none;
+  }
+}

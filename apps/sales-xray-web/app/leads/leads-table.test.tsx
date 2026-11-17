@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import type { LeadRow } from "./leads-client";
-import { fitColumns, LeadsTable } from "./leads-table";
+import { fitColumns, LeadsTable, stepDay, wideColumns } from "./leads-table";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -97,15 +97,18 @@ it("shows each lead on one line, with names capitalised and the columns asked fo
     "Pipeline",
     "Owner",
     "Source",
-    "Next action",
+    "Next step",
     "Last call",
+    "Created",
   ]);
   const first = host.querySelector("tbody tr")!;
   expect(first.textContent).toContain("Meera Fictional");
   expect(first.textContent).toContain("Fictional Homes");
   expect(first.textContent).toContain("•• 3210");
   expect(first.textContent).toContain("Enrolment");
-  expect(first.textContent).toContain("Swamini Fictional");
+  // The owner as a small avatar and a first name (pick M2-A, 17 Nov 2026).
+  expect(first.textContent).toContain("Swamini");
+  expect(first.querySelector('[title="Swamini Fictional"]')).not.toBeNull();
   expect(first.textContent).toContain("Busy · 2 calls");
   const second = host.querySelectorAll("tbody tr")[1];
   expect(second.textContent).toContain("No number");
@@ -146,8 +149,9 @@ it("leaves out Owner on my own leads and Pipeline with one pipeline", async () =
     "Phone",
     "Stage",
     "Source",
-    "Next action",
+    "Next step",
     "Last call",
+    "Created",
   ]);
 });
 
@@ -173,9 +177,10 @@ it("shows and hides columns from the picker", async () => {
     "Name",
     "Stage",
     "Source",
-    "Next action",
+    "Next step",
     "Last call",
     "Reason",
+    "Created",
   ]);
   // Kept for this browser; the next test starts from the first columns.
   expect(window.localStorage.getItem("sx-leads-table-columns")).toContain(
@@ -264,11 +269,69 @@ it("fits Name and the key columns to the pane's width", () => {
   expect(fitColumns(358, shown, order, true)?.keys).toEqual(["stage"]);
   // 130% text on a small phone: no room for a column; all goes under the name.
   expect(fitColumns(234, shown, order, false)?.keys).toEqual([]);
-  // A tablet holds four, in the table's own order.
-  expect(fitColumns(736, shown, order, false)).toEqual({
-    keys: ["stage", "source", "next", "last"],
-    keyWidth: 140,
+  // A narrow pane holds three, in the table's own order; from 640 px a
+  // computer's pane is the wide table (pick M2-A, 17 Nov 2026).
+  expect(fitColumns(600, shown, order, false)).toEqual({
+    keys: ["stage", "next", "last"],
+    keyWidth: 141,
   });
+  expect(fitColumns(736, shown, order, false)).toBeNull();
+});
+
+// Pick M2-A at 1280 (17 Nov 2026: "Akash Jadh", "New Lea"): every name and
+// stage word whole; the lowest-value columns go first where the pane is short.
+it("keeps a whole name in a computer's pane, dropping Last call, then Created", () => {
+  const all = [
+    "name",
+    "phone",
+    "stage",
+    "owner",
+    "source",
+    "next",
+    "last",
+    "created",
+  ] as const;
+  expect(wideColumns(0, all, true)).toEqual([...all]);
+  // 1440 x 900 beside the sidebar: every column.
+  expect(wideColumns(1042, all, true)).toEqual([...all]);
+  // 1280 x 800: 882 px, Last call goes.
+  expect(wideColumns(882, all, true)).toEqual([
+    "name",
+    "phone",
+    "stage",
+    "owner",
+    "source",
+    "next",
+    "created",
+  ]);
+  // 1100 x 800: 708 px, then Created and Source.
+  expect(wideColumns(708, all, true)).toEqual([
+    "name",
+    "phone",
+    "stage",
+    "owner",
+    "next",
+  ]);
+  // Narrower still: Phone, then Owner.
+  expect(wideColumns(620, all, true)).toEqual(["name", "stage", "next"]);
+  // Whole numbers take more room than the last four digits.
+  expect(wideColumns(882, all, true, true)).not.toContain("created");
+});
+
+it("says a next step's day, short", () => {
+  const now = new Date(2026, 10, 17, 9, 0);
+  expect(stepDay(new Date(2026, 10, 17, 15, 0).toISOString(), now)).toBe(
+    "Today",
+  );
+  expect(stepDay(new Date(2026, 10, 18, 10, 0).toISOString(), now)).toBe(
+    "Tomorrow",
+  );
+  expect(stepDay(new Date(2026, 10, 16, 10, 0).toISOString(), now)).toBe(
+    "Yesterday",
+  );
+  expect(stepDay(new Date(2026, 10, 1, 10, 0).toISOString(), now)).toBe(
+    "1 Nov",
+  );
 });
 
 const atWidth = async (width: number, run: () => Promise<void>) => {
@@ -358,7 +421,7 @@ it("opens the columns that don't fit under a row, without opening the lead", asy
     expect(host.querySelectorAll("tbody tr")[1].textContent).toContain(
       "No next step",
     );
-    expect(host.textContent).toContain("3 more columns under each row");
+    expect(host.textContent).toContain("4 more columns under each row");
     // No pencil beside a narrow name: renaming is on the lead page.
     expect(host.querySelector('[aria-label^="Rename"]')).toBeNull();
     const more = host.querySelector<HTMLButtonElement>(
@@ -370,7 +433,7 @@ it("opens the columns that don't fit under a row, without opening the lead", asy
     const under = host.querySelector(`#more-${id(1)}`)!;
     expect(
       Array.from(under.querySelectorAll("dt"), (term) => term.textContent),
-    ).toEqual(["Phone", "Source", "Last call"]);
+    ).toEqual(["Phone", "Source", "Last call", "Created"]);
     expect(under.textContent).toContain("•• 3210");
     // Only that row opened; the name still opens the lead.
     expect(host.querySelector(`#more-${id(2)}`)).toBeNull();

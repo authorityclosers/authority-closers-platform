@@ -17,8 +17,12 @@ SCOPES: dict[str, str] = {
     "leads:stage": "Move a lead to another stage, with the reason",
     # An organisation's key held by an owner or admin only (ai-writes.md, "Amended 15 Nov").
     "leads:assign": "Give leads to a teammate",
+    # The admin primitives (owner, 17 Nov 2026; integrations/admin_api.py): an organisation's
+    # key held by an owner or admin only. The Bin's purge stays in Sales X-Ray.
+    "leads:archive": "Archive leads, move them to the Bin and restore them",
     # The team as Sales X-Ray shows it: names, never emails (API gap 7, 15 Nov 2026).
     "team:read": "See the team: names, roles and lead capacity",
+    "team:manage": "Invite people, change their roles and remove them",
     # Ask Dipak's coaching loop (14 Nov 2026): missions and their counts; the team's
     # for an organisation key or a role that sees the team.
     "coaching:read": "Read Next-call missions and on how many calls each was done",

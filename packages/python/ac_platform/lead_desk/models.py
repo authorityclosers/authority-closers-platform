@@ -82,6 +82,13 @@ class Lead(Base):
             unique=True,
             postgresql_where=text("source_ref IS NOT NULL"),
         ),
+        # The Bin's leads, for its list and the 30-day purge (migration 0158).
+        Index(
+            "ix_lead_desk_lead_binned",
+            "tenant_id",
+            "binned_at",
+            postgresql_where=text("binned_at IS NOT NULL"),
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
@@ -146,6 +153,13 @@ class Lead(Base):
     # the leads worked every day. Null (every lead from before) is "live". Not pipeline_key,
     # which is the Lead OS pipeline the lead is in. No screen reads it yet.
     pipeline: Mapped[str | None] = mapped_column(String(8), nullable=True, default="live")
+    # Archive and Bin (migration 0158, owner 16 Nov 2026; lead_desk/shelf.py). Archived: off
+    # every work list and count, found by search and the Archived list, restorable. Binned:
+    # deleted, restorable by owners and admins for 30 days, then purged. Null: on the desk.
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    binned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    binned_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
 
 
 class LeadEvent(Base):
@@ -680,6 +694,60 @@ class LeadRep(Base):
     languages: Mapped[list[str]] = mapped_column(JSON)
     areas: Mapped[list[str]] = mapped_column(JSON)
     interests: Mapped[list[str]] = mapped_column(JSON)
+    updated_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadSavedView(Base):
+    """A saved Leads list (migration 0159, saved_views.py): one person's ("me") or the team's
+    ("team"; owners, admins and managers make those). ``query`` holds GET /leads options,
+    ``display`` how it shows; never a lead's data."""
+
+    __tablename__ = "lead_desk_saved_views"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_desk_view_tenant"),
+        ForeignKeyConstraint(["owner_person_id"], ["persons.id"], name="fk_lead_desk_view_owner"),
+        CheckConstraint("visibility IN ('me', 'team')", name="lead_desk_view_visibility"),
+        CheckConstraint("length(trim(name)) > 0", name="lead_desk_view_name"),
+        CheckConstraint("revision >= 1", name="lead_desk_view_revision"),
+        Index("ix_lead_desk_view_tenant", "tenant_id", "visibility", "position"),
+        Index("uq_lead_desk_view_command", "tenant_id", "command_id", unique=True),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    owner_person_id: Mapped[UUID] = mapped_column(Uuid)
+    visibility: Mapped[str] = mapped_column(String(8))
+    name: Mapped[str] = mapped_column(String(40))
+    query: Mapped[dict[str, Any]] = mapped_column(JSON)
+    display: Mapped[dict[str, Any]] = mapped_column(JSON)
+    position: Mapped[int] = mapped_column(Integer)
+    revision: Mapped[int] = mapped_column(Integer)
+    command_id: Mapped[UUID] = mapped_column(Uuid)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadImportMemory(Base):
+    """What a workspace chose in an earlier import (migration 0160, intake_memory.py; lead
+    import I2, 17 Nov 2026: "We'll remember this for your next import"). ``kind`` "column":
+    a file header (as key()) and the field it fills, or "_keep" / "_skip"; "stage": a stage
+    word and the stage key it means; "owner": a name and the teammate's person id. Words and
+    choices only, never a lead's data."""
+
+    __tablename__ = "lead_desk_import_memory"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_import_memory_tenant"),
+        CheckConstraint("kind IN ('column', 'stage', 'owner')", name="lead_import_memory_kind"),
+        CheckConstraint("length(word) > 0", name="lead_import_memory_word"),
+        UniqueConstraint("tenant_id", "kind", "word", name="uq_lead_import_memory_word"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    kind: Mapped[str] = mapped_column(String(8))
+    word: Mapped[str] = mapped_column(String(120))
+    value: Mapped[str] = mapped_column(String(80))
     updated_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 

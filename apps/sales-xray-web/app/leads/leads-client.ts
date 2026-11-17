@@ -82,6 +82,9 @@ export type LeadRow = {
   no_next_action?: boolean;
   /** It has an email address: the card offers one-tap Email. */
   has_email?: boolean;
+  /** Archive and Bin (shelf API): when it was archived or moved to the Bin. */
+  archived_at?: string | null;
+  binned_at?: string | null;
 };
 
 export type MessageTemplate = { key: string; label: string; text: string };
@@ -211,6 +214,8 @@ export type LeadEvent = {
   outcome?: "connected" | "not_connected" | "unknown" | null;
   seconds_from?: "call_log" | "recording" | null;
   changed?: string[] | null;
+  /** Archive and Bin: "archive", "bin", "restore_archive" or "restore_bin". */
+  shelf?: ShelfAction | null;
   channel?: string | null;
   template_label?: string | null;
   /** "phone": the seller's phone logged this call by itself (UX study item 5). */
@@ -405,6 +410,13 @@ export type ImportPreview = {
   bad_numbers?: number;
   /** Old leads kept as history: the enquiry date ("received") and campaign columns. */
   history_mapping?: Record<string, string>;
+  /** An Excel file's sheets, with their leads and columns, and the one read (I1-B). */
+  sheets?: { name: string; rows: number; columns: number }[];
+  sheet?: string | null;
+  /** Headers matched by the workspace's earlier import, and headers it starts as not
+   *  imported (remembered, or a Facebook lead form's ids) (lead import I2). */
+  remembered?: string[];
+  skip?: string[];
 };
 
 /** A file of old leads before it is brought in (history imports, 2 Nov 2026). */
@@ -427,6 +439,8 @@ export type FileCheck = {
     rows: number;
     stage: string | null;
     label?: string | null;
+    /** Placed by the workspace's earlier import (I2). */
+    remembered?: boolean;
   }[];
   unmatched_stage: string | null;
   owners: {
@@ -434,6 +448,7 @@ export type FileCheck = {
     rows: number;
     person_id: string | null;
     person_name: string | null;
+    remembered?: boolean;
   }[];
   owned_new: number;
   columns: {
@@ -441,6 +456,19 @@ export type FileCheck = {
     fate: "matched" | "kept" | "empty" | "not_imported";
     field: string | null;
   }[];
+  /** Every row's outcome, in order (lead import I3); none from an older server. */
+  rows?: RowFate[];
+};
+
+/** What one of the file's rows becomes (lead import I3). */
+export type RowFate = {
+  row: number;
+  outcome: "new" | "known" | "repeat" | "bad" | "blank";
+  /** The lead already here (owners and admins only). */
+  lead_id?: string | null;
+  lead_name?: string | null;
+  /** The earlier row a repeat repeats. */
+  same_as?: number | null;
 };
 
 /** A row an import didn't use, by its index in the preview's rows, and why. */
@@ -502,8 +530,13 @@ export type ImportOptions = {
   shares?: { person_id: string; count: number }[];
   step?: string;
   duplicates?: Duplicates;
-  /** Old leads: the stage key each of the file's stage words means. */
+  /** The stage key each of the file's stage words means (old leads; and I2's picks). */
   stages?: Record<string, string>;
+  /** The teammate each of the file's unknown owner names is (I2). */
+  owners?: Record<string, string>;
+  /** Columns left out and columns kept on the lead on purpose: remembered (I2). */
+  skipped?: string[];
+  kept?: string[];
 };
 
 export type SourceView = {
@@ -1174,6 +1207,253 @@ export function deleteLeads(leadIds: string[], command = commandId()) {
   );
 }
 
+/** At most this many leads go in one bulk change (ids or "all N matching"). */
+export const BULK_JOB_LIMIT = 2000;
+
+export type BulkJobAction = "assign" | "stage" | "pipeline" | ShelfAction;
+
+/** A Leads list as `GET /leads` names it, frozen when the bulk change arrives. */
+export type LeadFilter = {
+  scope?: "mine" | "team" | "unassigned";
+  side?: "inbound" | "cold" | null;
+  view?: "to_call" | "follow_ups" | "all" | null;
+  stage?: string | null;
+  step?: string | null;
+  search?: string | null;
+  owner?: string | null;
+  pipeline?: string | null;
+  source?: string | null;
+  due?: "late" | "today" | "week" | "none" | null;
+  contact?: "today" | "week" | "month" | "never" | null;
+  created?: "today" | "yesterday" | "week" | "month" | "history" | null;
+  when?: "today" | "overdue" | "upcoming" | null;
+  since?: string | null;
+  until?: string | null;
+  test?: boolean;
+  older?: boolean;
+  duplicates?: boolean;
+  shelf?: "archived" | "bin" | null;
+};
+
+export type BulkJobRequest = {
+  /** The leads by id, or `filter` ("Select all 522"); never both. */
+  lead_ids?: string[];
+  filter?: LeadFilter;
+  /** The count the screen showed: refused (409) when the list changed since. */
+  expected_total?: number;
+  action: BulkJobAction;
+  person_id?: string | null;
+  step?: string | null;
+  pipeline?: string | null;
+  outcome_reason?: string | null;
+  reason_note?: string | null;
+  next_action_at?: string | null;
+};
+
+export type BulkJob = {
+  job_id: string;
+  action: BulkJobAction;
+  selection: "ids" | "filter";
+  selected: number;
+  changed: number;
+  unchanged: number;
+  not_found: number;
+  failed: { reason: string; count: number }[];
+  /** The leads that changed, in the order asked. */
+  lead_ids: string[];
+  words: string;
+  by_person_id: string | null;
+  at: string;
+  undo_until: string;
+  undoable: boolean;
+  undone_at: string | null;
+};
+
+export type BulkUndone = { job_id: string; restored: number; skipped: number };
+
+/**
+ * One bulk change on a frozen selection (owners, admins and managers; the
+ * Bin: owners and admins). Keep one command id per confirm: a retry returns
+ * the same job. Undo it with `undoBulkJob` for 30 minutes.
+ */
+export function runBulkJob(change: BulkJobRequest, command = commandId()) {
+  return request<BulkJob>(
+    "/leads/bulk-jobs",
+    json("POST", { command_id: command, ...change }),
+  );
+}
+
+/** Put a bulk change back: leads changed since stay as they are. */
+export function undoBulkJob(jobId: string) {
+  return request<BulkUndone>(
+    `/leads/bulk-jobs/${encodeURIComponent(jobId)}/undo`,
+    json("POST", {}),
+  );
+}
+
+/** The workspace's recent bulk changes, newest first (the action history). */
+export function readBulkJobs(signal?: AbortSignal) {
+  return request<{ jobs: BulkJob[] }>("/leads/bulk-jobs", { signal });
+}
+
+/** Open leads on one side, late, due today, untouched 7 days, per desk stage. */
+export type LoadCounts = {
+  open: number;
+  late: number;
+  due_today: number;
+  untouched_7d: number;
+  by_stage: Record<string, number>;
+};
+
+export type SellerLoad = {
+  person_id: string;
+  name: string;
+  /** Their role here; null: holds leads but no longer works them. */
+  role: string | null;
+  takes_new_leads: boolean;
+  /** Open-lead limit (Inbound); null: no limit. */
+  max_open: number | null;
+  load: LoadCounts;
+};
+
+/** Sellers plus `unassigned` add up to `totals`. */
+export type SellerLoads = {
+  side: "inbound" | "cold";
+  generated_at: string;
+  sellers: SellerLoad[];
+  unassigned: LoadCounts;
+  totals: LoadCounts;
+};
+
+/** Each seller's load (owners, admins, managers, viewers): the assign sheet. */
+export function readSellerLoads(
+  side: "inbound" | "cold" = "inbound",
+  signal?: AbortSignal,
+) {
+  return request<SellerLoads>(`/team/load?side=${side}`, { signal });
+}
+
+export type ServerView = {
+  view_id: string;
+  name: string;
+  visibility: "me" | "team";
+  owner_person_id: string;
+  mine: boolean;
+  can_change: boolean;
+  filter: LeadFilter;
+  display: Record<string, unknown>;
+  position: number;
+  revision: number;
+  /** Its number for me, when asked for; null when my role can't open it. */
+  count: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Saved views on the server: the team's, then mine. */
+export function readServerViews(counts = false, signal?: AbortSignal) {
+  return request<{ views: ServerView[] }>(
+    counts ? "/views?counts=true" : "/views",
+    { signal },
+  );
+}
+
+/** Save a view: only me, or the team (owners, admins and managers). */
+export function saveServerView(
+  view: {
+    name: string;
+    visibility?: "me" | "team";
+    filter: LeadFilter;
+    display?: Record<string, unknown>;
+  },
+  command = commandId(),
+) {
+  return request<ServerView>(
+    "/views",
+    json("POST", { command_id: command, ...view }),
+  );
+}
+
+/** Change a view (only what is sent changes); a stale revision is refused (409). */
+export function editServerView(
+  viewId: string,
+  change: {
+    expected_revision: number;
+    name?: string;
+    visibility?: "me" | "team";
+    filter?: LeadFilter;
+    display?: Record<string, unknown>;
+    position?: number;
+  },
+) {
+  return request<ServerView>(
+    `/views/${encodeURIComponent(viewId)}`,
+    json("PUT", change),
+  );
+}
+
+export function deleteServerView(viewId: string, expectedRevision: number) {
+  return request<{ views: ServerView[] }>(
+    `/views/${encodeURIComponent(viewId)}/delete`,
+    json("POST", { expected_revision: expectedRevision }),
+  );
+}
+
+/** At most this many leads go in one archive, Bin or restore. */
+export const SHELF_LIMIT = 2000;
+
+export type ShelfAction = "archive" | "bin" | "restore_archive" | "restore_bin";
+
+export type LeadsShelved = {
+  action: ShelfAction;
+  /** The leads that moved, in the order asked. */
+  changed: number;
+  lead_ids: string[];
+  /** Already where they were asked to go. */
+  unchanged: number;
+  /** Not here, or not yours. */
+  not_found: number;
+};
+
+/**
+ * Archive leads (owners, admins and managers): off every list and count,
+ * found by search and the Archived list (`/leads?shelf=archived`).
+ */
+export function archiveLeads(leadIds: string[], command = commandId()) {
+  return request<LeadsShelved>(
+    "/leads/archive",
+    json("POST", { command_id: command, lead_ids: leadIds }),
+  );
+}
+
+/** Delete to the Bin (owners and admins): restorable for 30 days. */
+export function binLeads(leadIds: string[], command = commandId()) {
+  return request<LeadsShelved>(
+    "/leads/bin",
+    json("POST", { command_id: command, lead_ids: leadIds }),
+  );
+}
+
+/** Bring leads back from Archived or from the Bin (the Bin: owners and admins). */
+export function restoreLeads(
+  leadIds: string[],
+  from: "archive" | "bin",
+  command = commandId(),
+) {
+  return request<LeadsShelved>(
+    "/leads/restore",
+    json("POST", { command_id: command, lead_ids: leadIds, from }),
+  );
+}
+
+/** Delete leads in the Bin for good now (owners and admins). */
+export function purgeLeads(leadIds: string[], command = commandId()) {
+  return request<LeadsDeleted>(
+    "/leads/purge",
+    json("POST", { command_id: command, lead_ids: leadIds }),
+  );
+}
+
 export function readLead(leadId: string, signal?: AbortSignal) {
   const path = leadPath(leadId);
   // Read ahead: taken as it lands (or read now, if that read failed).
@@ -1729,12 +2009,14 @@ export function runSweep() {
   return request<{ moved: number }>("/sweep", { method: "POST" });
 }
 
-export async function previewImport(file: File) {
+export async function previewImport(file: File, sheet?: string) {
   return request<ImportPreview>("/imports/preview", {
     method: "POST",
     headers: {
       "content-type": file.type || "application/octet-stream",
       "x-file-name": file.name.replace(/[^\w .()-]+/g, "").slice(0, 200),
+      // An Excel file's sheet, by name (lead import I1-B).
+      ...(sheet ? { "x-sheet": encodeURIComponent(sheet.slice(0, 100)) } : {}),
     },
     body: file,
   });
@@ -1795,6 +2077,10 @@ export function checkFile(
   step: string,
   pipeline: string | null = null,
   signal?: AbortSignal,
+  picks: {
+    stages?: Record<string, string>;
+    owners?: Record<string, string>;
+  } = {},
 ) {
   return request<FileCheck>("/imports/check", {
     ...json("POST", {
@@ -1806,6 +2092,12 @@ export function checkFile(
       side,
       ...(step ? { step } : {}),
       ...(pipeline ? { pipeline } : {}),
+      ...(picks.stages && Object.keys(picks.stages).length
+        ? { stages: picks.stages }
+        : {}),
+      ...(picks.owners && Object.keys(picks.owners).length
+        ? { owners: picks.owners }
+        : {}),
     }),
     signal,
   });

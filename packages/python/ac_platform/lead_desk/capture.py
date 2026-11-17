@@ -477,10 +477,23 @@ def bounded_payload(record: Mapping[str, Any]) -> dict[str, Any]:
 
 
 @dataclass(frozen=True, slots=True)
+class Tab:
+    """One worksheet of an .xlsx file: its name, and its leads and columns as read (0 when
+    it has none), so the import can ask which sheet has the leads (lead import I1-B)."""
+
+    name: str
+    rows: int
+    columns: int
+
+
+@dataclass(frozen=True, slots=True)
 class Sheet:
     headers: tuple[str, ...]
     rows: tuple[dict[str, str], ...]
     truncated: bool
+    # An .xlsx file's worksheets in order, and the one read; empty for a CSV.
+    tabs: tuple[Tab, ...] = ()
+    tab: str | None = None
 
 
 def _rows_to_sheet(raw_rows: Iterable[list[str]]) -> Sheet:
@@ -533,6 +546,10 @@ def read_csv(data: bytes) -> Sheet:
 
 _MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 _REL = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
+# Worksheets read from one workbook: more are left off the list.
+_MAX_TABS: Final[int] = 30
+# Every worksheet's XML together, unpacked: a workbook of many big sheets is refused.
+_MAX_BOOK: Final[int] = 40 * 1024 * 1024
 _MAX_PART = 20 * 1024 * 1024
 
 # Spreadsheet bounds, checked while reading so nothing is built past them. A
@@ -809,8 +826,9 @@ def _sheet_rows(raw: bytes, shared: list[str]) -> list[list[str]]:
     return rows
 
 
-def read_xlsx(data: bytes) -> Sheet:
-    """The first worksheet of an .xlsx file, as text cells."""
+def read_xlsx(data: bytes, tab: str | None = None) -> Sheet:
+    """An .xlsx file's worksheet as text cells: the one named ``tab``, else the first that
+    has leads; every worksheet is listed with its rows and columns (lead import I1-B)."""
     try:
         archive = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile:
@@ -819,28 +837,63 @@ def read_xlsx(data: bytes) -> Sheet:
         workbook = _parse_xml(_part(archive, "xl/workbook.xml") or b"")
         rels = _parse_xml(_part(archive, "xl/_rels/workbook.xml.rels") or b"")
         sheets = workbook.first("sheets")
-        first = sheets.first("sheet") if sheets else None
-        if first is None:
+        listed = sheets.kids("sheet") if sheets else []
+        if not listed:
             raise CaptureError("The spreadsheet has no sheets.")
-        target = None
-        for rel in rels.children:
-            if rel.get("Id") == first.get(_REL):
-                target = rel.get("Target", "")
-        if not target:
-            raise CaptureError("The spreadsheet's first sheet is missing.")
-        path = target.lstrip("/") if target.startswith("/") else f"xl/{target}"
+        targets = {rel.get("Id"): rel.get("Target", "") for rel in rels.children}
         strings = _part(archive, "xl/sharedStrings.xml")
         shared = _shared_strings(strings) if strings else []
-        sheet_xml = _part(archive, path)
-        if sheet_xml is None:
-            raise CaptureError("The spreadsheet's first sheet is missing.")
-    return _rows_to_sheet(_sheet_rows(sheet_xml, shared))
+        read: list[tuple[str, Sheet | None, CaptureError | None]] = []
+        unpacked = 0
+        for item in listed[:_MAX_TABS]:
+            name = (item.get("name") or "").strip()[:100] or f"Sheet {len(read) + 1}"
+            target = targets.get(item.get(_REL)) or ""
+            path = target.lstrip("/") if target.startswith("/") else f"xl/{target}"
+            try:
+                sheet_xml = _part(archive, path) if target else None
+                if sheet_xml is None:
+                    raise CaptureError("The spreadsheet's sheet is missing.")
+                unpacked += len(sheet_xml)
+                if unpacked > _MAX_BOOK:
+                    raise CaptureError(_TOO_LARGE)
+                read.append((name, _rows_to_sheet(_sheet_rows(sheet_xml, shared)), None))
+            except CaptureError as error:
+                # A sheet that can't be read shows with no leads; picking it says why.
+                read.append((name, None, error))
+    tabs = tuple(
+        Tab(name, len(found.rows), len(found.headers)) if found else Tab(name, 0, 0)
+        for name, found, _ in read
+    )
+    if tab is not None:
+        chosen = next((entry for entry in read if entry[0] == tab), None)
+        if chosen is None:
+            raise CaptureError(f"This file has no sheet called {tab[:100]}.")
+    else:
+        # The sheet that looks like leads: one whose columns name a name or a phone, the
+        # most rows first; else the first sheet with any; none: the first sheet's reason.
+        def looks_like_leads(entry: tuple[str, Sheet | None, CaptureError | None]) -> int:
+            found = entry[1]
+            if found is None:
+                return -1
+            named = suggest_mapping(found.headers)
+            return len(found.rows) if ("name" in named or "phone" in named) else 0
+
+        best = max(read, key=looks_like_leads)
+        chosen = (
+            best
+            if looks_like_leads(best) > 0
+            else next((entry for entry in read if entry[1] is not None), read[0])
+        )
+    name, found, problem = chosen
+    if found is None:
+        raise problem or CaptureError("The spreadsheet's first sheet is missing.")
+    return Sheet(found.headers, found.rows, found.truncated, tabs=tabs, tab=name)
 
 
-def read_file(name: str, data: bytes) -> Sheet:
+def read_file(name: str, data: bytes, tab: str | None = None) -> Sheet:
     lowered = name.lower()
     if lowered.endswith(".xlsx") or data[:4] == b"PK\x03\x04":
-        return read_xlsx(data)
+        return read_xlsx(data, tab)
     if lowered.endswith(".xls"):
         raise CaptureError("Old .xls files aren't supported. Save it as .xlsx or .csv.")
     return read_csv(data)

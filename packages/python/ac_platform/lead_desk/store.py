@@ -155,7 +155,7 @@ from ac_platform.lead_desk.contracts import (
 
 # Re-exported: many modules import DeskError from here.
 from ac_platform.lead_desk.errors import DeskError as DeskError
-from ac_platform.lead_desk.history import HISTORY, NOT_INBOUND, inbound_only, worked
+from ac_platform.lead_desk.history import HISTORY, NOT_INBOUND, inbound_only, on_desk, worked
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.journey import pipelines, signals, transitions
 from ac_platform.lead_desk.journey.engine import not_undone
@@ -208,6 +208,9 @@ from ac_platform.tenancy.models import Membership
 from ac_platform.tenancy.roles import roles_with
 
 MANAGERS = frozenset(roles_with("leads.manage"))
+# A lead that came in by itself rings the bell only this soon after it arrived
+# (push.WINDOW): one a source delivers later is no news.
+NEW_LEAD_FRESH = timedelta(hours=2)
 # Deleting leads stays with owners and admins (Roles B: not Sales managers).
 DELETERS = frozenset(roles_with("leads.delete"))
 # Reading the team's leads (team.view): managers, and Viewers who change nothing.
@@ -827,6 +830,8 @@ class LeadDesk:
         # Each pipeline's own stages, read once per request (lists build many rows).
         self._journeys: dict[str, journeys.Journey] = {}
         self._pipelines: tuple[pipelines.Pipeline, ...] | None = None
+        # A bulk change's frozen selection (``leads(freeze=...)``).
+        self.frozen_ids: list[UUID] = []
 
     # ----- shared reads --------------------------------------------------------
 
@@ -983,7 +988,8 @@ class LeadDesk:
         return self._visible()
 
     async def _lead(self, lead_id: UUID, *, lock: bool = False) -> Lead:
-        query = select(Lead).where(Lead.id == lead_id, self._visible())
+        # A lead in the Bin opens nowhere and takes no change (shelf.py): restore it first.
+        query = select(Lead).where(Lead.id == lead_id, self._visible(), Lead.binned_at.is_(None))
         if lock:
             query = query.with_for_update()
         lead = await self.db.scalar(query)
@@ -1040,12 +1046,26 @@ class LeadDesk:
         try:
             return await self._lead(lead_id), False
         except DeskError:
+            if self.viewer.can_delete:
+                # A lead in the Bin, to read only (owners and admins, the Bin's own list;
+                # owner's M3-A, 17 Nov 2026): every change still refuses it until restored.
+                binned: Lead | None = await self.db.scalar(
+                    select(Lead).where(
+                        Lead.tenant_id == self.tenant_id,
+                        Lead.id == lead_id,
+                        Lead.binned_at.is_not(None),
+                    )
+                )
+                if binned is not None:
+                    return binned, True
             if not team and (
                 self.viewer.can_manage or not await duplicate_queue.worked_before(self, lead_id)
             ):
                 raise
         lead: Lead | None = await self.db.scalar(
-            select(Lead).where(Lead.tenant_id == self.tenant_id, Lead.id == lead_id)
+            select(Lead).where(
+                Lead.tenant_id == self.tenant_id, Lead.id == lead_id, Lead.binned_at.is_(None)
+            )
         )
         if lead is None:
             raise DeskError(404, "This lead isn't on your desk.")
@@ -1191,6 +1211,8 @@ class LeadDesk:
             and lead.stage != "new"
             and lead.next_action_at is None,
             has_email=bool(lead.email),
+            archived_at=lead.archived_at,
+            binned_at=lead.binned_at,
         )
 
     def _reason_label(self, lead: Lead) -> str | None:
@@ -2071,19 +2093,38 @@ class LeadDesk:
         when: FollowUpWhen | None = None,
         since: date | None = None,
         until: date | None = None,
+        shelf: Literal["archived", "bin"] | None = None,
+        freeze: int | None = None,
     ) -> LeadPage:
+        """One page of leads. ``freeze``: a bulk change's selection instead (bulk_jobs.py):
+        no rows or counts, only ``total``, and up to ``freeze`` matching ids kept in
+        ``self.frozen_ids`` (none when more match)."""
         limit = max(1, min(PAGE_SIZE, limit))
         if scope != "mine" and not self.viewer.can_see_team:
             raise DeskError(403, "Your role sees your own leads only.")
         where: list[Any] = [self._seen()]
-        if created == "history":
+        if shelf is not None:
+            # The Archived list and the Bin (shelf.py): every side, no work view; the Bin
+            # is for owners and admins only.
+            if shelf == "bin":
+                if not self.viewer.can_delete:
+                    raise DeskError(403, "Only owners and admins open the Bin.")
+                where.append(Lead.binned_at.is_not(None))
+            else:
+                where.extend((Lead.archived_at.is_not(None), Lead.binned_at.is_(None)))
+            created = view = when = None
+            side = None
+        elif created == "history":
             # Old leads brought in as history (2 Nov 2026): only this filter lists them,
             # all of them; none is in To Call or Follow-ups, so the work view is set aside.
-            where.append(Lead.pipeline == HISTORY)
+            where.extend((Lead.pipeline == HISTORY, on_desk()))
             created = view = when = None
         else:
+            # A lead in the Bin is in no list but the Bin, not even a search's.
+            where.append(Lead.binned_at.is_(None))
             if not search:
-                # Nobody's work: in no list, tab or count. A search still finds them below.
+                # Nobody's work: in no list, tab or count. A search still finds them below,
+                # and archived leads too ("findable").
                 where.append(worked())
             # Inbound Leads or Cold Leads (migration 0146): every list, tab and count keeps
             # to the side picked, All Leads too (orchestrator, 15 Nov 2026, Leads part 05
@@ -2092,7 +2133,9 @@ class LeadDesk:
             # history: "this person enquired in June".
             if side is not None:
                 where.append(
-                    or_(on_side(side), Lead.pipeline == HISTORY) if search else on_side(side)
+                    or_(on_side(side), Lead.pipeline == HISTORY, Lead.archived_at.is_not(None))
+                    if search
+                    else on_side(side)
                 )
         # To Call holds the leads who rang and weren't reached since, first (#9 option A).
         waiting: dict[UUID, tuple[datetime, int]] = {}
@@ -2110,7 +2153,7 @@ class LeadDesk:
             when_clause = in_when(when, self._day_start())
             where.append(when_clause)
         # The stage picker's numbers come with a side's first page (owner, 31 Oct 2026).
-        counting = side is not None and offset == 0
+        counting = side is not None and offset == 0 and freeze is None
         journey: journeys.Journey | None = None
         if step is not None or counting:
             journey_key = (
@@ -2228,6 +2271,15 @@ class LeadDesk:
             where.append(Lead.stage.in_(OPEN_STAGES))
         elif stage is not None:
             where.append(Lead.stage == stage)
+        if freeze is not None:
+            # "All 522 matching", frozen now: the ids, or none past the cap.
+            matching = int(await self.db.scalar(select(func.count()).where(*where)) or 0)
+            self.frozen_ids = (
+                list(await self.db.scalars(select(Lead.id).where(*where).order_by(Lead.id)))
+                if matching <= freeze
+                else []
+            )
+            return LeadPage(leads=(), total=matching, next_offset=None)
         owner_counts: dict[str, int] = {}
         if scope == "team":
             # Per seller for the same filters, the seller picked left out (25 Oct 2026).
@@ -2948,6 +3000,7 @@ class LeadDesk:
             changed=tuple(str(name) for name in data["changed"])
             if isinstance(data.get("changed"), list)
             else None,
+            shelf=text("shelf") if event.kind == "edited" else None,
             simulated=data.get("simulated") if isinstance(data.get("simulated"), bool) else None,
             estimated=True if event.kind == "call" and data.get("estimated") is True else None,
             recording=True if recording is not None or data.get("recording") is True else None,
@@ -3165,7 +3218,33 @@ class LeadDesk:
             pass  # the owner gives it out later (bulk upload, section 5)
         else:
             await self._allocate(lead, reps=reps)
+        # A lead that came in by itself, just now, rings the bell (bell.NEW; owner, 17 Nov
+        # 2026): never one typed in, imported, kept as history or Cold, nor one a source
+        # sends late (a Meta backfill).
+        arrived = lead.received_at or lead.created_at
+        if (
+            actor is None
+            and batch is None
+            and side != HISTORY
+            and lead_side(lead.pipeline) != "cold"
+            and arrived > self.now - NEW_LEAD_FRESH
+        ):
+            await self._tell_new_lead(lead, config)
         return lead, "created"
+
+    async def _tell_new_lead(self, lead: Lead, config: Mapping[str, Any]) -> None:
+        name = " ".join(word[:1].upper() + word[1:] for word in lead.name.split()) or "Someone"
+        source = lead.source_label or SOURCE_LABELS.get(lead.source or "", "") or "New"
+        owner = await self._name(lead.owner_person_id) if lead.owner_person_id else ""
+        await bell.announce(
+            self.db,
+            lead,
+            self.now,
+            config=config,
+            title=f"New lead: {name}",
+            waiting=f"{source} · No one has it yet. Call now or give it to a seller.",
+            owned=f"{source} · Given to {owner}." if owner else source,
+        )
 
     async def move_pipeline(
         self, lead_id: UUID, *, pipeline: str, expected_revision: int, command_id: UUID
@@ -3980,7 +4059,8 @@ class LeadDesk:
         source: str | None,
         search: str | None,
     ) -> list[Any]:
-        where: list[Any] = [self._visible(), journeys.lead_in(pipeline)]
+        # Archived and binned leads are on no board, card or count (shelf.py; PR 637 review).
+        where: list[Any] = [self._visible(), journeys.lead_in(pipeline), on_desk()]
         if owner is not None:
             if not self.viewer.can_manage:
                 raise DeskError(403, "Only owners and admins see another seller's leads.")
@@ -4328,6 +4408,20 @@ class LeadDesk:
         )
         if to_inbound:
             lead.pipeline = "live"
+        # An archived or binned lead who enquires again is back on the desk (shelf.py): a
+        # returning customer is never lost in Archived or the Bin. A file never brings one back.
+        from_shelf = (
+            None
+            if source in NOT_ENQUIRIES
+            else "bin"
+            if lead.binned_at is not None
+            else "archive"
+            if lead.archived_at is not None
+            else None
+        )
+        if from_shelf is not None:
+            lead.archived_at = lead.archived_by_person_id = None
+            lead.binned_at = lead.binned_by_person_id = None
         lead.repeats += 1
         lead.updated_at = self.now
         for name in ("email", "company", "city", "language", "interest"):
@@ -4343,6 +4437,7 @@ class LeadDesk:
             "reopened": reopened,
             "to_inbound": to_inbound,
             "payload": payload,
+            **({"from_shelf": from_shelf} if from_shelf is not None else {}),
         }
         if reopened:
             journey = await self._labels(journeys.pipeline_of(lead))
@@ -4430,7 +4525,17 @@ class LeadDesk:
             await task_book.follow_owner(self, lead, person_id)
             # The one who had it is told no more: their "is your lead now" goes quiet.
             if previous is not None:
-                await bell.retire(self.db, lead.tenant_id, [lead.id], self.now, person_id=previous)
+                await bell.retire(
+                    self.db,
+                    lead.tenant_id,
+                    [lead.id],
+                    self.now,
+                    person_id=previous,
+                    kinds=(bell.KIND,),
+                )
+            # Someone took a waiting lead: its "New lead" goes quiet for everyone (bell.NEW).
+            elif person_id is not None:
+                await bell.retire(self.db, lead.tenant_id, [lead.id], self.now, kinds=(bell.NEW,))
         # The bell's "<name> is your lead now" (owner, 27 Oct 2026; migration 0142): for a
         # seller someone else gave it to (the lead rules, a manager), never for their own pick
         # (an add for oneself passes no actor, so the person asking counts too).

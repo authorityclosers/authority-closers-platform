@@ -119,12 +119,12 @@
 
 .pick {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 22px 40px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 60px;
-  padding: 10px 14px;
+  min-height: 72px;
+  padding: 10px 16px 10px 14px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -143,24 +143,41 @@
   background: var(--sx-accent-soft);
 }
 
+/* Not ticked: an empty ring beside the lead's avatar. */
 .box {
-  display: grid;
-  place-items: center;
+  display: block;
   width: 22px;
   height: 22px;
   box-sizing: border-box;
   border: 2px solid var(--sx-line-strong);
   border-radius: 50%;
-  color: var(--sx-surface);
-  transition:
-    background var(--sx-dur-fast) var(--sx-ease-out),
-    border-color var(--sx-dur-fast) var(--sx-ease-out);
 }
 
-.box[data-on] {
-  border-color: var(--sx-accent);
+.face {
+  display: grid;
+  width: 40px;
+  height: 40px;
+}
+
+/* Ticked: the avatar becomes an emerald check (study 02 §5 M1). */
+.checked {
+  display: grid;
+  grid-column: 1 / span 2;
+  justify-self: center;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   background: var(--sx-accent);
-  color: var(--sx-accent-ink);
+  color: var(--sx-surface);
+  animation: checkIn 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+@keyframes checkIn {
+  from {
+    transform: scale(0.8);
+    opacity: 0.4;
+  }
 }
 
 .main {
@@ -175,7 +192,7 @@
   gap: 6px;
   min-width: 0;
   font-size: var(--sx-text-md);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .nameText {
@@ -194,12 +211,40 @@
   font-weight: 600;
 }
 
-.sub {
+.sub,
+.owner,
+.late {
   overflow: hidden;
-  color: var(--sx-muted);
-  font-size: var(--sx-text-xs);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.sub {
+  color: var(--sx-ink);
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--sx-muted);
+  vertical-align: 1px;
+}
+
+.quiet {
+  color: var(--sx-muted);
+}
+
+.owner {
+  color: var(--sx-ink-2);
+}
+
+.late {
+  color: var(--sx-bad);
 }
 
 /* ---------- The bar ----------
@@ -301,6 +346,10 @@
   .danger,
   .box {
     transition: none;
+  }
+
+  .checked {
+    animation: none;
   }
 }
 

@@ -109,7 +109,17 @@ async function mount(
     ),
   );
   await settle();
-  return host.querySelector("dialog")!;
+  const dialog = host.querySelector("dialog")!;
+  // Match columns first, every time (owner's pick I2-A, 17 Nov 2026).
+  if (importable > 1) {
+    await act(async () =>
+      Array.from(dialog.querySelectorAll("button"))
+        .find((item) => item.textContent === "Continue to check leads")!
+        .click(),
+    );
+    await settle();
+  }
+  return dialog;
 }
 
 afterEach(async () => {
@@ -125,18 +135,16 @@ const button = (dialog: HTMLElement, text: string) =>
     item.textContent?.trim().startsWith(text),
   );
 
-it("says which CRM's export it is and imports in one press, columns tucked away", async () => {
+it("says which CRM's export it is and imports from Check, columns tucked away", async () => {
   const dialog = await mount(2);
   expect(dialog.textContent).toContain("Zoho CRM export.");
   expect(dialog.textContent).toContain("Columns matched: Phone, Stage");
-  // The first rows as leads, before Import (phone personas ph1-48).
-  const first = dialog.querySelector('[aria-label="The first rows, as leads"]');
-  expect(
-    [...(first?.querySelectorAll("li") ?? [])].map((row) => row.textContent),
-  ).toEqual(["98760 72001", "98760 72002"]);
   expect(
     dialog.querySelectorAll('button[aria-haspopup="listbox"]'),
   ).toHaveLength(0);
+  // Import is on Assign (I4-A).
+  await act(async () => button(dialog, "Continue to assign")!.click());
+  await settle();
   await act(async () => button(dialog, "Import 2 leads")!.click());
   await settle();
   expect(commitImport).toHaveBeenCalledWith(
@@ -171,6 +179,9 @@ it("shows the columns when many rows make no lead", async () => {
 it("says who the import took past their limit, as a warning with Change limits", async () => {
   const warning = "Asha now has 58 open leads, 8 over their limit of 50.";
   const dialog = await mount(2, { warnings: [warning], canManage: true });
+  // Import is on Assign (I4-A).
+  await act(async () => button(dialog, "Continue to assign")!.click());
+  await settle();
   await act(async () => button(dialog, "Import 2 leads")!.click());
   await settle();
   const box = dialog.querySelector("[data-import-warnings]")!;
@@ -184,6 +195,9 @@ it("says who the import took past their limit, as a warning with Change limits",
 
 it("shows no warning box when the import stayed within every limit", async () => {
   const dialog = await mount(2, { warnings: [], canManage: true });
+  // Import is on Assign (I4-A).
+  await act(async () => button(dialog, "Continue to assign")!.click());
+  await settle();
   await act(async () => button(dialog, "Import 2 leads")!.click());
   await settle();
   expect(dialog.querySelector("[data-import-warnings]")).toBeNull();

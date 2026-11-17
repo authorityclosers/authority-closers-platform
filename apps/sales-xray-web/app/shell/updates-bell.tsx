@@ -37,6 +37,7 @@ const KINDS: Record<Kind, { icon: LucideIcon; tone: string; verb: string }> = {
   invite_received: { icon: UserPlus, tone: "invite", verb: "Open invite" },
   bug_solved: { icon: BadgeCheck, tone: "solved", verb: "Open" },
   lead_assigned: { icon: UserRoundPlus, tone: "lead", verb: "Open lead" },
+  lead_new: { icon: UserRoundPlus, tone: "lead", verb: "Open lead" },
   updates: { icon: Sparkles, tone: "news", verb: "What's new" },
 };
 

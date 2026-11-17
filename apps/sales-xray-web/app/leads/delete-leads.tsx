@@ -15,7 +15,7 @@ import { Check, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { notify } from "../notice-center";
-import { Avatar, Badge, Button } from "../ui/kit";
+import { Avatar, Button } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
 import {
   commandId,
@@ -24,6 +24,7 @@ import {
   LeadsError,
   type LeadRow,
   type LeadsDeleted,
+  when,
 } from "./leads-client";
 import styles from "./delete-leads.module.css";
 import { placed } from "./row-window";
@@ -160,11 +161,16 @@ export function DeleteLeadsSheet({
   );
 }
 
-/** A lead row in Select: tap to tick it. */
+/** A lead row in Select: tap to tick it. The approved row's look stays (pick
+ *  M1, 17 Nov 2026; study 02 §5 M1): its avatar becomes an emerald check when
+ *  ticked, an empty ring sits beside it when not, and the stage, owner and late
+ *  lines stay; Call and WhatsApp step aside while ticking. */
 export function SelectLine({
   row,
   selected,
   onToggle,
+  stageWord,
+  stageTone,
   at,
   index,
   count,
@@ -173,13 +179,17 @@ export function SelectLine({
   row: LeadRow;
   selected: boolean;
   onToggle: (row: LeadRow) => void;
+  /** The stage as the list words it, and its dot's colour. */
+  stageWord?: string;
+  stageTone?: string;
   /** In a long list drawn near the view only, as LeadLine's (row-window.ts). */
   at?: number;
   index?: number;
   count?: number;
   kind?: string;
 }) {
-  const sub = [row.interest, row.company, row.city].filter(Boolean).join(" · ");
+  const source = row.source_label?.trim();
+  const late = !!row.overdue && !!row.next_action_at;
   return (
     <li
       className={styles.line}
@@ -195,31 +205,43 @@ export function SelectLine({
         className={styles.pick}
         onClick={() => onToggle(row)}
       >
-        <span className={styles.box} data-on={selected || undefined}>
-          {selected ? (
-            <Check size={14} strokeWidth={3} aria-hidden="true" />
-          ) : null}
-        </span>
+        {selected ? (
+          <span className={styles.checked} aria-hidden="true">
+            <Check size={22} strokeWidth={3} />
+          </span>
+        ) : (
+          <>
+            <span className={styles.box} aria-hidden="true" />
+            <span className={styles.face} aria-hidden="true">
+              <Avatar name={row.name} size={40} />
+            </span>
+          </>
+        )}
         <span className={styles.main}>
           <span className={styles.name}>
             <span className={styles.nameText}>{row.name}</span>
             {row.test_data ? <span className={styles.test}>Test</span> : null}
           </span>
           <span className={styles.sub}>
-            {sub || row.owner_name || "No owner yet"}
+            <span
+              className={styles.dot}
+              style={stageTone ? { background: stageTone } : undefined}
+              aria-hidden="true"
+            />
+            {stageWord ?? row.stage_label}
+            {source ? (
+              <span className={styles.quiet}>{` · ${source}`}</span>
+            ) : null}
           </span>
+          <span className={styles.owner}>
+            {row.owner_name ? `Owner: ${row.owner_name}` : "No owner yet"}
+          </span>
+          {late && row.next_action_at ? (
+            <span className={styles.late}>
+              {`Late · was due ${when(row.next_action_at)}`}
+            </span>
+          ) : null}
         </span>
-        <Badge
-          tone={
-            row.stage === "won"
-              ? "good"
-              : row.stage === "lost"
-                ? "bad"
-                : "neutral"
-          }
-        >
-          {row.stage_label}
-        </Badge>
       </button>
     </li>
   );

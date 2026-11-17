@@ -1868,6 +1868,31 @@ export function LeadsRoute({
               go(TEST);
             },
           },
+          // Archived and the Bin, each with Restore (owner's M3-A, 17 Nov 2026).
+          {
+            key: "archived",
+            label: "Archived",
+            note: "Leads taken off your lists, to bring back",
+            onPick: () => {
+              setSettingsOpen(false);
+              leavingOverlay();
+              router.push("/leads/shelf?shelf=archived");
+            },
+          },
+          ...(desk.me.role === "owner" || desk.me.role === "admin"
+            ? [
+                {
+                  key: "bin",
+                  label: "Bin",
+                  note: "Deleted leads, kept for 30 days",
+                  onPick: () => {
+                    setSettingsOpen(false);
+                    leavingOverlay();
+                    router.push("/leads/shelf?shelf=bin");
+                  },
+                },
+              ]
+            : []),
         ]
       : []),
   ];

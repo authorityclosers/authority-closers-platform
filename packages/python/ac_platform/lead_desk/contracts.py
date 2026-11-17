@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
@@ -180,6 +180,10 @@ class LeadRow(Model):
     no_next_action: bool = False
     # It has an email address: the card offers one-tap Email (never the address itself).
     has_email: bool = False
+    # Archive and Bin (migration 0158, shelf.py): when it was archived or moved to the Bin.
+    # Lists on the desk never hold either; a search and the Archived and Bin lists do.
+    archived_at: datetime | None = None
+    binned_at: datetime | None = None
 
 
 class MessageTemplate(Model):
@@ -473,6 +477,94 @@ class LeadsDeleted(Model):
     not_found: int
 
 
+class BulkFailure(Model):
+    reason: str
+    count: int
+
+
+class BulkJob(Model):
+    """One bulk change (bulk_jobs.py): what was asked, what changed, and whether it can still
+    be undone. ``lead_ids``: the leads that changed, in the order asked."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    job_id: UUID
+    action: str
+    selection: Literal["ids", "filter"]
+    selected: int
+    changed: int
+    unchanged: int
+    not_found: int
+    failed: tuple[BulkFailure, ...] = ()
+    lead_ids: tuple[UUID, ...] = ()
+    words: str
+    by_person_id: UUID | None = None
+    at: datetime
+    undo_until: datetime
+    undoable: bool
+    undone_at: datetime | None = None
+
+
+class BulkJobs(Model):
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    jobs: tuple[BulkJob, ...]
+
+
+class BulkUndone(Model):
+    """An undone bulk change: the leads put back, and the ones changed since (left as they
+    are)."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    job_id: UUID
+    restored: int
+    skipped: int
+
+
+class LoadCounts(Model):
+    """Open leads on one side, late, due today, untouched for 7 days, and per desk stage
+    (load.py)."""
+
+    open: int
+    late: int
+    due_today: int
+    untouched_7d: int
+    by_stage: dict[str, int]
+
+
+class SellerLoad(Model):
+    person_id: UUID
+    name: str
+    # Their role here; None: someone who holds leads but no longer works them.
+    role: str | None
+    takes_new_leads: bool
+    # Their open-lead limit (Inbound); None: no limit.
+    max_open: int | None
+    load: LoadCounts
+
+
+class SellerLoads(Model):
+    """Each seller's load for the assign sheet and "By seller" (load.py): the sellers plus
+    ``unassigned`` add up to ``totals``."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    side: Literal["inbound", "cold"]
+    generated_at: datetime
+    sellers: tuple[SellerLoad, ...]
+    unassigned: LoadCounts
+    totals: LoadCounts
+
+
+class LeadsShelved(Model):
+    """Archive, Bin or Restore (shelf.py): the leads that moved, in the order asked, the
+    ones already where they were asked to go, and ones not here (or not yours)."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    action: Literal["archive", "bin", "restore_archive", "restore_bin"]
+    changed: int
+    unchanged: int
+    not_found: int
+    lead_ids: tuple[UUID, ...]
+
+
 class FieldValue(Model):
     label: str
     value: str
@@ -504,6 +596,9 @@ class LeadEventView(Model):
     # the lead's history says "dialled", not "called · 7s" (seller Flow 1, F2, 13 Nov 2026).
     estimated: bool | None = None
     changed: tuple[str, ...] | None = None
+    # Archive and Bin (shelf.py): "archive", "bin", "restore_archive" or "restore_bin" on an
+    # edited event; its words are in allocation_reason.
+    shelf: str | None = None
     channel: str | None = None
     template_label: str | None = None
     # A call the seller's phone logged by itself (UX study item 5): "phone", and
@@ -1325,6 +1420,15 @@ class Performance(Model):
     daily: tuple[DayOutcome, ...] = ()
 
 
+class SheetTab(Model):
+    """One sheet of an Excel file: how many leads and columns it has (0 when none), so the
+    import asks which sheet has the leads when there are several (lead import I1-B)."""
+
+    name: str
+    rows: int
+    columns: int
+
+
 class ImportPreview(Model):
     file_name: str
     headers: tuple[str, ...]
@@ -1348,6 +1452,14 @@ class ImportPreview(Model):
     # For old leads kept as history: the enquiry date ("received") and campaign columns a
     # header names (owner, 2 Nov 2026), added to ``mapping`` when the file is Old leads.
     history_mapping: dict[str, str] = Field(default_factory=dict)
+    # An Excel file's sheets in order, and the one these rows come from (none for a CSV).
+    sheets: tuple[SheetTab, ...] = ()
+    sheet: str | None = None
+    # The workspace's earlier choices (lead import I2, intake_memory.py): the headers whose
+    # match came from them, and the headers it starts as not imported (remembered, or a
+    # Facebook lead form's own ids).
+    remembered: tuple[str, ...] = ()
+    skip: tuple[str, ...] = ()
 
 
 class ImportSkip(Model):
@@ -1406,6 +1518,8 @@ class StageWord(Model):
     stage: str | None
     # The stage's own name, for the screen (the import's check, 16 Nov 2026).
     label: str | None = None
+    # Placed by the workspace's earlier import (lead import I2), not by its name.
+    remembered: bool = False
 
 
 class OwnerWord(Model):
@@ -1416,6 +1530,8 @@ class OwnerWord(Model):
     rows: int
     person_id: UUID | None
     person_name: str | None
+    # Said by the workspace's earlier import (lead import I2), not matched by name.
+    remembered: bool = False
 
 
 class ColumnFate(Model):
@@ -1426,6 +1542,22 @@ class ColumnFate(Model):
     header: str
     fate: Literal["matched", "kept", "empty", "not_imported"]
     field: str | None = None
+
+
+class RowFate(Model):
+    """What one of the file's rows becomes (lead import I3, 17 Nov 2026: "Here's what
+    happens to each row"; every row has exactly one outcome). ``row``: its index in the
+    rows sent. "new": a new lead; "known": a lead already here (``lead_id``, ``lead_name``),
+    kept as it is unless Fill blanks or Replace; "repeat": an earlier row of the file has
+    the same number or email, so it is added once; "bad": its number can't be read and it
+    has no email (fixable); "blank": no name, phone or email."""
+
+    row: int
+    outcome: Literal["new", "known", "repeat", "bad", "blank"]
+    lead_id: UUID | None = None
+    lead_name: str | None = None
+    # The earlier row of the file a repeat repeats.
+    same_as: int | None = None
 
 
 class FileCheck(Model):
@@ -1440,6 +1572,8 @@ class FileCheck(Model):
     owners: tuple[OwnerWord, ...]
     owned_new: int
     columns: tuple[ColumnFate, ...]
+    # Every row's outcome, in order (lead import I3); empty from an older server.
+    rows: tuple[RowFate, ...] = ()
 
 
 class HistoryCheck(Model):
@@ -1733,6 +1867,104 @@ class BulkLeads(Command):
     next_action_at: AwareDatetime | None = None
 
 
+class LeadFilter(Command):
+    """A Leads list as GET /leads names it (the same options), for a bulk change on "all N
+    matching": frozen when the request arrives (bulk_jobs.py)."""
+
+    scope: Literal["mine", "team", "unassigned"] = "team"
+    side: Literal["inbound", "cold"] | None = None
+    view: Literal["to_call", "follow_ups", "all"] | None = None
+    stage: str | None = Field(default=None, max_length=16)
+    step: str | None = Field(default=None, max_length=40)
+    search: str | None = Field(default=None, max_length=80)
+    owner: UUID | None = None
+    pipeline: str | None = Field(default=None, max_length=40)
+    source: str | None = Field(default=None, max_length=120)
+    due: LeadDue | None = None
+    contact: LeadSince | None = None
+    created: LeadMade | None = None
+    when: Literal["today", "overdue", "upcoming"] | None = None
+    since: date | None = None
+    until: date | None = None
+    test: bool = False
+    older: bool = False
+    duplicates: bool = False
+    shelf: Literal["archived", "bin"] | None = None
+
+
+class BulkJobCommand(Command):
+    """One bulk change (owner, 16 Nov 2026; bulk_jobs.py): the leads by id, or a list's filter
+    frozen now; up to 2,000. ``expected_total``: the count the screen showed ("Select all 522"),
+    refused with 409 when the list changed since. One command id is one job: a retry returns
+    it, and Undo names it."""
+
+    command_id: UUID
+    lead_ids: tuple[UUID, ...] | None = Field(default=None, min_length=1, max_length=2000)
+    filter: LeadFilter | None = None
+    expected_total: int | None = Field(default=None, ge=1)
+    action: Literal[
+        "assign", "stage", "pipeline", "archive", "bin", "restore_archive", "restore_bin"
+    ]
+    # assign: the person (none: the lead rules pick). stage: the business's stage key, with a
+    # Lost or Junk reason and a next action when the move asks. pipeline: its key.
+    person_id: UUID | None = None
+    step: str | None = Field(default=None, max_length=40)
+    pipeline: str | None = Field(default=None, max_length=40)
+    outcome_reason: str | None = Field(default=None, max_length=40)
+    reason_note: str | None = Field(default=None, max_length=500)
+    next_action_at: AwareDatetime | None = None
+
+
+class SavedViewCommand(Command):
+    """Save a Leads list as a view (saved_views.py): only me, or the team (owners, admins and
+    managers). ``display``: how it shows (columns, density, sort), the screen's own JSON."""
+
+    command_id: UUID
+    name: str = Field(min_length=1, max_length=40)
+    visibility: Literal["me", "team"] = "me"
+    filter: LeadFilter
+    display: dict[str, Any] = Field(default_factory=dict)
+
+
+class SavedViewEdit(Command):
+    """Change a view: only what is sent changes."""
+
+    expected_revision: int = Field(ge=1)
+    name: str | None = Field(default=None, min_length=1, max_length=40)
+    visibility: Literal["me", "team"] | None = None
+    filter: LeadFilter | None = None
+    display: dict[str, Any] | None = None
+    position: int | None = Field(default=None, ge=0, le=10_000)
+
+
+class SavedViewDelete(Command):
+    expected_revision: int = Field(ge=1)
+
+
+class SavedView(Model):
+    """A saved Leads list (saved_views.py). ``count``: its number for the person asking, when
+    asked for (None: not asked, or a list their role can't open)."""
+
+    view_id: UUID
+    name: str
+    visibility: Literal["me", "team"]
+    owner_person_id: UUID
+    mine: bool
+    can_change: bool
+    filter: LeadFilter
+    display: dict[str, Any]
+    position: int
+    revision: int
+    count: int | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SavedViews(Model):
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    views: tuple[SavedView, ...]
+
+
 class MovePipeline(Command):
     """Move a lead to another of the organisation's pipelines (owners and admins)."""
 
@@ -1751,6 +1983,22 @@ class DeleteLeads(Command):
 
 class DeleteLead(Command):
     command_id: UUID
+
+
+class ShelveLeads(Command):
+    """Archive these leads, or move them to the Bin (owner, 16 Nov 2026). One command id per
+    confirm: a retry returns the first answer and audits once. Up to 2,000 at a time."""
+
+    command_id: UUID
+    lead_ids: tuple[UUID, ...] = Field(min_length=1, max_length=2000)
+
+
+class RestoreLeads(Command):
+    """Bring leads back from Archived, or from the Bin (owners and admins)."""
+
+    command_id: UUID
+    lead_ids: tuple[UUID, ...] = Field(min_length=1, max_length=2000)
+    from_: Literal["archive", "bin"] = Field(alias="from")
 
 
 class UndoImport(Command):
@@ -1887,6 +2135,13 @@ class ImportCommand(Command):
     # The file's stage words and the stage key each one means (history imports): a word
     # left out is read as before (match_stage), and history refuses a word neither places.
     stages: dict[str, str] = Field(default_factory=dict, max_length=200)
+    # The file's owner names and the teammate each one is (lead import I2): a name left out
+    # is matched as before (people_index), then by the workspace's earlier import.
+    owners: dict[str, UUID] = Field(default_factory=dict, max_length=200)
+    # Columns the importer chose not to bring in (their cells are not sent) and to keep on
+    # the lead as details: remembered for the next import with the mapping (I2).
+    skipped: tuple[str, ...] = Field(default=(), max_length=500)
+    kept: tuple[str, ...] = Field(default=(), max_length=500)
     # The stage new leads start in (a stage key); none: the first stage.
     step: str | None = Field(default=None, max_length=40)
     # A pipeline picked by hand; None: the one that takes file imports.
