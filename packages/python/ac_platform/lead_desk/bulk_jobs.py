@@ -244,6 +244,11 @@ async def run(desk: LeadDesk, command: BulkJobCommand) -> BulkJob:
     leads = list(
         await desk.db.scalars(select(Lead).where(*scope).order_by(Lead.id).with_for_update())
     )
+    # A twin request (a second tap, a retry) may have finished while this one waited for the
+    # locks: its job, never a second APPLIED event (as shelf.move does; PR 637 review).
+    done = await _audit(desk, str(job_id), APPLIED)
+    if done is not None:
+        return await _view(desk, done, await _audit(desk, f"undo:{job_id}", UNDONE))
     before = {lead.id: _snapshot(lead) for lead in leads}
     failed: dict[str, int] = {}
     extra: dict[str, Any] = {}

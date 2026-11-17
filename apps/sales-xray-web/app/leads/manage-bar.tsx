@@ -19,6 +19,10 @@
  * - Phone: a top bar (✕, "3 selected", Select all) and the scope banner, and a
  *   dock of four (Assign, Stage, Tag, More) where the Call band was. No red
  *   button in the dock: Archive and the Bin live in More.
+ *
+ * Archive and Move to Bin stay hidden (SHELF_ACTIONS_ENABLED) until Leads has
+ * its Archived and Bin lists with Restore (M3-A): after the 10-second Undo
+ * there is no way back yet (v1.78 review, PR 637).
  */
 
 import {
@@ -250,12 +254,29 @@ export function tagLeads(change: TagChange): Promise<BulkJob> {
   );
 }
 
+/** Archive and Move to Bin in the bars: off until the Archived and Bin lists
+ * with Restore are reachable (M3-A; v1.78 review, PR 637). */
+export const SHELF_ACTIONS_ENABLED = false;
+
+/** The bars' actions with Archive and the Bin taken off while
+ * SHELF_ACTIONS_ENABLED is false. */
+export function withShelf(
+  actions: ManageActions,
+  enabled: boolean = SHELF_ACTIONS_ENABLED,
+): ManageActions {
+  return enabled
+    ? actions
+    : { ...actions, onArchive: undefined, onBin: undefined };
+}
+
 export function sayTagsLater() {
   notify({
     id: "bulk-tag",
     tone: "info",
     title: "Tags are coming",
-    message: "Leads have no tags yet. Assign, Stage and Archive work now.",
+    message: SHELF_ACTIONS_ENABLED
+      ? "Leads have no tags yet. Assign, Stage and Archive work now."
+      : "Leads have no tags yet. Assign and Stage work now.",
     timeout: 5000,
   });
 }
@@ -392,7 +413,8 @@ export type ManageActions = {
   onAssign: () => void;
   onStage: () => void;
   onTag: () => void;
-  onArchive: () => void;
+  /** Archive (hidden while SHELF_ACTIONS_ENABLED is false). */
+  onArchive?: () => void;
   /** Send a WhatsApp template (ticked leads only). */
   onWhatsApp?: () => void;
   /** Move to the Bin (owners and admins). */
@@ -401,7 +423,7 @@ export type ManageActions = {
 
 function moreItems(actions: ManageActions, withArchive: boolean): MoreItem[] {
   const items: MoreItem[] = [];
-  if (withArchive)
+  if (withArchive && actions.onArchive)
     items.push({
       key: "archive",
       label: "Archive",
@@ -482,15 +504,17 @@ export function TableBulkBar({
           <Tag size={18} aria-hidden="true" />
           Add tag
         </button>
-        <button
-          type="button"
-          className={styles.deskAction}
-          disabled={off}
-          onClick={actions.onArchive}
-        >
-          <Archive size={18} aria-hidden="true" />
-          Archive
-        </button>
+        {actions.onArchive ? (
+          <button
+            type="button"
+            className={styles.deskAction}
+            disabled={off}
+            onClick={actions.onArchive}
+          >
+            <Archive size={18} aria-hidden="true" />
+            Archive
+          </button>
+        ) : null}
         <MoreMenu
           items={moreItems(actions, false)}
           trigger={(open, toggle) => (

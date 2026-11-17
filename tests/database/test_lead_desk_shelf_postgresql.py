@@ -7,6 +7,7 @@ Each request audits once (ids and counts), a retry returns the first answer, and
 history shows the move.
 """
 
+import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -15,11 +16,13 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import verify_audit_chain
+from ac_platform.http.routes import RouteContext
 from ac_platform.lead_desk import deletion, shelf
+from ac_platform.lead_desk.journey.http import install_journey_http
 from ac_platform.lead_desk.models import Lead
 from tests.database.test_conversation_account_library_postgresql import _session
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
@@ -243,6 +246,106 @@ def test_archive_bin_restore_and_purge(postgres_harness: Any, tmp_path: Path) ->
                 words = json.dumps([event.payload for event in (*moves, *deletes)])
                 assert not any(private in words for private in (*NAMES, "Pune"))
                 assert (await verify_audit_chain(db, tenant)).valid
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+async def lock_waits(engine: Any, at_least: int) -> None:
+    """Until ``at_least`` sessions wait for a row lock (the request under test is blocked)."""
+    for _ in range(400):
+        async with engine.connect() as connection:
+            waiting = await connection.scalar(
+                text(
+                    "SELECT count(*) FROM pg_stat_activity"
+                    " WHERE wait_event_type = 'Lock' AND datname = current_database()"
+                )
+            )
+        if waiting >= at_least:
+            return
+        await asyncio.sleep(0.05)
+    raise AssertionError("the request never waited for the lead's lock")
+
+
+def test_board_leaves_out_shelved_leads_and_purge_spares_a_lead_restored_meanwhile(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """PR 637 review: the pipeline board shows no archived or binned lead in its cards or
+    counts; a purge that meets a restore in flight waits for it and leaves the lead alone."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            # The pipeline board lives in the journey routes.
+            # (with an organisation's settings, as _organisation installs Leads).
+            settings = setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
+            install_journey_http(
+                setup.app, RouteContext(settings, setup.require_actor, setup.sessions)
+            )
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+
+                async def post(path: str, body: dict[str, Any]) -> httpx.Response:
+                    return await client.post(f"{BASE}{path}", json=body, headers=WRITE)
+
+                async def board() -> tuple[int, set[str]]:
+                    page = await client.get(f"{BASE}/board")
+                    assert page.status_code == 200, page.text
+                    shown = page.json()
+                    cards = {
+                        card["lead_id"]
+                        for group in shown["groups"]
+                        for column in group["columns"]
+                        for card in column["cards"]
+                    }
+                    assert sum(group["count"] for group in shown["groups"]) == shown["total"]
+                    return shown["total"], cards
+
+                leads: list[UUID] = []
+                for name in NAMES[:3]:
+                    added = await post(
+                        "/leads",
+                        {"command_id": str(uuid4()), "name": name, "city": "Pune", "assign": "me"},
+                    )
+                    assert added.status_code == 201, added.text
+                    leads.append(UUID(added.json()["lead"]["lead_id"]))
+                a, b, c = leads
+                assert await board() == (3, {str(a), str(b), str(c)})
+
+                # Archived and binned leads leave the board's cards and counts.
+                assert (
+                    await post("/leads/archive", {"command_id": str(uuid4()), "lead_ids": [str(a)]})
+                ).json()["changed"] == 1
+                assert (
+                    await post("/leads/bin", {"command_id": str(uuid4()), "lead_ids": [str(b)]})
+                ).json()["changed"] == 1
+                assert await board() == (1, {str(c)})
+
+                # A restore holds B's row when the purge arrives: the purge waits, then sees B
+                # is back on the desk and deletes nothing.
+                async with setup.sessions() as db, db.begin():
+                    await db.execute(update(Lead).where(Lead.id == b).values(binned_at=None))
+                    purging = asyncio.create_task(
+                        post("/leads/purge", {"command_id": str(uuid4()), "lead_ids": [str(b)]})
+                    )
+                    await lock_waits(setup.engine, 1)
+                    assert not purging.done()
+                gone = await purging
+                assert gone.status_code == 200, gone.text
+                assert gone.json()["deleted"] == 0 and gone.json()["not_found"] == 1
+                assert (await client.get(f"{BASE}/leads/{b}")).status_code == 200
+                assert await board() == (2, {str(b), str(c)})
+
+            async with setup.sessions() as db:
+                assert set(await db.scalars(select(Lead.id))) == {a, b, c}
+                deleted = await db.scalars(
+                    select(AuditEvent).where(AuditEvent.action == deletion.AUDIT_ACTION)
+                )
+                assert not list(deleted)
         finally:
             await setup.engine.dispose()
 

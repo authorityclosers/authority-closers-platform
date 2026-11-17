@@ -24,7 +24,9 @@ import {
   PhoneDock,
   ScopeBanner,
   selectionRequest,
+  SHELF_ACTIONS_ENABLED,
   TableBulkBar,
+  withShelf,
   type ManageActions,
 } from "./manage-bar";
 
@@ -264,6 +266,55 @@ it("gives the phone a dock of four, Archive and the Bin under More", async () =>
     root.render(<PhoneDock count={0} busy={false} actions={act1} />),
   );
   expect(button("Assign")?.disabled).toBe(true);
+});
+
+it("keeps Archive and the Bin off both bars until they can be restored (v1.78)", async () => {
+  // No Archived or Bin list with Restore yet (M3-A): nothing hides a lead
+  // beyond its 10-second Undo.
+  expect(SHELF_ACTIONS_ENABLED).toBe(false);
+  const act1 = withShelf(actions());
+  expect(act1.onArchive).toBeUndefined();
+  expect(act1.onBin).toBeUndefined();
+  expect(withShelf(actions(), true).onBin).toBeDefined();
+  await act(async () =>
+    root.render(
+      <TableBulkBar
+        count={25}
+        busy={false}
+        actions={act1}
+        onClear={act1.onTag}
+        banner={null}
+      />,
+    ),
+  );
+  const bar = host.querySelector('[role="toolbar"]')!;
+  expect(
+    Array.from(bar.querySelectorAll("button"), (item) =>
+      item.textContent?.trim(),
+    ),
+  ).toEqual(["Assign", "Change stage", "Add tag", "More", "Clear"]);
+  await act(async () => button("More")?.click());
+  expect(
+    Array.from(
+      host.querySelectorAll('[role="menuitem"]'),
+      (item) => item.textContent,
+    ),
+  ).toEqual(["Send a WhatsApp template"]);
+  await act(async () => root.render(<></>));
+  await act(async () =>
+    root.render(<PhoneDock count={3} busy={false} actions={act1} />),
+  );
+  const dock = host.querySelector('[role="toolbar"]')!;
+  expect(Array.from(dock.children, (item) => item.textContent?.trim())).toEqual(
+    ["Assign", "Stage", "Tag", "More"],
+  );
+  await act(async () => button("More")?.click());
+  expect(
+    Array.from(
+      host.querySelectorAll('[role="menuitem"]'),
+      (item) => item.textContent,
+    ),
+  ).toEqual(["Send a WhatsApp template"]);
 });
 
 it("assigns with each seller's load, previews the change and offers Undo", async () => {

@@ -207,15 +207,24 @@ async def purge(desk: LeadDesk, command_id: UUID, lead_ids: Sequence[UUID]) -> L
     if await deletion.done_before(desk.db, desk.tenant_id, command_id) is not None:
         # A retry: the first answer, as the delete recorded it.
         return await desk.delete_leads(DeleteLeads(command_id=command_id, lead_ids=tuple(wanted)))
+    # Locked while chosen (id order, as deletion.lock takes them): a restore or a returning
+    # enquiry in flight finishes first, and PostgreSQL then rechecks ``binned_at`` on the row
+    # it committed, so a lead just brought back is never deleted (PR 637 review).
     binned = set(
         await desk.db.scalars(
-            select(Lead.id).where(
+            select(Lead.id)
+            .where(
                 Lead.tenant_id == desk.tenant_id,
                 Lead.id.in_(wanted),
                 Lead.binned_at.is_not(None),
             )
+            .order_by(Lead.id)
+            .with_for_update()
         )
     )
+    if await deletion.done_before(desk.db, desk.tenant_id, command_id) is not None:
+        # A twin request finished while this one waited for the locks: its answer.
+        return await desk.delete_leads(DeleteLeads(command_id=command_id, lead_ids=tuple(wanted)))
     if not binned:
         return LeadsDeleted(deleted=0, lead_ids=(), not_found=len(wanted))
     result = await desk.delete_leads(

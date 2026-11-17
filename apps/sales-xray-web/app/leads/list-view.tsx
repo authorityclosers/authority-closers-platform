@@ -57,6 +57,7 @@ import {
   selectionCount,
   useDeskSelect,
   useWideList,
+  withShelf,
   type ManageActions,
   type Selection,
 } from "./manage-bar";
@@ -1147,14 +1148,15 @@ export function ListView({
     setSelecting(false);
     onChanged?.();
   };
-  const manageActions: ManageActions = {
+  // Archive and the Bin stay off the bars until Archived and Bin can restore.
+  const manageActions: ManageActions = withShelf({
     onAssign: () => openManage("assign"),
     onStage: () => openBulk("stage"),
     onTag: sayTagsLater,
     onArchive: () => openManage("archive"),
     onWhatsApp: allMatching ? undefined : () => openBulk("whatsapp"),
     onBin: () => openManage("bin"),
-  };
+  });
   const owners = useMemo(
     () => new Map(rows.map((row) => [row.lead_id, row.owner_person_id])),
     [rows],

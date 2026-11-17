@@ -4047,7 +4047,8 @@ class LeadDesk:
         source: str | None,
         search: str | None,
     ) -> list[Any]:
-        where: list[Any] = [self._visible(), journeys.lead_in(pipeline)]
+        # Archived and binned leads are on no board, card or count (shelf.py; PR 637 review).
+        where: list[Any] = [self._visible(), journeys.lead_in(pipeline), on_desk()]
         if owner is not None:
             if not self.viewer.can_manage:
                 raise DeskError(403, "Only owners and admins see another seller's leads.")

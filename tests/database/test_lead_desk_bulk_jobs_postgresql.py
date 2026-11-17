@@ -2,6 +2,7 @@
 on PostgreSQL: a list's filter or ids, one job per command id, each lead's own history line,
 an action history, and an Undo for 30 minutes that leaves a lead changed since as it is."""
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
@@ -9,7 +10,7 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import verify_audit_chain
@@ -20,6 +21,7 @@ from tests.database.test_conversation_postgresql import postgres_harness as _pos
 from tests.database.test_conversation_postgresql import run, seed
 from tests.database.test_conversation_submission_http_postgresql import ORIGIN, _setup
 from tests.database.test_lead_desk_postgresql import _organisation
+from tests.database.test_lead_desk_shelf_postgresql import lock_waits
 
 WRITE = {"Origin": ORIGIN, "Content-Type": "application/json"}
 BASE = "/v1/lead-desk"
@@ -237,6 +239,74 @@ def test_bulk_jobs_freeze_apply_and_undo(postgres_harness: Any, tmp_path: Path) 
                 words = str([event.payload for event in jobs])
                 assert not any(private in words for private in (*NAMES, "Pune", "Bulkfix"))
                 assert (await verify_audit_chain(db, tenant)).valid
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_a_twin_bulk_job_waiting_for_the_locks_returns_the_first_job(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """PR 637 review: two requests with one command id both pass the first receipt check and
+    wait for the same leads' locks; the second returns the first's job, with no second
+    APPLIED event."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            tenant = setup.state.tenant_id
+            seller = await seed(setup.engine, tenant_id=tenant, role="member")
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+
+                async def post(path: str, body: dict[str, Any]) -> httpx.Response:
+                    return await client.post(f"{BASE}{path}", json=body, headers=WRITE)
+
+                leads: list[UUID] = []
+                for name in NAMES[:2]:
+                    added = await post(
+                        "/leads",
+                        {"command_id": str(uuid4()), "name": name, "city": "Pune", "assign": "me"},
+                    )
+                    assert added.status_code == 201, added.text
+                    leads.append(UUID(added.json()["lead"]["lead_id"]))
+                job = str(uuid4())
+                body = {
+                    "command_id": job,
+                    "lead_ids": [str(lead) for lead in leads],
+                    "action": "assign",
+                    "person_id": str(seller.person_id),
+                }
+                # Someone else holds both leads: each twin passes its first check and waits.
+                async with setup.sessions() as db, db.begin():
+                    await db.execute(select(Lead.id).where(Lead.id.in_(leads)).with_for_update())
+                    twins = [asyncio.create_task(post("/leads/bulk-jobs", body)) for _ in range(2)]
+                    await lock_waits(setup.engine, 2)
+                first, second = await asyncio.gather(*twins)
+                assert first.status_code == 200, first.text
+                assert second.status_code == 200, second.text
+                assert first.json() == second.json()
+                assert first.json()["changed"] == 2
+
+            async with setup.sessions() as db:
+                applied = await db.scalar(
+                    select(func.count())
+                    .select_from(AuditEvent)
+                    .where(
+                        AuditEvent.tenant_id == tenant,
+                        AuditEvent.action == bulk_jobs.APPLIED,
+                        AuditEvent.resource_id == job,
+                    )
+                )
+                assert applied == 1
+                owners = set(
+                    await db.scalars(select(Lead.owner_person_id).where(Lead.id.in_(leads)))
+                )
+                assert owners == {seller.person_id}
         finally:
             await setup.engine.dispose()
 
