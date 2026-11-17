@@ -84,3 +84,20 @@ it("keeps the app's own search on every other tab", () => {
   expect(bar?.querySelector('button[aria-label="Search"]')).not.toBeNull();
   expect(bar?.querySelector('button[aria-label="Saved questions"]')).toBeNull();
 });
+
+it("shows no page-title row on Ask Dipak: the tab bar says it (owner, 17 Nov 2026)", () => {
+  const titleRow = (path: string) => {
+    place.path = path;
+    place.query = "";
+    const host = document.createElement("div");
+    host.innerHTML = renderToStaticMarkup(
+      <AcquisitionShell authenticated active="coaching" pageName="Ask Dipak">
+        <p>Page</p>
+      </AcquisitionShell>,
+    );
+    return host.querySelector("[data-page-title]");
+  };
+  expect(titleRow("/ask-dipak")).toBeNull();
+  // Other pages keep theirs.
+  expect(titleRow("/growth")?.textContent).toBe("Ask Dipak");
+});

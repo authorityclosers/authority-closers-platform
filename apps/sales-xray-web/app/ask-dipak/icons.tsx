@@ -55,6 +55,21 @@ const ART: Readonly<Record<string, ReactNode>> = {
   ),
   presentation: <path d="M3 4h18v13H3zM12 17v5M8 22h8M7 14l4-4 3 2 4-5" />,
   growth: <path d="m3 17 6-6 4 3 8-9M15 5h6v6" />,
+  flag: <path d="M5 21V4m0 0h11l-2 4 2 4H5" />,
+  ban: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m6 18 12-12" />
+    </>
+  ),
+  down: <path d="M12 4v16m-6-6 6 6 6-6" />,
+  spark: (
+    <path d="M12 3c.6 4.6 2.4 6.4 7 7-4.6.6-6.4 2.4-7 7-.6-4.6-2.4-6.4-7-7 4.6-.6 6.4-2.4 7-7z" />
+  ),
+  book: (
+    <path d="M3 5c3-1.5 6-1.5 9 1 3-2.5 6-2.5 9-1v14c-3-1.5-6-1.5-9 1-3-2.5-6-2.5-9-1zM12 6v14" />
+  ),
+  ribbon: <path d="M6 3h12v18l-6-5-6 5zM9 8h6" />,
 };
 
 export function AskIcon({ name, size = 22 }: { name: string; size?: number }) {

@@ -2,6 +2,8 @@
 
 - ``/whatsapp/*``: connect the organisation's own number (Embedded Signup's code),
   auto replies, templates, the inbox, and Meta's signed webhook.
+- ``/whatsapp/media``, ``/whatsapp/campaigns``, ``/whatsapp/analytics`` (0162): the
+  workspace's WhatsApp files, broadcasts and drip sequences, and what they did.
 - ``/leads/{id}/whatsapp``: one lead's conversation, sending (24-hour window and
   opt-in rules), and the seller's record of the person's yes.
 - ``/sla`` and ``/reports/sla``: the first-response target and how the team is doing.
@@ -39,7 +41,9 @@ from ac_platform.lead_desk.connectors.app_return import AppComplete, AppComplete
 from ac_platform.lead_desk.models import LeadDeskSettings, LeadWhatsAppNumber, LeadWhatsAppTemplate
 from ac_platform.lead_desk.social import inbox as social_inbox
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
+from ac_platform.lead_desk.whatsapp import campaigns as wa_campaigns
 from ac_platform.lead_desk.whatsapp import cloud, inbox, runner
+from ac_platform.lead_desk.whatsapp import media as wa_media
 from ac_platform.tenancy.models import Membership, Organisation
 
 log = logging.getLogger(__name__)
@@ -74,6 +78,12 @@ class _Command(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True, str_strip_whitespace=True)
 
 
+class MediaRule(_Command):
+    stage: str | None = Field(default=None, max_length=16)
+    form: str | None = Field(default=None, max_length=120)
+    media_id: UUID = Field(alias="mediaId")
+
+
 class FirstReply(_Command):
     on: bool = False
     template: str | None = Field(default=None, max_length=512)
@@ -84,6 +94,10 @@ class FirstReply(_Command):
     who: Literal["form_yes", "every_lead"] = "form_yes"
     agreed: bool = False
     agreed_at: datetime | None = Field(default=None, alias="agreedAt")
+    # A file from the workspace's WhatsApp files (0162), and rules where the stage or the
+    # ad form picks another one.
+    media_id: UUID | None = Field(default=None, alias="mediaId")
+    media_rules: list[MediaRule] = Field(default_factory=list, alias="mediaRules", max_length=20)
 
 
 class OutOfHours(_Command):
@@ -114,6 +128,8 @@ class TemplateView(BaseModel):
     text: str
     parts: int
     rejected_reason: str | None = Field(default=None, alias="rejectedReason")
+    # "document", "image" or "video" when its header carries a file (each send needs one).
+    file: str | None = None
 
 
 class WhatsAppStatus(BaseModel):
@@ -138,6 +154,130 @@ class NewTemplate(_Command):
     category: Literal["MARKETING", "UTILITY"]
     body: str = Field(min_length=1, max_length=1024)
     example: list[str] = Field(default_factory=list, max_length=10)
+    # A file from the workspace's WhatsApp files: the template gets a file header of its
+    # kind, with this file as Meta's example.
+    media_id: UUID | None = Field(default=None, alias="mediaId")
+
+
+class MediaView(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    id: UUID
+    label: str
+    kind: str
+    filename: str
+    content_type: str = Field(alias="contentType")
+    size_bytes: int = Field(alias="sizeBytes")
+    created_at: datetime = Field(alias="createdAt")
+
+
+class CampaignStep(_Command):
+    template: str = Field(min_length=1, max_length=512)
+    language: str = Field(min_length=1, max_length=16)
+    # {name} becomes the lead's first name, {business} the workspace's name. Left empty,
+    # the template's {{1}} and {{2}} get those two.
+    values: list[str] = Field(default_factory=list, max_length=10)
+    media_id: UUID | None = Field(default=None, alias="mediaId")
+    # When it goes, after the lead joined (a sequence): days, or minutes for finer steps.
+    after_days: int | None = Field(default=None, alias="afterDays", ge=0, le=90)
+    after_minutes: int | None = Field(default=None, alias="afterMinutes", ge=0, le=129600)
+
+    def stored(self) -> dict[str, Any]:
+        minutes = (
+            self.after_minutes
+            if self.after_minutes is not None
+            else (self.after_days or 0) * 24 * 60
+        )
+        return {
+            "template": self.template,
+            "language": self.language,
+            "values": self.values,
+            "media_id": self.media_id,
+            "after_minutes": minutes,
+        }
+
+
+class CampaignTrigger(_Command):
+    on: Literal["new_lead", "stage"] = "new_lead"
+    stage: str | None = Field(default=None, max_length=16)
+
+
+class CampaignFilters(_Command):
+    stages: list[str] = Field(default_factory=list, max_length=20)
+    sources: list[str] = Field(default_factory=list, max_length=20)
+    owners: list[UUID] = Field(default_factory=list, max_length=50)
+    lead_ids: list[UUID] = Field(default_factory=list, alias="leadIds", max_length=5000)
+    city: str | None = Field(default=None, max_length=120)
+    since: datetime | None = None
+
+
+class CampaignCommand(_Command):
+    """A broadcast (``filters``, ``sendAt``, ``perMinute``; ``confirm`` is the count the
+    preview showed) or a sequence (``trigger``, ``agreed``: the manager's word that people
+    who reach them agreed to WhatsApp)."""
+
+    command_id: UUID = Field(alias="commandId")
+    kind: Literal["broadcast", "sequence"]
+    name: str = Field(min_length=1, max_length=80)
+    number_id: UUID | None = Field(default=None, alias="numberId")
+    steps: list[CampaignStep] = Field(min_length=1, max_length=10)
+    trigger: CampaignTrigger | None = None
+    filters: CampaignFilters | None = None
+    send_at: datetime | None = Field(default=None, alias="sendAt")
+    per_minute: int = Field(default=60, alias="perMinute", ge=1, le=600)
+    confirm: int | None = Field(default=None, ge=0)
+    agreed: bool = False
+
+
+class CampaignStatusCommand(_Command):
+    status: Literal["live", "paused", "ended"]
+
+
+class CampaignNumbers(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    people: dict[str, int]
+    reasons: dict[str, int]
+    sent: int
+    delivered: int
+    read: int
+    failed: int
+    replied: int
+    won: int
+
+
+class CampaignView(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    id: UUID
+    kind: str
+    name: str
+    status: str
+    number_id: UUID = Field(alias="numberId")
+    steps: list[dict[str, Any]]
+    audience: dict[str, Any]
+    send_at: datetime | None = Field(default=None, alias="sendAt")
+    per_minute: int = Field(alias="perMinute")
+    created_at: datetime = Field(alias="createdAt")
+    ended_at: datetime | None = Field(default=None, alias="endedAt")
+    numbers: CampaignNumbers
+
+
+class AnalyticsRow(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    sent_by: str = Field(alias="sentBy")
+    campaign_id: UUID | None = Field(default=None, alias="campaignId")
+    campaign: str | None = None
+    template: str | None = None
+    sent: int
+    delivered: int
+    read: int
+    failed: int
+    replied: int
+    won: int
+
+
+class AnalyticsView(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    since: datetime
+    rows: list[AnalyticsRow]
 
 
 class MessageView(BaseModel):
@@ -174,6 +314,9 @@ class SendCommand(_Command):
     template: str | None = Field(default=None, max_length=512)
     language: str | None = Field(default=None, max_length=16)
     values: list[str] = Field(default_factory=list, max_length=10)
+    # A file from the workspace's WhatsApp files: in a file-header template, or on its own
+    # (``text`` as its caption) inside the 24-hour window.
+    media_id: UUID | None = Field(default=None, alias="mediaId")
 
 
 class BulkWhatsAppCommand(_Command):
@@ -193,6 +336,13 @@ class SkipView(BaseModel):
     reason: str
     words: str
     count: int
+
+
+class CampaignPreview(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    ready: int
+    skipped: list[SkipView]
+    limit: int
 
 
 class BulkWhatsAppView(BaseModel):
@@ -311,6 +461,7 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
     router = APIRouter(prefix="/v1/lead-desk", tags=["lead-desk"])
     settings = ctx.settings
     read_actor = getattr(ctx.require_actor, "read_only", ctx.require_actor)
+    media_store = wa_media.MediaStore(settings.sales_xray_storage_root)
 
     def same_host(request: Request) -> None:
         if not settings.is_sales_xray_host(request.url.hostname):
@@ -401,6 +552,7 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
             text=body,
             parts=cloud.placeholders(body),
             rejected_reason=template.rejected_reason,
+            file=cloud.media_header(template.components or []),
         )
 
     def number_view(row: LeadWhatsAppNumber) -> NumberView:
@@ -419,6 +571,16 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                     who=rules["first_reply"].get("who") or "form_yes",
                     agreed=bool(rules["first_reply"].get("agreed_at")),
                     agreed_at=rules["first_reply"].get("agreed_at"),
+                    media_id=rules["first_reply"].get("media_id"),
+                    media_rules=[
+                        MediaRule(
+                            stage=rule.get("stage") or None,
+                            form=rule.get("form") or None,
+                            media_id=rule["media_id"],
+                        )
+                        for rule in rules["first_reply"].get("media_rules") or []
+                        if isinstance(rule, dict) and rule.get("media_id")
+                    ],
                 ),
                 out_of_hours=OutOfHours(
                     on=rules["out_of_hours"]["on"], text=rules["out_of_hours"]["text"]
@@ -656,7 +818,8 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
         async with desk_for(request, response, write=True) as desk:
             desk._require_manager()
             row = await inbox.number(desk.db, desk.tenant_id, number_id)
-            approved = {(t.name, t.language) for t in await inbox.approved_templates(desk.db, row)}
+            templates = await inbox.approved_templates(desk.db, row)
+            approved = {(t.name, t.language) for t in templates}
             inbox.save_auto_replies(
                 row,
                 {
@@ -666,6 +829,10 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                 approved,
                 by=desk.viewer.person_id,
                 now=desk.now,
+                files={m.id: m.kind for m in await wa_media.library(desk.db, desk.tenant_id)},
+                headers={
+                    (t.name, t.language): cloud.media_header(t.components or []) for t in templates
+                },
             )
             row.updated_at = desk.now
             await desk.db.flush()
@@ -709,6 +876,8 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                 category=command.category,
                 body=command.body,
                 example=command.example,
+                media_id=command.media_id,
+                store=media_store,
             )
             await desk.db.flush()
             return await status_view(desk)
@@ -789,6 +958,8 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                 template=command.template,
                 language=command.language,
                 values=command.values,
+                media_id=command.media_id,
+                store=media_store,
             )
             await desk.db.flush()
             view = await conversation_view(desk, lead_id)
@@ -1119,5 +1290,233 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                 ],
             )
 
+    # ----- WhatsApp files, broadcasts and sequences (0162) -----------------------------
+
+    def media_view(row: Any) -> MediaView:
+        return MediaView(
+            id=row.id,
+            label=row.label,
+            kind=row.kind,
+            filename=row.filename,
+            content_type=row.content_type,
+            size_bytes=row.size_bytes,
+            created_at=row.created_at,
+        )
+
+    @router.get("/whatsapp/media", response_model=list[MediaView], response_model_by_alias=True)
+    async def whatsapp_media(request: Request, response: Response) -> list[MediaView]:
+        """The workspace's WhatsApp files (anyone on the team may send one in a chat)."""
+        async with desk_for(request, response) as desk:
+            return [media_view(row) for row in await wa_media.library(desk.db, desk.tenant_id)]
+
+    @router.post(
+        "/whatsapp/media",
+        response_model=MediaView,
+        response_model_by_alias=True,
+        status_code=201,
+    )
+    async def whatsapp_media_add(
+        request: Request,
+        response: Response,
+        label: str = Query(min_length=1, max_length=80),
+        filename: str | None = Query(default=None, max_length=200),
+    ) -> MediaView:
+        """Add one file: the request body is the file itself (PDF, JPEG, PNG or MP4)."""
+        limit = max(wa_media.LIMITS.values())
+        raw = bytearray()
+        async for chunk in request.stream():
+            if len(raw) + len(chunk) > limit:
+                raise HTTPException(413, "Keep the file under 16 MB.", headers=PRIVATE)
+            raw.extend(chunk)
+        async with desk_for(request, response, write=True) as desk:
+            row = await wa_media.add(
+                desk, media_store, data=bytes(raw), label=label, filename=filename
+            )
+            return media_view(row)
+
+    @router.delete(
+        "/whatsapp/media/{media_id}",
+        response_model=list[MediaView],
+        response_model_by_alias=True,
+    )
+    async def whatsapp_media_archive(
+        media_id: UUID, request: Request, response: Response
+    ) -> list[MediaView]:
+        """Archive a file: it stays for the messages that carried it, and goes out no more."""
+        async with desk_for(request, response, write=True) as desk:
+            await wa_media.archive(desk, media_id)
+            return [media_view(row) for row in await wa_media.library(desk.db, desk.tenant_id)]
+
+    @router.get("/whatsapp/media/{media_id}/file", response_model=None)
+    async def whatsapp_media_file(media_id: UUID, request: Request, response: Response) -> Response:
+        """The file itself, to look at before it goes out."""
+        async with desk_for(request, response) as desk:
+            row = await wa_media.one(desk.db, desk.tenant_id, media_id, live=False)
+            try:
+                data = media_store.read(row.storage_key, expected_sha256=row.sha256)
+            except wa_media.MediaError as error:
+                raise DeskError(404, str(error)) from None
+        return Response(
+            data,
+            media_type=row.content_type,
+            headers={
+                **PRIVATE,
+                "Content-Disposition": f'inline; filename="{row.filename}"',
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    async def campaign_view(desk: LeadDesk, campaign: Any) -> CampaignView:
+        counted = await wa_campaigns.numbers(desk.db, campaign)
+        return CampaignView(
+            id=campaign.id,
+            kind=campaign.kind,
+            name=campaign.name,
+            status=campaign.status,
+            number_id=campaign.number_id,
+            steps=list(campaign.steps or []),
+            audience=dict(campaign.audience or {}),
+            send_at=campaign.send_at,
+            per_minute=campaign.per_minute,
+            created_at=campaign.created_at,
+            ended_at=campaign.ended_at,
+            numbers=CampaignNumbers(
+                people=counted["people"], reasons=counted["reasons"], **counted["messages"]
+            ),
+        )
+
+    async def start_campaign(
+        desk: LeadDesk, command: CampaignCommand, *, dry_run: bool
+    ) -> tuple[Any, wa_campaigns.Plan]:
+        if command.kind == "broadcast" and command.filters is None:
+            raise DeskError(422, "Choose who gets it: stages, sources, owners or leads.")
+        filters = command.filters.model_dump(mode="json") if command.filters else None
+        return await wa_campaigns.create(
+            desk,
+            kind=command.kind,
+            name=command.name,
+            number_id=command.number_id,
+            steps=[step.stored() for step in command.steps],
+            trigger=command.trigger.model_dump() if command.trigger else None,
+            filters=filters,
+            send_at=command.send_at,
+            per_minute=command.per_minute,
+            command_id=command.command_id,
+            confirm=command.confirm,
+            agreed=command.agreed,
+            dry_run=dry_run,
+        )
+
+    @router.get(
+        "/whatsapp/campaigns", response_model=list[CampaignView], response_model_by_alias=True
+    )
+    async def whatsapp_campaigns(request: Request, response: Response) -> list[CampaignView]:
+        async with desk_for(request, response) as desk:
+            desk._require_manager()
+            return [
+                await campaign_view(desk, campaign)
+                for campaign in await wa_campaigns.listing(desk.db, desk.tenant_id)
+            ]
+
+    @router.post(
+        "/whatsapp/campaigns/preview",
+        response_model=CampaignPreview,
+        response_model_by_alias=True,
+    )
+    async def whatsapp_campaign_preview(
+        command: CampaignCommand, request: Request, response: Response
+    ) -> CampaignPreview:
+        """Who a broadcast would reach, and who is skipped and why. Sends nothing."""
+        async with desk_for(request, response) as desk:
+            _, found = await start_campaign(desk, command, dry_run=True)
+            return CampaignPreview(
+                ready=len(found.ready),
+                skipped=[
+                    SkipView(reason=key, words=wa_campaigns.SKIP_WORDS.get(key, key), count=n)
+                    for key, n in found.skipped.items()
+                ],
+                limit=wa_campaigns.BROADCAST_LIMIT,
+            )
+
+    @router.post(
+        "/whatsapp/campaigns",
+        response_model=CampaignView,
+        response_model_by_alias=True,
+        status_code=201,
+    )
+    async def whatsapp_campaign_start(
+        command: CampaignCommand, request: Request, response: Response
+    ) -> CampaignView:
+        """Start a broadcast or a sequence; the WhatsApp loop sends it."""
+        async with desk_for(request, response, write=True) as desk:
+            campaign, _ = await start_campaign(desk, command, dry_run=False)
+            if campaign is None:
+                raise DeskError(409, "That campaign didn't start. Try again.")
+            return await campaign_view(desk, campaign)
+
+    @router.get(
+        "/whatsapp/campaigns/{campaign_id}",
+        response_model=CampaignView,
+        response_model_by_alias=True,
+    )
+    async def whatsapp_campaign(
+        campaign_id: UUID, request: Request, response: Response
+    ) -> CampaignView:
+        async with desk_for(request, response) as desk:
+            desk._require_manager()
+            return await campaign_view(
+                desk, await wa_campaigns.one(desk.db, desk.tenant_id, campaign_id)
+            )
+
+    @router.post(
+        "/whatsapp/campaigns/{campaign_id}/status",
+        response_model=CampaignView,
+        response_model_by_alias=True,
+    )
+    async def whatsapp_campaign_status(
+        campaign_id: UUID, command: CampaignStatusCommand, request: Request, response: Response
+    ) -> CampaignView:
+        """Pause, resume or end a campaign."""
+        async with desk_for(request, response, write=True) as desk:
+            campaign = await wa_campaigns.set_status(desk, campaign_id, command.status)
+            return await campaign_view(desk, campaign)
+
+    @router.get("/whatsapp/analytics", response_model=AnalyticsView, response_model_by_alias=True)
+    async def whatsapp_analytics(
+        request: Request, response: Response, days: int = Query(default=30, ge=1, le=92)
+    ) -> AnalyticsView:
+        """What every automatic and campaign message did: sent, delivered, read, failed,
+        replied and won, by what sent it and its template."""
+        async with desk_for(request, response) as desk:
+            desk._require_manager()
+            since = desk.now - timedelta(days=days)
+            names = {
+                campaign.id: campaign.name
+                for campaign in await wa_campaigns.listing(desk.db, desk.tenant_id)
+            }
+            return AnalyticsView(
+                since=since,
+                rows=[
+                    AnalyticsRow(
+                        sent_by=row["sentBy"],
+                        campaign_id=row["campaignId"],
+                        campaign=names.get(row["campaignId"]) if row["campaignId"] else None,
+                        template=row["template"],
+                        sent=row["sent"],
+                        delivered=row["delivered"],
+                        read=row["read"],
+                        failed=row["failed"],
+                        replied=row["replied"],
+                        won=row["won"],
+                    )
+                    for row in await wa_campaigns.overview(desk.db, desk.tenant_id, since=since)
+                ],
+            )
+
     application.include_router(router)
-    runner.attach(application, ctx.sessions, settings.environment)
+    runner.attach(
+        application,
+        ctx.sessions,
+        settings.environment,
+        storage_root=settings.sales_xray_storage_root,
+    )

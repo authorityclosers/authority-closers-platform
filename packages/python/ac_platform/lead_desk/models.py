@@ -958,7 +958,9 @@ class LeadWhatsAppMessage(Base):
             name="kind",
         ),
         CheckConstraint(
-            "auto IS NULL OR auto IN ('first_reply', 'out_of_hours', 'ai_reply')", name="auto"
+            "auto IS NULL OR auto IN ('first_reply', 'out_of_hours', 'ai_reply', 'drip',"
+            " 'broadcast')",
+            name="auto",
         ),
         CheckConstraint("wa_id ~ '^[0-9]{6,20}$'", name="wa_id").ddl_if(dialect="postgresql"),
         Index(
@@ -994,6 +996,133 @@ class LeadWhatsAppMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     status_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LeadWhatsAppMedia(Base):
+    """A workspace's file for WhatsApp (brochure, picture, short video), uploaded once. The
+    bytes sit in the private Sales X-Ray store; ``meta_ids`` keeps Meta's upload id per
+    number, with when it was made (Meta keeps an upload for 30 days)."""
+
+    __tablename__ = "lead_desk_whatsapp_media"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id"], ["tenants.id"], name="fk_lead_desk_whatsapp_media_tenant"
+        ),
+        CheckConstraint("kind IN ('document', 'image', 'video')", name="kind"),
+        CheckConstraint("size_bytes > 0", name="size"),
+        CheckConstraint("length(trim(label)) > 0", name="label"),
+        Index("ix_lead_desk_whatsapp_media_tenant", "tenant_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    label: Mapped[str] = mapped_column(String(80))
+    kind: Mapped[str] = mapped_column(String(16))
+    filename: Mapped[str] = mapped_column(String(120))
+    content_type: Mapped[str] = mapped_column(String(80))
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64))
+    storage_key: Mapped[str] = mapped_column(String(200))
+    meta_ids: Mapped[dict[str, Any]] = mapped_column(JSON)
+    created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LeadWhatsAppCampaign(Base):
+    """A broadcast (one approved template to a chosen list, at a set time and pace) or a
+    sequence (steps on a timer after a lead arrives or enters a stage)."""
+
+    __tablename__ = "lead_desk_whatsapp_campaigns"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id"], ["tenants.id"], name="fk_lead_desk_whatsapp_campaign_tenant"
+        ),
+        CheckConstraint("kind IN ('broadcast', 'sequence')", name="kind"),
+        CheckConstraint("status IN ('live', 'paused', 'ended')", name="status"),
+        CheckConstraint("(status = 'ended') = (ended_at IS NOT NULL)", name="ended"),
+        CheckConstraint("per_minute BETWEEN 1 AND 600", name="pace"),
+        CheckConstraint("length(trim(name)) > 0", name="name"),
+        Index("ix_lead_desk_whatsapp_campaign_tenant", "tenant_id", "status", "created_at"),
+        Index("uq_lead_desk_whatsapp_campaign_command", "tenant_id", "command_id", unique=True),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    number_id: Mapped[UUID] = mapped_column(Uuid)
+    kind: Mapped[str] = mapped_column(String(16))
+    name: Mapped[str] = mapped_column(String(80))
+    status: Mapped[str] = mapped_column(String(16))
+    steps: Mapped[list[Any]] = mapped_column(JSON)
+    audience: Mapped[dict[str, Any]] = mapped_column(JSON)
+    send_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    per_minute: Mapped[int] = mapped_column(Integer)
+    command_id: Mapped[UUID] = mapped_column(Uuid)
+    created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LeadWhatsAppCampaignLead(Base):
+    """One lead in one campaign: the step they are on, when the next is due, why they
+    stopped or were skipped, and the proof of their yes to WhatsApp when they were added."""
+
+    __tablename__ = "lead_desk_whatsapp_campaign_leads"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["campaign_id"],
+            ["lead_desk_whatsapp_campaigns.id"],
+            name="fk_lead_desk_whatsapp_campaign_lead_campaign",
+        ),
+        CheckConstraint(
+            "status IN ('waiting', 'done', 'stopped', 'skipped', 'failed')", name="status"
+        ),
+        CheckConstraint("(status = 'waiting') = (next_at IS NOT NULL)", name="due"),
+        CheckConstraint("step >= 0", name="step"),
+        Index("uq_lead_desk_whatsapp_campaign_lead", "campaign_id", "lead_id", unique=True),
+        Index(
+            "ix_lead_desk_whatsapp_campaign_lead_due",
+            "next_at",
+            postgresql_where=text("status = 'waiting'"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    campaign_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    step: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(16))
+    next_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    stage_at_start: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    proof: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
+    last_message_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadWhatsAppCampaignMessage(Base):
+    """Which campaign step sent which WhatsApp message (for the campaign's numbers)."""
+
+    __tablename__ = "lead_desk_whatsapp_campaign_messages"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["campaign_id"],
+            ["lead_desk_whatsapp_campaigns.id"],
+            name="fk_lead_desk_whatsapp_campaign_message_campaign",
+        ),
+        CheckConstraint("step >= 0", name="step"),
+        Index("ix_lead_desk_whatsapp_campaign_message_campaign", "campaign_id", "step"),
+    )
+
+    message_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    campaign_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    step: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class LeadWhatsAppTemplate(Base):
