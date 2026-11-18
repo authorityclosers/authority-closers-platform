@@ -9,7 +9,8 @@ export const COPY = {
   title: "Ask Dipak",
   // Sentence case: no ALL CAPS Latin beside Hindi (redesign study §4).
   eyebrow: "Dipak Vishwakarma · Your sales mentor",
-  hello: "Hey! Dipak this side. 👋",
+  // No emoji: Mukta has none, and phones showed an empty box (Dipak, 17 Nov 2026).
+  hello: "Hey! Dipak this side.",
   intro: [
     "Sales में 10+ years और दो businesses build करने के दौरान एक बात बार-बार समझ आई है।",
     "कभी-कभी एक सही question पूरी sales conversation बदल देता है।",
@@ -24,7 +25,8 @@ export const COPY = {
   explore: "Explore topics",
   seeAll: "See all",
   real: "Start with a real situation",
-  parts: "Quick answer · Deep lesson · MCQ",
+  // The question comes first, then his answer (Dipak's report 228, 16 Nov 2026).
+  parts: "MCQ · Quick answer · Deep lesson",
   notice:
     "Choose a topic or describe your situation in search. Answers are curated from Dipak's lessons.",
   allTitle: "Explore by topic",

@@ -60,6 +60,8 @@ export function phoneTabFor(
     if (under(pathname, "/leads")) return "leads";
     // Dipak's library (his spec, 13 Nov 2026): the middle tab's own page.
     if (under(pathname, "/ask-dipak")) return "ask";
+    // Its review fixture lights Ask Dipak too, never Growth (17 Nov 2026).
+    if (under(pathname, "/review-fixture/ask-dipak")) return "ask";
     if (under(pathname, "/chats")) return "leads";
     if (under(pathname, CALLS_PATH) || under(pathname, "/calls"))
       return "reports";

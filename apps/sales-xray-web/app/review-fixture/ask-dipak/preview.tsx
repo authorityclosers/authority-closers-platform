@@ -10,11 +10,11 @@
 import { useState } from "react";
 
 import { AcquisitionShell } from "../../acquisition-shell";
+import { AskDipakName } from "../../ask-dipak/ask-dipak-page";
 import { AskDipakView } from "../../ask-dipak/ask-dipak-view";
 import { COPY } from "../../ask-dipak/copy";
 import { LESSON_PATH } from "../../ask-dipak/lessons";
 import { PROGRESS_PATH, loadProgress } from "../../ask-dipak/progress";
-import { PageHeader } from "../../ui/kit";
 import { WorkspaceAccessContext } from "../../workspace-access";
 
 const SELLER = "00000000-0000-4000-8000-000000000002";
@@ -125,7 +125,7 @@ export function AskDipakFixture({ pick }: { pick: string | null }) {
       }}
     >
       <AcquisitionShell authenticated active="coaching" pageName={COPY.title}>
-        <PageHeader title={COPY.title} titleInBar />
+        <AskDipakName />
         <AskDipakView
           initial={
             pick ? { picked: { [pick]: 1 }, deep: { [pick]: true } } : undefined

@@ -44,7 +44,15 @@ vi.mock("next/navigation", async () => {
 import coach from "./coach-notes.json";
 import { AskDipakView } from "./ask-dipak-view";
 import { COPY } from "./copy";
-import { CATEGORIES, DRAFTS, questionById, questionLabel } from "./library";
+import {
+  CATEGORIES,
+  DRAFTS,
+  REAL_SITUATIONS,
+  featuredById,
+  featuredQuestions,
+  questionById,
+  questionLabel,
+} from "./library";
 import {
   KEEP,
   LESSON_PATH,
@@ -211,10 +219,42 @@ describe("Homepage", () => {
         ?.textContent,
     ).toBe("DV");
     expect(host.querySelector("img")).toBeNull();
-    expect(host.querySelector("a[data-continue]")).not.toBeNull();
+    // The strong card at the top carries Continue (owner, 17 Nov 2026).
+    expect(host.querySelector("section a[data-continue]")).not.toBeNull();
     // No active mission (the coaching API isn't served here): no strip.
     expect(host.querySelector("[data-mission-strip]")).toBeNull();
-    expect(host.querySelectorAll("svg[data-art]")).toHaveLength(4);
+    // Three situations and four topics, each with its drawing.
+    expect(host.querySelectorAll("svg[data-art]")).toHaveLength(7);
+    // No emoji after his hello: Mukta has none (an empty box, 17 Nov 2026).
+    expect(COPY.hello).not.toMatch(/\p{Extended_Pictographic}/u);
+  });
+
+  it("tells the three real situations apart, each its own colour and drawing (Dipak's report 226)", async () => {
+    await show();
+    const cards = REAL_SITUATIONS.map((id) =>
+      host.querySelector(`a[href="/ask-dipak?lesson=${id}"]`),
+    );
+    const looks = cards.map((card) =>
+      Array.from(card?.classList ?? []).join(" "),
+    );
+    expect(new Set(looks).size).toBe(3);
+    for (const card of cards) {
+      expect(card?.querySelector("svg[data-art]")).not.toBeNull();
+      expect(card?.textContent).toContain(COPY.parts);
+    }
+  });
+
+  it("numbers a topic's questions, each its own card (Dipak's report 227)", async () => {
+    await show("/ask-dipak?topic=talk");
+    const rows = Array.from(
+      host.querySelectorAll<HTMLAnchorElement>('a[href^="/ask-dipak?lesson="]'),
+    );
+    const questions = featuredQuestions(featuredById("talk")!);
+    expect(rows).toHaveLength(questions.length);
+    rows.forEach((row, index) => {
+      expect(row.firstElementChild?.textContent).toBe(String(index + 1));
+      expect(row.textContent).toContain(questionLabel(questions[index]));
+    });
   });
 
   it("offers Continue for the lesson just opened", async () => {
@@ -402,10 +442,11 @@ describe("Interactive lessons", () => {
         host.querySelectorAll("h3"),
         (h) => h.textContent,
       );
+      // The question first, then his answer (Dipak's report 228, 16 Nov 2026).
       expect(sections).toEqual([
+        COPY.turn,
         COPY.shift,
         COPY.quick,
-        COPY.turn,
         COPY.cue,
         COPY.mission,
         COPY.related,
@@ -762,7 +803,10 @@ describe("Lessons from the API (16 Nov 2026: served from the database)", () => {
       await loadLesson("CF01");
     });
     expect(LESSONS.CF01.shift).toBe("इस answer से कौन-सी सोच बदलनी है:");
-    expect(host.querySelector("h3")?.textContent).toBe(COPY.shift);
+    // The question comes first (report 228); his heading opens the answer.
+    expect(
+      Array.from(host.querySelectorAll("h3"), (h) => h.textContent).slice(0, 2),
+    ).toEqual([COPY.turn, COPY.shift]);
     expect(host.querySelector("[data-mindset]")?.textContent).toContain(
       LESSONS.CF01.after,
     );

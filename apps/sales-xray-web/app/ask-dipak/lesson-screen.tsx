@@ -5,9 +5,10 @@
  * S3-S4, options L-A, Q-A, D-A, N-A): one scroll in his order, each part with
  * its own look, and a track at the top that shows where you are (never how
  * well you did):
- *   his old and new thinking as two cards; his quick answer in numbered beats;
- *   your turn, the customer's words as a bubble and three option cards that
- *   all look the same when picked, his word on the one picked right under it;
+ *   your turn first (Dipak, 16 Nov 2026: the question before the answer),
+ *   the customer's words as a bubble and three option cards that all look the
+ *   same when picked, his word on the one picked right under it; then his old
+ *   and new thinking as two cards and his quick answer in numbered beats;
  *   the Deep lesson as an editorial read; the line to remember as a pocket
  *   card; the Next-call mission as a plan you commit to; what to learn next.
  * Every word with his name is his, from the lesson as served; nothing is
@@ -59,12 +60,17 @@ const PART_LABEL: Readonly<Record<PartKey, string>> = {
   next: COPY.related,
 };
 
-/** The lesson's parts, in his order; old and new thinking only where he wrote them. */
+/**
+ * The lesson's parts: the question first, then his answer (Dipak's report
+ * 228, 16 Nov 2026: answering before the MCQ is "like telling the answer
+ * before the exam"); then old and new thinking (only where he wrote them),
+ * his quick answer and the rest in his order.
+ */
 export function partsOf(lesson: Lesson): PartKey[] {
   return [
+    "turn",
     ...(lesson.before && lesson.after ? (["shift"] as const) : []),
     "quick",
-    "turn",
     "deep",
     "cue",
     "mission",
@@ -483,51 +489,6 @@ export function LessonScreen({
             </span>
           </div>
 
-          {lesson.before && lesson.after ? (
-            <Section part="shift">
-              <h3 className={styles.sectionH}>{COPY.shift}</h3>
-              {/* His before and after lines, word for word (his doc's opening). */}
-              <div className={styles.shift} data-mindset="">
-                <div className={styles.oldThought}>
-                  <p className={styles.thoughtLabel}>
-                    <AskIcon name="ban" size={20} />
-                    {COPY.before}
-                  </p>
-                  <p className={styles.thought}>{lesson.before}</p>
-                </div>
-                <span className={styles.shiftArrow} aria-hidden="true">
-                  <AskIcon name="down" size={20} />
-                </span>
-                <div className={styles.newThought}>
-                  <p className={styles.thoughtLabel}>
-                    <AskIcon name="spark" size={20} />
-                    {COPY.after}
-                  </p>
-                  <p className={styles.thought}>{lesson.after}</p>
-                </div>
-              </div>
-            </Section>
-          ) : null}
-
-          <Section part="quick" className={styles.quickCard}>
-            <div className={styles.coachHead}>
-              <CoachMark size="sm" />
-              <h3 className={styles.sectionH}>{COPY.quick}</h3>
-            </div>
-            <ol className={styles.beats}>
-              {paragraphs(lesson.quick).map((beat, index) => (
-                <li key={beat} className={styles.beat}>
-                  <span className={styles.beatDot} aria-hidden="true">
-                    {index + 1}
-                  </span>
-                  <p className={styles.beatText}>
-                    <Marked text={beat} />
-                  </p>
-                </li>
-              ))}
-            </ol>
-          </Section>
-
           <Section part="turn">
             <h3 className={styles.sectionH}>{COPY.turn}</h3>
             <div className={styles.scene}>
@@ -627,6 +588,51 @@ export function LessonScreen({
                 );
               })}
             </div>
+          </Section>
+
+          {lesson.before && lesson.after ? (
+            <Section part="shift">
+              <h3 className={styles.sectionH}>{COPY.shift}</h3>
+              {/* His before and after lines, word for word (his doc's opening). */}
+              <div className={styles.shift} data-mindset="">
+                <div className={styles.oldThought}>
+                  <p className={styles.thoughtLabel}>
+                    <AskIcon name="ban" size={20} />
+                    {COPY.before}
+                  </p>
+                  <p className={styles.thought}>{lesson.before}</p>
+                </div>
+                <span className={styles.shiftArrow} aria-hidden="true">
+                  <AskIcon name="down" size={20} />
+                </span>
+                <div className={styles.newThought}>
+                  <p className={styles.thoughtLabel}>
+                    <AskIcon name="spark" size={20} />
+                    {COPY.after}
+                  </p>
+                  <p className={styles.thought}>{lesson.after}</p>
+                </div>
+              </div>
+            </Section>
+          ) : null}
+
+          <Section part="quick" className={styles.quickCard}>
+            <div className={styles.coachHead}>
+              <CoachMark size="sm" />
+              <h3 className={styles.sectionH}>{COPY.quick}</h3>
+            </div>
+            <ol className={styles.beats}>
+              {paragraphs(lesson.quick).map((beat, index) => (
+                <li key={beat} className={styles.beat}>
+                  <span className={styles.beatDot} aria-hidden="true">
+                    {index + 1}
+                  </span>
+                  <p className={styles.beatText}>
+                    <Marked text={beat} />
+                  </p>
+                </li>
+              ))}
+            </ol>
           </Section>
 
           <Section part="deep">

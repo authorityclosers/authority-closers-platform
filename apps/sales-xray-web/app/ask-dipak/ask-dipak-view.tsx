@@ -41,6 +41,7 @@ import {
   categoryQuestions,
   featuredById,
   featuredQuestions,
+  lessonChip,
   questionById,
   questionLabel,
   searchQuestions,
@@ -62,7 +63,7 @@ import {
 } from "./nav";
 import { loadProgress, useProgress, type Progress } from "./progress";
 import { rememberLesson } from "./recent";
-import { toneOfCategory, toneOfFeatured } from "./tones";
+import { toneOfCategory, toneOfFeatured, type Tone } from "./tones";
 
 /** The element that scrolls this page: the shell's panel, or the window. */
 function scrollerOf(node: HTMLElement | null): Element {
@@ -77,14 +78,30 @@ function scrollerOf(node: HTMLElement | null): Element {
   return document.scrollingElement ?? document.documentElement;
 }
 
-function QuestionRow({ question, open }: { question: Question; open: Open }) {
+/**
+ * One question of a topic, its own bordered card with its number in the
+ * topic's colour (Dipak's report 227, 16 Nov 2026: "no differentiation
+ * between the points … make borders").
+ */
+function QuestionRow({
+  question,
+  open,
+  number,
+}: {
+  question: Question;
+  open: Open;
+  number: number;
+}) {
   return (
     <ScreenButton
       view={{ kind: "lesson", id: question.id }}
       open={open}
       className={styles.questionRow}
     >
-      <span>{questionLabel(question)}</span>
+      <span className={styles.rowNumber} aria-hidden="true">
+        {number}
+      </span>
+      <span className={styles.rowWords}>{questionLabel(question)}</span>
       <AskIcon name="right" size={18} />
     </ScreenButton>
   );
@@ -115,63 +132,83 @@ function Tools({ view, open }: { view: AskView; open: Open }) {
 }
 
 /**
- * Dipak's card, the Coach's desk (owner's pick H-A, 17 Nov 2026): his
- * monogram until an approved photo exists (never a generated face), his
- * hello and his question; his three intro lines fold behind "Dipak के बारे
- * में" (owner, 16 Nov 2026: keep it compact), sliding open and shut (none
- * with reduced motion). Saved lessons opens from its corner. No listen pill
- * until Dipak records his own voice.
+ * Dipak's card, the Coach's desk (owner's pick H-A, 17 Nov 2026), the strong
+ * card at the top (owner, 17 Nov 2026): his monogram until an approved photo
+ * exists (never a generated face), his hello and his question, and the lesson
+ * to Continue inside it; his three intro lines fold behind "Dipak के बारे में"
+ * (owner, 16 Nov 2026: keep it compact), sliding open and shut (none with
+ * reduced motion). Saved lessons opens from its corner. No listen pill until
+ * Dipak records his own voice.
  */
 function Greeting({ open }: { open: Open }) {
   const [more, setMore] = useState(false);
   const moreId = useId();
   return (
     <section className={styles.hero} data-more={more || undefined}>
-      <div className={styles.coachRow}>
-        <CoachMark />
-        <div className={styles.coachWords}>
-          <p className={styles.eyebrow}>{COPY.eyebrow}</p>
-          <h2 className={styles.hello}>{COPY.hello}</h2>
-          <p className={styles.heroAsk}>
-            <strong>{COPY.introAsk}</strong>
-          </p>
+      <div className={styles.heroMain}>
+        <div className={styles.coachRow}>
+          <CoachMark />
+          <div className={styles.coachWords}>
+            <p className={styles.eyebrow}>{COPY.eyebrow}</p>
+            <h2 className={styles.hello}>{COPY.hello}</h2>
+            <p className={styles.heroAsk}>
+              <strong>{COPY.introAsk}</strong>
+            </p>
+          </div>
+          <button
+            type="button"
+            className={styles.heroSaved}
+            aria-label={COPY.savedLessons}
+            onClick={() => open({ kind: "saved" })}
+          >
+            <AskIcon name="bookmark" size={20} />
+          </button>
+        </div>
+        <div
+          className={styles.introMore}
+          id={moreId}
+          aria-hidden={!more}
+          inert={!more}
+        >
+          <div>
+            {COPY.intro.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+          </div>
         </div>
         <button
           type="button"
-          className={styles.heroSaved}
-          aria-label={COPY.savedLessons}
-          onClick={() => open({ kind: "saved" })}
+          className={styles.introToggle}
+          aria-expanded={more}
+          aria-controls={moreId}
+          onClick={() => setMore((now) => !now)}
         >
-          <AskIcon name="bookmark" size={20} />
+          {more ? COPY.introLess : COPY.introMore}
+          <span className={styles.foldArrow} data-open={more || undefined}>
+            <AskIcon name="right" size={16} />
+          </span>
         </button>
       </div>
-      <div
-        className={styles.introMore}
-        id={moreId}
-        aria-hidden={!more}
-        inert={!more}
-      >
-        <div>
-          {COPY.intro.map((line) => (
-            <p key={line}>{line}</p>
-          ))}
-        </div>
-      </div>
-      <button
-        type="button"
-        className={styles.introToggle}
-        aria-expanded={more}
-        aria-controls={moreId}
-        onClick={() => setMore((now) => !now)}
-      >
-        {more ? COPY.introLess : COPY.introMore}
-        <span className={styles.foldArrow} data-open={more || undefined}>
-          <AskIcon name="right" size={16} />
-        </span>
-      </button>
+      <ContinueCard open={open} />
     </section>
   );
 }
+
+/**
+ * The three real situations each look like their own moment (Dipak's report
+ * 226, 16 Nov 2026: "teenhi goshti ek distay", the three look the same): the
+ * colour and drawing of what the customer's words are about, by meaning:
+ * price (Price & Objections), a decision someone else shares (Qualification
+ * & Decision Process) and "I'll think about it", a follow-up (Closing &
+ * Follow-Up).
+ */
+const SITUATION_LOOK: Readonly<
+  Record<string, { tone: Tone; category: string }>
+> = {
+  PB03: { tone: "action", category: "08" },
+  DM02: { tone: "info", category: "06" },
+  OB03: { tone: "good", category: "09" },
+};
 
 /**
  * The Coach's desk, top to bottom (redesign study §5 S1, with H-B's situation
@@ -185,10 +222,7 @@ function HomeScreen({ open }: { open: Open }) {
     <>
       <div className={styles.desk}>
         <Greeting open={open} />
-        <div className={styles.deskSide}>
-          <ContinueCard open={open} />
-          <MissionStrip open={open} />
-        </div>
+        <MissionStrip open={open} />
       </div>
       <ScreenButton
         view={{ kind: "search" }}
@@ -205,13 +239,23 @@ function HomeScreen({ open }: { open: Open }) {
         {REAL_SITUATIONS.map((id) => {
           const question = questionById(id);
           if (!question) return null;
+          const look = SITUATION_LOOK[id];
           return (
             <ScreenButton
               key={id}
               view={{ kind: "lesson", id }}
               open={open}
-              className={`${styles.situation} ${styles[toneOfCategory(question.categoryId)]}`}
+              className={`${styles.situation} ${styles[look?.tone ?? toneOfCategory(question.categoryId)]}`}
             >
+              <span className={styles.situationTop}>
+                <span className={styles.situationArt} aria-hidden="true">
+                  <TopicArt
+                    category={look?.category ?? question.categoryId}
+                    size={36}
+                  />
+                </span>
+                <span className={styles.chip}>{lessonChip(question)}</span>
+              </span>
               <span className={styles.bubble}>{questionLabel(question)}</span>
               <span className={styles.situationFoot}>
                 <span className={styles.entryMeta}>{COPY.parts}</span>
@@ -353,9 +397,14 @@ function TopicScreen({
         art={<TopicArt featured={topic.id} size={64} />}
       />
       <p className={styles.pageSub}>{COPY.topicSub}</p>
-      <div className={styles.rows}>
-        {featuredQuestions(topic).map((question) => (
-          <QuestionRow key={question.id} question={question} open={open} />
+      <div className={`${styles.rows} ${styles[toneOfFeatured(topic.id)]}`}>
+        {featuredQuestions(topic).map((question, index) => (
+          <QuestionRow
+            key={question.id}
+            question={question}
+            open={open}
+            number={index + 1}
+          />
         ))}
       </div>
     </>
@@ -384,9 +433,14 @@ function CategoryScreen({
         art={<TopicArt category={category.id} size={64} />}
       />
       <p className={styles.pageSub}>{COPY.categorySub}</p>
-      <div className={styles.rows}>
-        {categoryQuestions(category).map((question) => (
-          <QuestionRow key={question.id} question={question} open={open} />
+      <div className={`${styles.rows} ${styles[toneOfCategory(category.id)]}`}>
+        {categoryQuestions(category).map((question, index) => (
+          <QuestionRow
+            key={question.id}
+            question={question}
+            open={open}
+            number={index + 1}
+          />
         ))}
       </div>
     </>
@@ -430,9 +484,14 @@ function SearchScreen({
       </label>
       <div aria-live="polite" data-results="">
         {results.length ? (
-          <div className={styles.rows}>
-            {results.map((question) => (
-              <QuestionRow key={question.id} question={question} open={open} />
+          <div className={`${styles.rows} ${styles.good}`}>
+            {results.map((question, index) => (
+              <QuestionRow
+                key={question.id}
+                question={question}
+                open={open}
+                number={index + 1}
+              />
             ))}
           </div>
         ) : (
@@ -463,9 +522,14 @@ function SavedScreen({
       <h2 className={styles.pageTitle}>{COPY.savedTitle}</h2>
       <p className={styles.pageSub}>{COPY.savedSub}</p>
       {saved.length ? (
-        <div className={styles.rows}>
-          {saved.map((question) => (
-            <QuestionRow key={question.id} question={question} open={open} />
+        <div className={`${styles.rows} ${styles.good}`}>
+          {saved.map((question, index) => (
+            <QuestionRow
+              key={question.id}
+              question={question}
+              open={open}
+              number={index + 1}
+            />
           ))}
         </div>
       ) : waiting ? (

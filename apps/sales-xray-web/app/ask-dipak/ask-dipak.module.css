@@ -1225,8 +1225,11 @@
 .root {
   --ad-mint: var(--sx-tone-good-soft);
   --ad-accent: var(--xr-green);
+  /* Emoji come from the phone's own emoji font: Mukta has none (an empty
+     box after Dipak's hello, 17 Nov 2026). */
   font-family:
-    "Ask Dipak Mukta", "Noto Sans Devanagari Variable", system-ui, sans-serif;
+    "Ask Dipak Mukta", "Noto Sans Devanagari Variable", system-ui, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
 }
 
 /* ---------- The Coach's desk (owner's pick H-A, 17 Nov 2026) ----------
@@ -2331,4 +2334,143 @@
 
 .coverArt .artBack {
   fill: var(--sx-surface);
+}
+
+/* ---------- Dipak's reports and the strong top card (17 Nov 2026) ----------
+   Owner: "a strong card at the top". Dipak's card carries the lesson to
+   Continue inside it, on a green wash with a green edge; the mission strip
+   follows below it. Computers lay the card out in two columns. */
+.desk .hero {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 14px 14px 18px;
+  border: 1px solid color-mix(in oklab, var(--ad-accent) 32%, transparent);
+  background:
+    radial-gradient(
+      120% 90% at 100% 0%,
+      color-mix(in oklab, var(--ad-accent) 22%, transparent),
+      transparent 62%
+    ),
+    linear-gradient(
+      165deg,
+      color-mix(in oklab, var(--ad-accent) 12%, var(--sx-tile-fill)),
+      var(--sx-tile-fill) 78%
+    );
+  box-shadow: var(--sx-tile-depth);
+}
+
+.desk .hero .coachWords .hello {
+  font-weight: 750;
+  line-height: var(--sx-leading-28);
+}
+
+.desk .hero .introToggle {
+  align-self: flex-start;
+}
+
+.desk .hero .continueCard {
+  width: 100%;
+  min-height: 0;
+  border: 1px solid color-mix(in oklab, var(--ad-accent) 22%, transparent);
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+.desk .hero .continueGo {
+  margin: 0 0 0 auto;
+  padding: 0 12px 0 16px;
+  border-radius: 999px;
+  background: var(--ad-accent);
+  color: var(--sx-surface);
+}
+
+/* Report 226: each real situation its own moment, by what it is about. */
+.situation {
+  gap: 10px;
+  padding: 12px 12px 6px 14px;
+  border-left: 4px solid var(--ad-tone);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--ad-tone-soft) 70%, var(--sx-tile-fill)),
+    var(--sx-tile-fill) 85%
+  );
+}
+
+.situationTop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.situationArt {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--sx-tile-fill);
+  color: var(--ad-tone);
+}
+
+.situation .chip {
+  --ad-tone: inherit;
+  --ad-tone-soft: inherit;
+  background: var(--sx-tile-fill);
+}
+
+.situation .bubble {
+  border: 1px solid color-mix(in oklab, var(--ad-tone) 30%, transparent);
+  background: var(--sx-tile-fill);
+}
+
+/* Report 227: a topic's questions as separate bordered cards, numbered in
+   the topic's colour. */
+.rows {
+  gap: 10px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.rows .questionRow {
+  gap: 12px;
+  padding: 14px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 16px;
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+}
+
+.questionRow > .rowNumber {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--ad-tone-soft);
+  color: var(--ad-tone);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  line-height: var(--sx-leading-16);
+}
+
+@media (min-width: 900px) {
+  .desk {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .desk .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    align-items: center;
+    gap: 24px;
+    padding: 24px;
+  }
 }
