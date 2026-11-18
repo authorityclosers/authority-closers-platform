@@ -32,6 +32,7 @@
   color: var(--chip);
 }
 .meta li span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }

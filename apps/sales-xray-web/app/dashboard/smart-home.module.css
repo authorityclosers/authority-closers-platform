@@ -899,3 +899,19 @@ a.counter:active::after,
   -webkit-box-orient: vertical;
   line-height: var(--sx-leading-20);
 }
+
+/* Dipak's phone, 17 Nov 2026 (bug 221, "half words show"): beside its 44 px ring a
+   Done today tile at 360-412 px left 47-90 px for the name, so "Attempted",
+   "Connected" and "Follow-ups" were cut inside the word. A narrow tile puts the name
+   under its ring and number, across the tile; a wide one keeps them side by side. */
+.done > li {
+  container-type: inline-size;
+}
+@container (max-width: 12rem) {
+  .done > li > * {
+    grid-template-areas:
+      "ring value"
+      "label label";
+    row-gap: 6px;
+  }
+}

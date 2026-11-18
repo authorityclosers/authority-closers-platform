@@ -182,7 +182,7 @@ it("reads Not known yet where nothing is known, never a guess", async () => {
   expect(shown[3]).toMatchObject({ value: "Send the brochure in Marathi" });
 });
 
-it("opens the other five areas in place with See more", async () => {
+it("opens the other five areas in place with See more, the unknown ones on one line", async () => {
   await show(
     detailWith({
       events: [event({ kind: "call", connected: true, duration_seconds: 60 })],
@@ -196,11 +196,14 @@ it("opens the other five areas in place with See more", async () => {
   await act(async () => more?.click());
   expect(more?.textContent).toBe("See less");
   expect(more?.getAttribute("aria-expanded")).toBe("true");
-  const areas = [...host.querySelectorAll("h4")].map((h) => h.textContent);
-  expect(areas).toHaveLength(5);
-  expect(areas[0]).toBe("What They Want — & Why");
-  // What nobody knows yet is named once per area, never filled in.
-  expect(host.textContent).toContain("Not known yet: Industry");
+  // Nothing is known from a Report yet: no area lists its grey unknowns, and
+  // the five areas are named once, on one line, as what to find out (Dipak's
+  // phone, bug 224, 17 Nov 2026: "I can't tell where to focus").
+  expect(host.querySelectorAll("h4")).toHaveLength(0);
+  expect(host.textContent).not.toContain("Not known yet: Industry");
+  expect(host.textContent).toContain(
+    "To find out on the call: What They Want — & Why · Can & Will They Buy?",
+  );
 });
 
 it("takes the newest real talk, not a dial nobody answered", () => {
