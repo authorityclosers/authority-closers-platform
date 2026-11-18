@@ -14,7 +14,7 @@ export function PlansOnWeb() {
       <div className={styles.page}>
         <section className={styles.panel} role="status">
           <h2>Your plan</h2>
-          <p className={styles.hint}>{line}</p>
+          {line ? <p className={styles.hint}>{line}</p> : null}
           <div className={styles.actions}>
             <Link className={styles.primary} href="/settings/plan">
               See your minutes

@@ -139,3 +139,44 @@ it.each([
     expect(host.textContent).toBe(line);
   },
 );
+
+// App Store 3.1.1/3.1.3 (orchestrator, 18 Nov 2026): the iPhone app never says
+// plans are managed on the web, for an owner or a member; Android and the website do.
+it.each(["owner", "member"] as const)(
+  "tells an organisation %s nothing about plans on the web in the iPhone app",
+  async (role) => {
+    inApp.value = true;
+    iPhoneApp.value = true;
+    await act(async () =>
+      root.render(
+        <WorkspaceAccessProvider
+          value={{
+            status: "ready",
+            authenticated: true,
+            retry: () => {},
+            context: { personId: "p", sessionId: "s", tenantId: "org" },
+            workspaces: [
+              {
+                tenant_id: "org",
+                kind: "organisation",
+                name: "Brightline",
+                role,
+                sales_xray_enabled: true,
+              },
+            ],
+          }}
+        >
+          <PlansLine />
+        </WorkspaceAccessProvider>,
+      ),
+    );
+    expect(host.textContent).toBe("");
+    expect(host.textContent).not.toMatch(/web|plan|upgrade|buy/i);
+  },
+);
+
+it("keeps the plans-on-web line in the Android app", async () => {
+  inApp.value = true;
+  await act(async () => root.render(<PlansLine />));
+  expect(host.textContent).toMatch(/on the web\.$/);
+});

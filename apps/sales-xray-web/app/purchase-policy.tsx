@@ -20,11 +20,15 @@ export const PLANS_ON_WEB = "Your workspace owner manages plans on the web.";
 /** The same place for whoever pays (an owner, or anyone in Personal): their own plan. */
 export const YOUR_PLANS_ON_WEB = "You manage your plan and minutes on the web.";
 
-/** Which of the two lines this person reads, by their role here (persona QA ph1-42). */
-export function usePlansOnWebLine(): string {
-  return useCanHere()("billing.view") === false
-    ? PLANS_ON_WEB
-    : YOUR_PLANS_ON_WEB;
+/**
+ * Which of the two lines this person reads, by their role here (persona QA ph1-42).
+ * None in the iPhone app: App Store 3.1.1/3.1.3 can read "on the web" as steering
+ * people to buy elsewhere (orchestrator, 18 Nov 2026), so there it says nothing.
+ */
+export function usePlansOnWebLine(): string | null {
+  const canHere = useCanHere();
+  if (useIPhoneApp()) return null;
+  return canHere("billing.view") === false ? PLANS_ON_WEB : YOUR_PLANS_ON_WEB;
 }
 
 /**
