@@ -26,6 +26,7 @@ import { useTabAgain } from "../shell/tab-again";
 import styles from "./ask-dipak.module.css";
 import { COPY } from "./copy";
 import { CoachMark, TopicArt } from "./art";
+import { readGrowth, type Growth } from "./coaching-client";
 import { ContinueCard, MissionStrip } from "./home-desk";
 import { Breadcrumb, ScreenButton, type Open } from "./bits";
 import { AskIcon } from "./icons";
@@ -505,6 +506,82 @@ function SearchScreen({
   );
 }
 
+/**
+ * My learning (redesign study §5 S6, options P-A/P-B; 18 Nov 2026): Progress
+ * and Saved as one personal record. Progress counts only what the account
+ * keeps (saved lessons, missions, calls the seller said they tried), never a
+ * score, streak or percentage, and nothing resets.
+ */
+function ProgressPane({ progress }: { progress: Progress }) {
+  const [growth, setGrowth] = useState<Growth | null>(null);
+  useEffect(() => {
+    let live = true;
+    readGrowth().then(
+      (answer) => {
+        if (live) setGrowth(answer);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  const tried = growth
+    ? growth.missions.reduce((sum, item) => sum + item.done_calls, 0)
+    : null;
+  const kept = (id: string) =>
+    progress.saved.has(id) || progress.missions.has(id);
+  const stats: [number | null, string][] = [
+    [progress.saved.size, COPY.statSaved],
+    [progress.missions.size, COPY.statMissions],
+    [tried, COPY.statTried],
+  ];
+  const anything = progress.saved.size + progress.missions.size > 0;
+  return (
+    <div data-pane="progress">
+      <div className={styles.stats}>
+        {stats.map(([value, label]) => (
+          <div key={label} className={styles.stat}>
+            <strong>{value ?? "–"}</strong>
+            <span>{label}</span>
+          </div>
+        ))}
+      </div>
+      {anything ? null : <p className={styles.pageSub}>{COPY.progressZero}</p>}
+      <div className={styles.topicProgress}>
+        {CATEGORIES.map((category) => {
+          const lessons = categoryQuestions(category);
+          const count = lessons.filter((question) => kept(question.id)).length;
+          return (
+            <div
+              key={category.id}
+              className={`${styles.topicLine} ${styles[toneOfCategory(category.id)]}`}
+              data-topic-line={category.id}
+            >
+              <span className={styles.topicLineArt}>
+                <TopicArt category={category.id} size={28} />
+              </span>
+              <span className={styles.topicLineWords}>
+                <span className={styles.topicLineName}>{category.name}</span>
+                <span className={styles.topicLineBar} aria-hidden="true">
+                  <span
+                    style={{
+                      width: `${lessons.length ? (count / lessons.length) * 100 : 0}%`,
+                    }}
+                  />
+                </span>
+              </span>
+              <span className={styles.topicLineCount}>
+                {COPY.keptOf(count, lessons.length)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function SavedScreen({
   progress,
   open,
@@ -514,43 +591,74 @@ function SavedScreen({
   open: Open;
   back: () => void;
 }) {
+  const [pane, setPane] = useState<"progress" | "saved">("saved");
   const saved = QUESTIONS.filter((question) => progress.saved.has(question.id));
   const waiting = progress.status === "idle" || progress.status === "loading";
   return (
     <>
       <Breadcrumb onBack={back}>{COPY.title}</Breadcrumb>
-      <h2 className={styles.pageTitle}>{COPY.savedTitle}</h2>
-      <p className={styles.pageSub}>{COPY.savedSub}</p>
-      {saved.length ? (
-        <div className={`${styles.rows} ${styles.good}`}>
-          {saved.map((question, index) => (
-            <QuestionRow
-              key={question.id}
-              question={question}
-              open={open}
-              number={index + 1}
-            />
-          ))}
-        </div>
-      ) : waiting ? (
-        <div className={styles.rowSkeleton} aria-busy="true" />
-      ) : progress.status === "failed" ? (
-        <div className={styles.empty}>
-          <strong>Couldn&rsquo;t open your saved lessons</strong>
-          Check your connection, then try again.
+      <h2 className={styles.pageTitle}>{COPY.learningTitle}</h2>
+      <div
+        className={styles.segment}
+        role="tablist"
+        aria-label={COPY.learningTitle}
+      >
+        {(["progress", "saved"] as const).map((key) => (
           <button
+            key={key}
             type="button"
-            className={`${styles.smallBtn} ${styles.primary}`}
-            onClick={() => void loadProgress()}
+            role="tab"
+            aria-selected={pane === key}
+            className={styles.segmentItem}
+            onClick={() => setPane(key)}
           >
-            Try again
+            {key === "progress"
+              ? COPY.paneProgress
+              : `${COPY.paneSaved} (${saved.length})`}
           </button>
-        </div>
+        ))}
+      </div>
+      {pane === "progress" ? (
+        <ProgressPane progress={progress} />
       ) : (
-        <div className={styles.empty}>
-          <strong>{COPY.savedEmpty}</strong>
-          {COPY.savedEmptyHint}
-        </div>
+        <>
+          <p className={styles.pageSub}>{COPY.savedSub}</p>
+          {saved.length ? (
+            <div className={styles.savedList}>
+              {saved.map((question, index) => (
+                <div
+                  key={question.id}
+                  className={`${styles.rows} ${styles[toneOfCategory(question.categoryId)]}`}
+                >
+                  <QuestionRow
+                    question={question}
+                    open={open}
+                    number={index + 1}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : waiting ? (
+            <div className={styles.rowSkeleton} aria-busy="true" />
+          ) : progress.status === "failed" ? (
+            <div className={styles.empty}>
+              <strong>Couldn&rsquo;t open your saved lessons</strong>
+              Check your connection, then try again.
+              <button
+                type="button"
+                className={`${styles.smallBtn} ${styles.primary}`}
+                onClick={() => void loadProgress()}
+              >
+                Try again
+              </button>
+            </div>
+          ) : (
+            <div className={styles.empty}>
+              <strong>{COPY.savedEmpty}</strong>
+              {COPY.savedEmptyHint}
+            </div>
+          )}
+        </>
       )}
     </>
   );

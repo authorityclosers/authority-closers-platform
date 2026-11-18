@@ -1560,6 +1560,27 @@
   fill: var(--ad-tone-soft);
 }
 
+/* Graphics pass G-A (18 Nov 2026): soft tint shapes under the line, one
+   spark in a second colour by meaning. */
+.artFill {
+  fill: currentColor;
+  opacity: 0.22;
+}
+
+.artSpark {
+  fill: var(--sx-tone-action);
+}
+
+.action .artSpark {
+  fill: var(--sx-tone-calls);
+}
+
+.partMark {
+  display: block;
+  flex: none;
+  color: var(--ad-tone, var(--ad-accent));
+}
+
 .topicTile .topicTitle {
   font-size: var(--sx-text-md);
   font-weight: 600;
@@ -1762,6 +1783,43 @@
   margin: 0;
 }
 
+/* Each part's heading carries its mark (graphics pass G-A, 18 Nov 2026). */
+.partHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 22px 2px 12px;
+}
+
+.partHead .sectionH {
+  margin: 0;
+}
+
+/* Dipak's report 228 note: his answer waits until an option is picked. */
+.answerGate {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px dashed
+    color-mix(in oklab, var(--ad-tone, var(--ad-accent)) 45%, transparent);
+  border-radius: 18px;
+  background: color-mix(
+    in oklab,
+    var(--ad-tone-soft, var(--ad-mint)) 55%,
+    transparent
+  );
+}
+
+.gateText {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  line-height: var(--lx-leading-devanagari);
+}
+
 /* 1. His old and new thinking: two cards and an arrow; neither says "wrong". */
 .shift {
   display: flex;
@@ -1835,8 +1893,24 @@
   padding: 12px 0;
 }
 
-.beat + .beat {
-  border-top: 0.5px solid var(--sx-hairline);
+.beat {
+  position: relative;
+}
+
+/* His beats as one path: a soft line joins the numbered nodes. */
+.beat:not(:last-child)::before {
+  position: absolute;
+  top: 42px;
+  bottom: -12px;
+  left: 13px;
+  width: 2px;
+  border-radius: 2px;
+  background: color-mix(
+    in oklab,
+    var(--ad-tone, var(--ad-accent)) 35%,
+    transparent
+  );
+  content: "";
 }
 
 .beatDot {
@@ -1847,8 +1921,9 @@
   height: 26px;
   margin-top: 2px;
   border-radius: 999px;
-  background: var(--ad-accent);
-  color: var(--sx-surface);
+  background: var(--ad-tone-soft, var(--ad-mint));
+  box-shadow: inset 0 0 0 1.5px var(--ad-tone, var(--ad-accent));
+  color: var(--ad-tone, var(--ad-accent));
   font-size: var(--sx-text-xs);
   font-weight: 700;
   line-height: var(--sx-leading-16);
@@ -2272,6 +2347,10 @@
     background: var(--ad-accent);
   }
 
+  .outlineItem[data-state="ahead"] .partMark {
+    opacity: 0.55;
+  }
+
   .lessonTitle .pageTitle {
     font-size: var(--sx-text-3xl);
   }
@@ -2472,5 +2551,143 @@
     align-items: center;
     gap: 24px;
     padding: 24px;
+  }
+}
+
+/* ---------- My learning: Progress | Saved (redesign study §5 S6) ----------
+   18 Nov 2026: a segmented switch, three counts the account keeps (never a
+   score, streak or percentage) and the ten topics with what you kept in each. */
+.segment {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 4px 0 16px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--sx-tile-fill);
+  box-shadow: inset 0 0 0 1px var(--sx-line);
+}
+
+.segmentItem {
+  min-height: 44px;
+  border: 0;
+  border-radius: 11px;
+  background: none;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.segmentItem[aria-selected="true"] {
+  background: var(--ad-mint);
+  color: var(--sx-tone-good);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklab, var(--sx-tone-good) 30%, transparent);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  border: var(--sx-tile-edge);
+  border-radius: 18px;
+  background: var(--sx-tile-fill);
+}
+
+.stat strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-xl);
+  font-weight: 700;
+  line-height: var(--sx-leading-28);
+}
+
+.stat span {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+}
+
+.topicProgress {
+  overflow: hidden;
+  border: var(--sx-tile-edge);
+  border-radius: 22px;
+  background: var(--sx-tile-fill);
+}
+
+.topicLine {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 14px;
+}
+
+.topicLine {
+  margin-top: -1px;
+  border-top: 0.5px solid var(--sx-hairline);
+}
+
+.topicLineArt {
+  display: flex;
+  flex: none;
+  color: var(--ad-tone);
+}
+
+.topicLineWords {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.topicLineName {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  line-height: var(--sx-leading-20);
+}
+
+.topicLineBar {
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--ad-tone-soft);
+}
+
+.topicLineBar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ad-tone);
+}
+
+.topicLineCount {
+  flex: none;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+}
+
+.savedList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (min-width: 900px) {
+  .topicProgress {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 }

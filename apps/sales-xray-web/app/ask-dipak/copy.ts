@@ -40,6 +40,15 @@ export const COPY = {
   noMatchHint:
     "एक और word या topic try करें—जैसे price, objection, trust या closing.",
   savedTitle: "Saved lessons",
+  // My learning (redesign study §5 S6, 18 Nov 2026): our own words, counts only.
+  learningTitle: "My learning",
+  paneProgress: "Progress",
+  paneSaved: "Saved",
+  statSaved: "saved",
+  statMissions: "missions on",
+  statTried: "tried on calls",
+  progressZero: "Your learning starts with one useful question.",
+  keptOf: (kept: number, lessons: number) => `${kept} of ${lessons} kept`,
   savedSub: "अपने जरूरी questions फिर से खोलिए।",
   savedEmpty: "अभी कुछ save नहीं किया",
   savedEmptyHint: "किसी lesson का bookmark tap करके उसे यहाँ रख सकते हैं।",
@@ -104,6 +113,9 @@ export const COPY = {
   trackLabel: "Lesson parts",
   now: "अभी",
   pickHint: "कोई भी option चुनिए — हर एक पर Dipak की बात है।",
+  // His answer waits for a pick (Dipak's report 228 note, 18 Nov 2026).
+  gate: "पहले अपना option चुनिए। फिर Dipak का पूरा जवाब यहाँ खुलेगा।",
+  gatePeek: "बिना चुने जवाब देखें",
   seen: "देखा",
   seeOption: "Option देखें",
   why: "क्यों",
