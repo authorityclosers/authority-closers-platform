@@ -162,6 +162,12 @@ const button = (label: string) =>
       item.textContent?.trim() === label,
   );
 
+/** Dipak's answer waits for a pick (report 228 note); tests that read it open it. */
+async function openAnswer() {
+  const peek = button(COPY.gatePeek);
+  if (peek) await click(peek);
+}
+
 async function type(value: string) {
   const input = host.querySelector<HTMLInputElement>('input[type="search"]');
   if (!input) throw new Error("no search field");
@@ -259,6 +265,7 @@ describe("Homepage", () => {
 
   it("offers Continue for the lesson just opened", async () => {
     await show("/ask-dipak?lesson=OB03");
+    await openAnswer();
     await click(crumb());
     expect(view()).toBe("home");
     expect(host.querySelector("a[data-continue]")?.getAttribute("href")).toBe(
@@ -342,6 +349,7 @@ describe("Homepage", () => {
       expect(entry?.textContent).toContain(COPY.parts);
       expect(questionById(id)?.title).toBe(title);
       await click(entry);
+      await openAnswer();
       expect(view()).toBe("lesson");
       expect(heading()).toBe(questionLabel(questionById(id)!));
       for (const beat of paragraphs(LESSONS[id].quick))
@@ -436,6 +444,7 @@ describe("Interactive lessons", () => {
     "shows lesson %s whole, in Dipak's order, without his coaching note or report lock",
     async (id) => {
       await show(`/ask-dipak?lesson=${id}`);
+      await openAnswer();
       const lesson = LESSONS[id];
       expect(heading()).toBe(questionLabel(questionById(id)!));
       const sections = Array.from(
@@ -484,6 +493,7 @@ describe("Interactive lessons", () => {
 
   it("selects one option at a time, each with its own feedback", async () => {
     await show("/ask-dipak?lesson=PB03");
+    await openAnswer();
     const lesson = LESSONS.PB03;
     const option = (index: number) =>
       host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")[
@@ -530,6 +540,7 @@ describe("Interactive lessons", () => {
 
   it("opens and closes the Deep lesson", async () => {
     await show("/ask-dipak?lesson=DM02");
+    await openAnswer();
     const fold = host.querySelector<HTMLButtonElement>("button[aria-expanded]");
     expect(fold?.textContent).toContain(COPY.deep);
     expect(fold?.getAttribute("aria-expanded")).toBe("false");
@@ -546,6 +557,7 @@ describe("Interactive lessons", () => {
 
   it("marks the Next-call mission done on the account, and undoes it", async () => {
     await show("/ask-dipak?lesson=NX02");
+    await openAnswer();
     expect(text()).toContain(COPY.missionTodo);
     await click(button(COPY.markMission));
     expect(writes).toEqual([
@@ -561,6 +573,7 @@ describe("Interactive lessons", () => {
 
   it("takes a mission back if the account couldn't save it", async () => {
     await show("/ask-dipak?lesson=NX02");
+    await openAnswer();
     server.down = true;
     await click(button(COPY.markMission));
     expect(button(COPY.markMission)?.getAttribute("aria-pressed")).toBe(
@@ -573,6 +586,7 @@ describe("Interactive lessons", () => {
 
   it("opens related lessons from their own records", async () => {
     await show("/ask-dipak?lesson=PB03");
+    await openAnswer();
     const related = LESSONS.PB03.next;
     expect(
       related.every((id) => link(`/ask-dipak?lesson=${id}`) !== null),
@@ -583,6 +597,7 @@ describe("Interactive lessons", () => {
 
   it("shows the questions that were drafts as Dipak's own lessons, their missions markable", async () => {
     await show("/ask-dipak?lesson=PB05");
+    await openAnswer();
     expect(heading()).toBe(questionById("PB05")?.title);
     expect(DRAFTS.PB05).toBeUndefined();
     expect(host.querySelector("[data-draft]")).toBeNull();
@@ -597,6 +612,7 @@ describe("Interactive lessons", () => {
 describe("Saved lessons", () => {
   it("saves a lesson, lights the bookmark, lists it and removes it again", async () => {
     await show("/ask-dipak?lesson=RP01");
+    await openAnswer();
     const mark = () => button(COPY.save) ?? button(COPY.unsave) ?? null;
     expect(mark()?.getAttribute("aria-pressed")).toBe("false");
     await click(mark());
@@ -653,6 +669,7 @@ describe("Saved lessons", () => {
     server.saved.push("OB03");
     server.missions.push("OB03");
     await show("/ask-dipak?lesson=OB03");
+    await openAnswer();
     expect(button(COPY.unsave)?.getAttribute("aria-pressed")).toBe("true");
     expect(button(COPY.undoMission)?.getAttribute("aria-pressed")).toBe("true");
     await act(async () => root.unmount());
@@ -681,6 +698,7 @@ describe("Navigation (spec Flow F)", () => {
 
   it("goes back from a related lesson to the lesson before it", async () => {
     await show("/ask-dipak?lesson=PB03");
+    await openAnswer();
     await click(link(`/ask-dipak?lesson=${LESSONS.PB03.next[0]}`));
     await click(crumb());
     expect(heading()).toBe(questionLabel(questionById("PB03")!));
@@ -711,6 +729,7 @@ describe("Navigation (spec Flow F)", () => {
 
   it("goes back from Search to the home even when opened from a lesson", async () => {
     await show("/ask-dipak?lesson=DM01");
+    await openAnswer();
     await click(button(COPY.searchTool));
     expect(view()).toBe("search");
     await click(crumb());
@@ -729,6 +748,7 @@ describe("Navigation (spec Flow F)", () => {
 
   it("opens lessons from their stable address", async () => {
     await show("/ask-dipak?lesson=NEW-035");
+    await openAnswer();
     expect(heading()).toBe(questionById("NEW-035")?.title);
     expect(text()).toContain(LESSONS["NEW-035"].mission);
   });
@@ -736,6 +756,7 @@ describe("Navigation (spec Flow F)", () => {
 
 it("never writes an unknown lesson's progress", async () => {
   await show("/ask-dipak?lesson=ZZ99");
+  await openAnswer();
   expect(text()).toContain(COPY.notFound);
   expect(host.querySelectorAll("button[aria-pressed]")).toHaveLength(0);
   expect(crumb()?.textContent).toContain(COPY.title);
@@ -778,6 +799,7 @@ describe("Lessons from the API (16 Nov 2026: served from the database)", () => {
     await act(async () => {
       await loadLesson("RP01");
     });
+    await openAnswer();
     expect(asked).toEqual(["RP01"]);
     const lesson = LESSONS.RP01;
     for (const beat of paragraphs(lesson.quick)) expect(text()).toContain(beat);
@@ -802,6 +824,7 @@ describe("Lessons from the API (16 Nov 2026: served from the database)", () => {
     await act(async () => {
       await loadLesson("CF01");
     });
+    await openAnswer();
     expect(LESSONS.CF01.shift).toBe("इस answer से कौन-सी सोच बदलनी है:");
     // The question comes first (report 228); his heading opens the answer.
     expect(
@@ -821,6 +844,7 @@ describe("Lessons from the API (16 Nov 2026: served from the database)", () => {
     await act(async () => {
       await loadLesson("DM02");
     });
+    await openAnswer();
     expect(
       host.querySelector('[data-lesson-state="failed"]')?.textContent,
     ).toContain(COPY.loadFailed);
@@ -829,6 +853,7 @@ describe("Lessons from the API (16 Nov 2026: served from the database)", () => {
     await act(async () => {
       await loadLesson("DM02");
     });
+    await openAnswer();
     expect(host.querySelector("[data-lesson-state]")).toBeNull();
     for (const beat of paragraphs(LESSONS.DM02.quick))
       expect(text()).toContain(beat);
@@ -840,6 +865,7 @@ describe("Lessons from the API (16 Nov 2026: served from the database)", () => {
     await act(async () => {
       await loadLesson("OB03");
     });
+    await openAnswer();
     await act(async () => root.unmount());
     host.remove();
     // A new visit, offline.
@@ -849,6 +875,7 @@ describe("Lessons from the API (16 Nov 2026: served from the database)", () => {
     await act(async () => {
       await loadLesson("OB03");
     });
+    await openAnswer();
     for (const beat of paragraphs(LESSONS.OB03.quick))
       expect(text()).toContain(beat);
     expect(host.querySelector("[data-lesson-state]")).toBeNull();
@@ -863,5 +890,44 @@ describe("Lessons from the API (16 Nov 2026: served from the database)", () => {
     );
     expect(kept).toEqual(ids.slice(3));
     await show();
+  });
+});
+
+describe("Dipak's answer waits for a pick (report 228 note, 18 Nov 2026)", () => {
+  it("folds his answer until an option is picked, and opens it on a pick", async () => {
+    await show("/ask-dipak?lesson=OB03");
+    expect(host.querySelector("[data-answer-gate]")).not.toBeNull();
+    for (const beat of paragraphs(LESSONS.OB03.quick))
+      expect(text()).not.toContain(beat);
+    expect(host.querySelector('[data-part="quick"]')).toBeNull();
+    await click(host.querySelector('button[data-letter="B"]'));
+    expect(host.querySelector("[data-answer-gate]")).toBeNull();
+    for (const beat of paragraphs(LESSONS.OB03.quick))
+      expect(text()).toContain(beat);
+  });
+
+  it("opens his answer without a pick when asked", async () => {
+    await show("/ask-dipak?lesson=OB03");
+    await click(button(COPY.gatePeek));
+    expect(host.querySelector("[data-answer-gate]")).toBeNull();
+    expect(host.querySelector('[data-part="quick"]')).not.toBeNull();
+  });
+});
+
+describe("My learning: Progress | Saved (study S6, 18 Nov 2026)", () => {
+  it("counts what the account keeps per topic, with no score", async () => {
+    server.saved.push("OB03");
+    server.missions.push("NX02");
+    await show("/ask-dipak?view=saved");
+    expect(heading()).toBe(COPY.learningTitle);
+    expect(text()).toContain(`${COPY.paneSaved} (1)`);
+    await click(
+      Array.from(host.querySelectorAll('[role="tab"]')).find(
+        (tab) => tab.textContent === COPY.paneProgress,
+      ),
+    );
+    expect(host.querySelectorAll("[data-topic-line]")).toHaveLength(10);
+    expect(text()).toContain(COPY.statSaved);
+    expect(text()).not.toMatch(/%|streak|score/i);
   });
 });

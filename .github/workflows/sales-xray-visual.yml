@@ -48,8 +48,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python scripts/ci/sales_xray_visual_report.py baseline --output "$RUNNER_TEMP/visual-baseline"
       - name: Install Playwright 1.58.2 Chromium
-        timeout-minutes: 2
-        run: pnpm exec playwright install --with-deps chromium --only-shell
+        # 18 Nov 2026: 2 min timed out on v1.83 and twice on v1.85 (slow apt/CDN); 8 min with one retry.
+        timeout-minutes: 8
+        run: pnpm exec playwright install --with-deps chromium --only-shell || (sleep 10 && pnpm exec playwright install --with-deps chromium --only-shell)
       - name: Check focused visual-helper regressions
         run: |
           node --test scripts/ci/sales_xray_visual.test.mjs
