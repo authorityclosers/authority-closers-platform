@@ -888,10 +888,9 @@ class AsyncIdentityApplication:
         if len(unlocked) > 1:
             raise AmbiguousProviderIdentityError("provider key resolves to multiple identities")
         if unlocked:
-            person = await self._lock_person(
-                unlocked[0].person_id,
-                provider_email=validated.email,
-            )
+            # The (issuer, subject) key is the identity. A key connected in Settings
+            # may carry another email (a second Google account), so no email match.
+            person = await self._lock_person(unlocked[0].person_id)
             matches = await self._lock_provider_key(validated)
             if not matches or matches[0].person_id != person.id:
                 raise IdentityResolutionError("provider identity changed during registration")
@@ -1105,10 +1104,8 @@ class AsyncIdentityApplication:
             raise ProviderIdentityNotLinkedError("provider identity is not linked to a person")
         if len(unlocked) > 1:
             raise AmbiguousProviderIdentityError("provider key resolves to multiple identities")
-        person = await self._lock_person(
-            unlocked[0].person_id,
-            provider_email=validated.email,
-        )
+        # As in register: the linked key signs in whatever email it now carries.
+        person = await self._lock_person(unlocked[0].person_id)
         matches = await self._lock_provider_key(validated)
         if not matches or matches[0].person_id != person.id:
             raise IdentityResolutionError("provider identity changed during authentication")

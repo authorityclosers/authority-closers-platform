@@ -4,6 +4,10 @@ Orchestrator, 19 Oct 2026 (the owner wants it self-serve): the list shows email 
 password, Google, Apple and Facebook with when each was added and last used. A
 provider can be removed only right after a fresh sign-in (10 minutes), never the
 last way in, and every removal is audited and emailed (http/routes/sign_in_methods.py).
+
+18 Nov 2026 (Wise Life: one person, two Google logins): Google may hold more than one
+account. Each account is listed under its provider and can be removed on its own;
+every account is a way in.
 """
 
 from __future__ import annotations
@@ -40,6 +44,8 @@ PROVIDER_ISSUERS: dict[Provider, tuple[str, ...]] = {
     ),
 }
 FRESH_SIGN_IN = timedelta(minutes=10)
+# Providers one person may connect more than one account of.
+MULTI_ACCOUNT_PROVIDERS: frozenset[Provider] = frozenset({"google"})
 
 
 def register_pulse_issuer(issuer: str) -> None:
@@ -57,11 +63,22 @@ class SignInMethodError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
+class ProviderAccount:
+    """One linked provider account (one key) under its provider."""
+
+    id: UUID
+    added_at: datetime | None
+    last_used_at: datetime | None
+    removable: bool
+
+
+@dataclass(frozen=True, slots=True)
 class SignInMethod:
     kind: MethodKind
     added_at: datetime | None
     last_used_at: datetime | None
     removable: bool
+    accounts: tuple[ProviderAccount, ...] = ()
 
 
 def _provider_of(issuer: str) -> Provider | None:
@@ -90,28 +107,44 @@ async def sign_in_methods(database: AsyncSession, person_id: UUID) -> list[SignI
     password = await database.scalar(
         select(PasswordCredential).where(PasswordCredential.person_id == person_id)
     )
-    found: dict[Provider, tuple[datetime | None, datetime | None]] = {}
+    keys: dict[Provider, list[ProviderIdentity]] = {}
     for row in await database.scalars(
-        select(ProviderIdentity).where(ProviderIdentity.person_id == person_id)
+        select(ProviderIdentity)
+        .where(ProviderIdentity.person_id == person_id)
+        .order_by(ProviderIdentity.created_at, ProviderIdentity.id)
     ):
-        provider = _provider_of(row.issuer)
-        if provider is None:
-            continue
-        added, used = found.get(provider, (None, None))
-        found[provider] = (
-            min((value for value in (added, row.created_at) if value), default=None),
-            max((value for value in (used, row.last_authenticated_at) if value), default=None),
-        )
-    ways_in = int(email_code) + int(password is not None) + len(found)
+        kind = _provider_of(row.issuer)
+        if kind is not None:
+            keys.setdefault(kind, []).append(row)
+    # Every linked account is a way in.
+    ways_in = int(email_code) + int(password is not None) + sum(len(rows) for rows in keys.values())
     methods: list[SignInMethod] = []
     if email_code:
         methods.append(SignInMethod("email_code", None, None, removable=False))
     if password is not None:
         methods.append(SignInMethod("password", password.created_at, None, removable=False))
     for provider in ("google", "apple", "facebook", "pulse"):
-        if provider in found:
-            added, used = found[provider]
-            methods.append(SignInMethod(provider, added, used, removable=ways_in > 1))
+        rows = keys.get(provider)
+        if not rows:
+            continue
+        added = min((row.created_at for row in rows if row.created_at), default=None)
+        used = max(
+            (row.last_authenticated_at for row in rows if row.last_authenticated_at),
+            default=None,
+        )
+        methods.append(
+            SignInMethod(
+                provider,
+                added,
+                used,
+                # Removing the provider takes all its accounts: something must stay.
+                removable=ways_in > len(rows),
+                accounts=tuple(
+                    ProviderAccount(row.id, row.created_at, row.last_authenticated_at, ways_in > 1)
+                    for row in rows
+                ),
+            )
+        )
     return methods
 
 
@@ -131,8 +164,9 @@ async def remove_provider(
     session_id: UUID | None,
     provider: Provider,
     now: datetime,
+    account_id: UUID | None = None,
 ) -> None:
-    """Remove one provider from the account, in the caller's transaction."""
+    """Remove one provider (or one ``account_id`` of it), in the caller's transaction."""
 
     # The person row is the lock: two removals can't leave an account without a way in.
     person = await database.scalar(select(Person).where(Person.id == person_id).with_for_update())
@@ -144,6 +178,19 @@ async def remove_provider(
     target = next((method for method in methods if method.kind == provider), None)
     if target is None:
         raise SignInMethodError("not_found")
+    if account_id is not None:
+        account = next((item for item in target.accounts if item.id == account_id), None)
+        if account is None:
+            raise SignInMethodError("not_found")
+        if not account.removable:
+            raise SignInMethodError("last_method")
+        await database.execute(
+            delete(ProviderIdentity).where(
+                ProviderIdentity.person_id == person_id,
+                ProviderIdentity.id == account_id,
+            )
+        )
+        return
     if not target.removable:
         raise SignInMethodError("last_method")
     await database.execute(
@@ -156,7 +203,9 @@ async def remove_provider(
 
 __all__ = [
     "FRESH_SIGN_IN",
+    "MULTI_ACCOUNT_PROVIDERS",
     "PROVIDER_ISSUERS",
+    "ProviderAccount",
     "register_pulse_issuer",
     "SignInMethod",
     "SignInMethodError",
