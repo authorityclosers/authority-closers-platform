@@ -1,0 +1,22 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "6b228ea715bdc6678249b9285f91a4426e1fdef9",
+  "full": true,
+  "checks": [
+    "visual",
+    "web"
+  ],
+  "changed_files": null,
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [
+    "apps/sales-xray-web/app/shell/missed-alert-rules.ts",
+    "apps/sales-xray-web/app/shell/missed-alert-rules.test.ts",
+    "apps/sales-xray-web/app/shell/missed-alert.tsx",
+    "apps/sales-xray-web/app/shell/missed-alert.test.tsx",
+    "apps/sales-xray-web/app/shell/missed-alert.module.css",
+    "apps/sales-xray-web/app/shell/lightbox-shell.tsx"
+  ],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
