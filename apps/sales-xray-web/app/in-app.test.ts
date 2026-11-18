@@ -7,6 +7,7 @@ import {
   IN_APP_ATTRIBUTE,
   inAppInitScript,
   isAppUserAgent,
+  isIPhoneApp,
 } from "./in-app";
 import { phoneCallsOpener } from "./in-app-client";
 
@@ -109,4 +110,37 @@ it("follows the scale the app's status reports, from the first paint of the next
   expect(root.style.fontSize).toBe("150%");
   followFontScale("large");
   expect(root.style.fontSize).toBe("150%");
+});
+
+const IPHONE_APP_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 27_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 SalesXrayApp/0.3";
+const ANDROID_APP_UA =
+  "Mozilla/5.0 (Linux; Android 14; 23124RN87I Build/UP1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/141.0.0.0 Mobile Safari/537.36 SalesXrayApp/0.3";
+const IPHONE_SAFARI_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 27_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Mobile/15E148 Safari/604.1";
+
+it("knows the iPhone app by its user agent or Capacitor's platform, never Android or the website", () => {
+  expect(isIPhoneApp(IPHONE_APP_UA)).toBe(true);
+  expect(isIPhoneApp(ANDROID_APP_UA)).toBe(false);
+  expect(isIPhoneApp(IPHONE_SAFARI_UA)).toBe(false);
+  expect(
+    isIPhoneApp("Mozilla/5.0 (Windows NT 10.0) Chrome/141.0 Safari/537.36"),
+  ).toBe(false);
+  expect(isIPhoneApp(null)).toBe(false);
+  const ios = { Capacitor: { getPlatform: () => "ios" } };
+  const android = { Capacitor: { getPlatform: () => "android" } };
+  // An iPad's app may say "Macintosh": Capacitor's platform still tells.
+  expect(isIPhoneApp("Mozilla/5.0 (Macintosh) SalesXrayApp/0.3", ios)).toBe(
+    true,
+  );
+  expect(isIPhoneApp(IPHONE_APP_UA, android)).toBe(false);
+  expect(isIPhoneApp(ANDROID_APP_UA, {})).toBe(false);
+  const broken = {
+    Capacitor: {
+      getPlatform: () => {
+        throw new Error("no bridge");
+      },
+    },
+  };
+  expect(isIPhoneApp(IPHONE_APP_UA, broken)).toBe(true);
 });

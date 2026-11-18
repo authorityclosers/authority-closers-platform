@@ -12,6 +12,30 @@ export function isAppUserAgent(userAgent: string | null | undefined): boolean {
   return APP_TOKEN.test(userAgent ?? "");
 }
 
+const APPLE_DEVICE = /\b(?:iPhone|iPad|iPod)\b/;
+type CapacitorWindow = { Capacitor?: { getPlatform?: () => unknown } };
+
+/**
+ * True inside the iPhone app (App Store rules apply, iOS QA 18 Nov 2026). The
+ * iPhone shell (sales-xray-apps apps/phone, PR 35) is Capacitor: its bridge
+ * says platform "ios", and its user agent is the iPhone's own plus the same
+ * "SalesXrayApp/<version>" token the Android app sends. Android and the
+ * website are never the iPhone app.
+ */
+export function isIPhoneApp(
+  userAgent: string | null | undefined,
+  win?: unknown,
+): boolean {
+  try {
+    const platform = (
+      win as CapacitorWindow | undefined
+    )?.Capacitor?.getPlatform?.();
+    if (platform === "ios") return true;
+    if (platform === "android") return false;
+  } catch {}
+  return isAppUserAgent(userAgent) && APPLE_DEVICE.test(userAgent ?? "");
+}
+
 /**
  * The phone's font size, inside the app (native-feel spec, 3 Nov 2026). The
  * app pins the WebView's own text zoom at 100%, so the page applies Android's

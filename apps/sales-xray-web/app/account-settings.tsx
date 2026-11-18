@@ -483,9 +483,9 @@ export function AccountSettings({
                 </button>
               </div>
             </div>
-          ) : (
+          ) : plansOnWeb ? (
             <p className={styles.muted}>{plansOnWeb}</p>
-          )}
+          ) : null}
         </Pane>
 
         <Pane
@@ -1438,7 +1438,9 @@ export function PlanAndBillingPane({
           </dl>
         )}
 
-        {status === "ready" && (!current || !purchasesAllowed) ? (
+        {status === "ready" &&
+        (!current || !purchasesAllowed) &&
+        (purchasesAllowed || plansOnWeb) ? (
           <p className={styles.muted}>
             {purchasesAllowed
               ? "No subscription yet. View plans when you’re ready to choose one."

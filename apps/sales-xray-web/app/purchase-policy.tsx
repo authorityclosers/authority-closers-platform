@@ -2,7 +2,7 @@
 
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 
-import { useInApp } from "./in-app-client";
+import { useInApp, useIPhoneApp } from "./in-app-client";
 import { phoneStatus, setupStatus } from "./leads/native-phone";
 import { useCanHere } from "./workspace-role";
 
@@ -12,18 +12,23 @@ import { useCanHere } from "./workspace-role";
  * and User Choice Billing would need Play Billing. So inside the Play app nothing shows
  * plans, prices, checkout, top-ups or links to them. The website and the download-link app
  * sell as before. Inside the app, purchases stay hidden until the phone says which store
- * it came from.
+ * it came from. The iPhone app never sells (App Store 3.1.1, iOS QA 18 Nov 2026): no
+ * plans, prices, checkout or top-ups, whatever store it reports.
  */
 export const PLANS_ON_WEB = "Your workspace owner manages plans on the web.";
 
 /** The same place for whoever pays (an owner, or anyone in Personal): their own plan. */
 export const YOUR_PLANS_ON_WEB = "You manage your plan and minutes on the web.";
 
-/** Which of the two lines this person reads, by their role here (persona QA ph1-42). */
-export function usePlansOnWebLine(): string {
-  return useCanHere()("billing.view") === false
-    ? PLANS_ON_WEB
-    : YOUR_PLANS_ON_WEB;
+/**
+ * Which of the two lines this person reads, by their role here (persona QA ph1-42).
+ * None in the iPhone app: App Store 3.1.1/3.1.3 can read "on the web" as steering
+ * people to buy elsewhere (orchestrator, 18 Nov 2026), so there it says nothing.
+ */
+export function usePlansOnWebLine(): string | null {
+  const canHere = useCanHere();
+  if (useIPhoneApp()) return null;
+  return canHere("billing.view") === false ? PLANS_ON_WEB : YOUR_PLANS_ON_WEB;
 }
 
 /**
@@ -63,6 +68,7 @@ function askStore(): void {
 /** True where Sales X-Ray may show plans, prices and purchases. */
 export function usePurchasesAllowed(): boolean {
   const inApp = useInApp();
+  const iPhoneApp = useIPhoneApp();
   const known = useSyncExternalStore(
     subscribe,
     () => store,
@@ -71,6 +77,7 @@ export function usePurchasesAllowed(): boolean {
   useEffect(() => {
     if (inApp) askStore();
   }, [inApp]);
+  if (iPhoneApp) return false;
   return !inApp || known === "direct";
 }
 

@@ -20,13 +20,13 @@
     "review": "Re-pin 14 Nov 2026 (ux-audit for the orchestrator, during the v1.60 hold while the CI queue was quiet; the 14025987287 pin from run 43402793658, made 09:40Z on 13 Nov, would pass its 36-hour window at about 21:40Z on 14 Nov): producer run 43619970592 (workbench-checks.yml, push, success) on a request whose only parent is workbench 0f33427e8 (dev/live HEAD; its lockfiles, packages, workflows and scripts/ci match main except .github/workflows/sales-xray-native-image.yml, checked by diff), and which changes only .wb-ci/request.json. Same identity 8fed5c6d; artifact digest from the API. The pinned 14025987287 bundle was deleted first so a fresh bundle could publish."
   },
   {
-    "artifact_id": 14239342961,
-    "digest": "5fe205db270b6e70078fc3d22ca44aefce8768334a0e7f5b364fa1a76dde8a35",
+    "artifact_id": 14397970343,
+    "digest": "cf590ebe68adba3c7f072a9b9f02647ae3838cdfd15ffe63b64db2681ac5627f",
     "identity": "df10b24de0db7bee94c7d0e374e55de165d998c577dfd93f3664144c284e3144",
     "repository": "authorityclosers/authority-closers-platform",
-    "run_id": 43895623197,
-    "source_sha": "6b3e26a8d93612c1eda6cd10b00ae6bb56f38a18",
-    "reviewed_source_sha": "73f6a5f058db17f31b4550195759ea71ef49c827",
-    "review": "Re-pin 16 Nov 2026 (ux-audit for the orchestrator; wb-ci was blocked at ci-prerequisites by the 1 GiB bundle cap once the df10b24d pin, 14143635883, passed its 36-hour window at 14:42Z): producer run 43895623197 (workbench-checks.yml, push, success) on a request whose only parent is workbench 73f6a5f05 (dev/live HEAD) and which changes only .wb-ci/request.json; identity df10b24d; artifact digest from the API. The stale bundles 14123972796 (8fed5c6d) and 14143635883 (df10b24d) were deleted at 14:50Z; a release-side run (43889830551, application.yml, never pinnable) then published 14236207227, deleted once that run had finished, so a workbench producer could publish."
+    "run_id": 44236194896,
+    "source_sha": "416e8670611b6fb50c2b09907fb79476869ac4fc",
+    "reviewed_source_sha": "fc4a373545fc6268381753d0162bcea16b15a46f",
+    "review": "Re-pin 18 Nov 2026 (WL worker for the orchestrator; v1.84's hold run 44232874174 was declined at ci-prerequisites by the 1 GiB bundle cap once the df10b24d pin, 14239342961, passed its 36-hour window at about 03:27Z): producer run 44236194896 (workbench-checks.yml, push, success) on a request whose only parent is workbench fc4a37354 (dev/live HEAD) and which changes only .wb-ci/request.json; identity df10b24d, which main shares (same lockfiles and packages); artifact digest from the API. The stale pin 14239342961 and 14394049197 (published by run 44230698605, whose request changes 33 files, never pinnable) were deleted at a quiet moment so a fresh bundle could publish."
   }
 ]

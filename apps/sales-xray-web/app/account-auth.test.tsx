@@ -1383,3 +1383,74 @@ describe("inside the Sales X-Ray phone app", () => {
     );
   });
 });
+
+// App Store 4.8 (iOS QA, 18 Nov 2026): the iPhone app offers Google, Facebook
+// and Pulse only beside Sign in with Apple; email code and password stay.
+describe("inside the iPhone app", () => {
+  const IPHONE_APP =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 27_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 SalesXrayApp/0.3";
+  const ANDROID_APP =
+    "Mozilla/5.0 (Linux; Android 14) Chrome/141.0 Mobile Safari/537.36 SalesXrayApp/0.3";
+  const WEBSITE =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/141.0 Safari/537.36";
+  const noApple = { ...config, facebook_enabled: true, pulse_enabled: true };
+
+  afterEach(() => {
+    delete (globalThis as { Capacitor?: unknown }).Capacitor;
+  });
+
+  async function signInButtons(userAgent: string, served: object) {
+    vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue(userAgent);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json(served)),
+    );
+    await act(async () =>
+      root.render(<AccountAuth onAuthenticated={vi.fn()} />),
+    );
+    await flush();
+    return Array.from(host.querySelectorAll("button"))
+      .map((button) => button.textContent?.trim() ?? "")
+      .filter((text) => text.startsWith("Continue with"));
+  }
+
+  it("hides Google, Facebook and Pulse while Sign in with Apple is off, and keeps email", async () => {
+    expect(await signInButtons(IPHONE_APP, noApple)).toEqual([]);
+    expect(host.querySelector("#account-email")).not.toBeNull();
+    expect(host.textContent).toContain("Send sign-in code");
+    expect(host.textContent).not.toContain("or use email");
+  });
+
+  it("knows the iPhone app by Capacitor's platform too", async () => {
+    vi.stubGlobal("Capacitor", { getPlatform: () => "ios" });
+    expect(
+      await signInButtons(
+        "Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 Mobile/15E148",
+        noApple,
+      ),
+    ).toEqual([]);
+  });
+
+  it("offers them all once Sign in with Apple is on", async () => {
+    expect(
+      await signInButtons(IPHONE_APP, { ...noApple, apple_enabled: true }),
+    ).toEqual([
+      "Continue with Google",
+      "Continue with Apple",
+      "Continue with Facebook",
+      "Continue with Pulse",
+    ]);
+  });
+
+  it("leaves the Android app and the website as they are", async () => {
+    for (const userAgent of [ANDROID_APP, WEBSITE]) {
+      expect(await signInButtons(userAgent, noApple)).toEqual([
+        "Continue with Google",
+        "Continue with Facebook",
+        "Continue with Pulse",
+      ]);
+      await act(async () => root.unmount());
+      root = createRoot(host);
+    }
+  });
+});
