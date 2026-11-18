@@ -111,6 +111,7 @@ export const COPY = {
   // The lesson (owner's pick, 17 Nov 2026; redesign study §5 S3-S4). Our
   // screen words around his lesson, never shown as his.
   trackLabel: "Lesson parts",
+  railLabel: "Keep in mind",
   now: "अभी",
   pickHint: "कोई भी option चुनिए — हर एक पर Dipak की बात है।",
   // His answer waits for a pick (Dipak's report 228 note, 18 Nov 2026).

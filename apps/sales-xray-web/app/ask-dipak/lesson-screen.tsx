@@ -757,6 +757,33 @@ export function LessonScreen({
             </div>
           </Section>
         </div>
+        {/* Wide computers (X-B): the line to remember and the mission kept
+            beside the reading column once his answer is open. */}
+        {answerOpen ? (
+          <aside className={styles.rail} aria-label={COPY.railLabel}>
+            <div className={styles.railCard}>
+              <p className={styles.railHead}>
+                <PartMark part="cue" size={20} />
+                {COPY.cue}
+              </p>
+              <p className={styles.railCue}>{lesson.cue}</p>
+            </div>
+            <button
+              type="button"
+              className={`${styles.railCard} ${styles.railMission}`}
+              onClick={() => jump("mission")}
+            >
+              <span className={styles.railHead}>
+                <PartMark part="mission" size={20} />
+                {COPY.mission}
+              </span>
+              <span className={styles.railLine}>{lesson.mission}</span>
+              <span className={styles.railState}>
+                {committed ? COPY.missionOn : COPY.missionCommit}
+              </span>
+            </button>
+          </aside>
+        ) : null}
       </div>
     </>
   );

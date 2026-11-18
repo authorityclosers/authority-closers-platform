@@ -1,7 +1,7 @@
 /**
  * The phone tab bar's own icons (owner, 15 Nov 2026; his ChatGPT pass,
  * navigation-icons.json): one family on a 24 px box, 1.8 stroke, round ends.
- * Home is filled when it is the page; Ask Dipak is a speech bubble holding a D.
+ * Home is filled when it is the page; Ask Dipak is the Speech D mark in line.
  * Each sits beside its visible label, so each is hidden from screen readers.
  */
 
@@ -67,11 +67,18 @@ export function LeadsGlyph(props: GlyphProps) {
   );
 }
 
+/**
+ * The Speech D line mark (Mac design board, 19 Nov 2026): the D is a 72 x 144
+ * box plus an r72 half-circle, its top corner r24, a 32-degree tail whose tip
+ * sits on the stem line, and a "?" on an axis 5 units left of centre. Drawn
+ * at 1/9.4 scale (the D is 15.3 px), in the bar's own 1.8 stroke.
+ */
 export function AskDipakGlyph(props: GlyphProps) {
   return (
     <Glyph {...props}>
-      <path d="M7 3.5h10a4 4 0 0 1 4 4v7a4 4 0 0 1-4 4H9l-5 3 1.1-4.1A4 4 0 0 1 3 14.5v-7a4 4 0 0 1 4-4Z" />
-      <path d="M9 7.5h2.5a3.5 3.5 0 0 1 0 7H9v-7Z" />
+      <path d="M6.9 3H12a7.65 7.65 0 0 1 0 15.3H9.03l-4.68 2.92V5.55A2.55 2.55 0 0 1 6.9 3Z" />
+      <path d="M8.9 8.3a2.6 2.6 0 1 1 4.27 1.99Q11.5 11.69 11.5 12.7" />
+      <circle cx="11.5" cy="15.4" r="1" fill="currentColor" stroke="none" />
     </Glyph>
   );
 }

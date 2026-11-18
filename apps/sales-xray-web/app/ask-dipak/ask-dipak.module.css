@@ -2691,3 +2691,87 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ---------- Laptop lesson X-B (18 Nov 2026) ----------
+   The tools row adds nothing inside a lesson (its bar has the bookmark); on
+   wide screens a right rail of 260 keeps the cue and the mission in view. */
+.rail {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .root[data-ask-view="lesson"] .deskTools {
+    display: none;
+  }
+}
+
+@media (min-width: 1440px) {
+  .root[data-ask-view="lesson"] {
+    max-width: 1260px;
+  }
+
+  .lessonGrid {
+    grid-template-columns: 220px minmax(0, 680px) 260px;
+  }
+
+  .rail {
+    position: sticky;
+    top: 64px;
+    display: flex;
+    flex-direction: column;
+    align-self: start;
+    gap: 12px;
+  }
+
+  .railCard {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px;
+    border: var(--sx-tile-edge);
+    border-radius: 20px;
+    background: var(--sx-tile-fill);
+    color: var(--sx-ink);
+    font: inherit;
+    text-align: left;
+  }
+
+  .railMission {
+    cursor: pointer;
+  }
+
+  .railCard:first-child {
+    border-left: 4px solid var(--sx-tone-action);
+    background: var(--ad-memory);
+  }
+
+  .railHead {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    color: var(--sx-muted);
+    font-size: var(--sx-text-xs);
+    font-weight: 600;
+    line-height: var(--sx-leading-16);
+  }
+
+  .railCue {
+    margin: 0;
+    font-size: var(--sx-text-md);
+    font-weight: 600;
+    line-height: var(--lx-leading-devanagari);
+  }
+
+  .railLine {
+    font-size: var(--sx-text-sm);
+    line-height: var(--lx-leading-devanagari);
+  }
+
+  .railState {
+    color: var(--sx-tone-good);
+    font-size: var(--sx-text-xs);
+    font-weight: 700;
+    line-height: var(--sx-leading-16);
+  }
+}
