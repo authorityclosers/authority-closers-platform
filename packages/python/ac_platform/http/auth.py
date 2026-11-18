@@ -143,7 +143,11 @@ from ac_platform.identity.services import (
     validate_verified_provider_assertion,
 )
 from ac_platform.identity.services import AuthorizationDenied as IdentityAuthorizationDenied
-from ac_platform.identity.sign_in_methods import PROVIDER_ISSUERS, session_is_fresh
+from ac_platform.identity.sign_in_methods import (
+    MULTI_ACCOUNT_PROVIDERS,
+    PROVIDER_ISSUERS,
+    session_is_fresh,
+)
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError, ResourceNotFound
 from ac_platform.kernel.events import EventCategory, EventEnvelope
@@ -3615,7 +3619,7 @@ def install_identity_http(
                 )
                 .limit(1)
             )
-            if already is not None:
+            if already is not None and provider_name not in MULTI_ACCOUNT_PROVIDERS:
                 return refuse(
                     409,
                     "already_connected",

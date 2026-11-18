@@ -185,10 +185,16 @@ def test_settings_connect_links_the_provider_and_goes_back_to_the_settings_hash(
     assert notice.payload == {"audit_event_id": str(event.id)}
     label = {"google": "Google", "apple": "Apple", "facebook": "Facebook"}[provider_name]
     assert listings["before"]["available"] == [  # type: ignore[index]
-        {"kind": provider_name, "label": label, "connected": False}
+        {"kind": provider_name, "label": label, "connected": False, "add_another": False}
     ]
+    # Google may add another account once one is connected.
     assert listings["after"]["available"] == [  # type: ignore[index]
-        {"kind": provider_name, "label": label, "connected": True}
+        {
+            "kind": provider_name,
+            "label": label,
+            "connected": True,
+            "add_another": provider_name == "google",
+        }
     ]
 
 

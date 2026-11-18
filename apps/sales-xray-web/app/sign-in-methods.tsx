@@ -8,7 +8,9 @@
  * environment offers them, and removes them again. The server allows a change
  * only within 10 minutes of a sign-in and never removes the last way in; it
  * emails the account and audits the change. API: docs/product/identity/
- * sign-in-methods-api.md.
+ * sign-in-methods-api.md. 18 Nov 2026 (Wise Life: one person, two Google
+ * logins): each Google account is its own row with its own Remove, and
+ * "Another Google account" connects one more.
  */
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -30,17 +32,37 @@ export type MethodKind =
   | "facebook"
   | "pulse";
 type ProviderKind = "google" | "apple" | "facebook" | "pulse";
+/** One linked account of a provider (Google may hold several). */
+export type ProviderAccount = {
+  id: string;
+  addedAt: string | null;
+  lastUsedAt: string | null;
+  removable: boolean;
+};
 export type SignInMethod = {
   kind: MethodKind;
   addedAt: string | null;
   lastUsedAt: string | null;
   removable: boolean;
+  accounts: ProviderAccount[];
 };
 /** A provider this environment offers, and whether the account has it. */
 export type ConnectOption = {
   kind: ProviderKind;
   label: string;
   connected: boolean;
+  /** Connected, and one more account of it may be added (Google). */
+  addAnother: boolean;
+};
+/** One row of the list: a way in, or one account of a provider. */
+type Row = {
+  key: string;
+  kind: MethodKind;
+  addedAt: string | null;
+  lastUsedAt: string | null;
+  removable: boolean;
+  accountId: string | null;
+  label: string;
 };
 type Loaded =
   | { state: "loading" }
@@ -95,12 +117,31 @@ export function parseSignInMethods(value: unknown): {
     if (!raw || typeof raw !== "object") return null;
     const item = raw as Record<string, unknown>;
     if (typeof item.kind !== "string" || !KINDS.has(item.kind)) continue;
+    const accounts: ProviderAccount[] = [];
+    if (PROVIDERS.has(item.kind) && Array.isArray(item.accounts)) {
+      for (const one of item.accounts) {
+        if (!one || typeof one !== "object") continue;
+        const account = one as Record<string, unknown>;
+        if (typeof account.id !== "string" || !account.id) continue;
+        accounts.push({
+          id: account.id,
+          addedAt:
+            typeof account.added_at === "string" ? account.added_at : null,
+          lastUsedAt:
+            typeof account.last_used_at === "string"
+              ? account.last_used_at
+              : null,
+          removable: account.removable === true,
+        });
+      }
+    }
     methods.push({
       kind: item.kind as MethodKind,
       addedAt: typeof item.added_at === "string" ? item.added_at : null,
       lastUsedAt:
         typeof item.last_used_at === "string" ? item.last_used_at : null,
       removable: item.removable === true && PROVIDERS.has(item.kind),
+      accounts,
     });
   }
   const available: ConnectOption[] = [];
@@ -108,13 +149,15 @@ export function parseSignInMethods(value: unknown): {
     if (!raw || typeof raw !== "object") continue;
     const item = raw as Record<string, unknown>;
     if (!isProvider(item.kind)) continue;
+    // The account's own list wins if the two ever disagree.
+    const connected =
+      item.connected === true ||
+      methods.some((method) => method.kind === item.kind);
     available.push({
       kind: item.kind,
       label: typeof item.label === "string" ? item.label : LABELS[item.kind],
-      // The account's own list wins if the two ever disagree.
-      connected:
-        item.connected === true ||
-        methods.some((method) => method.kind === item.kind),
+      connected,
+      addAnother: connected && item.add_another === true,
     });
   }
   const minutes =
@@ -124,7 +167,34 @@ export function parseSignInMethods(value: unknown): {
   return { methods, available, freshMinutes: minutes };
 }
 
-function hint(method: SignInMethod): string {
+/** A provider with several accounts shows each as its own row. */
+function rowsOf(methods: SignInMethod[]): Row[] {
+  return methods.flatMap((method): Row[] => {
+    if (method.accounts.length < 2)
+      return [
+        {
+          key: method.kind,
+          kind: method.kind,
+          addedAt: method.addedAt,
+          lastUsedAt: method.lastUsedAt,
+          removable: method.removable,
+          accountId: null,
+          label: LABELS[method.kind],
+        },
+      ];
+    return method.accounts.map((account, index) => ({
+      key: `${method.kind}:${account.id}`,
+      kind: method.kind,
+      addedAt: account.addedAt,
+      lastUsedAt: account.lastUsedAt,
+      removable: account.removable,
+      accountId: account.id,
+      label: `${LABELS[method.kind]} account ${index + 1}`,
+    }));
+  });
+}
+
+function hint(method: Pick<Row, "kind" | "addedAt" | "lastUsedAt">): string {
   if (method.kind === "email_code")
     return "A one-time code to your email address.";
   const parts = [
@@ -195,8 +265,9 @@ const noSubscription = () => () => {};
 export function SignInMethods({ active }: { active: boolean }) {
   const [loaded, setLoaded] = useState<Loaded>({ state: "loading" });
   const [attempt, setAttempt] = useState(0);
-  const [confirming, setConfirming] = useState<MethodKind | null>(null);
-  const [busy, setBusy] = useState<MethodKind | null>(null);
+  // A row key: "google", or "google:<account id>" when Google has several.
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   // "remove:google" or "connect:facebook": the change that needs a fresh sign-in.
   const [needsFreshSignIn, setNeedsFreshSignIn] = useState<string | null>(null);
   const started = useRef(false);
@@ -328,26 +399,33 @@ export function SignInMethods({ active }: { active: boolean }) {
     setBusy(null);
   }
 
-  async function remove(kind: MethodKind) {
-    if (confirming !== kind) {
-      setConfirming(kind);
+  async function remove(row: Row) {
+    const { kind } = row;
+    if (confirming !== row.key) {
+      setConfirming(row.key);
       setNeedsFreshSignIn(null);
       return;
     }
     setConfirming(null);
-    setBusy(kind);
+    setBusy(row.key);
+    const one = row.accountId
+      ? `?account_id=${encodeURIComponent(row.accountId)}`
+      : "";
     try {
-      const response = await fetch(`/v1/me/sign-in-methods/${kind}/remove`, {
-        method: "POST",
-        credentials: "same-origin",
-        cache: "no-store",
-        headers: { accept: "application/json" },
-      });
+      const response = await fetch(
+        `/v1/me/sign-in-methods/${kind}/remove${one}`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          cache: "no-store",
+          headers: { accept: "application/json" },
+        },
+      );
       if (response.ok) {
         notify({
           id: "sign-in-method-removed",
           tone: "success",
-          title: `${LABELS[kind]} sign-in removed`,
+          title: `${row.label} sign-in removed`,
           message: "We emailed you about this change.",
           timeout: 6000,
         });
@@ -358,13 +436,13 @@ export function SignInMethods({ active }: { active: boolean }) {
         detail?: { code?: unknown; message?: unknown };
       } | null;
       if (body?.detail?.code === "fresh_sign_in") {
-        setNeedsFreshSignIn(`remove:${kind}`);
+        setNeedsFreshSignIn(`remove:${row.key}`);
         return;
       }
       notify({
         id: "sign-in-method-removed",
         tone: "error",
-        title: `${LABELS[kind]} sign-in wasn’t removed`,
+        title: `${row.label} sign-in wasn’t removed`,
         message:
           typeof body?.detail?.message === "string"
             ? body.detail.message
@@ -375,7 +453,7 @@ export function SignInMethods({ active }: { active: boolean }) {
       notify({
         id: "sign-in-method-removed",
         tone: "error",
-        title: `${LABELS[kind]} sign-in wasn’t removed`,
+        title: `${row.label} sign-in wasn’t removed`,
         message: "Check your connection and try again.",
       });
     } finally {
@@ -420,11 +498,13 @@ export function SignInMethods({ active }: { active: boolean }) {
         </div>
       </div>
     );
-  const toConnect = loaded.available.filter((option) => !option.connected);
+  const toConnect = loaded.available.filter(
+    (option) => !option.connected || option.addAnother,
+  );
   return (
     <section aria-label="Sign-in methods">
-      {loaded.methods.map((method) => (
-        <div className={styles.row} key={method.kind}>
+      {rowsOf(loaded.methods).map((method) => (
+        <div className={styles.row} key={method.key}>
           <div className={local.lead}>
             {method.kind === "pulse" ? (
               <PulseTile size={36} />
@@ -432,9 +512,9 @@ export function SignInMethods({ active }: { active: boolean }) {
               <BrandTile {...TILES[method.kind]} size={36} />
             )}
             <div className={styles.rowText}>
-              <span className={styles.rowLabel}>{LABELS[method.kind]}</span>
+              <span className={styles.rowLabel}>{method.label}</span>
               <span className={styles.rowHint}>
-                {needsFreshSignIn === `remove:${method.kind}`
+                {needsFreshSignIn === `remove:${method.key}`
                   ? `For your safety, sign out below and sign in again, then remove it within ${loaded.freshMinutes} minutes.`
                   : hint(method)}
               </span>
@@ -446,12 +526,12 @@ export function SignInMethods({ active }: { active: boolean }) {
                 type="button"
                 className={styles.danger}
                 disabled={busy !== null}
-                onClick={() => void remove(method.kind)}
+                onClick={() => void remove(method)}
               >
-                {busy === method.kind
+                {busy === method.key
                   ? "Removing…"
-                  : confirming === method.kind
-                    ? `Remove ${LABELS[method.kind]}?`
+                  : confirming === method.key
+                    ? `Remove ${method.label}?`
                     : "Remove"}
               </button>
             </div>
@@ -471,13 +551,19 @@ export function SignInMethods({ active }: { active: boolean }) {
               <BrandTile brands={[option.kind]} size={36} />
             )}
             <div className={styles.rowText}>
-              <span className={styles.rowLabel}>{option.label}</span>
+              <span className={styles.rowLabel}>
+                {option.addAnother
+                  ? `Another ${option.label} account`
+                  : option.label}
+              </span>
               <span className={styles.rowHint}>
                 {needsFreshSignIn === `connect:${option.kind}`
                   ? `For your safety, sign out below and sign in again, then connect it within ${loaded.freshMinutes} minutes.`
                   : phoneApp
                     ? `Connect ${option.label} from a computer or your phone’s browser.`
-                    : `Not connected. Sign in with your ${option.label} account too.`}
+                    : option.addAnother
+                      ? `Have a second ${option.label} login? Connect it, and either one signs you in here.`
+                      : `Not connected. Sign in with your ${option.label} account too.`}
               </span>
             </div>
           </div>

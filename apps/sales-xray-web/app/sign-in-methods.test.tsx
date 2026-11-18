@@ -346,8 +346,118 @@ it("reads the Connect list, trusting the account's own methods", () => {
     ],
   });
   expect(parsed?.available).toEqual([
-    { kind: "google", label: "Google", connected: true },
-    { kind: "apple", label: "Apple", connected: false },
+    { kind: "google", label: "Google", connected: true, addAnother: false },
+    { kind: "apple", label: "Apple", connected: false, addAnother: false },
   ]);
   expect(parseSignInMethods({ methods: [] })?.available).toEqual([]);
+});
+
+// Wise Life, 18 Nov 2026: one person, two Google logins.
+const TWO_GOOGLE = {
+  ...LISTING,
+  methods: [
+    ...LISTING.methods.slice(0, 2),
+    {
+      ...LISTING.methods[2],
+      accounts: [
+        {
+          id: "acc-1",
+          added_at: "2026-10-01T10:00:00+00:00",
+          last_used_at: "2026-10-18T09:00:00+00:00",
+          removable: true,
+        },
+        {
+          id: "acc-2",
+          added_at: "2026-11-18T09:00:00+00:00",
+          last_used_at: null,
+          removable: true,
+        },
+      ],
+    },
+  ],
+  available: [
+    { kind: "google", label: "Google", connected: true, add_another: true },
+  ],
+};
+
+it("offers another Google account once Google is connected", async () => {
+  const calls: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? "GET"} ${url}`);
+      if (url.endsWith("/connect"))
+        return Response.json({
+          redirect_url: "https://accounts.google.com/o/oauth2/v2/auth?x=1",
+        });
+      return Response.json({
+        ...LISTING,
+        available: [
+          {
+            kind: "google",
+            label: "Google",
+            connected: true,
+            add_another: true,
+          },
+        ],
+      });
+    }),
+  );
+  await act(async () => root.render(<SignInMethods active />));
+  await flush();
+  expect(host.querySelector('[data-connect="google"]')).not.toBeNull();
+  expect(host.textContent).toContain("Another Google account");
+  expect(host.textContent).toContain(
+    "Have a second Google login? Connect it, and either one signs you in here.",
+  );
+  await act(async () => button("Connect")!.click());
+  await flush();
+  expect(calls).toContain("POST /v1/me/sign-in-methods/google/connect");
+  expect(seen.trips).toEqual([
+    "https://accounts.google.com/o/oauth2/v2/auth?x=1",
+  ]);
+});
+
+it("lists each Google account and removes only the one asked", async () => {
+  const calls: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? "GET"} ${url}`);
+      if (url.includes("/remove"))
+        return Response.json({ removed: "google", account: "acc-2" });
+      return Response.json(TWO_GOOGLE);
+    }),
+  );
+  await act(async () => root.render(<SignInMethods active />));
+  await flush();
+  expect(host.textContent).toContain("Google account 1");
+  expect(host.textContent).toContain("Google account 2");
+  expect(host.textContent).toContain("Added 18 Nov 2026");
+  const removes = Array.from(host.querySelectorAll("button")).filter((item) =>
+    item.textContent?.includes("Remove"),
+  );
+  expect(removes).toHaveLength(2);
+  await act(async () => removes[1]!.click());
+  await flush();
+  await act(async () => button("Remove Google account 2?")!.click());
+  await flush();
+  expect(calls).toContain(
+    "POST /v1/me/sign-in-methods/google/remove?account_id=acc-2",
+  );
+  expect(seen.notices).toContainEqual(
+    expect.objectContaining({ title: "Google account 2 sign-in removed" }),
+  );
+});
+
+it("reads each provider account and the add-another offer", () => {
+  const parsed = parseSignInMethods(TWO_GOOGLE);
+  expect(parsed?.methods[2]?.accounts.map((account) => account.id)).toEqual([
+    "acc-1",
+    "acc-2",
+  ]);
+  expect(parsed?.methods[0]?.accounts).toEqual([]);
+  expect(parsed?.available).toEqual([
+    { kind: "google", label: "Google", connected: true, addAnother: true },
+  ]);
 });
