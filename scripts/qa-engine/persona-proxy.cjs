@@ -26,6 +26,12 @@ const PERSONAS = {
   vikas: ["admin+cy.vikas@authorityclosers.com", "SANDBOX_LOGIN_CY_VIKAS"],
   // the owner-view person: a fictional Admin of the AC Sales Sandbox (the orchestrator, 8 Nov 2026); sees what an Owner sees
   anjali: ["admin+ac.anjali@authorityclosers.com", "SANDBOX_LOGIN_AC_ANJALI"],
+  // the QA account and a fictional manager, both in dev's TEST · Sahyadri Homes (QA stage 1, owner 18 Nov 2026):
+  // the production monitor's and role walk's dev twins; never a real seller
+  qa: ["admin+ac.qa@authorityclosers.com", "SANDBOX_LOGIN_AC_QA"],
+  qamanager: ["admin+ac.qa-manager@authorityclosers.com", "SANDBOX_LOGIN_AC_QA_MANAGER"],
+  // a fictional Owner, of "TEST · QA Owner Desk" (the role walk's owner; never the real owner's account)
+  qaowner: ["admin+ac.qa-owner@authorityclosers.com", "SANDBOX_LOGIN_AC_QA_OWNER"],
 };
 
 function upstreamRequest(opts, body) {
