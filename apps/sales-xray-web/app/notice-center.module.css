@@ -566,8 +566,8 @@
   line-height: var(--sx-leading-20);
 }
 .card[data-tone="success"] .icon {
-  color: var(--lx-home-primary);
-  --tone: var(--lx-home-primary);
+  color: var(--sx-primary-ink);
+  --tone: var(--sx-primary-ink);
 }
 .action {
   border-radius: 999px;

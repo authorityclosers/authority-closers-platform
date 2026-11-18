@@ -1287,7 +1287,7 @@ a.nextName:active::after,
   grid-area: m;
 }
 .cards [data-card][data-tone="teal"] [data-icon] {
-  color: var(--lx-home-primary);
+  color: var(--sx-primary-ink);
 }
 
 /* number dead centre, the chevron in the tile's right edge; icons in tone colour */
@@ -1305,7 +1305,7 @@ a.nextName:active::after,
   transform: translateY(-50%);
 }
 .cards [data-card][data-tone="teal"] [data-icon] {
-  color: var(--lx-home-primary) !important;
+  color: var(--sx-primary-ink) !important;
 }
 .cards [data-card][data-tone="indigo"] [data-icon] {
   color: var(--lx-info) !important;
@@ -1334,6 +1334,8 @@ a.nextName:active::after,
     0 2px 4px color-mix(in oklab, var(--lx-home-primary) 30%, transparent),
     0 10px 20px -10px
       color-mix(in oklab, var(--lx-home-primary) 60%, transparent) !important;
+  /* The gloss's own ink: the Call lens's ink turns near-black in dark. */
+  color: var(--sx-gloss-ink);
   font-weight: 700;
   transition: transform 140ms ease-out;
 }

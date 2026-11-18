@@ -679,7 +679,7 @@ a.row:focus-visible {
 }
 
 .ringDone {
-  stroke: var(--lx-home-primary);
+  stroke: var(--sx-primary-ink);
   stroke-linecap: round;
   transition: stroke-dashoffset 320ms ease-out;
 }
@@ -1484,7 +1484,7 @@ a.row:focus-visible {
   transition: stroke-dashoffset 700ms var(--sx-ease-out);
 }
 .shareRing[data-tone="on"] .shareArc {
-  stroke: var(--lx-home-primary);
+  stroke: var(--sx-primary-ink);
 }
 .shareRing[data-tone="off"] .shareArc {
   stroke: var(--sx-muted);

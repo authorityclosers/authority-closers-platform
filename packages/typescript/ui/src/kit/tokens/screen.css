@@ -432,6 +432,10 @@ a {
     0 2px 4px color-mix(in oklab, var(--lx-home-primary) 30%, transparent),
     0 8px 16px -8px color-mix(in oklab, var(--lx-home-primary) 55%, transparent);
   --sx-gloss-ink: white;
+  /* Home's green as an ink (a word, an icon, a ring's arc) on a surface. The
+     fill green is one colour in both themes, which is right under white
+     words and 2.6:1 as an ink on a dark tile; the ink turns mint in dark. */
+  --sx-primary-ink: var(--lx-home-primary);
   --sx-press-sink: scale(0.97);
   /* The light an edge catches (19 Nov 2026). Home's finish drew its highlights
      in plain white: right on a light page, a grey slab with a bright outline
@@ -477,4 +481,5 @@ a {
   --sx-lit-rim: color-mix(in oklab, white 10%, transparent);
   --sx-lit-soft: color-mix(in oklab, white 6%, transparent);
   --sx-tile-glass: color-mix(in oklab, var(--lx-elevated) 62%, transparent);
+  --sx-primary-ink: var(--lx-home-emerald);
 }

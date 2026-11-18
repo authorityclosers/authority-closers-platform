@@ -222,8 +222,8 @@
 }
 .day[data-today]:not([aria-pressed="true"]) {
   box-shadow: none;
-  background: color-mix(in oklab, var(--lx-home-primary) 12%, transparent);
-  color: var(--lx-home-primary);
+  background: color-mix(in oklab, var(--sx-primary-ink) 12%, transparent);
+  color: var(--sx-primary-ink);
   font-weight: 800;
 }
 .day:disabled {

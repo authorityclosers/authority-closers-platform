@@ -20,7 +20,7 @@
   transition: transform 140ms ease-out;
 }
 .pill svg {
-  color: var(--lx-home-primary);
+  color: var(--sx-primary-ink);
 }
 .pill:active {
   transform: scale(0.95);
@@ -129,7 +129,7 @@
   margin: 0;
   font-size: var(--sx-text-xl);
   font-weight: 800;
-  color: var(--lx-home-primary);
+  color: var(--sx-primary-ink);
 }
 .note {
   margin: 8px 0 13px;
