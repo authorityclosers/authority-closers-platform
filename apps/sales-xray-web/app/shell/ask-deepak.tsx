@@ -25,6 +25,7 @@ import { useEffect, useId, useState } from "react";
 import { acquisition, callHref, submissionPath } from "../acquisition-client";
 import { displayName } from "../display-name";
 import { callBrief, type CallBrief } from "../leads/call-brief";
+import { readCaptureGuard } from "../leads/capture-guard-client";
 import {
   readLead,
   searchDesk,
@@ -114,6 +115,25 @@ export function standing(detail: LeadDetail): string {
     .join(" · ");
 }
 
+/**
+ * Whether the lead's last call can have a Report to read. When the capture
+ * guard follows this very recording and it isn't Report ready (a short call
+ * never is), there is none: asking anyway got a 404 and a console error on
+ * every opening (QA robot b1775f19, 23 sightings to 18 Nov 2026). The rule the
+ * lead's "Last call, in short" already uses; a call the guard doesn't follow,
+ * or a guard that doesn't answer, is read as before.
+ */
+async function reportCanBeRead(call: LeadEvent): Promise<boolean> {
+  if (!call.event_id) return true;
+  const guard = await readCaptureGuard(call.event_id);
+  const followed = guard?.calls.find((item) => item.event_id === call.event_id);
+  return (
+    !followed ||
+    followed.submission_id !== call.submission_id ||
+    followed.state === "report_ready"
+  );
+}
+
 async function answerFor(id: string, signal: AbortSignal): Promise<Answer> {
   const detail = await readLead(id, signal);
   const call = detail.events.find(
@@ -122,11 +142,12 @@ async function answerFor(id: string, signal: AbortSignal): Promise<Answer> {
   if (!call?.submission_id) return { id, detail, call: null };
   let brief: CallBrief | null = null;
   try {
-    brief = callBrief(
-      await acquisition(`${submissionPath(call.submission_id)}/report`, {
-        signal,
-      }),
-    );
+    if (await reportCanBeRead(call))
+      brief = callBrief(
+        await acquisition(`${submissionPath(call.submission_id)}/report`, {
+          signal,
+        }),
+      );
   } catch {
     // Not analysed yet, or not this person's to read: the notes still answer.
   }
