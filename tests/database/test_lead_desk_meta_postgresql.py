@@ -24,6 +24,7 @@ from ac_platform.lead_desk.connectors import meta, meta_backfill, meta_pull
 from ac_platform.lead_desk.connectors.http import install_connectors_http
 from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadEvent, LeadMerge, LeadSource
 from ac_platform.lead_desk.store import LeadDesk, Viewer
+from ac_platform.tenancy.models import Tenant
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run, seed
 from tests.database.test_conversation_submission_http_postgresql import ORIGIN, _setup
@@ -77,6 +78,9 @@ class FakeGraph:
 
     forms_listed: list[str] = ["fa"]
     unsubscribed: list[str] = []
+    # Pages Meta no longer sends leads for (the pull's webhook check), and the re-subscribes.
+    lost: set[str] = set()
+    subscribed: list[str] = []
 
     def __init__(self, cfg: meta.MetaConfig, client: Any = None, timeout: float = 20) -> None:
         self.cfg = cfg
@@ -85,10 +89,14 @@ class FakeGraph:
         assert page_token == "page-token-1"  # noqa: S105 - a fake Page's token
 
     async def subscribe(self, page_id: str, page_token: str) -> None:
-        return None
+        FakeGraph.subscribed.append(page_id)
+        FakeGraph.lost.discard(page_id)
 
     async def unsubscribe(self, page_id: str, page_token: str) -> None:
         FakeGraph.unsubscribed.append(page_id)
+
+    async def lead_subscribed(self, page_id: str, page_token: str) -> bool:
+        return page_id not in FakeGraph.lost
 
     async def forms(self, page_id: str, page_token: str) -> list[dict[str, str]]:
         names = {"fa": "Enquiry", "fb": "Site visit"}
@@ -936,6 +944,118 @@ def test_a_pages_new_leads_go_to_the_sellers_or_to_who_the_owner_picked(
                 waiting = await file(20)
                 assert waiting.owner_person_id is None
                 assert waiting.owner_reason == "Meta · Fictional Homes: left for you to assign."
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_a_page_on_in_another_workspace_keeps_its_webhook_and_a_lost_one_comes_back(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wise Life, 18 Nov 2026: iSolar's Page was connected in two workspaces. Wise Life
+    switched its copy off on 2 Nov, which told Meta to stop sending the Page's leads to
+    Sales Xray at all, so iSolar's leads came only with the ten-minute pull for two weeks.
+    Switching a Page off now leaves Meta alone while another workspace still takes it, and
+    the pull asks Meta every six hours and subscribes a Page again that lost its webhook."""
+    for name, value in ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(meta, "Graph", FakeGraph)
+    FakeGraph.forms_listed = ["fa"]
+    FakeGraph.unsubscribed = []
+    FakeGraph.subscribed = []
+    FakeGraph.lost = set()
+    cfg = meta.config()
+    assert cfg is not None
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            settings = setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
+            install_connectors_http(
+                setup.app, RouteContext(settings, setup.require_actor, setup.sessions)
+            )
+            mine, sister = setup.state.tenant_id, uuid4()
+
+            def page(tenant: Any) -> LeadSource:
+                return LeadSource(
+                    id=uuid4(),
+                    tenant_id=tenant,
+                    kind="meta",
+                    label="Meta · Fictional Solar",
+                    token_sha256=None,
+                    config={
+                        "page_id": "p1",
+                        "page_name": "Fictional Solar",
+                        "token": meta.seal(cfg.token_key, "page-token-1", page_id="p1"),
+                        "forms": "all",
+                        # On since now: the pull reads no older test lead into either.
+                        meta_backfill.CONNECTED: int(time.time()),
+                    },
+                    active=True,
+                    received=0,
+                    created_by_person_id=setup.state.person_id,
+                    created_at=datetime(2026, 10, 29, tzinfo=UTC),
+                    updated_at=datetime.now(UTC),
+                )
+
+            async with setup.sessions() as db, db.begin():
+                db.add(Tenant(id=sister, slug=sister.hex, name="Fictional Sister Company"))
+            async with setup.sessions() as db, db.begin():
+                db.add_all([page(mine), page(sister)])
+
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                off = await client.post(f"{META}/pages/p1/disconnect", headers=WRITE)
+                assert off.status_code == 200, off.text
+                assert off.json()["active"] is False
+                # The sister company's copy is still on: Meta keeps sending it the leads.
+                assert FakeGraph.unsubscribed == []
+
+                # Switched on again here and off in the sister company (its own row, as
+                # its manager's Switch off does): the last copy that is on goes off at Meta.
+                back = await client.post(f"{META}/pages/p1", headers=WRITE, json={"forms": "all"})
+                assert back.status_code == 200, back.text
+            async with setup.sessions() as db, db.begin():
+                await db.execute(
+                    update(LeadSource).where(LeadSource.tenant_id == sister).values(active=False)
+                )
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                last = await client.post(f"{META}/pages/p1/disconnect", headers=WRITE)
+                assert last.status_code == 200, last.text
+                assert FakeGraph.unsubscribed == ["p1"]
+
+            # A Page that is on but lost its webhook at Meta (as iSolar's did): the pull's
+            # check subscribes it again once, and keeps when it asked.
+            async with setup.sessions() as db, db.begin():
+                await db.execute(
+                    update(LeadSource).where(LeadSource.tenant_id == sister).values(active=True)
+                )
+            FakeGraph.lost = {"p1"}
+            FakeGraph.subscribed = []
+            now = int(time.time())
+            assert await meta_pull.pull_due(setup.sessions, cfg, FakeGraph(cfg), now=now) == 1
+            assert FakeGraph.subscribed == ["p1"] and FakeGraph.lost == set()
+            async with setup.sessions() as db:
+                kept = await db.scalar(select(LeadSource).where(LeadSource.tenant_id == sister))
+                assert kept is not None and kept.config[meta_pull.CHECKED] == now
+            # Asked again only after six hours, and a Page that still has it is left alone.
+            later = now + meta_pull.PULL_EVERY
+            assert await meta_pull.pull_due(setup.sessions, cfg, FakeGraph(cfg), now=later) == 1
+            much_later = now + meta_pull.CHECK_EVERY
+            assert (
+                await meta_pull.pull_due(setup.sessions, cfg, FakeGraph(cfg), now=much_later) == 1
+            )
+            assert FakeGraph.subscribed == ["p1"]
+            async with setup.sessions() as db:
+                kept = await db.scalar(select(LeadSource).where(LeadSource.tenant_id == sister))
+                assert kept is not None and kept.config[meta_pull.CHECKED] == much_later
         finally:
             await setup.engine.dispose()
 
