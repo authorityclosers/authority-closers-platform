@@ -767,7 +767,7 @@ export function AskDipakView({
       screen = (
         <>
           <Breadcrumb onBack={back}>{COPY.title}</Breadcrumb>
-          <MissionsScreen />
+          <MissionsScreen open={open} />
         </>
       );
       break;
