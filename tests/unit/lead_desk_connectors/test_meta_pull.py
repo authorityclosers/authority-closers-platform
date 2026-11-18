@@ -192,3 +192,35 @@ def test_the_puller_starts_and_stops_with_the_api(monkeypatch: pytest.MonkeyPatc
     with TestClient(app):
         pass
     assert seen == ["started"]
+
+
+@dataclass
+class Subscriptions:
+    """Meta's answer on whether a Page still sends its leads to Sales Xray."""
+
+    has_it: bool
+    asked: list[tuple[str, str]] = field(default_factory=list)
+    subscribed: list[tuple[str, str]] = field(default_factory=list)
+
+    async def lead_subscribed(self, page_id: str, page_token: str) -> bool:
+        self.asked.append((page_id, page_token))
+        return self.has_it
+
+    async def subscribe(self, page_id: str, page_token: str) -> None:
+        self.subscribed.append((page_id, page_token))
+
+
+def test_meta_is_asked_about_the_webhook_every_six_hours() -> None:
+    assert meta_pull.check_due({}, NOW)
+    assert not meta_pull.check_due({meta_pull.CHECKED: NOW - 3600}, NOW)
+    assert meta_pull.check_due({meta_pull.CHECKED: NOW - meta_pull.CHECK_EVERY}, NOW)
+    assert meta_pull.check_due({meta_pull.CHECKED: True}, NOW)
+
+
+def test_a_page_that_lost_its_webhook_is_subscribed_again_and_one_that_has_it_is_left() -> None:
+    # Wise Life, 18 Nov 2026: iSolar's Page lost its webhook and its leads waited for the pull.
+    lost, kept = Subscriptions(has_it=False), Subscriptions(has_it=True)
+    assert asyncio.run(meta_pull.keep_subscribed(source().config, lost, cfg())) is True
+    assert lost.subscribed == [("p1", "page-token")]
+    assert asyncio.run(meta_pull.keep_subscribed(source().config, kept, cfg())) is False
+    assert kept.asked == [("p1", "page-token")] and kept.subscribed == []

@@ -33,6 +33,7 @@ from ac_platform.http.conversation_admin import install_conversation_admin_http
 from ac_platform.http.conversation_execution_control import install_execution_control_http
 from ac_platform.http.conversation_insights import install_insights_routes
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
+from ac_platform.http.conversation_minutes import install_minutes_routes
 from ac_platform.http.conversation_reviews import install_conversation_review_http
 from ac_platform.http.identity_provider import OAuthIdentityProvider, create_google_provider
 from ac_platform.http.identity_provider_apple import AppleSignInProvider
@@ -286,6 +287,13 @@ def create_app(
         require_actor=require_actor,
         intake=resolved_conversation,
         acquisition_intake=resolved_acquisition.intake if resolved_acquisition else None,
+    )
+    # Analysis minutes given, used and left (owner, 18 Nov 2026): reads of the ledger.
+    install_minutes_routes(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        intake=resolved_acquisition.intake if resolved_acquisition else None,
     )
     install_execution_control_http(
         application, settings=settings, sessions=session_factory, require_actor=require_actor

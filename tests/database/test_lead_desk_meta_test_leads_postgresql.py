@@ -89,6 +89,12 @@ class FakeGraph:
     ) -> list[dict[str, Any]]:
         return [PULLED_TEST]
 
+    async def lead_subscribed(self, page_id: str, page_token: str) -> bool:
+        return True  # the pull's webhook check: Meta still sends this Page's leads
+
+    async def subscribe(self, page_id: str, page_token: str) -> None:
+        raise AssertionError("a Page that kept its webhook is not subscribed again")
+
 
 @pytest.fixture
 def postgres_harness() -> Any:

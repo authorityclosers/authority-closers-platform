@@ -1206,6 +1206,27 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             await desk.db.flush()
             return BackfillStarted(page=page_view(source), imported=imported)
 
+    async def page_on_elsewhere(page_id: str, source_id: UUID) -> bool:
+        """Another source that is on, in this workspace or another, still takes this Page.
+
+        Meta keeps one lead subscription per Page and app, so telling Meta to stop would
+        stop theirs too. On 2 Nov 2026 Wise Life switched off its copy of iSolar's Page;
+        the iSolar workspace's webhook went quiet and its leads waited for the ten-minute
+        pull for two weeks."""
+        async with ctx.sessions() as database:
+            other = await database.scalar(
+                select(LeadSource.id)
+                .where(
+                    LeadSource.kind == "meta",
+                    LeadSource.active.is_(True),
+                    LeadSource.id != source_id,
+                    func.jsonb_extract_path_text(cast(LeadSource.config, JSONB), "page_id")
+                    == page_id,
+                )
+                .limit(1)
+            )
+        return other is not None
+
     @router.post(
         "/meta/pages/{page_id}/disconnect", response_model=MetaPage, response_model_by_alias=True
     )
@@ -1215,9 +1236,10 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             desk._require_manager()
             source = await page_source(desk, page_id)
             try:
-                token = meta.unseal(cfg.token_key, source.config["token"], page_id=page_id)
-                # The manager is waiting: give Meta a few seconds, not twenty.
-                await meta.Graph(cfg, timeout=6).unsubscribe(page_id, token)
+                if not await page_on_elsewhere(page_id, source.id):
+                    token = meta.unseal(cfg.token_key, source.config["token"], page_id=page_id)
+                    # The manager is waiting: give Meta a few seconds, not twenty.
+                    await meta.Graph(cfg, timeout=6).unsubscribe(page_id, token)
             except meta.MetaError:
                 pass  # Already gone at Meta's end; switching it off here is what matters.
             source.active = False
@@ -1227,7 +1249,11 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
 
     async def stop_page(cfg: meta.MetaConfig, source: LeadSource, page_id: str) -> None:
         """Switch a Page off: Meta stops sending its leads, and the pull skips it."""
-        if source.active and isinstance((source.config or {}).get("token"), dict):
+        if (
+            source.active
+            and isinstance((source.config or {}).get("token"), dict)
+            and not await page_on_elsewhere(page_id, source.id)
+        ):
             try:
                 token = meta.unseal(cfg.token_key, source.config["token"], page_id=page_id)
                 await meta.Graph(cfg, timeout=6).unsubscribe(page_id, token)
