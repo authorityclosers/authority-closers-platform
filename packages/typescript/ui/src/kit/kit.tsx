@@ -533,6 +533,13 @@ export function Segmented<T extends string>({
     const resize =
       typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
     resize?.observe(root);
+    // A segment can grow while the group keeps its width ("Overdue" becomes
+    // "Overdue 2" when the counts arrive), so each one is watched too; the pill
+    // had stayed the old width and the count stood outside it (Dipak's phone,
+    // bug 229, 17 Nov 2026: "the text came out").
+    root
+      .querySelectorAll("button")
+      .forEach((segment) => resize?.observe(segment));
     return () => {
       cancelAnimationFrame(frame);
       resize?.disconnect();

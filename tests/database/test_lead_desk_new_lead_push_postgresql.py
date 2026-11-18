@@ -8,6 +8,7 @@ PostgreSQL, fictional rows only.
 """
 
 import json
+import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
@@ -242,6 +243,8 @@ def test_admins_hear_and_a_lead_nobody_got_waits_for_them(
                 assert words["title"] == "New lead waiting: Fictional Waiting"
                 assert "tap to assign" in words["body"]
                 assert words["urgency"] == "urgent"
+                # The time it came in, as a clock time and how long ago (owner, 17 Nov 2026).
+                assert re.search(r"\d{1,2}:\d{2} (AM|PM), ", words["body"])
                 as_(seller_token)
                 hidden = await client.get(f"{BASE}/leads/{waits}/alert")
                 assert hidden.status_code != 200
