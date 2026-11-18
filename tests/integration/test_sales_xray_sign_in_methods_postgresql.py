@@ -285,12 +285,21 @@ def test_staff_see_no_email_code_and_their_only_provider_is_not_removable(
             path="/v1/me/sign-in-methods",
         )
     ).json()
+    [account] = body["methods"][0]["accounts"]
     assert body["methods"] == [
         {
             "kind": "google",
             "added_at": body["methods"][0]["added_at"],
             "last_used_at": body["methods"][0]["last_used_at"],
             "removable": False,
+            "accounts": [
+                {
+                    "id": account["id"],
+                    "added_at": account["added_at"],
+                    "last_used_at": account["last_used_at"],
+                    "removable": False,
+                }
+            ],
         }
     ]
 
@@ -428,3 +437,124 @@ def test_the_email_code_rule_and_the_removal_rule_name_the_same_staff(
     email_rule, removal_rule = _run_async(compare())
     assert email_rule == removal_rule
     assert email_rule is (role in {"owner", "admin", "support"} and not organisation)
+
+
+def _two_google_accounts(harness: _Harness, *, password: bool) -> tuple[UUID, UUID, list[str]]:
+    tenant_id, person_id = _seed(harness, password=password, providers=(GOOGLE,))
+    with Session(harness.engine) as database, database.begin():
+        database.add(
+            ProviderIdentity(
+                person_id=person_id,
+                issuer=GOOGLE,
+                subject=f"second-{person_id.hex}",
+                created_at=datetime(2026, 11, 18, 9, tzinfo=UTC),
+            )
+        )
+    listing = _run_async(
+        _call(
+            harness,
+            tenant_id=tenant_id,
+            person_id=person_id,
+            age=timedelta(0),
+            method="GET",
+            path="/v1/me/sign-in-methods",
+        )
+    ).json()
+    [google] = [method for method in listing["methods"] if method["kind"] == "google"]
+    return tenant_id, person_id, [account["id"] for account in google["accounts"]]
+
+
+def test_two_google_accounts_are_listed_and_one_is_removed_on_its_own(
+    postgres_harness: _Harness,
+) -> None:
+    tenant_id, person_id, accounts = _two_google_accounts(postgres_harness, password=True)
+    assert len(accounts) == 2
+    response = _run_async(
+        _call(
+            postgres_harness,
+            tenant_id=tenant_id,
+            person_id=person_id,
+            age=timedelta(minutes=2),
+            method="POST",
+            path=f"/v1/me/sign-in-methods/google/remove?account_id={accounts[1]}",
+        )
+    )
+    assert response.status_code == 200
+    assert response.json() == {"removed": "google", "account": accounts[1]}
+    assert _google_rows(postgres_harness, person_id) == 1
+    with Session(postgres_harness.engine) as database:
+        [left] = database.scalars(
+            select(ProviderIdentity.id).where(ProviderIdentity.person_id == person_id)
+        )
+    assert str(left) == accounts[0]
+    [event], [_] = _removals(postgres_harness, person_id)
+    assert event.payload == {"provider": "google", "ip_address": "127.0.0.1"}
+
+
+def test_an_account_not_on_this_person_is_not_found_and_changes_nothing(
+    postgres_harness: _Harness,
+) -> None:
+    tenant_id, person_id, _ = _two_google_accounts(postgres_harness, password=True)
+    _, _, others = _two_google_accounts(postgres_harness, password=True)
+    response = _run_async(
+        _call(
+            postgres_harness,
+            tenant_id=tenant_id,
+            person_id=person_id,
+            age=timedelta(minutes=2),
+            method="POST",
+            path=f"/v1/me/sign-in-methods/google/remove?account_id={others[0]}",
+        )
+    )
+    assert response.status_code == 404
+    assert _google_rows(postgres_harness, person_id) == 2
+    assert _removals(postgres_harness, person_id) == ([], [])
+
+
+def test_staff_with_only_two_google_accounts_may_drop_one_but_never_both(
+    postgres_harness: _Harness,
+) -> None:
+    """Platform staff get no email codes, so the Google accounts are the only ways in."""
+
+    tenant_id, person_id = _seed(postgres_harness, password=False, providers=(GOOGLE,), staff=True)
+    with Session(postgres_harness.engine) as database, database.begin():
+        database.add(
+            ProviderIdentity(person_id=person_id, issuer=GOOGLE, subject=f"second-{person_id.hex}")
+        )
+    listing = _run_async(
+        _call(
+            postgres_harness,
+            tenant_id=tenant_id,
+            person_id=person_id,
+            age=timedelta(0),
+            method="GET",
+            path="/v1/me/sign-in-methods",
+        )
+    ).json()
+    [google] = listing["methods"]
+    assert google["kind"] == "google" and google["removable"] is False
+    assert [account["removable"] for account in google["accounts"]] == [True, True]
+    whole = _run_async(
+        _call(
+            postgres_harness,
+            tenant_id=tenant_id,
+            person_id=person_id,
+            age=timedelta(minutes=2),
+            method="POST",
+            path="/v1/me/sign-in-methods/google/remove",
+        )
+    )
+    assert whole.status_code == 409 and whole.json()["detail"]["code"] == "last_method"
+    assert _google_rows(postgres_harness, person_id) == 2
+    one = _run_async(
+        _call(
+            postgres_harness,
+            tenant_id=tenant_id,
+            person_id=person_id,
+            age=timedelta(minutes=2),
+            method="POST",
+            path=f"/v1/me/sign-in-methods/google/remove?account_id={google['accounts'][0]['id']}",
+        )
+    )
+    assert one.status_code == 200
+    assert _google_rows(postgres_harness, person_id) == 1

@@ -2,7 +2,8 @@
 
 - GET  /v1/me/sign-in-methods                     what can sign this account in, and
                                                   which providers can be connected
-- POST /v1/me/sign-in-methods/{provider}/remove   remove Google, Apple or Facebook
+- POST /v1/me/sign-in-methods/{provider}/remove   remove Google, Apple or Facebook;
+                                                  ?account=<id> removes one account
 - POST /v1/me/sign-in-methods/{provider}/connect  connect one (in http/auth.py, which
                                                   holds the provider sign-in flow)
 
@@ -17,6 +18,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any, Literal
+from uuid import UUID
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
 
@@ -31,6 +33,7 @@ from ac_platform.identity.provider_link_email import (
 )
 from ac_platform.identity.sign_in_methods import (
     FRESH_SIGN_IN,
+    MULTI_ACCOUNT_PROVIDERS,
     SignInMethodError,
     remove_provider,
     session_is_fresh,
@@ -97,14 +100,32 @@ def install(app: FastAPI, ctx: RouteContext) -> None:
                             method.last_used_at.isoformat() if method.last_used_at else None
                         ),
                         "removable": method.removable,
+                        # Each linked account of a provider, oldest first.
+                        "accounts": [
+                            {
+                                "id": str(account.id),
+                                "added_at": (
+                                    account.added_at.isoformat() if account.added_at else None
+                                ),
+                                "last_used_at": (
+                                    account.last_used_at.isoformat()
+                                    if account.last_used_at
+                                    else None
+                                ),
+                                "removable": account.removable,
+                            }
+                            for account in method.accounts
+                        ],
                     }
                     for method in methods
                 ],
-                # Settings -> Connect: configured here and not yet on the account.
+                # Settings -> Connect: configured here and not yet on the account
+                # (Google: another account may be added).
                 "providers": {
                     provider: {
                         "linked": provider in linked,
-                        "can_connect": provider in configured and provider not in linked,
+                        "can_connect": provider in configured
+                        and (provider not in linked or provider in MULTI_ACCOUNT_PROVIDERS),
                     }
                     for provider in ("google", "apple", "facebook", "pulse")
                 },
@@ -114,6 +135,7 @@ def install(app: FastAPI, ctx: RouteContext) -> None:
                         "kind": provider,
                         "label": PROVIDER_LABELS[provider],
                         "connected": provider in linked,
+                        "add_another": provider in linked and provider in MULTI_ACCOUNT_PROVIDERS,
                     }
                     for provider in ("google", "apple", "facebook", "pulse")
                     if provider in configured
@@ -127,6 +149,7 @@ def install(app: FastAPI, ctx: RouteContext) -> None:
         request: Request,
         response: Response,
         provider: Literal["google", "apple", "facebook", "pulse"],
+        account_id: UUID | None = None,
     ) -> dict[str, Any]:
         async with account(request, response, write=True) as auth:
             actor = auth.resolved.actor
@@ -141,6 +164,7 @@ def install(app: FastAPI, ctx: RouteContext) -> None:
                     session_id=actor.session_id,
                     provider=provider,
                     now=now,
+                    account_id=account_id,
                 )
             except SignInMethodError as error:
                 status = 404 if error.code == "not_found" else 409
@@ -167,6 +191,8 @@ def install(app: FastAPI, ctx: RouteContext) -> None:
                 now=now,
             )
             await enqueue_provider_notice(auth.database, event)
+            if account_id is not None:
+                return {"removed": provider, "account": str(account_id)}
             return {"removed": provider}
 
     app.include_router(router)

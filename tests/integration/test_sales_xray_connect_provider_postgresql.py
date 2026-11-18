@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID, uuid4
 
@@ -21,7 +22,11 @@ from ac_platform.http.problem import register_problem_handlers
 from ac_platform.http.routes import RouteContext
 from ac_platform.http.routes.sign_in_methods import install as install_sign_in_methods
 from ac_platform.identity.application import AsyncIdentityApplication
-from ac_platform.identity.models import ProviderAuthorizationTransaction, ProviderIdentity
+from ac_platform.identity.models import (
+    Person,
+    ProviderAuthorizationTransaction,
+    ProviderIdentity,
+)
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.identity.provider_link_email import (
     PROVIDER_CONNECTED_ACTION,
@@ -33,10 +38,13 @@ from tests.integration.test_password_identity_http_postgresql import (
     postgres_harness as _postgres_harness,
 )
 from tests.integration.test_sales_xray_provider_sign_in_postgresql import (
+    CONSENT_VERSION,
     ISSUERS,
     SALES_ORIGIN,
     _Provider,
+    _sessions_of,
     _settings,
+    _sign_in,
 )
 from tests.integration.test_sales_xray_sign_in_methods_postgresql import _seed
 
@@ -186,7 +194,11 @@ def test_a_fresh_session_connects_a_provider_whose_email_differs(
     assert notice.payload == {"audit_event_id": str(event.id)}
     providers = listing["providers"]
     assert isinstance(providers, dict)
-    assert providers[provider_name] == {"linked": True, "can_connect": False}
+    # Google may add another account; Apple and Facebook hold one each.
+    assert providers[provider_name] == {
+        "linked": True,
+        "can_connect": provider_name == "google",
+    }
     assert provider_name in [method["kind"] for method in listing["methods"]]  # type: ignore[index, union-attr]
 
 
@@ -307,3 +319,101 @@ def test_signed_out_or_from_the_phone_app_tab_connect_is_refused(
     assert (signed_out, from_app) == ("failed", "failed")
     assert provider.transactions == []
     assert _connected(postgres_harness, person_id) == ([], [])
+
+
+def test_a_second_google_account_connects_and_then_signs_in_with_its_own_email(
+    postgres_harness: _Harness,
+) -> None:
+    """Wise Life, 18 Nov 2026: one person, two Google logins, before the second is used."""
+
+    tenant_id, person_id = _seed(postgres_harness, password=False, providers=(ISSUERS["google"],))
+    subject = f"google-second-{uuid4().hex}"
+    second = _Provider("google", email=f"second-{uuid4().hex}@example.test", subject=subject)
+
+    result, finished, connected = _run_async(
+        _connect(postgres_harness, tenant_id=tenant_id, person_id=person_id, provider=second)
+    )
+    listing: Any = connected
+
+    assert result == "linked"
+    assert "ac_session" not in finished.cookies
+    [row] = _rows(postgres_harness, ISSUERS["google"], subject)
+    assert row.person_id == person_id
+    [event], [_] = _connected(postgres_harness, person_id)
+    assert event.payload == {"provider": "google", "ip_address": "127.0.0.1"}
+    [google] = [method for method in listing["methods"] if method["kind"] == "google"]
+    assert len(google["accounts"]) == 2
+    assert all(account["removable"] for account in google["accounts"])
+    assert listing["providers"]["google"] == {"linked": True, "can_connect": True}
+    [offer] = [option for option in listing["available"] if option["kind"] == "google"]
+    assert offer["add_another"] is True
+
+    # The second Google signs in to the same person, though its email is not the account's.
+    with Session(postgres_harness.engine) as database, database.begin():
+        person = database.get(Person, person_id)
+        assert person is not None
+        person.consent_version = CONSENT_VERSION
+    before = _sessions_of(postgres_harness, person_id)
+    signed_in, response = _run_async(
+        _sign_in(postgres_harness, tenant_id=tenant_id, provider=second)
+    )
+    assert signed_in == "success"
+    assert response.cookies.get("ac_session")
+    assert _sessions_of(postgres_harness, person_id) == before + 1
+    assert len(_rows(postgres_harness, ISSUERS["google"], subject)) == 1
+
+
+def test_a_second_google_account_already_on_another_person_is_refused(
+    postgres_harness: _Harness,
+) -> None:
+    _, other_id = _seed(postgres_harness, password=True, providers=())
+    subject = f"google-taken-{uuid4().hex}"
+    with Session(postgres_harness.engine) as database, database.begin():
+        database.add(
+            ProviderIdentity(person_id=other_id, issuer=ISSUERS["google"], subject=subject)
+        )
+    tenant_id, person_id = _seed(postgres_harness, password=True, providers=(ISSUERS["google"],))
+    taken = _Provider("google", email=f"x-{uuid4().hex}@example.test", subject=subject)
+
+    result, _, connected = _run_async(
+        _connect(postgres_harness, tenant_id=tenant_id, person_id=person_id, provider=taken)
+    )
+    listing: Any = connected
+
+    assert result == "already_linked"
+    [row] = _rows(postgres_harness, ISSUERS["google"], subject)
+    assert row.person_id == other_id
+    [google] = [method for method in listing["methods"] if method["kind"] == "google"]
+    assert len(google["accounts"]) == 1
+    assert _connected(postgres_harness, person_id) == ([], [])
+
+
+def test_an_unlinked_google_with_another_email_never_reaches_the_account(
+    postgres_harness: _Harness,
+) -> None:
+    """Only a key connected while signed in skips the email match; a stray one does not."""
+
+    tenant_id, person_id = _seed(postgres_harness, password=True, providers=(ISSUERS["google"],))
+    with Session(postgres_harness.engine) as database, database.begin():
+        person = database.get(Person, person_id)
+        assert person is not None
+        person.consent_version = CONSENT_VERSION
+    subject = f"google-stray-{uuid4().hex}"
+    stray = _Provider("google", email=f"stray-{uuid4().hex}@example.test", subject=subject)
+    before = _sessions_of(postgres_harness, person_id)
+
+    _run_async(_sign_in(postgres_harness, tenant_id=tenant_id, provider=stray))
+
+    assert _sessions_of(postgres_harness, person_id) == before
+    assert all(
+        row.person_id != person_id for row in _rows(postgres_harness, ISSUERS["google"], subject)
+    )
+    with Session(postgres_harness.engine) as database:
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(ProviderIdentity)
+                .where(ProviderIdentity.person_id == person_id)
+            )
+            == 1
+        )
