@@ -24,7 +24,7 @@ import {
   type RefObject,
 } from "react";
 
-import { CoachMark, TopicArt } from "./art";
+import { CoachMark, PartMark, TopicArt } from "./art";
 import { Breadcrumb, ScreenButton, toggle, type Open } from "./bits";
 import styles from "./ask-dipak.module.css";
 import {
@@ -365,6 +365,9 @@ export function LessonScreen({
   back: () => void;
 }) {
   const deepId = useId();
+  // Dipak's report 228 note (18 Nov 2026): his answer stays folded until an
+  // option is picked, or the reader asks to see it anyway.
+  const [peek, setPeek] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   // Dipak's lesson from the API (or the phone's copy of it); a draft is local.
@@ -439,6 +442,7 @@ export function LessonScreen({
   const scenario = splitScenario(lesson.scenario);
   const seen = new Set(tried);
   const allSeen = [0, 1, 2].every((index) => seen.has(index));
+  const answerOpen = peek || picked !== undefined || seen.size > 0;
 
   const jump = (part: PartKey) =>
     document
@@ -451,7 +455,7 @@ export function LessonScreen({
       <p className={styles.nowLine} aria-live="polite">
         {`${COPY.now}: ${PART_LABEL[parts[at] ?? "quick"]} · ${at + 1} of ${parts.length}`}
       </p>
-      <div className={styles.lessonGrid}>
+      <div className={`${styles.lessonGrid} ${tone}`}>
         <nav className={styles.outline} aria-label={COPY.trackLabel}>
           {parts.map((part, index) => (
             <button
@@ -463,7 +467,7 @@ export function LessonScreen({
               }
               onClick={() => jump(part)}
             >
-              <span className={styles.outlineDot} aria-hidden="true" />
+              <PartMark part={part} size={20} />
               {PART_LABEL[part]}
             </button>
           ))}
@@ -490,7 +494,10 @@ export function LessonScreen({
           </div>
 
           <Section part="turn">
-            <h3 className={styles.sectionH}>{COPY.turn}</h3>
+            <div className={styles.partHead}>
+              <PartMark part="turn" />
+              <h3 className={styles.sectionH}>{COPY.turn}</h3>
+            </div>
             <div className={styles.scene}>
               {scenario.said.map((line) => (
                 <p key={line} className={styles.sceneBubble}>
@@ -590,9 +597,26 @@ export function LessonScreen({
             </div>
           </Section>
 
-          {lesson.before && lesson.after ? (
+          {!answerOpen ? (
+            <div className={styles.answerGate} data-answer-gate="">
+              <PartMark part="quick" size={28} />
+              <p className={styles.gateText}>{COPY.gate}</p>
+              <button
+                type="button"
+                className={styles.smallBtn}
+                onClick={() => setPeek(true)}
+              >
+                {COPY.gatePeek}
+              </button>
+            </div>
+          ) : null}
+
+          {answerOpen && lesson.before && lesson.after ? (
             <Section part="shift">
-              <h3 className={styles.sectionH}>{COPY.shift}</h3>
+              <div className={styles.partHead}>
+                <PartMark part="shift" />
+                <h3 className={styles.sectionH}>{COPY.shift}</h3>
+              </div>
               {/* His before and after lines, word for word (his doc's opening). */}
               <div className={styles.shift} data-mindset="">
                 <div className={styles.oldThought}>
@@ -616,97 +640,105 @@ export function LessonScreen({
             </Section>
           ) : null}
 
-          <Section part="quick" className={styles.quickCard}>
-            <div className={styles.coachHead}>
-              <CoachMark size="sm" />
-              <h3 className={styles.sectionH}>{COPY.quick}</h3>
-            </div>
-            <ol className={styles.beats}>
-              {paragraphs(lesson.quick).map((beat, index) => (
-                <li key={beat} className={styles.beat}>
-                  <span className={styles.beatDot} aria-hidden="true">
-                    {index + 1}
-                  </span>
-                  <p className={styles.beatText}>
-                    <Marked text={beat} />
-                  </p>
-                </li>
-              ))}
-            </ol>
-          </Section>
+          {answerOpen ? (
+            <>
+              <Section part="quick" className={styles.quickCard}>
+                <div className={styles.coachHead}>
+                  <CoachMark size="sm" />
+                  <h3 className={styles.sectionH}>{COPY.quick}</h3>
+                </div>
+                <ol className={styles.beats}>
+                  {paragraphs(lesson.quick).map((beat, index) => (
+                    <li key={beat} className={styles.beat}>
+                      <span className={styles.beatDot} aria-hidden="true">
+                        {index + 1}
+                      </span>
+                      <p className={styles.beatText}>
+                        <Marked text={beat} />
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              </Section>
 
-          <Section part="deep">
-            <button
-              type="button"
-              className={styles.fold}
-              aria-expanded={deepOpen}
-              aria-controls={deepId}
-              onClick={onDeep}
-            >
-              <span className={`${styles.foldIcon} ${tone}`} aria-hidden="true">
-                <AskIcon name="book" size={22} />
-              </span>
-              <span className={styles.foldMain}>
-                <strong>{COPY.deep}</strong>
-                <small>{COPY.deepSub}</small>
-              </span>
-              <span
-                className={styles.foldArrow}
-                data-open={deepOpen || undefined}
-              >
-                <AskIcon name="right" size={22} />
-              </span>
-            </button>
-            {deepOpen ? (
-              <div className={styles.deep} id={deepId}>
-                {lesson.deep.map((paragraph, index) => (
-                  <p
-                    key={`${index}-${paragraph}`}
-                    className={index === 0 ? styles.pull : undefined}
-                  >
-                    {paragraph}
-                  </p>
-                ))}
+              <Section part="deep">
                 <button
                   type="button"
-                  className={styles.smallBtn}
+                  className={styles.fold}
+                  aria-expanded={deepOpen}
+                  aria-controls={deepId}
                   onClick={onDeep}
                 >
-                  {COPY.deepClose}
+                  <span
+                    className={`${styles.foldIcon} ${tone}`}
+                    aria-hidden="true"
+                  >
+                    <PartMark part="deep" size={24} />
+                  </span>
+                  <span className={styles.foldMain}>
+                    <strong>{COPY.deep}</strong>
+                    <small>{COPY.deepSub}</small>
+                  </span>
+                  <span
+                    className={styles.foldArrow}
+                    data-open={deepOpen || undefined}
+                  >
+                    <AskIcon name="right" size={22} />
+                  </span>
                 </button>
-              </div>
-            ) : null}
-          </Section>
+                {deepOpen ? (
+                  <div className={styles.deep} id={deepId}>
+                    {lesson.deep.map((paragraph, index) => (
+                      <p
+                        key={`${index}-${paragraph}`}
+                        className={index === 0 ? styles.pull : undefined}
+                      >
+                        {paragraph}
+                      </p>
+                    ))}
+                    <button
+                      type="button"
+                      className={styles.smallBtn}
+                      onClick={onDeep}
+                    >
+                      {COPY.deepClose}
+                    </button>
+                  </div>
+                ) : null}
+              </Section>
 
-          <Section part="cue">
-            <div className={styles.pocket}>
-              <span className={styles.pocketIcon} aria-hidden="true">
-                <AskIcon name="ribbon" size={22} />
-              </span>
-              <div>
-                <h3 className={styles.pocketLabel}>{COPY.cue}</h3>
-                <p className={styles.cue}>{lesson.cue}</p>
-              </div>
-            </div>
-          </Section>
+              <Section part="cue">
+                <div className={styles.pocket}>
+                  <span className={styles.pocketIcon} aria-hidden="true">
+                    <PartMark part="cue" size={24} />
+                  </span>
+                  <div>
+                    <h3 className={styles.pocketLabel}>{COPY.cue}</h3>
+                    <p className={styles.cue}>{lesson.cue}</p>
+                  </div>
+                </div>
+              </Section>
 
-          <Section part="mission">
-            <div className={styles.coachHead}>
-              <span className={styles.missionFlag} aria-hidden="true">
-                <AskIcon name="flag" size={18} />
-              </span>
-              <h3 className={styles.sectionH}>{COPY.mission}</h3>
-            </div>
-            <MissionCard
-              id={id}
-              mission={lesson.mission}
-              draft={draft}
-              committed={committed}
-            />
-          </Section>
+              <Section part="mission">
+                <div className={styles.coachHead}>
+                  <PartMark part="mission" />
+                  <h3 className={styles.sectionH}>{COPY.mission}</h3>
+                </div>
+                <MissionCard
+                  id={id}
+                  mission={lesson.mission}
+                  draft={draft}
+                  committed={committed}
+                />
+              </Section>
+            </>
+          ) : null}
 
           <Section part="next">
-            <h3 className={styles.sectionH}>{COPY.related}</h3>
+            <div className={styles.partHead}>
+              <PartMark part="next" />
+              <h3 className={styles.sectionH}>{COPY.related}</h3>
+            </div>
             <div className={styles.nextList}>
               {related.map((item) => (
                 <ScreenButton
