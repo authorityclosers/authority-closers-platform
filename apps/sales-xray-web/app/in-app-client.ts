@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-import { IN_APP_ATTRIBUTE } from "./in-app";
+import { IN_APP_ATTRIBUTE, isIPhoneApp } from "./in-app";
 
 type AppWindow = Window & {
   __sxPhone?: { openCalls?: () => void };
@@ -17,6 +17,15 @@ const subscribeNothing = () => () => {};
 /** True inside the phone app. The server render is the website. */
 export function useInApp(): boolean {
   return useSyncExternalStore(subscribeNothing, readInApp, () => false);
+}
+
+function readIPhoneApp(): boolean {
+  return isIPhoneApp(navigator.userAgent, window);
+}
+
+/** True inside the iPhone app (in-app.ts isIPhoneApp). The server render is the website. */
+export function useIPhoneApp(): boolean {
+  return useSyncExternalStore(subscribeNothing, readIPhoneApp, () => false);
 }
 
 /**

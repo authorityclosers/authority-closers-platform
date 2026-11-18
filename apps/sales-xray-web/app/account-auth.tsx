@@ -26,6 +26,7 @@ import {
 } from "react";
 import { BrandMark } from "./shell/brand-lockup";
 import { ThemeToggle } from "./shell/theme-toggle";
+import { useIPhoneApp } from "./in-app-client";
 import {
   ACCOUNT_CLOSED,
   ACCOUNT_CLOSED_MESSAGE,
@@ -1041,12 +1042,19 @@ export function AccountAuth({
     (preview && previewState === "auth.error");
   const available =
     activeConfig?.enabled && !!activeConfig.consent_version && !unavailable;
+  const iPhoneApp = useIPhoneApp();
   const googleBlocked = useSyncExternalStore(
     noHostSubscription,
     readGoogleBlocked,
     () => false,
   );
+  // App Store 4.8 (iOS QA, 18 Nov 2026): an iPhone app that offers Google,
+  // Facebook or Pulse must offer Sign in with Apple too. Until Apple is on,
+  // the iPhone app offers none of them, only email code and password.
+  const appleMissingOnIPhone =
+    iPhoneApp && !providerEnabled(activeConfig, "apple");
   const offered = (provider: SignInProvider) =>
+    !appleMissingOnIPhone &&
     (provider !== "google" || !googleBlocked) &&
     providerEnabled(activeConfig, provider) &&
     !configError &&

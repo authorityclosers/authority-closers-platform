@@ -3,12 +3,16 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const { inApp, phoneStatus, setupStatus } = vi.hoisted(() => ({
+const { inApp, iPhoneApp, phoneStatus, setupStatus } = vi.hoisted(() => ({
   inApp: { value: false },
+  iPhoneApp: { value: false },
   phoneStatus: vi.fn(),
   setupStatus: vi.fn(),
 }));
-vi.mock("./in-app-client", () => ({ useInApp: () => inApp.value }));
+vi.mock("./in-app-client", () => ({
+  useInApp: () => inApp.value,
+  useIPhoneApp: () => iPhoneApp.value,
+}));
 vi.mock("./leads/native-phone", () => ({ phoneStatus, setupStatus }));
 
 import {
@@ -29,6 +33,7 @@ let host: HTMLDivElement;
 beforeEach(() => {
   resetPurchaseStoreForTests();
   inApp.value = false;
+  iPhoneApp.value = false;
   phoneStatus.mockReset();
   setupStatus.mockReset();
   host = document.createElement("div");
@@ -85,6 +90,19 @@ it("keeps purchases hidden in the app while the store is unknown", async () => {
   expect(host.textContent).toBe(PLANS_ON_WEB);
 });
 
+// App Store 3.1.1 (iOS QA, 18 Nov 2026): the iPhone app never sells, even if
+// a status ever says "direct"; Android's download-link app still does.
+it("never shows plans, prices or plan links in the iPhone app", async () => {
+  inApp.value = true;
+  iPhoneApp.value = true;
+  phoneStatus.mockResolvedValue({ store: "direct" });
+  setupStatus.mockResolvedValue({ store: "direct" });
+  await show();
+  expect(host.querySelector('a[href="/plans"]')).toBeNull();
+  expect(host.textContent).toBe(PLANS_ON_WEB);
+  expect(host.textContent).not.toMatch(/₹|upgrade|buy|pricing/i);
+});
+
 function PlansLine() {
   return <p>{usePlansOnWebLine()}</p>;
 }
@@ -121,3 +139,44 @@ it.each([
     expect(host.textContent).toBe(line);
   },
 );
+
+// App Store 3.1.1/3.1.3 (orchestrator, 18 Nov 2026): the iPhone app never says
+// plans are managed on the web, for an owner or a member; Android and the website do.
+it.each(["owner", "member"] as const)(
+  "tells an organisation %s nothing about plans on the web in the iPhone app",
+  async (role) => {
+    inApp.value = true;
+    iPhoneApp.value = true;
+    await act(async () =>
+      root.render(
+        <WorkspaceAccessProvider
+          value={{
+            status: "ready",
+            authenticated: true,
+            retry: () => {},
+            context: { personId: "p", sessionId: "s", tenantId: "org" },
+            workspaces: [
+              {
+                tenant_id: "org",
+                kind: "organisation",
+                name: "Brightline",
+                role,
+                sales_xray_enabled: true,
+              },
+            ],
+          }}
+        >
+          <PlansLine />
+        </WorkspaceAccessProvider>,
+      ),
+    );
+    expect(host.textContent).toBe("");
+    expect(host.textContent).not.toMatch(/web|plan|upgrade|buy/i);
+  },
+);
+
+it("keeps the plans-on-web line in the Android app", async () => {
+  inApp.value = true;
+  await act(async () => root.render(<PlansLine />));
+  expect(host.textContent).toMatch(/on the web\.$/);
+});

@@ -1235,6 +1235,9 @@
     min-height: 100dvh;
     overflow: visible;
     padding: 10px;
+    /* Inside the iPhone app the page runs under the status bar (viewport-fit
+       cover): the film banner starts below it (iOS QA, 18 Nov 2026). */
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
   }
   .stage {
     padding: 20px 22px 18px;
@@ -1280,7 +1283,7 @@
   .themeSlot {
     position: absolute;
     z-index: 1;
-    top: 34px;
+    top: calc(34px + env(safe-area-inset-top, 0px));
     right: 32px;
     --lx-surface: color-mix(in srgb, var(--lx-film-text) 10%, transparent);
     --lx-line: color-mix(in srgb, var(--lx-film-text) 24%, transparent);
@@ -1295,7 +1298,7 @@
 }
 @media (max-width: 900px) and (pointer: coarse) {
   .themeSlot {
-    top: 28px;
+    top: calc(28px + env(safe-area-inset-top, 0px));
   }
 }
 /* Phones: the brand stays, the film goes, so every way to sign in is on the

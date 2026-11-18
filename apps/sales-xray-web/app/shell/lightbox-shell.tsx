@@ -889,7 +889,10 @@ function LightboxShellFrame({
     tick();
     markSwitchStart(tenantId);
     setSwitchingTo(tenantId);
-    window.setTimeout(() => setSwitcherOpen(false), SWITCH_TICK_MS);
+    // A frame gone by then (a test environment torn down) is left alone.
+    window.setTimeout(() => {
+      if (mounted.current) setSwitcherOpen(false);
+    }, SWITCH_TICK_MS);
     requestAnimationFrame(() =>
       requestAnimationFrame(() => markSwitchFeedback()),
     );
