@@ -2,7 +2,7 @@
 
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 
-import { useInApp } from "./in-app-client";
+import { useInApp, useIPhoneApp } from "./in-app-client";
 import { phoneStatus, setupStatus } from "./leads/native-phone";
 import { useCanHere } from "./workspace-role";
 
@@ -12,7 +12,8 @@ import { useCanHere } from "./workspace-role";
  * and User Choice Billing would need Play Billing. So inside the Play app nothing shows
  * plans, prices, checkout, top-ups or links to them. The website and the download-link app
  * sell as before. Inside the app, purchases stay hidden until the phone says which store
- * it came from.
+ * it came from. The iPhone app never sells (App Store 3.1.1, iOS QA 18 Nov 2026): no
+ * plans, prices, checkout or top-ups, whatever store it reports.
  */
 export const PLANS_ON_WEB = "Your workspace owner manages plans on the web.";
 
@@ -63,6 +64,7 @@ function askStore(): void {
 /** True where Sales X-Ray may show plans, prices and purchases. */
 export function usePurchasesAllowed(): boolean {
   const inApp = useInApp();
+  const iPhoneApp = useIPhoneApp();
   const known = useSyncExternalStore(
     subscribe,
     () => store,
@@ -71,6 +73,7 @@ export function usePurchasesAllowed(): boolean {
   useEffect(() => {
     if (inApp) askStore();
   }, [inApp]);
+  if (iPhoneApp) return false;
   return !inApp || known === "direct";
 }
 

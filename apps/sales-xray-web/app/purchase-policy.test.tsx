@@ -3,12 +3,16 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const { inApp, phoneStatus, setupStatus } = vi.hoisted(() => ({
+const { inApp, iPhoneApp, phoneStatus, setupStatus } = vi.hoisted(() => ({
   inApp: { value: false },
+  iPhoneApp: { value: false },
   phoneStatus: vi.fn(),
   setupStatus: vi.fn(),
 }));
-vi.mock("./in-app-client", () => ({ useInApp: () => inApp.value }));
+vi.mock("./in-app-client", () => ({
+  useInApp: () => inApp.value,
+  useIPhoneApp: () => iPhoneApp.value,
+}));
 vi.mock("./leads/native-phone", () => ({ phoneStatus, setupStatus }));
 
 import {
@@ -29,6 +33,7 @@ let host: HTMLDivElement;
 beforeEach(() => {
   resetPurchaseStoreForTests();
   inApp.value = false;
+  iPhoneApp.value = false;
   phoneStatus.mockReset();
   setupStatus.mockReset();
   host = document.createElement("div");
@@ -83,6 +88,19 @@ it("keeps purchases hidden in the app while the store is unknown", async () => {
   await show();
   expect(host.querySelector('a[href="/plans"]')).toBeNull();
   expect(host.textContent).toBe(PLANS_ON_WEB);
+});
+
+// App Store 3.1.1 (iOS QA, 18 Nov 2026): the iPhone app never sells, even if
+// a status ever says "direct"; Android's download-link app still does.
+it("never shows plans, prices or plan links in the iPhone app", async () => {
+  inApp.value = true;
+  iPhoneApp.value = true;
+  phoneStatus.mockResolvedValue({ store: "direct" });
+  setupStatus.mockResolvedValue({ store: "direct" });
+  await show();
+  expect(host.querySelector('a[href="/plans"]')).toBeNull();
+  expect(host.textContent).toBe(PLANS_ON_WEB);
+  expect(host.textContent).not.toMatch(/₹|upgrade|buy|pricing/i);
 });
 
 function PlansLine() {
