@@ -8810,3 +8810,25 @@ fieldset.form {
     padding-inline: 0;
   }
 }
+
+/* Dipak's phone, 17 Nov 2026 (bug 225, "this space is weird"): at 360 px
+   "Sort: Follow-up soonest" and List | Table needed 316 px of a 306 px row, so the
+   switch dropped under the sort and left an empty band. They keep one line and the
+   sort's words give way first, ending in "...". A sync line still wraps as before. */
+.listHead[data-bare]:has(> .listSort):not(:has(.syncChip:not([data-quiet]))) {
+  flex-wrap: nowrap;
+}
+.listHead[data-bare]:has(> .listSort):not(:has(.syncChip:not([data-quiet])))
+  > .listSort {
+  flex: 0 1 auto;
+}
+.listSort button[aria-haspopup="listbox"] {
+  max-width: 100%;
+  min-width: 0;
+}
+.listSort button[aria-haspopup="listbox"] > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

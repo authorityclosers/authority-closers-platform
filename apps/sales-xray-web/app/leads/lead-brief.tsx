@@ -34,6 +34,7 @@ import styles from "./lead-page.module.css";
 import { shortSource } from "./source-mark";
 
 const UNKNOWN = "Not known yet";
+const ASK = "To find out on the call";
 
 /** The lead's calls with a Report (newest first), as the brief reads calls. */
 export function analysedCalls(events: readonly LeadEvent[]): ProspectCall[] {
@@ -283,6 +284,21 @@ export function LeadBrief({
   };
 
   const facts = brief.sections.flatMap((section) => section.facts);
+  // See more shows what is known; an area with nothing known yet is one name
+  // on one line, not its own list of grey "Not known yet" items (Dipak's phone,
+  // bug 224, 17 Nov 2026: "I can't tell where to focus").
+  const more = brief.sections.slice(1).reduce(
+    (split, section, index) => {
+      const title = BRIEF_SECTIONS[index + 1].title;
+      if (section.facts.length) split.known.push({ title, section });
+      else split.blank.push(title);
+      return split;
+    },
+    {
+      known: [] as { title: string; section: BriefSection }[],
+      blank: [] as string[],
+    },
+  );
   const fact = (...labels: string[]) =>
     facts.find((item) => labels.includes(item.label))?.value ?? null;
   const talk = lastTalkOf(detail.events);
@@ -343,13 +359,14 @@ export function LeadBrief({
       <Rows rows={rows} />
       {open ? (
         <div className={styles.briefMore}>
-          {brief.sections.slice(1).map((section, index) => (
-            <Area
-              key={BRIEF_SECTIONS[index + 1].title}
-              title={BRIEF_SECTIONS[index + 1].title}
-              section={section}
-            />
+          {more.known.map(({ title, section }) => (
+            <Area key={title} title={title} section={section} />
           ))}
+          {more.blank.length ? (
+            <p className={styles.briefUnknown}>
+              {`${ASK}: ${more.blank.join(" · ")}`}
+            </p>
+          ) : null}
         </div>
       ) : null}
       <button

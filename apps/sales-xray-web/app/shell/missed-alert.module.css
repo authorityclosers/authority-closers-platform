@@ -1,0 +1,481 @@
+/* "Missed alert, come back" (owner, 17 Nov 2026): a sheet that rises over the
+   screen with a warm card, then one setup step at a time, then "All set".
+   Tokens only; motion off under reduced motion. */
+
+/* A modal dialog (top layer), so it also covers the permissions page. */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: color-mix(in oklab, var(--sx-ink) 38%, transparent);
+  animation: fade var(--sx-dur-base) var(--sx-ease-out) both;
+}
+
+.scrim:not([open]) {
+  display: none;
+}
+
+.scrim::backdrop {
+  background: transparent;
+}
+
+.sheet {
+  position: relative;
+  width: min(100%, 480px);
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  padding: 10px 16px calc(20px + env(safe-area-inset-bottom));
+  border-radius: 28px 28px 0 0;
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-2);
+  animation: rise 420ms var(--sx-spring) both;
+}
+
+.handle {
+  display: block;
+  width: 40px;
+  height: 4px;
+  margin: 0 auto 12px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-line);
+}
+
+/* The card: a warm wash, louder than anything else on the screen. */
+.card {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  padding: 18px 16px 12px;
+  border-radius: 22px;
+  border: 1px solid color-mix(in oklab, var(--sx-warn) 30%, transparent);
+  background: color-mix(in oklab, var(--sx-warn) 11%, var(--sx-surface));
+  animation: settle 520ms var(--sx-spring) 80ms both;
+}
+
+.close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-muted);
+}
+.close svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.close:focus-visible,
+.primary:focus-visible,
+.secondary:focus-visible,
+.textButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.cardTop {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 14px;
+  align-items: center;
+  padding-right: 32px;
+}
+
+.bell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--sx-warn) 22%, var(--sx-surface));
+  color: var(--sx-ink);
+}
+.pulse {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in oklab, var(--sx-warn) 55%, transparent);
+  opacity: 0;
+  animation: pulse 1.6s var(--sx-ease-out) 500ms 3;
+}
+.bellGlyph {
+  width: 32px;
+  height: 32px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform-origin: 50% 20%;
+  animation: ring 900ms var(--sx-ease-out) 300ms 1;
+}
+.bellSlash {
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
+  animation: draw 360ms var(--sx-ease-out) 900ms forwards;
+}
+
+.cardWords {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.kicker {
+  justify-self: start;
+  padding: 3px 10px;
+  border-radius: var(--sx-radius-pill);
+  background: color-mix(in oklab, var(--sx-warn) 24%, var(--sx-surface));
+  color: var(--sx-ink);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+}
+.headline {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-xl);
+  line-height: var(--sx-leading-28);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.leadRow {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--sx-hairline);
+  background: var(--sx-surface);
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--sx-muted);
+  color: var(--sx-surface);
+  font-weight: 500;
+  font-size: var(--sx-text-sm);
+}
+.leadWords {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.leadName {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.leadDetail {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.body {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-md);
+}
+
+.primary,
+.secondary {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  padding: 0 20px;
+  border-radius: var(--sx-radius-pill);
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
+}
+.primary {
+  border: 0;
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+.secondary {
+  border: 1px solid var(--sx-line);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+}
+.primary:active,
+.secondary:active {
+  transform: scale(var(--sx-press-scale));
+}
+.primary:disabled,
+.textButton:disabled {
+  opacity: 0.6;
+}
+
+.textButton {
+  justify-self: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+}
+
+/* One step at a time. */
+.step,
+.done {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  padding: 8px 4px 4px;
+  text-align: center;
+  animation: slide 360ms var(--sx-ease-out) both;
+}
+.stepCount {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+.progress {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 6px;
+  width: 100%;
+}
+.segment {
+  height: 6px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+  transition: background var(--sx-dur-base) var(--sx-ease-out);
+}
+.segment[data-state="done"],
+.segment[data-state="now"] {
+  background: var(--sx-accent);
+}
+.stepGlyph {
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  margin-top: 8px;
+  border-radius: 50%;
+  background: var(--sx-accent-soft);
+  animation: settle 520ms var(--sx-spring) both;
+}
+.stepGlyph::before {
+  content: "";
+  width: 40px;
+  height: 40px;
+  background: var(--sx-accent);
+  -webkit-mask: var(--glyph) center / contain no-repeat;
+  mask: var(--glyph) center / contain no-repeat;
+}
+.stepGlyph[data-step="notifications"] {
+  --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z'/%3E%3Cpath d='M10 20a2 2 0 0 0 4 0'/%3E%3C/svg%3E");
+}
+.stepGlyph[data-step="phone"] {
+  --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z'/%3E%3C/svg%3E");
+}
+.stepGlyph[data-step="audio"] {
+  --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V5l11-2v13'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='17' cy='16' r='3'/%3E%3C/svg%3E");
+}
+.stepGlyph[data-step="battery"] {
+  --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='7' width='16' height='10' rx='2'/%3E%3Cpath d='M22 11v2'/%3E%3Cpath d='M11 9l-2 3h4l-2 3'/%3E%3C/svg%3E");
+}
+.stepTitle,
+.doneTitle {
+  margin: 4px 0 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-xl);
+  line-height: var(--sx-leading-28);
+  font-weight: 500;
+}
+.stepWhy,
+.doneWhy {
+  margin: 0;
+  max-width: 32ch;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-md);
+}
+.hint {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+.step .primary,
+.done .primary,
+.done .secondary {
+  margin-top: 8px;
+}
+
+/* All set: the check draws itself. */
+.check {
+  width: 96px;
+  height: 96px;
+  margin-top: 8px;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.checkRing {
+  stroke: var(--sx-accent);
+  stroke-width: 3;
+  stroke-dasharray: 176;
+  stroke-dashoffset: 176;
+  animation: draw 520ms var(--sx-ease-out) 80ms forwards;
+}
+.checkMark {
+  stroke: var(--sx-accent);
+  stroke-width: 4;
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: draw 320ms var(--sx-ease-out) 520ms forwards;
+}
+
+.ticks {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+.tick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+}
+.tickMark {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid var(--sx-line);
+}
+.tick[data-on="yes"] .tickMark {
+  border-color: var(--sx-accent);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 12l4 4 8-8'/%3E%3C/svg%3E")
+      center / 14px no-repeat,
+    var(--sx-accent);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes rise {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+}
+@keyframes slide {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+@keyframes pulse {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}
+@keyframes ring {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  20% {
+    transform: rotate(-14deg);
+  }
+  40% {
+    transform: rotate(11deg);
+  }
+  60% {
+    transform: rotate(-7deg);
+  }
+  80% {
+    transform: rotate(4deg);
+  }
+}
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scrim,
+  .sheet,
+  .card,
+  .step,
+  .done,
+  .stepGlyph,
+  .bellGlyph {
+    animation: none;
+  }
+  .pulse {
+    display: none;
+  }
+  .bellSlash,
+  .checkRing,
+  .checkMark {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .primary,
+  .secondary,
+  .segment {
+    transition: none;
+  }
+}

@@ -1794,6 +1794,14 @@ a.nextName:active::after,
   margin: 8px 0 21px;
 }
 
+/* Dipak's phone, 17 Nov 2026 (bug 222): a long list name ("Pune _ Consolidated
+   Partner Leads _ 4 Categories") made its chip, and so the card's one column, wider
+   than the card, and Start Cold Calling ran out past its edge. The column keeps the
+   card's width and the chip's words end in "...". */
+.next {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 /* owner 15 Nov, round 6: Today's list and Done today, measured and finished. Rows are
    soft inset tiles on the 8 / 13 / 21 rhythm (no ruled lines); each chip says what it
    is with an icon (a task box, a follow-up calendar, a clock, a late mark); Done
