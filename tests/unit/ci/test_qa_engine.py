@@ -173,6 +173,19 @@ def test_tap_scan_reports_the_pointer_and_judges_a_fine_pointer_at_24_px() -> No
     assert "pointer:${[...new Set(" in sim
 
 
+def test_blank_page_check_reads_the_page_drawn_over_a_hidden_main() -> None:
+    """An open lead page on a phone hides <main> under it: the lead page is what is read."""
+    for name in ("invariants.cjs", "probe.cjs"):
+        scan = (ROOT / "lib" / name).read_text(encoding="utf-8")
+        assert "main.checkVisibility({ checkVisibilityCSS: true })" in scan, name
+        assert "document.elementFromPoint(" in scan, name
+        # the shell that holds <main> is never the page over it: a bare shell stays blank
+        assert "if (!el || el.contains(main) || main.contains(el)) return null;" in scan, name
+        assert "while (el.parentElement && !el.parentElement.contains(main))" in scan, name
+        assert "out.textLength = Math.max(readLength(main), readLength(overMain));" in scan, name
+        assert "out.textLength = (main.innerText" not in scan, name
+
+
 def test_tap_scan_looks_again_before_calling_a_control_small() -> None:
     """A small control gets the kit's reach tag within 1.5 s: the scan looks once more first."""
     scan = (ROOT / "lib" / "invariants.cjs").read_text(encoding="utf-8")

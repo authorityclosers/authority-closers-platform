@@ -42,7 +42,16 @@ function scan(phone) {
   const rec = (el, extra) => ({ s: sem(el), p: path(el), ...extra });
   const out = { url: location.pathname + location.search, vw, vh };
   const main = document.querySelector("main") || document.body;
-  out.textLength = (main.innerText || "").replace(/\s+/g, " ").trim().length;
+  // what a person reads: <main>, or the page drawn over it. On a phone an open lead page hides <main> under it on purpose, so <main> alone read 0 characters there and the walk called the lead page blank
+  const overMain = (() => {
+    if (main === document.body || (main.checkVisibility ? main.checkVisibility({ checkVisibilityCSS: true }) : getComputedStyle(main).visibility === "visible")) return null;
+    let el = document.elementFromPoint(document.documentElement.clientWidth / 2, window.innerHeight / 2);
+    if (!el || el.contains(main) || main.contains(el)) return null;
+    while (el.parentElement && !el.parentElement.contains(main)) el = el.parentElement;
+    return el;
+  })();
+  const readLength = (el) => ((el && el.innerText) || "").replace(/\s+/g, " ").trim().length;
+  out.textLength = Math.max(readLength(main), readLength(overMain));
   out.bodyText = (document.body.innerText || "").replace(/\s+/g, " ").slice(0, 6000);
   out.skeletons = [...document.querySelectorAll('[aria-busy="true"],[class*="skeleton" i],[class*="shimmer" i]')].filter(visible).filter((el) => {
     const r = el.getBoundingClientRect();
