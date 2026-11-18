@@ -105,13 +105,9 @@
    light; it presses in slightly when tapped. */
 .today {
   border: 0.5px solid color-mix(in oklab, var(--sx-ink) 9%, transparent);
-  background: linear-gradient(
-    180deg,
-    color-mix(in oklab, white 60%, var(--sx-elevated)),
-    var(--sx-elevated)
-  );
+  background: var(--sx-tile-fill);
   box-shadow:
-    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    inset 0 1px 0 var(--sx-lit-top),
     0 1px 1px color-mix(in oklab, var(--lx-film) 5%, transparent),
     0 4px 10px -2px color-mix(in oklab, var(--lx-film) 7%, transparent),
     0 12px 24px -16px color-mix(in oklab, var(--lx-film) 22%, transparent);

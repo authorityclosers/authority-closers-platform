@@ -1181,19 +1181,15 @@ a.nextName:active::after,
   min-height: 92px;
   padding: 10px 10px !important;
   text-align: center;
-  border: 1px solid color-mix(in oklab, white 70%, transparent) !important;
+  border: 1px solid var(--sx-lit-rim) !important;
   outline: 0.5px solid color-mix(in oklab, var(--sx-ink) 8%, transparent);
   outline-offset: -0.5px;
   border-radius: 22px !important;
-  background: linear-gradient(
-    180deg,
-    color-mix(in oklab, white 60%, var(--sx-elevated)),
-    var(--sx-elevated)
-  ) !important;
+  background: var(--sx-tile-fill) !important;
   -webkit-backdrop-filter: blur(18px) saturate(1.5);
   backdrop-filter: blur(18px) saturate(1.5);
   box-shadow:
-    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    inset 0 1px 0 var(--sx-lit-top),
     0 1px 1px color-mix(in oklab, var(--lx-film) 5%, transparent),
     0 4px 10px -2px color-mix(in oklab, var(--lx-film) 7%, transparent),
     0 14px 28px -18px color-mix(in oklab, var(--lx-film) 22%, transparent) !important;
@@ -1247,17 +1243,13 @@ a.nextName:active::after,
 }
 .next,
 .pending {
-  border: 1px solid color-mix(in oklab, white 70%, transparent) !important;
+  border: 1px solid var(--sx-lit-rim) !important;
   outline: 0.5px solid color-mix(in oklab, var(--sx-ink) 8%, transparent);
   outline-offset: -0.5px;
   border-radius: 22px !important;
-  background: linear-gradient(
-    180deg,
-    color-mix(in oklab, white 60%, var(--sx-elevated)),
-    var(--sx-elevated)
-  ) !important;
+  background: var(--sx-tile-fill) !important;
   box-shadow:
-    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    inset 0 1px 0 var(--sx-lit-top),
     0 4px 10px -2px color-mix(in oklab, var(--lx-film) 7%, transparent),
     0 14px 28px -18px color-mix(in oklab, var(--lx-film) 22%, transparent);
 }
@@ -1579,7 +1571,7 @@ a.nextName:active::after,
     color-mix(in oklab, var(--sx-warn) 5%, var(--sx-elevated))
   );
   box-shadow:
-    inset 0 1px 0 color-mix(in oklab, white 70%, transparent),
+    inset 0 1px 0 var(--sx-lit-rim),
     0 6px 14px -10px
       color-mix(
         in oklab,

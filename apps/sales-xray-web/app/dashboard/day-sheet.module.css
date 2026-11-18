@@ -138,7 +138,7 @@
   );
   box-shadow:
     inset 0 1px 2px color-mix(in oklab, var(--lx-film) 12%, transparent),
-    0 1px 0 color-mix(in oklab, white 80%, transparent);
+    0 1px 0 var(--sx-lit-lip);
 }
 .quickDay {
   min-height: 42px;
@@ -175,17 +175,13 @@
 .calendar {
   margin-top: 14px;
   padding: 10px 8px 12px;
-  border: 1px solid color-mix(in oklab, white 70%, transparent);
+  border: 1px solid var(--sx-lit-rim);
   outline: 0.5px solid color-mix(in oklab, var(--sx-ink) 8%, transparent);
   outline-offset: -0.5px;
   border-radius: 22px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in oklab, white 60%, var(--sx-elevated)),
-    var(--sx-elevated)
-  );
+  background: var(--sx-tile-fill);
   box-shadow:
-    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    inset 0 1px 0 var(--sx-lit-top),
     0 4px 10px -2px color-mix(in oklab, var(--lx-film) 7%, transparent),
     0 14px 28px -18px color-mix(in oklab, var(--lx-film) 22%, transparent);
 }
@@ -198,13 +194,9 @@
   height: 38px;
   justify-self: center;
   border: 0.5px solid color-mix(in oklab, var(--sx-ink) 9%, transparent);
-  background: linear-gradient(
-    180deg,
-    color-mix(in oklab, white 60%, var(--sx-elevated)),
-    var(--sx-elevated)
-  );
+  background: var(--sx-tile-fill);
   box-shadow:
-    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    inset 0 1px 0 var(--sx-lit-top),
     0 2px 6px -2px color-mix(in oklab, var(--lx-film) 14%, transparent);
   transition: transform 140ms ease-out;
 }

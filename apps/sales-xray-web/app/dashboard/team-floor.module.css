@@ -1667,7 +1667,7 @@ a.row:focus-visible {
     ),
     var(--sx-elevated);
   box-shadow:
-    0 1px 0 color-mix(in oklab, white 70%, transparent) inset,
+    0 1px 0 var(--sx-lit-rim) inset,
     0 6px 14px -10px color-mix(in oklab, var(--lx-film) 45%, transparent);
   transition:
     transform 160ms var(--sx-ease-out),
@@ -1748,7 +1748,7 @@ a.row:focus-visible {
   border: 0.5px solid color-mix(in oklab, var(--sx-ink) 9%, transparent);
   border-radius: 22px;
   box-shadow:
-    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    inset 0 1px 0 var(--sx-lit-top),
     0 1px 1px color-mix(in oklab, var(--lx-film) 5%, transparent),
     0 4px 10px -2px color-mix(in oklab, var(--lx-film) 7%, transparent),
     0 16px 32px -18px color-mix(in oklab, var(--lx-film) 22%, transparent);
@@ -1761,11 +1761,7 @@ a.row:focus-visible {
       color-mix(in oklab, var(--lx-home-emerald) 11%, transparent),
       transparent 55%
     ),
-    linear-gradient(
-      180deg,
-      color-mix(in oklab, white 60%, var(--sx-elevated)),
-      var(--sx-elevated)
-    );
+    var(--sx-tile-fill);
 }
 .stats > .stat:first-child {
   border: 0.5px solid color-mix(in oklab, var(--sx-ink) 9%, transparent);
@@ -1775,11 +1771,7 @@ a.row:focus-visible {
       color-mix(in oklab, var(--lx-home-emerald) 13%, transparent),
       transparent 60%
     ),
-    linear-gradient(
-      180deg,
-      color-mix(in oklab, white 60%, var(--sx-elevated)),
-      var(--sx-elevated)
-    );
+    var(--sx-tile-fill);
   animation-delay: 60ms;
 }
 .stats > .stat:nth-child(2) {
@@ -1794,11 +1786,7 @@ a.row:focus-visible {
       ),
       transparent 60%
     ),
-    linear-gradient(
-      180deg,
-      color-mix(in oklab, white 60%, var(--sx-elevated)),
-      var(--sx-elevated)
-    );
+    var(--sx-tile-fill);
   animation-delay: 120ms;
 }
 .stats > .team {
@@ -1809,11 +1797,7 @@ a.row:focus-visible {
       color-mix(in oklab, var(--sx-warn) 8%, transparent),
       transparent 55%
     ),
-    linear-gradient(
-      180deg,
-      color-mix(in oklab, white 60%, var(--sx-elevated)),
-      var(--sx-elevated)
-    );
+    var(--sx-tile-fill);
   animation-delay: 180ms;
 }
 @keyframes tileRise {
@@ -2310,12 +2294,12 @@ button.chip {
 .stats > .team {
   -webkit-backdrop-filter: blur(18px) saturate(1.5);
   backdrop-filter: blur(18px) saturate(1.5);
-  border: 1px solid color-mix(in oklab, white 70%, transparent);
+  border: 1px solid var(--sx-lit-rim);
   outline: 0.5px solid color-mix(in oklab, var(--sx-ink) 8%, transparent);
   outline-offset: -0.5px;
 }
 .ringSide {
-  background-color: color-mix(in oklab, white 62%, transparent);
+  background-color: var(--sx-tile-glass);
 }
 
 /* A past day's name on one line; "Back to today" goes under it when the two

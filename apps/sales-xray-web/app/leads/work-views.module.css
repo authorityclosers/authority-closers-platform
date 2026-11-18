@@ -627,7 +627,8 @@
   overflow: hidden;
   font-size: var(--sx-text-xs);
   font-weight: 500;
-  opacity: 0.82;
+  /* 0.82 measured 4.14:1 on the Call green; 0.92 is 4.7:1. */
+  opacity: 0.92;
   text-overflow: ellipsis;
   white-space: nowrap;
   animation: callBandWhoIn 140ms cubic-bezier(0.2, 0, 0, 1);

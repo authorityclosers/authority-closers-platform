@@ -520,7 +520,7 @@
   align-items: center;
   gap: 12px;
   padding: 12px 10px 12px 12px;
-  border: 1px solid color-mix(in oklab, white 70%, transparent);
+  border: 1px solid var(--sx-lit-rim);
   outline: 0.5px solid color-mix(in oklab, var(--sx-ink) 9%, transparent);
   outline-offset: -0.5px;
   border-radius: 22px;
@@ -528,7 +528,7 @@
   -webkit-backdrop-filter: blur(22px) saturate(1.6);
   backdrop-filter: blur(22px) saturate(1.6);
   box-shadow:
-    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    inset 0 1px 0 var(--sx-lit-top),
     0 2px 6px color-mix(in oklab, var(--lx-film) 8%, transparent),
     0 18px 36px -14px color-mix(in oklab, var(--lx-film) 32%, transparent);
 }
@@ -547,12 +547,12 @@
     color-mix(in oklab, var(--tone) 22%, transparent);
 }
 .pill {
-  border: 1px solid color-mix(in oklab, white 70%, transparent);
+  border: 1px solid var(--sx-lit-rim);
   outline: 0.5px solid color-mix(in oklab, var(--sx-ink) 9%, transparent);
   outline-offset: -0.5px;
   background: color-mix(in oklab, var(--sx-elevated) 82%, transparent);
   box-shadow:
-    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    inset 0 1px 0 var(--sx-lit-top),
     0 10px 24px -12px color-mix(in oklab, var(--lx-film) 30%, transparent);
 }
 .title {
