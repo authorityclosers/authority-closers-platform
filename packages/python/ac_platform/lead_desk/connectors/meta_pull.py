@@ -9,6 +9,11 @@ source reference, so a lead that arrives by
 webhook and by pull is filed once. On production the pull is the safety net for a
 webhook Meta drops.
 
+About every six hours the pull also asks Meta whether the Page still sends its leads to
+Sales Xray, and subscribes it again when not: a lost webhook (another workspace that
+switched off its copy of the Page, before 18 Nov 2026; a Page admin who removed the app)
+then costs one late lead, not a ten-minute wait on every lead.
+
 The same tick moves each Page's "Bring in older leads" along (``meta_backfill``), and
 keeps the Page's list of forms fresh, so the page can say which forms are covered. A
 pull that Meta refuses leaves its reason on the Page (``last_error``) for the manager.
@@ -42,6 +47,8 @@ from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer
 log = logging.getLogger(__name__)
 
 PULL_EVERY = 600  # seconds between pulls of one Page
+CHECK_EVERY = 6 * 3600  # seconds between asking Meta whether the Page still sends its leads
+CHECKED = "subscription_checked_at"
 OVERLAP = 3600  # re-read the last hour, so a lead Meta stamps late is not missed
 _TICK = 60
 _OUTCOMES = ("created", "repeat", "linked", "known", "skipped")
@@ -57,6 +64,10 @@ class _Graph(Protocol):
     async def leads_page(
         self, form_id: str, page_token: str, *, since: int, after: str | None = None
     ) -> tuple[list[dict[str, Any]], str | None]: ...
+
+    async def lead_subscribed(self, page_id: str, page_token: str) -> bool: ...
+
+    async def subscribe(self, page_id: str, page_token: str) -> None: ...
 
 
 @dataclass(slots=True)
@@ -93,6 +104,25 @@ def failed(config: Mapping[str, Any], error: meta.MetaError, now: int) -> dict[s
 def due(config: Mapping[str, Any], now: int, every: int = PULL_EVERY) -> bool:
     last = _last(config)
     return last is None or now - last >= every - _TICK // 2
+
+
+def check_due(config: Mapping[str, Any], now: int) -> bool:
+    """Six hours since Meta was last asked whether the Page still sends its leads."""
+    value = config.get(CHECKED)
+    last = value if isinstance(value, int) and not isinstance(value, bool) else None
+    return last is None or now - last >= CHECK_EVERY
+
+
+async def keep_subscribed(config: Mapping[str, Any], graph: _Graph, cfg: meta.MetaConfig) -> bool:
+    """Subscribes the Page again when Meta no longer sends its leads to Sales Xray.
+
+    Returns whether it had to. Touches no database."""
+    page_id = str(config.get("page_id") or "")
+    token = meta.unseal(cfg.token_key, config["token"], page_id=page_id)
+    if await graph.lead_subscribed(page_id, token):
+        return False
+    await graph.subscribe(page_id, token)
+    return True
 
 
 @dataclass(frozen=True, slots=True)
@@ -245,12 +275,22 @@ async def _pull(
                         {**(source.config or {}), "last_pulled_at": now}, error, now
                     )
         return 0
+    checked = check_due(config, now)
+    if checked:
+        # Asked once per check; a refusal is asked again at the next one.
+        try:
+            if await keep_subscribed(config, graph, cfg):
+                log.warning("meta lead source %s had lost its webhook: subscribed again", source_id)
+        except meta.MetaError as error:
+            log.warning("meta webhook check for lead source %s failed: %s", source_id, error)
     try:
         async with sessions() as database, database.begin():
             source = await _locked(database, source_id)
             if source is None or not due(source.config or {}, now):
                 return 0  # a manager is on it, or another process pulled it just now
             counts = await file(_desk(database, source), source, fetched, now=now)
+            if checked:
+                source.config = {**(source.config or {}), CHECKED: now}
     except (DeskError, KeyError, ValueError) as error:
         log.warning("meta pull for lead source %s failed: %s", source_id, error)
         return 0

@@ -652,6 +652,15 @@ class Graph:
         if body.get("success") is not True:
             raise MetaError("Meta didn't switch on leads for this Page. Try again.")
 
+    async def lead_subscribed(self, page_id: str, page_token: str) -> bool:
+        """Meta still sends this Page's new leads to this app (its webhook)."""
+        body = await self._call("GET", f"{page_id}/subscribed_apps", access_token=page_token)
+        for row in body.get("data") or []:
+            if isinstance(row, Mapping) and str(row.get("id") or "") == self.cfg.app_id:
+                fields = row.get("subscribed_fields")
+                return isinstance(fields, list) and "leadgen" in fields
+        return False
+
     async def unsubscribe(self, page_id: str, page_token: str) -> None:
         await self._call("DELETE", f"{page_id}/subscribed_apps", access_token=page_token)
 
