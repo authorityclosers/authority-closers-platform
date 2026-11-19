@@ -17,7 +17,8 @@ concurrency:
 jobs:
   visual-advisory:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20  # 19 Nov 2026: the render outgrew 8 min (v1.88 PR #649 cancelled twice at 8m)
+    # 19 Nov 2026: the render outgrew 8 min (v1.88 PR #649 was cancelled twice at 8 min).
+    timeout-minutes: 20
     # Deliberately advisory, including tool/setup failures. No status or PR writes.
     continue-on-error: true
     steps:
