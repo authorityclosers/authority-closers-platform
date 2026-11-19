@@ -3015,3 +3015,38 @@
 .situationTop .chip {
   white-space: nowrap;
 }
+
+/* Aman and Rohit (character kit v2), hook and payoff only: Rohit beside the
+   customer's words on a situation card and in the lesson's scene (the
+   bubble's tail points at him); Aman at the end of the line to remember. */
+.situationSay {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.situationSay .bubble {
+  min-width: 0;
+}
+
+.sceneWho {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.sceneWords {
+  flex: 1;
+  min-width: 0;
+}
+
+.sceneWords .sceneBubble:last-child {
+  margin-bottom: 0;
+}
+
+.pocketWho {
+  align-self: center;
+  margin-left: auto;
+}

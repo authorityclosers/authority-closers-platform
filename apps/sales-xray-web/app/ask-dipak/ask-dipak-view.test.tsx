@@ -224,9 +224,14 @@ describe("Homepage", () => {
       host.querySelector('[role="img"][aria-label="Dipak Vishwakarma"]')
         ?.textContent,
     ).toBe("DV");
-    // Dipak's face is never a picture: the only picture on his desk is the
-    // kit's Ask Dipak lockup (brand order, 19 Nov 2026).
-    expect(host.querySelector('img:not([src^="/brand/"])')).toBeNull();
+    // Dipak's face is never a picture: the only pictures on his desk are the
+    // kit's Ask Dipak lockup and the kit's fictional Aman and Rohit (brand
+    // order, 19 Nov 2026).
+    expect(
+      host.querySelector(
+        'img:not([src^="/brand/"]):not([src^="/media/ask-dipak/characters/"])',
+      ),
+    ).toBeNull();
     // The strong card at the top carries Continue (owner, 17 Nov 2026).
     expect(host.querySelector("section a[data-continue]")).not.toBeNull();
     // No active mission (the coaching API isn't served here): no strip.

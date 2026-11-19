@@ -25,6 +25,7 @@ import {
 } from "react";
 
 import { CoachMark, PartMark, TopicArt } from "./art";
+import { CharacterLoop } from "./characters";
 import { Breadcrumb, ScreenButton, toggle, type Open } from "./bits";
 import styles from "./ask-dipak.module.css";
 import {
@@ -499,11 +500,18 @@ export function LessonScreen({
               <h3 className={styles.sectionH}>{COPY.turn}</h3>
             </div>
             <div className={styles.scene}>
-              {scenario.said.map((line) => (
-                <p key={line} className={styles.sceneBubble}>
-                  {line}
-                </p>
-              ))}
+              {/* The hook: Rohit says it (character kit v2: Aman and Rohit
+                  open and close a lesson, never the teaching middle). */}
+              <div className={styles.sceneWho}>
+                <CharacterLoop loop="hook" size={56} />
+                <div className={styles.sceneWords}>
+                  {scenario.said.map((line) => (
+                    <p key={line} className={styles.sceneBubble}>
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              </div>
               {scenario.ask ? (
                 <p className={styles.sceneAsk}>{scenario.ask}</p>
               ) : null}
@@ -716,6 +724,12 @@ export function LessonScreen({
                     <h3 className={styles.pocketLabel}>{COPY.cue}</h3>
                     <p className={styles.cue}>{lesson.cue}</p>
                   </div>
+                  {/* The payoff: Aman, who takes this line to his next call. */}
+                  <CharacterLoop
+                    loop="payoff"
+                    size={56}
+                    className={styles.pocketWho}
+                  />
                 </div>
               </Section>
 
