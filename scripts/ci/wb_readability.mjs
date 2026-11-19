@@ -11,6 +11,8 @@
 //   node scripts/ci/wb_readability.mjs <output-dir> [--origin http://127.0.0.1:3026] [--only <key,key>]
 //        [--baseline <file>] [--write-baseline [--prune]] [--workers 3] [--shots]
 //
+// A baseline file that says {"recording": true} makes the run record instead of compare (two passes, either
+// counts, exit 0): include such a file in a wb-ci run to get a fresh readability.json from the hosted runner.
 // Without --origin it starts the fixture server itself (as wb_matrix.mjs does). --write-baseline folds this run
 // into the baseline (with --prune: replaces the cells this run measured). The output: report.md (also the step
 // summary), readability.json, and one JPEG per load with something new.
@@ -58,6 +60,24 @@ function axeSource() {
     require.resolve("eslint-config-next", { paths: [resolve("apps/sales-xray-web")] }),
   );
   return createRequire(nextRequire.resolve("eslint-plugin-jsx-a11y")).resolve("axe-core");
+}
+
+/**
+ * Waits until the page has stopped changing: the same amount of text and the same number of elements for two
+ * seconds, 10 s at most. The screens keep mounting things for 2 to 3.5 s after they load (notices, idle-time
+ * work, lazy parts); measured earlier than that, the same screen gave different findings on a slower runner
+ * (wb-ci 44394553683, 18 Nov 2026: one run red on Ask Dipak with no change to it).
+ */
+async function settle(tab) {
+  const size = () =>
+    tab.evaluate(() => `${document.body.innerText.length}/${document.querySelectorAll("*").length}`);
+  let last = await size();
+  for (let same = 0, polls = 0; same < 8 && polls < 40; polls++) {
+    await tab.waitForTimeout(250);
+    const now = await size();
+    same = now === last ? same + 1 : 0;
+    last = now;
+  }
 }
 
 /** One load, measured once: every scan's findings as {check, selector, detail}. */
@@ -108,7 +128,10 @@ async function measure(browser, origin, load, axePath, local) {
       content: "*,*::before,*::after{animation:none!important;transition:none!important}",
     });
     await tab.evaluate(() => document.fonts.ready);
-    await tab.waitForTimeout(500);
+    // Logos and icons come from files fetched after the first render; until they arrive a monogram holds their
+    // place (the Chats channel marks), so a run measured before that saw a monogram the next run did not.
+    await tab.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => undefined);
+    await settle(tab);
     if (variant === "long") {
       // Screens whose fixture keeps its data in the page: the names, amounts and percentages grow where they stand.
       await tab.evaluate(stressDomInPage());
@@ -171,7 +194,9 @@ async function main() {
   const screens = only ? SCREENS.filter((s) => only.split(",").includes(s.key)) : SCREENS;
   let baseline = null;
   try {
-    baseline = JSON.parse(await readFile(baselinePath, "utf8")).cells ?? {};
+    const file = JSON.parse(await readFile(baselinePath, "utf8"));
+    // {"recording": true} in place of the cells makes a hosted run record: the way to make a new baseline.
+    baseline = file.recording ? null : (file.cells ?? {});
   } catch {
     /* no baseline yet: this run records */
   }
