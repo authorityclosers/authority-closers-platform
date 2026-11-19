@@ -103,6 +103,8 @@ it("uploads the seller's own recording, puts it on the lead and starts its analy
   );
   // This call's own tick, on the terms in force.
   expect(put?.headers["x-upload-consent"]).toBe("accepted");
+  // The server may start it under the seller's standing consent if the page is left.
+  expect(put?.headers["x-upload-start"]).toBe("on-arrival");
   expect(put?.headers["x-upload-policy"]).toBe(POLICY.policy_sha256);
   expect(put?.headers["x-source-sha256"]).toMatch(/^[0-9a-f]{64}$/);
   // Never the import, which a seller may not use.
@@ -169,6 +171,7 @@ it("uploads and starts under a standing consent when the card says so", async ()
   });
   const put = sent.find((item) => item.method === "PUT");
   expect(put?.headers["x-upload-consent"]).toBe("standing");
+  expect(put?.headers["x-upload-start"]).toBeUndefined();
   expect(vi.mocked(startAnalysis).mock.calls[0]?.[0]).toMatchObject({
     standing: true,
   });

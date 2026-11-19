@@ -249,6 +249,10 @@ async function sendOwnSource({
           "X-Source-SHA256": sha,
           "X-Upload-Policy": policySha,
           "X-Upload-Consent": consent,
+          // A lead's call the seller asked to analyse: if their standing consent
+          // is on, the server starts it itself, so leaving the page during a
+          // long upload no longer leaves it unanalysed (Wise Life, 19 Nov 2026).
+          ...(consent === "accepted" ? { "X-Upload-Start": "on-arrival" } : {}),
           ...captureHeader(file),
         },
         body: file,
