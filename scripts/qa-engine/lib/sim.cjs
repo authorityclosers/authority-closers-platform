@@ -138,7 +138,7 @@ async function loadGap(tab) {
 async function walk(job) {
   const { row, alias, persona, prof, seed, area, filer } = job;
   const r = rng(seed);
-  const owner = alias === "owner";
+  const owner = cfg.isOwnerAlias(alias);
   const tokens = new Set((row.journey || "").toLowerCase().match(/[a-z]{4,}/g) || []);
   const tab = await session.openTab({ alias, device: row.device, theme: row.theme, state: row.state, keep: true });
   const page = tab.page;
@@ -149,6 +149,7 @@ async function walk(job) {
   const axeSeen = new Set();
   const note = (text) => steps.push(`${steps.length + 1}. ${text}`);
   let lastMark = tab.mark();
+  let lastPointer = null;
   const t0 = Date.now();
   const file = async (finding, extra = {}) => {
     const key = `${finding.rule}|${finding.route}|${finding.selector}`;
@@ -174,7 +175,10 @@ async function walk(job) {
       out.bugs.push(res.bugId);
       if (["BLOCKER", "MAJOR"].includes(finding.severity) && areaOfRoute(finding.route) === row.area) out.rowBugs.push(res.bugId);
     }
-    log(`  ${res.action} ${res.bugId || ""} ${finding.rule} ${finding.route} ${finding.selector}${res.reason ? ` (${res.reason})` : ""}`);
+    const ptr = /tap-target/.test(finding.rule) ? ` pointer:${[...new Set((String(finding.detail || "").match(/\(pointer (\w+)\)/g) || []).map((m) => m.slice(9, -1)))].join("+") || "?"}` : "";
+    // a layout shift's size and what led up to it ride on the line, so a repeat sighting can be read without a replay
+    const shiftTxt = finding.rule === "layout:shift" ? ` ${String(finding.detail || "").replace(/ during the step/, "")} at ${tab.dev.key} ${row.state} after: ${steps.slice(-3).join(" ").slice(0, 200)}` : "";
+    log(`  ${res.action} ${res.bugId || ""} ${finding.rule} ${finding.route} ${finding.selector}${ptr}${shiftTxt}${res.reason ? ` (${res.reason})` : ""}`);
   };
 
   // what the page and the log say after a step
@@ -191,6 +195,9 @@ async function walk(job) {
       await sleep(1000);
       s = await page.evaluate(inv.scan, phone).catch(() => s);
     }
+    // a control under 44 px may be about to get the kit's data-reach (tagged at idle, up to 1.5 s after a change): look again once before calling it small
+    if (s) s = await inv.settleSmall(page, s, phone);
+    if (s && s.reachSettled) note(`${s.reachSettled} control(s) under 44 px got the kit's reach tag within ${inv.REACH_WAIT_MS} ms: not counted`);
     // still loading (calls in flight) is not blank: that is a missing loading mark at worst, judged elsewhere
     if (s && s.textLength < 25 && tab.inflight > 0) s.textLength = 25;
     const q = await page
@@ -201,6 +208,11 @@ async function walk(job) {
         return o;
       })
       .catch(() => ({ cls: 0, events: [] }));
+    if (phone && s && s.pointer && s.pointer !== lastPointer) {
+      if (lastPointer !== null || s.pointer === "fine") log(`  pointer ${lastPointer || "start"} -> ${s.pointer} on a phone tab at ${route} (${tab.dev.key}, ${row.state}) after: ${steps.slice(-3).join(" ").slice(0, 220)}`);
+      if (s.pointer === "fine") note("this phone tab reports a fine pointer ((pointer: coarse) is false): tap sizes are judged at 24 px");
+      lastPointer = s.pointer;
+    }
     let found = s ? inv.rollup(inv.findingsFrom(s, { route, phone, shift: q.cls, events: q.events }), tab.dev.key) : [];
     const seen = tab.since(lastMark);
     lastMark = tab.mark();
@@ -397,7 +409,7 @@ async function nextRow(sizes) {
   }
   let ownerOk = false;
   try {
-    ownerOk = fs.existsSync("/tmp/pw/owner-cookie.txt");
+    ownerOk = cfg.OWNER_ALIAS !== "owner" || fs.existsSync("/var/tmp/owner-cookie.txt");
   } catch {
     ownerOk = false;
   }
@@ -409,7 +421,7 @@ async function nextRow(sizes) {
   const base = { P0: 3, P1: 2, P2: 1 };
   let boost = false;
   try {
-    boost = Date.now() - fs.statSync("/tmp/pw/owner-cookie.txt").mtimeMs < 2 * 3600 * 1000;
+    boost = Date.now() - fs.statSync("/var/tmp/owner-cookie.txt").mtimeMs < 2 * 3600 * 1000;
   } catch {
     boost = false;
   }
@@ -430,12 +442,12 @@ async function oneWalk(row, seedOverride) {
   const full = (await matrix.personaDetail())[persona.id] || {};
   const prof = profileFor({ ...persona, ...full }, row);
   const ownerArea = OWNER_AREAS.has(row.area);
-  const alias = persona.owner || ownerArea ? "owner" : persona.alias;
+  const alias = persona.owner || ownerArea ? cfg.OWNER_ALIAS : persona.alias;
   const seed = seedOverride || ++counter * 7919 + (Number(row.workflow_id.slice(1)) % 9973);
   const t0 = Date.now();
   let out;
   try {
-    out = await walk({ row, alias, persona, prof, seed, area: row.area, filer: alias === "owner" ? null : alias });
+    out = await walk({ row, alias, persona, prof, seed, area: row.area, filer: cfg.isOwnerAlias(alias) ? null : alias });
   } catch (error) {
     log(`${row.workflow_id} seed ${seed}: the walk broke (${String(error).split("\n")[0].slice(0, 140)})`);
     return { error: true };

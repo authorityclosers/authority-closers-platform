@@ -30,7 +30,7 @@ const sim = require("./sim.cjs");
 const log = (text) => console.log(`${new Date().toISOString().slice(11, 19)} ${text}`);
 
 const FAMILIES = ["fault", "3g", "extremes", "zoom", "keyboard", "dark", "history", "double"];
-const SIZES = ["360 px", "390 px", "1440"];
+const SIZES = ["360 px", "363 px", "390 px", "1440"];
 const PAGES = {
   seller: [
     "/dashboard", "/leads", "/leads?view=follow_ups", "/leads?view=all", "/leads?tab=tasks", "/leads?side=cold", "/leads?view=all&lead={lead}",
@@ -42,7 +42,7 @@ const PAGES = {
   ],
 };
 const SELLERS = ["priya", "rohan", "farah", "karan", "pooja"];
-const OWNER_COOKIE = "/tmp/pw/owner-cookie.txt";
+const OWNER_COOKIE = "/var/tmp/owner-cookie.txt";
 
 // ---- state ----------------------------------------------------------------------------------------------------------
 const FILE = path.join(cfg.STATE, "attack-cells.json");
@@ -56,6 +56,9 @@ const save = () => fs.writeFileSync(FILE, JSON.stringify(state));
 let aliasTurn = Math.floor(Math.random() * 100);
 
 function ownerAvailable() {
+  // the owner views are shown by the fictional Admin (cfg.OWNER_ALIAS); only the real owner alias needs the guard and a fresh session
+  if (cfg.OWNER_ALIAS !== "owner") return true;
+  if (fs.existsSync(path.join(cfg.STATE, "NO-OWNER"))) return false; // not approved for the robot right now
   try {
     return Date.now() - fs.statSync(OWNER_COOKIE).mtimeMs < 8 * 3600 * 1000;
   } catch {
@@ -139,11 +142,21 @@ const CODE_BUG = /TypeError|ReferenceError|RangeError|Cannot read|is not a funct
 const FRIENDLY = /couldn['’]?t|could not|can['’]?t|unable|try again|retry|something went wrong|didn['’]?t load|did not load|not available|offline|too many|problem|failed|went wrong/i;
 const TECH = /\b(?:500|429|502|503)\b|internal server error|too many requests|\b(?:TypeError|SyntaxError|ReferenceError)\b|unexpected token|\bJSON\b|failed to fetch|networkerror|\bundefined\b|\bNaN\b|\[object|"detail"/i;
 const EMPTY = /\b(?:no|nothing|haven['’]t|have no|none)\b[^.]{0,40}\b(?:leads?|calls?|tasks?|follow-?ups?|reports?|notes?|results?|activity)\b/i;
+// The empty-state words, looked for one block of text at a time (FACTS.lines). The page text with its line breaks gone ran
+// a "No owner" tile label into the "Calls today" heading beside it and read that as "there is nothing" (ux-audit, 8 Nov 2026).
+const emptyHit = (f) => {
+  for (const line of (f && f.lines) || []) {
+    const m = EMPTY.exec(line);
+    if (m) return m[0];
+  }
+  return "";
+};
 
 const FACTS = () => {
   const visible = (el) => el.checkVisibility && el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0;
   const main = document.querySelector("main") || document.body;
   const text = (main.innerText || "").replace(/\s+/g, " ").trim();
+  const lines = (main.innerText || "").split(/\n+/).map((s) => s.replace(/\s+/g, " ").trim()).filter(Boolean).slice(0, 400);
   // a clip player's own progress bar ("Clip progress", value 0 of 34 on the Coaching page) is not a page loading
   const mediaBar = (e) => e.getAttribute("role") === "progressbar" && (/clip|playback|audio|video|seek|player|position/i.test(e.getAttribute("aria-label") || "") || !!e.closest("audio,video,[class*='player' i]"));
   const loadingEls = [...document.querySelectorAll('[role=progressbar],[aria-busy="true"],[class*="skeleton" i],[class*="spinner" i],[class*="shimmer" i]')].filter(visible).filter((e) => !mediaBar(e));
@@ -163,13 +176,13 @@ const FACTS = () => {
   const portal = document.querySelector("nextjs-portal");
   const shadow = portal && portal.shadowRoot;
   const overlayText = shadow ? [...shadow.children].filter((e) => e.tagName !== "STYLE").map((e) => e.textContent || "").join(" ").replace(/\s+/g, " ") : "";
-  return { textLength: text.length, text: text.slice(0, 3000), loading, loadingIn, bits, retry, overlay: /unhandled runtime error|application error/i.test(overlayText) ? overlayText.slice(0, 160) : "", theme: document.documentElement.getAttribute("data-theme") || "" };
+  return { textLength: text.length, text: text.slice(0, 3000), lines, loading, loadingIn, bits, retry, overlay: /unhandled runtime error|application error/i.test(overlayText) ? overlayText.slice(0, 160) : "", theme: document.documentElement.getAttribute("data-theme") || "" };
 };
 
 const SHIFT_INIT = `(() => { const s = (window.__qaShifts = []); try { new PerformanceObserver((l) => { for (const e of l.getEntries()) if (!e.hadRecentInput && e.value > 0.002) s.push({ v: e.value, t: Math.round(e.startTime), src: (e.sources || []).slice(0, 3).map((x) => { try { return x.node && x.node.nodeType === 1 && window.__qaSem ? window.__qaSem(x.node) : "(text)"; } catch (err) { return "?"; } }) }); }).observe({ type: "layout-shift", buffered: true }); } catch (e) {} })();`;
 
 async function facts(tab) {
-  return tab.page.evaluate(FACTS).catch(() => ({ textLength: 0, text: "", loading: 0, bits: [], retry: false, overlay: "", theme: "", unreadable: true }));
+  return tab.page.evaluate(FACTS).catch(() => ({ textLength: 0, text: "", lines: [], loading: 0, bits: [], retry: false, overlay: "", theme: "", unreadable: true }));
 }
 
 // Writes are refused. lib/sim.cjs holds /v1 writes 1.2 s and aborts them (so a double press can be counted); any other
@@ -251,12 +264,14 @@ function makeCtx(tab, cell, alias) {
 
 // The page as it looks once it has filled in: text and loading marks unchanged over two reads a second apart (at most 9 s).
 // A page that paints its header first reads 50 characters at 0.7 s and 600 at 2 s: a baseline taken early makes every later difference look like the fault's doing.
+// loading words some pages show without a loading mark ("Counting the calls...", "Syncing...")
+const LOADING_WORDS = /\b(Counting|Loading|Syncing|Checking|Fetching)\b[^.\n]{0,40}(\u2026|\.\.\.)/i;
 async function settledFacts(tab) {
   let prev = await facts(tab);
   for (let i = 0; i < 9; i++) {
     await sleep(1000);
     const cur = await facts(tab);
-    const steady = cur.textLength >= 25 && cur.loading === 0 && Math.abs(cur.textLength - prev.textLength) <= 2;
+    const steady = cur.textLength >= 25 && cur.loading === 0 && !LOADING_WORDS.test(cur.text || "") && Math.abs(cur.textLength - prev.textLength) <= 2;
     prev = cur;
     if (steady) break;
   }
@@ -289,6 +304,7 @@ async function famFault(ctx, route) {
   const base = await settledFacts(tab);
   calls.stop();
   if (base.textLength < 25 || base.overlay) return ctx.note("the page itself is blank or crashed without a fault: no trials");
+  if (LOADING_WORDS.test(base.text || "")) return ctx.note(`the page was still on its loading words after settling ("${(base.text || "").slice(-40)}"): no trials`);
   const endpoints = [...calls.seen.keys()].slice(0, 8);
   ctx.note(`calls on load: ${endpoints.join(", ") || "none"}`);
   if (!endpoints.length) return;
@@ -329,7 +345,7 @@ async function faultTrial(ctx, route, kind, target, base, attempt = 0) {
       const mid = await facts(tab);
       const pending = tab.api.inflight > 0;
       if (pending && mid.textLength < 25 && mid.loading === 0) await add("fault:blank-while-waiting", "MAJOR", `${what}: blank, with no outline or loading mark, 3 s after opening`);
-      else if (pending && EMPTY.test(mid.text) && !EMPTY.test(base.text)) await add("fault:false-empty", "MAJOR", `${what}: says there is nothing (${(EMPTY.exec(mid.text) || [""])[0]}) while the call is still waiting`);
+      else if (pending && emptyHit(mid) && !emptyHit(base)) await add("fault:false-empty", "MAJOR", `${what}: says there is nothing (${emptyHit(mid)}) while the call is still waiting`);
       // eight calls delayed 10 s each queue behind the browser's six connections: give the page up to 50 s to fill
       let end = null;
       for (let wait = 0; wait < 10; wait++) {
@@ -370,7 +386,7 @@ async function faultTrial(ctx, route, kind, target, base, attempt = 0) {
           }
         }
         if (b.textLength >= 25 && b.loading === 0 && !calm && !techOnly.length) {
-          if (EMPTY.test(b.text) && !EMPTY.test(base.text)) await add("fault:false-empty", "MAJOR", `${what}: says there is nothing (${(EMPTY.exec(b.text) || [""])[0]}) when the call failed`);
+          if (emptyHit(b) && !emptyHit(base)) await add("fault:false-empty", "MAJOR", `${what}: says there is nothing (${emptyHit(b)}) when the call failed`);
           else if (base.textLength - b.textLength > 80) await add("fault:silent", "MINOR", `${what}: part of the page vanished (${base.textLength - b.textLength} characters) with no message and no Retry`);
         }
         const bug = errs.find((e) => CODE_BUG.test(e));
@@ -438,7 +454,7 @@ async function fam3g(ctx, route) {
     if (base.pending && early.textLength < 25 && early.loading === 0) await ctx.add("net3g:blank-while-loading", "MINOR", "blank with no outline or loading mark while the first calls wait", "");
     await sleep(900);
     const mid = await facts(tab);
-    if (tab.api.inflight > 0 && EMPTY.test(mid.text)) await ctx.add("net3g:false-empty", "MAJOR", `says there is nothing (${(EMPTY.exec(mid.text) || [""])[0]}) while a call is still on its way`, "");
+    if (tab.api.inflight > 0 && emptyHit(mid)) await ctx.add("net3g:false-empty", "MAJOR", `says there is nothing (${emptyHit(mid)}) while a call is still on its way`, "");
     await session.settle(tab, 60000);
     await sleep(1500);
     const shifts = await tab.page.evaluate(() => window.__qaShifts || []).catch(() => []);
@@ -534,7 +550,7 @@ async function famExtremes(ctx, route) {
   for (const variant of ["rows1000", "long300", "emoji", "indic", "zerowidth", "bignum"]) {
     if ((await headroom(() => {})) === "stop") throw new Error("stop");
     let changed = 0;
-    const handler = async (rt) => {
+    const inner = async (rt) => {
       const req = rt.request();
       const u = new URL(req.url());
       if (req.method() !== "GET" || !u.pathname.startsWith("/v1/") || SKIP_CALL.test(u.pathname) || SKIP_DATA.test(u.pathname)) return rt.fallback();
@@ -561,6 +577,8 @@ async function famExtremes(ctx, route) {
       if (body !== JSON.stringify(data)) changed++;
       return rt.fulfill({ status: res.status(), headers: { "content-type": ct }, body });
     };
+    // an answer given after the page closed or navigated away ("Fetch response has been disposed") must not end the run
+    const handler = (rt) => inner(rt).catch(() => rt.fallback().catch(() => rt.abort().catch(() => null)));
     await tab.context.route("**/v1/**", handler);
     const mark = tab.mark();
     try {
@@ -657,10 +675,30 @@ const SAMPLE = () => {
     const cs = getComputedStyle(el);
     return [cs.outlineStyle, cs.outlineWidth, cs.outlineColor, cs.boxShadow, cs.borderTopColor, cs.borderTopWidth, cs.backgroundColor, cs.color, cs.textDecorationLine, cs.opacity, cs.transform].join("|");
   };
+  // A "stretched link" draws its focus ring on a ::after that covers a bigger box (the row): the picture takes that box in too.
+  const reach = (el, b) => {
+    let x0 = b.left;
+    let y0 = b.top;
+    let x1 = b.right;
+    let y1 = b.bottom;
+    for (const pe of ["::after", "::before"]) {
+      const ps = getComputedStyle(el, pe);
+      if (ps.content === "none" || ps.content === "normal" || (ps.position !== "absolute" && ps.position !== "fixed")) continue;
+      if (!(parseFloat(ps.width) > b.width + 2 || parseFloat(ps.height) > b.height + 2)) continue;
+      const holder = getComputedStyle(el).position !== "static" ? el : el.offsetParent;
+      if (!holder) continue;
+      const c = holder.getBoundingClientRect();
+      x0 = Math.min(x0, c.left);
+      y0 = Math.min(y0, c.top);
+      x1 = Math.max(x1, c.right);
+      y1 = Math.max(y1, c.bottom);
+    }
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  };
   const prev = window.__qaPrev;
   const prevBlurSig = prev && prev.isConnected ? sig(prev) : null;
   const pr = prev && prev.isConnected ? prev.getBoundingClientRect() : null;
-  const prevRect = pr ? { x: pr.left, y: pr.top, w: pr.width, h: pr.height } : null;
+  const prevRect = pr ? reach(prev, pr) : null;
   const el = document.activeElement;
   if (!el || el === document.body || el === document.documentElement) return { body: true, prevBlurSig, prevRect };
   el.__qaId = el.__qaId || ++window.__qaN;
@@ -677,7 +715,7 @@ const SAMPLE = () => {
     sig: sig(el),
     prevBlurSig,
     prevRect,
-    rect: { x: r.left, y: r.top, w: r.width, h: r.height },
+    rect: reach(el, r),
     off: r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw,
     tiny: r.width < 2 || r.height < 2,
     coveredBy: top && top !== el && !el.contains(top) && !top.contains(el) ? window.__qaSem(top) : "",
@@ -1461,7 +1499,7 @@ async function runCell(cell, opts = {}) {
   const t0 = Date.now();
   const owner = cell.role === "owner";
   // QA_ATTACK_ALIAS pins one person for a by-hand replay (a new hire, whose first-call guide and welcome card are not dismissed); the loop rotates through SELLERS
-  const alias = owner ? "owner" : process.env.QA_ATTACK_ALIAS || SELLERS[aliasTurn++ % SELLERS.length];
+  const alias = owner ? cfg.OWNER_ALIAS : process.env.QA_ATTACK_ALIAS || SELLERS[aliasTurn++ % SELLERS.length];
   let route = cell.route;
   const tab = await session.openTab({ alias, device: cell.size, theme: cell.family === "dark" ? "dark" : "light", state: "normal", keep: true });
   const ctx = makeCtx(tab, cell, alias);
