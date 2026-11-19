@@ -26,6 +26,7 @@ import {
 
 import { CoachMark, PartMark, TopicArt } from "./art";
 import { CharacterLoop } from "./characters";
+import { LessonVideo } from "./lesson-video";
 import { Breadcrumb, ScreenButton, toggle, type Open } from "./bits";
 import styles from "./ask-dipak.module.css";
 import {
@@ -667,6 +668,9 @@ export function LessonScreen({
                     </li>
                   ))}
                 </ol>
+                {/* The studio's video of this lesson, where there is one: it
+                    teaches the answer, so it waits for the answer too. */}
+                <LessonVideo id={id} />
               </Section>
 
               <Section part="deep">
