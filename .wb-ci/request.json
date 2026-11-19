@@ -1,0 +1,21 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "539ceb427e5c10725cd765ad671c840384f9feb7",
+  "full": false,
+  "checks": [
+    "visual"
+  ],
+  "changed_files": [
+    "scripts/ci/wb-readability-baseline.json",
+    "scripts/ci/wb_readability.mjs",
+    "scripts/ci/wb_readability_baseline.mjs",
+    "scripts/ci/wb_readability_lib.mjs",
+    "scripts/ci/wb_readability_lib.test.mjs",
+    "scripts/qa/README.md"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
