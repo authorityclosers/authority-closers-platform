@@ -1061,7 +1061,8 @@ export function AccountAuth({
     !(preview && previewState === "auth.error");
   const offeredProviders = PROVIDERS.filter(offered);
   const googleAvailable = offeredProviders.length > 0;
-  const brandContent = <BrandMark />;
+  // The film is dark in both themes: the parent's dark art (brand order, 19 Nov 2026).
+  const brandContent = <BrandMark onDark />;
   const heading =
     displayedStep === "code"
       ? "Check your email."

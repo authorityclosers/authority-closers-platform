@@ -1,5 +1,6 @@
 "use client";
 
+import { ParentLogo } from "./brand/parent-brand";
 import styles from "./policy-pages.module.css";
 
 const POLICY_LINKS = [
@@ -24,6 +25,10 @@ export function PolicyFooter() {
           ))}
         </ul>
       </nav>
+      {/* The company behind the policies (brand order, 19 Nov 2026). */}
+      <p className={styles.footerBrand}>
+        <ParentLogo />
+      </p>
     </footer>
   );
 }

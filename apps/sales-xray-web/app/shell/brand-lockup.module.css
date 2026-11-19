@@ -36,7 +36,8 @@
   width: var(--size);
   height: var(--size);
   overflow: hidden;
-  border-radius: calc(var(--size) * 0.28);
+  /* The kit's tile corner: 22.5% of the tile (sx-app-icon.svg). */
+  border-radius: calc(var(--size) * 0.225);
   box-shadow:
     0 1px 2px color-mix(in srgb, var(--lx-ink) 16%, transparent),
     0 8px 18px -10px color-mix(in srgb, var(--lx-ink) 55%, transparent);
@@ -110,16 +111,17 @@ button:hover > .symbol .bar {
   line-height: 1.15;
 }
 
-/* The outlined wordmark: Hind Medium "Sales", Hind Bold "X-Ray", capsule hyphen. */
+/* The outlined wordmark (brand kit v0.2): Plus Jakarta Sans 500 "Sales", 800 "X-Ray", the green capsule hyphen.
+   The name takes the surface's ink (the sign-in film sets its own); the hyphen is the kit's --xr-green-mark. */
 .name {
   display: block;
-  width: 97px;
+  width: 100px;
   height: 18px;
   color: var(--lx-ink);
 }
 
 .hyphen {
-  fill: color-mix(in srgb, var(--lx-teal) 70%, var(--lx-glow));
+  fill: var(--xr-green-mark);
 }
 
 .by {

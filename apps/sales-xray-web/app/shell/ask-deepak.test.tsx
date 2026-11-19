@@ -9,8 +9,13 @@ const calls = vi.hoisted(() => ({
   read: vi.fn(),
   search: vi.fn(),
   report: vi.fn(),
+  guard: vi.fn(),
 }));
 
+vi.mock("../leads/capture-guard-client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../leads/capture-guard-client")>()),
+  readCaptureGuard: calls.guard,
+}));
 vi.mock("../leads/leads-client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../leads/leads-client")>()),
   readLead: calls.read,
@@ -63,6 +68,7 @@ beforeEach(() => {
   HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
     this.open = true;
   };
+  calls.guard.mockResolvedValue(null);
   calls.report.mockResolvedValue({
     report: {
       content: {
@@ -183,6 +189,69 @@ it("says where a lead stands and its last call even when that call has no report
   await settle();
   expect(page()).toMatch(/Interested · last call .+, no answer/);
   expect(calls.report).not.toHaveBeenCalled();
+});
+
+const EVENT = "9c1d7e2f-3b4a-4c5d-8e6f-7a8b9c0d1e2f";
+const openAbout = async (events: object[]) => {
+  calls.read.mockResolvedValue(detail(events));
+  await act(async () =>
+    root.render(
+      <AskDipakSheet
+        open
+        leadId="lead-1"
+        about="asha fictional"
+        onClose={() => {}}
+      />,
+    ),
+  );
+  await settle();
+};
+
+it("doesn't ask for a report the last call can't have", async () => {
+  // QA robot b1775f19 (23 sightings to 18 Nov 2026): opening Ask Dipak about a
+  // lead whose last call was too short to analyse asked for its report, a 404
+  // and a console error each time. The capture guard already says there is none.
+  calls.guard.mockResolvedValue({
+    calls: [{ event_id: EVENT, submission_id: CALL, state: "short_call" }],
+    rates: [],
+  });
+  await openAbout([
+    event("note", { note: "Wife decides; call after 6" }),
+    event("call", { submission_id: CALL, event_id: EVENT }),
+  ]);
+  expect(calls.guard).toHaveBeenCalledWith(EVENT);
+  expect(calls.report).not.toHaveBeenCalled();
+  expect(page()).toContain("Wife decides; call after 6");
+  expect(page()).not.toContain("What happened");
+  expect(page()).not.toContain("Couldn’t read");
+});
+
+it.each([
+  [
+    "the report is ready",
+    { event_id: EVENT, submission_id: CALL, state: "report_ready" },
+  ],
+  [
+    "the guard follows another recording",
+    { event_id: EVENT, submission_id: "another", state: "short_call" },
+  ],
+  ["the guard doesn't follow this call", null],
+])("still reads the last call's report when %s", async (_why, followed) => {
+  calls.guard.mockResolvedValue({
+    calls: followed ? [followed] : [],
+    rates: [],
+  });
+  await openAbout([event("call", { submission_id: CALL, event_id: EVENT })]);
+  expect(calls.report).toHaveBeenCalledTimes(1);
+  expect(page()).toContain("They want a site visit before deciding.");
+});
+
+it("still reads the last call's report when the guard doesn't answer", async () => {
+  calls.guard.mockResolvedValue(null);
+  await openAbout([event("call", { submission_id: CALL, event_id: EVENT })]);
+  expect(calls.guard).toHaveBeenCalledWith(EVENT);
+  expect(calls.report).toHaveBeenCalledTimes(1);
+  expect(page()).toContain("They want a site visit before deciding.");
 });
 
 it("joins each call to its own answer, and a dial with nothing saved is no call", () => {

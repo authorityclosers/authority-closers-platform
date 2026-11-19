@@ -574,7 +574,7 @@ button.figure:focus-visible {
   );
   box-shadow:
     inset 0 1px 2px color-mix(in oklab, var(--lx-film) 12%, transparent),
-    0 1px 0 color-mix(in oklab, white 80%, transparent);
+    0 1px 0 var(--sx-lit-lip);
 }
 .tab {
   position: relative;
@@ -628,7 +628,7 @@ button.figure:focus-visible {
   border: 0.5px solid color-mix(in oklab, var(--sx-ink) 9%, transparent) !important;
   border-radius: 22px !important;
   box-shadow:
-    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    inset 0 1px 0 var(--sx-lit-top),
     0 1px 1px color-mix(in oklab, var(--lx-film) 5%, transparent),
     0 4px 10px -2px color-mix(in oklab, var(--lx-film) 7%, transparent),
     0 14px 28px -18px color-mix(in oklab, var(--lx-film) 22%, transparent) !important;
@@ -641,7 +641,7 @@ button.figure:focus-visible {
 }
 .figAction {
   border-radius: 14px;
-  box-shadow: inset 0 1px 0 color-mix(in oklab, white 60%, transparent);
+  box-shadow: inset 0 1px 0 var(--sx-lit-soft);
 }
 /* pages slide in softly as they arrive */
 .page[data-active] .figure {

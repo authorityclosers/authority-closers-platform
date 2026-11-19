@@ -293,6 +293,53 @@ jobs:
           if-no-files-found: warn
           retention-days: 1
 
+  readability:
+    # QA system stage 1 (owner, 18 Nov 2026: "How come there are bugs that are just visible?", then "Yes, start
+    # stage 1"): the Readability Gate. The top 20 screens from the review fixtures at the four corner states (360 px
+    # dark with 130% text, 360 px light, 1280 px light and dark), each as its fixture is and with long real-shaped
+    # data; one pass runs the radar's scan, the overlap scan, the contrast scan, axe-core and the gate's own checks.
+    # It fails only on what is new against scripts/ci/wb-readability-baseline.json (the findings of the day it
+    # landed); with no baseline it only records.
+    needs: [plan, ci-prerequisites]
+    if: needs.plan.outputs.visual == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+      - name: Check the gate's own logic and the QA scripts'
+        run: >-
+          node --test scripts/ci/wb_readability_lib.test.mjs scripts/qa/judge.test.mjs
+          scripts/qa/role-walk.test.mjs scripts/qa/monitor/monitor.test.mjs
+      - name: Install locked Node dependencies
+        run: corepack enable && corepack prepare pnpm@11.19.0 --activate && pnpm install --frozen-lockfile
+      - name: Require cached locked Node browser
+        timeout-minutes: 13
+        uses: ./.github/actions/ci-prerequisites
+        with:
+          bundle: ${{ needs.ci-prerequisites.outputs.bundle }}
+          components: browser
+          python: python3
+          node-browser: "true"
+      - name: Readability Gate, 20 screens at the four corner states, fictional data only
+        timeout-minutes: 35
+        run: node scripts/ci/wb_readability.mjs "$RUNNER_TEMP/wb-readability"
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wb-readability
+          path: |
+            ${{ runner.temp }}/wb-readability/report.md
+            ${{ runner.temp }}/wb-readability/readability.json
+            ${{ runner.temp }}/wb-readability/*.jpg
+          if-no-files-found: warn
+          retention-days: 1
+
   matrix:
     # Opt-in (`wb-ci --matrix [screen|route ...]`; owner via the orchestrator, 25 Oct 2026: "check symmetry and
     # alignment numerically, not by eye"): review fixtures at 7 sizes x font scale 85/100/115/130% x light and dark,
@@ -648,7 +695,7 @@ jobs:
         run: bash scripts/validate-control-plane.sh
 
   summary:
-    needs: [plan, ci-prerequisites, lint, web, py-tests, visual, matrix, radar, radar-report, speed, e2e, migrations, control-plane]
+    needs: [plan, ci-prerequisites, lint, web, py-tests, visual, readability, matrix, radar, radar-report, speed, e2e, migrations, control-plane]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5

@@ -52,6 +52,7 @@ import {
 import { useBranding } from "./branding-store";
 import { AddSheet } from "./add-sheet";
 import { AskBarTools } from "../ask-dipak/ask-bar-tools";
+import { AskDipakLockup } from "../ask-dipak/lockup";
 import { searchTogether, warmLeadsSearch } from "./search-together";
 import { useAppRouter } from "./app-router";
 import { tabAgain } from "./tab-again";
@@ -1401,6 +1402,13 @@ function LightboxShellFrame({
       ? "Personal"
       : shownWorkspace.name
     : null;
+  // Ask Dipak's title is its lockup, the kit's artwork (brand order, 19 Nov 2026).
+  const barWords =
+    phoneTab === "ask" ? (
+      <AskDipakLockup inBar />
+    ) : (
+      (barTitle ?? workspaceLabel)
+    );
   // Phones: the bar's page name keeps one line; its length lets the CSS size
   // it to the room (Redmi QA, 10 Nov 2026: "New analysis" took two lines).
   const barFit = {
@@ -2029,7 +2037,7 @@ function LightboxShellFrame({
                       />
                     </small>
                   </span>
-                  <b style={barFit}>{barTitle ?? workspaceLabel}</b>
+                  <b style={barFit}>{barWords}</b>
                 </button>
               ) : (
                 <span
@@ -2047,7 +2055,7 @@ function LightboxShellFrame({
                         : "Workspace"}
                     </small>
                   </span>
-                  <b style={barFit}>{barTitle ?? workspaceLabel}</b>
+                  <b style={barFit}>{barWords}</b>
                 </span>
               )}
             </div>
@@ -2160,7 +2168,11 @@ function LightboxShellFrame({
                     </h1>
                   ) : (
                     <span key={pageTitle} className={styles.titleText}>
-                      {pageTitle}
+                      {phoneTab === "ask" ? (
+                        <AskDipakLockup inBar />
+                      ) : (
+                        pageTitle
+                      )}
                     </span>
                   )}
                 </div>

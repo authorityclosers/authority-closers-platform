@@ -1,13 +1,14 @@
 /**
- * My Next-call missions, the coaching loop's minimal screen (13 Nov 2026
- * meeting, section 5): keep up to three ticked missions active, answer yes or
- * no for each after a call from a lead, and see on how many calls each was
- * done. A fake server holds fictional missions and calls.
+ * My Next-call missions (redesign study §5 S5; 13 Nov 2026 meeting, section
+ * 5): the calls waiting for an answer come first as check-in cards, up to
+ * three ticked missions stay active, and each shows on how many calls it was
+ * tried. A fake server holds fictional missions and calls.
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { COPY } from "./copy";
 import { MISSION_WORDS, MissionsScreen } from "./missions-screen";
 
 (
@@ -154,11 +155,22 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-it("says how to start when no mission is ticked", async () => {
+it("says how to start when no mission is ticked, with a way to the topics", async () => {
   await show();
   expect(page().textContent).toContain(MISSION_WORDS.none);
   expect(page().textContent).toContain(MISSION_WORDS.noneHint);
+  const go = Array.from(page().querySelectorAll("a")).find(
+    (link) => link.textContent === MISSION_WORDS.explore,
+  );
+  expect(go?.getAttribute("href")).toContain("topics");
+  expect(page().querySelector("[data-call]")).toBeNull();
+});
+
+it("asks only when a mission is active", async () => {
+  fake.ticked = ["PB03"];
+  await show();
   expect(page().textContent).toContain(MISSION_WORDS.noActive);
+  expect(page().querySelector("[data-call]")).toBeNull();
 });
 
 it("keeps three active at most, and drops one to add another", async () => {
@@ -193,6 +205,10 @@ it("asks after a call for each active mission, and counts the yes", async () => 
   await show();
   const call = page().querySelector('[data-call="call-1"]');
   expect(call?.textContent).toContain("Fictional Lead");
+  expect(call?.textContent).toContain(COPY.checkinNote);
+  // The check-in is the screen's first thing to do, before the missions.
+  const first = page().querySelector("[data-call], [data-mission]");
+  expect(first?.getAttribute("data-call")).toBe("call-1");
   expect(button(MISSION_WORDS.did, call ?? page())).toHaveLength(2);
   await click(button(MISSION_WORDS.did, call ?? page())[0]);
   expect(fake.writes.at(-1)).toEqual({
@@ -200,7 +216,7 @@ it("asks after a call for each active mission, and counts the yes", async () => 
     body: { answers: [{ question_id: "PB03", done: true }] },
   });
   expect(page().querySelector('[data-mission="PB03"]')?.textContent).toContain(
-    "Done on 1 call",
+    COPY.triedOn(1),
   );
   await click(
     button(
@@ -210,8 +226,34 @@ it("asks after a call for each active mission, and counts the yes", async () => 
   );
   expect(fake.answers["call-1"]).toEqual({ PB03: true, OB03: false });
   expect(page().querySelector('[data-call="call-1"]')?.textContent).toContain(
-    "Answered:",
+    `${MISSION_WORDS.answered}:`,
   );
+  // "No chance" carries no penalty: only the tries are counted.
+  expect(
+    page().querySelector('[data-mission="OB03"]')?.textContent,
+  ).not.toContain("Tried on");
+});
+
+it("shows a mission's lesson once when the server has no mission words", async () => {
+  fake.ticked = ["PB03"];
+  fake.active = ["PB03"];
+  const original = globalThis.fetch;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const response = await original(input, init);
+      if (!String(input).endsWith("/growth")) return response;
+      const body = (await response.json()) as {
+        missions: { mission: string | null }[];
+      };
+      for (const mission of body.missions) mission.mission = null;
+      return new Response(JSON.stringify(body), { status: 200 });
+    }),
+  );
+  await show();
+  const card = page().querySelector('[data-mission="PB03"]');
+  const said = card?.textContent?.split(TITLES.PB03).length ?? 0;
+  expect(said - 1).toBe(1);
 });
 
 it("passes on the server's own words when it refuses", async () => {

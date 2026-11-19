@@ -25,6 +25,8 @@ import {
 } from "react";
 
 import { CoachMark, PartMark, TopicArt } from "./art";
+import { CharacterLoop } from "./characters";
+import { LessonVideo } from "./lesson-video";
 import { Breadcrumb, ScreenButton, toggle, type Open } from "./bits";
 import styles from "./ask-dipak.module.css";
 import {
@@ -499,11 +501,18 @@ export function LessonScreen({
               <h3 className={styles.sectionH}>{COPY.turn}</h3>
             </div>
             <div className={styles.scene}>
-              {scenario.said.map((line) => (
-                <p key={line} className={styles.sceneBubble}>
-                  {line}
-                </p>
-              ))}
+              {/* The hook: Rohit says it (character kit v2: Aman and Rohit
+                  open and close a lesson, never the teaching middle). */}
+              <div className={styles.sceneWho}>
+                <CharacterLoop loop="hook" size={56} />
+                <div className={styles.sceneWords}>
+                  {scenario.said.map((line) => (
+                    <p key={line} className={styles.sceneBubble}>
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              </div>
               {scenario.ask ? (
                 <p className={styles.sceneAsk}>{scenario.ask}</p>
               ) : null}
@@ -659,6 +668,9 @@ export function LessonScreen({
                     </li>
                   ))}
                 </ol>
+                {/* The studio's video of this lesson, where there is one: it
+                    teaches the answer, so it waits for the answer too. */}
+                <LessonVideo id={id} />
               </Section>
 
               <Section part="deep">
@@ -716,6 +728,12 @@ export function LessonScreen({
                     <h3 className={styles.pocketLabel}>{COPY.cue}</h3>
                     <p className={styles.cue}>{lesson.cue}</p>
                   </div>
+                  {/* The payoff: Aman, who takes this line to his next call. */}
+                  <CharacterLoop
+                    loop="payoff"
+                    size={56}
+                    className={styles.pocketWho}
+                  />
                 </div>
               </Section>
 
@@ -757,6 +775,33 @@ export function LessonScreen({
             </div>
           </Section>
         </div>
+        {/* Wide computers (X-B): the line to remember and the mission kept
+            beside the reading column once his answer is open. */}
+        {answerOpen ? (
+          <aside className={styles.rail} aria-label={COPY.railLabel}>
+            <div className={styles.railCard}>
+              <p className={styles.railHead}>
+                <PartMark part="cue" size={20} />
+                {COPY.cue}
+              </p>
+              <p className={styles.railCue}>{lesson.cue}</p>
+            </div>
+            <button
+              type="button"
+              className={`${styles.railCard} ${styles.railMission}`}
+              onClick={() => jump("mission")}
+            >
+              <span className={styles.railHead}>
+                <PartMark part="mission" size={20} />
+                {COPY.mission}
+              </span>
+              <span className={styles.railLine}>{lesson.mission}</span>
+              <span className={styles.railState}>
+                {committed ? COPY.missionOn : COPY.missionCommit}
+              </span>
+            </button>
+          </aside>
+        ) : null}
       </div>
     </>
   );

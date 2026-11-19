@@ -1951,7 +1951,7 @@
     background: var(--sx-glass-lens);
     box-shadow:
       0 1px 2px color-mix(in oklab, var(--lx-ink) 8%, transparent),
-      inset 0 0.5px 0 color-mix(in oklab, white 60%, transparent);
+      inset 0 0.5px 0 var(--sx-lit-soft);
   }
 
   .bottomLink[aria-current="page"] {

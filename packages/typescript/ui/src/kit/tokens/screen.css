@@ -432,7 +432,23 @@ a {
     0 2px 4px color-mix(in oklab, var(--lx-home-primary) 30%, transparent),
     0 8px 16px -8px color-mix(in oklab, var(--lx-home-primary) 55%, transparent);
   --sx-gloss-ink: white;
+  /* Home's green as an ink (a word, an icon, a ring's arc) on a surface. The
+     fill green is one colour in both themes, which is right under white
+     words and 2.6:1 as an ink on a dark tile; the ink turns mint in dark. */
+  --sx-primary-ink: var(--lx-home-primary);
   --sx-press-sink: scale(0.97);
+  /* The light an edge catches (19 Nov 2026). Home's finish drew its highlights
+     in plain white: right on a light page, a grey slab with a bright outline
+     in dark (owner, 17 Nov 2026: "Dark mode: some items can't be seen at
+     all"). Each has a dark value below; a screen takes these and never
+     writes white for an edge. Top: a tile's top edge. Lip: under a well and
+     along a sheet's top. Rim: a tile's 1 px rim. Soft: small raised controls.
+     Glass: a frosted tile. */
+  --sx-lit-top: color-mix(in oklab, white 85%, transparent);
+  --sx-lit-lip: color-mix(in oklab, white 80%, transparent);
+  --sx-lit-rim: color-mix(in oklab, white 70%, transparent);
+  --sx-lit-soft: color-mix(in oklab, white 60%, transparent);
+  --sx-tile-glass: color-mix(in oklab, white 62%, transparent);
   /* Colour by meaning, never by position: a badge or chip is the soft fill
      with the strong ink. Good or the outcome, understanding, needs action,
      calls and connecting, a problem. Home's palette, light and dark. */
@@ -450,11 +466,20 @@ a {
 
 :root[data-theme="dark"] {
   --sx-tile-edge: 0.5px solid color-mix(in oklab, white 10%, transparent);
-  --sx-tile-fill: var(--lx-elevated);
+  /* A picture in both themes: a tile that lays a tint over it, or a colour
+     under it, is then built the same way in dark. */
+  --sx-tile-fill: linear-gradient(var(--lx-elevated), var(--lx-elevated));
   --sx-tile-depth:
     inset 0 1px 0 color-mix(in oklab, white 8%, transparent),
     0 10px 26px -16px color-mix(in oklab, black 60%, transparent);
   --sx-well-edge: 0.5px solid color-mix(in oklab, white 10%, transparent);
   --sx-well-fill: color-mix(in oklab, white 6%, var(--lx-elevated));
   --sx-well-depth: inset 0 1px 2px color-mix(in oklab, black 40%, transparent);
+  /* Dark lifts by tint, not by light: an edge catches a trace of white. */
+  --sx-lit-top: color-mix(in oklab, white 8%, transparent);
+  --sx-lit-lip: color-mix(in oklab, white 5%, transparent);
+  --sx-lit-rim: color-mix(in oklab, white 10%, transparent);
+  --sx-lit-soft: color-mix(in oklab, white 6%, transparent);
+  --sx-tile-glass: color-mix(in oklab, var(--lx-elevated) 62%, transparent);
+  --sx-primary-ink: var(--lx-home-emerald);
 }

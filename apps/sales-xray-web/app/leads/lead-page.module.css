@@ -1063,7 +1063,8 @@ a.callBand {
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   line-height: var(--sx-leading-16);
-  opacity: 0.85;
+  /* 0.85 measured 4.32:1 on the Call green; 0.92 is 4.7:1. */
+  opacity: 0.92;
 }
 
 /* The owner's view: whose lead it is, under the fact line. */

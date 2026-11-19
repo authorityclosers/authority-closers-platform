@@ -165,8 +165,10 @@
   transition: color 120ms ease-out;
 }
 
+/* The gloss is one green in both themes, so its words take the gloss's own
+   ink: the surface colour turned near-black in dark (3.2:1 on the green). */
 .switch[data-look="home"] .option[aria-checked="true"] {
-  color: var(--sx-surface);
+  color: var(--sx-gloss-ink);
 }
 
 /* owner 15 Nov: the same finish as Home's tiles: a hairline edge, a fine top highlight
@@ -181,7 +183,7 @@
   );
   box-shadow:
     inset 0 1px 2px color-mix(in oklab, var(--lx-film) 12%, transparent),
-    0 1px 0 color-mix(in oklab, white 80%, transparent);
+    0 1px 0 var(--sx-lit-lip);
 }
 .switch[data-look="home"] .pill {
   background: linear-gradient(
