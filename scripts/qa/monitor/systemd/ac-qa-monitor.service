@@ -1,0 +1,15 @@
+[Unit]
+Description=Sales X-Ray production monitor with the QA account (read-only, /home/acdev/qa-monitor)
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=acdev
+Group=acdev
+ExecStart=/home/acdev/qa-monitor/scripts/qa/monitor/run.sh
+TimeoutStartSec=8min
+Nice=10
+CPUQuota=60%
+MemoryMax=1200M
+NoNewPrivileges=true
+PrivateTmp=true

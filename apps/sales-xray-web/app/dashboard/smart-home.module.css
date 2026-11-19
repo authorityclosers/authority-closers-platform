@@ -699,17 +699,13 @@ a.counter:active::after,
 .card {
   gap: 8px;
   padding: 16px 16px 8px;
-  border: 1px solid color-mix(in oklab, white 70%, transparent);
+  border: 1px solid var(--sx-lit-rim);
   outline: 0.5px solid color-mix(in oklab, var(--sx-ink) 8%, transparent);
   outline-offset: -0.5px;
   border-radius: 22px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in oklab, white 60%, var(--sx-elevated)),
-    var(--sx-elevated)
-  );
+  background: var(--sx-tile-fill);
   box-shadow:
-    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    inset 0 1px 0 var(--sx-lit-top),
     0 4px 10px -2px color-mix(in oklab, var(--lx-film) 7%, transparent),
     0 14px 28px -18px color-mix(in oklab, var(--lx-film) 22%, transparent);
   animation: blockIn 520ms cubic-bezier(0.2, 0.9, 0.25, 1) both;

@@ -8,13 +8,9 @@
   padding: 0 13px 0 11px;
   border: 0.5px solid color-mix(in oklab, var(--sx-ink) 9%, transparent);
   border-radius: 999px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in oklab, white 60%, var(--sx-elevated)),
-    var(--sx-elevated)
-  );
+  background: var(--sx-tile-fill);
   box-shadow:
-    inset 0 1px 0 color-mix(in oklab, white 85%, transparent),
+    inset 0 1px 0 var(--sx-lit-top),
     0 4px 10px -4px color-mix(in oklab, var(--lx-film) 14%, transparent);
   color: var(--sx-ink-2);
   font: inherit;
@@ -24,7 +20,7 @@
   transition: transform 140ms ease-out;
 }
 .pill svg {
-  color: var(--lx-home-primary);
+  color: var(--sx-primary-ink);
 }
 .pill:active {
   transform: scale(0.95);
@@ -133,7 +129,7 @@
   margin: 0;
   font-size: var(--sx-text-xl);
   font-weight: 800;
-  color: var(--lx-home-primary);
+  color: var(--sx-primary-ink);
 }
 .note {
   margin: 8px 0 13px;

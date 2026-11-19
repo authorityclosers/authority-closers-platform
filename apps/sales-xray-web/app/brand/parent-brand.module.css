@@ -1,0 +1,46 @@
+/* The Authority Closers endorsement: the kit's art at a set height, the light file on light, the dark on dark.
+   Its width follows the view's shape (202 x 38). At 20 px the A stays above the kit's 16 px symbol minimum
+   for the endorsement's own scale (the board's: half the product name's cap height). */
+.endorse {
+  --ac-endorse-height: 20px;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: var(--ac-endorse-height);
+}
+
+.endorse img {
+  display: block;
+  width: calc(var(--ac-endorse-height) * 202 / 38);
+  height: 100%;
+}
+
+/* The horizontal lockup: 26 px tall with its clear space, so the logo itself is the kit's 20 px minimum. */
+.logo {
+  display: inline-flex;
+  flex: none;
+  height: 26px;
+}
+
+.logo img {
+  display: block;
+  width: auto;
+  height: 100%;
+}
+
+.endorse .dark,
+.logo .dark {
+  display: none;
+}
+
+:global(:root[data-theme="dark"]) .endorse .light,
+:global(:root[data-theme="dark"]) .logo .light,
+.onDark .light {
+  display: none;
+}
+
+:global(:root[data-theme="dark"]) .endorse .dark,
+:global(:root[data-theme="dark"]) .logo .dark,
+.onDark .dark {
+  display: block;
+}

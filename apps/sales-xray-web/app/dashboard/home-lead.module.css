@@ -67,10 +67,10 @@
   border-radius: 999px;
   background: color-mix(
     in oklab,
-    var(--lx-home-primary) 14%,
+    var(--sx-primary-ink) 14%,
     var(--sx-elevated)
   );
-  color: var(--lx-home-primary);
+  color: var(--sx-primary-ink);
   font-weight: 800;
 }
 .words {
@@ -130,8 +130,8 @@
   min-height: 48px;
   margin-top: 13px;
   border-radius: 999px;
-  background: color-mix(in oklab, var(--lx-home-primary) 10%, transparent);
-  color: var(--lx-home-primary);
+  background: color-mix(in oklab, var(--sx-primary-ink) 10%, transparent);
+  color: var(--sx-primary-ink);
   font-weight: 700;
   text-decoration: none;
 }

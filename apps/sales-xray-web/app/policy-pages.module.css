@@ -136,6 +136,12 @@
   padding: 16px 4px 4px;
 }
 
+.footerBrand {
+  display: flex;
+  justify-content: center;
+  margin: 14px 0 0;
+}
+
 .footerLinks {
   display: flex;
   flex-wrap: wrap;

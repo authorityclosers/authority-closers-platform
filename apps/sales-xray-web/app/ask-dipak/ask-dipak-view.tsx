@@ -30,6 +30,8 @@ import { readGrowth, type Growth } from "./coaching-client";
 import { ContinueCard, MissionStrip } from "./home-desk";
 import { Breadcrumb, ScreenButton, type Open } from "./bits";
 import { AskIcon } from "./icons";
+import { CharacterStill, type CharacterStillName } from "./characters";
+import { AskDipakLockup } from "./lockup";
 import { LessonScreen } from "./lesson-screen";
 import { MissionsScreen } from "./missions-screen";
 import {
@@ -147,6 +149,10 @@ function Greeting({ open }: { open: Open }) {
   return (
     <section className={styles.hero} data-more={more || undefined}>
       <div className={styles.heroMain}>
+        {/* The Ask Dipak lockup heads the card on phones, where the top bar
+            shows the workspace; on laptops it is in the top bar (brand
+            order, 19 Nov 2026). */}
+        <AskDipakLockup className={styles.heroLockup} />
         <div className={styles.coachRow}>
           <CoachMark />
           <div className={styles.coachWords}>
@@ -204,11 +210,11 @@ function Greeting({ open }: { open: Open }) {
  * Follow-Up).
  */
 const SITUATION_LOOK: Readonly<
-  Record<string, { tone: Tone; category: string }>
+  Record<string, { tone: Tone; category: string; face: CharacterStillName }>
 > = {
-  PB03: { tone: "action", category: "08" },
-  DM02: { tone: "info", category: "06" },
-  OB03: { tone: "good", category: "09" },
+  PB03: { tone: "action", category: "08", face: "rohit-sceptical" },
+  DM02: { tone: "info", category: "06", face: "rohit-worried" },
+  OB03: { tone: "good", category: "09", face: "rohit-thinking" },
 };
 
 /**
@@ -257,7 +263,12 @@ function HomeScreen({ open }: { open: Open }) {
                 </span>
                 <span className={styles.chip}>{lessonChip(question)}</span>
               </span>
-              <span className={styles.bubble}>{questionLabel(question)}</span>
+              {/* The hook: Rohit, the customer, says these words (character
+                  kit v2: hook and payoff only); the bubble's tail is his. */}
+              <span className={styles.situationSay}>
+                {look ? <CharacterStill name={look.face} size={40} /> : null}
+                <span className={styles.bubble}>{questionLabel(question)}</span>
+              </span>
               <span className={styles.situationFoot}>
                 <span className={styles.entryMeta}>{COPY.parts}</span>
                 <AskIcon name="right" size={18} />
@@ -767,7 +778,7 @@ export function AskDipakView({
       screen = (
         <>
           <Breadcrumb onBack={back}>{COPY.title}</Breadcrumb>
-          <MissionsScreen />
+          <MissionsScreen open={open} />
         </>
       );
       break;

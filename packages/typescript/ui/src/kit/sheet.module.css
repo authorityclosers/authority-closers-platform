@@ -337,7 +337,7 @@
     border-top-left-radius: 28px;
     border-top-right-radius: 28px;
     box-shadow:
-      inset 0 1px 0 color-mix(in oklab, white 80%, transparent),
+      inset 0 1px 0 var(--sx-lit-lip),
       0 -12px 40px -12px color-mix(in oklab, black 28%, transparent);
   }
   .panel[data-entering] .body > *,
