@@ -30,6 +30,7 @@ import { readGrowth, type Growth } from "./coaching-client";
 import { ContinueCard, MissionStrip } from "./home-desk";
 import { Breadcrumb, ScreenButton, type Open } from "./bits";
 import { AskIcon } from "./icons";
+import { AskDipakLockup } from "./lockup";
 import { LessonScreen } from "./lesson-screen";
 import { MissionsScreen } from "./missions-screen";
 import {
@@ -147,6 +148,10 @@ function Greeting({ open }: { open: Open }) {
   return (
     <section className={styles.hero} data-more={more || undefined}>
       <div className={styles.heroMain}>
+        {/* The Ask Dipak lockup heads the card on phones, where the top bar
+            shows the workspace; on laptops it is in the top bar (brand
+            order, 19 Nov 2026). */}
+        <AskDipakLockup className={styles.heroLockup} />
         <div className={styles.coachRow}>
           <CoachMark />
           <div className={styles.coachWords}>

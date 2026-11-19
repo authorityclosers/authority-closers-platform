@@ -1,0 +1,30 @@
+/* The Ask Dipak horizontal lockup: the kit's files at a set height, the light file on light, the dark on dark. */
+.lockup {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: var(--ad-lockup-height, 28px);
+  vertical-align: middle;
+}
+
+.bar {
+  --ad-lockup-height: 26px;
+}
+
+.lockup img {
+  display: block;
+  width: auto;
+  height: 100%;
+}
+
+.lockup .dark {
+  display: none;
+}
+
+:global(:root[data-theme="dark"]) .lockup .light {
+  display: none;
+}
+
+:global(:root[data-theme="dark"]) .lockup .dark {
+  display: block;
+}

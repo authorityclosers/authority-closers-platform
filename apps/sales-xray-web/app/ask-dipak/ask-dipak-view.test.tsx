@@ -224,7 +224,9 @@ describe("Homepage", () => {
       host.querySelector('[role="img"][aria-label="Dipak Vishwakarma"]')
         ?.textContent,
     ).toBe("DV");
-    expect(host.querySelector("img")).toBeNull();
+    // Dipak's face is never a picture: the only picture on his desk is the
+    // kit's Ask Dipak lockup (brand order, 19 Nov 2026).
+    expect(host.querySelector('img:not([src^="/brand/"])')).toBeNull();
     // The strong card at the top carries Continue (owner, 17 Nov 2026).
     expect(host.querySelector("section a[data-continue]")).not.toBeNull();
     // No active mission (the coaching API isn't served here): no strip.

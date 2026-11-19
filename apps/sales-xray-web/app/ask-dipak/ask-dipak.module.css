@@ -1257,6 +1257,18 @@
   min-width: 0;
 }
 
+/* The Ask Dipak lockup over Dipak's card on phones; laptops show it in the top bar. */
+.heroLockup {
+  --ad-lockup-height: 36px;
+  margin: -4px 0 8px;
+}
+
+@media (min-width: 900px) {
+  .hero .heroLockup {
+    display: none;
+  }
+}
+
 .coachRow {
   display: flex;
   align-items: flex-start;
