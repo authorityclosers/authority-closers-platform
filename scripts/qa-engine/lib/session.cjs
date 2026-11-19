@@ -166,6 +166,8 @@ async function cookieHeader(alias) {
 
 // opts: { alias, device (matrix name), theme, state, locale, fontScale }
 async function openTab(opts) {
+  // the owner session is not the robot's to use unless the orchestrator has approved it: a NO-OWNER file in this run's state directory blocks it
+  if (opts.alias === "owner" && require("fs").existsSync(require("path").join(cfg.STATE, "NO-OWNER"))) throw new Error("the owner session is not approved for the robot right now (state/NO-OWNER)");
   const dev = cfg.DEVICES[opts.device];
   if (!dev) throw new Error(`no headless size for "${opts.device}"`);
   await signedIn(opts.alias);
@@ -185,6 +187,7 @@ async function openTab(opts) {
     timezoneId: "Asia/Kolkata",
     storageState: cookies.get(opts.alias),
     reducedMotion: "reduce",
+    ...(opts.videoDir ? { recordVideo: { dir: opts.videoDir, size: dev.viewport } } : {}), // the design capture stage records a scroll
   });
   await context.addInitScript(INIT);
   // the app ignores the browser's dark setting; its own theme key is what makes it dark (found 1 Nov 2026: every "dark" run before was light)
