@@ -90,6 +90,7 @@ def _provider_snapshot(row: ProviderIdentity) -> ProviderIdentitySnapshot:
             None if row.last_authenticated_at is None else _as_utc(row.last_authenticated_at)
         ),
         revision=row.revision,
+        email=row.email,
     )
 
 
@@ -242,6 +243,7 @@ class SqlAlchemyIdentityStore(IdentityStore):
                             created_at=identity.created_at,
                             last_authenticated_at=identity.last_authenticated_at,
                             revision=identity.revision,
+                            email=identity.email,
                         )
                     )
                     self._session.flush()
@@ -265,6 +267,7 @@ class SqlAlchemyIdentityStore(IdentityStore):
             .values(
                 last_authenticated_at=identity.last_authenticated_at,
                 revision=identity.revision,
+                email=identity.email,
             )
         )
         result = cast(CursorResult[Any], self._session.execute(statement))
@@ -826,6 +829,7 @@ class AsyncSqlAlchemyIdentityRepository:
                             created_at=identity.created_at,
                             last_authenticated_at=identity.last_authenticated_at,
                             revision=identity.revision,
+                            email=identity.email,
                         )
                     )
                     await self._session.flush()
@@ -852,6 +856,7 @@ class AsyncSqlAlchemyIdentityRepository:
                 .values(
                     last_authenticated_at=identity.last_authenticated_at,
                     revision=identity.revision,
+                    email=identity.email,
                 )
             ),
         )

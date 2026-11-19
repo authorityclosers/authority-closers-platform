@@ -285,6 +285,8 @@ class ProviderIdentitySnapshot:
     created_at: datetime
     last_authenticated_at: datetime | None = None
     revision: int = 0
+    # The email the provider last asserted for this key (display only; migration 0164).
+    email: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

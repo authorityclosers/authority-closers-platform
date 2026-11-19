@@ -309,7 +309,7 @@ it.each(["header", "rail"] as const)(
     const link = host.querySelector<HTMLAnchorElement>(
       'a[href="/account#profile"]',
     )!;
-    expect(link.textContent).toBe("Profile");
+    expect(link.textContent).toBe("Edit my profile");
     expect(link.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
     expect(host.querySelector('a[href="/account"]')?.textContent).toBe(
       "Settings",

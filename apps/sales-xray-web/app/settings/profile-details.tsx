@@ -419,6 +419,19 @@ export function ProfileDetailsPanel() {
                   ) : null}
                 </dd>
               </div>
+              {/* Owner, 19 Nov 2026: work and personal Gmails sign in to one account;
+                  Sign-in & security lists each and adds another. */}
+              <div>
+                <dt>Google logins</dt>
+                <dd>
+                  <Button
+                    variant="ghost"
+                    onClick={() => openSettings("security")}
+                  >
+                    Add another Google account
+                  </Button>
+                </dd>
+              </div>
             </dl>
             <Button variant="ghost" onClick={() => setContact(true)}>
               Edit name and phone

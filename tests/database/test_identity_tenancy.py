@@ -152,6 +152,9 @@ def test_migration_columns_match_identity_tenancy_models() -> None:
                 # The reviewer audience is introduced at0038, not in this
                 # deliberately isolated0001 migration proof.
                 expected -= {"audience"}
+            if model is ProviderIdentity:
+                # Each account's email is added at 0164 (20 Nov 2026).
+                expected -= {"email"}
             assert set(actual) == expected, model.__tablename__
             for column in model.__table__.columns:
                 if column.name not in expected:

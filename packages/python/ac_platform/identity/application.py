@@ -821,6 +821,7 @@ class AsyncIdentityApplication:
             issuer=validated.issuer,
             subject=validated.subject,
             created_at=current_time,
+            email=validated.email,
         )
         try:
             await self._repository.save_provider_identity(identity)
@@ -923,6 +924,7 @@ class AsyncIdentityApplication:
                     identity,
                     last_authenticated_at=current_time,
                     revision=identity.revision + 1,
+                    email=validated.email,
                 )
             )
             issued = await self._issue_session(
@@ -1118,6 +1120,7 @@ class AsyncIdentityApplication:
                 identity,
                 last_authenticated_at=current_time,
                 revision=identity.revision + 1,
+                email=validated.email,
             )
         )
         return await self._issue_session(
