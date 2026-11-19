@@ -118,3 +118,34 @@ def test_the_input_is_checked(tmp_path: Path) -> None:
     with pytest.raises(SystemExit) as refused:
         topup.spec_of(str(path))
     assert json.loads(str(refused.value))["refused"] == "missing_input"
+
+
+def test_several_days_and_exclusions_are_checked(tmp_path: Path) -> None:
+    """Owner, 19 Nov 2026 ("show the app to investors"): a TEST workspace plays the days it
+    missed, oldest first, in one transaction, leaving out members who are not its sellers."""
+    good = {
+        "command_id": str(uuid4()),
+        "approver_email": "a@example.com",
+        "issue": "x",
+        "tenant_id": str(uuid4()),
+        "days": ["2026-11-16", "2026-11-17"],
+        "exclude_person_ids": [str(uuid4())],
+    }
+    path = tmp_path / "in.json"
+    path.write_text(json.dumps(good), "utf-8")
+    assert topup.spec_of(str(path))["days"] == ["2026-11-16", "2026-11-17"]
+    for bad in (
+        {**good, "days": ["2026-11-17", "2026-11-16"]},
+        {**good, "days": ["2026-11-16", "2026-11-16"]},
+        {**good, "day": "2026-11-16"},
+    ):
+        path.write_text(json.dumps(bad), "utf-8")
+        with pytest.raises(SystemExit) as refused:
+            topup.spec_of(str(path))
+        assert json.loads(str(refused.value))["refused"] == (
+            "days_must_be_distinct_oldest_first_without_day"
+        )
+    path.write_text(json.dumps({**good, "exclude_person_ids": ["nope"]}), "utf-8")
+    with pytest.raises(ValueError):
+        topup.spec_of(str(path))
+    assert topup.TEST_PREFIX == "TEST · "

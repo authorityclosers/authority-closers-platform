@@ -1,4 +1,4 @@
-"""Today's work in a dev sandbox organisation, played up to now (approved data change, dev only).
+"""Today's work in a sandbox organisation, played up to now (approved data change).
 
 The owner, 14 Nov 2026 (via the orchestrator and live-design): "make a nice sales inbox… live
 data… so my dev can continuously continue with the new numbers". The dev AC Sales Sandbox's
@@ -21,9 +21,16 @@ command id. A rerun skips the slots already written and plays the ones whose tim
 a timer can run it every 15 minutes. Sunday plays only when the organisation works Sundays
 (``include_sunday`` adds Sunday to its work hours: the server drops calls outside them).
 
-Refuses outside the development environment and outside a sandbox organisation
-(``conversation_sandbox_organisations``). A dry run (the default) makes the change and rolls it
-back; ``--apply`` commits; ``--plan`` prints the day's plan and writes nothing.
+Refuses outside a sandbox organisation (``conversation_sandbox_organisations``). Outside the
+development environment it also refuses any organisation but a TEST workspace: its name starts
+with "TEST · " and every lead it holds is test data (owner, 19 Nov 2026: "show the app to
+investors"; the production TEST · Sahyadri Homes' 14 days ended on 14 Nov). A dry run (the
+default) makes the change and rolls it back; ``--apply`` commits; ``--plan`` prints the day's
+plan and writes nothing. ``days`` plays several days in order, in the one transaction.
+
+In production the API container's filesystem is read-only: pipe the script in and put the
+input in its tmpfs ``/tmp`` first:
+    docker exec -i <api> python - /tmp/topup.json [--apply | --plan] < sandbox-daily-topup.py
 
 Run on ac as root with the dev-live API's settings and Python:
     set -a; . /etc/authority-closers/development/api-live.env; set +a
@@ -31,7 +38,9 @@ Run on ac as root with the dev-live API's settings and Python:
         [--apply | --plan]
 input: {"command_id", "approver_email", "issue", "tenant_id",
         "day"?: "YYYY-MM-DD" (India time; default today), "until"?: ISO time (default now),
-        "include_sunday"?: false}
+        "days"?: ["YYYY-MM-DD", ...] (several days, oldest first; instead of "day"),
+        "include_sunday"?: false,
+        "exclude_person_ids"?: [members who are not the sandbox's sellers, e.g. a QA account]}
 Prints counts and the plan's size; never a lead's details.
 """
 
@@ -70,11 +79,12 @@ from ac_platform.lead_desk.contracts import (
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.models import Lead, LeadEvent
 from ac_platform.lead_desk.store import LeadDesk, Viewer
-from ac_platform.tenancy.models import Membership
+from ac_platform.tenancy.models import Membership, Tenant
 
 Mode = Literal["dry-run", "apply", "plan"]
 IST: Final = ZoneInfo("Asia/Kolkata")
 ACTION: Final = "lead_desk.sandbox_daily_topup"
+TEST_PREFIX: Final = "TEST · "
 DAY_START: Final = time(10, 30)
 DAY_END: Final = time(19, 0)
 LUNCH: Final = (time(13, 30), time(14, 15))
@@ -396,8 +406,9 @@ class Day:
         if owner is None:
             raise _refuse("no_owner")
         sellers = []
+        skip = {str(item) for item in self.spec.get("exclude_person_ids") or []}
         for role, person in sorted(rows, key=lambda r: str(r[1].id)):
-            if role != "member":
+            if role != "member" or str(person.id) in skip:
                 continue
             name = person.display_name or "Seller"
             # The 30-day build's shapes: Aditya works the cold lists, Sneha only enquiries.
@@ -668,10 +679,31 @@ class Day:
         self.counter[f"arrivals_{outcome}"] += 1
 
 
+async def test_workspace_only(db: AsyncSession, tenant_id: UUID) -> None:
+    """Outside development: a TEST workspace only, every lead of it test data."""
+    name = await db.scalar(select(Tenant.name).where(Tenant.id == tenant_id))
+    if not isinstance(name, str) or not name.startswith(TEST_PREFIX):
+        raise _refuse("test_workspace_only")
+    real = await db.scalar(
+        select(func.count())
+        .select_from(Lead)
+        .where(Lead.tenant_id == tenant_id, Lead.test_data.is_not(True))
+    )
+    if real:
+        raise _refuse("test_workspace_holds_real_leads", leads=real)
+
+
 async def play(
-    db: AsyncSession, spec: dict[str, Any], *, mode: Mode, now: datetime
+    db: AsyncSession,
+    spec: dict[str, Any],
+    *,
+    mode: Mode,
+    now: datetime,
+    environment: str = "development",
 ) -> dict[str, Any]:
     tenant_id = UUID(spec["tenant_id"])
+    if environment != "development":
+        await test_workspace_only(db, tenant_id)
     if (
         await db.scalar(
             select(ConversationSandboxOrganisation.tenant_id).where(
@@ -765,7 +797,7 @@ async def play(
         resource_type="tenant",
         resource_id=tenant_id,
         request_id=str(uuid5(base, f"audit:{day}:{until:%H%M}")),
-        reason=f"Owner approval ({spec['issue']}): today's work in a dev sandbox organisation",
+        reason=f"Owner approval ({spec['issue']}): a day's work in a sandbox organisation",
         payload={
             "issue": spec["issue"],
             "day": day.isoformat(),
@@ -786,19 +818,37 @@ def spec_of(path: str) -> dict[str, Any]:
         raise _refuse("missing_input", fields=missing)
     UUID(str(body["command_id"]))
     UUID(str(body["tenant_id"]))
+    days = body.get("days") or []
+    if days and (body.get("day") or sorted(days) != days or len(set(days)) != len(days)):
+        raise _refuse("days_must_be_distinct_oldest_first_without_day")
+    for item in days:
+        date.fromisoformat(item)
+    for item in body.get("exclude_person_ids") or []:
+        UUID(str(item))
     return {**body, "include_sunday": body.get("include_sunday") is True}
 
 
 async def main(path: str, mode: Mode) -> int:
     spec = spec_of(path)
     settings = get_settings()
-    if settings.environment != "development":
-        raise _refuse("development_only", environment=settings.environment)
+    if settings.environment not in {"development", "staging", "production"}:
+        raise _refuse("unknown_environment", environment=settings.environment)
+    days = spec.get("days") or [spec.get("day")]
     engine = create_async_engine(settings.database_url, hide_parameters=True)
+    reports: list[dict[str, Any]] = []
     try:
         async with async_sessionmaker(engine, expire_on_commit=False)() as db:
             try:
-                report = await play(db, spec, mode=mode, now=datetime.now(UTC))
+                for day in days:
+                    reports.append(
+                        await play(
+                            db,
+                            {**spec, "day": day},
+                            mode=mode,
+                            now=datetime.now(UTC),
+                            environment=settings.environment,
+                        )
+                    )
             except BaseException:
                 await db.rollback()
                 raise
@@ -808,7 +858,8 @@ async def main(path: str, mode: Mode) -> int:
                 await db.rollback()
     finally:
         await engine.dispose()
-    print(json.dumps({"approval": spec["issue"], **report}, default=str))
+    body: dict[str, Any] = reports[0] if len(reports) == 1 else {"days": reports}
+    print(json.dumps({"approval": spec["issue"], **body}, default=str))
     return 0
 
 
