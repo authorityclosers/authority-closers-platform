@@ -98,6 +98,8 @@ export function plainSelector(selector) {
     .map((part) =>
       part
         .replace(/-module__[A-Za-z0-9_-]{4,10}__/g, ":")
+        // React's generated ids ("_r_0_", "_R_eatpesncflb_", ":r1:") differ from one render to the next.
+        .replace(/#_[rR]_[A-Za-z0-9]*_|#\\?:[rR][A-Za-z0-9]*\\?:/g, "#:id:")
         .replace(/:nth-(child|of-type)\(\d+\)/g, "")
         .replace(/\[data-radar-[a-z]+="[^"]*"\]/g, ""),
     )
@@ -136,6 +138,24 @@ export function union(a, b) {
   for (const cell of [...new Set([...Object.keys(a), ...Object.keys(b)])].sort())
     out[cell] = [...new Set([...(a[cell] ?? []), ...(b[cell] ?? [])])].sort();
   return out;
+}
+
+/**
+ * A baseline from the rows of one or more recording runs: a finding any run saw is known. A load that could not
+ * be measured in a run adds nothing from that run. Returns { cells, errors } (errors: the loads that failed).
+ */
+export function baselineFrom(runs) {
+  let cells = {};
+  const errors = [];
+  for (const rows of runs) {
+    const found = {};
+    for (const row of rows) {
+      if (row.error) errors.push(`${row.cell}: ${row.error}`);
+      else found[row.cell] = row.names ?? [];
+    }
+    cells = union(cells, found);
+  }
+  return { cells, errors };
 }
 
 /** What each check means, in the report's words. The radar's own checks keep the radar's words. */

@@ -42,8 +42,16 @@ The top 20 screens (review fixtures, fictional data) x 4 corner states (360 px d
 1280 px light and dark) x plain and long real-shaped data = 160 loads. Each load runs the radar's scan, the overlap
 scan, the contrast scan, axe-core and the gate's own checks. A new finding fails the run; a load with something new is
 measured three times and only what every pass saw counts. Findings already in `scripts/ci/wb-readability-baseline.json` do
-not block: that file is the list of known problems to work down. Make the baseline on the machine type that checks it
-(the hosted runner): take `readability.json` from a run's `wb-readability` artifact, never a laptop's.
+not block: that file is the list of known problems to work down. A load is measured only after its text and element
+count have held still for two seconds: the screens keep mounting things for 2 to 3.5 s after they load.
+
+**A new baseline** comes from the hosted runner, never from ac or a laptop:
+
+1. Put `{"schema": "ac.wb-readability-baseline/1", "recording": true}` in `scripts/ci/wb-readability-baseline.json` on
+   the workbench (do not commit it) and run `wb-ci --visual --include scripts/ci/wb-readability-baseline.json` twice.
+2. Download each run's `wb-readability` artifact (`gh run download <run> -n wb-readability`).
+3. `node scripts/ci/wb_readability_baseline.mjs scripts/ci/wb-readability-baseline.json run1/readability.json
+   run2/readability.json` writes what either run saw. Check it against one more run before committing.
 
 To add a screen: one line in `SCREENS` (`wb_readability_lib.mjs`), then record its cells into the baseline.
 
@@ -71,7 +79,9 @@ python scripts/phone_smoke.py 7505cec
 
 Exit 0 green, 1 a screen failed, 2 phone unreachable, 3 the app is signed out, 4 the phone is busy (the Live design
 app is in front), 5 signed in but not to a TEST workspace (it stops: never test as a real seller). It presses only the
-bottom bar. The Redmi is shared with the Mac's sessions: claim it in the Mac's inbox before a run.
+bottom bar. The Redmi is shared with the Mac's sessions: claim it in the Mac's inbox before a run. The phones
+need no Google account: the QA account signs in by e-mail with its existing password (owner, 19 Nov 2026). On the
+office PC set `ADB` to the platform-tools `adb.exe`; the `adb.CMD` shim on the PATH does not work.
 
 ## Screen judge
 

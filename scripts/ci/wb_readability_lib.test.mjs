@@ -6,6 +6,7 @@ import {
   JUNK,
   LONG,
   SCREENS,
+  baselineFrom,
   cellOf,
   compare,
   isJunk,
@@ -43,6 +44,11 @@ test("a finding's name drops build hashes and positions, never keeps on-screen t
     "div.leads:row > span.name",
   );
   assert.equal(nameOf({ check: "overlap", selector: "a.x  b.y" }), "overlap | a.x > b.y");
+  // An id React makes up for one render is not part of a finding's name.
+  assert.equal(plainSelector("#_r_0_-heading-overview"), "#:id:-heading-overview");
+  assert.equal(plainSelector("#_R_eatpesncflb_-heading-overview"), "#:id:-heading-overview");
+  assert.equal(plainSelector("#\\:r1\\:-label"), "#:id:-label");
+  assert.equal(plainSelector("#report-title"), "#report-title");
   assert.deepEqual(
     namesOf([
       { check: "b", selector: "x" },
@@ -67,6 +73,21 @@ test("two runs fold into one baseline", () => {
     one: ["a", "b", "c"],
     two: ["z"],
   });
+});
+
+test("a baseline from several recording runs knows what any of them saw", () => {
+  const { cells, errors } = baselineFrom([
+    [
+      { cell: "one", names: ["a | x"] },
+      { cell: "two", error: "timeout" },
+    ],
+    [
+      { cell: "one", names: ["b | y"] },
+      { cell: "two", names: ["c | z"] },
+    ],
+  ]);
+  assert.deepEqual(cells, { one: ["a | x", "b | y"], two: ["c | z"] });
+  assert.deepEqual(errors, ["two: timeout"]);
 });
 
 test("junk is whole words a person should never read", () => {
