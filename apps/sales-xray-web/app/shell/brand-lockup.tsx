@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useId, type CSSProperties } from "react";
 
 import { MARK_ART } from "../brand/brand-art";
+import { ParentEndorsement } from "../brand/parent-brand";
 import styles from "./brand-lockup.module.css";
 
 // The Sales X-Ray mark, polished (brand kit v0.2, logos/sales-x-ray/, owner's order 19 Nov 2026): the live
@@ -52,7 +53,14 @@ export function BrandLockup({
 }
 
 /** The living Sales X-Ray mark and wordmark, for callers that own the wrapper. */
-export function BrandMark({ markOnly = false }: { markOnly?: boolean }) {
+export function BrandMark({
+  markOnly = false,
+  onDark = false,
+}: {
+  markOnly?: boolean;
+  /** On a surface that is dark in both themes (the sign-in film). */
+  onDark?: boolean;
+}) {
   const id = `sx-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   return (
     <>
@@ -155,7 +163,7 @@ export function BrandMark({ markOnly = false }: { markOnly?: boolean }) {
               rx={HYPHEN.height / 2}
             />
           </svg>
-          <span className={styles.by}>by Authority Closers</span>
+          <ParentEndorsement className={styles.by} onDark={onDark} />
         </span>
       )}
     </>
