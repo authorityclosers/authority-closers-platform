@@ -1,0 +1,1837 @@
+{
+  "name": "Authority Closers + Vitals OS sound library",
+  "version": "0.1.0",
+  "updated": "2026-11-20",
+  "status": "candidate (owner picks the defaults; every sound here is mastered and usable)",
+  "loudness": {
+    "ringtone_lufs": -14.0,
+    "notifications_lufs": -16.0,
+    "true_peak_ceiling_dbtp": -1.3,
+    "sample_rate": 48000
+  },
+  "formats": {
+    "wav": "48 kHz / 24-bit master (editing, video)",
+    "caf": "iOS notification + ringtone (bundle it; iOS plays <=30 s)",
+    "ogg": "Android notification channel sound (res/raw)",
+    "mp3": "web fallback",
+    "webm": "web (Opus), preferred in Chrome/Android WebView"
+  },
+  "categories": [
+    {
+      "id": "calls",
+      "label": "Calls",
+      "kinds": ["ringtone"]
+    },
+    {
+      "id": "messages",
+      "label": "Messages & leads",
+      "kinds": ["message", "mention"]
+    },
+    {
+      "id": "reminders",
+      "label": "Reminders",
+      "kinds": ["reminder"]
+    },
+    {
+      "id": "feedback",
+      "label": "Feedback",
+      "kinds": ["success", "error"]
+    }
+  ],
+  "kinds": {
+    "ringtone": {
+      "category": "calls",
+      "label": "Ringtone",
+      "use": "Incoming call, loops until answered"
+    },
+    "message": {
+      "category": "messages",
+      "label": "Message",
+      "use": "A new message or a new lead arrives"
+    },
+    "mention": {
+      "category": "messages",
+      "label": "Mention",
+      "use": "Someone needs YOU: a mention, a lead given to you"
+    },
+    "reminder": {
+      "category": "reminders",
+      "label": "Reminder",
+      "use": "A follow-up or task is due"
+    },
+    "success": {
+      "category": "feedback",
+      "label": "Success",
+      "use": "Something worked: report ready, deal won, saved"
+    },
+    "error": {
+      "category": "feedback",
+      "label": "Error",
+      "use": "Something failed and needs a look"
+    }
+  },
+  "events": [
+    {
+      "id": "sx.incoming_call",
+      "app": "sales-x-ray",
+      "label": "Incoming call",
+      "kind": "ringtone",
+      "default": "glass-v3.ringtone",
+      "choices": "every sound whose kind is 'ringtone' (any pack), plus 'none' and 'system'"
+    },
+    {
+      "id": "sx.new_lead",
+      "app": "sales-x-ray",
+      "label": "New lead given to me",
+      "kind": "mention",
+      "default": "glass-v2.mention",
+      "choices": "every sound whose kind is 'mention' (any pack), plus 'none' and 'system'"
+    },
+    {
+      "id": "sx.new_message",
+      "app": "sales-x-ray",
+      "label": "New message / update",
+      "kind": "message",
+      "default": "glass-v2.message",
+      "choices": "every sound whose kind is 'message' (any pack), plus 'none' and 'system'"
+    },
+    {
+      "id": "sx.follow_up_due",
+      "app": "sales-x-ray",
+      "label": "Follow-up due",
+      "kind": "reminder",
+      "default": "glass-v2.reminder",
+      "choices": "every sound whose kind is 'reminder' (any pack), plus 'none' and 'system'"
+    },
+    {
+      "id": "sx.report_ready",
+      "app": "sales-x-ray",
+      "label": "Call report ready",
+      "kind": "success",
+      "default": "glass-v1.success",
+      "choices": "every sound whose kind is 'success' (any pack), plus 'none' and 'system'"
+    },
+    {
+      "id": "sx.upload_failed",
+      "app": "sales-x-ray",
+      "label": "Recording/upload problem",
+      "kind": "error",
+      "default": "glass-v3.error",
+      "choices": "every sound whose kind is 'error' (any pack), plus 'none' and 'system'"
+    },
+    {
+      "id": "pulse.incoming_call",
+      "app": "vitals-os",
+      "label": "Incoming call",
+      "kind": "ringtone",
+      "default": "glass-v3.ringtone",
+      "choices": "every sound whose kind is 'ringtone' (any pack), plus 'none' and 'system'"
+    },
+    {
+      "id": "pulse.message",
+      "app": "vitals-os",
+      "label": "New message",
+      "kind": "message",
+      "default": "glass-v2.message",
+      "choices": "every sound whose kind is 'message' (any pack), plus 'none' and 'system'"
+    },
+    {
+      "id": "pulse.mention",
+      "app": "vitals-os",
+      "label": "Mention / assigned to me",
+      "kind": "mention",
+      "default": "glass-v2.mention",
+      "choices": "every sound whose kind is 'mention' (any pack), plus 'none' and 'system'"
+    },
+    {
+      "id": "pulse.reminder",
+      "app": "vitals-os",
+      "label": "Task / reminder due",
+      "kind": "reminder",
+      "default": "glass-v2.reminder",
+      "choices": "every sound whose kind is 'reminder' (any pack), plus 'none' and 'system'"
+    },
+    {
+      "id": "pulse.success",
+      "app": "vitals-os",
+      "label": "Done / approved",
+      "kind": "success",
+      "default": "glass-v1.success",
+      "choices": "every sound whose kind is 'success' (any pack), plus 'none' and 'system'"
+    },
+    {
+      "id": "pulse.error",
+      "app": "vitals-os",
+      "label": "Failed / needs attention",
+      "kind": "error",
+      "default": "glass-v3.error",
+      "choices": "every sound whose kind is 'error' (any pack), plus 'none' and 'system'"
+    }
+  ],
+  "packs": [
+    {
+      "id": "A",
+      "title": "Synth A \u00b7 Glass",
+      "family": "synth",
+      "source": "synth (ea)"
+    },
+    {
+      "id": "B",
+      "title": "Synth B \u00b7 Warm",
+      "family": "synth",
+      "source": "synth (ea)"
+    },
+    {
+      "id": "C",
+      "title": "Synth C \u00b7 Pulse",
+      "family": "synth",
+      "source": "synth (ea)"
+    },
+    {
+      "id": "glass-v1",
+      "title": "Glass V1",
+      "family": "glass",
+      "source": "ElevenLabs, retuned to E major + mastered (ea)"
+    },
+    {
+      "id": "glass-v2",
+      "title": "Glass V2",
+      "family": "glass",
+      "source": "ElevenLabs, retuned to E major + mastered (ea)"
+    },
+    {
+      "id": "glass-v3",
+      "title": "Glass V3",
+      "family": "glass",
+      "source": "ElevenLabs, retuned to E major + mastered (ea)"
+    },
+    {
+      "id": "warm-v1",
+      "title": "Warm V1",
+      "family": "warm",
+      "source": "ElevenLabs, retuned to E major + mastered (ea)"
+    },
+    {
+      "id": "warm-v2",
+      "title": "Warm V2",
+      "family": "warm",
+      "source": "ElevenLabs, retuned to E major + mastered (ea)"
+    },
+    {
+      "id": "warm-v3",
+      "title": "Warm V3",
+      "family": "warm",
+      "source": "ElevenLabs, retuned to E major + mastered (ea)"
+    },
+    {
+      "id": "pulse-v1",
+      "title": "Pulse V1",
+      "family": "pulse",
+      "source": "ElevenLabs, retuned to E major + mastered (ea)"
+    },
+    {
+      "id": "pulse-v2",
+      "title": "Pulse V2",
+      "family": "pulse",
+      "source": "ElevenLabs, retuned to E major + mastered (ea)"
+    },
+    {
+      "id": "pulse-v3",
+      "title": "Pulse V3",
+      "family": "pulse",
+      "source": "ElevenLabs, retuned to E major + mastered (ea)"
+    }
+  ],
+  "sounds": [
+    {
+      "id": "A.ringtone",
+      "pack": "A",
+      "family": "synth",
+      "kind": "ringtone",
+      "category": "calls",
+      "title": "Synth A \u00b7 Glass \u00b7 Ringtone",
+      "what": "8.0 s loop, 120 BPM, E | A | C#m7 | B; motif B5-E6 opens bars 1 and 3; bar 4 leads D#6 back to E",
+      "seconds": 8.0,
+      "loop": true,
+      "lufs": -14.0,
+      "true_peak_dbtp": -4.97,
+      "files": {
+        "wav": "sets/A/ringtone.wav",
+        "caf": "sets/A/ringtone.caf",
+        "ogg": "sets/A/ringtone.ogg",
+        "mp3": "sets/A/ringtone.mp3",
+        "webm": "sets/A/ringtone.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "A.message",
+      "pack": "A",
+      "family": "synth",
+      "kind": "message",
+      "category": "messages",
+      "title": "Synth A \u00b7 Glass \u00b7 Message",
+      "what": "tap + B5 -> E6 (the motif), 0.8 s",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -7.32,
+      "files": {
+        "wav": "sets/A/message.wav",
+        "caf": "sets/A/message.caf",
+        "ogg": "sets/A/message.ogg",
+        "mp3": "sets/A/message.mp3",
+        "webm": "sets/A/message.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "A.mention",
+      "pack": "A",
+      "family": "synth",
+      "kind": "mention",
+      "category": "messages",
+      "title": "Synth A \u00b7 Glass \u00b7 Mention",
+      "what": "tap + B5 -> E6 -> G#6 (E major, rising), 0.95 s",
+      "seconds": 0.95,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -7.27,
+      "files": {
+        "wav": "sets/A/mention.wav",
+        "caf": "sets/A/mention.caf",
+        "ogg": "sets/A/mention.ogg",
+        "mp3": "sets/A/mention.mp3",
+        "webm": "sets/A/mention.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "A.reminder",
+      "pack": "A",
+      "family": "synth",
+      "kind": "reminder",
+      "category": "reminders",
+      "title": "Synth A \u00b7 Glass \u00b7 Reminder",
+      "what": "motif twice (second softer), 1.3 s",
+      "seconds": 1.3,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -7.4,
+      "files": {
+        "wav": "sets/A/reminder.wav",
+        "caf": "sets/A/reminder.caf",
+        "ogg": "sets/A/reminder.ogg",
+        "mp3": "sets/A/reminder.mp3",
+        "webm": "sets/A/reminder.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "A.success",
+      "pack": "A",
+      "family": "synth",
+      "kind": "success",
+      "category": "feedback",
+      "title": "Synth A \u00b7 Glass \u00b7 Success",
+      "what": "fast B5-E6-G#6-B6 + E major chord bloom + E7 sparkle, 1.6 s",
+      "seconds": 1.6,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -5.82,
+      "files": {
+        "wav": "sets/A/success.wav",
+        "caf": "sets/A/success.caf",
+        "ogg": "sets/A/success.ogg",
+        "mp3": "sets/A/success.mp3",
+        "webm": "sets/A/success.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "A.error",
+      "pack": "A",
+      "family": "synth",
+      "kind": "error",
+      "category": "feedback",
+      "title": "Synth A \u00b7 Glass \u00b7 Error",
+      "what": "gentle: E5 -> B4 (the motif inverted, an octave lower), darker, 0.8 s",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -7.93,
+      "files": {
+        "wav": "sets/A/error.wav",
+        "caf": "sets/A/error.caf",
+        "ogg": "sets/A/error.ogg",
+        "mp3": "sets/A/error.mp3",
+        "webm": "sets/A/error.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "B.ringtone",
+      "pack": "B",
+      "family": "synth",
+      "kind": "ringtone",
+      "category": "calls",
+      "title": "Synth B \u00b7 Warm \u00b7 Ringtone",
+      "what": "8.0 s loop, 120 BPM, E | A | C#m7 | B; motif B5-E6 opens bars 1 and 3; bar 4 leads D#6 back to E",
+      "seconds": 8.0,
+      "loop": true,
+      "lufs": -14.0,
+      "true_peak_dbtp": -1.72,
+      "files": {
+        "wav": "sets/B/ringtone.wav",
+        "caf": "sets/B/ringtone.caf",
+        "ogg": "sets/B/ringtone.ogg",
+        "mp3": "sets/B/ringtone.mp3",
+        "webm": "sets/B/ringtone.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "B.message",
+      "pack": "B",
+      "family": "synth",
+      "kind": "message",
+      "category": "messages",
+      "title": "Synth B \u00b7 Warm \u00b7 Message",
+      "what": "tap + B5 -> E6 (the motif), 0.8 s",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -7.35,
+      "files": {
+        "wav": "sets/B/message.wav",
+        "caf": "sets/B/message.caf",
+        "ogg": "sets/B/message.ogg",
+        "mp3": "sets/B/message.mp3",
+        "webm": "sets/B/message.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "B.mention",
+      "pack": "B",
+      "family": "synth",
+      "kind": "mention",
+      "category": "messages",
+      "title": "Synth B \u00b7 Warm \u00b7 Mention",
+      "what": "tap + B5 -> E6 -> G#6 (E major, rising), 0.95 s",
+      "seconds": 0.95,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -6.1,
+      "files": {
+        "wav": "sets/B/mention.wav",
+        "caf": "sets/B/mention.caf",
+        "ogg": "sets/B/mention.ogg",
+        "mp3": "sets/B/mention.mp3",
+        "webm": "sets/B/mention.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "B.reminder",
+      "pack": "B",
+      "family": "synth",
+      "kind": "reminder",
+      "category": "reminders",
+      "title": "Synth B \u00b7 Warm \u00b7 Reminder",
+      "what": "motif twice (second softer), 1.3 s",
+      "seconds": 1.3,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -6.59,
+      "files": {
+        "wav": "sets/B/reminder.wav",
+        "caf": "sets/B/reminder.caf",
+        "ogg": "sets/B/reminder.ogg",
+        "mp3": "sets/B/reminder.mp3",
+        "webm": "sets/B/reminder.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "B.success",
+      "pack": "B",
+      "family": "synth",
+      "kind": "success",
+      "category": "feedback",
+      "title": "Synth B \u00b7 Warm \u00b7 Success",
+      "what": "fast B5-E6-G#6-B6 + E major chord bloom + E7 sparkle, 1.6 s",
+      "seconds": 1.6,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -4.77,
+      "files": {
+        "wav": "sets/B/success.wav",
+        "caf": "sets/B/success.caf",
+        "ogg": "sets/B/success.ogg",
+        "mp3": "sets/B/success.mp3",
+        "webm": "sets/B/success.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "B.error",
+      "pack": "B",
+      "family": "synth",
+      "kind": "error",
+      "category": "feedback",
+      "title": "Synth B \u00b7 Warm \u00b7 Error",
+      "what": "gentle: E5 -> B4 (the motif inverted, an octave lower), darker, 0.8 s",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -5.62,
+      "files": {
+        "wav": "sets/B/error.wav",
+        "caf": "sets/B/error.caf",
+        "ogg": "sets/B/error.ogg",
+        "mp3": "sets/B/error.mp3",
+        "webm": "sets/B/error.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "C.ringtone",
+      "pack": "C",
+      "family": "synth",
+      "kind": "ringtone",
+      "category": "calls",
+      "title": "Synth C \u00b7 Pulse \u00b7 Ringtone",
+      "what": "8.0 s loop, 120 BPM, E | A | C#m7 | B; motif B5-E6 opens bars 1 and 3; bar 4 leads D#6 back to E",
+      "seconds": 8.0,
+      "loop": true,
+      "lufs": -14.0,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/C/ringtone.wav",
+        "caf": "sets/C/ringtone.caf",
+        "ogg": "sets/C/ringtone.ogg",
+        "mp3": "sets/C/ringtone.mp3",
+        "webm": "sets/C/ringtone.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "C.message",
+      "pack": "C",
+      "family": "synth",
+      "kind": "message",
+      "category": "messages",
+      "title": "Synth C \u00b7 Pulse \u00b7 Message",
+      "what": "tap + B5 -> E6 (the motif), 0.8 s",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -3.95,
+      "files": {
+        "wav": "sets/C/message.wav",
+        "caf": "sets/C/message.caf",
+        "ogg": "sets/C/message.ogg",
+        "mp3": "sets/C/message.mp3",
+        "webm": "sets/C/message.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "C.mention",
+      "pack": "C",
+      "family": "synth",
+      "kind": "mention",
+      "category": "messages",
+      "title": "Synth C \u00b7 Pulse \u00b7 Mention",
+      "what": "tap + B5 -> E6 -> G#6 (E major, rising), 0.95 s",
+      "seconds": 0.95,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -5.94,
+      "files": {
+        "wav": "sets/C/mention.wav",
+        "caf": "sets/C/mention.caf",
+        "ogg": "sets/C/mention.ogg",
+        "mp3": "sets/C/mention.mp3",
+        "webm": "sets/C/mention.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "C.reminder",
+      "pack": "C",
+      "family": "synth",
+      "kind": "reminder",
+      "category": "reminders",
+      "title": "Synth C \u00b7 Pulse \u00b7 Reminder",
+      "what": "motif twice (second softer), 1.3 s",
+      "seconds": 1.3,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -3.66,
+      "files": {
+        "wav": "sets/C/reminder.wav",
+        "caf": "sets/C/reminder.caf",
+        "ogg": "sets/C/reminder.ogg",
+        "mp3": "sets/C/reminder.mp3",
+        "webm": "sets/C/reminder.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "C.success",
+      "pack": "C",
+      "family": "synth",
+      "kind": "success",
+      "category": "feedback",
+      "title": "Synth C \u00b7 Pulse \u00b7 Success",
+      "what": "fast B5-E6-G#6-B6 + E major chord bloom + E7 sparkle, 1.6 s",
+      "seconds": 1.6,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -5.43,
+      "files": {
+        "wav": "sets/C/success.wav",
+        "caf": "sets/C/success.caf",
+        "ogg": "sets/C/success.ogg",
+        "mp3": "sets/C/success.mp3",
+        "webm": "sets/C/success.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "C.error",
+      "pack": "C",
+      "family": "synth",
+      "kind": "error",
+      "category": "feedback",
+      "title": "Synth C \u00b7 Pulse \u00b7 Error",
+      "what": "gentle: E5 -> B4 (the motif inverted, an octave lower), darker, 0.8 s",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -3.34,
+      "files": {
+        "wav": "sets/C/error.wav",
+        "caf": "sets/C/error.caf",
+        "ogg": "sets/C/error.ogg",
+        "mp3": "sets/C/error.mp3",
+        "webm": "sets/C/error.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "glass-v1.ringtone",
+      "pack": "glass-v1",
+      "family": "glass",
+      "kind": "ringtone",
+      "category": "calls",
+      "title": "Glass V1 \u00b7 Ringtone",
+      "what": "ElevenLabs glass take 1, retuned -101 c; strongest notes E6 37%, F5 22%, A#5 17%",
+      "seconds": 8.48,
+      "loop": true,
+      "lufs": -14.04,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/glass-v1/ringtone.wav",
+        "caf": "sets/glass-v1/ringtone.caf",
+        "ogg": "sets/glass-v1/ringtone.ogg",
+        "mp3": "sets/glass-v1/ringtone.mp3",
+        "webm": "sets/glass-v1/ringtone.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "glass-v1.message",
+      "pack": "glass-v1",
+      "family": "glass",
+      "kind": "message",
+      "category": "messages",
+      "title": "Glass V1 \u00b7 Message",
+      "what": "ElevenLabs glass take 1, retuned +92 c; strongest notes C#5 100%, G#3 0%, B4 0%",
+      "seconds": 0.76,
+      "loop": false,
+      "lufs": -18.23,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/glass-v1/message.wav",
+        "caf": "sets/glass-v1/message.caf",
+        "ogg": "sets/glass-v1/message.ogg",
+        "mp3": "sets/glass-v1/message.mp3",
+        "webm": "sets/glass-v1/message.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "glass-v1.mention",
+      "pack": "glass-v1",
+      "family": "glass",
+      "kind": "mention",
+      "category": "messages",
+      "title": "Glass V1 \u00b7 Mention",
+      "what": "ElevenLabs glass take 1, retuned +92 c; strongest notes F#7 48%, B6 42%, F#6 11%",
+      "seconds": 0.95,
+      "loop": false,
+      "lufs": -16.03,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/glass-v1/mention.wav",
+        "caf": "sets/glass-v1/mention.caf",
+        "ogg": "sets/glass-v1/mention.ogg",
+        "mp3": "sets/glass-v1/mention.mp3",
+        "webm": "sets/glass-v1/mention.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "glass-v1.reminder",
+      "pack": "glass-v1",
+      "family": "glass",
+      "kind": "reminder",
+      "category": "reminders",
+      "title": "Glass V1 \u00b7 Reminder",
+      "what": "ElevenLabs glass take 1, retuned -0 c; strongest notes F#5 88%, B5 12%, G3 0%",
+      "seconds": 1.28,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -4.76,
+      "files": {
+        "wav": "sets/glass-v1/reminder.wav",
+        "caf": "sets/glass-v1/reminder.caf",
+        "ogg": "sets/glass-v1/reminder.ogg",
+        "mp3": "sets/glass-v1/reminder.mp3",
+        "webm": "sets/glass-v1/reminder.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "glass-v1.success",
+      "pack": "glass-v1",
+      "family": "glass",
+      "kind": "success",
+      "category": "feedback",
+      "title": "Glass V1 \u00b7 Success",
+      "what": "ElevenLabs glass take 1, retuned +92 c; strongest notes F#6 33%, D#7 20%, D#6 16%",
+      "seconds": 1.52,
+      "loop": false,
+      "lufs": -16.02,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/glass-v1/success.wav",
+        "caf": "sets/glass-v1/success.caf",
+        "ogg": "sets/glass-v1/success.ogg",
+        "mp3": "sets/glass-v1/success.mp3",
+        "webm": "sets/glass-v1/success.webm"
+      },
+      "recommended_take": true,
+      "status": "candidate"
+    },
+    {
+      "id": "glass-v1.error",
+      "pack": "glass-v1",
+      "family": "glass",
+      "kind": "error",
+      "category": "feedback",
+      "title": "Glass V1 \u00b7 Error",
+      "what": "ElevenLabs glass take 1, retuned -1 c; strongest notes C#5 100%, G3 0%, D5 0%",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -16.01,
+      "true_peak_dbtp": -3.94,
+      "files": {
+        "wav": "sets/glass-v1/error.wav",
+        "caf": "sets/glass-v1/error.caf",
+        "ogg": "sets/glass-v1/error.ogg",
+        "mp3": "sets/glass-v1/error.mp3",
+        "webm": "sets/glass-v1/error.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "glass-v2.ringtone",
+      "pack": "glass-v2",
+      "family": "glass",
+      "kind": "ringtone",
+      "category": "calls",
+      "title": "Glass V2 \u00b7 Ringtone",
+      "what": "ElevenLabs glass take 2, retuned +0 c; strongest notes F#5 29%, B5 23%, D#5 18%",
+      "seconds": 8.0,
+      "loop": true,
+      "lufs": -14.0,
+      "true_peak_dbtp": -3.91,
+      "files": {
+        "wav": "sets/glass-v2/ringtone.wav",
+        "caf": "sets/glass-v2/ringtone.caf",
+        "ogg": "sets/glass-v2/ringtone.ogg",
+        "mp3": "sets/glass-v2/ringtone.mp3",
+        "webm": "sets/glass-v2/ringtone.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "glass-v2.message",
+      "pack": "glass-v2",
+      "family": "glass",
+      "kind": "message",
+      "category": "messages",
+      "title": "Glass V2 \u00b7 Message",
+      "what": "ElevenLabs glass take 2, retuned -102 c; strongest notes G#6 100%, F#6 0%, G6 0%",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -16.02,
+      "true_peak_dbtp": -1.94,
+      "files": {
+        "wav": "sets/glass-v2/message.wav",
+        "caf": "sets/glass-v2/message.caf",
+        "ogg": "sets/glass-v2/message.ogg",
+        "mp3": "sets/glass-v2/message.mp3",
+        "webm": "sets/glass-v2/message.webm"
+      },
+      "recommended_take": true,
+      "status": "candidate"
+    },
+    {
+      "id": "glass-v2.mention",
+      "pack": "glass-v2",
+      "family": "glass",
+      "kind": "mention",
+      "category": "messages",
+      "title": "Glass V2 \u00b7 Mention",
+      "what": "ElevenLabs glass take 2, retuned -103 c; strongest notes B6 89%, B7 11%, A6 0%",
+      "seconds": 1.0,
+      "loop": false,
+      "lufs": -16.01,
+      "true_peak_dbtp": -5.84,
+      "files": {
+        "wav": "sets/glass-v2/mention.wav",
+        "caf": "sets/glass-v2/mention.caf",
+        "ogg": "sets/glass-v2/mention.ogg",
+        "mp3": "sets/glass-v2/mention.mp3",
+        "webm": "sets/glass-v2/mention.webm"
+      },
+      "recommended_take": true,
+      "status": "candidate"
+    },
+    {
+      "id": "glass-v2.reminder",
+      "pack": "glass-v2",
+      "family": "glass",
+      "kind": "reminder",
+      "category": "reminders",
+      "title": "Glass V2 \u00b7 Reminder",
+      "what": "ElevenLabs glass take 2, retuned -2 c; strongest notes B5 100%, C6 0%",
+      "seconds": 1.28,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -3.97,
+      "files": {
+        "wav": "sets/glass-v2/reminder.wav",
+        "caf": "sets/glass-v2/reminder.caf",
+        "ogg": "sets/glass-v2/reminder.ogg",
+        "mp3": "sets/glass-v2/reminder.mp3",
+        "webm": "sets/glass-v2/reminder.webm"
+      },
+      "recommended_take": true,
+      "status": "candidate"
+    },
+    {
+      "id": "glass-v2.success",
+      "pack": "glass-v2",
+      "family": "glass",
+      "kind": "success",
+      "category": "feedback",
+      "title": "Glass V2 \u00b7 Success",
+      "what": "ElevenLabs glass take 2, retuned +95 c; strongest notes G#6 35%, C#7 21%, F6 17%",
+      "seconds": 1.51,
+      "loop": false,
+      "lufs": -16.03,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/glass-v2/success.wav",
+        "caf": "sets/glass-v2/success.caf",
+        "ogg": "sets/glass-v2/success.ogg",
+        "mp3": "sets/glass-v2/success.mp3",
+        "webm": "sets/glass-v2/success.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "glass-v2.error",
+      "pack": "glass-v2",
+      "family": "glass",
+      "kind": "error",
+      "category": "feedback",
+      "title": "Glass V2 \u00b7 Error",
+      "what": "ElevenLabs glass take 2, retuned -102 c; strongest notes B4 55%, E5 45%, F#3 0%",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -16.03,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/glass-v2/error.wav",
+        "caf": "sets/glass-v2/error.caf",
+        "ogg": "sets/glass-v2/error.ogg",
+        "mp3": "sets/glass-v2/error.mp3",
+        "webm": "sets/glass-v2/error.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "glass-v3.ringtone",
+      "pack": "glass-v3",
+      "family": "glass",
+      "kind": "ringtone",
+      "category": "calls",
+      "title": "Glass V3 \u00b7 Ringtone",
+      "what": "ElevenLabs glass take 3, retuned -3 c; strongest notes B5 50%, E5 35%, E6 15%",
+      "seconds": 8.01,
+      "loop": true,
+      "lufs": -14.0,
+      "true_peak_dbtp": -3.8,
+      "files": {
+        "wav": "sets/glass-v3/ringtone.wav",
+        "caf": "sets/glass-v3/ringtone.caf",
+        "ogg": "sets/glass-v3/ringtone.ogg",
+        "mp3": "sets/glass-v3/ringtone.mp3",
+        "webm": "sets/glass-v3/ringtone.webm"
+      },
+      "recommended_take": true,
+      "status": "candidate"
+    },
+    {
+      "id": "glass-v3.message",
+      "pack": "glass-v3",
+      "family": "glass",
+      "kind": "message",
+      "category": "messages",
+      "title": "Glass V3 \u00b7 Message",
+      "what": "ElevenLabs glass take 3, retuned -100 c; strongest notes G#5 100%, G5 0%",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -16.01,
+      "true_peak_dbtp": -1.46,
+      "files": {
+        "wav": "sets/glass-v3/message.wav",
+        "caf": "sets/glass-v3/message.caf",
+        "ogg": "sets/glass-v3/message.ogg",
+        "mp3": "sets/glass-v3/message.mp3",
+        "webm": "sets/glass-v3/message.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "glass-v3.mention",
+      "pack": "glass-v3",
+      "family": "glass",
+      "kind": "mention",
+      "category": "messages",
+      "title": "Glass V3 \u00b7 Mention",
+      "what": "ElevenLabs glass take 3, retuned +100 c; strongest notes D#6 95%, D#7 4%, D6 0%",
+      "seconds": 0.94,
+      "loop": false,
+      "lufs": -16.02,
+      "true_peak_dbtp": -3.22,
+      "files": {
+        "wav": "sets/glass-v3/mention.wav",
+        "caf": "sets/glass-v3/mention.caf",
+        "ogg": "sets/glass-v3/mention.ogg",
+        "mp3": "sets/glass-v3/mention.mp3",
+        "webm": "sets/glass-v3/mention.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "glass-v3.reminder",
+      "pack": "glass-v3",
+      "family": "glass",
+      "kind": "reminder",
+      "category": "reminders",
+      "title": "Glass V3 \u00b7 Reminder",
+      "what": "ElevenLabs glass take 3, retuned +95 c; strongest notes C#7 90%, C#8 8%, D7 1%",
+      "seconds": 1.21,
+      "loop": false,
+      "lufs": -16.01,
+      "true_peak_dbtp": -6.49,
+      "files": {
+        "wav": "sets/glass-v3/reminder.wav",
+        "caf": "sets/glass-v3/reminder.caf",
+        "ogg": "sets/glass-v3/reminder.ogg",
+        "mp3": "sets/glass-v3/reminder.mp3",
+        "webm": "sets/glass-v3/reminder.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "glass-v3.success",
+      "pack": "glass-v3",
+      "family": "glass",
+      "kind": "success",
+      "category": "feedback",
+      "title": "Glass V3 \u00b7 Success",
+      "what": "ElevenLabs glass take 3, retuned -13 c; strongest notes E7 38%, C7 28%, G6 18%",
+      "seconds": 1.6,
+      "loop": false,
+      "lufs": -16.04,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/glass-v3/success.wav",
+        "caf": "sets/glass-v3/success.caf",
+        "ogg": "sets/glass-v3/success.ogg",
+        "mp3": "sets/glass-v3/success.mp3",
+        "webm": "sets/glass-v3/success.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "glass-v3.error",
+      "pack": "glass-v3",
+      "family": "glass",
+      "kind": "error",
+      "category": "feedback",
+      "title": "Glass V3 \u00b7 Error",
+      "what": "ElevenLabs glass take 3, retuned -101 c; strongest notes B5 61%, F#5 38%, C6 0%",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -3.82,
+      "files": {
+        "wav": "sets/glass-v3/error.wav",
+        "caf": "sets/glass-v3/error.caf",
+        "ogg": "sets/glass-v3/error.ogg",
+        "mp3": "sets/glass-v3/error.mp3",
+        "webm": "sets/glass-v3/error.webm"
+      },
+      "recommended_take": true,
+      "status": "candidate"
+    },
+    {
+      "id": "warm-v1.ringtone",
+      "pack": "warm-v1",
+      "family": "warm",
+      "kind": "ringtone",
+      "category": "calls",
+      "title": "Warm V1 \u00b7 Ringtone",
+      "what": "ElevenLabs warm take 1, retuned -0 c; strongest notes A4 20%, G4 17%, F#4 12%",
+      "seconds": 8.0,
+      "loop": true,
+      "lufs": -14.04,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/warm-v1/ringtone.wav",
+        "caf": "sets/warm-v1/ringtone.caf",
+        "ogg": "sets/warm-v1/ringtone.ogg",
+        "mp3": "sets/warm-v1/ringtone.mp3",
+        "webm": "sets/warm-v1/ringtone.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "warm-v1.message",
+      "pack": "warm-v1",
+      "family": "warm",
+      "kind": "message",
+      "category": "messages",
+      "title": "Warm V1 \u00b7 Message",
+      "what": "ElevenLabs warm take 1, retuned -99 c; strongest notes B3 59%, C#4 41%, A3 0%",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -16.01,
+      "true_peak_dbtp": -2.03,
+      "files": {
+        "wav": "sets/warm-v1/message.wav",
+        "caf": "sets/warm-v1/message.caf",
+        "ogg": "sets/warm-v1/message.ogg",
+        "mp3": "sets/warm-v1/message.mp3",
+        "webm": "sets/warm-v1/message.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "warm-v1.mention",
+      "pack": "warm-v1",
+      "family": "warm",
+      "kind": "mention",
+      "category": "messages",
+      "title": "Warm V1 \u00b7 Mention",
+      "what": "ElevenLabs warm take 1, retuned -101 c; strongest notes E4 85%, A3 15%",
+      "seconds": 1.0,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -3.13,
+      "files": {
+        "wav": "sets/warm-v1/mention.wav",
+        "caf": "sets/warm-v1/mention.caf",
+        "ogg": "sets/warm-v1/mention.ogg",
+        "mp3": "sets/warm-v1/mention.mp3",
+        "webm": "sets/warm-v1/mention.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "warm-v1.reminder",
+      "pack": "warm-v1",
+      "family": "warm",
+      "kind": "reminder",
+      "category": "reminders",
+      "title": "Warm V1 \u00b7 Reminder",
+      "what": "ElevenLabs warm take 1, retuned +1 c; strongest notes F#3 99%, F#4 1%",
+      "seconds": 1.28,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -7.26,
+      "files": {
+        "wav": "sets/warm-v1/reminder.wav",
+        "caf": "sets/warm-v1/reminder.caf",
+        "ogg": "sets/warm-v1/reminder.ogg",
+        "mp3": "sets/warm-v1/reminder.mp3",
+        "webm": "sets/warm-v1/reminder.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "warm-v1.success",
+      "pack": "warm-v1",
+      "family": "warm",
+      "kind": "success",
+      "category": "feedback",
+      "title": "Warm V1 \u00b7 Success",
+      "what": "ElevenLabs warm take 1, retuned +0 c; strongest notes C#5 49%, A4 35%, F#4 16%",
+      "seconds": 1.6,
+      "loop": false,
+      "lufs": -16.05,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/warm-v1/success.wav",
+        "caf": "sets/warm-v1/success.caf",
+        "ogg": "sets/warm-v1/success.ogg",
+        "mp3": "sets/warm-v1/success.mp3",
+        "webm": "sets/warm-v1/success.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "warm-v1.error",
+      "pack": "warm-v1",
+      "family": "warm",
+      "kind": "error",
+      "category": "feedback",
+      "title": "Warm V1 \u00b7 Error",
+      "what": "ElevenLabs warm take 1, retuned -101 c; strongest notes E4 70%, A#3 30%, C#4 0%",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -16.01,
+      "true_peak_dbtp": -1.94,
+      "files": {
+        "wav": "sets/warm-v1/error.wav",
+        "caf": "sets/warm-v1/error.caf",
+        "ogg": "sets/warm-v1/error.ogg",
+        "mp3": "sets/warm-v1/error.mp3",
+        "webm": "sets/warm-v1/error.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "warm-v2.ringtone",
+      "pack": "warm-v2",
+      "family": "warm",
+      "kind": "ringtone",
+      "category": "calls",
+      "title": "Warm V2 \u00b7 Ringtone",
+      "what": "ElevenLabs warm take 2, retuned +1 c; strongest notes F#4 18%, D4 15%, B4 15%",
+      "seconds": 8.0,
+      "loop": true,
+      "lufs": -16.08,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/warm-v2/ringtone.wav",
+        "caf": "sets/warm-v2/ringtone.caf",
+        "ogg": "sets/warm-v2/ringtone.ogg",
+        "mp3": "sets/warm-v2/ringtone.mp3",
+        "webm": "sets/warm-v2/ringtone.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "warm-v2.message",
+      "pack": "warm-v2",
+      "family": "warm",
+      "kind": "message",
+      "category": "messages",
+      "title": "Warm V2 \u00b7 Message",
+      "what": "ElevenLabs warm take 2, retuned +100 c; strongest notes D#5 51%, G#4 49%, A4 0%",
+      "seconds": 0.76,
+      "loop": false,
+      "lufs": -16.02,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/warm-v2/message.wav",
+        "caf": "sets/warm-v2/message.caf",
+        "ogg": "sets/warm-v2/message.ogg",
+        "mp3": "sets/warm-v2/message.mp3",
+        "webm": "sets/warm-v2/message.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "warm-v2.mention",
+      "pack": "warm-v2",
+      "family": "warm",
+      "kind": "mention",
+      "category": "messages",
+      "title": "Warm V2 \u00b7 Mention",
+      "what": "ElevenLabs warm take 2, retuned -101 c; strongest notes B3 100%, A3 0%",
+      "seconds": 1.0,
+      "loop": false,
+      "lufs": -16.03,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/warm-v2/mention.wav",
+        "caf": "sets/warm-v2/mention.caf",
+        "ogg": "sets/warm-v2/mention.ogg",
+        "mp3": "sets/warm-v2/mention.mp3",
+        "webm": "sets/warm-v2/mention.webm"
+      },
+      "recommended_take": true,
+      "status": "candidate"
+    },
+    {
+      "id": "warm-v2.reminder",
+      "pack": "warm-v2",
+      "family": "warm",
+      "kind": "reminder",
+      "category": "reminders",
+      "title": "Warm V2 \u00b7 Reminder",
+      "what": "ElevenLabs warm take 2, retuned -98 c; strongest notes B3 98%, B4 2%",
+      "seconds": 1.3,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -8.6,
+      "files": {
+        "wav": "sets/warm-v2/reminder.wav",
+        "caf": "sets/warm-v2/reminder.caf",
+        "ogg": "sets/warm-v2/reminder.ogg",
+        "mp3": "sets/warm-v2/reminder.mp3",
+        "webm": "sets/warm-v2/reminder.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "warm-v2.success",
+      "pack": "warm-v2",
+      "family": "warm",
+      "kind": "success",
+      "category": "feedback",
+      "title": "Warm V2 \u00b7 Success",
+      "what": "ElevenLabs warm take 2, retuned -1 c; strongest notes E5 45%, A4 18%, C#5 12%",
+      "seconds": 1.6,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -2.66,
+      "files": {
+        "wav": "sets/warm-v2/success.wav",
+        "caf": "sets/warm-v2/success.caf",
+        "ogg": "sets/warm-v2/success.ogg",
+        "mp3": "sets/warm-v2/success.mp3",
+        "webm": "sets/warm-v2/success.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "warm-v2.error",
+      "pack": "warm-v2",
+      "family": "warm",
+      "kind": "error",
+      "category": "feedback",
+      "title": "Warm V2 \u00b7 Error",
+      "what": "ElevenLabs warm take 2, retuned -95 c; strongest notes B3 100%, A3 0%, G3 0%",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -3.86,
+      "files": {
+        "wav": "sets/warm-v2/error.wav",
+        "caf": "sets/warm-v2/error.caf",
+        "ogg": "sets/warm-v2/error.ogg",
+        "mp3": "sets/warm-v2/error.mp3",
+        "webm": "sets/warm-v2/error.webm"
+      },
+      "recommended_take": true,
+      "status": "candidate"
+    },
+    {
+      "id": "warm-v3.ringtone",
+      "pack": "warm-v3",
+      "family": "warm",
+      "kind": "ringtone",
+      "category": "calls",
+      "title": "Warm V3 \u00b7 Ringtone",
+      "what": "ElevenLabs warm take 3, retuned -0 c; strongest notes E5 16%, A3 13%, C#4 12%",
+      "seconds": 8.0,
+      "loop": true,
+      "lufs": -14.05,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/warm-v3/ringtone.wav",
+        "caf": "sets/warm-v3/ringtone.caf",
+        "ogg": "sets/warm-v3/ringtone.ogg",
+        "mp3": "sets/warm-v3/ringtone.mp3",
+        "webm": "sets/warm-v3/ringtone.webm"
+      },
+      "recommended_take": true,
+      "status": "candidate"
+    },
+    {
+      "id": "warm-v3.message",
+      "pack": "warm-v3",
+      "family": "warm",
+      "kind": "message",
+      "category": "messages",
+      "title": "Warm V3 \u00b7 Message",
+      "what": "ElevenLabs warm take 3, retuned -98 c; strongest notes E4 100%, F4 0%, F#4 0%",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -5.34,
+      "files": {
+        "wav": "sets/warm-v3/message.wav",
+        "caf": "sets/warm-v3/message.caf",
+        "ogg": "sets/warm-v3/message.ogg",
+        "mp3": "sets/warm-v3/message.mp3",
+        "webm": "sets/warm-v3/message.webm"
+      },
+      "recommended_take": true,
+      "status": "candidate"
+    },
+    {
+      "id": "warm-v3.mention",
+      "pack": "warm-v3",
+      "family": "warm",
+      "kind": "mention",
+      "category": "messages",
+      "title": "Warm V3 \u00b7 Mention",
+      "what": "ElevenLabs warm take 3, retuned -98 c; strongest notes E4 100%, D#4 0%, F4 0%",
+      "seconds": 1.0,
+      "loop": false,
+      "lufs": -16.01,
+      "true_peak_dbtp": -5.13,
+      "files": {
+        "wav": "sets/warm-v3/mention.wav",
+        "caf": "sets/warm-v3/mention.caf",
+        "ogg": "sets/warm-v3/mention.ogg",
+        "mp3": "sets/warm-v3/mention.mp3",
+        "webm": "sets/warm-v3/mention.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "warm-v3.reminder",
+      "pack": "warm-v3",
+      "family": "warm",
+      "kind": "reminder",
+      "category": "reminders",
+      "title": "Warm V3 \u00b7 Reminder",
+      "what": "ElevenLabs warm take 3, retuned -99 c; strongest notes B3 84%, B4 16%, A3 0%",
+      "seconds": 1.3,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -6.53,
+      "files": {
+        "wav": "sets/warm-v3/reminder.wav",
+        "caf": "sets/warm-v3/reminder.caf",
+        "ogg": "sets/warm-v3/reminder.ogg",
+        "mp3": "sets/warm-v3/reminder.mp3",
+        "webm": "sets/warm-v3/reminder.webm"
+      },
+      "recommended_take": true,
+      "status": "candidate"
+    },
+    {
+      "id": "warm-v3.success",
+      "pack": "warm-v3",
+      "family": "warm",
+      "kind": "success",
+      "category": "feedback",
+      "title": "Warm V3 \u00b7 Success",
+      "what": "ElevenLabs warm take 3, retuned +100 c; strongest notes E5 54%, B4 20%, G4 11%",
+      "seconds": 1.51,
+      "loop": false,
+      "lufs": -16.01,
+      "true_peak_dbtp": -1.37,
+      "files": {
+        "wav": "sets/warm-v3/success.wav",
+        "caf": "sets/warm-v3/success.caf",
+        "ogg": "sets/warm-v3/success.ogg",
+        "mp3": "sets/warm-v3/success.mp3",
+        "webm": "sets/warm-v3/success.webm"
+      },
+      "recommended_take": true,
+      "status": "candidate"
+    },
+    {
+      "id": "warm-v3.error",
+      "pack": "warm-v3",
+      "family": "warm",
+      "kind": "error",
+      "category": "feedback",
+      "title": "Warm V3 \u00b7 Error",
+      "what": "ElevenLabs warm take 3, retuned +99 c; strongest notes G#3 99%, G#4 1%, A#3 0%",
+      "seconds": 0.76,
+      "loop": false,
+      "lufs": -16.01,
+      "true_peak_dbtp": -2.35,
+      "files": {
+        "wav": "sets/warm-v3/error.wav",
+        "caf": "sets/warm-v3/error.caf",
+        "ogg": "sets/warm-v3/error.ogg",
+        "mp3": "sets/warm-v3/error.mp3",
+        "webm": "sets/warm-v3/error.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "pulse-v1.ringtone",
+      "pack": "pulse-v1",
+      "family": "pulse",
+      "kind": "ringtone",
+      "category": "calls",
+      "title": "Pulse V1 \u00b7 Ringtone",
+      "what": "ElevenLabs pulse take 1, retuned +17 c; strongest notes D#5 81%, G4 11%, G5 3%",
+      "seconds": 7.92,
+      "loop": true,
+      "lufs": -14.21,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/pulse-v1/ringtone.wav",
+        "caf": "sets/pulse-v1/ringtone.caf",
+        "ogg": "sets/pulse-v1/ringtone.ogg",
+        "mp3": "sets/pulse-v1/ringtone.mp3",
+        "webm": "sets/pulse-v1/ringtone.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "pulse-v1.message",
+      "pack": "pulse-v1",
+      "family": "pulse",
+      "kind": "message",
+      "category": "messages",
+      "title": "Pulse V1 \u00b7 Message",
+      "what": "ElevenLabs pulse take 1, retuned -87 c; strongest notes F#4 94%, F3 4%, G3 2%",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -19.64,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/pulse-v1/message.wav",
+        "caf": "sets/pulse-v1/message.caf",
+        "ogg": "sets/pulse-v1/message.ogg",
+        "mp3": "sets/pulse-v1/message.mp3",
+        "webm": "sets/pulse-v1/message.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "pulse-v1.mention",
+      "pack": "pulse-v1",
+      "family": "pulse",
+      "kind": "mention",
+      "category": "messages",
+      "title": "Pulse V1 \u00b7 Mention",
+      "what": "ElevenLabs pulse take 1, retuned -103 c; strongest notes G#4 100%, A#4 0%, G4 0%",
+      "seconds": 1.0,
+      "loop": false,
+      "lufs": -17.3,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/pulse-v1/mention.wav",
+        "caf": "sets/pulse-v1/mention.caf",
+        "ogg": "sets/pulse-v1/mention.ogg",
+        "mp3": "sets/pulse-v1/mention.mp3",
+        "webm": "sets/pulse-v1/mention.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "pulse-v1.reminder",
+      "pack": "pulse-v1",
+      "family": "pulse",
+      "kind": "reminder",
+      "category": "reminders",
+      "title": "Pulse V1 \u00b7 Reminder",
+      "what": "ElevenLabs pulse take 1, retuned -78 c; strongest notes E5 100%, D#5 0%, F5 0%",
+      "seconds": 1.3,
+      "loop": false,
+      "lufs": -16.01,
+      "true_peak_dbtp": -2.14,
+      "files": {
+        "wav": "sets/pulse-v1/reminder.wav",
+        "caf": "sets/pulse-v1/reminder.caf",
+        "ogg": "sets/pulse-v1/reminder.ogg",
+        "mp3": "sets/pulse-v1/reminder.mp3",
+        "webm": "sets/pulse-v1/reminder.webm"
+      },
+      "recommended_take": true,
+      "status": "candidate"
+    },
+    {
+      "id": "pulse-v1.success",
+      "pack": "pulse-v1",
+      "family": "pulse",
+      "kind": "success",
+      "category": "feedback",
+      "title": "Pulse V1 \u00b7 Success",
+      "what": "ElevenLabs pulse take 1, retuned +3 c; strongest notes B4 98%, F#4 2%, C5 0%",
+      "seconds": 1.6,
+      "loop": false,
+      "lufs": -22.41,
+      "true_peak_dbtp": -1.42,
+      "files": {
+        "wav": "sets/pulse-v1/success.wav",
+        "caf": "sets/pulse-v1/success.caf",
+        "ogg": "sets/pulse-v1/success.ogg",
+        "mp3": "sets/pulse-v1/success.mp3",
+        "webm": "sets/pulse-v1/success.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "pulse-v1.error",
+      "pack": "pulse-v1",
+      "family": "pulse",
+      "kind": "error",
+      "category": "feedback",
+      "title": "Pulse V1 \u00b7 Error",
+      "what": "ElevenLabs pulse take 1, retuned +7 c; strongest notes C#5 81%, F5 8%, C#6 7%",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -16.44,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/pulse-v1/error.wav",
+        "caf": "sets/pulse-v1/error.caf",
+        "ogg": "sets/pulse-v1/error.ogg",
+        "mp3": "sets/pulse-v1/error.mp3",
+        "webm": "sets/pulse-v1/error.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "pulse-v2.ringtone",
+      "pack": "pulse-v2",
+      "family": "pulse",
+      "kind": "ringtone",
+      "category": "calls",
+      "title": "Pulse V2 \u00b7 Ringtone",
+      "what": "ElevenLabs pulse take 2, retuned -97 c; strongest notes F#4 29%, B3 19%, C#4 11%",
+      "seconds": 8.46,
+      "loop": true,
+      "lufs": -14.04,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/pulse-v2/ringtone.wav",
+        "caf": "sets/pulse-v2/ringtone.caf",
+        "ogg": "sets/pulse-v2/ringtone.ogg",
+        "mp3": "sets/pulse-v2/ringtone.mp3",
+        "webm": "sets/pulse-v2/ringtone.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "pulse-v2.message",
+      "pack": "pulse-v2",
+      "family": "pulse",
+      "kind": "message",
+      "category": "messages",
+      "title": "Pulse V2 \u00b7 Message",
+      "what": "ElevenLabs pulse take 2, retuned +79 c; strongest notes G#3 39%, D#4 26%, C4 18%",
+      "seconds": 0.76,
+      "loop": false,
+      "lufs": -16.04,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/pulse-v2/message.wav",
+        "caf": "sets/pulse-v2/message.caf",
+        "ogg": "sets/pulse-v2/message.ogg",
+        "mp3": "sets/pulse-v2/message.mp3",
+        "webm": "sets/pulse-v2/message.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "pulse-v2.mention",
+      "pack": "pulse-v2",
+      "family": "pulse",
+      "kind": "mention",
+      "category": "messages",
+      "title": "Pulse V2 \u00b7 Mention",
+      "what": "ElevenLabs pulse take 2, retuned +0 c; strongest notes C#6 77%, C#7 23%, C6 1%",
+      "seconds": 1.0,
+      "loop": false,
+      "lufs": -16.0,
+      "true_peak_dbtp": -3.05,
+      "files": {
+        "wav": "sets/pulse-v2/mention.wav",
+        "caf": "sets/pulse-v2/mention.caf",
+        "ogg": "sets/pulse-v2/mention.ogg",
+        "mp3": "sets/pulse-v2/mention.mp3",
+        "webm": "sets/pulse-v2/mention.webm"
+      },
+      "recommended_take": true,
+      "status": "candidate"
+    },
+    {
+      "id": "pulse-v2.reminder",
+      "pack": "pulse-v2",
+      "family": "pulse",
+      "kind": "reminder",
+      "category": "reminders",
+      "title": "Pulse V2 \u00b7 Reminder",
+      "what": "ElevenLabs pulse take 2, retuned +7 c; strongest notes B5 99%, B6 1%, C6 0%",
+      "seconds": 1.27,
+      "loop": false,
+      "lufs": -16.03,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/pulse-v2/reminder.wav",
+        "caf": "sets/pulse-v2/reminder.caf",
+        "ogg": "sets/pulse-v2/reminder.ogg",
+        "mp3": "sets/pulse-v2/reminder.mp3",
+        "webm": "sets/pulse-v2/reminder.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "pulse-v2.success",
+      "pack": "pulse-v2",
+      "family": "pulse",
+      "kind": "success",
+      "category": "feedback",
+      "title": "Pulse V2 \u00b7 Success",
+      "what": "ElevenLabs pulse take 2, retuned +1 c; strongest notes E5 68%, G#5 10%, E7 8%",
+      "seconds": 1.51,
+      "loop": false,
+      "lufs": -21.51,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/pulse-v2/success.wav",
+        "caf": "sets/pulse-v2/success.caf",
+        "ogg": "sets/pulse-v2/success.ogg",
+        "mp3": "sets/pulse-v2/success.mp3",
+        "webm": "sets/pulse-v2/success.webm"
+      },
+      "recommended_take": true,
+      "status": "candidate"
+    },
+    {
+      "id": "pulse-v2.error",
+      "pack": "pulse-v2",
+      "family": "pulse",
+      "kind": "error",
+      "category": "feedback",
+      "title": "Pulse V2 \u00b7 Error",
+      "what": "ElevenLabs pulse take 2, retuned -92 c; strongest notes B4 44%, C#5 28%, E4 24%",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -16.03,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/pulse-v2/error.wav",
+        "caf": "sets/pulse-v2/error.caf",
+        "ogg": "sets/pulse-v2/error.ogg",
+        "mp3": "sets/pulse-v2/error.mp3",
+        "webm": "sets/pulse-v2/error.webm"
+      },
+      "recommended_take": true,
+      "status": "candidate"
+    },
+    {
+      "id": "pulse-v3.ringtone",
+      "pack": "pulse-v3",
+      "family": "pulse",
+      "kind": "ringtone",
+      "category": "calls",
+      "title": "Pulse V3 \u00b7 Ringtone",
+      "what": "ElevenLabs pulse take 3, retuned -81 c; strongest notes B4 63%, E4 31%, A#4 1%",
+      "seconds": 8.38,
+      "loop": true,
+      "lufs": -15.08,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/pulse-v3/ringtone.wav",
+        "caf": "sets/pulse-v3/ringtone.caf",
+        "ogg": "sets/pulse-v3/ringtone.ogg",
+        "mp3": "sets/pulse-v3/ringtone.mp3",
+        "webm": "sets/pulse-v3/ringtone.webm"
+      },
+      "recommended_take": true,
+      "status": "candidate"
+    },
+    {
+      "id": "pulse-v3.message",
+      "pack": "pulse-v3",
+      "family": "pulse",
+      "kind": "message",
+      "category": "messages",
+      "title": "Pulse V3 \u00b7 Message",
+      "what": "ElevenLabs pulse take 3, retuned -100 c; strongest notes E4 100%, F4 0%, D#4 0%",
+      "seconds": 0.8,
+      "loop": false,
+      "lufs": -16.01,
+      "true_peak_dbtp": -2.4,
+      "files": {
+        "wav": "sets/pulse-v3/message.wav",
+        "caf": "sets/pulse-v3/message.caf",
+        "ogg": "sets/pulse-v3/message.ogg",
+        "mp3": "sets/pulse-v3/message.mp3",
+        "webm": "sets/pulse-v3/message.webm"
+      },
+      "recommended_take": true,
+      "status": "candidate"
+    },
+    {
+      "id": "pulse-v3.mention",
+      "pack": "pulse-v3",
+      "family": "pulse",
+      "kind": "mention",
+      "category": "messages",
+      "title": "Pulse V3 \u00b7 Mention",
+      "what": "ElevenLabs pulse take 3, retuned +15 c; strongest notes G#4 94%, G#5 6%, A4 0%",
+      "seconds": 0.99,
+      "loop": false,
+      "lufs": -17.88,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/pulse-v3/mention.wav",
+        "caf": "sets/pulse-v3/mention.caf",
+        "ogg": "sets/pulse-v3/mention.ogg",
+        "mp3": "sets/pulse-v3/mention.mp3",
+        "webm": "sets/pulse-v3/mention.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "pulse-v3.reminder",
+      "pack": "pulse-v3",
+      "family": "pulse",
+      "kind": "reminder",
+      "category": "reminders",
+      "title": "Pulse V3 \u00b7 Reminder",
+      "what": "ElevenLabs pulse take 3, retuned -85 c; strongest notes E4 91%, E5 9%, D#4 0%",
+      "seconds": 1.3,
+      "loop": false,
+      "lufs": -16.02,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/pulse-v3/reminder.wav",
+        "caf": "sets/pulse-v3/reminder.caf",
+        "ogg": "sets/pulse-v3/reminder.ogg",
+        "mp3": "sets/pulse-v3/reminder.mp3",
+        "webm": "sets/pulse-v3/reminder.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "pulse-v3.success",
+      "pack": "pulse-v3",
+      "family": "pulse",
+      "kind": "success",
+      "category": "feedback",
+      "title": "Pulse V3 \u00b7 Success",
+      "what": "ElevenLabs pulse take 3, retuned +2 c; strongest notes F#5 30%, F#6 29%, B5 25%",
+      "seconds": 1.6,
+      "loop": false,
+      "lufs": -23.87,
+      "true_peak_dbtp": -1.3,
+      "files": {
+        "wav": "sets/pulse-v3/success.wav",
+        "caf": "sets/pulse-v3/success.caf",
+        "ogg": "sets/pulse-v3/success.ogg",
+        "mp3": "sets/pulse-v3/success.mp3",
+        "webm": "sets/pulse-v3/success.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    },
+    {
+      "id": "pulse-v3.error",
+      "pack": "pulse-v3",
+      "family": "pulse",
+      "kind": "error",
+      "category": "feedback",
+      "title": "Pulse V3 \u00b7 Error",
+      "what": "ElevenLabs pulse take 3, retuned +14 c; strongest notes F#4 95%, G4 4%, G#4 0%",
+      "seconds": 0.79,
+      "loop": false,
+      "lufs": -16.02,
+      "true_peak_dbtp": -1.34,
+      "files": {
+        "wav": "sets/pulse-v3/error.wav",
+        "caf": "sets/pulse-v3/error.caf",
+        "ogg": "sets/pulse-v3/error.ogg",
+        "mp3": "sets/pulse-v3/error.mp3",
+        "webm": "sets/pulse-v3/error.webm"
+      },
+      "recommended_take": false,
+      "status": "candidate"
+    }
+  ],
+  "default_pack": "glass (recommended takes)",
+  "pending": [
+    "music beds / sound tracks (no music model on the connector yet)",
+    "UI micro-sounds (tap, toggle, swipe)",
+    "sonic logo standalone"
+  ]
+}

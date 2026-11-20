@@ -9,7 +9,16 @@ const mocks = vi.hoisted(() => ({
   clear: vi.fn(),
   notify: vi.fn(),
   claimed: false,
+  sounds: [] as string[],
 }));
+// The library sound a line plays (round-2 board 4, 20 Nov 2026), heard here as its moment.
+vi.mock("../sounds/player", () => ({
+  playEvent: (id: string) => {
+    mocks.sounds.push(id);
+    return id;
+  },
+}));
+
 vi.mock("../ui/alerts", () => ({
   raiseAlert: mocks.raise,
   clearAlert: mocks.clear,
@@ -89,6 +98,7 @@ let account = 0;
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.claimed = false;
+  mocks.sounds = [];
   account += 1;
   window.sessionStorage.clear();
   host = document.createElement("div");
@@ -122,6 +132,8 @@ it("shows what the bell received as a top banner, never as a corner card", async
     expect(alert.timeout).toBe(ACTIVITY_BANNER_MS);
   }
   expect(mocks.notify).not.toHaveBeenCalled();
+  // A lead given to you sounds as "New lead given to me".
+  expect(mocks.sounds).toEqual(["sx.new_lead"]);
   raised()[0].action?.run?.();
   expect(openNews).toHaveBeenCalledTimes(1);
   expect(raised()[1].action?.label).toBe("Open lead");
@@ -296,4 +308,16 @@ it("never pops a line older than a day, from the bell or a page; it waits in the
   );
   await act(async () => raiseNotificationLines([stale]));
   expect(raised()).toEqual([]);
+});
+
+it("sounds each bell line as its library moment, and What's new not at all", async () => {
+  const { LINE_SOUND } = await import("./update-notices");
+  expect(LINE_SOUND).toEqual({
+    report_ready: "sx.report_ready",
+    lead_assigned: "sx.new_lead",
+    analysis_paused: "sx.upload_failed",
+    invite_received: "sx.new_message",
+    bug_solved: "sx.new_message",
+  });
+  expect(LINE_SOUND.updates).toBeUndefined();
 });

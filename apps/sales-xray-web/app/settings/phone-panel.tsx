@@ -142,7 +142,8 @@ export function VibrationPanel() {
         meaning="A short buzz when you swipe a lead, pull to refresh or finish a step."
         onText="On"
         offText="Off"
-        note="Alert sounds follow your phone's notification settings."
+        // The sounds have their own page now (round-2 board 4, 20 Nov 2026).
+        note="Pick a sound for each alert in Settings › Sounds & alerts."
         chipOn="Vibration on"
         chipOff="Vibration off"
         // Turning vibration off is never felt; turning it on is, once saved.

@@ -341,6 +341,23 @@ export type TelemetryEvents = {
     action: "shown" | "accepted" | "changed" | "dismissed";
     from?: "call" | "chat" | "rule";
   };
+  /**
+   * Sounds (round-2 board 4, 20 Nov 2026; brand kit SOUND-PICKER.md): a sound
+   * picked for a moment (just me, the team, or a personal workspace's phone),
+   * a ▶ preview, and what really played, one in ten (sounds/telemetry.ts).
+   * The library's ids only: a moment and a pack, never a file.
+   */
+  "sx.sound_picked": {
+    event: SoundEventName;
+    pack: SoundPackName;
+    scope: "me" | "team" | "phone";
+  };
+  "sx.sound_previewed": { event?: SoundEventName; pack: SoundPackName };
+  "sx.sound_played": {
+    event: SoundEventName;
+    pack: SoundPackName;
+    platform: "web" | "android" | "ios";
+  };
   /** Changes this device holds unsent (sync/write-queue.ts): counts only. */
   "sx.writes_waiting": { waiting: number; refused: number; oldest_min: number };
   // Where people get stuck (owner, 25 Oct 2026); telemetry-flows.ts sends these.
@@ -366,6 +383,30 @@ export type TelemetryEvents = {
     ms?: number;
   };
 };
+
+export type SoundEventName =
+  | "sx.incoming_call"
+  | "sx.new_lead"
+  | "sx.new_message"
+  | "sx.follow_up_due"
+  | "sx.report_ready"
+  | "sx.upload_failed";
+/** A library pack, or none / the phone's own sound. */
+export type SoundPackName =
+  | "glass-v1"
+  | "glass-v2"
+  | "glass-v3"
+  | "warm-v1"
+  | "warm-v2"
+  | "warm-v3"
+  | "pulse-v1"
+  | "pulse-v2"
+  | "pulse-v3"
+  | "A"
+  | "B"
+  | "C"
+  | "none"
+  | "system";
 
 export type FlowName = "onboarding" | "phone_setup" | "add_lead" | "log_result";
 export type FlowOutcome =
@@ -554,6 +595,9 @@ export const TELEMETRY_EVENT_NAMES = [
   "sx.screen_hidden",
   "sx.flow",
   "sx.permission_prompt",
+  "sx.sound_picked",
+  "sx.sound_previewed",
+  "sx.sound_played",
 ] as const satisfies readonly TelemetryEventName[];
 
 export type SizeBand = "under_5mb" | "5_to_20mb" | "over_20mb";
