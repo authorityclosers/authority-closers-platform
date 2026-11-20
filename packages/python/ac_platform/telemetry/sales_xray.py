@@ -261,6 +261,32 @@ PROMPT_PERMISSIONS = frozenset(
 )
 PROMPT_OUTCOMES = frozenset({"granted", "denied", "blocked", "not_opened", "unknown"})
 MAX_PROMPT_MS = 600_000
+# The sound library's Sales X-Ray moments and its packs, plus none and the phone's own sound
+# (lead_desk/sound_prefs.py keeps the same lists).
+SOUND_EVENTS = (
+    "sx.incoming_call",
+    "sx.new_lead",
+    "sx.new_message",
+    "sx.follow_up_due",
+    "sx.report_ready",
+    "sx.upload_failed",
+)
+SOUND_PACKS = (
+    "glass-v1",
+    "glass-v2",
+    "glass-v3",
+    "warm-v1",
+    "warm-v2",
+    "warm-v3",
+    "pulse-v1",
+    "pulse-v2",
+    "pulse-v3",
+    "A",
+    "B",
+    "C",
+    "none",
+    "system",
+)
 # Where on the screen a rage or dead tap landed: the viewport in 4 rows of 3.
 TAP_ZONES = frozenset(f"r{row}c{column}" for row in range(1, 5) for column in range(1, 4))
 
@@ -669,6 +695,24 @@ SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
                 "from": ("call", "chat", "rule"),
             },
             required=("action",),
+        ),
+        # Sounds (round-2 board 4, 20 Nov 2026; brand kit SOUND-PICKER.md): a sound picked for a
+        # moment (just me, the team, or a personal workspace's phone), a preview, and what really
+        # played, one in ten. The library's moments and packs only, never a file.
+        "sx.sound_picked": _event(
+            values={"event": SOUND_EVENTS, "pack": SOUND_PACKS, "scope": ("me", "team", "phone")},
+            required=("event", "pack", "scope"),
+        ),
+        "sx.sound_previewed": _event(
+            values={"event": SOUND_EVENTS, "pack": SOUND_PACKS}, required=("pack",)
+        ),
+        "sx.sound_played": _event(
+            values={
+                "event": SOUND_EVENTS,
+                "pack": SOUND_PACKS,
+                "platform": ("web", "android", "ios"),
+            },
+            required=("event", "pack"),
         ),
         # A journey of several steps (telemetry-flows.ts): its start, each step reached, a
         # Continue or Save refused for something missing (blocked), and how it ended: done,
