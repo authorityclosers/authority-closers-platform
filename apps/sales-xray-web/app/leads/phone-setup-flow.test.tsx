@@ -236,10 +236,10 @@ describe("PhoneSetupFlow", () => {
     expect(title()).toBe("Notifications");
     expect(dots()).toBe("Step 2 of 6");
 
-    await act(async () => button("Later").click());
+    await act(async () => button("Not now").click());
     await settle();
     expect(title()).toBe("Call recordings");
-    await act(async () => button("Later").click());
+    await act(async () => button("Not now").click());
     await settle();
 
     // Android's battery screen: the flow waits for the way back.
@@ -266,7 +266,7 @@ describe("PhoneSetupFlow", () => {
     });
 
     expect(title()).toBe("Log work calls");
-    await act(async () => button("Later").click());
+    await act(async () => button("Not now").click());
     await settle();
     // The page that opened it takes it away.
     expect(closed).toHaveBeenCalledTimes(1);

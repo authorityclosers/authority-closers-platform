@@ -12,8 +12,11 @@
  * Set up recording or Not now, never finished). `?step=web` is the web's
  * last step, `?step=update` an app too old, `?step=personal` a personal
  * workspace's first screen, and `?view=team` Team's Call capture list.
- * `?view=permissions` is the permissions checklist after sign-in (two still to
- * allow, one blocked, contacts waiting for an app update) and `?view=missing`
+ * `?view=walk&step=welcome|alerts|calls|recordings|battery|analyse|test_call|all_set`
+ * is phone setup's one-ask walk after sign-in (owner, 20 Nov 2026, style C);
+ * `&family=xiaomi|samsung|oppo|pixel` picks the phone, `&stuck=1` the screen
+ * after Android stopped asking, `&phase=autostart` the battery's second page,
+ * `&test=waiting|missing` the test call's later states. `?view=missing` is
  * the line on Calls and Reports for calls with no recording (`&day=2026-10-29`:
  * as the bell's reminder opens it, its calls listed).
  */
@@ -23,11 +26,10 @@ import { useState, useSyncExternalStore } from "react";
 import type { CaptureSetup } from "../../capture-setup/capture-setup-client";
 import { CaptureSetupFlow } from "../../capture-setup/capture-setup-flow";
 import type { CaptureStep } from "../../capture-setup/capture-setup-rules";
-import { PermissionsChecklist } from "../../capture-setup/permissions-gate";
-import type {
-  PermissionItem,
-  PermissionKey,
-} from "../../capture-setup/permissions-rules";
+import { SetupWalk } from "../../capture-setup/setup-walk";
+import walkStyles from "../../capture-setup/setup-walk.module.css";
+import type { WalkStep } from "../../capture-setup/setup-walk-steps";
+import { parseSetup, type SetupStatus } from "../../leads/native-phone";
 import { MissingLine } from "../../capture-setup/recording-check";
 import { CaptureSetupPanel } from "../../organisation/capture-setup-panel";
 import onboarding from "../../leads/phone-onboarding.module.css";
@@ -263,67 +265,98 @@ const STARTS: Record<string, CaptureStep> = {
   update: "phone",
 };
 
-// An organisation's workspace (owner, 3 Nov 2026): the four it needs, then three with Not now.
-const PERMISSIONS: PermissionItem[] = [
-  {
-    key: "callLog",
-    label: "Call log",
-    why: "Logs your calls with leads on the lead. Other numbers stay on your phone.",
-    state: "needed",
-    required: false,
-    canWait: true,
-  },
-  {
-    key: "phone",
-    label: "Phone",
-    why: "Knows when a call starts and ends, so it is timed and its recording found.",
-    state: "needed",
-    required: true,
-    canWait: false,
-  },
-  {
-    key: "contacts",
-    label: "Contacts",
-    why: "Shows the right name on calls and leads by matching callers to your saved contacts. Read for nothing else.",
-    state: "update",
-    required: true,
-    canWait: false,
-  },
-  {
-    key: "notifications",
-    label: "Notifications",
-    why: "New leads, calls that are due, and Undo before a call uploads.",
-    state: "blocked",
-    required: true,
-    canWait: false,
-  },
-  {
-    key: "recordings",
-    label: "Recordings folder",
-    why: "Finds each call's recording in your Phone app's folder.",
-    state: "granted",
-    required: true,
-    canWait: false,
-  },
-  {
-    key: "battery",
-    label: "Battery",
-    why: "Lets calls upload when the app is closed. Choose No restrictions, then allow Autostart for Sales X-Ray.",
-    state: "needed",
-    required: false,
-    canWait: true,
-  },
-  {
-    key: "autoAnalysis",
-    label: "Analyse my calls automatically",
-    // Fictional words in the fixture; the real ones come sealed from the server.
-    why: "When I record a sales call with Sales X-Ray in Fictional Homes, the customer knows the call is recorded.",
-    state: "needed",
-    required: false,
-    canWait: true,
-    version: "fixture-v1",
-  },
+// Phone setup's walk on a fictional phone (owner, 20 Nov 2026, style C).
+const WALK: WalkStep[] = [
+  "welcome",
+  "alerts",
+  "calls",
+  "recordings",
+  "battery",
+  "analyse",
+  "test_call",
+  "all_set",
 ];
+
+const PHONES: Record<string, { model: string; folder: string }> = {
+  xiaomi: {
+    model: "Redmi 13",
+    folder: "/storage/emulated/0/MIUI/sound_recorder/call_rec",
+  },
+  samsung: {
+    model: "Galaxy A15",
+    folder: "/storage/emulated/0/Recordings/Call",
+  },
+  oppo: {
+    model: "Oppo A78",
+    folder: "/storage/emulated/0/Music/Recordings/Call Recordings",
+  },
+  pixel: { model: "Pixel 8", folder: "" },
+};
+
+function walkPhone(family: string): SetupStatus {
+  const phone = PHONES[family] ?? PHONES.xiaomi!;
+  return parseSetup({
+    checks: { calls: false, notifications: false },
+    family: family === "pixel" ? "other" : family,
+    model: phone.model,
+    version: "1.0.60",
+    device: "install-fictional-walk",
+    autostartNeeded: family === "xiaomi" || family === "oppo",
+    folderPickSupported: true,
+    callLogSupported: true,
+    recorderProfile: {
+      kind: family === "pixel" ? "private" : "folder",
+      dialerLabel: family === "pixel" ? "Google's Phone app" : "Phone",
+      recording: "on",
+      folders: phone.folder
+        ? [{ path: phone.folder, state: "found", recordings: 12 }]
+        : [],
+    },
+  }) as SetupStatus;
+}
+
+/** One screen of the walk, its buttons inert. */
+function WalkFixture() {
+  const step = (read("step") ?? "welcome") as WalkStep;
+  const status = walkPhone(read("family") ?? "xiaomi");
+  const stuck = read("stuck") === "1";
+  const test = read("test");
+  return (
+    <div
+      className={`${onboarding.page} ${walkStyles.walk}`}
+      style={{ position: "static", minHeight: "100dvh" }}
+    >
+      <SetupWalk
+        start={WALK.includes(step) ? step : "welcome"}
+        steps={WALK}
+        // At the end: all done, or (&almost=1) something put off.
+        stillOpen={() => step !== "all_set" || read("almost") === "1"}
+        status={status}
+        settingsFor={() => stuck}
+        questions={[
+          "Allow Sales X-Ray to make and manage phone calls?",
+          "Allow Sales X-Ray to access your phone call logs?",
+        ]}
+        batteryPhase={read("phase") === "autostart" ? "autostart" : "battery"}
+        test={test === "waiting" || test === "missing" ? test : "ready"}
+        consent={{
+          // Fictional organisation in the fixture; the real words come sealed from the server.
+          words:
+            "When I record a sales call with Sales X-Ray in Fictional Homes, the customer knows the call is recorded. Sales X-Ray may analyse each call I record here as soon as it arrives, at my organisation's AI setting. I can turn this off in Settings, Privacy, at any time.",
+          terms:
+            "Recordings and reports stay in your workspace. Fictional terms for review only.",
+        }}
+        busy={false}
+        laterLabel={(each) => `Not now: ${each}`}
+        onAsk={() => undefined}
+        onLater={() => undefined}
+        onNoCalls={() => undefined}
+        onShown={() => undefined}
+        onEnd={() => undefined}
+      />
+    </div>
+  );
+}
 
 const unchanging = () => () => undefined;
 
@@ -336,21 +369,10 @@ export function CaptureSetupPreview() {
   );
   if (query === null) return null;
   const params = new URLSearchParams(query);
-  if (params.get("view") === "permissions")
+  if (params.get("view") === "walk" || params.get("view") === "permissions")
     return (
       <main data-capture-setup-fixture="" style={{ minHeight: "100dvh" }}>
-        <div className={onboarding.page} style={{ position: "static" }}>
-          <div className={onboarding.body}>
-            <PermissionsChecklist
-              items={PERMISSIONS}
-              busy={null}
-              tried={new Set<PermissionKey>(["phone"])}
-              onAllow={() => undefined}
-              onSettings={() => undefined}
-              onLater={() => undefined}
-            />
-          </div>
-        </div>
+        <WalkFixture />
       </main>
     );
   if (params.get("view") === "missing")

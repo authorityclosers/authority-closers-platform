@@ -215,7 +215,7 @@ it("asks a Xiaomi phone for All files access on the Call recordings line", async
     sent.filter((item) => item.method === "setupOpen").map((item) => item.args),
   ).toEqual([{ what: "allFiles" }]);
   // Truecaller is on this phone: the checklist says how to get past its screen.
-  await act(async () => button("Later")!.click());
+  await act(async () => button("Not now")!.click());
   for (let i = 0; i < 10; i++) await act(async () => await Promise.resolve());
   expect(document.body.textContent).toContain("Truecaller");
   window.history.replaceState(null, "", "/leads");

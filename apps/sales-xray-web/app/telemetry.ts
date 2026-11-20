@@ -397,7 +397,13 @@ export type FlowStep =
   | "reason"
   | "stage"
   | "next"
-  | "save";
+  | "save"
+  // Phone setup's one-ask walk (20 Nov 2026): its welcome, the consent, the
+  // test call and the end; the other screens use the names above.
+  | "welcome"
+  | "analyse"
+  | "test_call"
+  | "all_set";
 export type FlowVia =
   | "business"
   | "solo"
@@ -407,7 +413,8 @@ export type FlowVia =
   | "quick"
   | "sheet"
   | "after_call"
-  | "lead";
+  | "lead"
+  | "first_run";
 export type PromptPermission =
   | "calls"
   | "notifications"
@@ -448,6 +455,7 @@ export type Screen =
   | "developers"
   | "review"
   | "welcome"
+  | "setup"
   | "other";
 
 /** Key actions whose tap-to-response time is measured (the server's ACTIONS). */
@@ -962,7 +970,18 @@ export function screenChanged() {
     window.dispatchEvent(new Event(SCREEN_CHANGED_EVENT));
 }
 
+/**
+ * On the page while phone setup's walk covers it: the walk is its own screen
+ * ("setup"), whatever page is under it, so its drop-off can be measured.
+ */
+export const SETUP_SCREEN_ATTRIBUTE = "data-sx-setup-walk";
+
 export function screenOf(pathname: string, search = ""): Screen {
+  if (
+    typeof document !== "undefined" &&
+    document.documentElement.hasAttribute(SETUP_SCREEN_ATTRIBUTE)
+  )
+    return "setup";
   const template = routeTemplate(pathname);
   const screen = (template && SCREENS[template]) || "other";
   return screen === "leads" && /[?&]lead=/.test(search) ? "lead" : screen;

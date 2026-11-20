@@ -22,11 +22,14 @@ import {
   Mic,
   Phone,
   Power,
-  X,
   type LucideIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { WalkFrame } from "../capture-setup/setup-walk";
+import walk from "../capture-setup/setup-walk.module.css";
+import { batteryLines, folderPath } from "../capture-setup/setup-walk-words";
+import { WalkArt, type ArtProps } from "../capture-setup/walk-art/walk-art";
 import { notify } from "../notice-center";
 import { useFlow } from "../telemetry-flows";
 import { useBackClose } from "../ui/back-close";
@@ -229,6 +232,46 @@ async function act(
   }
 }
 
+/** The picture of the phone screen a step opens, where there is one. */
+export function artOf(
+  step: FlowStep,
+  status: SetupStatus,
+  stuck: boolean,
+): ArtProps | null {
+  if (step === "notifications")
+    return { kind: stuck ? "alerts-settings" : "alerts" };
+  if (step === "calls")
+    return stuck
+      ? { kind: "calls-settings" }
+      : {
+          kind: "calls",
+          questions: [
+            "Allow Sales X-Ray to make and manage phone calls?",
+            ...(status.callLogSupported
+              ? ["Allow Sales X-Ray to access your phone call logs?"]
+              : []),
+          ],
+        };
+  if (step === "recordings" && folderPick(status))
+    return { kind: "recordings", path: folderPath(status) };
+  if (step === "recordings" && privateDialler(status))
+    return { kind: "recordings-private" };
+  const [battery, autostart] = batteryLines(status);
+  if (step === "battery")
+    return {
+      kind: "battery",
+      page: battery?.page,
+      choose: battery?.choose,
+      others:
+        status.family === "xiaomi"
+          ? ["Battery saver (recommended)", "Restrict background apps"]
+          : ["Optimised", "Restricted"],
+    };
+  if (step === "autostart")
+    return { kind: "autostart", page: autostart?.page ?? "Autostart" };
+  return null;
+}
+
 /**
  * The flow over the page. `only` sets up that one thing (Settings' Fix);
  * otherwise everything still to do, in order. `onClose` gets the phone's
@@ -422,46 +465,60 @@ export function PhoneSetupFlow({
     else await advance();
   };
 
+  // The same one-ask screen as the first run's walk (owner, 20 Nov 2026,
+  // style C): a picture of the phone screen that comes next, what to tap
+  // ringed, the button pinned at the foot and a quiet Not now.
+  const art = artOf(step, plan.status, blocked(step, plan.status));
   return (
     <dialog
       ref={frame}
-      className={styles.page}
+      className={`${styles.page} ${walk.walk}`}
       aria-labelledby="sx-setup-title"
       onCancel={(event) => {
         event.preventDefault();
         close();
       }}
     >
-      <div className={styles.top}>
-        {plan.steps.length > 1 ? (
-          <ol
-            className={styles.dots}
-            aria-label={`Step ${index + 1} of ${plan.steps.length}`}
-          >
-            {plan.steps.map((item, at) => (
-              <li key={item} data-on={at <= index ? "" : undefined} />
-            ))}
-          </ol>
-        ) : (
-          <span />
-        )}
-        <button
-          type="button"
-          className={styles.close}
-          aria-label="Close phone setup"
-          onClick={close}
-        >
-          <X size={20} aria-hidden="true" />
-        </button>
-      </div>
-      <div className={styles.body}>
-        <span className={styles.icon}>
-          <Icon size={28} aria-hidden="true" />
-        </span>
-        <h1 id="sx-setup-title" className={styles.title}>
-          {screen.title}
-        </h1>
-        <p className={styles.line}>{screen.why}</p>
+      <WalkFrame
+        titleId="sx-setup-title"
+        progress={{ index, total: plan.steps.length }}
+        onClose={close}
+        title={screen.title}
+        art={
+          art ? (
+            <WalkArt {...art} />
+          ) : (
+            <span className={styles.icon}>
+              <Icon size={28} aria-hidden="true" />
+            </span>
+          )
+        }
+        actions={
+          <>
+            <Button
+              variant="primary"
+              className={walk.primary}
+              disabled={busy || away !== null}
+              aria-busy={busy || undefined}
+              onClick={() => void go()}
+            >
+              {away ? "Waiting for you to come back…" : screen.action}
+            </Button>
+            <Button
+              variant="ghost"
+              className={walk.quiet}
+              disabled={busy}
+              onClick={() => {
+                setAway(null);
+                void advance();
+              }}
+            >
+              Not now
+            </Button>
+          </>
+        }
+      >
+        <p className={walk.line}>{screen.why}</p>
         {screen.steps ? (
           <ol className={styles.steps}>
             {screen.steps.map((line) => (
@@ -499,27 +556,7 @@ export function PhoneSetupFlow({
             ) : null}
           </dl>
         ) : null}
-      </div>
-      <div className={styles.actions}>
-        <Button
-          variant="primary"
-          disabled={busy || away !== null}
-          aria-busy={busy || undefined}
-          onClick={() => void go()}
-        >
-          {away ? "Waiting for you to come back…" : screen.action}
-        </Button>
-        <Button
-          variant="ghost"
-          disabled={busy}
-          onClick={() => {
-            setAway(null);
-            void advance();
-          }}
-        >
-          Later
-        </Button>
-      </div>
+      </WalkFrame>
     </dialog>
   );
 }
