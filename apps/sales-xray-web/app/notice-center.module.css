@@ -576,3 +576,86 @@
 .card:active {
   transform: scale(0.99);
 }
+
+/* UI loop item 1 (owner's pick, 20 Nov 2026, option C): a new lead in the dock
+   under the top bar is a slim banner in the calls colour, the same on every
+   phone screen: initials, the line and where it came from, a solid Open and
+   the X. It pushes the page down; nothing floats over the page. */
+.pill[data-banner] {
+  min-height: 56px;
+  padding: 4px 4px 4px 0;
+  border: 1px solid color-mix(in oklab, var(--sx-tone-calls) 24%, transparent);
+  border-radius: var(--sx-radius-md);
+  outline: 0;
+  background: var(--sx-tone-calls-soft);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  color: var(--sx-ink);
+}
+
+.pill[data-banner] .pillOpen {
+  gap: 10px;
+  padding-left: 8px;
+  font-size: var(--sx-text-sm);
+}
+
+.pill[data-banner] .icon {
+  color: var(--sx-tone-calls);
+}
+
+.avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--sx-elevated);
+  color: var(--sx-tone-calls);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.bannerWords {
+  display: grid;
+  min-width: 0;
+  text-align: left;
+}
+
+.pill[data-banner] .pillText {
+  color: var(--sx-tone-calls);
+  font-weight: 700;
+}
+
+.bannerDetail {
+  overflow: hidden;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contents {
+  display: contents;
+}
+
+.unseen {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Open: the banner's one filled button, in the calls colour. */
+.pill[data-banner] .action,
+.pill[data-banner] .action:hover {
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--sx-tone-calls);
+  color: var(--sx-tone-calls-soft);
+}

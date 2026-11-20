@@ -636,6 +636,66 @@ it("puts a line that arrives over a drawn page in the corner, never pushing the 
   }
 });
 
+it("docks a bell line over a drawn page as a banner, pushing the page down (UI loop item 1)", async () => {
+  // Owner's pick, 20 Nov 2026, option C: "Manoj Bhagat is your lead now"
+  // floated over Home's Next action, a Leads row, Reports and Settings. A bell
+  // line now takes the dock under the top bar even over a drawn page.
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+  const drawn = document.createElement("section");
+  drawn.textContent = "Home";
+  document.body.append(drawn);
+  Object.defineProperty(document, "elementFromPoint", {
+    configurable: true,
+    value: () => drawn,
+  });
+  const page = document.createElement("div");
+  document.body.append(page);
+  const pageRoot = createRoot(page);
+  const dock = () => page.querySelector<HTMLElement>("[data-notice-dock]")!;
+  try {
+    await act(async () => pageRoot.render(<NoticeDock />));
+    await act(async () =>
+      raiseAlert({
+        id: "event:fictional:1",
+        level: "normal",
+        title: "Asha Fictional is your lead now",
+        message: "New from Meta Ads: Fictional form. Picked for you.",
+        action: { label: "Open lead", href: "/leads" },
+      }),
+    );
+    const banner = dock().querySelector<HTMLElement>("[data-banner]");
+    expect(banner).not.toBeNull();
+    // The name first, then what it is and where it came from; a short Open.
+    expect(banner!.querySelector("button")?.textContent).toBe(
+      "AFAsha Fictional is your lead nowNew lead · Meta Ads",
+    );
+    expect(
+      banner!.querySelector('[data-sx-feature="notice_opened"]')?.textContent,
+    ).toBe("Open");
+    expect(
+      banner!
+        .querySelector('[aria-label="Dismiss"]')
+        ?.getAttribute("data-sx-feature"),
+    ).toBe("notice_dismissed");
+    // Not in the corner over the page.
+    expect(host.textContent).not.toContain("Asha Fictional");
+  } finally {
+    await act(async () => clearAlert("event:fictional:1"));
+    await act(async () => pageRoot.unmount());
+    delete (document as { elementFromPoint?: unknown }).elementFromPoint;
+    drawn.remove();
+    page.remove();
+    vi.unstubAllGlobals();
+  }
+});
+
 it("docks a line that comes while the next page is still its outline", async () => {
   // QA robot, 9 Nov 2026: Leads tapped from Home, "… is your lead now" was
   // drawn under the outline at the foot of the screen, then sat at the top.

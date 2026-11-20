@@ -816,9 +816,11 @@ it("gives New analysis its notice dock at the top of the studio's own scroller",
   await flush();
   const main = container.querySelector(".studio-main");
   expect(main?.firstElementChild?.hasAttribute("data-notice-dock")).toBe(true);
-  // Other studios (the start page, a saved report) keep the corner.
+  // Other studios (the start page, a saved report) have no dock of their own;
+  // the shell's dock under the top bar (UI loop item 1, 20 Nov 2026) is not
+  // inside the studio's scroller.
   await mount();
-  expect(container.querySelector("[data-notice-dock]")).toBeNull();
+  expect(container.querySelector(".studio-main [data-notice-dock]")).toBeNull();
 });
 
 it("keeps one source upload alive across client navigation and shows the confirmed result", async () => {

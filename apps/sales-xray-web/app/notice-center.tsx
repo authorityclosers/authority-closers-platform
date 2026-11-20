@@ -173,6 +173,41 @@ const EMPTY: readonly Notice[] = [];
 
 /** New enquiries and work alerts; app problems keep the corner (owner, 31 Oct 2026). */
 const DOCKED_TONES: ReadonlySet<NoticeTone> = new Set(["lead", "work", "due"]);
+
+/**
+ * UI loop item 1 (owner's pick, 20 Nov 2026, option C: "the new-lead notice
+ * covers what the seller is doing"): a new enquiry, and each bell line the
+ * shell raises (shell/update-notices.tsx: "<name> is your lead now", a report
+ * ready), is a slim banner in the dock under the top bar on every phone
+ * screen. It pushes the page down instead of floating over Next action, a
+ * row or the tab bar, and while a sheet is up it waits for it to close (the
+ * Notifications sheet already lists it).
+ */
+const BELL_LINE = "alert:event:";
+const pushesPage = (notice: Notice) =>
+  notice.tone === "lead" || notice.id.startsWith(BELL_LINE);
+
+/** The lead's name in a line ("Asha Patil is your lead now", "New lead: Asha"). */
+function leadNameIn(title: string): string {
+  const named =
+    /^(.+?) is your lead now$/.exec(title) ?? /^New lead:\s*(.+)$/.exec(title);
+  return named ? named[1].trim() : "";
+}
+
+/** "Sameer Sheikh" -> "SS", "Asha" -> "A"; "" without letters. */
+function initialsOf(name: string): string {
+  const words = name.split(/\s+/).filter((word) => /^\p{L}/u.test(word));
+  const first = words[0]?.[0] ?? "";
+  const last = words.length > 1 ? words[words.length - 1][0] : "";
+  return `${first}${last}`.toUpperCase();
+}
+
+/** Where it came from ("New from Meta Ads: …" -> "Meta Ads"), else the words. */
+function bannerDetail(message: string | undefined): string {
+  const words = (message ?? "").trim();
+  const from = /^New from ([^:.]+)[:.]/.exec(words);
+  return from ? from[1].trim() : words;
+}
 const DOCK_MEDIA = "(max-width: 759.98px)";
 let dock: HTMLElement | null = null;
 const dockListeners = new Set<() => void>();
@@ -229,6 +264,7 @@ function placeLines(
   node: HTMLElement | null,
   ids: readonly string[],
   covered: boolean,
+  pushes: ReadonlySet<string> = new Set(),
 ) {
   if (node !== placedOn) {
     placedOn = node;
@@ -238,12 +274,17 @@ function placeLines(
     return;
   }
   if (!node) return;
-  for (const id of ids)
-    if (!inDockHere.has(id))
-      inDockHere.set(
-        id,
-        asideHere.delete(id) || (!covered && !pageShownUnder(node)),
-      );
+  for (const id of ids) {
+    if (inDockHere.has(id)) continue;
+    // A banner (pushesPage) waits while a sheet is up, then takes the dock.
+    if (covered && pushes.has(id)) continue;
+    inDockHere.set(
+      id,
+      asideHere.delete(id) ||
+        pushes.has(id) ||
+        (!covered && !pageShownUnder(node)),
+    );
+  }
 }
 
 /**
@@ -429,6 +470,14 @@ function NoticeCard({
     placed.set(key, folded);
   }, [key, folded]);
   const Icon = ICON[notice.tone];
+  const banner = docked && pushesPage(notice);
+  const name = banner ? leadNameIn(notice.title) : "";
+  const letters = name ? initialsOf(name) : "";
+  // A lead banner says the name first, then "New lead · Meta Ads" (option C).
+  const source = banner ? bannerDetail(notice.message) : "";
+  const detail = name
+    ? ["New lead", source].filter(Boolean).join(" · ")
+    : source;
   const remove = useCallback(() => {
     placed.delete(key);
     // Used or closed from the dock: gone, not set aside (asideHere).
@@ -513,6 +562,7 @@ function NoticeCard({
         className={styles.pill}
         data-tone={notice.tone}
         data-docked={docked || undefined}
+        data-banner={banner || undefined}
         data-again={again || undefined}
       >
         <button
@@ -525,24 +575,68 @@ function NoticeCard({
             setFolded(false);
           }}
         >
-          <Icon className={styles.icon} size={16} aria-hidden="true" />
-          <span className={styles.pillText}>{notice.title}</span>
+          {letters ? (
+            <span className={styles.avatar} aria-hidden="true">
+              {letters}
+            </span>
+          ) : (
+            <Icon className={styles.icon} size={16} aria-hidden="true" />
+          )}
+          {banner ? (
+            <span className={styles.bannerWords}>
+              <span className={styles.pillText}>
+                {name ? (
+                  <>
+                    {/* The name shows; a screen reader hears the whole line. */}
+                    <span className={styles.unseen}>
+                      {notice.title.slice(0, notice.title.indexOf(name))}
+                    </span>
+                    {name}
+                    <span className={styles.unseen}>
+                      {notice.title.slice(
+                        notice.title.indexOf(name) + name.length,
+                      )}
+                    </span>
+                  </>
+                ) : (
+                  notice.title
+                )}
+              </span>
+              {detail ? (
+                <span className={styles.bannerDetail}>{detail}</span>
+              ) : null}
+            </span>
+          ) : (
+            <span className={styles.pillText}>{notice.title}</span>
+          )}
         </button>
         {/* A short-lived card's action stays too: its Undo is the point of
-            it (ph2-36: Undo vanished once the card folded). */}
+            it (ph2-36: Undo vanished once the card folded). A banner's taps
+            are counted (sx.feature_used notice_opened / notice_dismissed). */}
         {notice.action &&
         (notice.pillAction || docked || Boolean(notice.timeout)) ? (
-          <CardAction
-            action={notice.action}
-            onRun={() => {
-              if (!notice.onDismiss) remove();
-            }}
-          />
+          <span
+            className={styles.contents}
+            data-sx-feature={banner ? "notice_opened" : undefined}
+          >
+            <CardAction
+              action={
+                // The banner's one button is short, so the name has the room.
+                banner && name
+                  ? { ...notice.action, label: "Open" }
+                  : notice.action
+              }
+              onRun={() => {
+                if (!notice.onDismiss) remove();
+              }}
+            />
+          </span>
         ) : null}
         <button
           type="button"
           className={styles.close}
           aria-label="Dismiss"
+          data-sx-feature={banner ? "notice_dismissed" : undefined}
           disabled={dismissing}
           onClick={() => void dismiss()}
         >
@@ -1118,13 +1212,16 @@ export function NoticeCenter() {
 
   const docks = (item: Notice) =>
     item.dock === true || DOCKED_TONES.has(item.tone);
+  const dockable = [...list.filter(docks), ...(workCard ? [workCard] : [])];
   placeLines(
     pageDock,
-    [...list.filter(docks), ...(workCard ? [workCard] : [])].map(
-      (item) => item.id,
-    ),
+    dockable.map((item) => item.id),
     sheet !== null,
+    new Set(dockable.filter(pushesPage).map((item) => item.id)),
   );
+  // On a phone (a page with a dock) a banner waits under a sheet, never over it.
+  const waitsForSheet = (item: Notice) =>
+    sheet !== null && pageDock !== null && pushesPage(item);
   const inDock = (item: Notice) => inDockHere.get(item.id) === true;
   const docked = docking
     ? list.filter((item) => docks(item) && inDock(item))
@@ -1147,7 +1244,9 @@ export function NoticeCenter() {
   // covered the sheet's own controls (orchestrator, 8 Nov 2026: three cards over
   // the lead sheet's actions at 363); the rest come back with the page's stack
   // once the sheet closes.
-  const sheetCard = sheet && corner.length ? corner[corner.length - 1] : null;
+  const sheetCorner = corner.filter((item) => !waitsForSheet(item));
+  const sheetCard =
+    sheet && sheetCorner.length ? sheetCorner[sheetCorner.length - 1] : null;
   // While a sheet holds the dock's lines (above), the dock keeps their room on
   // the page under it, so the page doesn't rise as a lead's sheet opens and
   // drop as it closes (QA robot 95abddab and 77641e07, 3 Nov 2026: 52 px each
@@ -1200,7 +1299,7 @@ export function NoticeCenter() {
           data-capture-skip=""
           popover={sheet ? "manual" : undefined}
         >
-          {cornerWork && !sheetCard ? (
+          {cornerWork && !sheetCard && !waitsForSheet(cornerWork) ? (
             <NoticeCard
               key={cornerWork.id}
               notice={cornerWork}
