@@ -39,6 +39,7 @@ from sqlalchemy import cast, func, select
 from sqlalchemy.dialects.postgresql import JSONB
 from starlette.requests import ClientDisconnect
 
+from ac_platform.audit.service import append_audit_event
 from ac_platform.conversation_intelligence.sales_xray_tenants import SALES_XRAY_MEMBER_ROLES
 from ac_platform.conversation_intelligence.synthetic_import_models import (
     ConversationSandboxOrganisation,
@@ -168,6 +169,31 @@ class MetaStatus(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     configured: bool
     pages: list[MetaPage]
+
+
+class DisconnectMeta(BaseModel):
+    """Disconnect Facebook entirely: without confirm, only what would stop is counted."""
+
+    model_config = ConfigDict(extra="forbid")
+    confirm: bool = False
+
+
+class MetaDisconnected(BaseModel):
+    """What disconnecting Facebook stops (asked first, done false) or stopped (done true)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+    done: bool
+    # Facebook accounts and Pages connected here, and the Pages and forms bringing leads.
+    accounts: int
+    pages: int
+    pages_on: int = Field(alias="pagesOn")
+    forms_on: int = Field(alias="formsOn")
+    # Leads from Facebook already here: they stay, with their history.
+    leads_kept: int = Field(alias="leadsKept")
+    # Meta took back the workspace's sign-in (false before confirm, when there was none,
+    # or when Meta didn't answer: the tokens are dropped here all the same).
+    revoked: bool = False
+    status: MetaStatus
 
 
 class ConnectPage(BaseModel):
@@ -1294,12 +1320,122 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 source.updated_at = desk.now
             row = await lead_settings(desk)
             box = (row.config or {}).get(meta_capi.CONNECTION)
+            revoked = False
             if isinstance(box, dict) and box.get("account") == account_id:
-                row.config = {
-                    k: v for k, v in (row.config or {}).items() if k != meta_capi.CONNECTION
-                }
+                revoked = await drop_connection(desk, cfg, row)
             await desk.db.flush()
+            await append_audit_event(
+                desk.db,
+                tenant_id=desk.viewer.tenant_id,
+                actor_person_id=desk.viewer.person_id,
+                action="lead_desk.meta_account_disconnected",
+                resource_type="lead_desk_meta",
+                resource_id=account_id[:40],
+                reason="A Facebook account was disconnected",
+                payload={"pages": len(sources), "revoked": revoked},
+            )
             return await status_view(desk)
+
+    async def drop_connection(desk: LeadDesk, cfg: meta.MetaConfig, row: LeadDeskSettings) -> bool:
+        """Ask Meta to take back the workspace's sign-in, then forget it here. True when
+        Meta said yes; a sign-in Meta already dropped (or no answer) is forgotten anyway."""
+        token = meta_capi.connection_token(row.config or {}, cfg, desk.viewer.tenant_id)
+        revoked = False
+        if token:
+            try:
+                await meta.Graph(cfg, timeout=6).revoke(token)
+                revoked = True
+            except meta.MetaError:
+                pass
+        row.config = {k: v for k, v in (row.config or {}).items() if k != meta_capi.CONNECTION}
+        return revoked
+
+    @router.post("/meta/disconnect", response_model=MetaDisconnected, response_model_by_alias=True)
+    async def meta_disconnect_all(
+        command: DisconnectMeta, request: Request, response: Response
+    ) -> MetaDisconnected:
+        """Disconnect Facebook entirely (owner bug reports 111 and 112, 29 Oct 2026: "an
+        option to remove the connected entire facebook account"; built 20 Nov 2026).
+        Asked first: without confirm it only counts what would stop. With confirm, Meta is
+        asked to take back the workspace's sign-in, every Page of every Facebook account
+        stops (no webhook, no pull, no lead forms read) and every token is dropped, as is
+        the Conversions connection. Leads already filed stay, with their history.
+        Connecting again brings the Pages back, off. One audit event says who and what."""
+        cfg = meta_config()
+        async with desk_for(request, response, write=command.confirm) as desk:
+            desk._require_manager()
+            sources = [
+                source
+                for source in await meta_sources(desk)
+                if isinstance((source.config or {}).get("token"), dict)
+            ]
+            settings = await desk.db.get(LeadDeskSettings, desk.viewer.tenant_id)
+            signed_in = isinstance(
+                ((settings.config if settings else None) or {}).get(meta_capi.CONNECTION), dict
+            )
+            if not sources and not signed_in:
+                raise DeskError(404, "Facebook isn't connected here.")
+            on = [source for source in sources if source.active]
+            accounts = len({_account_id(source.config or {}) for source in sources})
+            forms_on = sum(
+                len(
+                    _covered(
+                        (source.config or {}).get("form_list"),
+                        (source.config or {}).get("forms", "all"),
+                    )
+                )
+                for source in on
+            )
+            kept = int(
+                await desk.db.scalar(
+                    select(func.count()).where(
+                        Lead.tenant_id == desk.viewer.tenant_id,
+                        Lead.source == "meta",
+                        Lead.binned_at.is_(None),
+                        Lead.test_data.is_(False),
+                    )
+                )
+                or 0
+            )
+            revoked = False
+            if command.confirm:
+                at = int(time.time())
+                for source in sources:
+                    await desk.db.refresh(source, with_for_update=True)
+                    config = dict(source.config or {})
+                    await stop_page(cfg, source, str(config.get("page_id") or ""))
+                    config.pop("token", None)
+                    source.config = {**config, "disconnected_at": at}
+                    source.updated_at = desk.now
+                revoked = await drop_connection(desk, cfg, await lead_settings(desk))
+                await desk.db.flush()
+                await append_audit_event(
+                    desk.db,
+                    tenant_id=desk.viewer.tenant_id,
+                    actor_person_id=desk.viewer.person_id,
+                    action="lead_desk.meta_disconnected",
+                    resource_type="lead_desk_meta",
+                    resource_id="all",
+                    reason="Facebook was disconnected",
+                    payload={
+                        "accounts": accounts,
+                        "pages": len(sources),
+                        "pages_on": len(on),
+                        "forms_on": forms_on,
+                        "leads_kept": kept,
+                        "revoked": revoked,
+                    },
+                )
+            return MetaDisconnected(
+                done=command.confirm,
+                accounts=accounts,
+                pages=len(sources),
+                pages_on=len(on),
+                forms_on=forms_on,
+                leads_kept=kept,
+                revoked=revoked,
+                status=await status_view(desk),
+            )
 
     @router.post(
         "/meta/pages/{page_id}/remove", response_model=MetaPage, response_model_by_alias=True

@@ -18,9 +18,10 @@ import httpx
 import pytest
 from sqlalchemy import func, select, update
 
+from ac_platform.audit.models import AuditEvent
 from ac_platform.http.routes import RouteContext
 from ac_platform.lead_desk import owner_alerts, sla
-from ac_platform.lead_desk.connectors import meta, meta_backfill, meta_pull
+from ac_platform.lead_desk.connectors import meta, meta_backfill, meta_capi, meta_pull
 from ac_platform.lead_desk.connectors.http import install_connectors_http
 from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadEvent, LeadMerge, LeadSource
 from ac_platform.lead_desk.store import LeadDesk, Viewer
@@ -94,6 +95,11 @@ class FakeGraph:
 
     async def unsubscribe(self, page_id: str, page_token: str) -> None:
         FakeGraph.unsubscribed.append(page_id)
+
+    revoked: list[str] = []
+
+    async def revoke(self, user_token: str) -> None:
+        FakeGraph.revoked.append(user_token)
 
     async def lead_subscribed(self, page_id: str, page_token: str) -> bool:
         return page_id not in FakeGraph.lost
@@ -824,7 +830,187 @@ def test_a_wrong_facebook_account_is_disconnected_and_an_old_page_removed(
                 assert await db.scalar(select(func.count()).select_from(Lead)) == 2
                 row = await db.get(LeadDeskSettings, tenant)
                 assert row is not None and "meta_connection" not in row.config
+                event = await db.scalar(
+                    select(AuditEvent).where(
+                        AuditEvent.action == "lead_desk.meta_account_disconnected"
+                    )
+                )
+                assert event is not None and event.resource_id == "77"
+                assert event.payload == {"pages": 2, "revoked": False}
             # The pull reads only Pages that are on: none now.
+            assert await meta_pull.pull_due(setup.sessions, cfg, FakeGraph(cfg), now=1) == 0
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_disconnecting_facebook_entirely_asks_first_then_stops_everything_and_keeps_leads(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Owner bug reports 111 and 112 (29 Oct 2026, built 20 Nov 2026): "an option to
+    remove the connected entire facebook account". Asked first, it only counts what would
+    stop and changes nothing. Done, Meta takes back the workspace's sign-in, every Page of
+    every Facebook account stops (Meta told for the ones on) and loses its token, the
+    Conversions connection goes, the pull skips them all, the leads stay, and one audit
+    event says who did it and what stopped. A second try says Facebook isn't connected."""
+    for name, value in ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(meta, "Graph", FakeGraph)
+    FakeGraph.unsubscribed = []
+    FakeGraph.revoked = []
+    cfg = meta.config()
+    assert cfg is not None
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            settings = setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
+            install_connectors_http(
+                setup.app, RouteContext(settings, setup.require_actor, setup.sessions)
+            )
+            tenant = setup.state.tenant_id
+            first = {"id": "77", "name": "Fictional Owner"}
+            second = {"id": "88", "name": "Fictional Partner", "at": 1790000000}
+
+            def page(page_id: str, name: str, account: dict[str, Any], on: bool) -> LeadSource:
+                return LeadSource(
+                    id=uuid4(),
+                    tenant_id=tenant,
+                    kind="meta",
+                    label=f"Meta · {name}",
+                    token_sha256=None,
+                    config={
+                        "page_id": page_id,
+                        "page_name": name,
+                        "token": meta.seal(cfg.token_key, "page-token-1", page_id=page_id),
+                        "forms": "all",
+                        "form_list": [
+                            {"id": "fa", "name": "Enquiry", "status": "ACTIVE"},
+                            {"id": "fb", "name": "Site visit", "status": "ACTIVE"},
+                        ],
+                        "account": account,
+                    },
+                    active=on,
+                    received=0,
+                    created_by_person_id=setup.state.person_id,
+                    created_at=datetime(2026, 10, 20, tzinfo=UTC),
+                    updated_at=datetime.now(UTC),
+                )
+
+            async with setup.sessions() as db, db.begin():
+                db.add_all(
+                    [
+                        page("p1", "Fictional Homes", first, True),
+                        page("p2", "Fictional Old Page", first, False),
+                        page("p3", "Fictional Clinic", second, True),
+                    ]
+                )
+                db.add(
+                    LeadDeskSettings(
+                        tenant_id=tenant,
+                        revision=1,
+                        config={
+                            "meta_connection": {
+                                "token": meta.seal(
+                                    cfg.token_key,
+                                    USER_TOKEN,
+                                    page_id=meta_capi.connection_bound(tenant),
+                                ),
+                                "account": "77",
+                                "at": 1,
+                            }
+                        },
+                        updated_by_person_id=None,
+                        updated_at=datetime.now(UTC),
+                    )
+                )
+                desk = LeadDesk(
+                    db,
+                    Viewer(
+                        person_id=setup.state.person_id,
+                        tenant_id=tenant,
+                        role="admin",
+                        name="Admin",
+                    ),
+                )
+                await desk.ingest(
+                    {"full_name": "Fictional Buyer", "phone": "+919999055555"},
+                    source="meta",
+                    source_label="Meta · Fictional Homes",
+                    source_ref="200000000000011",
+                    actor=None,
+                )
+                await desk.ingest(
+                    {"full_name": "Meta Test Person", "phone": "+919999066666"},
+                    source="meta",
+                    source_label="Meta · Fictional Clinic",
+                    source_ref="200000000000012",
+                    actor=None,
+                    test_data=True,
+                )
+
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                asked = await client.post(f"{META}/disconnect", headers=WRITE, json={})
+                assert asked.status_code == 200, asked.text
+                counts = asked.json()
+                assert {k: counts[k] for k in counts if k != "status"} == {
+                    "done": False,
+                    "accounts": 2,
+                    "pages": 3,
+                    "pagesOn": 2,
+                    "formsOn": 4,
+                    "leadsKept": 1,  # Meta's test lead isn't counted
+                    "revoked": False,
+                }
+                assert len(counts["status"]["pages"]) == 3  # nothing changed yet
+                assert FakeGraph.unsubscribed == [] and FakeGraph.revoked == []
+
+                done = await client.post(
+                    f"{META}/disconnect", headers=WRITE, json={"confirm": True}
+                )
+                assert done.status_code == 200, done.text
+                body = done.json()
+                assert body["done"] is True and body["revoked"] is True
+                assert body["status"]["pages"] == []
+                assert sorted(FakeGraph.unsubscribed) == ["p1", "p3"]  # the Pages that were on
+                assert FakeGraph.revoked == [USER_TOKEN]
+
+                again = await client.post(
+                    f"{META}/disconnect", headers=WRITE, json={"confirm": True}
+                )
+                assert again.status_code == 404
+                assert (
+                    await client.post(f"{META}/pages/p3/pull", headers=WRITE)
+                ).status_code == 404
+
+            async with setup.sessions() as db:
+                for source in (await db.scalars(select(LeadSource))).all():
+                    assert source.active is False
+                    assert "token" not in source.config
+                    assert source.config["disconnected_at"] > 0
+                assert await db.scalar(select(func.count()).select_from(Lead)) == 2
+                row = await db.get(LeadDeskSettings, tenant)
+                assert row is not None and "meta_connection" not in row.config
+                events = (
+                    await db.scalars(
+                        select(AuditEvent).where(AuditEvent.action == "lead_desk.meta_disconnected")
+                    )
+                ).all()
+                assert len(events) == 1
+                assert events[0].actor_person_id == setup.state.person_id
+                assert events[0].payload == {
+                    "accounts": 2,
+                    "pages": 3,
+                    "pages_on": 2,
+                    "forms_on": 4,
+                    "leads_kept": 1,
+                    "revoked": True,
+                }
             assert await meta_pull.pull_due(setup.sessions, cfg, FakeGraph(cfg), now=1) == 0
         finally:
             await setup.engine.dispose()

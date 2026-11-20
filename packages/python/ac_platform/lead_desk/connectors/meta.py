@@ -664,6 +664,11 @@ class Graph:
     async def unsubscribe(self, page_id: str, page_token: str) -> None:
         await self._call("DELETE", f"{page_id}/subscribed_apps", access_token=page_token)
 
+    async def revoke(self, user_token: str) -> None:
+        """Take back everything the person allowed Sales Xray at Meta (owner bug report
+        111, 20 Nov 2026): their sign-in and every Page token made from it stop working."""
+        await self._call("DELETE", "me/permissions", access_token=user_token)
+
     async def test_leads(self, form_id: str, page_token: str) -> list[str]:
         """The form's test leads (Meta keeps one at a time)."""
         old = await self._call("GET", f"{form_id}/test_leads", access_token=page_token)
