@@ -42,6 +42,7 @@ import { InitialSessionProvider } from "./initial-session";
 import { DisplayDatesProvider } from "./display-clock";
 import { serverDisplayDates, serverSession } from "./server-reads";
 import { NoticeCenter } from "./notice-center";
+import { DesktopKeys } from "./shell/desktop-keys";
 import { ReleaseHoldBanner } from "./release-hold-banner";
 import { TelemetryAuto } from "./telemetry-auto";
 import { ClarityGate } from "./clarity";
@@ -141,6 +142,8 @@ export default async function Layout({
               </InitialSessionProvider>
               <UploadIndicator />
               <NoticeCenter />
+              {/* Keys on a computer: / N G-then-letter ? (sx-desktop, 20 Nov 2026). */}
+              <DesktopKeys />
               {/* Releases: one fetch layer waits them out behind a calm banner. */}
               <ReleaseHoldBanner />
               {/* Usage and performance telemetry, sent only for people it is on for. */}
