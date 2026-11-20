@@ -6,6 +6,8 @@ import styles from "./segmented.module.css";
 export type SegmentedOption<T extends string> = Readonly<{
   value: T;
   label: ReactNode;
+  /** Sent as sx.feature_used when tapped (telemetry-auto's data-sx-feature). */
+  feature?: string;
 }>;
 
 /** Native radios styled as segments: arrow keys and form semantics come free. */
@@ -37,7 +39,11 @@ export function Segmented<T extends string>({
       <legend className={styles.legend}>{legend}</legend>
       <div className={styles.track}>
         {options.map((option) => (
-          <label key={option.value} className={styles.option}>
+          <label
+            key={option.value}
+            className={styles.option}
+            data-sx-feature={option.feature}
+          >
             <input
               className={styles.input}
               type="radio"

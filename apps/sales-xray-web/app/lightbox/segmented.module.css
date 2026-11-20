@@ -38,16 +38,20 @@
   cursor: pointer;
 }
 
+/* UI loop item 8 (owner's pick, 20 Nov 2026, option A): the theme switch's 13 px
+   words on a 36 px track were hard to read and to hit. Segments are 44 px tall
+   with 16 px words and an icon beside each. */
 .label {
   display: flex;
   width: 100%;
-  min-height: var(--lx-control-h, 36px);
+  min-height: var(--lx-row-min-h, 44px);
   align-items: center;
   justify-content: center;
+  gap: var(--lx-space-2);
   padding: 0 var(--lx-space-2);
   border-radius: var(--lx-radius-sm);
   color: var(--lx-ink-3);
-  font: var(--lx-text-meta);
+  font: 600 var(--sx-text-md) / 1.25 var(--lx-font-ui);
   line-height: var(--lx-leading-devanagari, 1.4);
   text-align: center;
   transition:
@@ -55,6 +59,12 @@
     box-shadow var(--lx-dur-move) var(--lx-ease-move),
     color var(--lx-dur-quick) var(--lx-ease-quick),
     transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.label svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
 }
 
 /* Design system v2: a press dips the segment and lets it spring back. */
@@ -74,7 +84,7 @@
   box-shadow:
     0 1px 3px color-mix(in oklab, var(--lx-film) 14%, transparent),
     0 0 0 0.5px var(--sx-hairline);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .input:focus-visible + .label {

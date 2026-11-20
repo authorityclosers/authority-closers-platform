@@ -220,6 +220,23 @@ describe("ThemeProvider and ThemeControl", () => {
     expect(html.hasAttribute("data-theme-preference")).toBe(false);
   });
 
+  it("shows Light and Dark with a sun and a moon, each tap named for telemetry", async () => {
+    mediaQuery(false);
+    await mount();
+    const options = [...host.querySelectorAll("label")];
+    expect(options.map((option) => option.textContent)).toEqual([
+      "Light",
+      "Dark",
+    ]);
+    expect(options.map((option) => option.dataset.sxFeature)).toEqual([
+      "theme_light",
+      "theme_dark",
+    ]);
+    for (const option of options) {
+      expect(option.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    }
+  });
+
   it("renders nothing outside a provider, as in the learner-web embed", async () => {
     await act(async () => root.render(<ThemeControl />));
     expect(host.innerHTML).toBe("");

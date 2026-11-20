@@ -7,6 +7,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import { Moon, Sun } from "lucide-react";
 
 import { setPhoneTheme } from "../leads/native-phone";
 import { Segmented } from "./segmented";
@@ -101,9 +102,28 @@ export function useTheme() {
   return useContext(ThemeContext);
 }
 
+// Sun and moon as the top bar's theme toggle draws them (shell/theme-toggle.tsx).
 const themeOptions = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
+  {
+    value: "light",
+    label: (
+      <>
+        <Sun aria-hidden="true" strokeWidth={1.8} />
+        Light
+      </>
+    ),
+    feature: "theme_light",
+  },
+  {
+    value: "dark",
+    label: (
+      <>
+        <Moon aria-hidden="true" strokeWidth={1.8} />
+        Dark
+      </>
+    ),
+    feature: "theme_dark",
+  },
 ] as const;
 
 export function ThemeControl({ className }: { className?: string }) {
