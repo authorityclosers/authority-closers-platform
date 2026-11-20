@@ -83,3 +83,31 @@ def test_a_leads_facts_read_its_value_answer_and_google_ads() -> None:
         value_answer="budget",
     )
     assert plain.source == "webhook" and plain.value is None
+
+
+def test_a_split_rule_needs_shares_that_add_up() -> None:
+    people = [str(UUID(int=11)), str(UUID(int=12)), str(UUID(int=13))]
+    rule = routing_rules.Rule.model_validate(
+        {"id": "wl-split", "name": "Wise Life split", "give_to": people, "shares": [20, 40, 40]}
+    )
+    assert rule.when == () and rule.shares == (20, 40, 40)
+    ((_, made),) = routing_rules.pure((rule,))
+    assert made.every and made.key == "wl-split" and made.shares == (20, 40, 40)
+    config = {routing_rules.KEY: [rule.model_dump(mode="json")]}
+    assert routing_rules.split_keys(config) == ("wl-split",)
+    for bad in ([20, 40], [20, 40, 30], [120, -10, -10]):
+        with pytest.raises(ValidationError):
+            routing_rules.Rule.model_validate({"give_to": people, "shares": bad})
+    with pytest.raises(ValidationError):
+        routing_rules.Rule.model_validate({"give_to": [people[0], people[0]], "shares": [50, 50]})
+    # A plain group with no conditions is for every lead, taking turns: no split to count.
+    turns = routing_rules.Rule.model_validate({"id": "t", "give_to": people})
+    assert routing_rules.split_keys({routing_rules.KEY: [turns.model_dump(mode="json")]}) == ()
+    decided = routing_rules.decide(
+        config,
+        routing.LeadFacts(),
+        tuple(routing.Seat(UUID(p), f"P{i}", True, 0, None) for i, p in enumerate(people)),
+        {"wl-split": {}},
+    )
+    assert decided is not None and decided[0].person_id == UUID(people[1])
+    assert decided[0].split == "wl-split" and decided[1] == "Wise Life split"

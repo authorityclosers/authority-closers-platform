@@ -364,3 +364,71 @@ def test_leads(postgres_harness: Any, tmp_path: Path) -> None:
             assert binned is not None
 
     run(exercise())
+
+
+def test_workspace_lead_rules(postgres_harness: Any, tmp_path: Path) -> None:
+    """Wise Life's lead rules (owner, 19 Nov 2026): a split by percent, auto-reassign after
+    30 work minutes, Mon-Sat hours, sellers may give a lead on; read, dry run, apply, replay."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            cli = await _cli(here)
+            seller, owner = str(here.seller.person_id), str(here.setup.state.person_id)
+
+            shown = await cli("workspaces", "lead-rules", write=False)
+            assert shown["mode"] == "read" and shown["lead_rules"]["split"] is None
+
+            change = (
+                "workspaces",
+                "lead-rules",
+                "--split",
+                f"{seller}=60",
+                "--split",
+                f"{owner}=40",
+                "--split-name",
+                "Fictional split",
+                "--auto-reassign",
+                "on",
+                "--reassign-minutes",
+                "30",
+                "--work-days",
+                "mon-sat",
+                "--work-start",
+                "09:30",
+                "--work-end",
+                "19:30",
+                "--sellers-reassign",
+                "on",
+            )
+            dry, done, _ = await cli.twice(*change)
+            assert dry["before"]["split"] is None
+            after = done["after"]
+            assert after["split"] == {
+                "name": "Fictional split",
+                "enabled": True,
+                "shares": {seller: 60, owner: 40},
+            }
+            assert after["auto_reassign"] is True and after["reassign_minutes"] == 30
+            assert after["sellers_reassign"] is True
+            assert after["work_hours"]["days"] == [0, 1, 2, 3, 4, 5]
+            assert (after["work_hours"]["start"], after["work_hours"]["end"]) == ("09:30", "19:30")
+            async with cli.sessions() as db:
+                saved = await db.get(LeadDeskSettings, here.tenant_id)
+                assert saved is not None
+                (rule,) = saved.config["routing_rules"]
+                assert rule["id"] == tool.SPLIT_ID and rule["shares"] == [60, 40]
+                assert rule["when"] == []
+
+            with pytest.raises(tool.OrganisationCommandError, match="add up to 100"):
+                await cli(
+                    "workspaces", "lead-rules", "--split", f"{seller}=60", "--split", f"{owner}=30"
+                )
+            with pytest.raises(tool.OrganisationCommandError, match="must be a member"):
+                await cli("workspaces", "lead-rules", "--split", f"{uuid4()}=100")
+
+            # The split comes off; the rest stays as it is.
+            _, cleared, _ = await cli.twice("workspaces", "lead-rules", "--no-split")
+            assert cleared["after"]["split"] is None
+            assert cleared["after"]["auto_reassign"] is True
+
+    run(exercise())

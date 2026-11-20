@@ -1238,6 +1238,10 @@ class LeadDetail(Model):
     # A Won lead: what the deal was worth, the newest amount (a correction stands), whole
     # rupees; None while it is not Won or no amount was given (ph1-13, 1 Nov 2026).
     won_amount: int | None = None
+    # A seller may give this lead of theirs to a colleague, with a reason (the workspace's
+    # "Sellers can reassign leads", owner, Wise Life, 19 Nov 2026); ``reps`` lists who.
+    # Owners and admins use ``can_assign`` instead.
+    can_give: bool = False
 
 
 class PhoneHealth(Model):
@@ -1312,6 +1316,9 @@ class SettingsView(Model):
     # Languages are strict: a lead nobody free speaks waits for a manager instead of going
     # to the least loaded seller (27 Oct 2026). Off: languages are preferred.
     strict_language: bool = False
+    # Sellers can give their own leads to a colleague, with a reason (owner, Wise Life,
+    # 19 Nov 2026); owners and admins always can.
+    sellers_reassign: bool = False
 
 
 class Team(Model):
@@ -1844,10 +1851,23 @@ class MessageSent(Command):
     edited: bool = False
 
 
+# Why a lead moves to someone else (a seller must say; owners and admins may).
+REASSIGN_REASONS: dict[str, str] = {
+    "escalation": "Escalation",
+    "importance": "Important lead",
+    "wrong_person": "Wrong person for it",
+    "other": "Other",
+}
+
+
 class Reassign(Command):
     command_id: UUID
     expected_revision: int = Field(ge=1)
     person_id: UUID | None = None  # None: run the allocation rules again
+    # Why (owner, Wise Life, 19 Nov 2026): required when a seller gives their lead away,
+    # with a note for "other"; kept on the lead's history.
+    reason: Literal["escalation", "importance", "wrong_person", "other"] | None = None
+    note: str | None = Field(default=None, max_length=300)
 
 
 class BulkLeads(Command):
@@ -2072,6 +2092,8 @@ class SettingsCommand(Command):
     default_max_open: int | None = Field(default=None, ge=1, le=1000)
     # None keeps it as it is.
     strict_language: bool | None = None
+    # Sellers can give their own leads to a colleague, with a reason; None keeps it.
+    sellers_reassign: bool | None = None
 
 
 class NudgesCommand(Command):
