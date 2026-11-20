@@ -39,9 +39,11 @@ export type AcquisitionFileStageProps = Readonly<{
   timeLeft?: string | null;
 }>;
 
+// In the limit's own megabytes (1,000,000 bytes): a 104 MB file read "99.2 MB
+// · Over size limit" under "Up to 100 MB" (bug report 201).
 function fileSize(bytes: number): string {
-  if (bytes < 1048576) return `${Math.ceil(bytes / 1024)} KB`;
-  return `${(bytes / 1048576).toFixed(1)} MB`;
+  if (bytes < 1_000_000) return `${Math.ceil(bytes / 1000)} KB`;
+  return `${(bytes / 1_000_000).toFixed(1)} MB`;
 }
 
 export function AcquisitionFileStage({
