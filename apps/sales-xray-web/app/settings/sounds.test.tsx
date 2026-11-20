@@ -115,7 +115,6 @@ it("lists every moment in the library's groups, the team's or mine", async () =>
   expect(host.textContent).toContain("Warm V1 · Success");
   expect(host.textContent).toContain("Mine");
   expect(host.textContent).toContain("Team default");
-  expect(host.textContent).toContain("Just me");
   // Every row is a 44 px tap that opens its picker, with a telemetry name.
   const rows = host.querySelectorAll('button[data-sx-feature="sound_open"]');
   expect(rows).toHaveLength(6);

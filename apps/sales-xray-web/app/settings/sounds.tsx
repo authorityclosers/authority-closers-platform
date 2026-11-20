@@ -58,7 +58,7 @@ import { Picker } from "../ui/picker";
 import { Sheet } from "../ui/sheet";
 import { Skeleton } from "../ui/kit";
 import { soundPicked, soundPreviewed } from "../sounds/telemetry";
-import { savedFor, ScopeChip, useOrgName } from "./scope-chip";
+import { savedFor, useOrgName } from "./scope-chip";
 import styles from "./sounds.module.css";
 
 const ICON: Record<SxEventId, { icon: ReactNode; hue: Hue }> = {
@@ -402,7 +402,6 @@ export function MySounds() {
     <DsScope className={styles.page}>
       <div className={styles.lead}>
         <p>Pick a sound for each moment. Tap ▶ to hear it.</p>
-        <ScopeChip scope={view?.local ? "phone" : "me"} />
       </div>
       <div className={styles.actions}>
         <Button
@@ -576,7 +575,6 @@ export function TeamSounds() {
     <DsScope className={styles.page}>
       <div className={styles.lead}>
         <p>Sellers hear these unless they pick their own.</p>
-        <ScopeChip scope="everyone" org={org} />
       </div>
       {view ? (
         <p className={styles.count}>
