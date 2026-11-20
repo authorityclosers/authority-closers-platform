@@ -4,11 +4,16 @@ Solved and their reporters are told (owner, 25 Oct 2026, v0.93; orchestrator: a 
 reads ac-ship's log, not a change to ac-ship).
 
 Every 5 minutes (ac-bugs-release.timer) it reads /var/log/ac-ship.log. For each
-"vX is live on production" line it has not handled, it takes the hold line before it,
-"hold <sha> (workbench <sha> over main <sha>)", and runs
-`ac-bugs released vX --source <that workbench sha>`: every issue fixed in the next update whose
-commit is in that workbench commit becomes Solved, with the release in its note. The last
-handled releases are kept in /var/lib/ac-bugs-release/state.json, so a rerun does nothing.
+"vX is live on production" line it has not handled, it takes the hold line before it and
+runs `ac-bugs released vX --source <sha> [--commits ...]`: every issue fixed in the next
+update whose commit the release carries becomes Solved, with the release in its note.
+- ac-ship's own holds, "hold <sha> (workbench <sha> over main <sha>)": the workbench sha.
+- cutlist.sh's holds (since 29 Oct 2026), "hold <sha> over main <sha>", after
+  "=== cut vX over main <sha> (orchestrator; commits: <shas>)": the hold, plus the listed
+  commits, since a hold is main plus only their files (holdlist.sh). Reading only the old
+  form, the hook paired every release from v1.3 on with the last old hold (ba06ff909) and
+  solved nothing after v1.33 (bug audit, 20 Nov 2026).
+The handled releases are kept in /var/lib/ac-bugs-release/state.json, so a rerun does nothing.
 
   ac-bugs-release [--dry-run]
 """
@@ -29,20 +34,38 @@ LIVE = re.compile(r"^\S+ (v\d+\.\d+\.\d+) is live on production\b")
 HOLD = re.compile(
     r"^\S+ hold [0-9a-f]{7,40} \(workbench ([0-9a-f]{7,40}) over main [0-9a-f]{7,40}\)"
 )
+CUT_HOLD = re.compile(r"^\S+ hold ([0-9a-f]{7,40}) over main [0-9a-f]{7,40}\s*$")
+CUT = re.compile(r"^\S+ === cut v\S+ over main [0-9a-f]{7,40} \([^;]*; commits: ([0-9a-f ]*)\)")
+# Kept long enough for every release in the log: a shorter list than the log's releases
+# made each run handle again the ones it had just dropped (50, until 20 Nov 2026).
+KEEP = 2000
+
+Release = tuple[str, str, tuple[str, ...]]
 
 
-def releases(lines: list[str]) -> list[tuple[str, str]]:
-    """(version, workbench sha) for each live release, its hold line the one before it."""
-    found: list[tuple[str, str]] = []
-    hold: str | None = None
+def releases(lines: list[str]) -> list[Release]:
+    """(version, source sha, listed commits) for each live release, from the hold line
+    before it: ac-ship's own hold names its workbench commit; a cutlist hold is the
+    source itself and carries the commits its cut line listed."""
+    found: list[Release] = []
+    hold: tuple[str, tuple[str, ...]] | None = None
+    listed: tuple[str, ...] = ()
     for line in lines:
+        cut = CUT.match(line)
+        if cut:
+            listed = tuple(cut.group(1).split())
+            continue
         held = HOLD.match(line)
         if held:
-            hold = held.group(1)
+            hold = (held.group(1), ())
+            continue
+        held = CUT_HOLD.match(line)
+        if held:
+            hold = (held.group(1), listed)
             continue
         live = LIVE.match(line)
-        if live and hold and all(version != live.group(1) for version, _ in found):
-            found.append((live.group(1), hold))
+        if live and hold and all(version != live.group(1) for version, _, _ in found):
+            found.append((live.group(1), hold[0], hold[1]))
     return found
 
 
@@ -60,12 +83,14 @@ def main(argv: list[str]) -> int:
     found = releases(lines)
     if not state:
         # First run: only releases from now on (the past ones carried no issues).
-        done = [version for version, _ in found]
+        done = [version for version, _, _ in found]
         found = []
-    for version, source in found:
+    for version, source, listed in found:
         if version in done:
             continue
         command = [AC_BUGS, "--json", "released", version, "--source", source]
+        if listed:
+            command += ["--commits", *listed]
         if dry:
             command.append("--dry-run")
         result = subprocess.run(  # noqa: S603 - fixed argv
@@ -81,7 +106,7 @@ def main(argv: list[str]) -> int:
             done.append(version)
     if not dry:
         STATE.parent.mkdir(parents=True, exist_ok=True)
-        STATE.write_text(json.dumps({"done": done[-50:]}, indent=1))
+        STATE.write_text(json.dumps({"done": done[-KEEP:]}, indent=1))
     return 0
 
 
