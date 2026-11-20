@@ -282,6 +282,10 @@ class ProviderIdentity(Base):
         DateTime(timezone=True), nullable=True
     )
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # The email the provider last asserted for this key (migration 0164, 20 Nov 2026), so
+    # Settings can show which Google account is which. Shown to the person only; never a
+    # sign-in selector: the (issuer, subject) key is the identity. Null until next used.
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
 
     person: Mapped[Person] = relationship(back_populates="provider_identities")
 

@@ -10,7 +10,9 @@
  * emails the account and audits the change. API: docs/product/identity/
  * sign-in-methods-api.md. 18 Nov 2026 (Wise Life: one person, two Google
  * logins): each Google account is its own row with its own Remove, and
- * "Another Google account" connects one more.
+ * "Another Google account" connects one more. 20 Nov 2026 (owner, 19 Nov:
+ * work and personal Gmails): each row shows the account's own email, "Add
+ * another Google account" connects up to the server's limit (5).
  */
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -38,6 +40,8 @@ export type ProviderAccount = {
   addedAt: string | null;
   lastUsedAt: string | null;
   removable: boolean;
+  /** The email the provider last gave; null until the account signs in again. */
+  email: string | null;
 };
 export type SignInMethod = {
   kind: MethodKind;
@@ -53,6 +57,8 @@ export type ConnectOption = {
   connected: boolean;
   /** Connected, and one more account of it may be added (Google). */
   addAnother: boolean;
+  /** No more may be added: the person has the most the server allows. */
+  atLimit: boolean;
 };
 /** One row of the list: a way in, or one account of a provider. */
 type Row = {
@@ -63,6 +69,7 @@ type Row = {
   removable: boolean;
   accountId: string | null;
   label: string;
+  email: string | null;
 };
 type Loaded =
   | { state: "loading" }
@@ -72,6 +79,7 @@ type Loaded =
       methods: SignInMethod[];
       available: ConnectOption[];
       freshMinutes: number;
+      maxAccounts: number;
     };
 
 const LABELS: Record<MethodKind, string> = {
@@ -108,6 +116,7 @@ export function parseSignInMethods(value: unknown): {
   methods: SignInMethod[];
   available: ConnectOption[];
   freshMinutes: number;
+  maxAccounts: number;
 } | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const body = value as Record<string, unknown>;
@@ -132,6 +141,10 @@ export function parseSignInMethods(value: unknown): {
               ? account.last_used_at
               : null,
           removable: account.removable === true,
+          email:
+            typeof account.email === "string" && account.email.includes("@")
+              ? account.email
+              : null,
         });
       }
     }
@@ -158,13 +171,18 @@ export function parseSignInMethods(value: unknown): {
       label: typeof item.label === "string" ? item.label : LABELS[item.kind],
       connected,
       addAnother: connected && item.add_another === true,
+      atLimit: connected && item.at_limit === true,
     });
   }
   const minutes =
     typeof body.fresh_minutes === "number" && body.fresh_minutes > 0
       ? body.fresh_minutes
       : 10;
-  return { methods, available, freshMinutes: minutes };
+  const maxAccounts =
+    typeof body.max_accounts === "number" && body.max_accounts > 0
+      ? body.max_accounts
+      : 5;
+  return { methods, available, freshMinutes: minutes, maxAccounts };
 }
 
 /** A provider with several accounts shows each as its own row. */
@@ -180,6 +198,7 @@ function rowsOf(methods: SignInMethod[]): Row[] {
           removable: method.removable,
           accountId: null,
           label: LABELS[method.kind],
+          email: method.accounts[0]?.email ?? null,
         },
       ];
     return method.accounts.map((account, index) => ({
@@ -190,14 +209,21 @@ function rowsOf(methods: SignInMethod[]): Row[] {
       removable: account.removable,
       accountId: account.id,
       label: `${LABELS[method.kind]} account ${index + 1}`,
+      email: account.email,
     }));
   });
 }
 
-function hint(method: Pick<Row, "kind" | "addedAt" | "lastUsedAt">): string {
+function hint(
+  method: Pick<Row, "kind" | "addedAt" | "lastUsedAt"> & {
+    email?: string | null;
+  },
+): string {
   if (method.kind === "email_code")
     return "A one-time code to your email address.";
   const parts = [
+    // Which account it is comes first (owner, 19 Nov 2026).
+    method.email ?? null,
     when(method.addedAt) ? `Added ${when(method.addedAt)}` : null,
     when(method.lastUsedAt) ? `last used ${when(method.lastUsedAt)}` : null,
   ].filter(Boolean);
@@ -240,6 +266,13 @@ export function connectReturnNotice(
         ? `You can now sign in with ${name}.`
         : "You can now sign in with it.",
       timeout: 6000,
+    };
+  if (error === "limit")
+    return {
+      id: "sign-in-connect",
+      tone: "info",
+      title: `${name} wasn’t connected`,
+      message: `You have the most ${name} accounts allowed. Remove one, then connect the new one.`,
     };
   return {
     id: "sign-in-connect",
@@ -375,10 +408,12 @@ export function SignInMethods({ active }: { active: boolean }) {
         setBusy(null);
         return;
       }
-      if (body?.code === "already_connected") setAttempt((value) => value + 1);
+      const known =
+        body?.code === "already_connected" || body?.code === "account_limit";
+      if (known) setAttempt((value) => value + 1);
       notify({
         id: "sign-in-connect",
-        tone: body?.code === "already_connected" ? "info" : "error",
+        tone: known ? "info" : "error",
         title:
           body?.code === "already_connected"
             ? `${LABELS[kind]} is already connected`
@@ -501,6 +536,7 @@ export function SignInMethods({ active }: { active: boolean }) {
   const toConnect = loaded.available.filter(
     (option) => !option.connected || option.addAnother,
   );
+  const full = loaded.available.filter((option) => option.atLimit);
   return (
     <section aria-label="Sign-in methods">
       {rowsOf(loaded.methods).map((method) => (
@@ -553,7 +589,7 @@ export function SignInMethods({ active }: { active: boolean }) {
             <div className={styles.rowText}>
               <span className={styles.rowLabel}>
                 {option.addAnother
-                  ? `Another ${option.label} account`
+                  ? `Add another ${option.label} account`
                   : option.label}
               </span>
               <span className={styles.rowHint}>
@@ -562,7 +598,7 @@ export function SignInMethods({ active }: { active: boolean }) {
                   : phoneApp
                     ? `Connect ${option.label} from a computer or your phone’s browser.`
                     : option.addAnother
-                      ? `Have a second ${option.label} login? Connect it, and either one signs you in here.`
+                      ? `Work and personal ${option.label} logins? Connect up to ${loaded.maxAccounts}, and each one signs you in here.`
                       : `Not connected. Sign in with your ${option.label} account too.`}
               </span>
             </div>
@@ -579,6 +615,19 @@ export function SignInMethods({ active }: { active: boolean }) {
               </button>
             </div>
           )}
+        </div>
+      ))}
+      {full.map((option) => (
+        <div
+          className={styles.row}
+          key={`full:${option.kind}`}
+          data-connect-full={option.kind}
+        >
+          <div className={styles.rowText}>
+            <span className={styles.rowHint}>
+              {`You have ${loaded.maxAccounts} ${option.label} accounts, the most allowed. Remove one to add another.`}
+            </span>
+          </div>
         </div>
       ))}
     </section>

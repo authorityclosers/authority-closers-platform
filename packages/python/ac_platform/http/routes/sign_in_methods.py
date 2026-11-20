@@ -33,8 +33,10 @@ from ac_platform.identity.provider_link_email import (
 )
 from ac_platform.identity.sign_in_methods import (
     FRESH_SIGN_IN,
+    MAX_PROVIDER_ACCOUNTS,
     MULTI_ACCOUNT_PROVIDERS,
     SignInMethodError,
+    may_add_account,
     remove_provider,
     session_is_fresh,
     sign_in_methods,
@@ -91,6 +93,8 @@ def install(app: FastAPI, ctx: RouteContext) -> None:
                 request.app.state, "sign_in_provider_names", frozenset()
             )
             linked = {method.kind for method in methods}
+            # Accounts per provider (a provider without accounts counts as one).
+            counts = {method.kind: max(len(method.accounts), 1) for method in methods}
             return {
                 "methods": [
                     {
@@ -113,6 +117,9 @@ def install(app: FastAPI, ctx: RouteContext) -> None:
                                     else None
                                 ),
                                 "removable": account.removable,
+                                # Which account it is (owner, 19 Nov 2026); null until
+                                # the account is next used to sign in.
+                                "email": account.email,
                             }
                             for account in method.accounts
                         ],
@@ -120,12 +127,12 @@ def install(app: FastAPI, ctx: RouteContext) -> None:
                     for method in methods
                 ],
                 # Settings -> Connect: configured here and not yet on the account
-                # (Google: another account may be added).
+                # (Google: another account may be added, up to MAX_PROVIDER_ACCOUNTS).
                 "providers": {
                     provider: {
                         "linked": provider in linked,
                         "can_connect": provider in configured
-                        and (provider not in linked or provider in MULTI_ACCOUNT_PROVIDERS),
+                        and may_add_account(provider, counts.get(provider, 0)),
                     }
                     for provider in ("google", "apple", "facebook", "pulse")
                 },
@@ -135,13 +142,18 @@ def install(app: FastAPI, ctx: RouteContext) -> None:
                         "kind": provider,
                         "label": PROVIDER_LABELS[provider],
                         "connected": provider in linked,
-                        "add_another": provider in linked and provider in MULTI_ACCOUNT_PROVIDERS,
+                        "add_another": provider in linked
+                        and may_add_account(provider, counts.get(provider, 0)),
+                        # Shown when add_another is off because the limit is reached.
+                        "at_limit": provider in MULTI_ACCOUNT_PROVIDERS
+                        and counts.get(provider, 0) >= MAX_PROVIDER_ACCOUNTS,
                     }
                     for provider in ("google", "apple", "facebook", "pulse")
                     if provider in configured
                 ],
                 "fresh_sign_in": fresh,
                 "fresh_minutes": int(FRESH_SIGN_IN.total_seconds() // 60),
+                "max_accounts": MAX_PROVIDER_ACCOUNTS,
             }
 
     @router.post("/{provider}/remove")

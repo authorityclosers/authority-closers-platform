@@ -360,7 +360,8 @@ export function ProfileMenu({
                 }}
               >
                 <CircleUserRound size={16} aria-hidden="true" />
-                <span>Profile</span>
+                {/* Owner, 19 Nov 2026: "I don't see the edit option for my profile". */}
+                <span>Edit my profile</span>
               </Link>
             ) : null}
             {authenticated ? (

@@ -5,6 +5,9 @@ GET  /v1/sales-xray/ask-dipak/lessons?q=            search Dipak's 150 questions
 GET  /v1/sales-xray/ask-dipak/lessons/{id}          a question and its lesson (null while none),
                                                     from the newest import (migration 0157),
                                                     with the library's version
+GET  /v1/sales-xray/ask-dipak/videos                the lessons' approved videos, none while
+                                                    the switch is off (videos.py; owner, 19 Nov
+                                                    2026: off until Dipak and the owner approve)
 GET  /v1/sales-xray/ask-dipak/how-to-improve?skills=&objections=
                                                     Dipak's questions for a report's weaknesses
 GET  /v1/sales-xray/ask-dipak/growth                my ticked and active missions, with counts
@@ -28,7 +31,15 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from ac_platform.ask_dipak import catalogue, coaching, how_to_improve, library, store, team
+from ac_platform.ask_dipak import (
+    catalogue,
+    coaching,
+    how_to_improve,
+    library,
+    store,
+    team,
+    videos,
+)
 from ac_platform.http.auth import AuthenticatedTransaction, require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.kernel.errors import DomainError
@@ -138,6 +149,16 @@ def install_ask_dipak_coaching_http(app: FastAPI, ctx: RouteContext) -> None:
             "question": found.public(),
             "lesson": catalogue.lesson(question_id, served.lessons),
         }
+
+    @router.get("/videos")
+    async def lesson_videos(
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = read_dependency,
+    ) -> dict[str, Any]:
+        response.headers.update(PRIVATE)
+        on_app_host(request)
+        return {"videos": await videos.served(auth.database)}
 
     @router.get("/how-to-improve")
     async def improve(

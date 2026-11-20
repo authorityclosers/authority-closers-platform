@@ -87,9 +87,11 @@ it("offers the chip after a missed or unanswered call, saying what the phone saw
     heard: missed,
     hint: "Your phone says nobody answered.",
   });
+  // No word on connecting and no talk time (a phone without call-history
+  // access, 19 Nov 2026): asked all the same, as it may well have connected.
   expect(
-    ask({ phoneCall: phoneCall({ connected: null, durationSeconds: 0 }) }),
-  ).toMatchObject({ ask: false, hint: null });
+    ask({ phoneCall: phoneCall({ connected: null, durationSeconds: 0 }) }).ask,
+  ).toBe(true);
 });
 
 it("asks after a call the phone logged from its own dialler, with talk time", () => {

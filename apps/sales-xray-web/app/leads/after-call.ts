@@ -34,9 +34,11 @@ const CHANNEL: Record<string, string> = {
   email: "by email",
 };
 
-const connected = (call: NativeCall) =>
-  call.connected === true ||
-  (call.connected === null && (call.durationSeconds ?? 0) > 0);
+// Asked unless the phone knows the call didn't connect (owner, 19 Nov 2026:
+// "after the call the pop-up doesn't ask"). A phone without call-history
+// access (Aniket's Oppo, 19 Nov) reports neither connecting nor talk time,
+// so every call it placed went unasked; the question has "Didn't get through".
+const connected = (call: NativeCall) => call.connected !== false;
 
 const time = (event: LeadEvent) => Date.parse(event.at) || 0;
 

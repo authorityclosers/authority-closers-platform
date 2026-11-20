@@ -384,6 +384,13 @@ export function SettingsMenu({
     ] as const
   ).map(([id, icon]) => ({
     ...sectionById(id),
+    // Owner, 19 Nov 2026: "I don't see the edit option for my profile".
+    ...(id === "profile"
+      ? {
+          label: "Edit my profile",
+          hint: "Your name, photo, phone and Google logins",
+        }
+      : {}),
     href: `/settings/${id}`,
     icon,
   }));

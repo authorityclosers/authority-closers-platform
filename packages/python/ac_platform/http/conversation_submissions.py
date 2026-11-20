@@ -423,11 +423,11 @@ def install_submission_http(
         ):
             raise fail(409, "This call belongs to another workspace or seller.")
 
-    async def _standing_consent(owner: _Owner, policy_sha256: str) -> UUID:
-        """The standing consent an upload marked "standing" relies on: the seller's own,
-        in their organisation, for these upload terms, with their AI level not Off."""
+    async def _standing_consent_found(owner: _Owner, policy_sha256: str) -> UUID | None:
+        """The seller's own standing consent, in their organisation, for these upload terms,
+        with their AI level not Off; None when there is none."""
         actor = owner.actor
-        found = (
+        return (
             None
             if actor is None
             or actor.tenant_id is None
@@ -436,6 +436,10 @@ def install_submission_http(
                 owner.ownership.database, actor.tenant_id, actor.person_id, policy_sha256
             )
         )
+
+    async def _standing_consent(owner: _Owner, policy_sha256: str) -> UUID:
+        """The standing consent an upload marked "standing" relies on."""
+        found = await _standing_consent_found(owner, policy_sha256)
         if found is None:
             raise fail(409, "Automatic analysis isn't on for you here. Tap Analyse this call.")
         return found
@@ -746,6 +750,17 @@ def install_submission_http(
         # "accepted": this call's own tick. "standing": the seller's standing consent to have
         # their calls analysed as they arrive (call_ai.auto_consent), checked below.
         consents = request.headers.getlist("x-upload-consent")
+        # "on-arrival", with a ticked call: the seller tapped Analyse on a lead's call, so
+        # when their own standing consent is on now it covers the call too, and the server
+        # starts it after its audio check like a "standing" upload (auto_start). Before,
+        # only the page that sent it accepted the plan: a seller who left the page during a
+        # long upload had a call that was never analysed (Wise Life, 19 Nov 2026: a
+        # 13-minute call uploaded, its plan never accepted, with "Analyse my calls
+        # automatically" on). Consent off: the call keeps its tap, as before. Only a
+        # consent the seller gave and still holds is used, never one assumed for them.
+        on_arrival = consents == ["accepted"] and request.headers.getlist("x-upload-start") == [
+            "on-arrival"
+        ]
         if (
             len(lengths) != 1
             or re.fullmatch(r"[1-9][0-9]{0,8}", lengths[0]) is None
@@ -781,6 +796,8 @@ def install_submission_http(
             actor_binding = _actor_binding(owner.actor)
             if consents == ["standing"]:
                 standing_consent = await _standing_consent(owner, policies[0])
+            elif on_arrival:
+                standing_consent = await _standing_consent_found(owner, policies[0])
             if isinstance(owner.ownership, ImportOwnership):
                 reused = await owner.ownership.existing_source(
                     submission_id,
@@ -886,6 +903,9 @@ def install_submission_http(
                         if consents == ["standing"]:
                             # Turned off while the bytes streamed: this call waits for a tap.
                             standing_consent = await _standing_consent(owner, policies[0])
+                        elif on_arrival:
+                            # Read again too: off now, the ticked call keeps its tap.
+                            standing_consent = await _standing_consent_found(owner, policies[0])
                         service = AcquisitionProcessing(owner.ownership, runtime)
                         actor, quote = await service.prepare(
                             measured,
