@@ -1506,7 +1506,10 @@ it("rejects an audio file above the provider limit before creating a session", a
   );
   await flush();
 
-  expect(container.textContent).toContain("MP3, WAV, M4A, AAC");
+  // It says the file is too big, and by how much (bug report 201).
+  expect(container.textContent).toContain(
+    "This file is too big: 33.6 MB. The most is 33.5 MB.",
+  );
   expect(
     calls.some(
       (call) => call.path.endsWith("/session") && call.init.method === "POST",

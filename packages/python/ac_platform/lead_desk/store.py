@@ -37,6 +37,7 @@ from ac_platform.lead_desk import (
     deletion,
     duplicate_queue,
     owner_words,
+    recording_guard,
     reports,
     routing_rules,
 )
@@ -5822,6 +5823,10 @@ class LeadDesk:
             if call is None:
                 raise DeskError(404, "That call isn't on this lead.")
             data["for_call"] = str(call_event_id)
+        # One recording, one call (Oppo CPH2835, 20 Nov 2026): audio already on another call
+        # is refused here (409, the phone looks again); the same call again changes nothing.
+        if await recording_guard.already_here(self, lead.id, submission_id, call_event_id):
+            return await self.detail(lead.id)
         lead.last_submission_id = submission_id
         lead.revision += 1
         lead.updated_at = self.now

@@ -1,20 +1,26 @@
 "use client";
 
 /**
- * The permissions checklist right after sign-in, in the phone app (owner, 30
- * Oct 2026, fix 5: "the app cannot be used until all are granted"). One screen:
- * call log, phone, contacts, notifications and the recordings folder, each with
- * Allow, or Open settings once Android won't ask again. It covers every page
- * until all that this app build can grant are granted; items the build can't
- * ask for say so and never lock anyone out (permissions-rules.ts).
+ * Phone setup right after sign-in, in the phone app (owner, 30 Oct 2026, fix
+ * 5: call log, phone, contacts, notifications and the recordings folder). It
+ * covers every page while something this build can grant is still to answer;
+ * items the build can't ask for say so elsewhere and never lock anyone out
+ * (permissions-rules.ts).
+ *
+ * One ask per screen (owner, 20 Nov 2026, style C "See what to tap"): the
+ * walk in setup-walk.tsx shows each thing on its own screen with a picture of
+ * the phone screen that comes next, and this gate does what each button asks
+ * of Android and remembers each Not now. Not now on anything lets the person
+ * in: a row the app needs is put off for this app open only and asked again
+ * at the next one; a row that can wait is put off on this phone and stays as
+ * a slim reminder until it is done.
  *
  * In an organisation's workspace (owner, 3 Nov 2026) it is read at every open
  * and every return to the app, so a permission taken away in Android's
- * settings brings it back. Two more rows join it there: the battery, and
- * "Analyse my calls automatically", the one-time standing consent with its
- * sealed words, never pre-ticked and never filled from storage. Call history,
- * the battery and the consent offer Not now; a put-off one stays as a slim
- * reminder until it is done. A personal workspace keeps the checklist it had.
+ * settings brings it back, and two more screens join: the battery (with
+ * Autostart where the maker needs it) and "Analyse my calls automatically",
+ * the one-time standing consent with its sealed words, never pre-ticked and
+ * never filled from storage.
  *
  * It waits for the Terms card and Home's first run, and call capture setup and
  * "Set up this phone" wait for it. Nothing shows in a browser or an app too
@@ -22,20 +28,8 @@
  */
 
 import {
-  BatteryCharging,
-  Bell,
-  CheckCircle2,
-  Contact,
-  FolderOpen,
-  History,
-  Phone,
-  ShieldCheck,
-  type LucideIcon,
-} from "lucide-react";
-import {
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
@@ -47,7 +41,6 @@ import {
   parsePolicy,
   type UploadPolicy,
 } from "../acquisition-client";
-import { PLAY_LISTING } from "../app-compatibility-provider";
 import styles from "../leads/phone-onboarding.module.css";
 import {
   askCallAccess,
@@ -58,52 +51,77 @@ import {
   callLogStatus,
   inPhoneApp,
   onPhoneSignal,
+  openDialer,
   pickRecordingsFolder,
   setupMark,
   setupOpen,
   setupStatus,
   type SetupStatus,
 } from "../leads/native-phone";
+import {
+  markPrivateDiallerSeen,
+  privateDiallerSeen,
+} from "../leads/phone-setup-steps";
+import {
+  startAsk,
+  trackPrompt,
+  type Ask,
+} from "../leads/phone-setup-telemetry";
 import { dismissNotice, notify, useNoticeShown } from "../notice-center";
 import {
   chooseAutoAnalysis,
   readAutoAnalysis,
   type AutoAnalysis,
 } from "../settings/auto-analysis-client";
+import {
+  SETUP_SCREEN_ATTRIBUTE,
+  screenChanged,
+  track,
+  type FlowVia,
+} from "../telemetry";
+import { useFlow } from "../telemetry-flows";
 import { useBackClose } from "../ui/back-close";
-import { Button } from "../ui/kit";
 import { FIRST_RUN_ATTRIBUTE } from "../welcome/setup-state";
 import { useWorkspaceAccess } from "../workspace-access";
 import { recordCaptureSetup } from "./capture-setup-client";
 import {
   CAPTURE_SETUP_ATTRIBUTE,
   PHONE_SETUP_PANEL_ATTRIBUTE,
+  markTestCall,
+  phoneFacts,
+  recordingProven,
 } from "./capture-setup-rules";
-import own from "./capture-setup.module.css";
 import {
   PERMISSIONS_ATTRIBUTE,
-  checklistOpen,
   permissionItems,
   putOffKey,
   reminders,
   sayBatteryDone,
-  toAnswer,
-  waitsFor,
   type ConsentFact,
   type PermissionItem,
   type PermissionKey,
 } from "./permissions-rules";
-import { named } from "./product-name";
-
-const ICONS: Record<PermissionKey, LucideIcon> = {
-  callLog: History,
-  phone: Phone,
-  contacts: Contact,
-  notifications: Bell,
-  recordings: FolderOpen,
-  battery: BatteryCharging,
-  autoAnalysis: ShieldCheck,
-};
+import { SetupWalk } from "./setup-walk";
+import walkStyles from "./setup-walk.module.css";
+import {
+  STEP_KEYS,
+  WALK_PROMPT,
+  WALK_TELEMETRY,
+  WALK_WELCOMED_KEY,
+  askSteps,
+  captureReady,
+  isAsk,
+  noCallsKey,
+  pendingKeys,
+  readKey,
+  stepOpen,
+  testSkippedKey,
+  walkSteps,
+  writeKey,
+  type AskStep,
+  type WalkStep,
+} from "./setup-walk-steps";
+import { TEST_CALL_NUMBER } from "./setup-walk-words";
 
 const CONSENT_ATTRIBUTE = "data-sx-consent";
 const REMINDER_ID = "permissions-later";
@@ -195,154 +213,60 @@ function watchTyping(changed: () => void) {
     document.removeEventListener("focusout", soon);
   };
 }
+type OpenDetail = { step?: AskStep };
 
 /**
- * Turn on from the Calls line (owner, 3 Nov 2026): the checklist again, at the
- * consent row with its sealed words. Only the phone app has the checklist.
+ * Turn on from the Calls line (owner, 3 Nov 2026): the consent's own screen
+ * with its sealed words. Only the phone app has phone setup.
  */
 export function askConsent(): void {
-  window.dispatchEvent(new CustomEvent(OPEN_EVENT));
+  openSetupStep("analyse");
 }
 
-/** The checklist itself, for the gate and the review fixture. */
-export function PermissionsChecklist({
-  items,
-  busy,
-  tried,
-  putOff = new Set(),
-  onAllow,
-  onSettings,
-  onLater,
-}: {
-  items: readonly PermissionItem[];
-  busy: PermissionKey | null;
-  /** Asked once and still not granted: Android may not ask again. */
-  tried: ReadonlySet<PermissionKey>;
-  /** Put off with Not now (putOffKey). */
-  putOff?: ReadonlySet<string>;
-  onAllow: (key: PermissionKey) => void;
-  onSettings: (key: PermissionKey) => void;
-  onLater?: (item: PermissionItem) => void;
-}) {
-  const titleId = useId();
-  const left = items.filter(waitsFor).length;
-  const offering = toAnswer(items, putOff).filter((item) => !waitsFor(item));
-  const offered = offering.length;
-  // Name only the buttons on screen: the battery's is Done, the others' Not now
-  // (phone QA on v1.36, 3 Nov 2026: "choose Not now" over the battery alone).
-  const onlyBattery = offering.every((item) => item.key === "battery");
-  return (
-    <div className={own.permissions} aria-labelledby={titleId} role="group">
-      <h1 id={titleId} className={styles.title}>
-        {named("Allow what Sales X-Ray needs")}
-      </h1>
-      <p className={styles.line}>
-        {left
-          ? `Sales X-Ray works once these are allowed. ${left === 1 ? "1 left." : `${left} left.`}`
-          : offered
-            ? onlyBattery
-              ? "This helps too. Check it, or tap Done once it's set."
-              : "These help too. Allow them, or choose Not now."
-            : "All set. Sales X-Ray is ready."}
-      </p>
-      <ul className={own.grants}>
-        {items.map((item) => {
-          const Icon = ICONS[item.key];
-          const settings =
-            item.state === "blocked" ||
-            (item.state === "needed" && tried.has(item.key));
-          const later =
-            onLater &&
-            item.canWait &&
-            (item.state === "needed" || item.state === "blocked");
-          // The battery: Check opens its page, and Done is the seller's word
-          // when Android can't see it (HyperOS). The consent: one tap, Turn on
-          // (owner, 3 Nov 2026).
-          const allowWord =
-            item.key === "battery"
-              ? "Check"
-              : item.key === "autoAnalysis"
-                ? "Turn on"
-                : "Allow";
-          const laterWord = item.key === "battery" ? "Done" : "Not now";
-          const saidDone =
-            item.key === "battery" && putOff.has(putOffKey(item));
-          const done = item.state === "granted" || saidDone;
-          return (
-            <li key={item.key} data-state={done ? "granted" : item.state}>
-              <span className={own.grantIcon}>
-                {done ? (
-                  <CheckCircle2 size={20} aria-hidden="true" />
-                ) : (
-                  <Icon size={20} aria-hidden="true" />
-                )}
-              </span>
-              <span className={own.grantText}>
-                <strong>{item.label}</strong>
-                <small>
-                  {item.state === "update"
-                    ? named("Update Sales X-Ray to allow this.")
-                    : item.state === "later"
-                      ? named(
-                          "Comes in a later Google Play version of Sales X-Ray.",
-                        )
-                      : item.state === "elsewhere"
-                        ? "Turns on in your organisation's workspace."
-                        : item.key === "autoAnalysis"
-                          ? // The sealed consent words, exactly as the server has them.
-                            item.why
-                          : named(item.why)}
-                </small>
-              </span>
-              {done ? (
-                <span className={own.granted}>
-                  {item.state !== "granted"
-                    ? "Done"
-                    : item.key === "autoAnalysis" || item.key === "battery"
-                      ? "On"
-                      : "Allowed"}
-                </span>
-              ) : item.state === "update" ? (
-                <a
-                  className={own.link}
-                  href={PLAY_LISTING}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Update
-                </a>
-              ) : item.state === "later" ||
-                item.state === "elsewhere" ? null : (
-                <span className={own.grantActions}>
-                  <Button
-                    variant={settings ? "ghost" : "primary"}
-                    disabled={busy !== null}
-                    aria-busy={busy === item.key || undefined}
-                    aria-label={`${settings ? "Open settings for" : allowWord} ${item.label}`}
-                    onClick={() =>
-                      settings ? onSettings(item.key) : onAllow(item.key)
-                    }
-                  >
-                    {settings ? "Open settings" : allowWord}
-                  </Button>
-                  {later ? (
-                    <Button
-                      variant="ghost"
-                      disabled={busy !== null}
-                      aria-label={`${laterWord}: ${item.label}`}
-                      onClick={() => onLater(item)}
-                    >
-                      {laterWord}
-                    </Button>
-                  ) : null}
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+/**
+ * Phone setup at the one screen that is missing, just in time (a call that
+ * didn't upload: the recordings folder; a missed lead alert: alerts), or all
+ * of what is left when no screen is named.
+ */
+export function openSetupStep(step?: AskStep): void {
+  window.dispatchEvent(
+    new CustomEvent<OpenDetail>(OPEN_EVENT, { detail: { step } }),
   );
+}
+
+/** The test call: to the organisation's number when there is one, else the empty dialer. */
+function dial(number: string) {
+  if (!number) {
+    openDialer();
+    return;
+  }
+  try {
+    window.location.href = `tel:${number}`;
+  } catch {
+    openDialer();
+  }
+}
+
+/** A test call's recording is looked for this long after the seller comes back. */
+const TEST_WAIT_MS = 45_000;
+type TestCall = { started: number; found: boolean; gaveUp: boolean };
+
+/** Android's questions on the calls screen, in the order the phone asks them. */
+function callQuestions(
+  pending: ReadonlySet<PermissionKey>,
+  status: SetupStatus,
+): string[] {
+  const questions: string[] = [];
+  if (pending.has("phone"))
+    questions.push("Allow Sales X-Ray to make and manage phone calls?");
+  if (
+    status.callLogSupported &&
+    (pending.has("callLog") || pending.has("phone"))
+  )
+    questions.push("Allow Sales X-Ray to access your phone call logs?");
+  if (pending.has("contacts"))
+    questions.push("Allow Sales X-Ray to access your contacts?");
+  return questions;
 }
 
 async function ask(key: PermissionKey): Promise<void> {
@@ -459,7 +383,6 @@ function consentFact(consent: Consent | null): ConsentFact {
     version: notice.version,
   };
 }
-
 export function PermissionsGate() {
   const access = useWorkspaceAccess();
   const signedIn = access?.authenticated === true && access.status === "ready";
@@ -472,13 +395,28 @@ export function PermissionsGate() {
   const [status, setStatus] = useState<SetupStatus | null>(null);
   const [consent, setConsent] = useState<Consent | null>(null);
   const [decided, setDecided] = useState(false);
-  const [busy, setBusy] = useState<PermissionKey | null>(null);
-  const [tried, setTried] = useState<ReadonlySet<PermissionKey>>(new Set());
-  // Not now, kept on this device per person and workspace, and for this visit
-  // when the device can't keep it.
+  const [busy, setBusy] = useState(false);
+  // Refusals per row: twice, and the screen opens Android's settings instead.
+  const [tries, setTries] = useState<Readonly<Record<string, number>>>({});
+  // Not now, kept on this device per person and workspace (rows that can
+  // wait), and for this visit when the device can't keep it.
   const [visitLater, setVisitLater] = useState<ReadonlySet<string>>(new Set());
-  // The reminder's Finish: the checklist again, with the put-off rows.
-  const [reopened, setReopened] = useState(false);
+  // Not now for this app open only: every row, the needed ones included.
+  const [skipped, setSkipped] = useState<ReadonlySet<string>>(new Set());
+  // The reminder's Finish or the Calls line's Turn on: the walk again, with
+  // the put-off rows, or at one screen.
+  const [target, setTarget] = useState<OpenDetail | null>(null);
+  const [walk, setWalk] = useState<{
+    steps: WalkStep[];
+    via: FlowVia;
+  } | null>(null);
+  const [noCallsNow, setNoCalls] = useState(false);
+  const [batteryPhase, setBatteryPhase] = useState<"battery" | "autostart">(
+    "battery",
+  );
+  const [test, setTest] = useState<TestCall | null>(null);
+  const [testSkippedNow, setTestSkipped] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
   // The reminder was tapped or closed: not again until the app opens again.
   const reminded = useRef(false);
   const fullPage = useSyncExternalStore(
@@ -495,10 +433,17 @@ export function PermissionsGate() {
   // stacked at the foot of New analysis).
   const minutesCard = useNoticeShown("analysis-minutes-out");
   const typing = useSyncExternalStore(watchTyping, typingNow, noFullPage);
+  // Away in one of Android's settings screens, and which screen sent them.
   const away = useRef(false);
+  const awayStep = useRef<AskStep | null>(null);
+  const asked = useRef<Ask | null>(null);
 
   useEffect(() => {
-    const open = () => setReopened(true);
+    const open = (event: Event) => {
+      const detail = (event as CustomEvent<OpenDetail | null>).detail;
+      setSkipped(new Set());
+      setTarget({ step: detail?.step });
+    };
     window.addEventListener(OPEN_EVENT, open);
     return () => window.removeEventListener(OPEN_EVENT, open);
   }, []);
@@ -559,6 +504,128 @@ export function PermissionsGate() {
     };
   }, [signedIn, organisation]);
 
+  // "I don't make calls on this phone" and a skipped test call, per install.
+  const device = status?.device ?? "";
+  const noCalls =
+    noCallsNow || (device !== "" && readKey(noCallsKey(device)) === "1");
+  const testSkipped =
+    testSkippedNow ||
+    (device !== "" && readKey(testSkippedKey(device)) === "1");
+
+  const items = useMemo(
+    () =>
+      status
+        ? permissionItems(status, {
+            organisation,
+            consent: organisation ? consentFact(consent) : null,
+          })
+        : [],
+    [status, organisation, consent],
+  );
+  const pending = useMemo(
+    () =>
+      pendingKeys(items, {
+        // The reminder's Finish shows the put-off rows again.
+        putOff: target ? new Set<string>() : putOff,
+        skipped,
+        makesCalls: !noCalls,
+      }),
+    [items, target, putOff, skipped, noCalls],
+  );
+  const tested =
+    testSkipped ||
+    test?.found === true ||
+    (status ? recordingProven(phoneFacts(status, null)!) : false);
+  const facts = useMemo(
+    () =>
+      status
+        ? {
+            pending,
+            status,
+            makesCalls: !noCalls,
+            welcomed: readKey(WALK_WELCOMED_KEY) === "1" || target !== null,
+            tested,
+            privateSeen: privateDiallerSeen(),
+          }
+        : null,
+    [pending, status, noCalls, target, tested],
+  );
+  const stillOpen = useCallback(
+    (step: AskStep) =>
+      facts !== null &&
+      (step === "test_call"
+        ? !facts.tested && captureReady(facts.status)
+        : stepOpen(step, facts)),
+    [facts],
+  );
+  const planned = useMemo(
+    () => (facts ? walkSteps(facts, target?.step) : []),
+    [facts, target],
+  );
+  const asksSomething = planned.some(
+    (step) => isAsk(step) && step !== "test_call",
+  );
+  const showing =
+    walk ??
+    (asksSomething
+      ? { steps: planned, via: (target ? "fix" : "first_run") as FlowVia }
+      : null);
+  // The walk's screens are fixed once it shows, so its dots don't jump; a
+  // request with nothing left to ask is spent. (State kept from the render
+  // before: React re-renders at once, with no effect in between.)
+  if (!walk && showing) setWalk(showing);
+  if (target && !walk && !asksSomething) setTarget(null);
+
+  // Where people stop and what Android answered (the weekly friction report).
+  const flow = useFlow("phone_setup", { via: showing?.via });
+  const answered = useCallback(
+    (after: SetupStatus | null) => {
+      const ask = asked.current;
+      if (!ask) return;
+      asked.current = null;
+      trackPrompt({
+        ...ask,
+        after,
+        fix: showing?.via === "fix",
+        ms: performance.now() - ask.at,
+      });
+    },
+    [showing?.via],
+  );
+
+  // A row is put off: kept on this phone when it can wait, and for this app
+  // open in every case, so the walk moves on.
+  const putAway = useCallback(
+    (keys: readonly PermissionItem[]) => {
+      if (!keys.length) return;
+      const lasting = keys.filter((item) => item.canWait).map(putOffKey);
+      setSkipped((value) => new Set([...value, ...keys.map(putOffKey)]));
+      if (lasting.length) {
+        setVisitLater((value) => new Set([...value, ...lasting]));
+        if (storageKey)
+          writeLater(storageKey, new Set([...putOff, ...lasting]));
+      }
+    },
+    [putOff, storageKey],
+  );
+  const stepItems = useCallback(
+    (step: AskStep) =>
+      items.filter(
+        (item) => STEP_KEYS[step].includes(item.key) && pending.has(item.key),
+      ),
+    [items, pending],
+  );
+
+  // The battery screen is done once the seller has been to its pages: HyperOS
+  // doesn't tell Android, so coming back is the seller's word, as the
+  // checklist's Done was (Set up this phone asks for neither again).
+  const batteryDone = useCallback(() => {
+    sayBatteryDone();
+    if (status?.autostartNeeded) void setupMark("autostart", true);
+    setBatteryPhase("battery");
+    putAway(stepItems("battery"));
+  }, [status?.autostartNeeded, putAway, stepItems]);
+
   // Back in the app: from Android's settings or the folder picker, and, in an
   // organisation's workspace, every return, so a permission taken away shows.
   useEffect(
@@ -566,22 +633,69 @@ export function PermissionsGate() {
       onPhoneSignal((event) => {
         if (event !== "resume" || !decided) return;
         if (!away.current && !organisation) return;
+        const from = awayStep.current;
         away.current = false;
-        void read();
+        awayStep.current = null;
+        void read().then((next) => {
+          if (from) answered(next);
+          if (from === "battery") {
+            if (batteryPhase === "battery" && next?.autostartNeeded)
+              setBatteryPhase("autostart");
+            else batteryDone();
+          }
+        });
       }),
-    [read, decided, organisation],
+    [read, decided, organisation, answered, batteryPhase, batteryDone],
   );
 
-  const items = status
-    ? permissionItems(status, {
-        organisation,
-        consent: organisation ? consentFact(consent) : null,
-      })
-    : [];
-  const later = reminders(items, putOff);
-  const open =
-    Boolean(status) &&
-    (checklistOpen(items, putOff) || (reopened && later.length > 0));
+  // A test call is out: its recording is looked for every few seconds and when
+  // the app comes back, until it is found or the seller has been back a while.
+  const waitingFrom = test && !test.found && !test.gaveUp ? test.started : null;
+  useEffect(() => {
+    if (waitingFrom === null) return;
+    let stopped = false;
+    let giveUp: number | undefined;
+    const check = async () => {
+      const next = await setupStatus();
+      const newest = next?.recorder?.newestMs ?? null;
+      if (stopped || !next || newest === null || newest < waitingFrom) return;
+      markTestCall(next.device);
+      setStatus(next);
+      setTest((value) => (value ? { ...value, found: true } : value));
+    };
+    const timer = window.setInterval(() => void check(), 4_000);
+    const stop = onPhoneSignal((event) => {
+      if (event !== "resume") return;
+      void check();
+      giveUp ??= window.setTimeout(
+        () =>
+          setTest((value) =>
+            value && !value.found ? { ...value, gaveUp: true } : value,
+          ),
+        TEST_WAIT_MS,
+      );
+    });
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      window.clearTimeout(giveUp);
+      stop();
+    };
+  }, [waitingFrom]);
+
+  // Put off with Not now and still not done: the slim reminder names them,
+  // the rows the app needs among them.
+  const later = [
+    ...reminders(items, putOff),
+    ...items.filter(
+      (item) =>
+        item.required &&
+        (item.state === "needed" || item.state === "blocked") &&
+        skipped.has(putOffKey(item)) &&
+        !putOff.has(putOffKey(item)),
+    ),
+  ];
+  const open = Boolean(showing);
   const deciding = signedIn && inPhoneApp() && !decided;
 
   useEffect(() => {
@@ -591,10 +705,22 @@ export function PermissionsGate() {
     return () => html.removeAttribute(PERMISSIONS_ATTRIBUTE);
   }, [deciding, open]);
 
+  // The walk is its own screen in the friction report ("setup").
+  useEffect(() => {
+    if (!open) return;
+    const html = document.documentElement;
+    html.setAttribute(SETUP_SCREEN_ATTRIBUTE, "");
+    screenChanged();
+    return () => {
+      html.removeAttribute(SETUP_SCREEN_ATTRIBUTE);
+      screenChanged();
+    };
+  }, [open]);
+
   // A put-off row stays as one slim line until it is done, or until Finish or
   // the X is tapped, once per app open (orchestrator, 3 Nov 2026: it left by
   // itself after 5 s). On Leads it is the line above the rows; elsewhere the
-  // corner, which the page keeps room for.
+  // corner, which the page keeps room for. Never over the walk.
   const remind =
     open || fullPage || sheet || recordingCard || minutesCard || typing
       ? ""
@@ -614,7 +740,8 @@ export function PermissionsGate() {
         icon: "none",
         run: () => {
           reminded.current = true;
-          setReopened(true);
+          setSkipped(new Set());
+          setTarget({});
         },
       },
       slim: true,
@@ -629,28 +756,49 @@ export function PermissionsGate() {
     });
   }, [remind, quiet]);
 
-  // Back is Not now for the rows that can wait (never the battery's Done or the
-  // consent, which are the seller's own words), and closes the checklist the
-  // reminder reopened (Redmi QA on production, 10 Nov 2026: Back did nothing).
-  // What the app needs to work still holds it; Escape still doesn't close it.
-  useBackClose(open, () => {
-    if (reopened) {
-      setReopened(false);
-      return;
-    }
-    const keys = toAnswer(items, putOff)
-      .filter(
-        (item) =>
-          item.canWait &&
-          !waitsFor(item) &&
-          item.key !== "battery" &&
-          item.key !== "autoAnalysis",
-      )
-      .map(putOffKey);
-    if (!keys.length) return;
-    setVisitLater(new Set([...visitLater, ...keys]));
-    if (storageKey) writeLater(storageKey, new Set([...putOff, ...keys]));
-  });
+  /** The walk is over: what is left waits for the next open or the reminder. */
+  const close = useCallback(
+    (how: "done" | "cancel") => {
+      if (!walk) return;
+      const left = askSteps(walk.steps).filter(
+        (step) => step !== "test_call" && stillOpen(step),
+      );
+      // Back is Not now for what can wait (never the battery or the consent,
+      // which are the seller's own words); everything left rests for this open.
+      if (how === "cancel") {
+        const lasting = left
+          .flatMap(stepItems)
+          .filter(
+            (item) =>
+              item.canWait &&
+              item.key !== "battery" &&
+              item.key !== "autoAnalysis",
+          )
+          .map(putOffKey);
+        if (lasting.length) {
+          setVisitLater((value) => new Set([...value, ...lasting]));
+          if (storageKey)
+            writeLater(storageKey, new Set([...putOff, ...lasting]));
+        }
+        flow.cancel();
+      } else flow.done({ left: left.length });
+      setSkipped(
+        (value) =>
+          new Set([
+            ...value,
+            ...left.flatMap(stepItems).map((item) => putOffKey(item)),
+          ]),
+      );
+      setWalk(null);
+      setTarget(null);
+      setNote(null);
+      setTest(null);
+    },
+    [walk, stillOpen, stepItems, storageKey, putOff, flow],
+  );
+
+  // Back closes the walk (Redmi QA on production, 10 Nov 2026: Back did nothing).
+  useBackClose(open, () => close("cancel"));
 
   // A modal dialog over every page; Escape doesn't close it.
   const frame = useRef<HTMLDialogElement>(null);
@@ -659,78 +807,213 @@ export function PermissionsGate() {
     if (open && node && !node.open) node.showModal?.();
   }, [open]);
 
-  if (!open) return null;
-  const allow = async (key: PermissionKey) => {
-    setBusy(key);
+  if (!showing || !status) return null;
+
+  const tried = (key: PermissionKey) => (tries[key] ?? 0) >= 2;
+  const stateOf = (key: PermissionKey) =>
+    items.find((item) => item.key === key)?.state;
+  const settingsFor = (step: AskStep) =>
+    step === "alerts"
+      ? stateOf("notifications") === "blocked" || tried("notifications")
+      : step === "calls"
+        ? stateOf("phone") === "blocked" ||
+          tried("phone") ||
+          (pending.has("contacts") &&
+            (stateOf("contacts") === "blocked" || tried("contacts")))
+        : false;
+
+  const refused = (
+    next: SetupStatus | null,
+    keys: readonly PermissionKey[],
+  ) => {
+    const after = next
+      ? permissionItems(next, { organisation })
+      : ([] as PermissionItem[]);
+    const still = keys.filter((key) => {
+      const row = after.find((item) => item.key === key);
+      return row && (row.state === "needed" || row.state === "blocked");
+    });
+    if (still.length)
+      setTries((value) => {
+        const copy = { ...value };
+        for (const key of still) copy[key] = (copy[key] ?? 0) + 1;
+        return copy;
+      });
+  };
+
+  const onAsk = async (step: AskStep) => {
+    setNote(null);
+    const settings = settingsFor(step);
+    const prompt = WALK_PROMPT[step];
+    if (prompt) asked.current = startAsk(prompt, status, settings);
+    const leave = (opened: boolean) => {
+      if (asked.current) asked.current.opened = opened;
+      away.current = true;
+      awayStep.current = step;
+    };
+    setBusy(true);
     try {
-      if (key === "battery") {
-        away.current = true;
-        await setupOpen("battery");
-      } else if (key === "autoAnalysis") {
-        const notice = consent?.view.notice;
-        if (!notice || !consent) return;
-        // The seller's own choice, once, with the words as shown and the terms in force.
-        await chooseAutoAnalysis({
-          decision: "granted",
-          notice,
-          uploadPolicySha256: consent.policy.policy_sha256,
-        });
-        // Automatic upload follows from it; the app's own confirmation shows the words again.
-        away.current = true;
-        await autoCaptureSetup(true, false).catch(() => null);
-      } else await ask(key);
+      switch (step) {
+        case "alerts":
+          if (settings) {
+            leave(await setupOpen("notifications"));
+            return;
+          }
+          await ask("notifications");
+          break;
+        case "calls":
+          if (settings) {
+            leave(await setupOpen("appSettings"));
+            return;
+          }
+          if (pending.has("phone")) await ask("phone");
+          if (pending.has("contacts")) await ask("contacts");
+          if (pending.has("callLog")) await ask("callLog");
+          break;
+        case "recordings":
+          if (status.recorder?.kind === "private") {
+            markPrivateDiallerSeen();
+            putAway(stepItems("recordings"));
+            return;
+          }
+          await ask("recordings");
+          break;
+        case "battery": {
+          const what = batteryPhase === "autostart" ? "autostart" : "battery";
+          const opened = await setupOpen(what);
+          if (!opened) {
+            setNote(
+              "That page didn't open. Find it in Sales X-Ray's app settings, then come back.",
+            );
+            leave(await setupOpen("appSettings"));
+            return;
+          }
+          leave(true);
+          return;
+        }
+        case "analyse": {
+          const notice = consent?.view.notice;
+          if (!notice || !consent) return;
+          // The seller's own choice, once, with the words as shown and the terms in force.
+          await chooseAutoAnalysis({
+            decision: "granted",
+            notice,
+            uploadPolicySha256: consent.policy.policy_sha256,
+          });
+          // Automatic upload follows from it; the app's own confirmation shows the words again.
+          away.current = true;
+          await autoCaptureSetup(true, false).catch(() => null);
+          break;
+        }
+        case "test_call":
+          setTest({ started: Date.now(), found: false, gaveUp: false });
+          away.current = true;
+          dial(TEST_CALL_NUMBER);
+          return;
+      }
     } catch {
-      // Android said no, or the phone didn't answer: Open settings next.
+      // Android said no, or the phone didn't answer: the screen stays.
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
     const next = await read();
-    const still = next
-      ? permissionItems(next, { organisation }).find((item) => item.key === key)
-      : undefined;
-    if (still && still.state !== "granted" && key !== "battery")
-      setTried((value) => new Set(value).add(key));
+    answered(next);
+    if (step === "alerts") refused(next, ["notifications"]);
+    if (step === "calls") refused(next, ["phone", "contacts"]);
+    if (step === "recordings" && next && !next.folderPicked)
+      setNote(
+        "No folder chosen yet. Tap Choose folder and pick the one above.",
+      );
   };
-  const settings = (key: PermissionKey) => {
-    if (key === "recordings" || key === "battery") {
-      void allow(key);
+
+  const onLater = (step: AskStep) => {
+    setNote(null);
+    try {
+      track("sx.flow", {
+        flow: "phone_setup",
+        outcome: "skip",
+        step: WALK_TELEMETRY[step],
+        via: showing.via,
+        left: askSteps(showing.steps).filter((each) => stillOpen(each)).length,
+      });
+    } catch {
+      // Telemetry never breaks setup.
+    }
+    if (step === "test_call") {
+      writeKey(testSkippedKey(status.device), "1");
+      setTestSkipped(true);
+      setTest(null);
       return;
     }
-    away.current = true;
-    void setupOpen(key === "notifications" ? "notifications" : "appSettings");
-  };
-  const putAside = (item: PermissionItem) => {
-    const next = new Set(putOff).add(putOffKey(item));
-    setVisitLater(new Set(visitLater).add(putOffKey(item)));
-    setReopened(false);
-    if (storageKey) writeLater(storageKey, next);
-    // Done is the seller's word for battery and Autostart: Set up this phone asks for neither again.
-    if (item.key === "battery") {
-      sayBatteryDone();
-      void setupMark("autostart", true);
-    }
+    if (step === "battery") setBatteryPhase("battery");
     // The capture setup's own record of not now: it asks again on its own days.
-    if (item.key === "autoAnalysis")
+    if (step === "analyse")
       void recordCaptureSetup({ outcome: "declined" }).catch(() => null);
+    putAway(stepItems(step));
   };
+
+  const laterLabel = (step: AskStep) =>
+    step === "test_call"
+      ? "Skip the test call"
+      : `Not now: ${stepItems(step)
+          .map((item) => item.label)
+          .join(" and ")}`;
+
+  const notice = consent?.view.notice;
   return (
     <dialog
       ref={frame}
-      className={styles.page}
+      className={`${styles.page} ${walkStyles.walk}`}
       data-permissions=""
       onCancel={(event) => event.preventDefault()}
     >
-      <div className={styles.body}>
-        <PermissionsChecklist
-          items={items}
-          busy={busy}
-          tried={tried}
-          putOff={reopened ? new Set() : putOff}
-          onAllow={(key) => void allow(key)}
-          onSettings={settings}
-          onLater={putAside}
-        />
-      </div>
+      <SetupWalk
+        steps={showing.steps}
+        stillOpen={stillOpen}
+        status={status}
+        settingsFor={settingsFor}
+        questions={callQuestions(pending, status)}
+        batteryPhase={batteryPhase}
+        test={!test ? "ready" : test.gaveUp ? "missing" : "waiting"}
+        consent={
+          notice
+            ? {
+                words:
+                  items.find((item) => item.key === "autoAnalysis")?.why ??
+                  notice.text,
+                terms: consent?.policy.privacy_details || undefined,
+              }
+            : null
+        }
+        noCalls={noCalls}
+        busy={busy}
+        note={note}
+        laterLabel={laterLabel}
+        onAsk={(step) => void onAsk(step)}
+        onLater={onLater}
+        onNoCalls={() => {
+          writeKey(noCallsKey(status.device), "1");
+          setNoCalls(true);
+          setWalk((value) =>
+            value
+              ? {
+                  ...value,
+                  steps: value.steps.filter(
+                    (step) =>
+                      !isAsk(step) ||
+                      !["calls", "recordings", "battery", "test_call"].includes(
+                        step,
+                      ),
+                  ),
+                }
+              : value,
+          );
+        }}
+        onShown={(step, index, total) =>
+          flow.step(WALK_TELEMETRY[step], index, total)
+        }
+        onEnd={() => close("done")}
+      />
     </dialog>
   );
 }

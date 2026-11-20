@@ -157,6 +157,13 @@ const byLabel = (label: string) => {
   if (!found) throw new Error(`no button ${label}: ${host.textContent}`);
   return found;
 };
+const byText = (words: string) => {
+  const found = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent?.trim() === words,
+  );
+  if (!found) throw new Error(`no button ${words}: ${host.textContent}`);
+  return found;
+};
 const finish = () => {
   const found = [...host.querySelectorAll("button")].find(
     (button) => button.textContent === "Finish",
@@ -200,7 +207,7 @@ it("keeps the reminder after Not now until Finish or its X, once per app open", 
   await act(async () => vi.advanceTimersByTime(60_000));
   vi.useRealTimers();
   expect(reminder()).toBe(true);
-  // Finish: the checklist again with the put-off row; put off again, no second reminder.
+  // Finish: phone setup again at the put-off screen; put off again, no second reminder.
   await act(async () => finish().click());
   await settle();
   expect(host.querySelector("dialog[data-permissions]")).not.toBeNull();
@@ -222,7 +229,7 @@ it("keeps the reminder after Not now until Finish or its X, once per app open", 
   await resume();
   expect(host.querySelector("dialog[data-permissions]")).not.toBeNull();
   notifications = true;
-  await act(async () => byLabel("Allow Notifications").click());
+  await act(async () => byText("Allow alerts").click());
   await settle();
   expect(host.querySelector("dialog")).toBeNull();
   expect(reminder()).toBe(false);

@@ -125,6 +125,7 @@
 }
 
 .chip {
+  position: relative;
   display: inline-flex;
   flex: none;
   box-sizing: border-box;
@@ -144,6 +145,12 @@
   transition:
     background-color var(--lx-dur-quick) var(--lx-ease-quick),
     color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.chip::before {
+  position: absolute;
+  inset: -7px 0;
+  content: "";
 }
 
 .chip:hover {
@@ -1488,6 +1495,13 @@
   box-shadow: inset 0 0 0 1px var(--sx-line);
 }
 
+/* The temporary letter must remain legible while the channel logo loads. */
+.channelMark > span[class] {
+  background: var(--sx-surface);
+  color: var(--lx-ink);
+  font-size: var(--sx-text-xs);
+}
+
 .chatAvatar > .channelMark {
   box-shadow:
     0 0 0 2px var(--sx-surface),
@@ -1763,7 +1777,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 14px 6px;
 }
 
 .iconChip {

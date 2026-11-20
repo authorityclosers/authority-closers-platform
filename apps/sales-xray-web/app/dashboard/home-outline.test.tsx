@@ -70,18 +70,21 @@ async function draw(access: WorkspaceAccessValue) {
 it("outlines a seller's Home before this device has seen a role", async () => {
   await draw(listing);
   expect(host.querySelector('[data-mode="mine"]')).not.toBeNull();
-  expect(host.querySelector('[data-area="cards"]')).not.toBeNull();
-  expect(host.querySelector('[data-area="side"] [inert]')).not.toBeNull();
-  expect(host.textContent).toContain("Today's overview");
+  // The work queue's outline (round 2, board 2): the queue, the preview and
+  // Today in their places, the side switch's place held.
+  expect(host.querySelector("[data-queue-home]")).not.toBeNull();
+  expect(host.querySelector("[data-queue-home] header [inert]")).not.toBeNull();
+  expect(host.textContent).toContain("Work queue");
+  expect(host.textContent).toContain("Lead preview");
   expect(host.textContent).not.toContain("Last 30 days");
 });
 
-it("outlines the team's floor where this device last saw an owner", async () => {
+it("outlines Team today where this device last saw an owner", async () => {
   window.localStorage.setItem("sx:home-role", "manager");
   await draw(listing);
   expect(host.querySelector('[data-mode="team"]')).not.toBeNull();
-  expect(host.textContent).toContain("Total calls");
-  expect(host.textContent).toContain("Needs you now");
+  expect(host.querySelector("[data-team-today]")).not.toBeNull();
+  expect(host.textContent).toContain("Team today");
   expect(host.textContent).not.toContain("Last 30 days");
 });
 

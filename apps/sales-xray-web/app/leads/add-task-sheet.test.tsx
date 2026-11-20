@@ -23,6 +23,7 @@ import { WorkspaceAccessProvider } from "../workspace-access";
 import { AddTaskSheet, EARLY_MINUTES } from "./add-task-sheet";
 import { LeadsError } from "./leads-client";
 import { bucketFor } from "./task-words";
+import { TASKS_CHANGED_EVENT, useTasksChanged } from "./tasks-changed";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -244,6 +245,42 @@ it("adds a task of your own when no lead is picked", async () => {
     tone: "success",
     message: "On your list",
   });
+});
+
+// Owner, bug reports 218 and 219 (15 Nov 2026): a task added from the
+// header's + showed on Home and Tasks only after a refresh. The sheet says a
+// task was added, and the lists on screen read again.
+it("tells the task lists on screen to read again once a task is added", async () => {
+  calls.own.mockResolvedValue({});
+  const heard = vi.fn();
+  window.addEventListener(TASKS_CHANGED_EVENT, heard);
+  try {
+    await open();
+    await act(async () => button("Other")!.click());
+    await act(async () => button("Add task")!.click());
+    expect(heard).toHaveBeenCalledTimes(1);
+    calls.own.mockRejectedValue(new LeadsError("No lead here.", 404));
+    await act(async () => button("Add task")!.click());
+    expect(heard).toHaveBeenCalledTimes(1);
+  } finally {
+    window.removeEventListener(TASKS_CHANGED_EVENT, heard);
+  }
+});
+
+it("a task list listening reads again when a task is added anywhere", async () => {
+  const reread = vi.fn();
+  function List() {
+    useTasksChanged(reread);
+    return null;
+  }
+  await act(async () => root.render(<List />));
+  await act(async () => {
+    window.dispatchEvent(new Event(TASKS_CHANGED_EVENT));
+  });
+  expect(reread).toHaveBeenCalledTimes(1);
+  await act(async () => root.render(<></>));
+  window.dispatchEvent(new Event(TASKS_CHANGED_EVENT));
+  expect(reread).toHaveBeenCalledTimes(1);
 });
 
 // Persona QA 8417b4d1 (31 Oct 2026): tasks are the non-calling work, the

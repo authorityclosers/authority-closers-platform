@@ -52,7 +52,7 @@ it("lights Ask Dipak's tab on his library and carries his Search, alone, in the 
   const { nav, bar } = shell();
   expect(
     Array.from(nav?.children ?? [], (item) => item.textContent?.trim()),
-  ).toEqual(["Home", "Leads", "Ask Dipak", "Reports", "Growth"]);
+  ).toEqual(["Home", "Leads", "Ask Dipak", "Calls", "Growth"]);
   const tab = nav?.querySelector('a[href="/ask-dipak"]');
   expect(tab?.getAttribute("aria-current")).toBe("page");
   expect(nav?.querySelectorAll('[aria-current="page"]')).toHaveLength(1);

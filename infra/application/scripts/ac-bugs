@@ -18,9 +18,12 @@ report's words, a name or a phone number.
   sudo ac-bugs show ISSUE [--json]                       an issue's number or id
   sudo ac-bugs set ISSUE --status fixing|fixed-in-next-update|solved [--note TEXT]
                          [--commit SHA] [--release VERSION] [--app-update] [--as NAME] [--json]
-  sudo ac-bugs released VERSION --source WORKBENCH_SHA [--repo PATH] [--dry-run] [--json]
+  sudo ac-bugs released VERSION --source SHA [--source SHA ...] [--commits SHA ...]
+                         [--repo PATH] [--dry-run] [--json]
       every issue fixed in the next update whose commit is in that release becomes solved,
-      with the release in its note (the hook for "vX is live on production")
+      with the release in its note (the hook for "vX is live on production"). A commit is
+      in it when it is an ancestor of a --source, or is one of the cut's --commits (the
+      same commit, or the same change rebuilt onto main: same patch or same subject)
 
 Reports (owner, 26 Oct 2026: "admin api, cli, mcp"):
   ac-bugs reports [--status open|new|triaged|in_progress|fixed|verified|closed|all] [--json]
@@ -227,7 +230,18 @@ def arguments(argv: list[str]) -> argparse.Namespace:
     released = commands.add_parser("released")
     released.add_argument("version")
     released.add_argument(
-        "--source", required=True, help="the workbench commit the release was cut from"
+        "--source",
+        required=True,
+        action="append",
+        help="a commit the release carries with its history (repeatable): the workbench "
+        "commit an old-style hold was cut from, or the hold itself",
+    )
+    released.add_argument(
+        "--commits",
+        nargs="*",
+        default=[],
+        help="the commits a cutlist release listed (holdlist.sh takes only their files, so "
+        "their ancestors are not in it)",
     )
     released.add_argument("--repo", default=REPO)
     released.add_argument("--dry-run", action="store_true")
@@ -264,15 +278,60 @@ def who(chosen: str | None) -> str:
     return chosen or os.environ.get("SUDO_USER") or os.environ.get("USER") or "unknown"
 
 
-def in_release(repo: str, commit: str, source: str) -> bool:
-    done = subprocess.run(  # noqa: S603 - fixed argv
-        # Root reads acdev's repository: name it safe for this one command.
-        ["git", "-c", f"safe.directory={repo}", "-C", repo]
-        + ["merge-base", "--is-ancestor", commit, source],
+def git(repo: str, *args: str, stdin: str | None = None) -> subprocess.CompletedProcess[str]:
+    # Root reads acdev's repository: name it safe for this one command.
+    command = ["git", "-c", f"safe.directory={repo}", "-C", repo, *args]  # noqa: S607
+    return subprocess.run(  # noqa: S603 - fixed argv
+        command,
         capture_output=True,
+        text=True,
+        input=stdin,
         check=False,
     )
-    return done.returncode == 0
+
+
+def in_release(repo: str, commit: str, source: str) -> bool:
+    return git(repo, "merge-base", "--is-ancestor", commit, source).returncode == 0
+
+
+# A subject this long names one change; short ones ("Fix") could match another.
+SUBJECT_MATCH_MIN = 40
+
+
+def change_of(repo: str, commit: str) -> tuple[str, str, str] | None:
+    """(full sha, stable patch id, subject) of a commit, or None when the repo lacks it."""
+    full = git(repo, "rev-parse", "--verify", "-q", f"{commit}^{{commit}}").stdout.strip()
+    if not full:
+        return None
+    shown = git(repo, "show", "--format=", full).stdout
+    patch = git(repo, "patch-id", "--stable", stdin=shown).stdout.split()
+    subject = git(repo, "log", "-1", "--format=%s", full).stdout.strip()
+    return full, patch[0] if patch else "", subject
+
+
+def carried(repo: str, commit: str, sources: list[str], listed: list[str]) -> bool:
+    """Whether a release carries a commit: an ancestor of one of its sources, or one of
+    the commits a cutlist release listed. Since 29 Oct 2026 holds are main plus the
+    listed commits' files (holdlist.sh), and since 14 Nov the listed commits are often
+    rebuilt onto main, so a fix's own sha is neither in the hold's history nor in the
+    list: the same patch or the same long subject counts (the release hook had marked
+    nothing solved since v1.33, bug audit 20 Nov 2026)."""
+    if any(in_release(repo, commit, source) for source in sources):
+        return True
+    if not listed:
+        return False
+    mine = change_of(repo, commit)
+    if mine is None:
+        return False
+    for other in listed:
+        theirs = change_of(repo, other)
+        if theirs is None:
+            continue
+        if mine[0] == theirs[0] or (mine[1] and mine[1] == theirs[1]):
+            return True
+        if len(mine[2]) >= SUBJECT_MATCH_MIN and mine[2] == theirs[2]:
+            return True
+    return False
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -365,7 +424,7 @@ def main(argv: list[str] | None = None) -> int:
     moved = []
     for issue in waiting:
         commit = issue.get("commit")
-        if not commit or not in_release(a.repo, commit, a.source):
+        if not commit or not carried(a.repo, commit, a.source, a.commits):
             continue
         if a.dry_run:
             moved.append(issue)

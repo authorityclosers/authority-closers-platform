@@ -286,6 +286,8 @@ function fakePhone(
   folderPicked = true,
   /** The phone's call-log answers, by method, when a test needs its own. */
   log?: (method: string) => Record<string, unknown> | undefined,
+  /** More of the phone's setup status (autostartNeeded, recorderProfile). */
+  extra: Record<string, unknown> = {},
 ) {
   const listeners: Listener[] = [];
   const sent: Sent[] = [];
@@ -308,6 +310,7 @@ function fakePhone(
               folderPickSupported: true,
               folderPicked,
               callLogSupported: true,
+              ...extra,
             });
       queueMicrotask(() =>
         listeners.forEach((listener) =>
@@ -368,6 +371,17 @@ const button = (label: string) => {
   if (!found) throw new Error(`no button ${label}: ${host.textContent}`);
   return found;
 };
+/** A button by the words on it. */
+const tap = (words: string) => {
+  const found = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+    (item) => item.textContent?.trim() === words,
+  );
+  if (!found) throw new Error(`no button ${words}: ${host.textContent}`);
+  return found;
+};
+const heading = () => host.querySelector("h1")?.textContent;
+const progress = () =>
+  host.querySelector("ol[aria-label]")?.getAttribute("aria-label") ?? null;
 
 beforeEach(() => {
   host = document.createElement("div");
@@ -389,31 +403,62 @@ afterEach(async () => {
   document.documentElement.removeAttribute(PERMISSIONS_ATTRIBUTE);
 });
 
+// Owner, 20 Nov 2026 (style C, "See what to tap"): one ask per screen, with a
+// picture of the phone screen that comes next; granted screens skipped; Not
+// now on anything lets the person in; denied twice opens the right settings.
 describe("PermissionsGate", () => {
-  it("shows the battery On, or Check with Done for when Android can't see it, never holding the app", async () => {
-    fakePhone(() => ({ ...ALL, battery: false }));
+  it("asks for the battery on its own screen, and coming back from its page counts, never holding the app", async () => {
+    const sent = fakePhone(() => ({ ...ALL, battery: false }), "oneplus");
     await mount();
-    expect(host.textContent).toContain("Battery");
-    expect(host.textContent).toContain("No restrictions, then allow Autostart");
-    await act(async () => button("Done: Battery").click());
+    expect(heading()).toBe("Keep uploads running in the background");
+    expect(host.textContent).toContain("Battery → Unrestricted");
+    expect(host.querySelector('[data-walk-art="battery"]')).not.toBeNull();
+    await act(async () => tap("Open settings").click());
     await settle();
-    // Done is the seller's word: no reminder, and the checklist closes.
+    expect(sent).toContainEqual({
+      method: "setupOpen",
+      args: { what: "battery" },
+    });
+    expect(batterySaidDone()).toBe(false);
+    await resume();
+    // Back from its page is the seller's word: no reminder, and the walk closes.
+    expect(batterySaidDone()).toBe(true);
     expect(host.querySelector("dialog")).toBeNull();
     expect(mocks.notify).not.toHaveBeenCalledWith(
       expect.objectContaining({ id: "permissions-later" }),
     );
-    await act(async () => root.unmount());
-    root = createRoot(host);
-    fakePhone(() => ({ ...ALL, battery: true }));
-    mocks.consent.state = "off";
-    await mount();
-    const battery = [...host.querySelectorAll("li")].find((row) =>
-      row.textContent?.includes("Battery"),
-    );
-    expect(battery?.textContent).toContain("On");
   });
 
-  it("opens the consent row again from the Calls line's Turn on", async () => {
+  it("opens Autostart after the battery where the maker needs it, and marks it done on the way back", async () => {
+    const sent = fakePhone(
+      () => ({ ...ALL, battery: false }),
+      "xiaomi",
+      true,
+      undefined,
+      { autostartNeeded: true },
+    );
+    await mount();
+    expect(host.textContent).toContain("Battery saver → No restrictions");
+    expect(host.textContent).toContain("Autostart → On");
+    await act(async () => tap("Open settings").click());
+    await settle();
+    await resume();
+    expect(host.querySelector('[data-walk-art="autostart"]')).not.toBeNull();
+    await act(async () => tap("Open Autostart").click());
+    await settle();
+    expect(sent).toContainEqual({
+      method: "setupOpen",
+      args: { what: "autostart" },
+    });
+    await resume();
+    expect(sent).toContainEqual({
+      method: "setupMark",
+      args: { what: "autostart", done: true },
+    });
+    expect(host.querySelector("dialog")).toBeNull();
+  });
+
+  it("opens the consent screen again from the Calls line's Turn on", async () => {
     mocks.consent.state = "off";
     fakePhone(() => ALL);
     await mount();
@@ -426,30 +471,40 @@ describe("PermissionsGate", () => {
     await settle();
     expect(host.querySelector("dialog[data-permissions]")).not.toBeNull();
     expect(host.textContent).toContain(mocks.words);
-    expect(button("Turn on Analyse my calls automatically")).toBeTruthy();
+    expect(tap("Turn on")).toBeTruthy();
   });
 
-  it("covers the app until contacts and notifications are allowed, then lets it be used", async () => {
+  it("walks one screen at a time until contacts and notifications are allowed, then lets the app be used", async () => {
     let notifications = false;
     let contacts = false;
     const sent = fakePhone(() => ({ ...ALL, notifications, contacts }));
     await mount();
     expect(host.querySelector("dialog[data-permissions]")).not.toBeNull();
-    expect(host.textContent).toContain("2 left.");
     expect(document.documentElement.hasAttribute(PERMISSIONS_ATTRIBUTE)).toBe(
       true,
     );
-    contacts = true;
-    await act(async () => button("Allow Contacts").click());
+    expect(heading()).toBe("Let's set up your phone");
+    expect(host.textContent).toContain("2 quick steps");
+    await act(async () => tap("Start").click());
     await settle();
-    expect(sent.map((message) => message.method)).toContain("requestContacts");
-    expect(host.textContent).toContain("1 left.");
+    expect(heading()).toBe("Hear about new leads first");
+    expect(progress()).toBe("Step 1 of 2");
     notifications = true;
-    await act(async () => button("Allow Notifications").click());
+    await act(async () => tap("Allow alerts").click());
     await settle();
     expect(sent.map((message) => message.method)).toContain(
       "requestNotifications",
     );
+    // Back from Android's question: the next screen, by itself.
+    expect(heading()).toBe("Let Sales X-Ray see your work calls");
+    expect(progress()).toBe("Step 2 of 2");
+    contacts = true;
+    await act(async () => tap("Continue").click());
+    await settle();
+    expect(sent.map((message) => message.method)).toContain("requestContacts");
+    expect(heading()).toBe("You're ready");
+    await act(async () => tap("Go to Home").click());
+    await settle();
     expect(host.querySelector("dialog")).toBeNull();
     expect(document.documentElement.hasAttribute(PERMISSIONS_ATTRIBUTE)).toBe(
       false,
@@ -464,7 +519,7 @@ describe("PermissionsGate", () => {
     notifications = false;
     await resume();
     expect(host.querySelector("dialog[data-permissions]")).not.toBeNull();
-    expect(button("Allow Notifications")).toBeTruthy();
+    expect(tap("Allow alerts")).toBeTruthy();
   });
 
   it("lets a seller put the recordings folder off with Not now or Back", async () => {
@@ -473,6 +528,9 @@ describe("PermissionsGate", () => {
     fakePhone(() => ALL, "xiaomi", false);
     await mount("personal");
     expect(host.querySelector("dialog")).not.toBeNull();
+    expect(host.textContent).toContain(
+      "On your Xiaomi, choose: MIUI › sound_recorder › call_rec, then tap Use this folder.",
+    );
     await act(async () => button("Not now: Recordings folder").click());
     await settle();
     expect(host.querySelector("dialog")).toBeNull();
@@ -488,7 +546,7 @@ describe("PermissionsGate", () => {
     expect(host.querySelector("dialog")).toBeNull();
   });
 
-  it("keeps Personal as it was: contacts don't wait, no battery or consent row, no Not now", async () => {
+  it("keeps Personal as it was: contacts don't wait, no battery or consent screen", async () => {
     let calls = true;
     const sent = fakePhone(() => ({ ...ALL, contacts: false, calls }));
     await mount("personal");
@@ -502,22 +560,42 @@ describe("PermissionsGate", () => {
     expect(host.querySelector("dialog")).toBeNull();
   });
 
-  it("offers Open settings after a refusal, and has no way past what is needed", async () => {
+  it("opens settings after two refusals; Not now lets the seller in for this open, and the next open asks again", async () => {
     const sent = fakePhone(() => ({ ...ALL, calls: false }));
     await mount();
-    expect(host.textContent).not.toContain("Not now");
-    await act(async () => button("Allow Phone").click());
+    expect(host.textContent).toContain(
+      "Your phone will ask twice. Tap Allow both times.",
+    );
+    await act(async () => tap("Continue").click());
     await settle();
     expect(sent.map((message) => message.method)).toContain(
       "requestCallAccess",
     );
-    await act(async () => button("Open settings for Phone").click());
+    // Once refused: Android may still ask.
+    expect(tap("Continue")).toBeTruthy();
+    await act(async () => tap("Continue").click());
+    await settle();
+    expect(
+      host.querySelector('[data-walk-art="calls-settings"]'),
+    ).not.toBeNull();
+    await act(async () => tap("Open settings").click());
     await settle();
     expect(sent.at(-1)).toEqual({
       method: "setupOpen",
       args: { what: "appSettings" },
     });
-    expect(host.querySelector("dialog")).not.toBeNull();
+    await act(async () => button("Not now: Phone").click());
+    await settle();
+    expect(host.querySelector("dialog")).toBeNull();
+    expect(mocks.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "permissions-later", message: "Phone" }),
+    );
+    // The next app open: what the app needs is asked again.
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    fakePhone(() => ({ ...ALL, calls: false }));
+    await mount();
+    expect(host.querySelector("dialog[data-permissions]")).not.toBeNull();
   });
 
   it("turns call logging on for the first SIM", async () => {
@@ -525,12 +603,13 @@ describe("PermissionsGate", () => {
     const sent = fakePhone(() => ({ ...ALL, callLog }));
     await mount();
     callLog = true;
-    await act(async () => button("Allow Call log").click());
+    await act(async () => tap("Continue").click());
     await settle();
     expect(sent.find((message) => message.method === "callLogSetup")).toEqual({
       method: "callLogSetup",
       args: { on: true, sim: "sim-1" },
     });
+    expect(host.querySelector("dialog")).toBeNull();
   });
 
   it("turns call logging on for a two-SIM phone, whose SIMs show only once it is allowed", async () => {
@@ -556,7 +635,7 @@ describe("PermissionsGate", () => {
       },
     );
     await mount();
-    await act(async () => button("Allow Call log").click());
+    await act(async () => tap("Continue").click());
     await settle();
     expect(
       sent
@@ -587,27 +666,18 @@ describe("PermissionsGate", () => {
     expect(host.querySelector("dialog")).toBeNull();
   });
 
-  it("opens the battery page from its row", async () => {
-    const sent = fakePhone(() => ({ ...ALL, battery: false }), "oneplus");
-    await mount();
-    await act(async () => button("Check Battery").click());
-    await settle();
-    expect(sent).toContainEqual({
-      method: "setupOpen",
-      args: { what: "battery" },
-    });
-  });
-
-  it("asks for the consent once with its sealed words, then uploads follow, and never asks again", async () => {
+  it("asks for the consent once with its sealed words in full, then uploads follow, and never asks again", async () => {
     mocks.consent.state = "off";
     const sent = fakePhone(() => ALL);
     await mount();
-    expect(host.textContent).toContain(mocks.words);
-    // Never pre-ticked: a button to tap, not a box already ticked.
-    expect(host.querySelector('input[type="checkbox"]')).toBeNull();
-    await act(async () =>
-      button("Turn on Analyse my calls automatically").click(),
+    expect(heading()).toBe("Analyse my calls automatically?");
+    expect(host.querySelector("[data-sx-consent-words] p")?.textContent).toBe(
+      mocks.words,
     );
+    // Never pre-ticked: two equal buttons, no box already ticked.
+    expect(host.querySelector('input[type="checkbox"]')).toBeNull();
+    expect(button("Not now: Analyse my calls automatically")).toBeTruthy();
+    await act(async () => tap("Turn on").click());
     await settle();
     expect(mocks.chooseAutoAnalysis).toHaveBeenCalledTimes(1);
     expect(mocks.chooseAutoAnalysis).toHaveBeenCalledWith({
@@ -628,7 +698,7 @@ describe("PermissionsGate", () => {
     expect(mocks.chooseAutoAnalysis).toHaveBeenCalledTimes(1);
   });
 
-  it("asks again after new consent words, even after Not now on the old ones", async () => {
+  it("never records the consent on Not now, and asks again after new words", async () => {
     mocks.consent.state = "off";
     fakePhone(() => ALL);
     await mount();
@@ -637,6 +707,7 @@ describe("PermissionsGate", () => {
     );
     await settle();
     expect(host.querySelector("dialog")).toBeNull();
+    expect(mocks.chooseAutoAnalysis).not.toHaveBeenCalled();
     expect(mocks.recordCaptureSetup).toHaveBeenCalledWith({
       outcome: "declined",
     });
@@ -648,7 +719,7 @@ describe("PermissionsGate", () => {
     mocks.consent.version = "auto-analysis-v2";
     await resume();
     expect(host.querySelector("dialog[data-permissions]")).not.toBeNull();
-    expect(button("Turn on Analyse my calls automatically")).toBeTruthy();
+    expect(tap("Turn on")).toBeTruthy();
   });
 
   it("shows nothing in a browser", async () => {
@@ -659,30 +730,122 @@ describe("PermissionsGate", () => {
     );
   });
 
-  // Phone QA on v1.36 (3 Nov 2026): "choose Not now" over the battery alone, and
-  // Done, then Battery and Autostart again in Set up this phone.
-  it("names only the buttons on screen, and the battery's Done counts for Set up this phone", async () => {
-    const sent = fakePhone(() => ({ ...ALL, battery: false }));
+  it("puts the battery off with Not now without saying it is done", async () => {
+    fakePhone(() => ({ ...ALL, battery: false }));
     await mount();
-    expect(host.textContent).toContain(
-      "This helps too. Check it, or tap Done once it's set.",
-    );
-    expect(host.textContent).not.toContain("choose Not now");
-    expect(batterySaidDone()).toBe(false);
-    await act(async () => button("Done: Battery").click());
+    await act(async () => button("Not now: Battery").click());
     await settle();
-    expect(batterySaidDone()).toBe(true);
-    expect(sent).toContainEqual({
-      method: "setupMark",
-      args: { what: "autostart", done: true },
-    });
+    expect(host.querySelector("dialog")).toBeNull();
+    expect(batterySaidDone()).toBe(false);
   });
 
-  it("says Not now while a row has it", async () => {
-    fakePhone(() => ({ ...ALL, battery: false, callLog: false }));
+  it("walks in the owner's order, counting only what is left, and ends honestly when something was put off", async () => {
+    mocks.consent.state = "off";
+    fakePhone(() => ({
+      ...ALL,
+      notifications: false,
+      callLog: false,
+      battery: false,
+    }));
     await mount();
-    expect(host.textContent).toContain(
-      "These help too. Allow them, or choose Not now.",
+    expect(heading()).toBe("Let's set up your phone");
+    expect(host.textContent).toContain("4 quick steps");
+    await act(async () => tap("Start").click());
+    await settle();
+    const seen: (string | null | undefined)[][] = [];
+    for (let i = 0; i < 4; i++) {
+      seen.push([progress(), heading()]);
+      const later = [...host.querySelectorAll("button")].find((item) =>
+        item.getAttribute("aria-label")?.startsWith("Not now"),
+      );
+      await act(async () => later!.click());
+      await settle();
+    }
+    expect(seen).toEqual([
+      ["Step 1 of 4", "Hear about new leads first"],
+      ["Step 2 of 4", "Let Sales X-Ray see your work calls"],
+      ["Step 3 of 4", "Keep uploads running in the background"],
+      ["Step 4 of 4", "Analyse my calls automatically?"],
+    ]);
+    expect(heading()).toBe("Almost ready");
+    await act(async () => tap("Go to Home").click());
+    await settle();
+    expect(host.querySelector("dialog")).toBeNull();
+  });
+
+  it("leaves out the calls screens on a phone that makes no calls, from then on", async () => {
+    let notifications = false;
+    fakePhone(() => ({
+      ...ALL,
+      notifications,
+      callLog: false,
+      battery: false,
+    }));
+    await mount();
+    await act(async () => tap("I don't make calls on this phone").click());
+    await settle();
+    expect(heading()).toBe("Hear about new leads first");
+    expect(progress()).toBeNull();
+    notifications = true;
+    await act(async () => tap("Allow alerts").click());
+    await settle();
+    expect(heading()).toBe("You're ready");
+    expect(host.textContent).toContain("Sales X-Ray is ready on this phone.");
+    await act(async () => tap("Go to Home").click());
+    await settle();
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    fakePhone(() => ({ ...ALL, callLog: false, battery: false }));
+    await mount();
+    expect(host.querySelector("dialog")).toBeNull();
+  });
+
+  it("resumes where it was after the app closes, without the welcome", async () => {
+    fakePhone(() => ({ ...ALL, notifications: false, callLog: false }));
+    await mount();
+    await act(async () => tap("Start").click());
+    await settle();
+    expect(heading()).toBe("Hear about new leads first");
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    fakePhone(() => ({ ...ALL, notifications: false, callLog: false }));
+    await mount();
+    expect(heading()).toBe("Hear about new leads first");
+  });
+
+  it("offers an optional test call once calls and recordings work, and Skip always lets the seller go", async () => {
+    let notifications = false;
+    const sent = fakePhone(
+      () => ({ ...ALL, notifications }),
+      "xiaomi",
+      true,
+      undefined,
+      {
+        recorderProfile: {
+          kind: "folder",
+          dialerLabel: "Phone",
+          recording: "on",
+          folders: [],
+        },
+      },
     );
+    await mount();
+    expect(host.textContent).toContain("2 quick steps");
+    await act(async () => tap("Start").click());
+    await settle();
+    notifications = true;
+    await act(async () => tap("Allow alerts").click());
+    await settle();
+    expect(heading()).toBe("Try a 20-second test call");
+    expect(host.textContent).toContain("Call anyone for 20 seconds");
+    await act(async () => tap("Make a test call").click());
+    await settle();
+    expect(host.textContent).toContain(
+      "Looking for your test call's recording",
+    );
+    expect(sent.map((message) => message.method)).not.toContain("call");
+    await act(async () => button("Skip the test call").click());
+    await settle();
+    expect(heading()).toBe("You're ready");
   });
 });
