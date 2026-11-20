@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { resetBackCloseForTests } from "../ui/back-close";
-import { ago, groupNotifications, UpdatesBell } from "./updates-bell";
+import { ago, groupNotifications, initials, UpdatesBell } from "./updates-bell";
 import type { UpdateNotification } from "./updates-client";
 
 (
@@ -58,19 +58,62 @@ it("words times as people say them", () => {
   expect(ago("2026-10-12T06:00:00Z", now)).toBe("12 Oct");
 });
 
-// Owner program, 25 Oct 2026: grouping and priorities.
-it("puts what needs you first, then what is new, then what was read", () => {
-  const read = { ...release, id: "read", read: true };
-  const groups = groupNotifications([read, release, event]);
-  expect(groups.map((group) => group.title)).toEqual([
-    "Needs you",
-    "New",
-    "Earlier",
+// UI loop item 7 (owner's pick, 20 Nov 2026): Today and Earlier, newest first.
+it("groups today's lines first, then earlier ones, newest first", () => {
+  const now = Date.parse("2026-10-10T08:00:00Z");
+  const earlyToday = {
+    ...release,
+    id: "early-today",
+    read: true,
+    created_at: "2026-10-10T01:00:00Z",
+  };
+  const groups = groupNotifications([release, earlyToday, event], now);
+  expect(groups.map((group) => group.title)).toEqual(["Today", "Earlier"]);
+  expect(groups[0].items.map((entry) => entry.id)).toEqual([
+    "early-today",
+    "fictional-event",
   ]);
-  expect(groups[0].items[0].id).toBe("fictional-event");
-  expect(groupNotifications([read]).map((group) => group.title)).toEqual([
-    "Earlier",
+  expect(groups[1].items.map((entry) => entry.id)).toEqual([
+    "fictional-release",
   ]);
+  expect(
+    groupNotifications([release], now).map((group) => group.title),
+  ).toEqual(["Earlier"]);
+});
+
+it("shows a lead's initials and where it came from, a dot when unread, and names the tap", async () => {
+  expect(initials("Sameer Sheikh")).toBe("SS");
+  expect(initials("Asha")).toBe("A");
+  expect(initials("Ravi Kumar Rao")).toBe("RR");
+  expect(initials("+91 98")).toBe("");
+  const lead: UpdateNotification = {
+    ...release,
+    id: "fictional-lead",
+    kind: "lead_assigned",
+    title: "Sameer Sheikh is your lead now",
+    body: "New from Meta Ads. Picked for you.",
+    href: "/leads?lead=1",
+    created_at: new Date().toISOString(),
+  };
+  await act(async () =>
+    root.render(
+      <UpdatesBell
+        notifications={[lead]}
+        unreadCount={1}
+        status="ready"
+        openNews={vi.fn()}
+        openEvent={vi.fn(async () => {})}
+      />,
+    ),
+  );
+  await act(async () => trigger().click());
+  const [row] = rows();
+  expect(row.querySelector("span[aria-hidden]")?.textContent).toBe("SS");
+  expect(row.querySelector("small")?.textContent).toBe("Meta Ads · Just now");
+  expect(row.textContent).toContain("Unread");
+  expect(row.textContent).toContain("Open lead");
+  expect(row.dataset.sxFeature).toBe("notice_row_opened");
+  expect(sheet().querySelector("h3")?.textContent).toBe("Today");
 });
 
 it("uses the API count, opens release notes and gives focus back on close", async () => {

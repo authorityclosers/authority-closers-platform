@@ -6,6 +6,11 @@
  * what needs you first, then what is new, then what you have read; each line
  * in its kind's colour with its one action, unread lines marked, and Mark all
  * read. Nothing waiting: a calm line that says what lands here.
+ *
+ * UI loop item 7 (owner's pick, 20 Nov 2026, option B: "The Notifications list
+ * shouts"): Today and Earlier, newest first; a lead's initials with a small
+ * unread dot instead of red rails and a red "Needs you"; one-line title and
+ * one-line detail; the whole row opens it, with a chevron.
  */
 
 import {
@@ -13,6 +18,7 @@ import {
   Bell,
   BellRing,
   CheckCheck,
+  ChevronRight,
   FileCheck2,
   PauseCircle,
   Sparkles,
@@ -23,6 +29,7 @@ import {
 import { useRef, useState } from "react";
 
 import { Sheet } from "../ui/sheet";
+import { leadName, leadSource } from "./missed-alert-rules";
 import {
   isRelativeUpdateHref,
   type UpdateNotification,
@@ -58,28 +65,35 @@ export function ago(iso: string, now: number = Date.now()): string {
   });
 }
 
-/** Needs you (urgent, unread), New (unread), Earlier (read): newest first. */
-export function groupNotifications(list: readonly UpdateNotification[]) {
+/** Today and Earlier, newest first; unread lines carry a dot, not a group. */
+export function groupNotifications(
+  list: readonly UpdateNotification[],
+  now: number = Date.now(),
+) {
   const newest = [...list].sort(
     (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
   );
+  const today = new Date(now).toDateString();
+  const isToday = (entry: UpdateNotification) =>
+    new Date(entry.created_at).toDateString() === today;
   return [
-    {
-      key: "urgent",
-      title: "Needs you",
-      items: newest.filter((entry) => !entry.read && entry.urgent),
-    },
-    {
-      key: "new",
-      title: "New",
-      items: newest.filter((entry) => !entry.read && !entry.urgent),
-    },
+    { key: "today", title: "Today", items: newest.filter(isToday) },
     {
       key: "earlier",
       title: "Earlier",
-      items: newest.filter((entry) => entry.read),
+      items: newest.filter((entry) => !isToday(entry)),
     },
   ].filter((group) => group.items.length);
+}
+
+const LEAD_KINDS: ReadonlySet<Kind> = new Set(["lead_assigned", "lead_new"]);
+
+/** "Sameer Sheikh" -> "SS", "Asha" -> "A"; "" when there are no letters. */
+export function initials(name: string): string {
+  const words = name.split(/\s+/).filter((word) => /^\p{L}/u.test(word));
+  const first = words[0]?.[0] ?? "";
+  const last = words.length > 1 ? words[words.length - 1][0] : "";
+  return `${first}${last}`.toUpperCase();
 }
 
 function Row({
@@ -93,27 +107,50 @@ function Row({
 }) {
   const kind = KINDS[entry.kind];
   const Icon = kind.icon;
+  const lead = LEAD_KINDS.has(entry.kind);
+  const letters = lead ? initials(leadName(entry)) : "";
+  // A lead says where it came from ("Meta Ads · 11 h ago"); others their words.
+  const source = lead ? (leadSource(entry).split(":")[0] ?? "").trim() : "";
+  const when = <time dateTime={entry.created_at}>{ago(entry.created_at)}</time>;
   return (
-    <li data-unread={!entry.read} data-urgent={entry.urgent || undefined}>
+    <li data-unread={!entry.read}>
       <button
         type="button"
         className={styles.row}
         data-tone={kind.tone}
+        data-sx-feature={lead ? "notice_row_opened" : `notice_row_${kind.tone}`}
         disabled={disabled}
         onClick={onOpen}
       >
         <span className={styles.icon} aria-hidden="true">
-          <Icon size={20} />
+          {letters ? (
+            <span className={styles.initials}>{letters}</span>
+          ) : (
+            <Icon size={20} />
+          )}
         </span>
         <span className={styles.words}>
-          <strong>{entry.title}</strong>
-          {entry.body ? <span>{entry.body}</span> : null}
+          {/* As the picked design words it: the name shows more of itself. */}
+          <strong>
+            {lead ? entry.title.replace(/\s+now$/, "") : entry.title}
+          </strong>
           <small>
-            <time dateTime={entry.created_at}>{ago(entry.created_at)}</time>
-            {!entry.read ? <span className={styles.unread}>Unread</span> : null}
+            {source ? (
+              <>
+                {source} · {when}
+              </>
+            ) : entry.body ? (
+              <>
+                {when} · {entry.body}
+              </>
+            ) : (
+              when
+            )}
           </small>
+          {!entry.read ? <span className={styles.hidden}>Unread</span> : null}
         </span>
-        <span className={styles.verb}>{kind.verb}</span>
+        <span className={styles.hidden}>{kind.verb}</span>
+        <ChevronRight className={styles.chevron} size={20} aria-hidden="true" />
       </button>
     </li>
   );
@@ -244,10 +281,7 @@ export function UpdatesBell({
               className={styles.group}
               aria-label={group.title}
             >
-              <h3 data-group={group.key}>
-                {group.title}
-                <span>{group.items.length}</span>
-              </h3>
+              <h3 data-group={group.key}>{group.title}</h3>
               <ul>
                 {group.items.map((entry) => (
                   <Row
