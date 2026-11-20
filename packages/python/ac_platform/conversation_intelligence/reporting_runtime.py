@@ -29,7 +29,10 @@ from ac_platform.conversation_intelligence.inference_broker import (
 )
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
-from ac_platform.conversation_intelligence.retention import ConversationRetentionScheduler
+from ac_platform.conversation_intelligence.retention import (
+    AUTOMATIC_EXPIRY,
+    ConversationRetentionScheduler,
+)
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
 
 
@@ -125,5 +128,6 @@ def compose_hosted_reporting(
             sessions, intake.storage, router, authority=authority
         ),
         plans=ProcessingPlanScheduler(sessions, authority, intake.storage),
-        retention=ConversationRetentionScheduler(sessions),
+        # Never erases a recording because its deadline passed (owner, 20 Nov 2026).
+        retention=ConversationRetentionScheduler(sessions, expire=AUTOMATIC_EXPIRY),
     )

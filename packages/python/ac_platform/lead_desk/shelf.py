@@ -7,9 +7,11 @@ level is not there"; docs/design/research/lead-import-and-management-20261116/
   search and the Archived list (``/leads?shelf=archived``) still find it; Restore puts it back
   as it was. Owners, admins and sales managers archive and restore.
 - **Bin** is Delete. A binned lead is in no list but the Bin (``/leads?shelf=bin``) and no
-  page opens it. Owners and admins move leads to the Bin, restore them within 30 days, or
-  purge them at once; after 30 days the purge job deletes them for good. The purge is the old
-  hard delete (deletion.py), audited the same way.
+  page opens it. Owners and admins move leads to the Bin, restore them, or delete them for
+  good at once (``purge``, the old hard delete in deletion.py, audited the same way). Nothing
+  deletes a binned lead by itself any more (owner, 20 Nov 2026: "No data should be deleted
+  ... they need it for comparing months and weeks"): the 30-day purge job is off
+  (``AUTOMATIC_PURGE``); ``purge_due`` stays for an operator who is asked to run it.
 - A person who enquires again (an ad's or a website's form) brings an archived or binned lead
   back to the desk (store ``_repeat``), so a returning customer is never lost.
 
@@ -63,6 +65,8 @@ EVENT_WORDS: Final[dict[ShelfAction, str]] = {
     "restore_bin": "Restored from the Bin",
 }
 PURGE_ACTOR: Final = "lead_desk.bin_purge"
+# The hourly 30-day purge is off: a lead leaves the Bin for good only when a person says so.
+AUTOMATIC_PURGE: Final = False
 _TICK: Final = 3600.0
 _PURGE_BATCH: Final = 500
 
@@ -301,8 +305,9 @@ async def _purger(sessions: async_sessionmaker[AsyncSession], stop: asyncio.Even
 def attach(
     application: FastAPI, sessions: async_sessionmaker[AsyncSession], environment: str
 ) -> None:
-    """Run the Bin's purge hourly for the API's lifetime (not in local runs or tests)."""
-    if environment in {"local", "test"}:
+    """Run the Bin's purge hourly for the API's lifetime (not in local runs or tests), only
+    while AUTOMATIC_PURGE is on; it is off (owner, 20 Nov 2026: nothing deleted by itself)."""
+    if not AUTOMATIC_PURGE or environment in {"local", "test"}:
         return
     inner = application.router.lifespan_context
 

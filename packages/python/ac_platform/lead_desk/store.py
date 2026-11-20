@@ -275,9 +275,11 @@ def business_day(day: date) -> datetime:
 DEVICES_PER_PERSON = 5
 DEFAULT_MAX_OPEN = 50
 # Calls the phone logged by itself (UX study item 5): the phone book is the leads
-# a person can see, newest first; a call older than a week is no longer taken.
+# a person can see, newest first. Every call-history row the phone sends is kept, however
+# old (owner, 20 Nov 2026: "No data should be deleted ... every call, everything needs to
+# be there"; a 7-day cut dropped older rows); the bound only refuses a broken clock.
 PHONE_BOOK_LIMIT = 20000
-PHONE_LOG_DAYS = 7
+PHONE_LOG_MAX_DAYS = 3650
 PHONE_LOG_NAMESPACE = UUID("0d0b7c52-6f1e-4c55-9d8e-5a3f2b8e1c47")
 PHONE_DIRECTIONS = frozenset({"outgoing", "incoming", "missed", "rejected", "blocked"})
 # Attempts with no outcome are filled in later from what the seller's phone kept (owner via
@@ -5970,14 +5972,14 @@ class LeadDesk:
         command id comes from this person, this phone, the row and its time. A
         call the app's own after-call sheet already logged is not counted twice.
         The stage and the next call stay as they are; only the seller's own
-        answer changes those. A first read (``backfill``) reaches OUTCOME_FILL_DAYS
-        back, but its rows older than PHONE_LOG_DAYS only time the app's own dials.
+        answer changes those. Every row is taken however old it is (owner, 20 Nov 2026:
+        "every call, everything needs to be there"), first read (``backfill``) or not, up to
+        PHONE_LOG_MAX_DAYS back; a row from before its lead existed stays off the lead.
         """
         _, config = await self.settings()
         country = str(config.get("default_country") or "91")
         hours = work_hours.parse(config)
-        logs_from = self.now - timedelta(days=PHONE_LOG_DAYS)
-        oldest = self.now - timedelta(days=OUTCOME_FILL_DAYS) if command.backfill else logs_from
+        oldest = self.now - timedelta(days=PHONE_LOG_MAX_DAYS)
         newest = self.now + timedelta(minutes=5)
         wanted: dict[UUID, tuple[PhoneLogCall, str]] = {}
         skipped = already = 0
@@ -6134,10 +6136,6 @@ class LeadDesk:
                 dial = dial_for(start, in_app.get(lead.id, ()))
                 if dial is not None:
                     timing.append((key, call, lead, dial))
-                continue
-            # Older than a week: a first read's row only times a dial; it is no call of its own.
-            if start < logs_from:
-                skipped += 1
                 continue
             talked = call.duration_seconds > 0 and call.direction in {"outgoing", "incoming"}
             if call.direction == "outgoing" or talked:
