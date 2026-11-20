@@ -368,6 +368,7 @@ export function ListView({
   onChanged,
   onCounts,
   onTable,
+  besideLead = false,
   onStepCounts,
   onViewCounts,
   pipeline = null,
@@ -444,6 +445,8 @@ export function ListView({
   onCounts?: (counts: Record<string, number>) => void;
   /** Whether the rows show as the table: the page gives it the whole width. */
   onTable?: (table: boolean) => void;
+  /** A lead is open beside the list on a wide screen: rows, not the table. */
+  besideLead?: boolean;
   /** Each of the owner's stages' count, for the Pipeline stage picker. */
   onStepCounts?: (counts: Record<string, number>) => void;
   /** Each work view's count for these filters, for the To Call / Follow-ups / All tabs. */
@@ -499,17 +502,21 @@ export function ListView({
   // M2-A, 17 Nov 2026: "a huge requirement for this update"); List stays one
   // click away and is remembered once chosen.
   const wideList = useWideList();
-  const asTable =
+  const tableChosen =
     hydrated &&
     (layout.value === "table" || (layout.value === null && wideList));
+  // A lead open beside the list (round-2 board 3, option C): the list's own
+  // rows, whole names and next steps, not a table squeezed to two columns
+  // ("4 more columns under each row"); the table comes back when it closes.
+  const asTable = tableChosen && !besideLead;
   // The page gives a table the whole width until a lead opens (owner, 31 Oct 2026).
   const tableTold = useRef(onTable);
   useLayoutEffect(() => {
     tableTold.current = onTable;
   });
   useEffect(() => {
-    tableTold.current?.(asTable);
-  }, [asTable]);
+    tableTold.current?.(tableChosen);
+  }, [tableChosen]);
   const chooseLayout = (value: Layout) => {
     setLayout({ owner: layoutOwner, value });
     if (!layoutOwner) return;
@@ -1275,7 +1282,16 @@ export function ListView({
       onOpen={openRow}
       // The owner's name only on someone else's lead.
       showOwner={scope !== "mine" && row.owner_person_id !== me}
-      actions={actions ? (picksHere ? ownerActions : rowActions) : undefined}
+      // Beside an open lead the rows are for choosing: the lead's own pane
+      // has Call and WhatsApp (round-2 board 3, option C), and the names
+      // get the room.
+      actions={
+        actions && !besideLead
+          ? picksHere
+            ? ownerActions
+            : rowActions
+          : undefined
+      }
       onPick={picksHere ? startPicking : undefined}
       compact={stage === OPENING_STAGE}
       stageWord={stageWord?.(row)}

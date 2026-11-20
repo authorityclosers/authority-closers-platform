@@ -135,3 +135,55 @@ it("keeps the sheet open and says why when the server refuses", async () => {
   expect(onGiven).not.toHaveBeenCalled();
   expect(button("Give lead")).toBeTruthy();
 });
+
+it("asks who and why on one sheet and never offers the lead's own owner", async () => {
+  const owner = "bbbbbbbb-0000-4000-8000-000000000002";
+  await act(async () =>
+    root.render(
+      <GiveLead
+        detail={detail({
+          reps: [
+            {
+              person_id: ANIKA,
+              name: "anika sample",
+              open_leads: 3,
+              available: true,
+            },
+            {
+              person_id: owner,
+              name: "mira sample",
+              open_leads: 9,
+              available: true,
+            },
+          ] as LeadDetail["reps"],
+        })}
+        onGiven={vi.fn()}
+      />,
+    ),
+  );
+  await click("Give to a colleague");
+  // Both questions at once, with a way out.
+  expect(button("Anika Sample")).toBeTruthy();
+  expect(button("Escalation")).toBeTruthy();
+  expect(button("Cancel")).toBeTruthy();
+  expect(button("Mira Sample")).toBeUndefined();
+  // Only one colleague away from the owner: no sheet when there is no one.
+  await act(async () =>
+    root.render(
+      <GiveLead
+        detail={detail({
+          reps: [
+            {
+              person_id: owner,
+              name: "mira sample",
+              open_leads: 9,
+              available: true,
+            },
+          ] as LeadDetail["reps"],
+        })}
+        onGiven={vi.fn()}
+      />,
+    ),
+  );
+  expect(button("Give to a colleague")).toBeUndefined();
+});

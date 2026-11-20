@@ -10,6 +10,7 @@
 import { AutoCaptureState } from "./auto-capture-state";
 import {
   ChevronDown,
+  ArrowLeft,
   ArrowRightLeft,
   ArrowUp,
   BellPlus,
@@ -19,6 +20,7 @@ import {
   Check,
   CheckCircle2,
   ChevronRight,
+  Clock,
   History as HistoryIcon,
   Link2,
   Mail,
@@ -114,6 +116,7 @@ import {
 } from "./leads-client";
 import { PersonAvatar } from "../people/person-avatar";
 import { ReassignSheet } from "./reassign-sheet";
+import { GiveLead, GiveLeadSheet } from "./give-lead";
 import { CallLink } from "./call-link";
 import type { FirstTapEvent } from "./first-tap";
 import { callStep } from "./phone-call-steps";
@@ -211,6 +214,8 @@ import lens from "../ui/call-lens/call-lens.module.css";
 import { LeadBrief } from "./lead-brief";
 import { LeadPageFrame } from "./lead-page-frame";
 import page from "./lead-page.module.css";
+import wrap from "./wrap-up.module.css";
+import { WrapUpDone, WrapUpFrame } from "./wrap-up";
 import { shortSource, sourceKind } from "./source-mark";
 import { mainPath, StageStepper } from "./stage-stepper";
 
@@ -479,6 +484,62 @@ export function lastWord(
   return { last, tries };
 }
 
+/** The wrap-up's four answers (round-2 board 1): the server's own results. */
+const WRAP_ANSWERS: {
+  key: "talked" | "no_answer" | "busy" | "wrong";
+  label: string;
+  reason: string;
+  tone: string;
+  icon: LucideIcon;
+}[] = [
+  {
+    key: "talked",
+    label: "We talked",
+    reason: "",
+    tone: "good",
+    icon: CheckCircle2,
+  },
+  {
+    key: "no_answer",
+    label: "No answer",
+    reason: "did_not_pick",
+    tone: "info",
+    icon: PhoneMissed,
+  },
+  {
+    key: "busy",
+    label: "Busy, call back",
+    reason: "busy",
+    tone: "later",
+    icon: Clock,
+  },
+  {
+    key: "wrong",
+    label: "Wrong number",
+    reason: "invalid_number",
+    tone: "bad",
+    icon: PhoneOff,
+  },
+];
+
+/** The wrap-up's chosen answer, in its words and colour, over step 2. */
+function wrapLabel(talk: Talk, reason: string | null): string {
+  if (talk === "talked") return "We talked";
+  const quick = WRAP_ANSWERS.find(
+    (item) => item.reason && item.reason === reason,
+  );
+  if (quick) return quick.label;
+  return MISSED.find((item) => item.key === reason)?.label ?? "Didn't talk";
+}
+
+function wrapTone(talk: Talk, reason: string | null): string {
+  if (talk === "talked") return "good";
+  return (
+    WRAP_ANSWERS.find((item) => item.reason && item.reason === reason)?.tone ??
+    "info"
+  );
+}
+
 export function CallOutcome({
   detail,
   submitLabel,
@@ -491,9 +552,13 @@ export function CallOutcome({
   ask = false,
   onSkip,
   onUndone,
+  wrapUp = false,
 }: {
   detail: LeadDetail;
   submitLabel: string;
+  /** The wrap-up screen after a call (round-2 board 1, option B): four big
+   *  answers and a real "I didn't call", then "What happens next?" alone. */
+  wrapUp?: boolean;
   /** L on a computer: this is the step to fill (it comes into view, focused). */
   ask?: boolean;
   /** Call mode: save and end the round here ("Save and stop here"). */
@@ -930,18 +995,52 @@ export function CallOutcome({
   return (
     <section
       ref={ref}
-      className={styles.outcome}
+      className={
+        wrapUp ? `${styles.outcome} ${wrap.screenCard}` : styles.outcome
+      }
       // The corner's news waits while this is open (notice-center.tsx).
       data-after-call=""
       data-attention={attention || undefined}
       aria-labelledby={`${id}-q`}
     >
-      <h3 id={`${id}-q`} className={styles.outcomeTitle}>
-        {attention
-          ? `Back from the call with ${first}. How did it go?`
-          : `How did the call with ${first} go?`}
+      {wrapUp && talk !== null ? (
+        <div className={wrap.stepBar}>
+          <button
+            type="button"
+            className={wrap.back}
+            aria-label="Change how it went"
+            disabled={saving}
+            onClick={() => {
+              setTalk(null);
+              setReason(null);
+              setRetry(null);
+              setQuick(false);
+              setStage(lastStage);
+              setStep(lastStep);
+            }}
+          >
+            <ArrowLeft size={20} aria-hidden="true" />
+          </button>
+          <span className={wrap.stepCount}>Step 2 of 2</span>
+          <span className={wrap.answer} data-tone={wrapTone(talk, reason)}>
+            {wrapLabel(talk, reason)}
+          </span>
+        </div>
+      ) : null}
+      <h3 id={`${id}-q`} className={wrapUp ? wrap.title : styles.outcomeTitle}>
+        {wrapUp
+          ? talk === null
+            ? `How did the call with ${first} go?`
+            : talk === "talked"
+              ? "What happens next?"
+              : reason !== null && NO_RETRY.has(reason)
+                ? "Save and move on"
+                : "When to try again?"
+          : attention
+            ? `Back from the call with ${first}. How did it go?`
+            : `How did the call with ${first} go?`}
       </h3>
-      {context.last || context.tries ? (
+      {!wrapUp && (context.last || context.tries) ? (
         <p className={styles.lastWord}>
           {context.last ? <span>{context.last}</span> : null}
           {context.tries ? <span>{context.tries}</span> : null}
@@ -953,62 +1052,128 @@ export function CallOutcome({
           {heardLine(heard)}
         </p>
       ) : null}
-      <div
-        className={styles.choiceRow}
-        role="group"
-        aria-label="Did you talk to them?"
-      >
-        <button
-          type="button"
-          className={styles.choiceTile}
-          data-kind="talked"
-          aria-pressed={talk === "talked"}
-          onClick={() => {
-            setTalk("talked");
-            setReason(null);
-            setRetry(null);
-            setStage((current) => current ?? lastStage);
-          }}
+      {wrapUp && talk === null ? (
+        <>
+          {/* Four big answers in their colours (round-2 board 1, option B):
+              each sets the server's own result, nothing new. */}
+          <div
+            className={wrap.tiles}
+            role="group"
+            aria-label="How did the call go?"
+          >
+            {WRAP_ANSWERS.map((answer) => (
+              <button
+                key={answer.key}
+                type="button"
+                className={wrap.tile}
+                data-tone={answer.tone}
+                data-sx-feature={`wrap_up_${answer.key}`}
+                onClick={() => {
+                  if (answer.key === "talked") {
+                    setTalk("talked");
+                    setReason(null);
+                    setRetry(null);
+                    setStage((current) => current ?? lastStage);
+                    return;
+                  }
+                  setTalk("missed");
+                  setQuick(true);
+                  setReason(answer.reason);
+                  setStage(null);
+                  setStep(null);
+                  // Busy: the next try is set in the same tap (in 1 hour).
+                  setRetry(answer.key === "busy" ? "hour" : null);
+                }}
+              >
+                <answer.icon size={28} aria-hidden="true" />
+                <span>{answer.label}</span>
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className={wrap.other}
+            onClick={() => {
+              setTalk("missed");
+              setQuick(false);
+              setReason(null);
+              setRetry(null);
+              setStage(null);
+              setStep(null);
+            }}
+          >
+            Something else happened
+          </button>
+          {onSkip ? (
+            <button
+              type="button"
+              className={wrap.didntCall}
+              data-sx-feature="wrap_up_didnt_call"
+              onClick={onSkip}
+            >
+              I didn&apos;t call
+            </button>
+          ) : null}
+        </>
+      ) : null}
+      {wrapUp ? null : (
+        <div
+          className={styles.choiceRow}
+          role="group"
+          aria-label="Did you talk to them?"
         >
-          <CheckCircle2 size={20} aria-hidden="true" />
-          We talked
-        </button>
-        {/* The most common miss in one tap (Call mode, 22 Oct 2026). */}
-        <button
-          type="button"
-          className={styles.choiceTile}
-          data-kind="missed"
-          aria-pressed={talk === "missed" && quick}
-          onClick={() => {
-            setTalk("missed");
-            setQuick(true);
-            setReason("did_not_pick");
-            setStage(null);
-            setStep(null);
-          }}
-        >
-          <PhoneMissed size={20} aria-hidden="true" />
-          No answer
-        </button>
-        <button
-          type="button"
-          className={styles.choiceTile}
-          data-kind="missed"
-          aria-pressed={talk === "missed" && !quick}
-          data-span="row"
-          onClick={() => {
-            setTalk("missed");
-            if (quick) setReason(null);
-            setQuick(false);
-            setStage(null);
-            setStep(null);
-          }}
-        >
-          <PhoneOff size={20} aria-hidden="true" />
-          Didn&apos;t get through
-        </button>
-      </div>
-      {onSkip && talk === null ? (
+          <button
+            type="button"
+            className={styles.choiceTile}
+            data-kind="talked"
+            aria-pressed={talk === "talked"}
+            onClick={() => {
+              setTalk("talked");
+              setReason(null);
+              setRetry(null);
+              setStage((current) => current ?? lastStage);
+            }}
+          >
+            <CheckCircle2 size={20} aria-hidden="true" />
+            We talked
+          </button>
+          {/* The most common miss in one tap (Call mode, 22 Oct 2026). */}
+          <button
+            type="button"
+            className={styles.choiceTile}
+            data-kind="missed"
+            aria-pressed={talk === "missed" && quick}
+            onClick={() => {
+              setTalk("missed");
+              setQuick(true);
+              setReason("did_not_pick");
+              setStage(null);
+              setStep(null);
+            }}
+          >
+            <PhoneMissed size={20} aria-hidden="true" />
+            No answer
+          </button>
+          <button
+            type="button"
+            className={styles.choiceTile}
+            data-kind="missed"
+            aria-pressed={talk === "missed" && !quick}
+            data-span="row"
+            onClick={() => {
+              setTalk("missed");
+              if (quick) setReason(null);
+              setQuick(false);
+              setStage(null);
+              setStep(null);
+            }}
+          >
+            <PhoneOff size={20} aria-hidden="true" />
+            Didn&apos;t get through
+          </button>
+        </div>
+      )}
+      {!wrapUp && onSkip && talk === null ? (
         <button type="button" className={styles.skipLink} onClick={onSkip}>
           I didn&apos;t call
         </button>
@@ -1074,7 +1239,9 @@ export function CallOutcome({
           className={styles.outcomeStep}
           data-nudge={missing ? nudge : undefined}
         >
-          <span className={styles.stepLabel}>What happens next?</span>
+          {wrapUp ? null : (
+            <span className={styles.stepLabel}>What happens next?</span>
+          )}
           {answers.length ? (
             // Plain answers over the organisation's own stages (ph2-16).
             <div
@@ -3433,6 +3600,8 @@ export function LeadCard({
   // The actions beyond the row of four (lead page P5): an item closes More,
   // then opens its own sheet, so sheets never stack.
   const [more, setMore] = useState(false);
+  // Give to a colleague, from More (a seller, when the workspace allows it).
+  const [giving, setGiving] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const afterMore = (run: () => void) => {
     setMore(false);
@@ -4241,6 +4410,21 @@ export function LeadCard({
               </button>
             </li>
           ) : null}
+          {/* A seller's own lead, where the workspace lets sellers give
+              leads on (round-2 board 3): the same sheet as on the lead. */}
+          {!detail.can_assign && detail.can_give ? (
+            <li>
+              <button
+                type="button"
+                className={page.moreItem}
+                data-sx-feature="give_lead_more"
+                onClick={() => afterMore(() => setGiving(true))}
+              >
+                <ArrowRightLeft size={20} aria-hidden="true" />
+                Give to a colleague
+              </button>
+            </li>
+          ) : null}
           {canMove && lostMove ? (
             <li>
               <button
@@ -4265,6 +4449,17 @@ export function LeadCard({
           )}
         </ul>
       </Picker>
+      {!detail.can_assign && detail.can_give ? (
+        <GiveLeadSheet
+          detail={detail}
+          open={giving}
+          onClose={() => setGiving(false)}
+          onGiven={(next) => {
+            setGiving(false);
+            onChanged(next);
+          }}
+        />
+      ) : null}
       {menuSlot
         ? createPortal(
             <button
@@ -4578,6 +4773,9 @@ export function LeadCard({
             {lead.owner_name ? "Reassign" : "Assign"}
           </button>
         ) : null}
+        {!detail.can_assign && detail.can_give ? (
+          <GiveLead detail={detail} onGiven={onChanged} />
+        ) : null}
         <small className={styles.ownerNote}>
           {[
             ownerNote(detail.owner_reason),
@@ -4756,7 +4954,10 @@ export function LeadSheet({
   round = null,
   stages = null,
   framed = "page",
+  onCallNext,
 }: {
+  /** The wrap-up's "Call next lead" outside a round: Leads starts To call. */
+  onCallNext?: () => void;
   /** "sheet": a tall pop-up with an X and a drag down to close, over the page
    *  it opened from (Home, owner 15 Nov 2026); "page": Leads' own lead page. */
   framed?: "page" | "sheet";
@@ -4840,6 +5041,16 @@ export function LeadSheet({
   const heldCall = useCallToAnswer(holdAccount);
   const mustAnswer = !!leadId && heldCall?.leadId === leadId;
   const questionOpen = asking || logIntent || logging === leadId || mustAnswer;
+  // The wrap-up screen (round-2 board 1, option B): the question on a screen
+  // of its own; Back keeps it on the lead instead, unless it must be answered.
+  const [wrapLater, setWrapLater] = useState<string | null>(null);
+  const [wrapDone, setWrapDone] = useState<{
+    leadId: string;
+    saved: LeadDetail;
+    talked: boolean;
+  } | null>(null);
+  const wrapping =
+    !!detail && questionOpen && (mustAnswer || wrapLater !== leadId);
 
   // Home's "Pick up where you left off" (owner, 27 Oct 2026): the lead this
   // person opened last, kept on this device only.
@@ -4915,6 +5126,66 @@ export function LeadSheet({
       if (leadId) setLogging(leadId);
     },
   );
+
+  const outcomeEl = detail ? (
+    <CallOutcome
+      key={`${formKey}-${after?.heard?.startedMs ?? 0}`}
+      detail={detail}
+      submitLabel={
+        wrapping ? "Save" : queue ? "Save & Next Lead" : "Save & Close"
+      }
+      wrapUp={wrapping}
+      heard={after?.heard ?? null}
+      attention={asking || mustAnswer}
+      ask={logIntent || logging === leadId || mustAnswer}
+      beforeSave={() => logWaitingCall(detail)}
+      onSkip={
+        mustAnswer
+          ? undefined
+          : () => {
+              // Nothing saved; in a round, on to the next lead (ph2-16).
+              setBackFrom(null);
+              setLogging(null);
+              setLoggedFor(leadId);
+              if (asked) setAnswered(asked.startedMs);
+              if (queue && onNext && leadId) onNext(leadId);
+            }
+      }
+      onSaved={(next) => {
+        if (leadId) answeredCallFor(holdAccount, leadId);
+        setBackFrom(null);
+        setLogging(null);
+        setLoggedFor(leadId);
+        if (asked) setAnswered(asked.startedMs);
+        update(next);
+        const talked =
+          next.events.find((event) => event.kind === "result")?.connected ===
+          true;
+        // The wrap-up: Saved, the report on its way and Call
+        // next lead; a missed call in a round goes straight on
+        // to the next lead (board 1, "No answer" path).
+        if (wrapping && leadId && !(queue && onNext && !talked)) {
+          setWrapDone({ leadId, saved: next, talked });
+          return;
+        }
+        // From Call Next, on to the list's next lead. A one-off
+        // call's Save & Close closes the question and stays on
+        // the lead, saved: a note or a follow-up often comes next
+        // (J213; Dipak's doc R10-31: back to the screen it came
+        // from).
+        if (queue && onNext && leadId) onNext(leadId);
+      }}
+      onUndone={(back) => {
+        // The lead still open shows where Undo put it.
+        setLoaded((current) =>
+          current?.lead.lead_id === back.lead.lead_id ? back : current,
+        );
+        onChanged();
+      }}
+    />
+  ) : null;
+  const callNext =
+    queue && onNext && leadId ? () => onNext(leadId) : onCallNext;
 
   return (
     <>
@@ -4997,50 +5268,9 @@ export function LeadSheet({
               }
               outcome={
                 questionOpen ? (
-                  <CallOutcome
-                    key={`${formKey}-${after?.heard?.startedMs ?? 0}`}
-                    detail={detail}
-                    submitLabel={queue ? "Save & Next Lead" : "Save & Close"}
-                    heard={after?.heard ?? null}
-                    attention={asking || mustAnswer}
-                    ask={logIntent || logging === leadId || mustAnswer}
-                    beforeSave={() => logWaitingCall(detail)}
-                    onSkip={
-                      mustAnswer
-                        ? undefined
-                        : () => {
-                            // Nothing saved; in a round, on to the next lead (ph2-16).
-                            setBackFrom(null);
-                            setLogging(null);
-                            setLoggedFor(leadId);
-                            if (asked) setAnswered(asked.startedMs);
-                            if (queue && onNext && leadId) onNext(leadId);
-                          }
-                    }
-                    onSaved={(next) => {
-                      if (leadId) answeredCallFor(holdAccount, leadId);
-                      setBackFrom(null);
-                      setLogging(null);
-                      setLoggedFor(leadId);
-                      if (asked) setAnswered(asked.startedMs);
-                      update(next);
-                      // From Call Next, on to the list's next lead. A one-off
-                      // call's Save & Close closes the question and stays on
-                      // the lead, saved: a note or a follow-up often comes next
-                      // (J213; Dipak's doc R10-31: back to the screen it came
-                      // from).
-                      if (queue && onNext && leadId) onNext(leadId);
-                    }}
-                    onUndone={(back) => {
-                      // The lead still open shows where Undo put it.
-                      setLoaded((current) =>
-                        current?.lead.lead_id === back.lead.lead_id
-                          ? back
-                          : current,
-                      );
-                      onChanged();
-                    }}
-                  />
+                  wrapping ? null : (
+                    outcomeEl
+                  )
                 ) : (
                   <LogThis
                     hint={after?.ask === false ? after.hint : null}
@@ -5094,6 +5324,40 @@ export function LeadSheet({
           />
         ) : null}
       </PaneOrSheet>
+      {wrapping && detail ? (
+        <WrapUpFrame
+          name={detail.lead.name}
+          line={
+            after?.heard?.connected === true
+              ? `Talked ${talkTime(after.heard.durationSeconds ?? 0)} · just now`
+              : null
+          }
+          onLater={mustAnswer ? undefined : () => setWrapLater(leadId)}
+        >
+          {outcomeEl}
+        </WrapUpFrame>
+      ) : wrapDone && wrapDone.leadId === leadId ? (
+        <WrapUpFrame
+          name={wrapDone.saved.lead.name}
+          asking={false}
+          onLater={() => setWrapDone(null)}
+        >
+          <WrapUpDone
+            saved={wrapDone.saved}
+            talked={wrapDone.talked}
+            reportExpected={wrapDone.saved.call_mode === "phone"}
+            onCallNext={
+              callNext
+                ? () => {
+                    setWrapDone(null);
+                    callNext();
+                  }
+                : undefined
+            }
+            onBack={() => setWrapDone(null)}
+          />
+        </WrapUpFrame>
+      ) : null}
     </>
   );
 }

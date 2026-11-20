@@ -101,47 +101,53 @@ const tile = (label: string) =>
     button.textContent?.startsWith(label),
   )!;
 
-// Dipak's Home + Leads handoff (31 Oct 2026, items 16-17): from Call Next,
-// Save & Next Lead goes on through the list; a one-off call's Save & Close
-// closes the question and stays on the lead (J213, 1 Nov 2026: a note or a
-// follow-up often comes next).
-it.each([
-  [false, "Save & Close"],
-  [true, "Save & Next Lead"],
-])("after a call opened with queue %s, saves with %s", async (queue, label) => {
-  const onNext = vi.fn();
-  const onClose = vi.fn();
-  await act(async () =>
-    root.render(
-      <LeadSheet
-        leadId={ONE}
-        me={null}
-        onClose={onClose}
-        onChanged={() => undefined}
-        onNext={onNext}
-        queue={queue}
-      />,
-    ),
-  );
-  await flush();
-  // No call yet: the question waits behind its light chip.
-  await act(async () => tile("Log a call").click());
-  await act(async () => tile("Didn't get through").click());
-  await act(async () => tile("No answer").click());
-  await act(async () => tile(label).click());
-  await flush();
-  expect(onClose).not.toHaveBeenCalled();
-  if (queue) {
-    expect(onNext).toHaveBeenCalledWith(ONE);
-  } else {
-    expect(onNext).not.toHaveBeenCalled();
-    // Still on the lead, the question answered and gone.
-    expect(document.body.textContent).toContain("Ravi Kulkarni");
-    expect(document.body.textContent).not.toContain("How did the call");
-    expect(tile("Log a call")).toBeDefined();
-  }
-  expect(document.querySelector('[class*="nextUp"]')).toBeNull();
-});
+// Dipak's Home + Leads handoff (31 Oct 2026, items 16-17): from Call Next, a
+// missed call goes on through the list; a one-off call closes the question and
+// stays on the lead (J213, 1 Nov 2026: a note or a follow-up often comes
+// next). Since the wrap-up screen (round-2 board 1, 20 Nov 2026) the question
+// is a screen of its own with four answers, and a one-off call ends on Saved
+// with Back to the lead.
+it.each([false, true])(
+  "after a call opened with queue %s, a missed call saves",
+  async (queue) => {
+    const onNext = vi.fn();
+    const onClose = vi.fn();
+    await act(async () =>
+      root.render(
+        <LeadSheet
+          leadId={ONE}
+          me={null}
+          onClose={onClose}
+          onChanged={() => undefined}
+          onNext={onNext}
+          queue={queue}
+        />,
+      ),
+    );
+    await flush();
+    // No call yet: the question waits behind its light chip.
+    await act(async () => tile("Log a call").click());
+    expect(document.querySelector("[data-wrap-up]")).not.toBeNull();
+    expect(tile("I didn't call")).toBeDefined();
+    await act(async () => tile("No answer").click());
+    expect(document.body.textContent).toContain("Step 2 of 2");
+    await act(async () => tile("Save").click());
+    await flush();
+    expect(onClose).not.toHaveBeenCalled();
+    if (queue) {
+      expect(onNext).toHaveBeenCalledWith(ONE);
+    } else {
+      expect(onNext).not.toHaveBeenCalled();
+      expect(document.body.textContent).toContain("Saved");
+      await act(async () => tile("Back to Ravi").click());
+      // Still on the lead, the question answered and gone.
+      expect(document.body.textContent).toContain("Ravi Kulkarni");
+      expect(document.body.textContent).not.toContain("How did the call");
+      expect(tile("Log a call")).toBeDefined();
+    }
+    expect(document.querySelector('[class*="nextUp"]')).toBeNull();
+  },
+);
 
 it("asks once when opened to log a call, then stays on the lead", async () => {
   const onClose = vi.fn();
@@ -158,10 +164,10 @@ it("asks once when opened to log a call, then stays on the lead", async () => {
   );
   await flush();
   expect(document.body.textContent).toContain("How did the call with Ravi go?");
-  await act(async () => tile("Didn't get through").click());
   await act(async () => tile("No answer").click());
-  await act(async () => tile("Save & Close").click());
+  await act(async () => tile("Save").click());
   await flush();
+  await act(async () => tile("Back to Ravi").click());
   expect(onClose).not.toHaveBeenCalled();
   expect(document.body.textContent).toContain("Ravi Kulkarni");
   expect(document.body.textContent).not.toContain("How did the call");
@@ -240,7 +246,12 @@ it("asks straight away after a call the phone logged with talk time", async () =
   );
   await flush();
   const text = document.body.textContent ?? "";
-  expect(text).toContain("Back from the call with Ravi. How did it go?");
+  // The wrap-up screen asks, the phone's talk time under the lead's name.
+  expect(document.querySelector("[data-wrap-up]")).not.toBeNull();
+  // The phone says they talked: straight to step 2, one tap back to change.
+  expect(text).toContain("Step 2 of 2");
+  expect(text).toContain("What happens next?");
+  expect(text).toContain("Talked 1\u00a0min 22\u00a0s · just now");
   expect(text).toContain(
     "Your phone says you talked for 1\u00a0min 22\u00a0s.",
   );
@@ -310,4 +321,43 @@ it("says a lead that moved off your desk has, with Close and no Try again", asyn
   expect(tile("Try again")).toBeUndefined();
   await act(async () => tile("Close").click());
   expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+// Round-2 board 1 (option B, 20 Nov 2026): after a call the wrap-up screen
+// has four big answers; Busy sets the next try in the same tap, and a call
+// that connected ends on Saved, the report on its way and Call next lead.
+it("wraps up a call: busy sets the next try, a talk ends with Call next lead", async () => {
+  const onCallNext = vi.fn();
+  await act(async () =>
+    root.render(
+      <LeadSheet
+        leadId={ONE}
+        me={null}
+        intent="log"
+        onClose={() => undefined}
+        onChanged={() => undefined}
+        onCallNext={onCallNext}
+      />,
+    ),
+  );
+  await flush();
+  for (const label of [
+    "We talked",
+    "No answer",
+    "Busy, call back",
+    "Wrong number",
+  ])
+    expect(tile(label), label).toBeDefined();
+  await act(async () => tile("Busy, call back").click());
+  expect(document.body.textContent).toContain("When to try again?");
+  expect(document.body.textContent).toContain("In 1 hour");
+  // Back to the four answers, nothing saved.
+  await act(async () =>
+    (
+      document.querySelector(
+        'button[aria-label="Change how it went"]',
+      ) as HTMLButtonElement
+    ).click(),
+  );
+  expect(tile("Wrong number")).toBeDefined();
 });

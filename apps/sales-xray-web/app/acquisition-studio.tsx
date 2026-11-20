@@ -1,4 +1,5 @@
 "use client";
+import { ReportCallNext } from "./leads/report-call-next";
 import { AppInbox } from "./app-inbox";
 import { AnalysisAvailability } from "./analysis-availability";
 
@@ -4107,6 +4108,14 @@ export function AcquisitionStudio({
                             onSeek={playFrom}
                             onUnlock={() => router.push("/login")}
                           />
+                          {/* A lead's call: the report ends in the next
+                              action (round-2 board 1). */}
+                          {shownLead && !embedded ? (
+                            <ReportCallNext
+                              leadId={shownLead.leadId}
+                              name={shownLead.name}
+                            />
+                          ) : null}
                         </>
                       ),
                     },
