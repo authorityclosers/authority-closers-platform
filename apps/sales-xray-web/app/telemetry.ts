@@ -337,6 +337,38 @@ export type TelemetryEvents = {
    * number or a name; the app checks each value, and the server again.
    */
   "sx.capture_scan": Record<string, string | number>;
+  /**
+   * Find my old calls (owner, 20 Nov 2026): a step of the 14-day look-back,
+   * where it began and the consent it ran under, with counts only.
+   */
+  "sx.old_calls": {
+    stage:
+      | "card_shown"
+      | "scan_started"
+      | "scan_done"
+      | "asked"
+      | "chose_all"
+      | "chose_pick"
+      | "not_now"
+      | "auto_started"
+      | "stopped"
+      | "done"
+      | "assign"
+      | "not_lead"
+      | "no_app"
+      | "failed";
+    entry?: "calls" | "card" | "setup";
+    consent?: "on" | "off" | "ask" | "unavailable";
+    found?: number;
+    sure?: number;
+    likely?: number;
+    time_only?: number;
+    unplaced?: number;
+    scanned?: number;
+    done?: number;
+    failed?: number;
+    took_ms?: number;
+  };
   "sx.lead_suggestion": {
     action: "shown" | "accepted" | "changed" | "dismissed";
     from?: "call" | "chat" | "rule";
@@ -550,6 +582,7 @@ export const TELEMETRY_EVENT_NAMES = [
   "sx.network_state",
   "sx.permission_snapshot",
   "sx.capture_scan",
+  "sx.old_calls",
   "sx.writes_waiting",
   "sx.screen_hidden",
   "sx.flow",
@@ -996,12 +1029,25 @@ const PERSONAL_KEY =
   /email|e[-_ ]?mail|phone|mobile|address|name|transcript|audio|recording|token|secret|password|ip|device.?id|cookie|prompt|answer|message|url/i;
 const VALUE = /^[a-z0-9_.-]{0,64}$/;
 
+/**
+ * Events that may hold more keys than 16: the Android app's capture scan (up
+ * to 8 folders with a name, state and age each, plus its call counts; the
+ * server takes its whole list). 20 Nov 2026: the 16-key cap dropped every
+ * scan here, so none ever reached the server.
+ */
+export const WIDE_EVENTS: Readonly<Record<string, number>> = {
+  "sx.capture_scan": 64,
+};
+
 /** True when a payload is short enums and finite numbers only. */
-export function safePayload(payload: Record<string, unknown>): boolean {
+export function safePayload(
+  payload: Record<string, unknown>,
+  maxKeys = 16,
+): boolean {
   const entries = Object.entries(payload);
   // An event's own keys and where it ran (device, tier, network, link, app, version):
-  // the phone's daily profile is the largest, at 15.
-  if (entries.length > 16) return false;
+  // the phone's daily profile is the largest, at 15; a wide event says its own.
+  if (entries.length > maxKeys) return false;
   return entries.every(
     ([key, value]) =>
       KEY.test(key) &&
@@ -1204,7 +1250,7 @@ export class TelemetryClient {
       if (context.link) values.link = context.link;
       if (context.appVersion) values.app_version = context.appVersion;
     }
-    if (!safePayload(values)) return;
+    if (!safePayload(values, WIDE_EVENTS[name])) return;
     const occurredAt = this.sender.now().toISOString();
     const detail = trailDetail(values);
     keepStep({

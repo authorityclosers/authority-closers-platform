@@ -2,6 +2,12 @@
 
 The source-owned permission deadline is authoritative. Expiry needs no current
 user session or provider approval and never extends retention on a failed job.
+
+Automatic expiry is OFF in the hosted service (owner, 20 Nov 2026: "No data should be
+deleted. Not the call logs, not the recordings, nothing"; and for Authority Closers
+Public Learners: "keep the public learners data too, nothing deleted"). The service
+composes the scheduler with ``expire=AUTOMATIC_EXPIRY``; a recording goes only when a
+person deletes it or an erasure request asks for it (application.py's delete path).
 """
 
 from __future__ import annotations
@@ -21,6 +27,9 @@ from ac_platform.conversation_intelligence.models import (
 )
 from ac_platform.outbox.repository import JobRepository, RecoveryStateRepository
 
+# The hosted service never erases a recording because its deadline passed (see above).
+AUTOMATIC_EXPIRY = False
+
 
 class ConversationRetentionScheduler:
     def __init__(
@@ -28,10 +37,13 @@ class ConversationRetentionScheduler:
         sessions: async_sessionmaker[AsyncSession],
         *,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        expire: bool = True,
     ) -> None:
-        self.sessions, self.clock = sessions, clock
+        self.sessions, self.clock, self.expire = sessions, clock, expire
 
     async def step(self) -> bool:
+        if not self.expire:
+            return False
         now = utc(self.clock())
         async with self.sessions() as db, db.begin():
             await RecoveryStateRepository(db).require_ready(lock=True, shared_lock=True)

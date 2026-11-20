@@ -699,10 +699,17 @@ export async function callLogSetup(
   return "status" in outcome ? outcome.status : null;
 }
 
-/** Looks at the call history now (the app also does when it opens and every 15 minutes). */
-export async function callLogSyncNow(): Promise<CallLogStatus | null> {
+/**
+ * Looks at the call history now (the app also does when it opens and every 15
+ * minutes). With `days` (Find my old calls; app builds with sales-xray-apps
+ * #38, at most 14), it reads that far back again, so lead calls it missed
+ * become rows; older builds ignore it.
+ */
+export async function callLogSyncNow(
+  days?: number,
+): Promise<CallLogStatus | null> {
   try {
-    return parseCallLog(await ask("callLogSync", {}, 60_000));
+    return parseCallLog(await ask("callLogSync", days ? { days } : {}, 60_000));
   } catch {
     return null;
   }
@@ -1274,4 +1281,22 @@ export async function autoCaptureStates(): Promise<AutoCaptureItem[]> {
         captureStatesRead = null;
       });
   return captureStatesRead;
+}
+
+/**
+ * Find my old calls (owner, 20 Nov 2026; sales-xray-apps #38): the phone
+ * matches each of these lead calls with no recording to a recording in its
+ * folder (the lead's number and the call's time), read-only; old-calls-rules
+ * reads the answer. Older apps answer "unknown_method".
+ */
+export function findOldRecordings(args: {
+  calls: {
+    eventId: string;
+    number: string;
+    startedMs: number;
+    seconds: number;
+  }[];
+  sinceMs: number;
+}): Promise<unknown> {
+  return ask("findOldRecordings", args, 120_000);
 }

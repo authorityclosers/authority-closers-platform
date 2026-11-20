@@ -39,6 +39,8 @@ from sqlalchemy import select
 from ac_platform.conversation_intelligence.brain4 import DIMENSION_IDS
 from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.telemetry.ingest import (
+    MAX_PAYLOAD_FIELDS,
+    MAX_WIDE_PAYLOAD_FIELDS,
     SALES_XRAY_ROUTE_TEMPLATES,
     TelemetryEventDefinition,
     TelemetrySurface,
@@ -167,6 +169,24 @@ CAPTURE_HOLDS = (
     "other",
 )
 CAPTURE_MAX_AGE_S = 30 * 24 * 60 * 60
+# sx.old_calls (Find my old calls, owner 20 Nov 2026): each step of the 14-day look-back, from
+# the card to the last Report, with counts only.
+OLD_CALLS_STAGES = (
+    "card_shown",
+    "scan_started",
+    "scan_done",
+    "asked",
+    "chose_all",
+    "chose_pick",
+    "not_now",
+    "auto_started",
+    "stopped",
+    "done",
+    "assign",
+    "not_lead",
+    "no_app",
+    "failed",
+)
 PERMISSION_STATES = ("granted", "denied", "not_in_build")
 # The Android app's own permissions, by short names the intake's personal-data guard allows.
 APP_PERMISSIONS = ("calls", "rec_files", "notifications", "mic", "all_files", "folder", "call_log")
@@ -273,6 +293,7 @@ def _event(
     labels: Iterable[str] = (),
     required: Iterable[str] = (),
     takes_call: bool = False,
+    wide: bool = False,
 ) -> TelemetryEventDefinition:
     # Every event may say where it ran: device class and tier, network and link, app.
     typed = {"device": _DEVICES, "app": _APPS, "tier": TIERS, "net": NETWORKS, "link": LINKS}
@@ -290,6 +311,8 @@ def _event(
         labels=names,
         required=frozenset(required),
         takes_call=takes_call,
+        # A wide event may hold every key it lists (at most MAX_WIDE_PAYLOAD_FIELDS); others 20.
+        max_fields=min(len(keys), MAX_WIDE_PAYLOAD_FIELDS) if wide else MAX_PAYLOAD_FIELDS,
     )
 
 
@@ -655,6 +678,32 @@ SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
             ),
             labels=("dialer",),
             required=("outcome",),
+            # Up to 8 folders with a name, state and age each, plus the call counts: about 50
+            # keys, so the 20-key cap refused every scan (20 Nov 2026: none ever stored).
+            wide=True,
+        ),
+        # Find my old calls (owner, 20 Nov 2026): a step of the look-back (the card, the phone's
+        # scan, the seller's choice, the uploads), where it began and the consent it ran under,
+        # with counts: calls found by match (sure, likely, time only), recordings not placed,
+        # recordings the phone looked at, calls done and failed. Never a name, number or file.
+        "sx.old_calls": _event(
+            values={
+                "stage": OLD_CALLS_STAGES,
+                "entry": ("calls", "card", "setup"),
+                "consent": ("on", "off", "ask", "unavailable"),
+            },
+            numbers={
+                "found": 1_000,
+                "sure": 1_000,
+                "likely": 1_000,
+                "time_only": 1_000,
+                "unplaced": 1_000,
+                "scanned": 10_000,
+                "done": 1_000,
+                "failed": 1_000,
+                "took_ms": 3_600_000,
+            },
+            required=("stage",),
         ),
         # A seller's changes this device holds that the server doesn't have yet
         # (sync/write-queue.ts): how many wait, how many the server refused when sent

@@ -30,13 +30,7 @@ import { breakLength } from "../dashboard/home-today";
 import { displayName } from "../display-name";
 import { readDayCalls, type ActivityPage } from "../leads/leads-client";
 import { tick } from "../ui/haptics";
-import type { Effort, SellerEffort } from "./performance-client";
-import {
-  both,
-  noRecording,
-  SCOPE_WORDS,
-  speedToLead,
-} from "../dashboard/team-numbers";
+import type { Effort, SellerEffort, SideEffort } from "./performance-client";
 import styles from "./growth-visual.module.css";
 
 /** The views in the order Growth shows them; a test or a choice reorders this. */
@@ -46,6 +40,18 @@ export type GrowthView = (typeof GROWTH_VIEWS)[number];
 /** The Growth period: today, 7 days, or this month so far. */
 export type GrowthPeriod = "1" | "7" | "month";
 
+type Sides = { inbound: SideEffort; cold: SideEffort };
+type Summed =
+  | "attempted"
+  | "connected"
+  | "talk_seconds"
+  | "interested"
+  | "leads_attempted"
+  | "reached"
+  | "meetings";
+
+const both = (sides: Sides, key: Summed) =>
+  sides.inbound[key] + sides.cold[key];
 export const talkTime = (seconds: number) =>
   breakLength(Math.round(seconds / 60));
 const number = new Intl.NumberFormat("en-IN");
@@ -121,7 +127,7 @@ function Units({ value }: { value: string }) {
 }
 
 export function SpeedTile({ effort }: { effort: Effort }) {
-  const minutes = speedToLead(effort);
+  const minutes = effort.inbound.first_call_minutes;
   return (
     <section
       className={styles.speed}
@@ -154,6 +160,7 @@ export function SpeedTile({ effort }: { effort: Effort }) {
 
 /** What needs someone now: only real counts above zero. */
 export function attention(effort: Effort) {
+  const { inbound, cold } = effort;
   const rows: {
     key: string;
     label: string;
@@ -164,25 +171,25 @@ export function attention(effort: Effort) {
     {
       key: "late",
       label: "Late follow-ups",
-      value: both(effort, "late"),
+      value: inbound.late + cold.late,
       tone: "late",
     },
     {
       key: "backlog",
       label: "Not called yet",
-      value: both(effort, "backlog"),
+      value: inbound.backlog + cold.backlog,
       tone: "due",
     },
     {
       key: "missed",
       label: "Missed calls",
-      value: both(effort, "missed_calls"),
+      value: inbound.missed_calls + cold.missed_calls,
       tone: "due",
     },
     {
       key: "recordings",
       label: "Calls without a recording",
-      value: noRecording(effort, "all"),
+      value: effort.missing_recordings,
       tone: "due",
     },
   ];
@@ -322,11 +329,6 @@ export function PulseTiles({
       <h2 id={headingId} className={styles.heading}>
         {title ?? (effort.team ? "Team" : "Your work")}
       </h2>
-      {/* What every number here counts, said (round 2, board 6, 20 Nov 2026):
-          all leads, as Home's Team today counts them by default. */}
-      <p className={styles.meta} data-counts="all">
-        {SCOPE_WORDS.all}
-      </p>
       {/* One total a tile, no Inbound | Cold split (owner, 10 Nov 2026: "we
           don't have to focus on inbound and cold leads"), each with one
           line of what is behind it. */}

@@ -924,7 +924,7 @@ def test_calls_the_phone_logged_by_itself_reach_their_leads(
                     row("102", "+91 98765 43210", 2, direction="missed"),
                     row("103", "9876543211", 2),  # another seller's lead
                     row("104", "9123456789", 2),  # nobody's
-                    row("105", "9876543210", 60 * 24 * 8),  # older than a week
+                    row("105", "9876543210", 60 * 24 * 8),  # from before the lead existed
                 ]
                 body = {"device_id": device, "calls": calls}
                 refused = await client.post(f"{BASE}/phone-log", json=body)

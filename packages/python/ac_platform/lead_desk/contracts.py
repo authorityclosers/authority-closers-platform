@@ -2369,8 +2369,8 @@ class PhoneLog(Command):
 
     device_id: UUID
     calls: tuple[PhoneLogCall, ...] = Field(max_length=200)
-    # The phone's first read after the seller allows the call history, once per phone: rows
-    # up to 30 days back time the app's own dials; only the last 7 days log calls of their own.
+    # The phone's first read after the seller allows the call history, once per phone. Every
+    # row is logged however old (owner, 20 Nov 2026: no 7-day cut); kept for older apps.
     backfill: bool = False
 
 

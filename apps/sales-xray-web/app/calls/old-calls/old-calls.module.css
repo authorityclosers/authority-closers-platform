@@ -1,0 +1,300 @@
+/* Find my old calls (owner, 20 Nov 2026; board option C, summary first). */
+
+.card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+}
+
+.card > svg {
+  color: var(--sx-accent);
+}
+
+.card > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.card small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.card[data-quiet] {
+  padding: 6px 14px;
+  background: transparent;
+  border-style: dashed;
+}
+
+.sheet {
+  display: grid;
+  gap: 16px;
+  padding: 4px 4px 8px;
+  color: var(--sx-ink);
+}
+
+.hero {
+  display: grid;
+  gap: 14px;
+}
+
+.hero h2 {
+  margin: 0;
+  font-size: var(--sx-text-xl);
+  line-height: var(--sx-leading-28);
+  letter-spacing: -0.01em;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.count {
+  display: block;
+  font-size: var(--sx-text-3xl);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.note {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.scanSteps {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0 0 0 20px;
+  color: var(--sx-ink);
+}
+
+.scanSteps li:last-child {
+  color: var(--sx-muted);
+}
+
+.buckets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.buckets li {
+  padding: 8px 14px;
+  border-radius: var(--sx-radius-pill);
+  font-size: var(--sx-text-sm);
+}
+
+.buckets li[data-fit="number"],
+.chip[data-fit="number"] {
+  background: color-mix(in oklab, var(--sx-good) 12%, var(--sx-surface));
+  color: color-mix(in oklab, var(--sx-good) 70%, var(--sx-ink));
+}
+
+.buckets li[data-fit="contact"],
+.chip[data-fit="contact"] {
+  background: color-mix(in oklab, var(--sx-call-fill) 14%, var(--sx-surface));
+  color: color-mix(in oklab, var(--sx-call-fill) 75%, var(--sx-ink));
+}
+
+.buckets li[data-fit="time"],
+.chip[data-fit="time"] {
+  background: color-mix(in oklab, var(--sx-warn) 14%, var(--sx-surface));
+  color: color-mix(in oklab, var(--sx-warn) 55%, var(--sx-ink));
+}
+
+.terms {
+  display: grid;
+  gap: 8px;
+}
+
+.terms summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.terms p {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.check,
+.pickRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.check input,
+.pickRow input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  accent-color: var(--sx-accent);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--sx-line);
+}
+
+.callLine {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.callLine strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.callLine small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.chip {
+  justify-self: start;
+  padding: 2px 10px;
+  border-radius: var(--sx-radius-pill);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.callLine .chip {
+  color: inherit;
+}
+
+.state[data-state="done"] {
+  color: color-mix(in oklab, var(--sx-good) 70%, var(--sx-ink));
+  font-weight: 600;
+}
+
+.state[data-state="failed"] {
+  color: var(--sx-bad);
+}
+
+.doneIcon {
+  color: var(--sx-good);
+}
+
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.unplaced {
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+}
+
+.unplaced h3,
+.assign h3 {
+  margin: 0;
+  font-size: var(--sx-text-md);
+}
+
+.assign {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-sunken);
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+}
+
+.search input:focus {
+  outline: none;
+}
+
+.search:focus-within {
+  box-shadow: var(--sx-focus-ring);
+}
+
+.leadPick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.leadPick small {
+  color: var(--sx-muted);
+}
+
+.error {
+  margin: 0;
+  color: var(--sx-bad);
+  font-size: var(--sx-text-sm);
+}

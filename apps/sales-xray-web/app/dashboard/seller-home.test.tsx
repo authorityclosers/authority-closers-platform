@@ -323,12 +323,259 @@ const card = (key: string) =>
 const radios = () =>
   Array.from(host.querySelectorAll<HTMLButtonElement>('[role="radio"]'));
 
+it("is the owner's Smart lists Home: the work in five blocks, each opening its exact place", async () => {
+  answer({ inbound: { leads: 40 }, cold: { imported: 200 } });
+  await mount();
+  // Both types: the selector.
+  expect(radios().map((radio) => radio.textContent)).toEqual([
+    "Inbound Leads",
+    "Cold Leads",
+  ]);
+  // The four cards, Inbound: the side's own three and the shared tasks.
+  expect(card("new")?.getAttribute("href")).toBe(
+    "/leads?view=to_call&step=new",
+  );
+  // One caption under the number (Dipak's picture, 2 Nov 2026); the number as
+  // H5 writes it, beside a coloured icon (owner's pick, 10 Nov 2026).
+  expect(card("new")?.textContent).toBe("New leads8First call pending");
+  expect(card("new")?.querySelector("[data-icon] svg")).not.toBeNull();
+  expect(card("new")?.getAttribute("data-tone")).toBe("teal");
+  expect(card("open")?.getAttribute("href")).toBe(
+    "/leads?view=all&step=open_leads",
+  );
+  // A caption short enough to fit whole on one line at 360 (ux-audit).
+  expect(card("open")?.textContent).toMatch(/^Open leads\d*Needs discussion$/);
+  expect(card("follow_ups")?.getAttribute("href")).toBe(
+    "/leads?view=follow_ups&when=today",
+  );
+  expect(card("follow_ups")?.textContent).toBe("Follow-ups7Due today");
+  // Tasks: the Tasks page's Today, the non-calling work (Dipak's handoff;
+  // one truth with Tasks, persona QA, 31 Oct 2026), a box per task due (H3).
+  // One overdue on Tasks' Overdue: "1 late", as H5 says it.
+  expect(card("tasks")?.textContent).toBe("Tasks4Due today, 1 late");
+  expect(card("tasks")?.querySelectorAll("i")).toHaveLength(4);
+  // Today's overview, and whose activity it counts.
+  expect(host.querySelector("#today-title")?.textContent).toBe(
+    "Today's overview",
+  );
+  expect(host.textContent).toContain("Your inbound lead activity");
+  // Next to call: one customer, opening the lead; Call now calls them.
+  const name = host.querySelector(
+    'a[href="/leads?lead=00000000-0000-4000-8000-000000000001"]',
+  );
+  expect(name?.textContent).toBe("Amit Sample");
+  // Where from and what happened are icon chips now (owner, 15 Nov 2026).
+  expect(host.textContent).toContain("Meta Ads");
+  expect(host.textContent).toContain("Assigned 4 min ago");
+  // Next action, ready to call; one big button, no countdown beside it.
+  expect(host.querySelector("#next-title")?.textContent).toBe("Next action");
+  expect(host.textContent).toContain("Ready to call");
+  expect(host.querySelector("[data-countdown]")).toBeNull();
+  const call = Array.from(host.querySelectorAll("a")).find(
+    (link) => link.textContent === "Call now",
+  );
+  // To Call by name: a bare /leads opens the person's last view (31 Oct).
+  expect(call?.getAttribute("href")).toBe("/leads?view=to_call");
+  // Today's list: today's tasks and today's follow-ups in one list by time,
+  // five at most (H5); each says its kind (H4); a past follow-up is Late, its
+  // time in red (H1), and its phone opens the list it sits in (bug report #92).
+  const list = host.querySelector('[aria-labelledby="list-title"]');
+  expect(list?.querySelector("h2")?.textContent).toBe("Today's list");
+  const rows = Array.from(
+    list?.querySelectorAll("[data-today-row]") ?? [],
+    (item) => item.textContent?.replace(/\s+/g, " "),
+  );
+  expect(rows).toHaveLength(5);
+  expect(rows[0]).toContain("Send proposal to Neha");
+  expect(rows[0]).toContain("Task");
+  // Its lead under the words, which don't name her in full; the words open her.
+  expect(rows[0]).toContain("Neha Example");
+  expect(
+    list?.querySelector("[data-today-row] a[href^='/leads?lead=']")
+      ?.textContent,
+  ).toBe("Send proposal to Neha");
+  expect(rows[1]).toContain("Prepare tomorrow's demo");
+  expect(rows[4]).toContain("Call back Neha Example");
+  expect(rows[4]).toContain("Follow-up");
+  expect(rows[4]).toContain("Late");
+  expect(rows[4]).toContain("Discuss proposal");
+  const followRow = list?.querySelectorAll("[data-today-row]")[4];
+  expect(followRow?.querySelector("[data-late-time]")).not.toBeNull();
+  expect(
+    followRow
+      ?.querySelector('a[aria-label="Call Neha Example"]')
+      ?.getAttribute("href"),
+  ).toBe("/leads?view=follow_ups&when=today");
+  // Upcoming follow-ups and Recent calls left Me with the pick.
+  expect(host.querySelector('[aria-labelledby="follow-ups-title"]')).toBeNull();
+  expect(host.querySelector('[aria-labelledby="recent-title"]')).toBeNull();
+  // Done today: two by two, this side only; each number beside a ring, the
+  // arc a real share or none (Connected of Attempted).
+  const performance = host.querySelector(
+    '[aria-labelledby="performance-title"]',
+  );
+  expect(performance?.querySelector("h2")?.textContent).toBe("Done today");
+  expect(
+    Array.from(performance?.querySelectorAll("[data-share]") ?? [], (ring) =>
+      ring.closest("a")?.getAttribute("data-done"),
+    ),
+  ).toEqual(["connected"]);
+  expect(
+    Array.from(
+      performance?.querySelectorAll("li") ?? [],
+      (item) => item.textContent,
+    ),
+  ).toEqual([
+    "Attempted12",
+    "Connected7 of 12",
+    "Talk time34 min",
+    "Follow-ups3",
+  ]);
+  expect(performance?.textContent).toContain("Inbound calls only · Today");
+  // Not in the picture: the longest breaks and the Taking new leads pill.
+  expect(host.textContent).not.toContain("Your longest breaks");
+  expect(host.textContent).not.toContain("Taking new leads");
+});
+
+it("switches to Cold at once, with no second read", async () => {
+  answer({ inbound: { leads: 40 }, cold: { imported: 200 } });
+  await mount();
+  const reads = calls.length;
+  await act(async () => radios()[1].click());
+  expect(calls.length).toBe(reads);
+  expect(window.location.search).toBe("?side=cold");
+  expect(card("new")?.textContent).toBe("Unworked leads180Never attempted");
+  expect(card("new")?.getAttribute("href")).toBe(
+    "/leads?view=to_call&step=new&side=cold",
+  );
+  expect(card("follow_ups")?.getAttribute("href")).toBe(
+    "/leads?view=follow_ups&when=today&side=cold",
+  );
+  expect(host.textContent).toContain("Your cold lead activity");
+  expect(host.querySelector("[data-countdown]")).toBeNull();
+  const start = Array.from(host.querySelectorAll("a")).find(
+    (link) => link.textContent === "Start Cold Calling",
+  );
+  expect(start?.getAttribute("href")).toBe("/leads?view=to_call&side=cold");
+  // Fresh enquiries waiting on Inbound, one tap to them.
+  const alert = Array.from(host.querySelectorAll("a")).find((link) =>
+    link.getAttribute("aria-label")?.startsWith("8 new inbound leads waiting"),
+  );
+  expect(alert?.getAttribute("href")).toBe("/leads?view=to_call&step=new");
+});
+
 it("hides the selector from someone with one lead type", async () => {
   answer({ inbound: { leads: 0 }, cold: { imported: 200 } });
   await mount();
   expect(radios()).toHaveLength(0);
   // Cold-only: the cold side, Unworked first.
   expect(card("new")?.textContent).toContain("Unworked");
+});
+
+it("completes a task in one tap, and puts it back if it wasn't saved", async () => {
+  answer({ inbound: { leads: 40 }, cold: { imported: 0 } });
+  await mount();
+  const box = () =>
+    host.querySelector<HTMLInputElement>(
+      'input[aria-label="Done: Send proposal to Neha"]',
+    );
+  await act(async () => box()?.click());
+  await act(async () => Promise.resolve());
+  expect(
+    calls.some((item) => item.path.endsWith("/done") && item.method === "POST"),
+  ).toBe(true);
+  expect(box()?.checked).toBe(true);
+  doneFails = true;
+  await act(async () => box()?.click());
+  await act(async () => Promise.resolve());
+  await act(async () => Promise.resolve());
+  // The undo didn't save (a 503 here): the screen keeps what is true.
+  expect(box()?.checked).toBe(true);
+});
+
+const tasksBlock = () =>
+  host.querySelector<HTMLElement>('section[aria-labelledby="list-title"]');
+
+// Competitor teardown #1 (1 Nov 2026, Pipedrive Focus, Close Inbox): a late
+// task says so in red, its time red as H1 draws it (owner's pick, 10 Nov 2026),
+// and the word Late beside its kind; swipe left, hold or right-click moves it
+// to one of the after-call's times.
+it("marks a late task in red, and moves it to next week", async () => {
+  lateBrochure = true;
+  answer({ inbound: { leads: 40 }, cold: { imported: 0 } });
+  await mount();
+  const first = Array.from(
+    tasksBlock()?.querySelectorAll<HTMLLIElement>("ul > li") ?? [],
+  ).find((item) => item.textContent?.includes("Share brochure"));
+  expect(first?.hasAttribute("data-late")).toBe(true);
+  expect(first?.querySelector("[data-late-time]")).not.toBeNull();
+  expect(first?.textContent).toContain("Late");
+  await act(async () => {
+    first?.dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, cancelable: true }),
+    );
+  });
+  const week = Array.from(document.querySelectorAll("button")).find(
+    (button) => button.textContent === "Next week",
+  );
+  expect(
+    Array.from(
+      document.querySelectorAll("button"),
+      (button) => button.textContent,
+    ).filter((text) =>
+      ["In 1 hour", "This evening", "Tomorrow morning", "Next week"].includes(
+        text ?? "",
+      ),
+    ),
+  ).toHaveLength(4);
+  await act(async () => week?.click());
+  await act(async () => Promise.resolve());
+  const snooze = calls.find(
+    (item) => item.path.endsWith("/snooze") && item.method === "POST",
+  );
+  expect(JSON.parse(snooze?.body ?? "{}").choice).toBe("week");
+});
+
+// Tasks moves a task to Overdue a while after its time; Home's list read only
+// Today, so a late task vanished from Home. Now it comes first, Late in red
+// (owner's pick, 10 Nov 2026), and one tap marks it done.
+it("brings a task from Tasks' Overdue into Today's list, Late, and ticks it done", async () => {
+  lateOwn = true;
+  answer({ inbound: { leads: 40 }, cold: { imported: 0 } });
+  await mount();
+  const first = tasksBlock()?.querySelector("[data-today-row]");
+  expect(first?.textContent).toContain("Call the bank about the loan papers");
+  expect(first?.textContent).toContain("Late");
+  expect(first?.querySelector("[data-late-time]")).not.toBeNull();
+  // See all opens Tasks on Overdue, where this late task is (Redmi QA).
+  expect(
+    tasksBlock()?.querySelector('a[href="/leads?tab=tasks&tasks=overdue"]'),
+  ).not.toBeNull();
+  const box = first?.querySelector<HTMLInputElement>('input[type="checkbox"]');
+  await act(async () => box?.click());
+  await act(async () => Promise.resolve());
+  expect(
+    calls.some(
+      (item) =>
+        item.path.endsWith("-00000000001/done") && item.method === "POST",
+    ),
+  ).toBe(true);
+});
+
+it("says All clear with the next call when nothing is left, and no helper lines", async () => {
+  emptyToday = true;
+  noFollowUps = true;
+  answer({ inbound: { leads: 40 }, cold: { imported: 0 } });
+  await mount();
+  const block = tasksBlock();
+  expect(block?.textContent).toContain("All clear");
+  expect(
+    block?.querySelector<HTMLAnchorElement>("a[href*='view=to_call']")
+      ?.textContent,
+  ).toContain("Call your next lead");
+  // Once: an empty Upcoming follow-ups says only All clear (ux-audit N9).
+  expect(host.textContent?.split("Call your next lead")).toHaveLength(2);
+  expect(host.textContent).not.toContain("Fresh enquiries from ads");
 });
 
 // Leads 2 (1 Nov 2026): a missed call not yet returned is To Call's first row,
@@ -403,6 +650,84 @@ it("starts a cold round at the card, and dials only a call-back or an Inbound le
   });
 });
 
+// Teardown 3 (1 Nov 2026): a call still waiting for its answer is the first
+// thing on Home; in Dipak's design (4 Nov 2026) it is Pending action, and
+// Complete call activity opens that lead on Leads at its after-call question.
+it("puts a call waiting for its answer first, as Pending action that opens its question", async () => {
+  const assign = vi
+    .spyOn(window.location, "assign")
+    .mockImplementation(() => {});
+  const shared = desk as Record<string, unknown>;
+  shared.unanswered = [
+    {
+      lead_id: "00000000-0000-4000-8000-000000000041",
+      name: "meera fictional",
+      called_at: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
+      event_id: "00000000-0000-4000-a000-000000000041",
+    },
+  ];
+  try {
+    answer({ inbound: { leads: 40 }, cold: { imported: 200 } });
+    await mount();
+    const first = host.querySelector("[data-area]");
+    expect(first?.getAttribute("data-area")).toBe("finish");
+    expect(first?.textContent).toContain("Pending action");
+    expect(first?.textContent).toContain("1 reminder");
+    // Two rows (the owner, 13 Nov 2026): who and when beside Complete.
+    expect(first?.querySelector("b")?.textContent).toBe("Meera Fictional");
+    expect(first?.textContent).toContain("Last dialled 4 min ago");
+    takeHandedLead();
+    const open = [...first!.querySelectorAll("button")].find(
+      (button) =>
+        button.getAttribute("aria-label") ===
+        "Complete call activity: Meera Fictional",
+    );
+    expect(open?.textContent).toContain("Complete");
+    await act(async () => open?.click());
+    expect(takeHandedLead()).toEqual({
+      leadId: "00000000-0000-4000-8000-000000000041",
+      call: false,
+      log: true,
+    });
+    expect(assign).toHaveBeenCalledWith("/leads");
+  } finally {
+    delete shared.unanswered;
+    assign.mockRestore();
+  }
+});
+
+// The test robot (1 Nov 2026): on a slow network the Inbound | Cold selector
+// arrived after Today's cards and pushed them down (0.06 at 360 px). Waiting
+// for the sides instead left Home blank on 3G (QA robot 4cf9a9c7 and 054a9c20,
+// 9 Nov 2026). Today's outline draws at once, the selector's place held
+// unseen, and the selector arrives in that place.
+it("draws Today's outline at once and holds the selector's place until the sides are known", async () => {
+  answer({ inbound: { leads: 40 }, cold: { imported: 200 } });
+  const served = globalThis.fetch;
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async (input, init) => {
+      if (String(input) === "/v1/lead-desk/sides?scope=mine") await held;
+      return served(input, init);
+    }),
+  );
+  await mount();
+  const side = () => host.querySelector('[data-area="side"]');
+  expect(host.querySelector('[data-area="cards"]')).not.toBeNull();
+  expect(side()?.querySelector("[inert] [role=radiogroup]")).not.toBeNull();
+  expect(host.querySelector("[data-call-lens]")).toBeNull();
+  await act(async () => release());
+  for (let step = 0; step < 4; step += 1)
+    await act(async () => Promise.resolve());
+  expect(side()?.querySelector("[role=radiogroup]")).not.toBeNull();
+  expect(side()?.querySelector("[inert]")).toBeNull();
+  expect(host.querySelector('[data-area="cards"]')).not.toBeNull();
+});
+
 it("never counts a call whose outcome the phone never said, and each number opens its calls", async () => {
   // Owner and Dipak, 2 Nov 2026: 36 calls, 35 Call-button dials the phone never
   // matched, one recorded call of 77 s.
@@ -435,6 +760,41 @@ it("never counts a call whose outcome the phone never said, and each number open
   expect(host.textContent).not.toContain("Connected");
 });
 
+// Home studio, 4 Nov 2026 (judges, round 2): a bad network never takes Dipak's
+// blocks away. The four cards keep their places and say "–", never a 0 they
+// don't know, and the next call's card offers Try again in the Call's place.
+it("keeps every block in place with a dash when the leads didn't load", async () => {
+  resetHomeReads();
+  answer({ inbound: { leads: 40 }, cold: { imported: 200 } });
+  const served = globalThis.fetch;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async (input, init) =>
+      String(input) === "/v1/lead-desk"
+        ? new Response("{}", { status: 503 })
+        : served(input, init),
+    ),
+  );
+  await mount();
+  expect(
+    Array.from(
+      host.querySelectorAll("[data-card] strong"),
+      (figure) => figure.textContent,
+    ),
+  ).toEqual(["–", "–", "–", "–"]);
+  // A dash opens nothing: there is no list behind a number it doesn't know.
+  expect(host.querySelector("a[data-card]")).toBeNull();
+  const next = host.querySelector('[aria-labelledby="next-title"]');
+  expect(next?.textContent).toContain("Leads didn't load");
+  expect(
+    Array.from(next?.querySelectorAll("button") ?? [], (button) =>
+      button.textContent?.trim(),
+    ),
+  ).toContain("Try again");
+  expect(host.querySelector("[data-call-lens]")).toBeNull();
+  resetHomeReads();
+});
+
 // Later visits draw at once from the sides this device saw last, so Today
 // and the selector arrive together, with no wait and nothing moving.
 // QA robot 27a7dd88 (9 Nov 2026): back on Home from Tasks, the blocks under
@@ -463,6 +823,29 @@ it("draws Today's list at once on a return, from what it showed", async () => {
   );
   await mount();
   expect(task()).toBe(true);
+});
+
+it("draws Today at once on a later visit, from the sides this device kept", async () => {
+  window.localStorage.setItem("sx:home-sides", "11");
+  answer({ inbound: { leads: 40 }, cold: { imported: 200 } });
+  const served = globalThis.fetch;
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async (input, init) => {
+      if (String(input) === "/v1/lead-desk/sides?scope=mine") await held;
+      return served(input, init);
+    }),
+  );
+  await mount();
+  expect(host.querySelector('[data-area="side"]')).not.toBeNull();
+  expect(host.querySelector('[data-area="cards"]')).not.toBeNull();
+  // The next call is the one Call pill, its glyph beside the words.
+  expect(host.querySelector("[data-call-lens]")?.textContent).toBe("Call now");
+  await act(async () => release());
 });
 
 // Bug report #92: Home's next follow-ups run from now, so one later today is in

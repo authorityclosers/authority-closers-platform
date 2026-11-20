@@ -48,6 +48,7 @@
         "sx.app_launch",
         "sx.app_start",
         "sx.board_drag",
+        "sx.capture_scan",
         "sx.clip_played",
         "sx.coaching_opened",
         "sx.device_profile",
@@ -63,6 +64,7 @@
         "sx.mission_completed",
         "sx.mission_started",
         "sx.network_state",
+        "sx.old_calls",
         "sx.on_demand_requested",
         "sx.outcome_set",
         "sx.paywall_clicked",
@@ -169,6 +171,7 @@
         "review",
         "settings",
         "settings_section",
+        "setup",
         "welcome"
       ]
     },
@@ -215,11 +218,14 @@
         "dead",
         "error",
         "exit",
+        "folder",
         "full",
         "preview",
+        "private",
         "rage",
         "react",
-        "rejection"
+        "rejection",
+        "unknown"
       ]
     },
     "action": {
@@ -354,6 +360,7 @@
         "blocked",
         "cancel",
         "cancelled",
+        "consent",
         "denied",
         "done",
         "fail",
@@ -361,18 +368,24 @@
         "interrupted",
         "near",
         "not_opened",
+        "notices",
+        "off",
         "opened",
+        "ran",
         "saved",
         "skip",
         "start",
         "step",
-        "unknown"
+        "unknown",
+        "workspace"
       ]
     },
     "step": {
       "type": "string",
       "max_null_rate": 1,
       "enum": [
+        "all_set",
+        "analyse",
         "autostart",
         "battery",
         "bridge_error",
@@ -399,7 +412,9 @@
         "status",
         "talk",
         "team",
-        "touch_no_call"
+        "test_call",
+        "touch_no_call",
+        "welcome"
       ]
     },
     "via": {
@@ -412,6 +427,7 @@
         "bulk",
         "business",
         "click",
+        "first_run",
         "fix",
         "join",
         "lead",
