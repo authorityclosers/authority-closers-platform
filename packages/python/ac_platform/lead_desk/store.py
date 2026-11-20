@@ -11,8 +11,9 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, Literal, NamedTuple
 from uuid import UUID, uuid4, uuid5
@@ -56,6 +57,7 @@ from ac_platform.lead_desk.contracts import (
     APP_CHANGE_UNDO_DAYS,
     DEAL_AMOUNT_MAX,
     PHONE_CHECKS,
+    REASSIGN_REASONS,
     ActivityItem,
     ActivityPage,
     AlertText,
@@ -230,6 +232,8 @@ WhyKind = Literal["due", "new", "retry", "later", "open", "closed", "waiting"]
 SELLER_ROLES = roles_with("leads.work")
 # Who sells: new leads go by themselves to sellers, never to owners (owner, 2 Nov 2026).
 SELLER_ROLE = "member"
+# Who takes new leads by default (``takes_new_leads``): sellers and sales managers.
+TAKERS = frozenset({SELLER_ROLE, "manager"})
 QUEUE_LIMIT = 30
 UPCOMING_LIMIT = 20
 PAGE_SIZE = 50
@@ -290,6 +294,8 @@ PHONE_DEVICES_KEY = "phone_devices"
 # A seller's installs kept, newest first; one not heard from in this long is left out.
 PHONE_DEVICES_KEPT = 5
 PHONE_DEVICE_STALE = timedelta(days=30)
+# Auto-reassign moves leads that came in this recently; older uncalled ones stay put.
+SWEEP_DAYS = 3
 # The calls report covers at most this many days at once.
 REPORT_DAYS = 92
 # A missed call waits on the desk this long for a call back.
@@ -313,6 +319,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "default_max_open": DEFAULT_MAX_OPEN,
     # Languages are preferred: a lead nobody free speaks still goes to someone.
     "strict_language": False,
+    # Sellers can give their own leads to a colleague, with a reason (owner, Wise Life,
+    # 19 Nov 2026: a workspace switch; owners and admins always can).
+    "sellers_reassign": False,
 }
 IST = ZoneInfo("Asia/Kolkata")
 # The pipeline board (Lead OS): cards per column per page.
@@ -794,12 +803,13 @@ def arrived_text(at: datetime, now: datetime) -> str:
 
 def takes_new_leads(role: str | None, rules: LeadRep | None) -> bool:
     """Whether the lead rules give this person new leads by themselves (owner, 2 Nov 2026:
-    leads go to sellers, not owners). A seller does unless they switched "Taking new leads"
-    off; an owner, admin or manager only once they switched it on, saying they also sell.
-    Anyone may still be given a lead by hand."""
+    leads go to sellers, not owners). A seller or a sales manager does unless they switched
+    "Taking new leads" off (owner, Wise Life, 19 Nov 2026: "only salespeople ... and the
+    sales manager"); an owner or admin only once they switched it on, saying they also
+    sell. Anyone may still be given a lead by hand."""
     if rules is not None:
         return bool(rules.available)
-    return role == SELLER_ROLE
+    return role in TAKERS
 
 
 def _strings(values: Any) -> tuple[str, ...]:
@@ -844,6 +854,9 @@ class LeadDesk:
         self._pipelines: tuple[pipelines.Pipeline, ...] | None = None
         # A bulk change's frozen selection (``leads(freeze=...)``).
         self.frozen_ids: list[UUID] = []
+        # Per routing split, the leads it gave each person, read once and kept current
+        # as this request gives more out (an import gives many).
+        self._split_given: dict[str, Counter[UUID]] | None = None
 
     # ----- shared reads --------------------------------------------------------
 
@@ -2741,8 +2754,20 @@ class LeadDesk:
                 if isinstance(value, str):
                     with contextlib.suppress(ValueError):
                         people.add(UUID(value))
-        # Who the lead may go to (managers), read first so one look-up finds every photo.
-        sellers = [rep.state for rep in await self._reps()] if self.viewer.can_manage else []
+        # Who the lead may go to (managers; a seller giving their own lead, their
+        # colleagues), read first so one look-up finds every photo.
+        can_give = await self._may_give(lead)
+        sellers = (
+            [rep.state for rep in await self._reps()]
+            if self.viewer.can_manage
+            else [
+                rep.state
+                for rep in await self._reps()
+                if rep.state.person_id != self.viewer.person_id
+            ]
+            if can_give
+            else []
+        )
         names = await self._names(people)
         photos = await person_photos.photo_urls(
             self.db, people | {seller.person_id for seller in sellers}
@@ -2839,6 +2864,7 @@ class LeadDesk:
             ),
             can_edit=can_edit,
             can_assign=self.viewer.can_manage,
+            can_give=can_give,
             reps=reps,
             call_mode=self.call_mode,
             first_call_minutes=first_call_minutes(lead.created_at, lead.first_contact_at),
@@ -4530,6 +4556,8 @@ class LeadDesk:
         actor: UUID | None = None,
         kind: str = "assigned",
         command_id: UUID | None = None,
+        split: str | None = None,
+        extra: Mapping[str, Any] | None = None,
     ) -> LeadEvent:
         previous = lead.owner_person_id
         lead.owner_person_id = person_id
@@ -4537,18 +4565,19 @@ class LeadDesk:
         lead.owner_reason = reason[:300]
         lead.revision += 1 if kind == "reassigned" else 0
         lead.updated_at = self.now
-        event = self._event(
-            lead,
-            kind,
-            {
-                "to": str(person_id) if person_id else None,
-                "from": str(previous) if previous else None,
-                "reason_text": reason[:300],
-                "rule": rule,
-            },
-            actor=actor,
-            command_id=command_id,
-        )
+        data: dict[str, Any] = {
+            "to": str(person_id) if person_id else None,
+            "from": str(previous) if previous else None,
+            "reason_text": reason[:300],
+            "rule": rule,
+        }
+        if split is not None and person_id is not None:
+            # A routing split gave it: the split counts it (routing.py).
+            data["split"] = split
+            if self._split_given is not None:
+                self._split_given.setdefault(split, Counter())[person_id] += 1
+        data.update(extra or {})
+        event = self._event(lead, kind, data, actor=actor, command_id=command_id)
         # Its open tasks go with it (work-memory engine). Last: the update below flushes
         # the lead, which must be whole by then.
         if previous != person_id:
@@ -4673,6 +4702,7 @@ class LeadDesk:
             actor=actor,
             kind=kind,
             command_id=command_id,
+            split=decision.split,
         )
         if reps is not None and decision.person_id is not None:
             # Keep the caller's load counts current inside a batch import.
@@ -5572,28 +5602,73 @@ class LeadDesk:
         )
         return False
 
+    async def _may_give(self, lead: Lead) -> bool:
+        """A seller may give this lead to a colleague: it is theirs and the workspace lets
+        sellers reassign (owner, Wise Life, 19 Nov 2026). Owners and admins move any lead."""
+        if self.viewer.can_manage or self.viewer.role not in SELLER_ROLES:
+            return False
+        if lead.owner_person_id != self.viewer.person_id:
+            return False
+        return bool((await self.settings())[1].get("sellers_reassign"))
+
+    async def _detail_after(self, lead_id: UUID, *, given: bool) -> LeadDetail:
+        """The lead after a move. A seller who just gave it away no longer has it on their
+        desk, so they read it this once as a Viewer would: nothing on it is theirs to change."""
+        if not given:
+            return await self.detail(lead_id)
+        reader = LeadDesk(
+            self.db,
+            replace(self.viewer, role="viewer"),
+            call_mode=self.call_mode,
+            sandbox=self.sandbox,
+            now=self.now,
+        )
+        return await reader.detail(lead_id)
+
     async def reassign(self, lead_id: UUID, command: Reassign) -> LeadDetail:
-        if not self.viewer.can_manage:
+        if not self.viewer.can_manage and self.viewer.role not in SELLER_ROLES:
             raise DeskError(403, "Only owners and admins move leads between people.")
         seen = await self._command_seen(command.command_id)
         if seen is not None:
-            return await self.detail(seen.lead_id)
+            return await self._detail_after(seen.lead_id, given=not self.viewer.can_manage)
         lead = await self._lead(lead_id, lock=True)
+        giving = not self.viewer.can_manage
+        if giving and not await self._may_give(lead):
+            raise DeskError(
+                403,
+                "Only owners and admins move leads between people here. They can let sellers "
+                "give their leads to a colleague in Lead rules.",
+            )
         if lead.revision != command.expected_revision:
             raise DeskError(409, "This lead changed. Check it and try again.")
+        note = " ".join((command.note or "").split()) or None
+        if giving and (command.person_id is None or command.reason is None):
+            raise DeskError(422, "Pick who takes it and say why.")
+        if command.reason == "other" and note is None:
+            raise DeskError(422, "Say why in a few words.")
         if command.person_id is not None:
             await self._require_seller(command.person_id)
             if command.person_id == lead.owner_person_id:
                 return await self.detail(lead.id)
+            why = f"{'Given' if giving else 'Moved'} by {self.viewer.name}"
+            extra: dict[str, Any] = {}
+            if command.reason is not None:
+                label = REASSIGN_REASONS[command.reason]
+                why += f": {label}" + (f" ({note})" if note else "")
+                extra = {"reason": command.reason, "note": note}
             await self._set_owner(
                 lead,
                 command.person_id,
-                f"Moved by {self.viewer.name}",
-                "manual",
+                why,
+                "given" if giving else "manual",
                 actor=self.viewer.person_id,
                 kind="reassigned",
                 command_id=command.command_id,
+                extra=extra,
             )
+            if giving:
+                await self.db.flush()
+                return await self._detail_after(lead.id, given=True)
         else:
             exclude = frozenset({lead.owner_person_id}) if lead.owner_person_id else frozenset()
             await self._allocate(
@@ -7004,6 +7079,7 @@ class LeadDesk:
                     UUID(str(person)) for person in _team_config(config).get("nudges_off_for") or ()
                 ),
                 strict_language=bool(config.get("strict_language")),
+                sellers_reassign=bool(config.get("sellers_reassign")),
             ),
             by_stage={stage: int(count) for stage, count in by_stage.items()},
             by_source={source: int(count) for source, count in by_source.items()},
@@ -7381,6 +7457,8 @@ class LeadDesk:
             config["default_max_open"] = command.default_max_open
         if command.strict_language is not None:
             config["strict_language"] = command.strict_language
+        if command.sellers_reassign is not None:
+            config["sellers_reassign"] = command.sellers_reassign
         if row is None:
             row = LeadDeskSettings(tenant_id=self.tenant_id, revision=0, config={})
             self.db.add(row)
@@ -7453,15 +7531,45 @@ class LeadDesk:
                 value_answer=config.get(routing_rules.VALUE_KEY),
             ),
             routing_rules.seats([rep.state for rep in team], exclude),
+            await self._splits_given(routing_rules.split_keys(config)),
         )
         if routed is None:
             return None
         decision, _ = routed
         if decision.person_id is not None:
-            return allocation.Allocation(decision.person_id, decision.why, "routing")
+            return allocation.Allocation(
+                decision.person_id, decision.why, "routing", split=decision.split
+            )
         if decision.passed_over:
             return allocation.Allocation(None, "; ".join(decision.passed_over), "routing")
         return None
+
+    async def _splits_given(self, keys: Sequence[str]) -> dict[str, Counter[UUID]]:
+        """How many leads each routing split gave each person so far, from the history
+        lines it marked (a split is fair over time, not per day). Read once a request."""
+        if self._split_given is None:
+            self._split_given = {}
+        missing = [key for key in keys if key not in self._split_given]
+        if missing:
+            split = LeadEvent.data["split"].as_string()
+            given_to = LeadEvent.data["to"].as_string()
+            rows = (
+                await self.db.execute(
+                    select(split, given_to, func.count())
+                    .where(
+                        LeadEvent.tenant_id == self.tenant_id,
+                        LeadEvent.kind.in_(("assigned", "reassigned")),
+                        split.in_(missing),
+                    )
+                    .group_by(split, given_to)
+                )
+            ).all()
+            for key in missing:
+                self._split_given[key] = Counter()
+            for key, person, count in rows:
+                if person:
+                    self._split_given[key][UUID(person)] += int(count)
+        return {key: self._split_given[key] for key in keys}
 
     async def routing_view(self) -> routing_rules.RoutingView:
         self._require_manager()
@@ -7524,6 +7632,7 @@ class LeadDesk:
                 value=lead.value,
             ),
             routing_rules.seats([rep.state for rep in team]),
+            await self._splits_given(routing_rules.split_keys(config)),
         )
         if routed is not None and (person := routed[0].person_id) is not None:
             decision, name = routed
@@ -7583,9 +7692,14 @@ class LeadDesk:
         return released
 
     async def sweep(self, *, limit: int = 200) -> int:
-        """Move new leads nobody called in time to someone else (when switched on)."""
+        """Move new leads nobody called in time to someone else (when switched on). With
+        work hours set, the time is work time (``work_hours.working_minutes``): a lead given
+        out at night, or on a day off, starts its clock when work starts (owner, Wise Life,
+        19 Nov 2026). Only leads that came in the last ``SWEEP_DAYS`` move: an older one
+        nobody called is a manager's backlog, not a lead to pass round every half hour."""
         _, config = await self.settings()
-        if not config["auto_reassign"] or work_hours.paused(work_hours.parse(config), self.now):
+        hours = work_hours.parse(config)
+        if not config["auto_reassign"] or work_hours.paused(hours, self.now):
             return 0
         minutes = int(config["reassign_minutes"])
         stale = (
@@ -7596,7 +7710,11 @@ class LeadDesk:
                     Lead.stage == "new",
                     Lead.attempts == 0,
                     Lead.owner_person_id.is_not(None),
+                    # Work time is never more than the time on the clock, so this finds
+                    # every lead that may be due; work time decides below.
                     Lead.assigned_at < self.now - timedelta(minutes=minutes),
+                    func.coalesce(Lead.received_at, Lead.created_at)
+                    >= self.now - timedelta(days=SWEEP_DAYS),
                     # A Cold list given to a seller is worked over days, not minutes; an old
                     # lead kept as history is not worked at all.
                     inbound_only(),
@@ -7607,10 +7725,17 @@ class LeadDesk:
                 .with_for_update(skip_locked=True)
             )
         ).all()
+        stale = [
+            lead
+            for lead in stale
+            if lead.assigned_at is not None
+            and work_hours.working_minutes(hours, lead.assigned_at, self.now) >= minutes
+        ]
         if not stale:
             return 0
         reps = await self._reps()
         moved = 0
+        late = f"No call in {minutes} {'work ' if hours is not None else ''}minutes. "
         for lead in stale:
             owner = lead.owner_person_id
             decision = await self._allocate(
@@ -7618,7 +7743,7 @@ class LeadDesk:
                 exclude=frozenset({owner}) if owner else frozenset(),
                 reps=reps,
                 kind="reassigned",
-                prefix=f"No call in {minutes} minutes. ",
+                prefix=late,
             )
             moved += decision.person_id is not None
         await self.db.flush()

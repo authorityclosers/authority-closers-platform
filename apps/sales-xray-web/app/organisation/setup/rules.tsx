@@ -89,7 +89,7 @@ function SellerRules({ mode }: { mode: "people" | "limits" }) {
         <Skeleton height={240} />
       </div>
     );
-  const save = async (auto: boolean) => {
+  const save = async (auto: boolean, giving?: boolean) => {
     if (lock.current) return;
     lock.current = true;
     setBusy(true);
@@ -97,6 +97,7 @@ function SellerRules({ mode }: { mode: "people" | "limits" }) {
       const next = await saveSettings(team.settings.revision, {
         auto_reassign: auto,
         reassign_minutes: minutes,
+        ...(giving === undefined ? {} : { sellers_reassign: giving }),
       });
       setTeam(next);
       notify({ id: "org-rules", tone: "success", title: "Lead limit saved" });
@@ -225,6 +226,31 @@ function SellerRules({ mode }: { mode: "people" | "limits" }) {
             >
               Save wait time
             </button>
+          </section>
+          {/* Sellers give their own leads to a colleague, with a reason (owner,
+              Wise Life, 19 Nov 2026); owners and admins always can. */}
+          <section className={styles.card}>
+            <div className={styles.head}>
+              <div>
+                <h3>Sellers can reassign leads</h3>
+                <p>A seller gives their lead to a colleague and says why.</p>
+              </div>
+              <button
+                className={styles.button}
+                role="switch"
+                aria-label="Sellers can reassign leads"
+                aria-checked={!!team.settings.sellers_reassign}
+                disabled={busy}
+                onClick={() =>
+                  void save(
+                    team.settings.auto_reassign,
+                    !team.settings.sellers_reassign,
+                  )
+                }
+              >
+                {team.settings.sellers_reassign ? "On" : "Off"}
+              </button>
+            </div>
           </section>
           <WorkHoursPanel team={team} onSaved={setTeam} />
           <details

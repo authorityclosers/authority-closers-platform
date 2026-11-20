@@ -263,6 +263,12 @@ export type LeadDetail = {
   events: LeadEvent[];
   can_edit: boolean;
   can_assign: boolean;
+  /**
+   * A seller may give this lead of theirs to a colleague, with a reason (the
+   * workspace's "Sellers can reassign leads"); `reps` lists who. Absent on an
+   * older server.
+   */
+  can_give?: boolean;
   reps: {
     person_id: string;
     name: string;
@@ -383,6 +389,8 @@ export type Team = {
      * preference. Absent where the server doesn't offer it yet.
      */
     strict_language?: boolean;
+    /** Sellers can give their own leads to a colleague, with a reason. */
+    sellers_reassign?: boolean;
   };
   by_stage: Record<string, number>;
   by_source: Record<string, number>;
@@ -1787,10 +1795,27 @@ export function movePipeline(
   );
 }
 
+/** Why a lead moves to someone else: a seller must say, owners and admins may. */
+export type ReassignReason =
+  | "escalation"
+  | "importance"
+  | "wrong_person"
+  | "other";
+export const REASSIGN_REASONS: readonly {
+  key: ReassignReason;
+  label: string;
+}[] = [
+  { key: "escalation", label: "Escalation" },
+  { key: "importance", label: "Important lead" },
+  { key: "wrong_person", label: "Wrong person for it" },
+  { key: "other", label: "Other" },
+];
+
 export function reassign(
   lead: Pick<LeadRow, "lead_id" | "revision">,
   personId: string | null,
   command = commandId(),
+  why?: { reason: ReassignReason; note?: string },
 ) {
   return request<LeadDetail>(
     `/leads/${encodeURIComponent(lead.lead_id)}/assign`,
@@ -1798,6 +1823,7 @@ export function reassign(
       command_id: command,
       expected_revision: lead.revision,
       person_id: personId,
+      ...(why ? { reason: why.reason, note: why.note ?? null } : {}),
     }),
   );
 }
@@ -1911,6 +1937,8 @@ export function saveSettings(
     show_full_phones?: boolean;
     /** Sent: whether languages are strict. Left out: kept. */
     strict_language?: boolean;
+    /** Sent: whether sellers may give their leads away. Left out: kept. */
+    sellers_reassign?: boolean;
   },
 ) {
   return request<Team>(

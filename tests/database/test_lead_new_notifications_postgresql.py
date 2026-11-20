@@ -81,9 +81,11 @@ def test_a_waiting_lead_rings_owners_admins_and_managers_until_taken(
             manager = await seed(setup.engine, tenant_id=tenant, role="manager")
             seller = await seed(setup.engine, tenant_id=tenant, role="member")
             now = datetime.now(UTC)
-            # The seller is not taking new leads (a seller with no rules row takes them).
+            # The seller and the manager are not taking new leads (with no rules row, both
+            # take them: managers take leads by default, owner, 19 Nov 2026).
             async with setup.sessions() as db, db.begin():
                 db.add(_rep(tenant, seller.person_id, available=False))
+                db.add(_rep(tenant, manager.person_id, available=False))
             system = Viewer(person_id=uuid4(), tenant_id=tenant, role="member", name="")
             owner = Viewer(
                 person_id=setup.state.person_id, tenant_id=tenant, role="owner", name="O"
@@ -204,6 +206,7 @@ def test_a_lead_the_rules_gave_rings_owners_and_admins_who_keep_new_enquiry_on(
             now = datetime.now(UTC)
             async with setup.sessions() as db, db.begin():
                 db.add(_rep(tenant, seller.person_id))
+                db.add(_rep(tenant, manager.person_id, available=False))  # only the seller takes it
                 db.add(
                     LeadDeskSettings(
                         tenant_id=tenant,

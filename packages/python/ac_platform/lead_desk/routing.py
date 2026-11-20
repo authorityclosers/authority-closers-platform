@@ -2,9 +2,15 @@
 (docs/product/lead-desk/routing-and-patterns.md, section 2). Pure: no database and no clock.
 
 A rule is: **when** all its conditions hold, **give to** one person or a group (round-robin
-inside it), **within** caps. Rules are tried top to bottom and the first that can give the lead
-out does. A rule whose people are all away or at their cap is passed over, and the reason says
-so; a lead no rule takes goes by the lead rules as before (``allocation``).
+inside it, or split by percent), **within** caps. Rules are tried top to bottom and the first
+that can give the lead out does. A rule whose people are all away or at their cap is passed
+over, and the reason says so; a lead no rule takes goes by the lead rules as before
+(``allocation``).
+
+A split rule (owner, Wise Life, 19 Nov 2026: "Dheeraj 20%, Aniket 40%, Sachin 40%") gives each
+person a share. The next lead goes to whoever is furthest behind their share, counted over every
+lead the rule has given out (``given``), so ten leads go 2/4/4 and the split holds over time.
+Someone away or at their cap is skipped and catches up once back; a share of 0 never gets one.
 
 Value conditions read the lead's band with care: "at least X" needs its low to be X or more,
 "below X" needs its high to be under X, "between" needs both inside. A lead with no value never
@@ -16,6 +22,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+from fractions import Fraction
 from typing import Literal
 from uuid import UUID
 
@@ -118,6 +125,12 @@ class Rule:
     conditions: tuple[Condition, ...]
     # One person, or a group taking turns in this order.
     people: tuple[UUID, ...]
+    # A split by percent: one share per person, in ``people``'s order; () takes turns.
+    shares: tuple[int, ...] = ()
+    # The saved rule's id, which the split counts its leads by.
+    key: str | None = None
+    # For every new lead, with no conditions (a split of all leads).
+    every: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,15 +155,41 @@ class Decision:
     rule: int | None
     why: str
     passed_over: tuple[str, ...] = ()
+    # The split rule's key when a split gave it out: its history line counts for the split.
+    split: str | None = None
 
 
 def matches(rule: Rule, facts: LeadFacts) -> bool:
+    """A rule for every new lead always matches; any other needs all its conditions, and
+    one with none never matches."""
+    if rule.every:
+        return True
     return bool(rule.conditions) and all(item.holds(facts) for item in rule.conditions)
 
 
-def _turn(rule: Rule, seats: Mapping[UUID, Seat]) -> Seat | None:
-    """The person in the rule whose turn it is: with room, given a lead longest ago."""
+def _turn(rule: Rule, seats: Mapping[UUID, Seat], given: Mapping[UUID, int]) -> Seat | None:
+    """The person in the rule whose turn it is: with room, given a lead longest ago; in a
+    split, the one furthest behind their share."""
     order = {person: index for index, person in enumerate(rule.people)}
+    if rule.shares:
+        share = dict(zip(rule.people, rule.shares, strict=False))
+        ready = [
+            seats[person]
+            for person in rule.people
+            if person in seats and seats[person].has_room and share.get(person, 0) > 0
+        ]
+        if not ready:
+            return None
+        # Furthest behind: the fewest leads per share after this one, then the bigger share,
+        # then the rule's order. Exact (no floats): compare (given + 1) / share as a fraction.
+        return min(
+            ready,
+            key=lambda seat: (
+                Fraction(given.get(seat.person_id, 0) + 1, share[seat.person_id]),
+                -share[seat.person_id],
+                order[seat.person_id],
+            ),
+        )
     ready = [seats[person] for person in rule.people if person in seats and seats[person].has_room]
     if not ready:
         return None
@@ -165,20 +204,32 @@ def _turn(rule: Rule, seats: Mapping[UUID, Seat]) -> Seat | None:
     )
 
 
-def decide(facts: LeadFacts, rules: Sequence[Rule], seats: Sequence[Seat]) -> Decision:
+def decide(
+    facts: LeadFacts,
+    rules: Sequence[Rule],
+    seats: Sequence[Seat],
+    given: Mapping[str, Mapping[UUID, int]] | None = None,
+) -> Decision:
+    """``given``: per split rule's key, how many leads it has given each person so far."""
     by_person = {seat.person_id: seat for seat in seats}
     passed: list[str] = []
     for number, rule in enumerate(rules, start=1):
         if not matches(rule, facts):
             continue
-        reason = "; ".join(item.words(facts) for item in rule.conditions)
-        seat = _turn(rule, by_person)
+        reason = "; ".join(item.words(facts) for item in rule.conditions) or "Every new lead"
+        seat = _turn(rule, by_person, (given or {}).get(rule.key or "", {}))
         if seat is None:
             names = [by_person[p].name for p in rule.people if p in by_person] or ["nobody"]
             passed.append(f"Rule {number}: {', '.join(names)} away or at their limit")
             continue
+        share = dict(zip(rule.people, rule.shares, strict=False)).get(seat.person_id)
+        who = f"{seat.name}, {share}% share" if share else seat.name
         return Decision(
-            seat.person_id, number, f"{reason}: {seat.name} (rule {number})", tuple(passed)
+            seat.person_id,
+            number,
+            f"{reason}: {who} (rule {number})",
+            tuple(passed),
+            split=rule.key if rule.shares else None,
         )
     if passed:
         return Decision(None, None, f"{passed[-1]}, given by the lead rules", tuple(passed))
