@@ -115,6 +115,15 @@ import {
   type DoneFigure,
 } from "./smart-home";
 import { talkOrDash } from "./talk-time";
+import {
+  arrivedAt,
+  clockDay,
+  fresh,
+  LONG_WAIT_MINUTES,
+  noteBeside,
+  waited,
+  waitingMinutes,
+} from "./queue-words";
 
 /** Which lead types this seller works: GET /sides (Leads session, 31 Oct). */
 type SidesAccess = { inbound: boolean; cold: boolean };
@@ -472,7 +481,7 @@ export function SideBlock({
 /** The selector's place while this device has never seen which sides the
  *  seller works: its own track at its own size, without its words, so Today
  *  draws at once and the selector arrives where it waited. */
-function SideWait({ side }: { side: Side }) {
+export function SideWait({ side }: { side: Side }) {
   return (
     <div className={styles.sideWait} aria-hidden="true" inert>
       <SideSelector value={side} onChange={() => {}} tone="home" />
@@ -787,6 +796,18 @@ export function NextCall({
                 (cold && lead.why === "New lead" ? "Unworked" : lead.why)
               }
             />
+            {/* How long a new lead has waited (board 2, option C: speed to
+                lead in plain numbers, on the card that calls it). */}
+            {fresh(lead) ? (
+              <p
+                className={styles.nextWait}
+                data-warn={
+                  waitingMinutes(lead) >= LONG_WAIT_MINUTES || undefined
+                }
+              >
+                {`Came in ${clockDay(arrivedAt(lead))} · waiting ${waited(waitingMinutes(lead))}`}
+              </p>
+            ) : null}
             <CallLens
               href={callTo}
               onClick={(event) => {
@@ -1437,7 +1458,9 @@ export function TodaysList({
               href={`/leads?lead=${lead.lead_id}`}
             >{`Call back ${name}`}</Link>
           }
-          extra={lead.next_action_note || null}
+          // The note only when it says more than "Call back <name>" (board 2:
+          // every follow-up line read twice).
+          extra={noteBeside(lead.next_action_note, lead.name)}
         />
       </SwipeRow>
     );

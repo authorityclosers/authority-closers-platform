@@ -19,6 +19,11 @@
  *   was done (Analyse yourself, then recent calls with Activity beside them,
  *   three each); the longest breaks last.
  *
+ * Round 2 (owner, 20 Nov 2026, "build them"): a seller's Home is the work
+ * queue with the lead picked from it and a Today column (home-queue.tsx,
+ * board 2 option C); the team's Home is Team today (team-today.tsx, board 6
+ * option A), counted as Growth counts.
+ *
  * Only real numbers: nothing here is estimated or invented.
  */
 
@@ -35,10 +40,12 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import type { LibrarySubmission } from "../acquisition-client";
 import { can } from "../organisation/roles";
 import { FirstRun } from "./first-run";
-import { MyTasks, SellerBlocks, useSidesAccess } from "./seller-home";
+import { useSidesAccess } from "./seller-home";
+import { QueueHome } from "./home-queue";
+import { TeamToday } from "./team-today";
 import type { Side } from "../ui/side-selector";
 import { SetupStart } from "./home-v2";
-import { TeamFloor, type StageKeys } from "./team-floor";
+import type { StageKeys } from "./team-floor";
 import {
   HomeLoadWatch,
   retryHome,
@@ -49,50 +56,11 @@ import {
 import { PullMark, usePullToRefresh } from "../shell/pull-refresh";
 import { RevenueBar } from "./revenue-bar";
 import { TeamControls } from "./team-controls";
-import {
-  readDesk,
-  readPerformance,
-  readTeam,
-  type Desk,
-  type Period,
-} from "../leads/leads-client";
+import { readDesk, readTeam, type Desk } from "../leads/leads-client";
 import { InCorner } from "../notice-center";
 import { ScopeRow } from "./scope-row";
-import { OutcomeTiles, TILE_SETS } from "./outcome-tiles";
 import type { HomeDesk } from "./my-day-client";
 import styles from "./sales-home.module.css";
-
-const PERIOD_EVENT = "sx:home-period";
-
-const readPeriod = (): Period => {
-  const asked = Number(
-    new URLSearchParams(window.location.search).get("period"),
-  );
-  return asked === 1 || asked === 30 ? asked : 7;
-};
-
-const onPeriod = (change: () => void) => {
-  window.addEventListener("popstate", change);
-  window.addEventListener(PERIOD_EVENT, change);
-  return () => {
-    window.removeEventListener("popstate", change);
-    window.removeEventListener(PERIOD_EVENT, change);
-  };
-};
-
-/** Today, 7 or 30 days: kept in the address, so a refresh keeps it. */
-function usePeriod(): [Period, (next: Period) => void] {
-  const period = useSyncExternalStore<Period>(onPeriod, readPeriod, () => 7);
-  return [
-    period,
-    (next) => {
-      const url = new URL(window.location.href);
-      url.searchParams.set("period", String(next));
-      window.history.replaceState(null, "", url.pathname + url.search);
-      window.dispatchEvent(new Event(PERIOD_EVENT));
-    },
-  ];
-}
 
 /** The desk, read once (and again on Retry); the last good one if a read fails. */
 function useDesk():
@@ -138,17 +106,6 @@ function stagesOf(desk: ReturnType<typeof useDesk>): StageKeys | undefined {
     : { newKey: "new", openKey: "open_leads" };
 }
 
-/** The period's report for the team, with the period kept in the address. */
-function usePerformance() {
-  const [period, setPeriod] = usePeriod();
-  const { value, failed } = useHomeRead(`performance:${period}`, (signal) =>
-    readPerformance(period, signal),
-  );
-  return { period, setPeriod, shown: value, failed: failed && !value };
-}
-
-/** The team's Home: the floor, on the side the address names; the
- *  owner's own tasks beside it when they work leads. */
 /** The ways on from the team's Home (owner's chosen lower Home, 08, 14 Nov
  *  2026): Performance, the team, call reports, each its tinted icon. */
 export function TeamMore({ sellers }: { sellers: number }) {
@@ -211,39 +168,21 @@ export function TeamMore({ sellers }: { sellers: number }) {
   );
 }
 
+/** The team's Home (round 2, board 6, option A, 20 Nov 2026): Team today,
+ *  insights first, then today's figures and one row per seller, counted as
+ *  Growth counts them; Team controls in its header for those who manage. */
 function TeamHome({
   manages,
-  mine,
-  me,
   stages,
 }: {
   manages: boolean;
-  mine: HomeDesk | null;
-  me: string | null;
   stages: StageKeys | undefined;
 }) {
-  const { period, setPeriod, shown, failed } = usePerformance();
-  const [side, setSide] = useHomeSide();
-  const sellers = shown?.sellers.length ?? 0;
   return (
-    <TeamFloor
-      side={side}
-      onSide={setSide}
-      controls={manages ? <TeamControls /> : null}
-      mine={mine ? <MyTasks desk={mine} side={side} /> : null}
-      me={me}
+    <TeamToday
       stages={stages}
-      outcomes={
-        <OutcomeTiles
-          period={period}
-          onPeriod={setPeriod}
-          performance={shown}
-          failed={failed}
-          tiles={TILE_SETS.outcomes}
-          layout="grid"
-        />
-      }
-      more={<TeamMore sellers={sellers} />}
+      controls={manages ? <TeamControls /> : null}
+      more={(sellers) => <TeamMore sellers={sellers} />}
     />
   );
 }
@@ -318,7 +257,7 @@ function SellerHome({
   // from the kept answer.
   const status = access ? state.status : "loading";
   return (
-    <SellerBlocks
+    <QueueHome
       desk={
         access && state.status === "ready" ? (state.desk as HomeDesk) : null
       }
@@ -511,12 +450,7 @@ export function SalesHome({
         data-still={switched ? undefined : ""}
       >
         {shown === "team" ? (
-          <TeamHome
-            manages={manages}
-            mine={works && desk.status === "ready" ? desk.desk : null}
-            me={desk.status === "ready" ? desk.desk.me.person_id : null}
-            stages={stagesOf(desk)}
-          />
+          <TeamHome manages={manages} stages={stagesOf(desk)} />
         ) : (
           <SellerHome state={desk} onDrawn={onDrawn} />
         )}
