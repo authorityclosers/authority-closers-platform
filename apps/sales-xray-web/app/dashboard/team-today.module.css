@@ -448,3 +448,21 @@
     display: none;
   }
 }
+
+/* On a computer the day's numbers never break mid-figure (owner, 20 Nov 2026,
+   sx-desktop board: at 1280 the seven tiles wrapped six and one, and "7 h 30
+   min" broke over two lines): four a row in a page up to 1399 px wide, all in
+   one row from 1400 px (a 1920 window). Phones keep their three. */
+@media (min-width: 1024px) {
+  @container team-today (min-width: 720px) {
+    .kpis {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  @container team-today (min-width: 1400px) {
+    .kpis {
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    }
+  }
+}
