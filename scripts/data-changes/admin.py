@@ -187,6 +187,8 @@ LEAD_RULES = (
     "pause_leads",
     "sellers_reassign",
 )
+# The lead-rules options that are not None when not given.
+NOT_ON_OFF = ("split", "no_split")
 SPLIT_ID = "admin-split"
 DAY_KEYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 MAX_NAME = 200
@@ -411,7 +413,11 @@ def _writes(args: argparse.Namespace) -> bool:
     if _key(args) == ("workspaces", "switches"):
         return any(getattr(args, switch) is not None for switch in SWITCHES)
     if _key(args) == ("workspaces", "lead-rules"):
-        return any(getattr(args, name) not in (None, False, []) for name in LEAD_RULES)
+        # An on/off option given as "off" is False, still a change (reassign-fix, 20 Nov
+        # 2026: "--auto-reassign off" only read); --no-split counts when set.
+        return bool(args.split or args.no_split) or any(
+            getattr(args, name) is not None for name in LEAD_RULES if name not in NOT_ON_OFF
+        )
     if _key(args) == ("ask-dipak", "videos"):
         return args.state is not None
     return _key(args) not in READS
