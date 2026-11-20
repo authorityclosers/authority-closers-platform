@@ -173,6 +173,7 @@
    "text-spill | aside.chats__listPane > ul.chats__listBody > li > button.chats__row"
   ],
   "chats | plain | 360 light 100%": [
+   "overlap | button.chats__row > span.chats__chatAvatar > span.chats__channelMark > span.report-entities__monogram > ⟂ > li > button.",
    "clipped-text | button.chats__row > span.chats__rowMain > span.chats__rowText > span",
    "contrast | button.chats__row > span.chats__chatAvatar > span.chats__channelMark > span.report-entities__monogram",
    "contrast | span.chats__rowMeta > span.chats__channelTag > span.chats__channelMark > span.report-entities__monogram"
