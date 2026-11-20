@@ -125,6 +125,7 @@
 }
 
 .chip {
+  position: relative;
   display: inline-flex;
   flex: none;
   box-sizing: border-box;
@@ -144,6 +145,12 @@
   transition:
     background-color var(--lx-dur-quick) var(--lx-ease-quick),
     color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.chip::before {
+  position: absolute;
+  inset: -7px 0;
+  content: "";
 }
 
 .chip:hover {
@@ -1763,7 +1770,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 14px 6px;
 }
 
 .iconChip {
