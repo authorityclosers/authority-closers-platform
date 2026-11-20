@@ -7,11 +7,13 @@
  * kit is extended, never redrawn.
  *
  * Every picture here was rendered from the kit's own rig (pb03-formats/src/characters, unchanged): the stills
- * are its busts at rest (idle motion off, as on the model sheet) inside each character's kit backdrop circle;
- * the loops are its frames (breathing, blinks, the nod) played forward then back so they have no seam, 240 px,
- * no sound, about 20 KB each. With reduced motion, or until a loop is near the screen, the still shows.
+ * are its busts at rest (idle motion off, as on the model sheet) inside each character's kit backdrop circle.
+ *
+ * No idle loops ship (owner, 19 Nov 2026 23:36 IST: "the videos are not approved for Ask Dipak, so make sure they
+ * won't go live on the app in the next update"). The hook and the payoff show their still pose, the same picture
+ * reduced motion showed. A loop may come back only through the server's Ask Dipak video switch
+ * (GET /v1/sales-xray/ask-dipak/videos, OFF by default), never as a file in public/.
  */
-import { useEffect, useRef, useState, type RefObject } from "react";
 
 import styles from "./characters.module.css";
 
@@ -35,18 +37,13 @@ export const CHARACTER_NAME = {
   rohit: "Rohit, the customer",
 } as const;
 
-/** The two loops: the hook (Rohit, sceptical) and the payoff (Aman, confident, nodding). */
+/** The hook's pose (Rohit, sceptical) and the payoff's (Aman, confident). Stills only: no loop is approved. */
 export const CHARACTER_LOOP = {
-  hook: { still: "rohit-sceptical", name: "rohit-sceptical-loop" },
-  payoff: { still: "aman-confident", name: "aman-confident-loop" },
-} as const satisfies Record<
-  string,
-  { still: CharacterStillName; name: string }
->;
+  hook: { still: "rohit-sceptical" },
+  payoff: { still: "aman-confident" },
+} as const satisfies Record<string, { still: CharacterStillName }>;
 
 export const stillSrc = (name: CharacterStillName) => `${BASE}/${name}.svg`;
-const loopSrc = (name: string, type: "webm" | "mp4") =>
-  `${BASE}/${name}.${type}`;
 
 const whoOf = (name: CharacterStillName) =>
   name.startsWith("aman") ? CHARACTER_NAME.aman : CHARACTER_NAME.rohit;
@@ -78,41 +75,7 @@ export function CharacterStill({
   );
 }
 
-function useReducedMotion() {
-  const [reduced, setReduced] = useState(true);
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => setReduced(query.matches);
-    update();
-    query.addEventListener?.("change", update);
-    return () => query.removeEventListener?.("change", update);
-  }, []);
-  return reduced;
-}
-
-/** Near the screen yet? Loops load only then (and never without IntersectionObserver). */
-function useNear(ref: RefObject<HTMLElement | null>) {
-  const [near, setNear] = useState(false);
-  useEffect(() => {
-    const node = ref.current;
-    if (!node || typeof IntersectionObserver === "undefined") return;
-    const watch = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setNear(true);
-          watch.disconnect();
-        }
-      },
-      { rootMargin: "200px" },
-    );
-    watch.observe(node);
-    return () => watch.disconnect();
-  }, [ref]);
-  return near;
-}
-
-/** The hook's or the payoff's short loop: muted, looping, inline; the still first and with reduced motion. */
+/** The hook's or the payoff's character: its still pose (no video, no loop request). */
 export function CharacterLoop({
   loop,
   size = 64,
@@ -122,48 +85,25 @@ export function CharacterLoop({
   size?: number;
   className?: string;
 }) {
-  const { still, name } = CHARACTER_LOOP[loop];
-  const frame = useRef<HTMLSpanElement | null>(null);
-  const reduced = useReducedMotion();
-  const near = useNear(frame);
+  const { still } = CHARACTER_LOOP[loop];
   return (
     <span
-      ref={frame}
       className={className ? `${styles.loop} ${className}` : styles.loop}
       style={{ width: size, height: size }}
       role="img"
       aria-label={whoOf(still)}
       data-character-loop={loop}
     >
-      {near && !reduced ? (
-        <video
-          className={styles.media}
-          width={size}
-          height={size}
-          poster={stillSrc(still)}
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="metadata"
-          disablePictureInPicture
-          aria-hidden="true"
-        >
-          <source src={loopSrc(name, "webm")} type="video/webm" />
-          <source src={loopSrc(name, "mp4")} type="video/mp4" />
-        </video>
-      ) : (
-        // eslint-disable-next-line @next/next/no-img-element -- the kit's rendered character, an SVG file as it is
-        <img
-          className={styles.media}
-          src={stillSrc(still)}
-          width={size}
-          height={size}
-          alt=""
-          aria-hidden="true"
-          decoding="async"
-        />
-      )}
+      {/* eslint-disable-next-line @next/next/no-img-element -- the kit's rendered character, an SVG file as it is */}
+      <img
+        className={styles.media}
+        src={stillSrc(still)}
+        width={size}
+        height={size}
+        alt=""
+        aria-hidden="true"
+        decoding="async"
+      />
     </span>
   );
 }

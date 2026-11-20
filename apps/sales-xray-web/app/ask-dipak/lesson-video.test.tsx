@@ -162,11 +162,10 @@ describe("no lesson video ships in the app's build", () => {
       shipped.filter((path) => path.startsWith("media/ask-dipak/lessons")),
     ).toEqual([]);
     expect(shipped.filter((path) => /-lesson/.test(path))).toEqual([]);
-    // The only videos left are the characters' short idle loops.
-    expect(shipped.filter((path) => path.endsWith(".mp4")).sort()).toEqual([
-      "media/ask-dipak/characters/aman-confident-loop.mp4",
-      "media/ask-dipak/characters/rohit-sceptical-loop.mp4",
-    ]);
+    // No video of any kind: the characters' idle loops are not approved either (19 Nov 2026).
+    expect(shipped.filter((path) => /\.(mp4|webm|mov)$/i.test(path))).toEqual(
+      [],
+    );
   });
 
   it("the dev workbench's copies stay out of git and so out of every build", () => {
