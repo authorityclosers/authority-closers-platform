@@ -41,7 +41,7 @@ it("adds Team for an organisation, with every hub section by role", () => {
     [
       "Team",
       [
-        ["Overview"],
+        ["Settings"],
         ["Team"],
         ["Analytics"],
         ["Insights"],
@@ -56,14 +56,15 @@ it("adds Team for an organisation, with every hub section by role", () => {
   ]);
   const team = owner[2].pages;
   expect(team.map((page) => [page.href, page.hubTab ?? null])).toEqual([
-    ["/organisation", "overview"],
-    ["/organisation?tab=team", "team"],
+    // Round-2 board 7 (20 Nov 2026): the setup areas open their Settings sections.
+    ["/settings", "overview"],
+    ["/settings/team", null],
     ["/organisation?tab=analytics", "analytics"],
     ["/organisation/insights", null],
-    ["/organisation?tab=leads", "leads"],
-    ["/organisation?tab=connections", "connections"],
-    ["/organisation?tab=call-ai", "call-ai"],
-    ["/organisation?tab=company", "company"],
+    ["/settings/lead-rules", null],
+    ["/settings/apps", null],
+    ["/settings/call-ai", null],
+    ["/settings/organisation", null],
     ["/settings/plan", null],
   ]);
   expect(team[0].name).toBe("Organisation overview");
@@ -74,7 +75,7 @@ it("adds Team for an organisation, with every hub section by role", () => {
     manager: false,
   });
   expect(seller[2].pages.map((page) => page.label)).toEqual([
-    "Overview",
+    "Settings",
     "Team",
     "Analytics",
     "Company",
@@ -87,7 +88,7 @@ it("adds Team for an organisation, with every hub section by role", () => {
     manages: false,
   });
   expect(viewer[2].pages.map((page) => page.label)).toEqual([
-    "Overview",
+    "Settings",
     "Team",
     "Analytics",
     "Insights",

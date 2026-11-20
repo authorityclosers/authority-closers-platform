@@ -3,6 +3,10 @@
  * sidebar's Team panel (orchestrator, 26 Oct 2026: "the same section list
  * everywhere, in the same order"). A module of its own, so the sidebar
  * doesn't load the hub to list them.
+ *
+ * Round-2 board 7 (20 Nov 2026): the organisation's settings live in one
+ * Settings again, so every setup area opens its Settings section; only
+ * Analytics (and Insights, its own page) stay with the hub.
  */
 
 import {
@@ -34,15 +38,17 @@ export type HubTab = {
 export const HUB_TABS: readonly HubTab[] = [
   {
     id: "overview",
-    label: "Overview",
-    note: "Everything your organisation can set and see",
+    label: "Settings",
+    note: "Everything your organisation can set, in one place",
     icon: LayoutGrid,
+    href: "/settings",
   },
   {
     id: "team",
     label: "Team",
     note: "Members, invites and who can do what",
     icon: UsersRound,
+    href: "/settings/team",
   },
   {
     id: "analytics",
@@ -63,6 +69,7 @@ export const HUB_TABS: readonly HubTab[] = [
     label: "Leads setup",
     note: "Who gets new leads, your stages and where leads come from",
     icon: Route,
+    href: "/settings/lead-rules",
     managers: true,
   },
   {
@@ -70,6 +77,7 @@ export const HUB_TABS: readonly HubTab[] = [
     label: "Connections",
     note: "Lead ads, WhatsApp and Instagram, AI replies, API keys, Pulse",
     icon: Plug,
+    href: "/settings/apps",
     managers: true,
   },
   {
@@ -77,6 +85,7 @@ export const HUB_TABS: readonly HubTab[] = [
     label: "AI on calls",
     note: "How much AI reads each seller's recorded calls",
     icon: Sparkles,
+    href: "/settings/call-ai",
     managers: true,
   },
   {
@@ -84,6 +93,7 @@ export const HUB_TABS: readonly HubTab[] = [
     label: "Company",
     note: "Name, logo, details and your email domains",
     icon: Building2,
+    href: "/settings/organisation",
   },
   {
     id: "plan",

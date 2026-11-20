@@ -494,7 +494,8 @@ it("puts your settings, and an organisation's for its managers, in You", async (
     "/settings/selling",
     "/settings/notifications",
   ]);
-  expect(manager.theirs).toEqual(["/organisation", "/organisation?tab=team"]);
+  // One Settings for the organisation (round-2 board 7, 20 Nov 2026).
+  expect(manager.theirs).toEqual(["/settings", "/settings/team"]);
   await act(async () => root.unmount());
   host.remove();
   const seller = await rows({ organisation: true, insights: false });

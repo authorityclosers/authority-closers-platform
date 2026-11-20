@@ -19,12 +19,11 @@ import { refreshAppData } from "../shell/refresh-app";
 import { ANDROID_APK_URL } from "../apps/release";
 import { CallAiSettingsSection } from "../call-ai/call-ai-settings";
 import { AlertsCard } from "../leads/alerts-card";
-import {
-  LeadRulesPane,
-  LeadSourcesPane,
-  LeadStagesPane,
-} from "../leads/settings-panes";
+import { CaptureSetupPanel } from "../organisation/capture-setup-panel";
 import { OrganisationView } from "../organisation/organisation-view";
+import { OrganisationRules } from "../organisation/setup/rules";
+import { OrganisationSources } from "../organisation/setup/sources";
+import { OrganisationStages } from "../organisation/setup/stages";
 import { PulsePanel } from "../organisation/pulse/pulse-panel";
 import { BILLING_WITH_OWNER, useApkLinksAllowed } from "../purchase-policy";
 import { Panel } from "../ui/kit";
@@ -38,6 +37,7 @@ import { PhoneSetupPanel, VibrationPanel } from "./phone-panel";
 import { PrivacySettings } from "./privacy";
 import { ProfileDetailsPanel } from "./profile-details";
 import { SellingSettings } from "./selling";
+import { MySounds, TeamSounds } from "./sounds";
 import type { SettingsSectionId } from "./settings-sections";
 import { useCanHere } from "../workspace-role";
 import styles from "./sections.module.css";
@@ -196,6 +196,10 @@ export function SettingsSectionView({
       return <AnalysisTimeSection />;
     case "privacy":
       return <PrivacySettings />;
+    case "sounds":
+      return <MySounds />;
+    case "team-sounds":
+      return <TeamSounds />;
     case "help":
       return <AccountSettings only={["help"]} />;
     case "organisation":
@@ -206,12 +210,17 @@ export function SettingsSectionView({
       return (
         <OrganisationView embedded headless={headless} sections={["members"]} />
       );
+    // The Leads setup the Organisation hub had, in Settings again (round-2
+    // board 7, 20 Nov 2026): each part its own section, so no row of tabs.
     case "lead-rules":
-      return <LeadRulesPane />;
+      return <OrganisationRules />;
     case "stages":
-      return <LeadStagesPane />;
+      // The section's title names it: no second one (owner, bug 192).
+      return <OrganisationStages bare />;
     case "sources":
-      return <LeadSourcesPane />;
+      return <OrganisationSources />;
+    case "phones":
+      return <CaptureSetupPanel />;
     case "call-ai":
       return <CallAiSettingsSection />;
     case "apps":

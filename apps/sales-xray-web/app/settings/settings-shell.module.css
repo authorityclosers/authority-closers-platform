@@ -22,15 +22,43 @@
 }
 
 .navTitle {
-  margin: 0 0 2px 10px;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 0 0 2px;
+  padding: 0 10px;
+  border-radius: var(--sx-radius-sm);
+  text-decoration: none;
   color: var(--sx-ink);
   font-size: var(--sx-text-title);
   font-weight: 750;
   letter-spacing: -0.01em;
 }
 
-.group h2 {
+.navTitle[aria-current="page"] {
+  background: var(--sx-accent-soft);
+}
+
+/* A group's name, with who it affects on the overview (round-2 board 7). */
+.groupHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
   margin: 0 0 4px 10px;
+}
+
+.group[data-variant="list"] .groupHead {
+  margin: 0 0 8px;
+}
+
+.group[data-variant="list"] h2 {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+}
+
+.group h2 {
+  margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
   font-weight: 700;
@@ -186,6 +214,31 @@
   text-decoration: none;
 }
 
+/* Who the open section affects, under its line. */
+.scope {
+  display: flex;
+  margin-top: 6px;
+}
+
+.titleRow > .header > .scope {
+  grid-column: 2;
+}
+
+/* The overview: the groups as cards, each with its sections. */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  align-items: start;
+  gap: 18px 16px;
+}
+
+.cards > .group {
+  padding: 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
 /* The overview: every section as a card. */
 .overview {
   display: grid;
@@ -193,8 +246,20 @@
 }
 
 .overview .group ul {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
-  gap: 8px;
+  gap: 2px;
+}
+
+/* Inside its group's card a section is a plain row, not a card of its own. */
+.cards .item[data-variant="list"] {
+  min-height: 52px;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+}
+
+.cards .item[data-variant="list"]:hover,
+.cards .item[data-variant="list"]:focus-visible {
+  background: var(--sx-sunken);
 }
 
 .overviewHead h1 {
@@ -285,7 +350,7 @@
     display: inline-flex;
   }
 
-  .overview .group ul {
+  .cards {
     grid-template-columns: minmax(0, 1fr);
   }
 }

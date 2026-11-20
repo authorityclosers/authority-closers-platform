@@ -1,4 +1,4 @@
-import { act, useEffect } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
@@ -10,12 +10,15 @@ import { OrganisationHub } from "./org-hub";
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-const sourceMounted = vi.hoisted(() => vi.fn());
+const replace = vi.hoisted(() => vi.fn());
 let query = "";
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(query),
   usePathname: () => "/organisation",
-  useRouter: () => null,
+  useRouter: () => ({ replace }),
+}));
+vi.mock("../settings/settings-shell", () => ({
+  SettingsOverview: () => <div data-settings-overview="" />,
 }));
 vi.mock("../acquisition-shell", () => ({
   AcquisitionShell: ({ children }: { children: React.ReactNode }) => (
@@ -30,20 +33,6 @@ vi.mock("../settings/sections", () => ({
     id: string;
     headless?: boolean;
   }) => <div data-section={id} data-headless={headless ? "" : undefined} />,
-}));
-vi.mock("./setup/stages", () => ({
-  OrganisationStages: () => <div data-section="stages" />,
-}));
-vi.mock("./setup/rules", () => ({
-  OrganisationRules: () => <div data-section="lead-rules" />,
-}));
-vi.mock("./setup/sources", () => ({
-  OrganisationSources: () => {
-    useEffect(() => {
-      sourceMounted();
-    }, []);
-    return <div data-section="sources" />;
-  },
 }));
 vi.mock("./analytics-view", () => ({
   AnalyticsView: ({ team }: { team: boolean }) => (
@@ -78,12 +67,15 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   query = "";
+  replace.mockReset();
+  window.history.replaceState(null, "", "/");
 });
 
 const render = async (
   role: "owner" | "admin" | "manager" | "member" | "viewer",
   kind: "organisation" | "personal" = "organisation",
   tenant = TENANT,
+  base?: string,
 ) => {
   await act(async () =>
     root.render(
@@ -104,7 +96,7 @@ const render = async (
           retry: () => {},
         }}
       >
-        <OrganisationHub />
+        <OrganisationHub base={base} />
       </WorkspaceAccessContext.Provider>,
     ),
   );
@@ -117,235 +109,93 @@ const tabs = () =>
     ),
   ].map((link) => [link.textContent, link.getAttribute("href")]);
 
-// Owner, 23 Oct 2026: "if organisation is clicked there should be clearly
-// visible all management options like team, analytics, insights".
-it("shows owners every area as a tab, and lists them on Overview", async () => {
+// Round-2 board 7 (20 Nov 2026): the organisation's settings are one Settings
+// again, so the hub's tabs open their Settings sections; Analytics stays here.
+it("lists every area, the setup ones as their Settings sections", async () => {
+  query = "tab=analytics";
   await render("owner");
   expect(host.querySelector("h1")?.textContent).toBe("Fictional Homes");
   expect(tabs()).toEqual([
-    ["Overview", "/organisation"],
-    ["Team", "/organisation?tab=team"],
+    ["Settings", "/settings"],
+    ["Team", "/settings/team"],
     ["Analytics", "/organisation?tab=analytics"],
     ["Insights", "/organisation/insights"],
-    ["Leads setup", "/organisation?tab=leads"],
-    ["Connections", "/organisation?tab=connections"],
-    ["AI on calls", "/organisation?tab=call-ai"],
-    ["Company", "/organisation?tab=company"],
+    ["Leads setup", "/settings/lead-rules"],
+    ["Connections", "/settings/apps"],
+    ["AI on calls", "/settings/call-ai"],
+    ["Company", "/settings/organisation"],
     ["Plan & billing", "/settings/plan"],
   ]);
-  const listed = [
-    ...host.querySelectorAll<HTMLAnchorElement>(
-      'ul[aria-label="Organisation"] a',
-    ),
-  ].map((link) => link.getAttribute("href"));
-  expect(listed).toHaveLength(8);
-  expect(listed[0]).toBe("/organisation?tab=team");
   expect(
     host.querySelector('nav[aria-label="Organisation"] a[aria-current="page"]')
       ?.textContent,
-  ).toBe("Overview");
+  ).toBe("Analytics");
+  expect(replace).not.toHaveBeenCalled();
 });
 
-it("shows members the team, the numbers and the company only", async () => {
+it("shows each role only its areas", async () => {
+  query = "tab=analytics";
   await render("member");
   expect(tabs().map(([label]) => label)).toEqual([
-    "Overview",
+    "Settings",
     "Team",
     "Analytics",
     "Company",
   ]);
-});
-
-// Roles B (27 Oct 2026): a Viewer reads the team, and changes nothing.
-it("shows a Viewer the team, the numbers and insights, and none of the setup", async () => {
   await render("viewer");
   expect(tabs().map(([label]) => label)).toEqual([
-    "Overview",
+    "Settings",
     "Team",
     "Analytics",
     "Insights",
     "Company",
   ]);
-  // A setup tab asked for by address opens Overview instead.
-  query = "tab=connections";
-  await render("viewer");
-  expect(
-    host.querySelector('nav[aria-label="Organisation"] a[aria-current="page"]')
-      ?.textContent,
-  ).toBe("Overview");
-});
-
-// Roles B: a Sales manager sets up leads, but billing is for whoever pays and
-// API keys and Pulse for those who manage the organisation (roles.ts; the
-// servers' guards), so neither shows.
-it("shows a Sales manager no Plan & billing, and only the connections they may change", async () => {
   await render("manager");
-  expect(tabs().map(([label]) => label)).toEqual([
-    "Overview",
-    "Team",
-    "Analytics",
-    "Insights",
-    "Leads setup",
-    "Connections",
-    "AI on calls",
-    "Company",
-  ]);
-  query = "tab=connections";
-  await render("manager");
-  expect(
-    [
-      ...host.querySelectorAll<HTMLButtonElement>(
-        '[aria-label="Connections"] button',
-      ),
-    ].map((button) => button.textContent),
-  ).toEqual(["Connected apps", "AI replies"]);
-  expect(host.querySelector('[data-section="apps"]')).not.toBeNull();
-  query = "tab=leads";
-  await render("manager");
-  expect(
-    [
-      ...host.querySelectorAll<HTMLButtonElement>(
-        '[aria-label="Leads setup"] button',
-      ),
-    ].map((button) => button.textContent),
-  ).toEqual(["Lead rules", "Stages", "Sources"]);
+  expect(tabs().map(([label]) => label)).not.toContain("Plan & billing");
 });
 
-it("opens each tab here, with the hub's header only", async () => {
-  query = "tab=team";
-  await render("admin");
-  expect(
-    host.querySelector('[data-section="team"][data-headless]'),
-  ).not.toBeNull();
-  await act(async () => root.unmount());
-  root = createRoot(host);
-
-  query = "tab=analytics";
-  await render("admin");
-  expect(host.querySelector('[data-analytics="team"]')).not.toBeNull();
-  await act(async () => root.unmount());
-  root = createRoot(host);
-
-  query = "tab=leads&part=stages";
-  await render("owner");
-  expect(host.querySelector('[data-section="stages"]')).not.toBeNull();
-  expect(host.querySelector('[aria-label="Leads setup"]')).not.toBeNull();
-  await act(async () => root.unmount());
-  root = createRoot(host);
-
-  // A tab that opens its own page never renders here: Overview instead.
-  query = "tab=insights";
-  await render("owner");
-  expect(
-    host.querySelector('nav[aria-label="Organisation"] a[aria-current="page"]')
-      ?.textContent,
-  ).toBe("Overview");
-});
-
-// Owner, 25 Oct 2026: on Leads setup, tapping Stages or Sources left Lead rules
-// showing (the part was read from the address only, which a bare replaceState
-// doesn't refresh). The same row serves Connections.
-it("switches the part on a tap, and keeps it in the address", async () => {
-  query = "tab=leads";
-  await render("owner");
-  const segment = (label: string) =>
-    [
-      ...host.querySelectorAll<HTMLButtonElement>(
-        '[aria-label="Leads setup"] button',
-      ),
-    ].find((button) => button.textContent === label);
-  expect(host.querySelector('[data-section="lead-rules"]')).not.toBeNull();
-  await act(async () => segment("Stages")?.click());
-  expect(host.querySelector('[data-section="stages"]')).not.toBeNull();
-  expect(segment("Stages")?.getAttribute("aria-pressed")).toBe("true");
-  expect(new URLSearchParams(window.location.search).get("part")).toBe(
-    "stages",
-  );
-  await act(async () => segment("Sources")?.click());
-  expect(host.querySelector('[data-section="sources"]')).not.toBeNull();
-  expect(host.querySelector('[data-section="stages"]')).toBeNull();
-  await act(async () => root.unmount());
-  root = createRoot(host);
-
-  query = "tab=connections";
-  await render("owner");
-  const connection = [
-    ...host.querySelectorAll<HTMLButtonElement>(
-      '[aria-label="Connections"] button',
-    ),
-  ].find((button) => button.textContent === "Developers");
-  await act(async () => connection?.click());
-  expect(host.querySelector('[data-section="developers"]')).not.toBeNull();
-});
-
-// Owner bug #43 (27 Oct 2026): on a phone the Connections parts wrapped onto
-// two lines and pushed the page past the screen, and the open tab sat out of
-// sight. Each row scrolls inside itself: the open item comes into view, and the
-// row fades at its edge only while more sits past it.
-it("brings the open tab and part into view, and fades a row only while more is past its edge", async () => {
-  // A 358 px row holding 700 px; Connections and Pulse sit at 600 px.
-  const layout: Record<string, (this: HTMLElement) => number> = {
-    clientWidth: () => 358,
-    scrollWidth: () => 700,
-    offsetWidth: () => 100,
-    offsetLeft() {
-      return ["Connections", "Pulse"].includes(this.textContent ?? "")
-        ? 600
-        : 0;
-    },
-  };
-  const saved = Object.keys(layout).map(
-    (key) =>
-      [
-        key,
-        Object.getOwnPropertyDescriptor(HTMLElement.prototype, key),
-      ] as const,
-  );
-  for (const [key, get] of Object.entries(layout))
-    Object.defineProperty(HTMLElement.prototype, key, {
-      configurable: true,
-      get,
-    });
-  const frame = () =>
-    act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 40));
-    });
-  const bar = () =>
-    host.querySelector<HTMLElement>('[aria-label="Connections"]')!
-      .parentElement!;
-  try {
-    query = "tab=connections&part=pulse";
+it("sends every old hub address to its Settings section, its own query kept", async () => {
+  const cases: [string, string][] = [
+    ["", "/settings"],
+    ["tab=overview", "/settings"],
+    ["tab=team", "/settings/team"],
+    ["tab=leads", "/settings/lead-rules"],
+    ["tab=leads&part=rules", "/settings/lead-rules"],
+    ["tab=leads&part=stages", "/settings/stages"],
+    ["tab=leads&part=sources", "/settings/sources"],
+    ["tab=connections", "/settings/apps"],
+    ["tab=connections&part=ai-replies", "/settings/ai-replies"],
+    ["tab=connections&part=developers", "/settings/developers"],
+    ["tab=connections&part=pulse", "/settings/pulse"],
+    ["tab=call-ai", "/settings/call-ai"],
+    ["tab=company", "/settings/organisation"],
+    ["tab=plan", "/settings/plan"],
+    ["tab=nonsense", "/settings"],
+  ];
+  for (const [asked, to] of cases) {
+    replace.mockReset();
+    query = asked;
+    window.history.replaceState(null, "", `/organisation?${asked}`);
     await render("owner");
-    await frame();
-    const nav = host.querySelector<HTMLElement>(
-      'nav[aria-label="Organisation"]',
-    )!;
-    // 600 + 100 - 358, and 32 px to clear the fade.
-    expect(nav.scrollLeft).toBe(374);
-    expect(nav.getAttribute("data-less")).toBe("");
-    expect(bar().scrollLeft).toBe(374);
-    // Scrolled to its end: the fade is on the left only.
-    expect(bar().getAttribute("data-less")).toBe("");
-    expect(bar().hasAttribute("data-more")).toBe(false);
-    await act(async () => root.unmount());
-    root = createRoot(host);
-
-    query = "tab=connections&part=apps";
-    await render("owner");
-    await frame();
-    // At its start: the fade is on the right only.
-    expect(bar().scrollLeft).toBe(0);
-    expect(bar().hasAttribute("data-less")).toBe(false);
-    expect(bar().getAttribute("data-more")).toBe("");
-  } finally {
-    for (const [key, descriptor] of saved)
-      if (descriptor)
-        Object.defineProperty(HTMLElement.prototype, key, descriptor);
-      else
-        delete (HTMLElement.prototype as unknown as Record<string, unknown>)[
-          key
-        ];
+    expect(replace, asked).toHaveBeenCalledWith(to);
+    expect(host.querySelector('nav[aria-label="Organisation"]')).toBeNull();
   }
+  // A connect flow coming back keeps its answer.
+  replace.mockReset();
+  query = "tab=connections&part=apps&connected=meta";
+  window.history.replaceState(null, "", `/organisation?${query}`);
+  await render("owner");
+  expect(replace).toHaveBeenCalledWith("/settings/apps?connected=meta");
+});
+
+it("shows the section in place on a review page, for its pictures", async () => {
+  query = "tab=leads&part=sources";
+  await render("owner", "organisation", TENANT, "/review-fixture/lead-sources");
+  expect(replace).not.toHaveBeenCalled();
+  expect(host.querySelector('[data-section="sources"]')).not.toBeNull();
+  query = "";
+  await render("owner", "organisation", TENANT, "/review-fixture/hub");
+  expect(host.querySelector("[data-settings-overview]")).not.toBeNull();
 });
 
 it("keeps the organisation page as it was outside an organisation", async () => {
@@ -391,13 +241,4 @@ it("keeps sellers on their own activity while viewers can compare team work", as
   expect(host.querySelector('[data-analytics="own"]')).not.toBeNull();
   await render("viewer");
   expect(host.querySelector('[data-analytics="team"]')).not.toBeNull();
-});
-
-it("starts Sources afresh after switching organisations so old form drafts cannot carry over", async () => {
-  sourceMounted.mockClear();
-  query = "tab=leads&part=sources";
-  await render("owner");
-  expect(sourceMounted).toHaveBeenCalledTimes(1);
-  await render("owner", "organisation", "00000000-0000-4000-8000-000000000099");
-  expect(sourceMounted).toHaveBeenCalledTimes(2);
 });

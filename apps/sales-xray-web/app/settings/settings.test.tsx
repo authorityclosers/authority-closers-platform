@@ -57,10 +57,9 @@ import { AccountRedirect } from "./account-redirect";
 import SettingsPage from "./page";
 import { SettingsShell, currentSection } from "./settings-shell";
 import {
-  SETTINGS_LINKS,
   SETTINGS_SECTIONS,
-  hubAddress,
   accountRedirect,
+  hubTabSetting,
   isSettingsSection,
   settingsPath,
 } from "./settings-sections";
@@ -85,27 +84,31 @@ afterEach(async () => {
 });
 
 it("maps every section, and the old account sections, to an address of its own", () => {
-  expect(SETTINGS_SECTIONS.map((item) => item.id)).toEqual([
-    "profile",
-    "selling",
-    "security",
-    "ai-apps",
-    "plan",
-    "analysis-time",
-    "privacy",
-    "organisation",
-    "team",
-    "lead-rules",
-    "stages",
-    "call-ai",
-    "sources",
-    "apps",
-    "ai-replies",
-    "developers",
-    "pulse",
-    "notifications",
-    "devices",
-    "help",
+  // Round-2 board 7 (20 Nov 2026): grouped the way an owner thinks.
+  expect(SETTINGS_SECTIONS.map((item) => [item.group, item.id])).toEqual([
+    ["Team", "team"],
+    ["Leads", "lead-rules"],
+    ["Leads", "stages"],
+    ["Leads", "sources"],
+    ["Calls & phones", "phones"],
+    ["Calls & phones", "call-ai"],
+    ["Calls & phones", "team-sounds"],
+    ["Connections", "apps"],
+    ["Connections", "ai-replies"],
+    ["Connections", "developers"],
+    ["Connections", "pulse"],
+    ["Company", "organisation"],
+    ["Plan & billing", "plan"],
+    ["Plan & billing", "analysis-time"],
+    ["Just me", "profile"],
+    ["Just me", "selling"],
+    ["Just me", "sounds"],
+    ["Just me", "security"],
+    ["Just me", "ai-apps"],
+    ["Just me", "privacy"],
+    ["Just me", "help"],
+    ["This phone", "notifications"],
+    ["This phone", "devices"],
   ]);
   // Organisation → Connections → Pulse (25 Oct 2026) lives in the organisation hub.
   expect(isSettingsSection("pulse")).toBe(true);
@@ -143,17 +146,37 @@ it("lists every section in groups on the Settings page", async () => {
   expect(new Set(links.map((link) => link.getAttribute("href")))).toEqual(
     new Set(
       // Privacy and Apps & devices open inside Phone & alerts (owner, 24 Oct 2026).
-      SETTINGS_SECTIONS.filter(
-        (item) => !hubAddress(item.id) && !item.within,
-      ).map((item) => `/settings/${item.id}`),
+      SETTINGS_SECTIONS.filter((item) => !item.within).map(
+        (item) => `/settings/${item.id}`,
+      ),
     ),
   );
   expect(
     host.querySelector('nav[aria-label="Settings sections"]'),
   ).not.toBeNull();
-  expect(host.textContent).toContain("Organisation");
+  // Every group says who it affects (round-2 board 7).
+  const overview = host.querySelector('[class*="cards"]');
+  expect(
+    [...(overview?.querySelectorAll("section[aria-label]") ?? [])].map(
+      (group) => [
+        group.getAttribute("aria-label"),
+        group.querySelector("[data-scope]")?.getAttribute("data-scope"),
+      ],
+    ),
+  ).toEqual([
+    ["Team", "everyone"],
+    ["Leads", "everyone"],
+    ["Calls & phones", "everyone"],
+    ["Connections", "everyone"],
+    ["Company", "everyone"],
+    ["Plan & billing", "everyone"],
+    ["Just me", "me"],
+    ["This phone", "phone"],
+  ]);
   expect(host.textContent).toContain("Google, Facebook and Apple sign-in");
-  expect(host.querySelector("a[aria-current='page']")).toBeNull();
+  expect(
+    host.querySelector("nav a[aria-current='page']")?.getAttribute("href"),
+  ).toBe("/settings");
 });
 
 it("shows one section with its title, the way back, and the side list lit", async () => {
@@ -167,7 +190,7 @@ it("shows one section with its title, the way back, and the side list lit", asyn
   );
   expect(host.querySelector("h1")?.textContent).toBe("Selling");
   // The top bar says Settings; the way back is its chevron, named for readers.
-  const back = host.querySelector('a[href="/settings"]');
+  const back = host.querySelector('a[href="/settings"][title]');
   expect(back?.getAttribute("aria-label")).toBe("Back to Settings");
   expect(back?.textContent).toBe("");
   expect(
@@ -244,29 +267,66 @@ it("keeps the Settings frame while the session is checked", async () => {
   await act(async () => root.render(<SettingsSkeleton />));
   expect(host.querySelector("h1")?.textContent).toBe("Settings");
   expect(host.querySelectorAll("a[data-variant='list']")).toHaveLength(
-    SETTINGS_SECTIONS.filter((item) => !hubAddress(item.id) && !item.within)
-      .length + SETTINGS_LINKS.length,
+    SETTINGS_SECTIONS.filter((item) => !item.within).length,
   );
 });
 
-// Owner, 23 Oct 2026: the organisation's settings live in its hub, so the
-// Organisation group is one way there.
-it("sends the organisation's settings to its hub", async () => {
+// Round-2 board 7 (20 Nov 2026): the organisation's settings live in Settings
+// again, each section saying who it affects; the hub's old addresses come here.
+it("keeps the organisation's settings here, and its sections say who they affect", async () => {
+  nav.pathname = "/settings/stages";
+  await act(async () =>
+    root.render(
+      <SettingsShell>
+        <p>stages</p>
+      </SettingsShell>,
+    ),
+  );
+  expect(host.querySelector("h1")?.textContent).toBe("Lead stages");
+  expect(
+    host.querySelector("header [data-scope]")?.getAttribute("data-scope"),
+  ).toBe("everyone");
+  expect(host.querySelector('a[href="/organisation"]')).toBeNull();
+  nav.pathname = "/settings/privacy";
+  await act(async () =>
+    root.render(
+      <SettingsShell>
+        <p>privacy</p>
+      </SettingsShell>,
+    ),
+  );
+  // Privacy opens inside Phone & alerts: this phone's.
+  expect(
+    host.querySelector("header [data-scope]")?.getAttribute("data-scope"),
+  ).toBe("phone");
+  expect(hubTabSetting("leads", "stages")).toBe("/settings/stages");
+  expect(hubTabSetting("connections", null)).toBe("/settings/apps");
+  expect(hubTabSetting("analytics", null)).toBeNull();
+  expect(hubTabSetting(null, null)).toBe("/settings");
+});
+
+it("lists only your own settings in a personal workspace", async () => {
   nav.pathname = "/settings";
   await act(async () =>
-    root.render(<SettingsShell>{<SettingsPage />}</SettingsShell>),
+    root.render(
+      inWorkspace(
+        <SettingsShell>{<SettingsPage />}</SettingsShell>,
+        "personal",
+        null,
+      ),
+    ),
   );
-  expect(host.querySelector('a[href="/settings/stages"]')).toBeNull();
-  const hub = [
-    ...host.querySelectorAll<HTMLAnchorElement>('a[href="/organisation"]'),
-  ];
-  // Once in the side list, once as a card on the overview.
-  expect(hub).toHaveLength(2);
-  expect(
-    hub.every((link) => link.closest('section[aria-label="Organisation"]')),
-  ).toBe(true);
-  expect(hubAddress("stages")).toBe("/organisation/stages");
-  expect(hubAddress("profile")).toBeNull();
+  expect(host.querySelector('a[href="/settings/team"]')).toBeNull();
+  expect(host.querySelector('a[href="/settings/apps"]')).toBeNull();
+  expect(host.querySelector('a[href="/settings/plan"]')).not.toBeNull();
+  expect(host.querySelector('a[href="/settings/sounds"]')).not.toBeNull();
+  // Plan & billing is yours there.
+  const plan = host.querySelector(
+    '[class*="cards"] section[aria-label="Plan & billing"]',
+  );
+  expect(plan?.querySelector("[data-scope]")?.getAttribute("data-scope")).toBe(
+    "me",
+  );
 });
 
 // Billing belongs to whoever pays (roles.ts "billing.view"): a Seller of an
@@ -298,7 +358,7 @@ const inWorkspace = (
   </WorkspaceAccessContext.Provider>
 );
 
-it("leaves Plan & usage out for a Seller, and says who sees billing at its address", async () => {
+it("leaves Plan & billing out for a Seller, and says who sees billing at its address", async () => {
   nav.pathname = "/settings";
   await act(async () =>
     root.render(
@@ -310,7 +370,6 @@ it("leaves Plan & usage out for a Seller, and says who sees billing at its addre
     ),
   );
   expect(host.querySelector('a[href="/settings/plan"]')).toBeNull();
-  expect(host.textContent).not.toContain("Plan & usage");
   expect(host.querySelector('a[href="/settings/profile"]')).not.toBeNull();
   await act(async () =>
     root.render(
@@ -335,14 +394,14 @@ it("leaves Plan & usage out for a Seller, and says who sees billing at its addre
       ),
     ),
   );
-  expect(host.querySelector("h1")?.textContent).toBe("Plan & usage");
+  expect(host.querySelector("h1")?.textContent).toBe("Plan & billing");
   expect(host.textContent).not.toContain("Your plan and invoices");
   expect(host.textContent).toContain(
     "Only your organisation's owner can see billing.",
   );
 });
 
-it("keeps Plan & usage for an organisation's owner and in a personal workspace", async () => {
+it("keeps Plan & billing for an organisation's owner and in a personal workspace", async () => {
   for (const [kind, role] of [
     ["organisation", "owner"],
     ["personal", null],

@@ -396,14 +396,15 @@ it("lists every hub section under Team, Insights and Plan & billing included", (
   expect(panelPages(hub)).toEqual([
     "Team",
     [
-      ["Overview", "/organisation", "page"],
-      ["Team", "/organisation?tab=team", null],
+      // Round-2 board 7 (20 Nov 2026): the setup areas are Settings sections.
+      ["Settings", "/settings", "page"],
+      ["Team", "/settings/team", null],
       ["Analytics", "/organisation?tab=analytics", null],
       ["Insights", "/organisation/insights", null],
-      ["Leads setup", "/organisation?tab=leads", null],
-      ["Connections", "/organisation?tab=connections", null],
-      ["AI on calls", "/organisation?tab=call-ai", null],
-      ["Company", "/organisation?tab=company", null],
+      ["Leads setup", "/settings/lead-rules", null],
+      ["Connections", "/settings/apps", null],
+      ["AI on calls", "/settings/call-ai", null],
+      ["Company", "/settings/organisation", null],
       ["Plan & billing", "/settings/plan", null],
     ],
   ]);
