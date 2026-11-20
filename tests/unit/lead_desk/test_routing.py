@@ -143,3 +143,68 @@ def test_properties_over_random_leads_and_teams() -> None:
         # No value meets no value rule.
         if facts.value is None:
             raise AssertionError("a lead with no value met a value rule")
+
+
+DHEERAJ, ANIKET, SACHIN = UUID(int=11), UUID(int=12), UUID(int=13)
+SPLIT = Rule((), (DHEERAJ, ANIKET, SACHIN), (20, 40, 40), "split-1", every=True)
+SELLERS = (seat(DHEERAJ, "Dheeraj"), seat(ANIKET, "Aniket"), seat(SACHIN, "Sachin"))
+
+
+def _run_split(count: int, team: tuple[Seat, ...], rule: Rule = SPLIT) -> dict[UUID, int]:
+    given: dict[UUID, int] = {}
+    for _ in range(count):
+        decision = decide(LeadFacts(), (rule,), team, {"split-1": given})
+        assert decision.person_id is not None
+        assert decision.split == "split-1"
+        given[decision.person_id] = given.get(decision.person_id, 0) + 1
+    return given
+
+
+def test_a_split_gives_leads_by_percent_and_stays_fair_over_time() -> None:
+    """Wise Life, 19 Nov 2026: Dheeraj 20%, Aniket 40%, Sachin 40%; ten leads go 2/4/4."""
+    assert _run_split(10, SELLERS) == {DHEERAJ: 2, ANIKET: 4, SACHIN: 4}
+    assert _run_split(100, SELLERS) == {DHEERAJ: 20, ANIKET: 40, SACHIN: 40}
+    # Every prefix stays within one lead of each share (never a run to one person).
+    given: dict[UUID, int] = {}
+    for number in range(1, 51):
+        person = decide(LeadFacts(), (SPLIT,), SELLERS, {"split-1": given}).person_id
+        assert person is not None
+        given[person] = given.get(person, 0) + 1
+        for who, share in zip(SPLIT.people, SPLIT.shares, strict=True):
+            assert abs(given.get(who, 0) - number * share / 100) <= 1
+    first = decide(LeadFacts(), (SPLIT,), SELLERS, {"split-1": {}})
+    assert first.why == "Every new lead: Aniket, 40% share (rule 1)"
+
+
+def test_a_split_passes_over_someone_away_or_full_and_they_catch_up() -> None:
+    away = (
+        seat(DHEERAJ, "Dheeraj"),
+        seat(ANIKET, "Aniket", available=False),
+        seat(SACHIN, "Sachin"),
+    )
+    given = _run_split(6, away)
+    assert ANIKET not in given and given == {DHEERAJ: 2, SACHIN: 4}
+    # Back: Aniket is furthest behind his share, so he gets the next ones.
+    back = decide(LeadFacts(), (SPLIT,), SELLERS, {"split-1": given})
+    assert back.person_id == ANIKET
+    full = (
+        seat(DHEERAJ, "Dheeraj"),
+        seat(ANIKET, "Aniket", open_leads=50),
+        seat(SACHIN, "Sachin"),
+    )
+    assert ANIKET not in _run_split(5, full)
+    # Everyone away: the lead falls to the lead rules and says why.
+    nobody = tuple(seat(other.person_id, other.name, available=False) for other in SELLERS)
+    decision = decide(LeadFacts(), (SPLIT,), nobody, {})
+    assert decision.person_id is None and decision.split is None
+    assert decision.why.startswith("Rule 1: Dheeraj, Aniket, Sachin away or at their limit")
+
+
+def test_a_share_of_nothing_gets_nothing_and_rules_without_conditions_need_every() -> None:
+    rule = Rule((), (DHEERAJ, ANIKET), (0, 100), "split-1", every=True)
+    assert set(_run_split(5, SELLERS, rule)) == {ANIKET}
+    assert matches(SPLIT, LeadFacts(city="Pune"))
+    assert not matches(Rule((), (NEHA,)), LeadFacts(city="Pune"))
+    # Turns (no shares) still go by who waited longest, with no split mark.
+    turns = decide(LeadFacts(), (Rule((), (ASHA, RAVI), every=True),), TEAM)
+    assert turns.person_id == ASHA and turns.split is None

@@ -40,6 +40,16 @@ Workspaces:
                                                    the AI-apps switch (Organisation -> AI
                                                    apps); no flag shows it. Sales X-Ray itself
                                                    is on for every active organisation.
+    workspaces lead-rules --tenant-id T [--split P=PCT ...] [--split-name N] [--no-split]
+                          [--auto-reassign on|off] [--reassign-minutes N]
+                          [--work-days mon-sat] [--work-start HH:MM] [--work-end HH:MM]
+                          [--pause-leads on|off] [--sellers-reassign on|off]
+                                                   Lead rules: a split of every new lead by
+                                                   percent (the first rule; shares add up to
+                                                   100), auto-reassign after N work minutes,
+                                                   work days and hours (India time), and
+                                                   whether sellers may give their leads to a
+                                                   colleague; no flag shows them
 
 Ask Dipak (the whole platform; no --tenant-id):
     ask-dipak videos [on|off]                      the lesson-video switch; no word shows it
@@ -143,7 +153,7 @@ COMMANDS: dict[str, tuple[str, ...]] = {
         "remove-member",
         "taking-leads",
     ),
-    "workspaces": ("list", "show", "create", "rename", "domains", "switches"),
+    "workspaces": ("list", "show", "create", "rename", "domains", "switches", "lead-rules"),
     "leads": (
         "list",
         "add",
@@ -165,6 +175,20 @@ NO_TENANT |= {("ask-dipak", name) for name in ("videos", "add-video", "remove-vi
 SHELF = {"archive": "archive", "restore-archive": "restore_archive", "bin": "bin"}
 SHELF["restore-bin"] = "restore_bin"
 SWITCHES = ("paused", "note", "task", "outcome", "update", "stage")
+# workspaces lead-rules: the options that change something (none: it reads).
+LEAD_RULES = (
+    "split",
+    "no_split",
+    "auto_reassign",
+    "reassign_minutes",
+    "work_days",
+    "work_start",
+    "work_end",
+    "pause_leads",
+    "sellers_reassign",
+)
+SPLIT_ID = "admin-split"
+DAY_KEYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 MAX_NAME = 200
 MAX_LEADS = 2000
 PAGE = 50
@@ -211,6 +235,33 @@ def _on_off(value: str) -> bool:
     if value not in ("on", "off"):
         raise ValueError("on or off")
     return value == "on"
+
+
+def _share(value: str) -> tuple[UUID, int]:
+    """``person=percent`` for a split."""
+    person, _, share = value.partition("=")
+    try:
+        return UUID(person.strip()), int(share)
+    except ValueError:
+        raise argparse.ArgumentTypeError("person=percent") from None
+
+
+def _days(value: str) -> tuple[int, ...]:
+    """``mon-sat`` or ``mon,tue,wed``: work days, 0 for Monday."""
+    words = value.lower().replace(" ", "")
+    try:
+        if "-" in words:
+            first, last = (DAY_KEYS.index(word) for word in words.split("-", 1))
+            return tuple(range(first, last + 1))
+        return tuple(sorted({DAY_KEYS.index(word) for word in words.split(",")}))
+    except ValueError:
+        raise argparse.ArgumentTypeError("days like mon-sat or mon,tue") from None
+
+
+def _clock(value: str) -> str:
+    if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", value):
+        raise argparse.ArgumentTypeError("HH:MM")
+    return value
 
 
 def _when(value: str) -> datetime:
@@ -288,6 +339,17 @@ def _parser() -> argparse.ArgumentParser:
     domains.add_argument("--clear", action="store_true")
     for switch in SWITCHES:
         made[("workspaces", "switches")].add_argument(f"--{switch}", type=_on_off)
+    rules = made[("workspaces", "lead-rules")]
+    rules.add_argument("--split", action="append", type=_share, default=[])
+    rules.add_argument("--split-name", type=_name, default="Split by percent")
+    rules.add_argument("--no-split", action="store_true")
+    rules.add_argument("--auto-reassign", type=_on_off)
+    rules.add_argument("--reassign-minutes", type=int)
+    rules.add_argument("--work-days", type=_days)
+    rules.add_argument("--work-start", type=_clock)
+    rules.add_argument("--work-end", type=_clock)
+    rules.add_argument("--pause-leads", type=_on_off)
+    rules.add_argument("--sellers-reassign", type=_on_off)
     listing = made[("leads", "list")]
     _where(listing)
     listing.add_argument("--search")
@@ -348,6 +410,8 @@ def _key(args: argparse.Namespace) -> tuple[str, str]:
 def _writes(args: argparse.Namespace) -> bool:
     if _key(args) == ("workspaces", "switches"):
         return any(getattr(args, switch) is not None for switch in SWITCHES)
+    if _key(args) == ("workspaces", "lead-rules"):
+        return any(getattr(args, name) not in (None, False, []) for name in LEAD_RULES)
     if _key(args) == ("ask-dipak", "videos"):
         return args.state is not None
     return _key(args) not in READS
@@ -363,6 +427,13 @@ def _check_command(args: argparse.Namespace) -> None:
         args.clear == bool(args.domain) or (args.clear and args.auto_join)
     ):
         raise OrganisationCommandError("--domain (with --auto-join), or --clear")
+    if key == ("workspaces", "lead-rules"):
+        if args.split and args.no_split:
+            raise OrganisationCommandError("--split or --no-split, one of them")
+        if args.split and sum(share for _, share in args.split) != 100:
+            raise OrganisationCommandError("the split's shares add up to 100")
+        if args.reassign_minutes is not None and not 5 <= args.reassign_minutes <= 1440:
+            raise OrganisationCommandError("--reassign-minutes is 5 to 1440")
     if args.group == "leads" and args.command not in ("list", "add", "import"):
         filtered = _filtered(args)
         if args.command != "reassign" and (args.lead_id is None) == (not filtered):
@@ -436,6 +507,8 @@ def _intent(args: argparse.Namespace) -> dict[str, Any]:
             continue
         if isinstance(value, list):
             value = sorted(str(item) for item in value)
+        elif isinstance(value, tuple):  # work days: compared with the stored JSON list on replay
+            value = list(value)
         elif isinstance(value, UUID | datetime | Path):
             value = str(value)
         intent[name] = value
@@ -1007,6 +1080,121 @@ async def workspaces_switches(ctx: Context) -> Result:
     return {"status": "eligible", "before": before, "after": after}
 
 
+async def _lead_rules_now(ctx: Context) -> dict[str, Any]:
+    from ac_platform.lead_desk import hours as work_hours
+    from ac_platform.lead_desk import routing_rules
+
+    revision, config = await ctx.desk().settings()
+    rules = routing_rules.stored(config)
+    split = next((rule for rule in rules if rule.id == SPLIT_ID), None)
+    return {
+        "revision": revision,
+        "split": (
+            {
+                "name": split.name,
+                "enabled": split.enabled,
+                "shares": {
+                    str(person): share
+                    for person, share in zip(split.give_to, split.shares, strict=False)
+                },
+            }
+            if split is not None
+            else None
+        ),
+        "other_routing_rules": sum(1 for rule in rules if rule.id != SPLIT_ID),
+        "auto_reassign": bool(config.get("auto_reassign")),
+        "reassign_minutes": int(config.get("reassign_minutes") or 0),
+        "work_hours": work_hours.as_config(work_hours.parse(config)),
+        "sellers_reassign": bool(config.get("sellers_reassign")),
+    }
+
+
+async def workspaces_lead_rules(ctx: Context) -> Result:
+    """Lead rules through the app's own saves (LeadDesk.save_routing, save_settings,
+    save_work_hours). Wise Life, 19 Nov 2026 (owner, Wise Life office session): Dheeraj 20%,
+    Aniket 40%, Sachin 40%; 30 work minutes before an uncalled lead moves on; Mon-Sat;
+    sellers may give a lead to a colleague with a reason. The split is one rule, first, with a
+    fixed id, so a rerun replaces it and the split's counts carry on."""
+    from ac_platform.lead_desk import routing_rules
+    from ac_platform.lead_desk.contracts import SettingsCommand, WorkHoursCommand
+
+    args = ctx.args
+    before = await _lead_rules_now(ctx)
+    if not _writes(args):
+        return {"status": "read", "lead_rules": before}
+    desk = ctx.desk()
+    if args.split or args.no_split:
+        members = await _members(ctx.database, ctx.tenant_id)
+        if any(person not in members for person, _ in args.split):
+            raise OrganisationCommandError("every person in the split must be a member")
+        revision, config = await desk.settings()
+        others = [rule for rule in routing_rules.stored(config) if rule.id != SPLIT_ID]
+        made = (
+            [
+                routing_rules.Rule(
+                    id=SPLIT_ID,
+                    name=args.split_name,
+                    give_to=tuple(person for person, _ in args.split),
+                    shares=tuple(share for _, share in args.split),
+                )
+            ]
+            if args.split
+            else []
+        )
+        await desk.save_routing(
+            routing_rules.RoutingCommand(
+                expected_revision=revision,
+                rules=(*made, *others),
+                value_answer=config.get(routing_rules.VALUE_KEY),
+            )
+        )
+    hours_given = (args.work_days, args.work_start, args.work_end, args.pause_leads)
+    if any(value is not None for value in hours_given):
+        revision, _ = await desk.settings()
+        now = before["work_hours"] or {}
+        await desk.save_work_hours(
+            WorkHoursCommand(
+                expected_revision=revision,
+                days=args.work_days if args.work_days is not None else tuple(now.get("days", ())),
+                start=args.work_start or now.get("start", "09:30"),
+                end=args.work_end or now.get("end", "19:00"),
+                pause_leads=(
+                    args.pause_leads
+                    if args.pause_leads is not None
+                    else bool(now.get("pause_leads"))
+                ),
+            )
+        )
+    settings_given = (args.auto_reassign, args.reassign_minutes, args.sellers_reassign)
+    if any(value is not None for value in settings_given):
+        revision, config = await desk.settings()
+        await desk.save_settings(
+            SettingsCommand(
+                expected_revision=revision,
+                auto_reassign=(
+                    args.auto_reassign
+                    if args.auto_reassign is not None
+                    else bool(config.get("auto_reassign"))
+                ),
+                reassign_minutes=(
+                    args.reassign_minutes
+                    if args.reassign_minutes is not None
+                    else int(config.get("reassign_minutes") or 10)
+                ),
+                sellers_reassign=args.sellers_reassign,
+            )
+        )
+    after = await _lead_rules_now(ctx)
+    unchanged = {key: value for key, value in after.items() if key != "revision"} == {
+        key: value for key, value in before.items() if key != "revision"
+    }
+    return {
+        "status": "already_set" if unchanged else "eligible",
+        "before": before,
+        "after": after,
+    }
+
+
 # ----- ask dipak -----------------------------------------------------------------------------
 
 
@@ -1275,6 +1463,7 @@ HANDLERS: dict[tuple[str, str], Handler] = {
     ("workspaces", "rename"): workspaces_rename,
     ("workspaces", "domains"): workspaces_domains,
     ("workspaces", "switches"): workspaces_switches,
+    ("workspaces", "lead-rules"): workspaces_lead_rules,
     ("leads", "list"): leads_list,
     ("leads", "add"): leads_add,
     ("leads", "assign"): leads_assign,
@@ -1293,6 +1482,7 @@ RESOURCES = {
     "workspaces rename": "organisation",
     "workspaces domains": "organisation_domains",
     "workspaces switches": "lead_desk_settings",
+    "workspaces lead-rules": "lead_desk_settings",
     "ask-dipak videos": "ask_dipak_library",
     "ask-dipak add-video": "ask_dipak_library",
     "ask-dipak remove-video": "ask_dipak_library",

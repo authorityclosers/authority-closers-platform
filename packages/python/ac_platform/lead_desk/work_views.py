@@ -28,6 +28,10 @@ CallView = Literal["to_call", "follow_ups"]
 FollowUpWhen = Literal["today", "overdue", "upcoming"]
 # A new Inbound enquiry this recent and never called is the top of To Call (teardown #4).
 FRESH_ENQUIRY: Final = timedelta(hours=24)
+# A new lead never called that came in longer ago than this is backlog, not a new lead
+# waiting its turn (Wise Life, 19 Nov 2026: an untouched 36-hour-old enquiry sat 59th of 62 in
+# To Call, behind 40 never-called leads from 1 Nov, past the first page of 50).
+RECENT_NEW: Final = timedelta(days=7)
 
 
 def in_view(view: CallView, day_end: datetime, waiting: Collection[UUID] = ()) -> Any:
@@ -59,7 +63,8 @@ def call_order(now: datetime, day_start: datetime) -> tuple[Any, ...]:
     it jumps to the top of To Call and is the next card in a round). Then, as Dipak's
     handoff p.12 has it (a promised follow-up stays in sight when a new enquiry arrives,
     and an older backlog doesn't push fresh enquiries down): due today and already due,
-    then new leads never called (oldest first), then the older backlog, then the rest of
+    then new leads never called from the last week (oldest first), then the older backlog
+    (planned before today, and new leads never called from before that), then the rest of
     today; the lead's id last, so a page never repeats one. A missed call not yet returned
     goes ahead of all of it (call_backs_first).
     Home's next lead is the first row of this order (phone personas, 1 Nov 2026: Home said
@@ -74,7 +79,16 @@ def call_order(now: datetime, day_start: datetime) -> tuple[Any, ...]:
     bucket = case(
         (fresh, 0),
         (and_(Lead.next_action_at >= day_start, Lead.next_action_at <= now), 1),
-        (and_(Lead.stage == "new", Lead.next_action_at.is_(None)), 2),
+        (
+            and_(
+                Lead.stage == "new",
+                Lead.next_action_at.is_(None),
+                arrived >= now - RECENT_NEW,
+            ),
+            2,
+        ),
+        # A new lead from before that, never called: the older backlog, by when it came.
+        (and_(Lead.stage == "new", Lead.next_action_at.is_(None)), 3),
         (Lead.next_action_at < day_start, 3),
         else_=4,
     )

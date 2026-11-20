@@ -2,13 +2,14 @@
 intelligent"; the leads setup audit found ``routing.py`` built but never wired).
 
 A rule says **when** a new lead matches all its conditions, **give it to** one person or a
-group in turn, within their limits. Conditions read what a lead carries: its source (Google
-Ads lead forms apart from website forms), city, language, product, one form answer, or its
-value: the answer the organisation names as the value, read as a rupee band ("₹60,000 –
-₹1,00,000", "2L+"). Rules are tried top to bottom, and the first that can give the lead out
-does; a rule whose people are all away or at their limit is passed over, and the lead's
-reason says so. A lead no rule gives out goes by the lead rules as before (``allocation``).
-A returning lead still goes back to its seller first.
+group in turn, within their limits. A group can instead split the leads by percent (``shares``,
+owner, Wise Life, 19 Nov 2026), and a rule with no conditions is for every new lead. Conditions
+read what a lead carries: its source (Google Ads lead forms apart from website forms), city,
+language, product, one form answer, or its value: the answer the organisation names as the
+value, read as a rupee band ("₹60,000 – ₹1,00,000", "2L+"). Rules are tried top to bottom, and
+the first that can give the lead out does; a rule whose people are all away or at their limit
+is passed over, and the lead's reason says so. A lead no rule gives out goes by the lead rules
+as before (``allocation``). A returning lead still goes back to its seller first.
 
 The rules live in the workspace's Lead Desk settings (``routing_rules``, under the same
 revision as the other settings). ``routing.py`` decides; this module stores, checks, reads
@@ -82,9 +83,27 @@ class Rule(Model):
     id: str | None = Field(default=None, max_length=40)
     name: str = Field(default="", max_length=60)
     enabled: bool = True
-    when: tuple[Condition, ...] = Field(min_length=1, max_length=6)
+    # None: every new lead.
+    when: tuple[Condition, ...] = Field(default=(), max_length=6)
     # One person, or a group taking turns in this order.
     give_to: tuple[UUID, ...] = Field(min_length=1, max_length=30)
+    # A split by percent instead of turns: one share per person in ``give_to``, adding up
+    # to 100; a share of 0 gets none. Empty: the group takes turns.
+    shares: tuple[int, ...] = Field(default=(), max_length=30)
+
+    @model_validator(mode="after")
+    def _split(self) -> Rule:
+        if not self.shares:
+            return self
+        if len(self.shares) != len(self.give_to):
+            raise ValueError("Give each person in the split a share.")
+        if any(share < 0 or share > 100 for share in self.shares):
+            raise ValueError("Each share is between 0 and 100 percent.")
+        if sum(self.shares) != 100:
+            raise ValueError("The shares add up to 100 percent.")
+        if len(set(self.give_to)) != len(self.give_to):
+            raise ValueError("Name each person in the split once.")
+        return self
 
 
 class RoutingCommand(Command):
@@ -172,7 +191,14 @@ def pure(rules: Iterable[Rule]) -> tuple[tuple[Rule, routing.Rule], ...]:
                 conditions.append(routing.AnswerIn(item.key, item.values))
             elif item.field in {"source", "city", "language", "interest"}:
                 conditions.append(routing.FieldIn(item.field, item.values))
-        made.append((rule, routing.Rule(tuple(conditions), rule.give_to)))
+        made.append(
+            (
+                rule,
+                routing.Rule(
+                    tuple(conditions), rule.give_to, rule.shares, rule.id, every=not rule.when
+                ),
+            )
+        )
     return tuple(made)
 
 
@@ -223,14 +249,23 @@ def seats(people: Sequence[Any], exclude: Iterable[UUID] = ()) -> tuple[routing.
     )
 
 
+def split_keys(config: Mapping[str, Any]) -> tuple[str, ...]:
+    """The ids of the switched-on split rules, whose leads given so far the split counts."""
+    return tuple(rule.id for rule, made in pure(stored(config)) if made.shares and rule.id)
+
+
 def decide(
-    config: Mapping[str, Any], lead_facts: routing.LeadFacts, team: Sequence[routing.Seat]
+    config: Mapping[str, Any],
+    lead_facts: routing.LeadFacts,
+    team: Sequence[routing.Seat],
+    given: Mapping[str, Mapping[UUID, int]] | None = None,
 ) -> tuple[routing.Decision, str | None] | None:
-    """The routing decision for a lead, with the rule's name; None when no rule is on."""
+    """The routing decision for a lead, with the rule's name; None when no rule is on.
+    ``given``: per split rule's id, the leads it gave each person so far."""
     rules = pure(stored(config))
     if not rules:
         return None
-    decision = routing.decide(lead_facts, [rule for _, rule in rules], team)
+    decision = routing.decide(lead_facts, [rule for _, rule in rules], team, given)
     name = rules[decision.rule - 1][0].name if decision.rule else None
     return decision, name
 
@@ -316,6 +351,7 @@ __all__ = [
     "questions",
     "saved",
     "seats",
+    "split_keys",
     "stored",
     "view",
 ]

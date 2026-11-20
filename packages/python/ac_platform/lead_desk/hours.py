@@ -114,6 +114,44 @@ def next_start(hours: WorkHours, at: datetime) -> datetime:
     return at  # unreachable: some day in the next week is a work day
 
 
+def working_minutes(hours: WorkHours | None, since: datetime, until: datetime) -> float:
+    """Minutes of work time between two moments (auto-reassign's "no call in 30 minutes",
+    owner, Wise Life, 19 Nov 2026): only the work days' hours count, never a break, a
+    night or a day off, so a lead that came at night starts its clock when work starts.
+    No work hours set: every minute counts."""
+    if until <= since:
+        return 0.0
+    if hours is None:
+        return (until - since).total_seconds() / 60
+    begin, end = since.astimezone(IST), until.astimezone(IST)
+    total = 0.0
+    day = begin.date()
+    # Two weeks is far past any wait the sweep asks about; older counts as that.
+    for _ in range(15):
+        if day > end.date():
+            break
+        if day.weekday() in hours.days:
+            spans = [(hours.start, hours.end)]
+            for rest_start, rest_end in hours.breaks:
+                cut: list[tuple[time, time]] = []
+                for low, high in spans:
+                    if rest_end <= low or rest_start >= high:
+                        cut.append((low, high))
+                        continue
+                    if low < rest_start:
+                        cut.append((low, rest_start))
+                    if rest_end < high:
+                        cut.append((rest_end, high))
+                spans = cut
+            for low, high in spans:
+                opens = max(datetime.combine(day, low, tzinfo=IST), begin)
+                shuts = min(datetime.combine(day, high, tzinfo=IST), end)
+                if shuts > opens:
+                    total += (shuts - opens).total_seconds() / 60
+        day += timedelta(days=1)
+    return total
+
+
 def opening_words(hours: WorkHours, at: datetime) -> str:
     """'at 9:30 AM', 'tomorrow at 9:30 AM' or 'on Monday at 9:30 AM', in India time."""
     begins = next_start(hours, at).astimezone(IST)

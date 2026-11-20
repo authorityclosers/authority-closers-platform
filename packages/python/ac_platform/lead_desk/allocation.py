@@ -58,6 +58,9 @@ class Allocation:
     person_id: UUID | None
     reason: str
     rule: str
+    # A routing split's rule id (routing.py): the history line says so, and the split
+    # counts it.
+    split: str | None = None
 
 
 def _norm(value: str) -> str:
