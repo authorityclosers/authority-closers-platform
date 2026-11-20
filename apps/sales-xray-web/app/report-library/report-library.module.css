@@ -923,3 +923,83 @@
     transition: none;
   }
 }
+
+/* ---------- On a computer, 1024 px and up (owner, 20 Nov 2026: "learn how
+   Vitals OS is so great on PC"; board ~/orch/boards/sx-desktop, option B) ----
+   Calls was the phone's 720 px column in the middle of the window (60 % of a
+   1920 screen empty), with a full-width Analyse bar. Now the page runs from the
+   gutter to 1180 px; the subtitle and a 320 px Main / All Reports switch share
+   the header row; Main lists Recent reports on the left and keeps Analyse a call
+   (its waveform and button) and Your phone calls in a context column on the
+   right, as Vitals keeps its numbers beside its list. All Reports uses the
+   width: two cards a row from 1280 px. Phones keep the column. */
+@media (min-width: 1024px) {
+  .page[data-reports-v4],
+  .page[data-reports-loading] {
+    max-width: 1180px;
+    margin-inline: 0;
+  }
+
+  .page[data-reports-v4] {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    column-gap: 24px;
+  }
+
+  .page[data-reports-v4] > * {
+    grid-column: 1 / -1;
+  }
+
+  .page[data-reports-v4] > .subtitle {
+    grid-column: 1;
+    align-self: center;
+  }
+
+  .page[data-reports-v4] > .tabs {
+    grid-column: 2;
+  }
+
+  .page[data-tab="main"] > .panel {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-rows: auto auto auto 1fr;
+    align-items: start;
+    column-gap: 24px;
+  }
+
+  .page[data-tab="main"] > .panel > * {
+    grid-column: 1;
+    grid-row: 2 / span 3;
+  }
+
+  .page[data-tab="main"] > .panel > .sectionLine {
+    grid-row: 1;
+  }
+
+  .page[data-tab="main"] > .panel > .analyse {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    gap: 12px;
+    padding: 20px;
+    border: 1px solid var(--sx-line);
+    border-radius: var(--sx-radius-lg);
+    background: var(--sx-surface);
+  }
+
+  .page[data-tab="main"] > .panel > .callLog {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .page[data-tab="main"] .waveform {
+    height: 72px;
+  }
+
+  .page[data-tab="main"] .waveform svg {
+    height: 64px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .page[data-tab="all"] .list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
