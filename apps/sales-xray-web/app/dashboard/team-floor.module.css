@@ -2620,11 +2620,28 @@ button.chip {
     gap: 4px;
   }
 
+  /* With the phone's large text a chip's words ran out of its third of the
+     row, over the next chip and past the card (report 220): the pill keeps
+     them and grows with the text; the icon and number stay, the word ends
+     in "…". */
   .workLine .chip {
     min-width: 0;
+    height: auto;
+    min-height: 26px;
     gap: 4px;
     padding: 0 8px;
+    overflow: hidden;
     white-space: nowrap;
+  }
+
+  .workLine .chip > svg {
+    flex: none;
+  }
+
+  .workLine .chipWord {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .sellerHead,
