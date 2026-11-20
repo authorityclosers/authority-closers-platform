@@ -64,7 +64,8 @@ _APPS = frozenset({"web", "android"})
 TIERS = frozenset({"low", "mid", "high", "unknown"})
 NETWORKS = frozenset({"slow_2g", "2g", "3g", "4g", "unknown"})
 LINKS = frozenset({"wifi", "cellular", "ethernet", "offline", "unknown"})
-# The app's screens, one per route template (telemetry.ts screenOf), and a lead open on Leads.
+# The app's screens, one per route template (telemetry.ts screenOf), a lead open on Leads, and
+# phone setup's walk over any page ("setup").
 SCREENS = frozenset(
     {
         "home",
@@ -93,6 +94,7 @@ SCREENS = frozenset(
         "developers",
         "review",
         "welcome",
+        "setup",
         "other",
     }
 )
@@ -215,12 +217,29 @@ FLOW_STEPS = frozenset(
         "stage",
         "next",
         "save",
+        # Phone setup's one-ask walk (20 Nov 2026): its welcome, the consent, the test call
+        # and the end; the other screens use the names above.
+        "welcome",
+        "analyse",
+        "test_call",
+        "all_set",
     }
 )
 # Which way into a flow: setup's path, all of phone setup or one Fix, quick add or the
 # Add lead sheet, and where "How did it go?" was asked.
 FLOW_VIAS = frozenset(
-    {"business", "solo", "join", "all", "fix", "quick", "sheet", "after_call", "lead"}
+    {
+        "business",
+        "solo",
+        "join",
+        "all",
+        "fix",
+        "quick",
+        "sheet",
+        "after_call",
+        "lead",
+        "first_run",
+    }
 )
 MAX_FLOW_MS = 3_600_000
 MAX_FLOW_COUNT = 20

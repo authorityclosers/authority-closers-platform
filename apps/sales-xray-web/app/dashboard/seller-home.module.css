@@ -1832,3 +1832,21 @@ a.nextName:active::after,
   justify-content: space-between;
   gap: 8px;
 }
+
+/* Next action's waiting time (round 2, board 2, 20 Nov 2026): under the chips,
+   warm once a new lead has waited half an hour; the words say it too. */
+.nextMeta:has(+ .nextWait) {
+  margin-bottom: 8px;
+}
+
+.nextWait {
+  margin: 0 0 21px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.nextWait[data-warn] {
+  color: color-mix(in oklab, var(--sx-warn) 45%, var(--sx-ink));
+  font-weight: 600;
+}

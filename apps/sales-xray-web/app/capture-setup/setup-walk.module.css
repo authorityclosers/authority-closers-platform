@@ -1,0 +1,268 @@
+/* Phone setup, one ask per screen (setup-walk.tsx): the app's ground, the
+   step in the middle, one green button pinned at the foot in thumb reach and
+   a quiet Not now under it. Tokens only. */
+
+/* The dialog itself (with phone-onboarding's .page): the app's paper ground. */
+.walk {
+  background: var(--sx-paper);
+  padding-bottom: 0;
+}
+
+.walk::backdrop {
+  background: var(--sx-paper);
+}
+
+/* Back on the left, the progress in the middle. */
+.top {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  width: min(440px, 100%);
+  min-height: 52px;
+  margin: 0 auto;
+}
+
+.spacer {
+  width: 44px;
+  height: 44px;
+}
+
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-left: -10px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--sx-ink);
+  cursor: pointer;
+}
+
+.top > .iconButton:last-child {
+  margin-right: -10px;
+  margin-left: 0;
+  justify-self: end;
+  color: var(--sx-muted);
+}
+
+.iconButton:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+}
+
+.progress {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.dots {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dots li {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sx-line-strong);
+  transition: background-color var(--sx-dur-base) var(--sx-ease-out);
+}
+
+.dots li[data-on] {
+  background: var(--sx-accent);
+}
+
+.count {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.body {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  flex: 1 0 auto;
+  width: min(440px, 100%);
+  margin: 0 auto;
+  padding: 12px 0 16px;
+}
+
+.title {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-2xl);
+  font-weight: 750;
+  letter-spacing: var(--sx-tracking-title);
+  line-height: var(--sx-leading-36);
+  text-wrap: balance;
+}
+
+.line {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
+}
+
+.note {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+/* A picker cancelled, a settings page that didn't open. */
+.alert {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-tone-action-soft);
+  color: var(--sx-tone-action);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+/* Battery, then Autostart: the line to do now is the strong one. */
+.numbered {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 22px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
+}
+
+.numbered li[data-on] {
+  color: var(--sx-ink);
+  font-weight: 650;
+}
+
+.art {
+  display: grid;
+  place-items: center;
+  padding: 4px 0;
+}
+
+/* The welcome's list: what the walk will ask. */
+.plan {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+}
+
+.plan svg {
+  flex: none;
+  color: var(--sx-accent);
+}
+
+/* The sealed consent words, in full, at full width. */
+.consent {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.consent > p {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
+}
+
+.terms summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.terms p {
+  margin: 4px 0 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  white-space: pre-line;
+}
+
+/* Pinned at the foot, above the page as it scrolls. */
+.actions {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  gap: 4px;
+  width: min(440px, 100%);
+  margin: 0 auto;
+  padding: 12px 0 max(12px, env(safe-area-inset-bottom));
+  background: var(--sx-paper);
+}
+
+.actions button.primary,
+.actions button.secondary {
+  width: 100%;
+  min-height: 52px;
+  justify-content: center;
+  border-radius: var(--sx-radius-pill);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+}
+
+/* Turn on and Not now: equal weight, the same size. */
+.pair {
+  display: grid;
+  gap: 10px;
+}
+
+.actions button.secondary {
+  border: 1.5px solid var(--sx-accent);
+  background: var(--sx-surface);
+  color: var(--sx-accent);
+}
+
+.actions button.quiet {
+  width: 100%;
+  min-height: 44px;
+  justify-content: center;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dots li {
+    transition: none;
+  }
+}

@@ -1,0 +1,262 @@
+/* Phone setup's pictures (walk-art.tsx): the next phone screen, drawn from the
+   app's tokens so light and dark both read. Tokens only: no raw colours. */
+.art {
+  display: block;
+  width: min(100%, 290px);
+  height: auto;
+  margin: 0 auto;
+  overflow: visible;
+  font-family: inherit;
+}
+
+.body {
+  fill: var(--sx-surface);
+  stroke: var(--sx-line-strong);
+  stroke-width: 2.5;
+}
+
+.screen {
+  fill: var(--sx-paper);
+}
+
+.dim {
+  fill: var(--sx-scrim);
+}
+
+.camera,
+.glyph {
+  fill: var(--sx-ink-2);
+}
+
+.status {
+  fill: var(--sx-ink-2);
+  font-weight: 600;
+}
+
+.nav {
+  fill: none;
+  stroke: var(--sx-muted);
+  stroke-width: 1.5;
+}
+
+.card {
+  fill: var(--sx-surface);
+  stroke: var(--sx-hairline);
+  stroke-width: 1;
+}
+
+.iconLine {
+  fill: none;
+  stroke: var(--sx-accent);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dialogText,
+.dialogSmall,
+.header,
+.row,
+.rowStrong,
+.crumbs {
+  fill: var(--sx-ink);
+}
+
+.dialogText {
+  font-weight: 650;
+}
+
+.dialogSmall {
+  font-weight: 650;
+}
+
+.header {
+  font-weight: 700;
+}
+
+.row {
+  fill: var(--sx-ink-2);
+}
+
+.rowStrong {
+  font-weight: 650;
+}
+
+.crumbs {
+  fill: var(--sx-ink-2);
+}
+
+.crumbLast {
+  fill: var(--sx-ink);
+  font-weight: 700;
+}
+
+.quiet {
+  fill: var(--sx-muted);
+}
+
+.allow {
+  fill: var(--sx-accent-soft);
+}
+
+.allowText {
+  fill: var(--sx-accent);
+  font-weight: 700;
+}
+
+/* What to tap: the ring and its bubble. */
+.ring {
+  fill: none;
+  stroke: var(--sx-accent);
+  stroke-width: 3;
+  animation: ring 1.8s var(--sx-ease-out) infinite;
+}
+
+.bubbleFill {
+  fill: var(--sx-accent);
+}
+
+.bubbleText {
+  fill: var(--sx-accent-ink);
+  font-weight: 700;
+}
+
+.badge {
+  fill: var(--sx-accent);
+}
+
+.badgeText {
+  fill: var(--sx-accent-ink);
+  font-weight: 700;
+}
+
+.toggle {
+  fill: var(--sx-accent);
+}
+
+.knob {
+  fill: var(--sx-surface);
+}
+
+.radio {
+  fill: none;
+  stroke: var(--sx-muted);
+  stroke-width: 1.5;
+}
+
+.radioOn {
+  fill: var(--sx-accent);
+  stroke: var(--sx-accent-soft);
+  stroke-width: 3;
+}
+
+.well {
+  fill: var(--sx-sunken);
+}
+
+.picked {
+  fill: var(--sx-accent-soft);
+}
+
+.folder {
+  fill: var(--sx-tone-calls);
+}
+
+.use {
+  fill: var(--sx-accent);
+}
+
+.useText {
+  fill: var(--sx-accent-ink);
+  font-weight: 700;
+}
+
+.callsSoft {
+  fill: var(--sx-tone-calls-soft);
+}
+
+.lock {
+  fill: var(--sx-ink-2);
+}
+
+.lockLoop {
+  fill: none;
+  stroke: var(--sx-ink-2);
+  stroke-width: 2;
+}
+
+.appMark {
+  fill: var(--sx-accent);
+}
+
+.done {
+  fill: var(--sx-accent);
+}
+
+.doneTick {
+  fill: none;
+  stroke: var(--sx-accent-ink);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.found {
+  fill: var(--sx-accent);
+  font-weight: 650;
+}
+
+.shield {
+  display: block;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto;
+}
+
+.shieldBack {
+  fill: var(--sx-accent-soft);
+}
+
+.shieldLine {
+  fill: none;
+  stroke: var(--sx-accent);
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tick {
+  display: block;
+  width: 132px;
+  height: 132px;
+  margin: 0 auto;
+}
+
+.tickBack {
+  fill: var(--sx-accent);
+}
+
+.tickLine {
+  fill: none;
+  stroke: var(--sx-accent-ink);
+  stroke-width: 11;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@keyframes ring {
+  0%,
+  100% {
+    stroke-opacity: 1;
+  }
+
+  50% {
+    stroke-opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ring {
+    animation: none;
+  }
+}

@@ -764,6 +764,113 @@ it("keeps the dock's room while a sheet holds its lines, so the page never jumps
     vi.useRealTimers();
   }
 });
+
+it("brings a line set aside for a sheet back to its place in the dock, keeping its room meanwhile", async () => {
+  // Tester report 203 (production 1.58, 14 Nov 2026): "Finish setting up" sat
+  // at the top of Leads; after any sheet it came back at the bottom, over the
+  // first lead row's due time, and the page shifted under the thumb. Its owner
+  // takes it away as a sheet opens, before the stack sees the sheet, and
+  // raises it again as the sheet closes, over a drawn page.
+  vi.useFakeTimers();
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+  const measure = vi
+    .spyOn(Element.prototype, "getBoundingClientRect")
+    .mockImplementation(function (this: Element) {
+      const height = this.parentElement?.hasAttribute("data-notice-dock")
+        ? 42
+        : 0;
+      return rect({ left: 0, top: 0, right: 360, bottom: height });
+    });
+  const matches = Element.prototype.matches;
+  const modal = vi
+    .spyOn(Element.prototype, "matches")
+    .mockImplementation(function (this: Element, selector: string) {
+      if (selector === ":modal")
+        return (
+          this.hasAttribute("data-fixture-sheet") && this.hasAttribute("open")
+        );
+      return matches.call(this, selector);
+    });
+  Object.defineProperty(document, "elementsFromPoint", {
+    configurable: true,
+    value: () => [],
+  });
+  const drawn = document.createElement("section");
+  drawn.textContent = "Leads";
+  const outline = document.createElement("div");
+  outline.setAttribute("aria-busy", "true");
+  document.body.append(drawn, outline);
+  let under: Element = outline;
+  Object.defineProperty(document, "elementFromPoint", {
+    configurable: true,
+    value: () => under,
+  });
+  const page = document.createElement("div");
+  document.body.append(page);
+  const pageRoot = createRoot(page);
+  const sheet = document.createElement("dialog");
+  sheet.setAttribute("data-fixture-sheet", "");
+  document.body.append(sheet);
+  const reminder = () =>
+    notify({
+      id: "fictional",
+      tone: "info",
+      title: "Finish setting up",
+      message: "Fictional step",
+      action: { label: "Finish", icon: "none", run: () => {} },
+      slim: true,
+      pillAction: true,
+      noReport: true,
+      dock: true,
+      timeout: 0,
+      onDismiss: async () => {},
+    });
+  try {
+    await act(async () => pageRoot.render(<NoticeDock />));
+    await act(async () => reminder());
+    const dock = page.querySelector<HTMLElement>("[data-notice-dock]")!;
+    expect(dock.textContent).toContain("Finish setting up");
+    under = drawn;
+    // A sheet opens and the line is set aside: the dock keeps its room.
+    await act(async () => {
+      sheet.setAttribute("open", "");
+      dismissNotice("fictional");
+    });
+    expect(dock.textContent).toBe("");
+    expect(dock.hasAttribute("data-held")).toBe(true);
+    expect(dock.style.getPropertyValue("--sx-dock-held")).toBe("42px");
+    await frames();
+    expect(dock.hasAttribute("data-held")).toBe(true);
+    // It closes and the line comes back: to its place, never the corner.
+    await act(async () => {
+      sheet.removeAttribute("open");
+      reminder();
+    });
+    await frames();
+    expect(dock.textContent).toContain("Finish setting up");
+    expect(host.textContent).not.toContain("Finish setting up");
+    expect(dock.hasAttribute("data-held")).toBe(false);
+  } finally {
+    await act(async () => pageRoot.unmount());
+    sheet.remove();
+    page.remove();
+    drawn.remove();
+    outline.remove();
+    measure.mockRestore();
+    modal.mockRestore();
+    delete (document as { elementsFromPoint?: unknown }).elementsFromPoint;
+    delete (document as { elementFromPoint?: unknown }).elementFromPoint;
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  }
+});
 it("lifts over a bar that reaches its place as the screen's motion ends", async () => {
   // Redmi QA on the owner's production build, 13 Nov 2026: "Finish setting
   // up", raised on Home, sat over Leads' Call Next Lead. Leads slid in; while

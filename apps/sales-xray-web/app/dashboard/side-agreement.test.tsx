@@ -20,7 +20,7 @@ vi.mock("next/link", () => ({
 import type { Effort, SideEffort } from "../performance/performance-client";
 import type { HomeSide } from "./my-day-client";
 import { onSide, TodayPerformance } from "./seller-home";
-import { elsewhere } from "./team-floor";
+import { elsewhere, noCallsNote } from "./team-floor";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -66,6 +66,15 @@ it("says where today's calls are when the side shown has none", () => {
     elsewhere("inbound", { inbound: side(2), cold: side(35) } as Effort),
   ).toBe("");
   expect(elsewhere("inbound", null)).toBe("");
+});
+
+it("the team hero's ring says where today's calls are instead of a bare zero (#174 #175)", () => {
+  const effort = { inbound: side(0), cold: side(35) } as Effort;
+  expect(noCallsNote("inbound", effort, false)).toBe("35 tried on Cold");
+  expect(noCallsNote("inbound", effort, true)).toBe("35 tried on Cold");
+  const quiet = { inbound: side(0), cold: side(0) } as Effort;
+  expect(noCallsNote("inbound", quiet, false)).toBe("No calls yet today");
+  expect(noCallsNote("cold", quiet, true)).toBe("No calls that day");
 });
 
 it("a seller's Inbound performance at 0 says how many were tried on Cold", async () => {

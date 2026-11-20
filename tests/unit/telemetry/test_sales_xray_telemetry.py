@@ -421,6 +421,18 @@ def test_friction_events_take_flow_steps_prompt_outcomes_and_tap_places_only() -
         },
     )
     check_payload_values(flow, {"flow": "phone_setup", "outcome": "done", "left": 2, "via": "all"})
+    # Phone setup's one-ask walk (20 Nov 2026): its own steps, the first run, and Not now per step.
+    for step in ("welcome", "notifications", "analyse", "test_call", "all_set"):
+        check_payload_values(
+            flow,
+            {"flow": "phone_setup", "outcome": "step", "step": step, "via": "first_run"},
+        )
+    check_payload_values(
+        flow, {"flow": "phone_setup", "outcome": "skip", "step": "analyse", "left": 3, "via": "fix"}
+    )
+    check_payload_values(
+        SALES_XRAY_EVENTS["sx.screen_viewed"], {"screen": "setup", "from": "home", "nav": "push"}
+    )
     for bad in (
         {"flow": "checkout", "outcome": "start"},
         {"flow": "add_lead", "outcome": "gave_up"},

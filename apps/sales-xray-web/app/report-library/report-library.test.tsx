@@ -292,7 +292,7 @@ describe("Main page", () => {
     expect(host.textContent).toContain(
       "Turn your sales conversations into clearer next steps.",
     );
-    expect($("h1")?.textContent).toBe("Reports");
+    expect($("h1")?.textContent).toBe("Calls");
   });
 
   it("switches between Main and All Reports", async () => {

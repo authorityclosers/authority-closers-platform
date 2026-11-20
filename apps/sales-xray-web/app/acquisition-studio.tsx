@@ -280,6 +280,25 @@ export function minutesOutNotice(
 export const FILE_REFUSED =
   "That file can't be analysed. Choose a call recording up to 100 MB: MP3, WAV, M4A, AAC or another audio or video file.";
 
+const RECORDING_NAME =
+  /\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc|wma|asf|wmv|caf)$/i;
+
+/**
+ * Why New analysis can't take this file, or null when it can: too big (with
+ * its size and the most), empty, or not a recording. One line for all three
+ * never said which, so a WAV over the limit read as "WAV isn't taken" (Dipak,
+ * bug report 201).
+ */
+export function fileRefusal(file: File, maximumBytes: number): string | null {
+  if (!RECORDING_NAME.test(file.name)) return FILE_REFUSED;
+  if (!file.size) return "This file is empty. Choose the call recording again.";
+  if (file.size <= maximumBytes) return null;
+  // Rounded apart, so a file just over never reads as the most itself.
+  const size = Math.ceil(file.size / 100_000) / 10;
+  const most = Math.floor(maximumBytes / 100_000) / 10;
+  return `This file is too big: ${size} MB. The most is ${most} MB. Choose a shorter recording, or an MP3 or M4A copy (they're smaller).`;
+}
+
 /**
  * Why New analysis can't take a file now, said under Choose a file, or null.
  * Out of minutes where none can be bought here (a member, or the Google Play
@@ -1584,15 +1603,11 @@ export function AcquisitionStudio({
     clearConsent();
     setConsentedSubmissionId(null);
     setPlanRequiresAction(false);
-    if (
-      !policy ||
-      !/\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc|wma|asf|wmv|caf)$/i.test(
-        next.name,
-      ) ||
-      !next.size ||
-      next.size > policy.maximum_file_bytes
-    ) {
-      setError(FILE_REFUSED);
+    const refusal = policy
+      ? fileRefusal(next, policy.maximum_file_bytes)
+      : FILE_REFUSED;
+    if (refusal) {
+      setError(refusal);
       setLocalValidationError(true);
       return;
     }
@@ -1615,18 +1630,16 @@ export function AcquisitionStudio({
   function addFiles(nextFiles: FileList | File[]) {
     if (inFlight.current || submission || !policy || uploadUnresolved) return;
     const candidates = Array.from(nextFiles);
+    const refusals = candidates
+      .map((candidate) => fileRefusal(candidate, policy.maximum_file_bytes))
+      .filter((refusal): refusal is string => refusal !== null);
     const valid = candidates.filter(
-      (candidate) =>
-        /\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc|wma|asf|wmv|caf)$/i.test(
-          candidate.name,
-        ) &&
-        candidate.size > 0 &&
-        candidate.size <= policy.maximum_file_bytes,
+      (candidate) => !fileRefusal(candidate, policy.maximum_file_bytes),
     );
-    const hasInvalidFiles = valid.length !== candidates.length;
+    const hasInvalidFiles = refusals.length > 0;
     if (valid.length === 0) {
       if (hasInvalidFiles) {
-        setError(FILE_REFUSED);
+        setError(refusals[0]);
         setLocalValidationError(true);
       }
       return;
@@ -1639,7 +1652,7 @@ export function AcquisitionStudio({
       ]);
     if (!file) choose(valid[0]);
     if (hasInvalidFiles) {
-      setError(FILE_REFUSED);
+      setError(refusals[0]);
       setLocalValidationError(true);
     }
   }
@@ -4318,6 +4331,7 @@ function errorTitle(error: unknown, statusOnly: boolean) {
     return "Can’t refresh this call’s status";
   if (error instanceof AcquisitionError) {
     if (error.status === 401) return "You’re signed out";
+    if (error.reason === "call_too_long") return "This call is too long";
     if (error.status === 403) return "Access needs a check";
     if (error.status === 404) return "Call not found";
     if (error.status === 429) return "One moment";

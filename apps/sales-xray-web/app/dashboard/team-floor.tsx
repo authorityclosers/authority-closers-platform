@@ -636,6 +636,19 @@ export function elsewhere(side: Side, effort: Effort | null): string {
   return ` · ${there} tried on ${other === "cold" ? "Cold" : "Inbound"}`;
 }
 
+/** The line under the hero's ring when the side shown has no calls: where the
+ *  team's calls are when the other side has them, else that there are none
+ *  (owner, #174 #175, 4 Nov 2026: "Swamini called and this panel says zero";
+ *  the hint had dropped out of the hero in the 15 Nov redesign). */
+export function noCallsNote(
+  side: Side,
+  effort: Effort | null,
+  past: boolean,
+): string {
+  const away = elsewhere(side, effort).replace(/^ · /, "");
+  return away || (past ? "No calls that day" : "No calls yet today");
+}
+
 const FACES_KEY = "sx:home-floor-faces";
 const subscribeNothing = () => () => {};
 const readKeptFaces = (): string | null => {
@@ -1026,9 +1039,7 @@ function FloorHero({
                 {!day
                   ? " "
                   : none
-                    ? past
-                      ? "No calls that day"
-                      : "No calls yet today"
+                    ? noCallsNote(side, effort, past)
                     : `of ${count(day.attempted)} calls`}
               </small>
             </span>

@@ -256,180 +256,11 @@ const counts = (
   [`/v1/lead-desk/leads?scope=unassigned&side=${side}`]: page(unowned),
 });
 
-const figures = () =>
-  Array.from(host.querySelectorAll("[data-figure]"), (figure) => [
-    figure.getAttribute("data-figure"),
-    figure.querySelector("strong")?.textContent,
-    figure.hasAttribute("data-red"),
-  ]);
-
-// Owner and Dipak, 31 Oct 2026: the team's floor, one lead type at a time,
-// counts not shares, today's calls, what needs the owner, each seller's day.
-it("gives an owner the team's floor, one side at a time", async () => {
-  answer({
-    "/v1/lead-desk": owner(desk([])),
-    "/v1/lead-desk/reports/performance*": performance(),
-    "/v1/lead-desk/team": team({ new: 4, not_connected: 3, won: 3 }),
-    "/v1/lead-desk/performance/sellers*": effort(true),
-    ...counts("inbound", 4, 7, 2),
-    ...counts("cold", 9, 11, 0),
-  });
-  await mount(true);
-  await act(async () => Promise.resolve());
-  await act(async () => Promise.resolve());
-  expect(host.querySelector("h2")?.textContent).toBe("Today");
-  expect(figures().slice(0, 4)).toEqual([
-    ["new", "4", true],
-    ["open", "7", false],
-    ["late", "1", true],
-    ["unowned", "2", true],
-  ]);
-  expect(
-    ["new", "open", "late", "unowned"].map((key) =>
-      host.querySelector(`a[data-figure=${key}]`)?.getAttribute("href"),
-    ),
-  ).toEqual([
-    "/leads?view=to_call&step=new",
-    "/leads?view=all&step=open_leads",
-    "/leads?tab=all&due=late",
-    "/leads?tab=all&stage=open&who=unassigned",
-  ]);
-  // Today's calls on Inbound, and the first call's speed.
-  expect(
-    figures()
-      .slice(4, 8)
-      .map(([key, value]) => [key, value]),
-  ).toEqual([
-    ["tried", "12"],
-    ["connected", "6"],
-    ["not_connected", "6"],
-    ["talk", "25 min"],
-  ]);
-  expect(
-    host.querySelector("[data-figure=first_call] strong")?.textContent,
-  ).toBe("8 min");
-  // Needs you now, worst first; a missing recording is not a missed call.
-  expect(
-    Array.from(host.querySelectorAll("[data-need]"), (need) =>
-      need.getAttribute("data-need"),
-    ),
-  ).toEqual(["late", "fresh", "unowned", "gaps", "recordings"]);
-  // Each seller's day, the unexplained hour-long break as the row's line.
-  const seller = host.querySelector('[aria-label="Each seller today"] a');
-  expect(seller?.textContent?.toLowerCase()).toContain("priya example");
-  expect(seller?.querySelector("small[data-warn]")?.textContent).toBe(
-    "Break 1 h 15 min",
-  );
-  // How sales are going: the outcomes in a grid, no sideways row.
-  expect(
-    Array.from(
-      host.querySelectorAll("[data-layout=grid] [data-tile]"),
-      (tile) => tile.getAttribute("data-tile"),
-    ),
-  ).toEqual(["won", "interested", "new_leads", "connected"]);
-  expect(host.querySelector("[data-layout=slider]")).toBeNull();
-  // Recent calls left Home (Dipak's handoff).
-  expect(host.querySelector('[aria-label="Recent"]')).toBeNull();
-  const buttons = Array.from(
-    host.querySelectorAll("button"),
-    (button) => button.textContent,
-  );
-  expect(buttons).toContain("Controls");
-  expect(buttons).toContain("Me");
-  expect(
-    host.querySelector('a[href="/organisation?tab=team"]')?.textContent,
-  ).toContain("Your team");
-  expect(host.querySelector('a[href="/reports"]')).not.toBeNull();
-  // The owner's own tasks and follow-ups sit beside the team's (Dipak: owners
-  // have their tasks too), with Add task at the card's foot.
-  expect(
-    Array.from(host.querySelectorAll("h2"), (title) => title.textContent),
-  ).toContain("My tasks");
-  expect(buttons).toContain("Add task");
-
-  // Cold: Unworked, never mixed with Inbound.
-  const cold = Array.from(host.querySelectorAll("[role=radio]")).find((radio) =>
-    radio.textContent?.includes("Cold"),
-  ) as HTMLElement;
-  await act(async () => cold.click());
-  await act(async () => Promise.resolve());
-  await act(async () => Promise.resolve());
-  expect(window.location.search).toBe("?side=cold");
-  expect(figures().slice(0, 4)).toEqual([
-    ["new", "9", true],
-    ["open", "11", false],
-    ["late", "3", true],
-    ["unowned", "0", false],
-  ]);
-  expect(host.querySelector("a[data-figure=new]")?.textContent).toContain(
-    "Unworked",
-  );
-  expect(host.querySelector("a[data-figure=new]")?.getAttribute("href")).toBe(
-    "/leads?view=to_call&step=new&side=cold",
-  );
-  expect(
-    Array.from(host.querySelectorAll("[data-need]"), (need) =>
-      need.getAttribute("data-need"),
-    ),
-  ).toEqual(["late", "gaps", "recordings"]);
-});
-
-// Phone personas on v1.21 (31 Oct 2026): an organisation on older stages has no
-// "open_leads", and its Open leads card said 0 and opened "No leads match". Each
-// lead card opens its stage as the server found it by meaning; a card whose
-// meaning the organisation lacks is left out, never a raw key.
-const withStages = (open_key: string | null) => {
-  const keys = { new_key: "enquiry", open_key, upcoming: [] };
-  return { ...owner(desk([])), sides: { inbound: keys, cold: keys } };
-};
-
-it("opens each lead card's stage as the server found it by meaning", async () => {
-  answer({
-    "/v1/lead-desk": withStages("contacted"),
-    "/v1/lead-desk/reports/performance*": performance(),
-    "/v1/lead-desk/team": team({ new: 2 }),
-    "/v1/lead-desk/performance/sellers*": effort(false),
-    "/v1/lead-desk/leads?scope=team&side=inbound&view=to_call&step=enquiry":
-      page(2),
-    "/v1/lead-desk/leads?scope=team&side=inbound&view=all&step=contacted":
-      page(5),
-    "/v1/lead-desk/leads?scope=unassigned&side=inbound": page(0),
-  });
-  await mount(true);
-  await act(async () => Promise.resolve());
-  await act(async () => Promise.resolve());
-  expect(figures().slice(0, 2)).toEqual([
-    ["new", "2", true],
-    ["open", "5", false],
-  ]);
-  expect(
-    ["new", "open"].map((key) =>
-      host.querySelector(`a[data-figure=${key}]`)?.getAttribute("href"),
-    ),
-  ).toEqual([
-    "/leads?view=to_call&step=enquiry",
-    "/leads?view=all&step=contacted",
-  ]);
-});
-
-it("leaves out Open leads where the organisation has no such stage", async () => {
-  answer({
-    "/v1/lead-desk": withStages(null),
-    "/v1/lead-desk/reports/performance*": performance(),
-    "/v1/lead-desk/team": team({ new: 2 }),
-    "/v1/lead-desk/performance/sellers*": effort(false),
-    "/v1/lead-desk/leads?scope=team&side=inbound&view=to_call&step=enquiry":
-      page(2),
-    "/v1/lead-desk/leads?scope=unassigned&side=inbound": page(0),
-  });
-  await mount(true);
-  await act(async () => Promise.resolve());
-  await act(async () => Promise.resolve());
-  expect(figures().map(([key]) => key)).not.toContain("open");
-  expect(figures()[0]).toEqual(["new", "2", true]);
-  const asked = vi.mocked(fetch).mock.calls.map(([input]) => String(input));
-  expect(asked.some((path) => path.includes("open_leads"))).toBe(false);
-});
+/** A Team today figure's number, by its label. */
+const kpi = (label: string) =>
+  Array.from(host.querySelectorAll("[data-team-today] li a"))
+    .find((link) => link.querySelector("span")?.textContent === label)
+    ?.querySelector("strong")?.textContent;
 
 // QA robot 331fa263 (1 Nov 2026): offline, Home said nothing. It says so
 // calmly, keeps the numbers it had, and reads again once back online.
@@ -456,7 +287,8 @@ it("says it is offline, keeps what it had, and reads again when back", async () 
     expect(host.textContent).toContain(
       "You're offline. Showing what was saved.",
     );
-    expect(figures()[0]).toEqual(["new", "4", true]);
+    // Inbound and Cold together, as Growth counts (board 6).
+    expect(kpi("Calls")).toBe("17");
     const asked = vi.mocked(fetch).mock.calls.length;
     online = true;
     await act(async () => {
@@ -512,42 +344,6 @@ it("says it is offline in the corner, over the page, not in Home's flow", async 
   }
 });
 
-// The Home studio (9 Nov 2026): the floor's hero grew 67 px under the pager at
-// 363 as the team's numbers landed. Until they do, its note and the faces drawn
-// last time hold their room, unseen.
-it("holds the floor's note and faces in their place until the numbers land", async () => {
-  answer({
-    "/v1/lead-desk": owner(desk([])),
-    "/v1/lead-desk/reports/performance*": performance(),
-    "/v1/lead-desk/team": team({ new: 4 }),
-    ...counts("inbound", 4, 7, 2),
-  });
-  await mount(true);
-  const waiting = () => host.querySelectorAll("li[data-wait]").length;
-  expect(waiting()).toBe(7);
-  // The hero's team line is chips now (owner, 15 Nov 2026).
-  expect(host.textContent).toContain("Team performance");
-  await act(async () => root.unmount());
-  host.remove();
-  window.localStorage.setItem("sx:home-floor-faces", "3");
-  await mount(true);
-  expect(waiting()).toBe(3);
-});
-
-it("keeps how many faces the floor drew, for the next visit's room", async () => {
-  answer({
-    "/v1/lead-desk": owner(desk([])),
-    "/v1/lead-desk/reports/performance*": performance(),
-    "/v1/lead-desk/team": team({ new: 4 }),
-    "/v1/lead-desk/performance/sellers*": effort(true),
-    ...counts("inbound", 4, 7, 2),
-  });
-  await mount(true);
-  await act(async () => Promise.resolve());
-  expect(host.querySelectorAll("li[data-wait]")).toHaveLength(0);
-  expect(window.localStorage.getItem("sx:home-floor-faces")).toBe("1");
-});
-
 // The owner (10 Nov 2026, his OnePlus): on Home, even as admin, he was
 // "redirected from Team to Me". A choice of Me kept on the device used to be
 // applied once the desk answered; Team is where an owner's Home opens.
@@ -591,6 +387,9 @@ it("can be pulled down to read everything again", async () => {
 });
 
 it("keeps every figure calm when nothing waits", async () => {
+  // Before the working day, so a seller with no call yet isn't news.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-22T03:00:00Z"));
   answer({
     "/v1/lead-desk": owner(desk([])),
     "/v1/lead-desk/reports/performance*": performance({
@@ -604,9 +403,9 @@ it("keeps every figure calm when nothing waits", async () => {
   await mount(true);
   await act(async () => Promise.resolve());
   await act(async () => Promise.resolve());
-  expect(figures().filter(([, , red]) => red)).toEqual([]);
-  expect(host.querySelector("[data-need]")).toBeNull();
-  expect(host.textContent).toContain("Nothing waiting. All clear.");
+  expect(host.querySelector("[data-insight]")).toBeNull();
+  expect(host.textContent).toContain("Nothing needs you right now. All clear.");
+  vi.useRealTimers();
 });
 
 it("switches an owner between Team and Me in one tap", async () => {
@@ -630,7 +429,7 @@ it("switches an owner between Team and Me in one tap", async () => {
   await act(async () => back.click());
   await act(async () => Promise.resolve());
   expect(window.location.search).toBe("");
-  expect(host.querySelector("a[data-figure=unowned]")).not.toBeNull();
+  expect(host.querySelector("[data-team-today]")).not.toBeNull();
 });
 
 // Owner, #20 (26 Oct 2026): a brand-new workspace starts with three steps.
@@ -748,9 +547,8 @@ it("gives a Viewer the team's Home with nothing to change", async () => {
       (button) => button.textContent === "My day",
     ),
   ).toBe(false);
-  expect(host.textContent).toContain("How sales are going");
-  // The team's floor, read only: no settings, no My work.
-  expect(host.querySelector("a[data-figure=unowned]")).not.toBeNull();
+  // Team today, read only: no settings, no My work.
+  expect(host.textContent).toContain("Team today");
   expect(host.querySelector('a[href="/settings/lead-rules"]')).toBeNull();
   expect(host.textContent).not.toContain("late follow-up");
   expect(host.textContent).not.toContain("Analyse yourself");

@@ -218,6 +218,30 @@ describe("acquisition permission recovery", () => {
     });
   });
 
+  it("says a call over the limit is too long, not an access problem (bug report 201)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            detail:
+              "This recording is longer than 60 minutes, the longest call Sales X-Ray analyses. Split it and try again.",
+          }),
+          { status: 403 },
+        ),
+      ),
+    );
+    await expect(
+      acquisition(`/submissions/${submissionId}/source`, { method: "PUT" }),
+    ).rejects.toMatchObject({
+      status: 403,
+      reason: "call_too_long",
+      message: expect.stringContaining(
+        "This recording is longer than 60 minutes",
+      ),
+    });
+  });
+
   it("preserves the server request reference without exposing arbitrary denial text", async () => {
     vi.stubGlobal(
       "fetch",
@@ -250,7 +274,7 @@ describe("acquisition permission recovery", () => {
     [
       "The audio length could not be verified. Try another file.",
       "source_verification",
-      "We couldn’t verify this recording’s audio.",
+      "We couldn’t read this recording’s audio. Try an MP3 or M4A copy",
     ],
     [
       "Choose an audio or video file up to 100 MB and accept the current upload terms.",
@@ -266,6 +290,22 @@ describe("acquisition permission recovery", () => {
       "The recording could not be verified in private storage.",
       "source_storage",
       "The recording could not be verified in private storage.",
+    ],
+    // A refused file says why, never "Check your connection" (bug report 201).
+    [
+      "Choose a supported audio or video file up to 100 MB.",
+      "source_unsupported",
+      "This file type can’t be read. Choose an MP3 or M4A copy of the call.",
+    ],
+    [
+      "Choose an audio or video file up to 100 MB.",
+      "source_too_big",
+      "This file is too big: the most is 100 MB.",
+    ],
+    [
+      "This file has no sound track.",
+      "source_silent",
+      "This file has no sound.",
     ],
   ] as const)(
     "translates a controlled source denial (%s)",

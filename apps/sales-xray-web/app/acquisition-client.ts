@@ -7,6 +7,7 @@ import {
   NEW_ANALYSIS_PATH,
 } from "./analysis-routes";
 import { parseCallLabel, type CallLabel } from "./call-label";
+import { CALL_LIMIT_MINUTES } from "./call-limit";
 import { ReportContractError } from "./report-contract";
 import {
   parseLanguageCapabilities,
@@ -288,6 +289,35 @@ function liveProgress(
   return live;
 }
 
+/** The server's words for a call over the limit (acquisition_usage.py
+ *  LONGEST_CALL_EXCEEDED_MESSAGE), shown as they are. */
+const CALL_TOO_LONG = `This recording is longer than ${CALL_LIMIT_MINUTES} minutes, the longest call Sales X-Ray analyses. Split it and try again.`;
+
+/**
+ * A file the server refused says why, in plain words (Dipak, bug report 201:
+ * a refused file read "Check your connection and try again"). Keyed by the
+ * server's exact words (acquisition_source.py); other text is never shown.
+ */
+const FILE_REFUSAL_DETAILS = new Map<
+  unknown,
+  "source_unsupported" | "source_too_big" | "source_silent"
+>([
+  [
+    "Choose a supported audio or video file up to 100 MB.",
+    "source_unsupported",
+  ],
+  ["Choose an audio or video file up to 100 MB.", "source_too_big"],
+  ["This file has no sound track.", "source_silent"],
+]);
+const FILE_REFUSALS: Readonly<Record<string, string>> = {
+  source_unsupported:
+    "This file type can’t be read. Choose an MP3 or M4A copy of the call.",
+  source_too_big:
+    "This file is too big: the most is 100 MB. Choose a shorter recording, or an MP3 or M4A copy (they’re smaller).",
+  source_silent: "This file has no sound. Choose the call’s audio recording.",
+  call_too_long: CALL_TOO_LONG,
+};
+
 export class AcquisitionError extends Error {
   constructor(
     readonly status: number,
@@ -301,12 +331,16 @@ export class AcquisitionError extends Error {
       | "source_invalid"
       | "source_incomplete"
       | "source_verification"
-      | "source_storage",
+      | "source_storage"
+      | "source_unsupported"
+      | "source_too_big"
+      | "source_silent"
+      | "call_too_long",
     readonly requestId?: string,
   ) {
     const message =
       reason === "source_verification"
-        ? "We couldn’t verify this recording’s audio. Try again; if this continues, share the request reference with the AC team."
+        ? "We couldn’t read this recording’s audio. Try an MP3 or M4A copy of the call; if that fails too, share the request reference with the AC team."
         : reason === "execution_paused"
           ? ACQUISITION_PAUSED_MESSAGE
           : reason === "release_hold"
@@ -336,7 +370,8 @@ export class AcquisitionError extends Error {
                           : status === 409
                             ? "Analysis is not available for this call yet. Your recording remains private; try again shortly."
                             : "This request did not finish. Check your connection and try again.";
-    super(requestId ? `${message} Request reference: ${requestId}.` : message);
+    const shown = (reason && FILE_REFUSALS[reason]) || message;
+    super(requestId ? `${shown} Request reference: ${requestId}.` : shown);
   }
 }
 export async function acquisition(
@@ -394,6 +429,9 @@ export async function acquisition(
           requestId,
         );
       }
+      // Over the longest call: not an access problem (bug report 201).
+      if (detail === CALL_TOO_LONG)
+        throw new AcquisitionError(response.status, "call_too_long", requestId);
       if (!/^\/submissions\/[0-9a-f-]{36}\/plan(?:\/quote)?$/.test(path))
         throw new AcquisitionError(response.status, undefined, requestId);
       const allowanceUsed =
@@ -431,7 +469,11 @@ export async function acquisition(
                   "The recording could not be verified in private storage."
                 ? "source_storage"
                 : undefined;
-      throw new AcquisitionError(response.status, sourceReason, requestId);
+      throw new AcquisitionError(
+        response.status,
+        sourceReason ?? FILE_REFUSAL_DETAILS.get(detail),
+        requestId,
+      );
     }
     throw new AcquisitionError(response.status, undefined, requestId);
   }

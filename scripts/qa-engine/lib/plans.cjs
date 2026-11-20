@@ -24,7 +24,7 @@ async function open(tab, route) {
 }
 
 const BOTH = new Set(["priya", "rohan", "farah", "karan", "pooja", "vikas"]);
-const NAV_WANT = ["Home", "Leads", "Ask Dipak", "Reports", "Growth"];
+const NAV_WANT = ["Home", "Leads", "Ask Dipak", "Calls", "Growth"];
 
 async function noFindings(tab, route, rules, mark) {
   const found = (await probe(tab, route, { mark, skipAxe: !rules.some((r) => r.startsWith("axe:")) })).filter((f) => rules.includes(f.rule));

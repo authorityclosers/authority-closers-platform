@@ -37,6 +37,7 @@ import {
   dueWords,
   kindOf,
 } from "./task-words";
+import { useTasksChanged } from "./tasks-changed";
 import styles from "./tasks.module.css";
 
 const AddTaskSheet = dynamic(
@@ -134,6 +135,8 @@ export function TasksView({
   });
   const tasks = (shown?.tasks ?? []).filter((task) => !gone.has(task.task_id));
   const reload = () => setRound((value) => value + 1);
+  // A task added from the header's + or a lead lists at once (218, 219).
+  useTasksChanged(reload);
   const hide = (task: ListedTask, hidden: boolean) =>
     setGone((value) => {
       const next = new Set(value);

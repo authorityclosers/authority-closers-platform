@@ -40,6 +40,7 @@ import {
   quickTimes,
 } from "./task-words";
 import { useDraft } from "./drafts";
+import { tasksChanged } from "./tasks-changed";
 import styles from "./add-task-sheet.module.css";
 
 /** The kinds a seller adds by hand, the most used first. Tasks are the
@@ -263,6 +264,8 @@ export function AddTaskSheet({
       });
       setTitle("");
       onAdded(at);
+      // Home's and Tasks' lists show it now, not after a refresh (218, 219).
+      tasksChanged();
     } catch (reason) {
       if (reason instanceof LeadsError && reason.kept) {
         notify({
@@ -273,6 +276,7 @@ export function AddTaskSheet({
         });
         setTitle("");
         onAdded(at);
+        tasksChanged();
         return;
       }
       notify({
