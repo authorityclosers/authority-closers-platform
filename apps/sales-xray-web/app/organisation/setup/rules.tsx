@@ -12,43 +12,26 @@ import {
 import { TeamView, WorkHoursPanel } from "../../leads/team-view";
 import { SellerSheet } from "../../leads/seller-sheet";
 import { readCallAi, type CallAiSettings } from "../../call-ai/call-ai-client";
-import { Segmented, Skeleton } from "../../ui/kit";
-import { SideScroll } from "../../ui/side-scroll";
+import { Skeleton } from "../../ui/kit";
 import { PersonDisplayName } from "../people/person-display-name";
+import { LeadSplit } from "./lead-split";
+import split from "./lead-split.module.css";
 import styles from "./setup.module.css";
 
 export function OrganisationRules() {
-  const [part, setPart] = useState<"routing" | "people" | "limits">("routing");
+  // One page, not two rows of tabs (round-2 board 3, option C, 20 Nov 2026):
+  // the split, the move after work minutes, the hours and the sellers' switch,
+  // then the rules for some leads and each seller's own rules, one tap down.
+  // No title of its own: Leads setup's switch already says Lead rules (owner,
+  // bug 190, 6 Nov 2026).
   return (
-    // No title of its own: Leads setup's switch already says Lead rules
-    // (owner, bug 190, 6 Nov 2026: the same words three times, too much text).
     <div className={styles.stack}>
-      {/* Each label on one line: at large text the switch scrolls sideways
-          inside itself, as Leads setup's own switch does (owner's bug 190,
-          re-checked at 130% text on 10 Nov 2026: the labels wrapped). */}
-      <SideScroll chosen={part}>
-        <Segmented
-          label="Lead rule setup"
-          value={part}
-          onChange={setPart}
-          items={[
-            { key: "routing", label: "Match leads" },
-            { key: "people", label: "Seller rules" },
-            { key: "limits", label: "Limits" },
-          ]}
-        />
-      </SideScroll>
-      {part === "routing" ? (
-        <div className={styles.routing}>
-          <RoutingRules />
-        </div>
-      ) : (
-        <SellerRules mode={part} />
-      )}
+      <LeadSplit />
+      <SellerRules />
     </div>
   );
 }
-function SellerRules({ mode }: { mode: "people" | "limits" }) {
+function SellerRules() {
   const [team, setTeam] = useState<Team | null>(null);
   const [callAi, setCallAi] = useState<CallAiSettings | null>(null);
   const [editing, setEditing] = useState<RepView | null>(null);
@@ -56,6 +39,7 @@ function SellerRules({ mode }: { mode: "people" | "limits" }) {
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [advanced, setAdvanced] = useState(false);
+  const [routingOpen, setRoutingOpen] = useState(false);
   const [failed, setFailed] = useState(false);
   const [minutes, setMinutes] = useState(10);
   const lock = useRef(false);
@@ -100,7 +84,7 @@ function SellerRules({ mode }: { mode: "people" | "limits" }) {
         ...(giving === undefined ? {} : { sellers_reassign: giving }),
       });
       setTeam(next);
-      notify({ id: "org-rules", tone: "success", title: "Lead limit saved" });
+      notify({ id: "org-rules", tone: "success", title: "Lead rules saved" });
     } catch (reason) {
       notify({
         id: "org-rules",
@@ -113,163 +97,188 @@ function SellerRules({ mode }: { mode: "people" | "limits" }) {
       setBusy(false);
     }
   };
+  const people = (
+    <>
+      <p className={styles.help}>
+        Choose a seller to set areas, languages, products and capacity.
+      </p>
+      <ul className={styles.list}>
+        {team.reps.map((rep) => (
+          <li key={rep.person_id}>
+            <button
+              className={styles.choice}
+              onClick={() => {
+                setEditing(rep);
+                setRound((value) => value + 1);
+              }}
+            >
+              <UsersRound size={20} aria-hidden="true" />
+              <span className={styles.copy}>
+                <PersonDisplayName name={rep.name} />
+                <small>
+                  {rep.available ? "Taking leads" : "Not taking leads"} ·{" "}
+                  {rep.max_open == null
+                    ? "No cap"
+                    : `${rep.max_open} open-lead cap`}
+                </small>
+              </span>
+              <ChevronRight size={18} aria-hidden="true" />
+            </button>
+          </li>
+        ))}
+      </ul>
+      {team.reps.length === 0 ? (
+        <p className={styles.help}>
+          Invite a seller from Team to set their lead rules.
+        </p>
+      ) : null}
+      <SellerSheet
+        key={round}
+        rep={editing}
+        callAi={callAi}
+        onClose={() => setEditing(null)}
+        onSaved={setTeam}
+        onCallAiSaved={setCallAi}
+      />
+    </>
+  );
+  const hours = team.settings.work_hours?.days?.length ? "work " : "";
   return (
-    <div className={`${styles.stack} ${styles.sellerScope}`}>
-      {mode === "people" ? (
-        <>
-          <p className={styles.help}>
-            Choose a seller to set areas, languages, products and capacity.
-          </p>
-          <ul className={styles.list}>
-            {team.reps.map((rep) => (
-              <li key={rep.person_id}>
-                <button
-                  className={styles.choice}
-                  onClick={() => {
-                    setEditing(rep);
-                    setRound((value) => value + 1);
-                  }}
-                >
-                  <UsersRound size={20} aria-hidden="true" />
-                  <span className={styles.copy}>
-                    <PersonDisplayName name={rep.name} />
-                    <small>
-                      {rep.available ? "Taking leads" : "Not taking leads"} ·{" "}
-                      {rep.max_open == null
-                        ? "No cap"
-                        : `${rep.max_open} open-lead cap`}
-                    </small>
-                  </span>
-                  <ChevronRight size={18} aria-hidden="true" />
-                </button>
-              </li>
-            ))}
-          </ul>
-          {team.reps.length === 0 ? (
-            <p className={styles.help}>
-              Invite a seller from Team to set their lead rules.
+    <>
+      <section className={styles.card}>
+        <div className={styles.head}>
+          <div>
+            <h3>Move untouched leads</h3>
+            <p>
+              A lead with no call goes to the next seller
+              {team.settings.work_hours?.days?.length
+                ? ", counting work hours only"
+                : ""}
+              .
             </p>
-          ) : null}
-          <SellerSheet
-            key={round}
-            rep={editing}
-            callAi={callAi}
-            onClose={() => setEditing(null)}
-            onSaved={setTeam}
-            onCallAiSaved={setCallAi}
-          />
-        </>
-      ) : (
-        <>
-          <section className={styles.card}>
-            <div className={styles.head}>
-              <div>
-                <h3>Move untouched leads</h3>
-                <p>Give another seller a turn when no call is logged.</p>
-              </div>
-              <button
-                className={styles.button}
-                role="switch"
-                aria-label="Move untouched leads"
-                aria-checked={team.settings.auto_reassign}
-                disabled={busy}
-                onClick={() => void save(!team.settings.auto_reassign)}
-              >
-                {team.settings.auto_reassign ? "On" : "Off"}
-              </button>
-            </div>
-            <label className={styles.copy}>
-              Wait before moving
-              <div className={styles.tools}>
-                <button
-                  className={styles.button}
-                  aria-label="Wait five minutes less"
-                  disabled={busy || minutes <= 5}
-                  onClick={() => setMinutes((value) => Math.max(5, value - 5))}
-                >
-                  <Minus size={18} />
-                </button>
-                <input
-                  className={styles.search}
-                  style={{ width: 100 }}
-                  aria-label="Wait in minutes"
-                  type="number"
-                  min={5}
-                  max={1440}
-                  step={5}
-                  value={minutes}
-                  onChange={(event) => setMinutes(Number(event.target.value))}
-                />
-                <span>minutes</span>
-                <button
-                  className={styles.button}
-                  aria-label="Wait five minutes more"
-                  disabled={busy || minutes >= 1440}
-                  onClick={() =>
-                    setMinutes((value) => Math.min(1440, value + 5))
-                  }
-                >
-                  <Plus size={18} />
-                </button>
-              </div>
-            </label>
+          </div>
+          <label className={split.toggle}>
+            <input
+              type="checkbox"
+              role="switch"
+              className={split.switch}
+              aria-label="Move untouched leads"
+              checked={team.settings.auto_reassign}
+              disabled={busy}
+              data-sx-feature="lead_rules_move_switch"
+              onChange={() => void save(!team.settings.auto_reassign)}
+            />
+            {team.settings.auto_reassign ? "On" : "Off"}
+          </label>
+        </div>
+        <p className={split.wait}>
+          After
+          <span className={split.stepper}>
+            <button
+              type="button"
+              aria-label="Wait five minutes less"
+              disabled={busy || minutes <= 5}
+              onClick={() => setMinutes((value) => Math.max(5, value - 5))}
+            >
+              <Minus size={18} aria-hidden="true" />
+            </button>
+            <input
+              aria-label="Wait in minutes"
+              type="number"
+              min={5}
+              max={1440}
+              step={5}
+              value={minutes}
+              onChange={(event) => setMinutes(Number(event.target.value))}
+            />
+            <button
+              type="button"
+              aria-label="Wait five minutes more"
+              disabled={busy || minutes >= 1440}
+              onClick={() => setMinutes((value) => Math.min(1440, value + 5))}
+            >
+              <Plus size={18} aria-hidden="true" />
+            </button>
+          </span>
+          {hours}minutes with no call
+        </p>
+        {minutes !== team.settings.reassign_minutes ? (
+          <div className={split.actions}>
             <button
               className={styles.primary}
               disabled={
                 busy ||
                 !Number.isInteger(minutes) ||
                 minutes < 5 ||
-                minutes > 1440 ||
-                minutes === team.settings.reassign_minutes
+                minutes > 1440
               }
+              data-sx-feature="lead_rules_wait_saved"
               onClick={() => void save(team.settings.auto_reassign)}
             >
               Save wait time
             </button>
-          </section>
-          {/* Sellers give their own leads to a colleague, with a reason (owner,
-              Wise Life, 19 Nov 2026); owners and admins always can. */}
-          <section className={styles.card}>
-            <div className={styles.head}>
-              <div>
-                <h3>Sellers can reassign leads</h3>
-                <p>A seller gives their lead to a colleague and says why.</p>
-              </div>
-              <button
-                className={styles.button}
-                role="switch"
-                aria-label="Sellers can reassign leads"
-                aria-checked={!!team.settings.sellers_reassign}
-                disabled={busy}
-                onClick={() =>
-                  void save(
-                    team.settings.auto_reassign,
-                    !team.settings.sellers_reassign,
-                  )
-                }
-              >
-                {team.settings.sellers_reassign ? "On" : "Off"}
-              </button>
-            </div>
-          </section>
-          <WorkHoursPanel team={team} onSaved={setTeam} />
-          <details
-            className={styles.details}
-            onToggle={(event) => setAdvanced(event.currentTarget.open)}
-          >
-            <summary>More lead rules</summary>
-            {advanced ? (
-              <div>
-                <TeamView
-                  rulesOnly
-                  onChanged={() => undefined}
-                  onOpen={() => undefined}
-                />
-              </div>
-            ) : null}
-          </details>
-        </>
-      )}
-    </div>
+          </div>
+        ) : null}
+      </section>
+      <WorkHoursPanel team={team} onSaved={setTeam} />
+      {/* Sellers give their own leads to a colleague, with a reason (owner,
+          Wise Life, 19 Nov 2026); owners and admins always can. */}
+      <section className={styles.card}>
+        <div className={styles.head}>
+          <div>
+            <h3>Sellers can reassign leads</h3>
+            <p>A seller gives their lead to a colleague and says why.</p>
+          </div>
+          <label className={split.toggle}>
+            <input
+              type="checkbox"
+              role="switch"
+              className={split.switch}
+              aria-label="Sellers can reassign leads"
+              checked={!!team.settings.sellers_reassign}
+              disabled={busy}
+              data-sx-feature="lead_rules_give_switch"
+              onChange={() =>
+                void save(
+                  team.settings.auto_reassign,
+                  !team.settings.sellers_reassign,
+                )
+              }
+            />
+            {team.settings.sellers_reassign ? "On" : "Off"}
+          </label>
+        </div>
+      </section>
+      <details
+        className={styles.details}
+        onToggle={(event) => setRoutingOpen(event.currentTarget.open)}
+      >
+        <summary>Rules for some leads (a source, a city, a language)</summary>
+        {routingOpen ? (
+          <div className={`${styles.routing} ${split.more}`}>
+            <RoutingRules />
+          </div>
+        ) : null}
+      </details>
+      <details className={styles.details}>
+        <summary>Each seller&apos;s areas and limits</summary>
+        <div className={`${styles.sellerScope} ${split.more}`}>{people}</div>
+      </details>
+      <details
+        className={styles.details}
+        onToggle={(event) => setAdvanced(event.currentTarget.open)}
+      >
+        <summary>More lead rules</summary>
+        {advanced ? (
+          <div>
+            <TeamView
+              rulesOnly
+              onChanged={() => undefined}
+              onOpen={() => undefined}
+            />
+          </div>
+        ) : null}
+      </details>
+    </>
   );
 }

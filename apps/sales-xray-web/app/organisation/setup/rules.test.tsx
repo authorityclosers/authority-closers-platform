@@ -31,6 +31,9 @@ vi.mock("../../leads/leads-client", () => ({
   saveSettings: vi.fn(),
 }));
 vi.mock("../../notice-center", () => ({ notify: vi.fn() }));
+vi.mock("./lead-split", () => ({
+  LeadSplit: () => <section>Who gets new leads</section>,
+}));
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -70,23 +73,41 @@ async function tap(text: string) {
   expect(item).toBeDefined();
   await act(async () => item!.click());
 }
-it("keeps the rule switch in its own sideways scroller, so no label wraps", async () => {
-  // The owner's bug 190, re-checked at 130% text (10 Nov 2026): "Match leads"
-  // and "Seller rules" each took two lines in a switch the width of the page.
+async function open(summary: string) {
+  const item = [...host.querySelectorAll("details")].find((details) =>
+    details.querySelector("summary")?.textContent?.includes(summary),
+  );
+  expect(item).toBeDefined();
+  await act(async () => {
+    item!.open = true;
+    item!.dispatchEvent(new Event("toggle"));
+  });
+}
+it("puts every lead rule on one page, with no rows of tabs", async () => {
+  // Round-2 board 3 (option C, 20 Nov 2026): the split, the move, the hours
+  // and the sellers' switch on one page instead of two rows of tabs.
   await act(async () => root.render(<OrganisationRules />));
-  const group = host.querySelector(
-    '[role="group"][aria-label="Lead rule setup"]',
-  )!;
-  const stack = host.firstElementChild!;
-  expect(group.parentElement).not.toBe(stack);
-  expect(group.parentElement?.parentElement).toBe(stack);
+  expect(host.querySelector('[role="group"]')).toBeNull();
+  const text = host.textContent ?? "";
+  for (const words of [
+    "Who gets new leads",
+    "Move untouched leads",
+    "Work hours",
+    "Sellers can reassign leads",
+  ])
+    expect(text).toContain(words);
+  expect(text.indexOf("Who gets new leads")).toBeLessThan(
+    text.indexOf("Move untouched leads"),
+  );
 });
 
-it("opens rule setup instead of a team dashboard", async () => {
+it("keeps the rules for some leads and each seller's rules one tap down", async () => {
   await act(async () => root.render(<OrganisationRules />));
+  expect(host.textContent).not.toContain("Try a lead");
+  await open("Rules for some leads");
   expect(host.textContent).toContain("Try a lead");
   expect(host.textContent).not.toContain("All leads");
-  await tap("Seller rules");
+  await open("areas and limits");
   await tap("Mira Fictional");
   expect(host.querySelector('[role="dialog"]')?.textContent).toContain(
     "Areas, languages",
@@ -95,13 +116,18 @@ it("opens rule setup instead of a team dashboard", async () => {
 });
 it("preserves saved wait time and uses its revision for an explicit toggle", async () => {
   await act(async () => root.render(<OrganisationRules />));
-  await tap("Limits");
   expect(
     host.querySelector<HTMLInputElement>('[aria-label="Wait in minutes"]')
       ?.value,
   ).toBe("35");
+  // Nothing to save until the wait changes.
+  expect(host.textContent).not.toContain("Save wait time");
   expect(saveSettings).not.toHaveBeenCalled();
-  await tap("Off");
+  const move = host.querySelector<HTMLInputElement>(
+    '[role="switch"][aria-label="Move untouched leads"]',
+  )!;
+  expect(move.checked).toBe(false);
+  await act(async () => move.click());
   expect(saveSettings).toHaveBeenCalledWith(7, {
     auto_reassign: true,
     reassign_minutes: 35,

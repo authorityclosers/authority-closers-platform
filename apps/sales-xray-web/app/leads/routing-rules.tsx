@@ -30,6 +30,7 @@ import {
   conditionReady,
   conditionWords,
   readRouting,
+  ROUTING_CHANGED,
   ruleReady,
   RoutingError,
   saveRouting,
@@ -105,6 +106,14 @@ export function RoutingRules() {
     });
     return () => controller.abort();
   }, []);
+  // The split saved on the same page: read the rules again (unsaved edits
+  // here stay as they are; Save then says someone else saved first).
+  useEffect(() => {
+    if (dirty) return;
+    const again = () => void readRouting().then(take, () => undefined);
+    window.addEventListener(ROUTING_CHANGED, again);
+    return () => window.removeEventListener(ROUTING_CHANGED, again);
+  }, [dirty]);
 
   // Not offered here, or not for this person: the rest of Lead rules stands.
   if (routing === "hidden") return null;
@@ -152,104 +161,109 @@ export function RoutingRules() {
         <h2 id={titleId}>Who gets which leads</h2>
         <p>
           The first rule that fits a new lead, with someone free, gives it out.
-          Leads no rule fits are shared fairly.
+          Leads no rule fits go by the split, or are shared fairly.
         </p>
       </header>
 
-      {rules.length ? (
+      {rules.some((rule) => !rule.shares?.length) ? (
         <ol className={styles.rules}>
-          {rules.map((rule, index) => (
-            <li
-              key={rule.id ?? `new-${index}`}
-              className={styles.rule}
-              data-off={rule.enabled ? undefined : ""}
-            >
-              <div className={styles.ruleHead}>
-                <span className={styles.number} aria-hidden="true">
-                  {index + 1}
-                </span>
-                <strong>{rule.name}</strong>
-                {routing.can_edit ? (
-                  <input
-                    type="checkbox"
-                    role="switch"
-                    className={styles.switch}
-                    aria-label={`${rule.name}: ${rule.enabled ? "on" : "off"}`}
-                    checked={rule.enabled}
-                    onChange={(event) =>
-                      edit(
-                        rules.map((item, at) =>
-                          at === index
-                            ? { ...item, enabled: event.target.checked }
-                            : item,
-                        ),
-                      )
-                    }
-                  />
-                ) : null}
-              </div>
-              <p className={styles.line}>
-                <span className={styles.lead}>When</span>
-                {rule.when.map((condition, at) => (
-                  <span key={at} className={styles.chip}>
-                    {conditionWords(condition, routing)}
+          {rules.map((rule, index) =>
+            // The percent split has its own card on the page (Who gets new
+            // leads); it stays in the rules saved from here.
+            rule.shares?.length ? null : (
+              <li
+                key={rule.id ?? `new-${index}`}
+                className={styles.rule}
+                data-off={rule.enabled ? undefined : ""}
+              >
+                <div className={styles.ruleHead}>
+                  <span className={styles.number} aria-hidden="true">
+                    {index + 1}
                   </span>
-                ))}
-              </p>
-              <p className={styles.line}>
-                <span className={styles.lead}>Give to</span>
-                <span className={styles.faces} aria-hidden="true">
-                  {rule.give_to.slice(0, 4).map((id) => (
-                    <PersonAvatar
-                      key={id}
-                      personId={id}
-                      name={
-                        routing.people.find((person) => person.person_id === id)
-                          ?.name ?? "?"
+                  <strong>{rule.name}</strong>
+                  {routing.can_edit ? (
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      className={styles.switch}
+                      aria-label={`${rule.name}: ${rule.enabled ? "on" : "off"}`}
+                      checked={rule.enabled}
+                      onChange={(event) =>
+                        edit(
+                          rules.map((item, at) =>
+                            at === index
+                              ? { ...item, enabled: event.target.checked }
+                              : item,
+                          ),
+                        )
                       }
-                      size={24}
                     />
-                  ))}
-                </span>
-                <span>
-                  {names(routing, rule.give_to)}
-                  {rule.give_to.length > 1 ? ", in turn" : ""}
-                </span>
-              </p>
-              {routing.can_edit ? (
-                <div className={styles.ruleActions}>
-                  <Button
-                    variant="ghost"
-                    onClick={() => setEditing({ index, rule })}
-                  >
-                    <Pencil size={16} aria-hidden="true" />
-                    Edit
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    aria-label={`Move ${rule.name} up`}
-                    disabled={index === 0}
-                    onClick={() => move(index, -1)}
-                  >
-                    <ArrowUp size={16} aria-hidden="true" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    aria-label={`Move ${rule.name} down`}
-                    disabled={index === rules.length - 1}
-                    onClick={() => move(index, 1)}
-                  >
-                    <ArrowDown size={16} aria-hidden="true" />
-                  </Button>
+                  ) : null}
                 </div>
-              ) : null}
-            </li>
-          ))}
+                <p className={styles.line}>
+                  <span className={styles.lead}>When</span>
+                  {rule.when.map((condition, at) => (
+                    <span key={at} className={styles.chip}>
+                      {conditionWords(condition, routing)}
+                    </span>
+                  ))}
+                </p>
+                <p className={styles.line}>
+                  <span className={styles.lead}>Give to</span>
+                  <span className={styles.faces} aria-hidden="true">
+                    {rule.give_to.slice(0, 4).map((id) => (
+                      <PersonAvatar
+                        key={id}
+                        personId={id}
+                        name={
+                          routing.people.find(
+                            (person) => person.person_id === id,
+                          )?.name ?? "?"
+                        }
+                        size={24}
+                      />
+                    ))}
+                  </span>
+                  <span>
+                    {names(routing, rule.give_to)}
+                    {rule.give_to.length > 1 ? ", in turn" : ""}
+                  </span>
+                </p>
+                {routing.can_edit ? (
+                  <div className={styles.ruleActions}>
+                    <Button
+                      variant="ghost"
+                      onClick={() => setEditing({ index, rule })}
+                    >
+                      <Pencil size={16} aria-hidden="true" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      aria-label={`Move ${rule.name} up`}
+                      disabled={index === 0}
+                      onClick={() => move(index, -1)}
+                    >
+                      <ArrowUp size={16} aria-hidden="true" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      aria-label={`Move ${rule.name} down`}
+                      disabled={index === rules.length - 1}
+                      onClick={() => move(index, 1)}
+                    >
+                      <ArrowDown size={16} aria-hidden="true" />
+                    </Button>
+                  </div>
+                ) : null}
+              </li>
+            ),
+          )}
         </ol>
       ) : (
         <p className={styles.empty}>
-          No rules yet: new leads go to whoever is free with the fewest open
-          leads. Add a rule to send some leads to the right people first.
+          No rules for some leads yet. Add one to send leads from a source, a
+          city or a language to the right people first.
         </p>
       )}
 
