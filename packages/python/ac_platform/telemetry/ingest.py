@@ -37,6 +37,10 @@ MAX_BATCH_EVENTS = 50
 MAX_EVENT_PAYLOAD_BYTES = 4 * 1024
 MAX_BATCH_BYTES = 64 * 1024
 MAX_PAYLOAD_FIELDS = 20
+# A wide event (its definition says so: the Android app's sx.capture_scan, about 50 typed keys)
+# may hold up to its own allowlist, never more than this; every other event keeps 20 (20 Nov
+# 2026: no capture scan was ever stored, because 20 was checked before the event's definition).
+MAX_WIDE_PAYLOAD_FIELDS = 64
 MAX_EVENT_AGE = timedelta(days=7)
 MAX_FUTURE_SKEW = timedelta(minutes=5)
 MAX_RETENTION_DAYS = 3650
@@ -125,6 +129,8 @@ class TelemetryEventDefinition:
     flags: frozenset[str] = frozenset()
     required: frozenset[str] = frozenset()
     takes_call: bool = False
+    # How many payload keys one event may hold: 20, or a wide event's whole allowlist.
+    max_fields: int = MAX_PAYLOAD_FIELDS
 
 
 # The learner registry's name for the same schema entry.
@@ -134,6 +140,8 @@ LearnerAnalyticsEventDefinition = TelemetryEventDefinition
 def check_payload_values(definition: TelemetryEventDefinition, payload: Mapping[str, Any]) -> None:
     """Raise ValueError unless every typed key holds a value of its type."""
 
+    if len(payload) > definition.max_fields:
+        raise ValueError("payload holds more keys than the event takes")
     missing = definition.required - set(payload)
     if missing:
         raise ValueError("payload is missing a required key")
@@ -296,8 +304,10 @@ class LearnerTelemetryEvent(BaseModel):
     @field_validator("payload")
     @classmethod
     def validate_payload(cls, value: dict[str, Any]) -> dict[str, Any]:
-        if len(value) > MAX_PAYLOAD_FIELDS:
-            raise ValueError(f"payload may contain at most {MAX_PAYLOAD_FIELDS} fields")
+        # The event's own cap (20, or a wide event's allowlist) is checked against its
+        # definition (check_payload_values); this is the ceiling for any event.
+        if len(value) > MAX_WIDE_PAYLOAD_FIELDS:
+            raise ValueError(f"payload may contain at most {MAX_WIDE_PAYLOAD_FIELDS} fields")
         for key, item in value.items():
             if not _PAYLOAD_KEY_PATTERN.fullmatch(key) or _PII_KEY_PATTERN.search(key):
                 raise ValueError("payload keys must be bounded, allowlisted, and non-PII")
@@ -449,6 +459,7 @@ __all__ = [
     "MAX_EVENT_PAYLOAD_BYTES",
     "MAX_FUTURE_SKEW",
     "MAX_PAYLOAD_FIELDS",
+    "MAX_WIDE_PAYLOAD_FIELDS",
     "MAX_RETENTION_DAYS",
     "LearnerTelemetryBatch",
     "LearnerAnalyticsEventDefinition",

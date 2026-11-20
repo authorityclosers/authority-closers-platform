@@ -126,6 +126,113 @@ def test_a_capture_scan_says_why_a_call_waits_without_a_name_or_number() -> None
         check_payload_values(scan, {"kind": "folder"})  # no outcome
 
 
+def _full_capture_scan() -> dict[str, object]:
+    # Every key a phone with 8 known folders sends, plus where it ran (fictional values).
+    scan: dict[str, object] = {
+        "outcome": "ran",
+        "dialer": "com.oplus.dialer",
+        "kind": "folder",
+        "rec": "on",
+        "picked": 1,
+        "picked_folder": "recordings",
+        "picked_covers": "yes",
+        "hidden": "no",
+        "newest_age_s": 600,
+        "media_calls_24h": 4,
+        "media_folder": "recordings_call",
+        "files_seen": 40,
+        "files_matched": 3,
+        "call_log": "yes",
+        "calls": 4,
+        "calls_matched": 3,
+        "calls_none": 1,
+        "calls_ambiguous": 0,
+        "none_age_s": 7_200,
+        "jobs_waiting": 0,
+        "jobs_held": 1,
+        "hold": "folder",
+        "device": "phone",
+        "app": "android",
+        "app_version": "1.0.40",
+    }
+    for i in range(1, 9):
+        scan.update({f"f{i}": f"folder_{i}", f"f{i}_state": "found", f"f{i}_age_s": 3_600})
+    return scan
+
+
+def test_a_full_capture_scan_is_taken_by_the_intake() -> None:
+    # 20 Nov 2026: no sx.capture_scan was ever stored. A scan holds about 50 keys, and the
+    # intake refused any event over 20 before reading its definition (the page, over 16).
+    from datetime import UTC, datetime
+
+    from ac_platform.http.telemetry import _validate_event_schema
+    from ac_platform.telemetry.ingest import MAX_PAYLOAD_FIELDS, LearnerTelemetryBatch
+
+    scan = _full_capture_scan()
+    assert len(scan) > 40
+    batch = LearnerTelemetryBatch.model_validate(
+        {
+            "events": [
+                {
+                    "event_id": str(uuid4()),
+                    "event_name": "sx.capture_scan",
+                    "occurred_at": datetime.now(UTC).isoformat(),
+                    "session_id": str(uuid4()),
+                    "payload": scan,
+                }
+            ]
+        }
+    )
+    _validate_event_schema(batch, SALES_XRAY_SURFACE)
+    # Only a wide event may: every other one still takes at most 20 keys.
+    assert SALES_XRAY_EVENTS["sx.capture_scan"].max_fields >= len(scan)
+    wide = [name for name, event in SALES_XRAY_EVENTS.items() if event.max_fields > 20]
+    assert wide == ["sx.capture_scan"]
+    many = {f"k{i}": 1 for i in range(MAX_PAYLOAD_FIELDS + 1)}
+    with pytest.raises(ValueError):
+        check_payload_values(SALES_XRAY_EVENTS["sx.section_read"], many)
+
+
+def test_the_lake_contract_takes_every_event_and_value_the_intake_stores() -> None:
+    # A stored name or value the daily lake export's contract doesn't list stops the whole
+    # day's export ("lake value outside enum"); capture scans and phone setup's steps had none.
+    from ac_platform.telemetry.lake import contract
+
+    spec = contract("analytics_events")
+    columns = spec["columns"]
+    assert set(SALES_XRAY_EVENTS) <= set(columns["event_name"]["enum"])
+    gaps = {
+        (name, key): sorted(set(event.values[key]) - set(columns[key]["enum"]))
+        for name, event in SALES_XRAY_EVENTS.items()
+        for key in spec["payload_columns"]
+        if key in event.values and "enum" in columns[key]
+    }
+    assert {where: gap for where, gap in gaps.items() if gap} == {}
+
+
+def test_find_my_old_calls_counts_each_step_without_names() -> None:
+    old = SALES_XRAY_EVENTS["sx.old_calls"]
+    check_payload_values(
+        old,
+        {
+            "stage": "scan_done",
+            "entry": "card",
+            "consent": "off",
+            "found": 12,
+            "sure": 9,
+            "likely": 2,
+            "time_only": 1,
+            "unplaced": 4,
+            "scanned": 47,
+            "took_ms": 5_200,
+        },
+    )
+    for bad in ({"stage": "uploaded"}, {"stage": "done", "found": 1_001}):
+        with pytest.raises(ValueError):
+            check_payload_values(old, bad)
+    assert not any(_PII_KEY.search(key) for key in old.allowed_payload_keys)
+
+
 def test_values_are_checked_by_type() -> None:
     read = SALES_XRAY_EVENTS["sx.section_read"]
     check_payload_values(
