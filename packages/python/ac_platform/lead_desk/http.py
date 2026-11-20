@@ -1462,7 +1462,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         return {"received": outcome != "skipped", "outcome": outcome, "lead_id": lead_id}
 
     application.include_router(router)
-    # The Bin's 30-day purge (shelf.py), hourly.
+    # The Bin's 30-day purge (shelf.py): off since 20 Nov 2026 (shelf.AUTOMATIC_PURGE).
     shelf.attach(application, ctx.sessions, settings.environment)
     push.attach(application, ctx.sessions, settings.environment)
     # Leads a release's hold kept for later (lead_desk/spool.py), filed every minute.

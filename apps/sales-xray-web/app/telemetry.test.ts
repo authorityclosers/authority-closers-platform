@@ -19,6 +19,7 @@ import {
   routeTemplate,
   safePayload,
   screenOf,
+  WIDE_EVENTS,
   sizeBand,
   takeSignIn,
   timingBand,
@@ -707,4 +708,25 @@ it("retries a 503 with the same event IDs and bounded backoff", async () => {
   expect(batches).toHaveLength(2);
   expect(batches[1].body).toEqual(first.body);
   vi.useRealTimers();
+});
+
+it("sends the phone's whole capture scan, about 50 keys (20 Nov 2026: none ever arrived)", () => {
+  const scan: Record<string, string | number> = {
+    outcome: "ran",
+    kind: "folder",
+    rec: "on",
+    call_log: "yes",
+    calls: 4,
+    calls_matched: 3,
+  };
+  for (let i = 1; i <= 8; i++) {
+    scan[`f${i}`] = `folder_${i}`;
+    scan[`f${i}_state`] = "found";
+    scan[`f${i}_age_s`] = 3600;
+  }
+  expect(Object.keys(scan).length).toBeGreaterThan(16);
+  expect(safePayload(scan)).toBe(false);
+  expect(safePayload(scan, WIDE_EVENTS["sx.capture_scan"])).toBe(true);
+  // Every other event keeps the 16-key cap.
+  expect(Object.keys(WIDE_EVENTS)).toEqual(["sx.capture_scan"]);
 });

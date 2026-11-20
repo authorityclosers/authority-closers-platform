@@ -191,11 +191,12 @@ def test_recordings_fill_the_sellers_own_dials_once(postgres_harness: Any, tmp_p
     run(exercise())
 
 
-def test_a_first_call_history_read_only_times_dials_past_a_week(
+def test_old_call_history_rows_time_dials_and_log_calls(
     postgres_harness: Any, tmp_path: Path
 ) -> None:
-    """The first read after the seller allows the call history goes back 30 days, but a row
-    older than a week only fills a dial's outcome: it is never a call of its own."""
+    """Every call-history row is kept however old (owner, 20 Nov 2026: "every call, everything
+    needs to be there"; there was a 7-day cut): a three-week-old row that is the app's own dial
+    still only times it, never a call of its own; a dialer call with no dial is a call."""
 
     async def exercise() -> None:
         async with world(postgres_harness, tmp_path) as here:
@@ -241,13 +242,13 @@ def test_a_first_call_history_read_only_times_dials_past_a_week(
             body = {"device_id": str(uuid4()), "calls": calls}
             usual = await here.client.post(f"{BASE}/phone-log", json=body, headers=WRITE)
             assert usual.status_code == 200, usual.text
-            assert (usual.json()["logged"], usual.json()["skipped"]) == (0, 2)
+            assert tuple(usual.json()[k] for k in ("logged", "already", "skipped")) == (1, 1, 0)
+            # The first read sends them again: both known, nothing twice.
             first = await here.client.post(
                 f"{BASE}/phone-log", json=body | {"backfill": True}, headers=WRITE
             )
             assert first.status_code == 200, first.text
-            assert (first.json()["logged"], first.json()["already"]) == (0, 1)
-            assert first.json()["skipped"] == 1
+            assert tuple(first.json()[k] for k in ("logged", "already", "skipped")) == (0, 2, 0)
 
             async with here.setup.sessions() as db:
                 rows = (
@@ -257,7 +258,10 @@ def test_a_first_call_history_read_only_times_dials_past_a_week(
                         )
                     )
                 ).all()
-            assert [data.get("via") for kind, data in rows if kind == "call"] == [None]
+            assert sorted(str(data.get("via")) for kind, data in rows if kind == "call") == [
+                "None",
+                "phone",
+            ]
             assert [
                 (data["timed_call"], data["duration_seconds"])
                 for kind, data in rows

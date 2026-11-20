@@ -22,6 +22,7 @@ import { forgetUnknown } from "../leads/native-phone";
 import { PhoneLogCard } from "../leads/phone-log-card";
 import { RecordedCallsCard } from "../leads/recorded-calls";
 import { UnknownCallsCard } from "../leads/unknown-calls-card";
+import { OldCallsCard } from "./old-calls/old-calls-card";
 import { Skeleton } from "../ui/kit";
 import {
   CallRows,
@@ -141,6 +142,7 @@ export function PhoneCalls({
         <>
           <PhoneLogCard as="offer" />
           <RecordedCallsCard />
+          <OldCallsCard />
         </>
       )}
       {week.status === "loading" ? (
