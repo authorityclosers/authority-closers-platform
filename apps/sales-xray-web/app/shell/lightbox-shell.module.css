@@ -3235,3 +3235,73 @@ span.homeName {
     transition: none;
   }
 }
+
+/* ---------- Computers, 1024 px and up: the Vitals shell ----------
+   Owner, 20 Nov 2026: "You know how Vitals OS is so friendly for PC … learn
+   how Vitals OS is so great on PC" (board ~/orch/boards/sx-desktop, option B).
+   Phones and the 900-1023 px band keep what they had.
+   - The rail and the panel are one calm card inset on the canvas, as Pulse
+     draws its sidebar: chrome reads as a layer, the page as the brightest
+     thing on screen. Collapsed, the card is the rail alone.
+   - The top bar is the page's header: the workspace a quiet line, the title
+     at the page-title size (--sx-text-xl), and Add the one primary on the
+     right, shown with the panel open too (it was hidden while the panel's
+     New analysis showed, so a computer had no primary in its header). */
+@media (min-width: 1024px) {
+  .sidebar {
+    box-sizing: border-box;
+    padding: 12px 0 12px 12px;
+    background: var(--lx-paper);
+    box-shadow: none;
+  }
+
+  .iconStrip {
+    border: 1px solid var(--lx-line);
+    border-right: 0;
+    border-radius: var(--lx-radius-md) 0 0 var(--lx-radius-md);
+    background: var(--lx-surface);
+    box-shadow: inset -0.5px 0 0 var(--sx-hairline);
+  }
+
+  .panel {
+    border: 1px solid var(--lx-line);
+    border-left: 0;
+    border-radius: 0 var(--lx-radius-md) var(--lx-radius-md) 0;
+    background: var(--lx-surface);
+    box-shadow: none;
+  }
+
+  .collapsed .iconStrip,
+  :global(html[data-sx-sidebar="collapsed"]) .iconStrip {
+    border-right: 1px solid var(--lx-line);
+    border-radius: var(--lx-radius-md);
+    box-shadow: none;
+  }
+
+  .collapsed .panel,
+  :global(html[data-sx-sidebar="collapsed"]) .panel {
+    border-color: transparent;
+  }
+
+  /* The card takes 12 px more of the width, so the page gives back as much
+     of its left gutter: the page keeps the width it had beside the flush
+     sidebar, and the bar keeps its 48 px height (the readability gate measures
+     the lead page at 1280 to the pixel). */
+  .topBar,
+  .main {
+    padding-left: calc(clamp(24px, 4vw, 48px) - 12px);
+  }
+
+  .titleText {
+    font-size: var(--sx-text-xl);
+    font-weight: 700;
+    line-height: var(--sx-leading-28);
+    letter-spacing: -0.015em;
+  }
+
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .newAnalysisButton {
+    display: inline-flex;
+  }
+}
