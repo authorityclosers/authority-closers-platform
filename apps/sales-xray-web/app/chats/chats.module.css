@@ -1495,6 +1495,13 @@
   box-shadow: inset 0 0 0 1px var(--sx-line);
 }
 
+/* The temporary letter must remain legible while the channel logo loads. */
+.channelMark > span[class] {
+  background: var(--sx-surface);
+  color: var(--lx-ink);
+  font-size: var(--sx-text-xs);
+}
+
 .chatAvatar > .channelMark {
   box-shadow:
     0 0 0 2px var(--sx-surface),
