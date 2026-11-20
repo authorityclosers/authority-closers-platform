@@ -56,6 +56,7 @@ import { createPortal } from "react-dom";
 import { displayName } from "../display-name";
 import { ActionSheet } from "../leads/action-sheet";
 import { AddTaskSheet } from "../leads/add-task-sheet";
+import { useTasksChanged } from "../leads/tasks-changed";
 import { forWhom } from "../leads/tasks-view";
 import { useRowGestures } from "../leads/gestures";
 import {
@@ -307,6 +308,8 @@ export function useTodayTasks(withLate = false): {
     setFailed(false);
     setAttempt((value) => value + 1);
   }, []);
+  // A task added anywhere (the header's +, a lead) shows at once (218, 219).
+  useTasksChanged(reload);
   // A task ticked here is kept as ticked.
   const setTasks = useCallback((next: ListedTask[]) => {
     setShown(next);
