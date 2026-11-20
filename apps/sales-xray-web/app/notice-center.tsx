@@ -193,6 +193,12 @@ const noDock = () => null;
 // true, in the dock; false, in the corner, over the page.
 let placedOn: HTMLElement | null = null;
 const inDockHere = new Map<string, boolean>();
+// Lines that left this dock without being used or closed (their owner set them
+// aside while a sheet was up or someone typed): back, they take their place in
+// it again, never the corner over the rows (tester report 203, production 1.58,
+// 14 Nov 2026: after any sheet "Finish setting up" left the top of Leads for
+// the bottom, over the first lead row's due time, above Call Next Lead).
+const asideHere = new Set<string>();
 
 /** Whether the page under the dock is drawn and in sight, so a line put in
  *  the dock now would push it down. A loading outline is about to go, so a
@@ -227,13 +233,17 @@ function placeLines(
   if (node !== placedOn) {
     placedOn = node;
     inDockHere.clear();
+    asideHere.clear();
     if (node) for (const id of ids) inDockHere.set(id, true);
     return;
   }
   if (!node) return;
   for (const id of ids)
     if (!inDockHere.has(id))
-      inDockHere.set(id, !covered && !pageShownUnder(node));
+      inDockHere.set(
+        id,
+        asideHere.delete(id) || (!covered && !pageShownUnder(node)),
+      );
 }
 
 /**
@@ -421,9 +431,11 @@ function NoticeCard({
   const Icon = ICON[notice.tone];
   const remove = useCallback(() => {
     placed.delete(key);
+    // Used or closed from the dock: gone, not set aside (asideHere).
+    if (docked) inDockHere.delete(notice.id);
     if (leave) leave();
     else dismissNotice(notice.id);
-  }, [key, leave, notice.id]);
+  }, [key, leave, notice.id, docked]);
   const dismiss = async () => {
     if (dismissing) return;
     setDismissing(true);
@@ -920,7 +932,11 @@ export function NoticeCenter() {
     const ids = new Set(
       [...list, ...(workCard ? [workCard] : [])].map((item) => item.id),
     );
-    for (const id of inDockHere.keys()) if (!ids.has(id)) inDockHere.delete(id);
+    for (const id of inDockHere.keys())
+      if (!ids.has(id)) {
+        if (inDockHere.get(id)) asideHere.add(id);
+        inDockHere.delete(id);
+      }
   }, [list, workCard]);
 
   // The page keeps room for the stack, so content scrolls clear of it: the
@@ -1142,7 +1158,9 @@ export function NoticeCenter() {
     if (!docking) return;
     const lines = docking.firstElementChild;
     if (!lines) {
-      dockRoom.current = 0;
+      // Set aside as a sheet opens, before the stack has seen it: the room
+      // stays held (tester report 203: the page shifted under the thumb).
+      if (!topModal()) dockRoom.current = 0;
       return;
     }
     const style = getComputedStyle(lines);
@@ -1153,7 +1171,9 @@ export function NoticeCenter() {
   }, [docking, dockLines]);
   useLayoutEffect(() => {
     if (!pageDock) return;
-    const hold = sheet !== null && dockRoom.current > 0;
+    const hold =
+      (sheet !== null || (dockLines === 0 && topModal() !== null)) &&
+      dockRoom.current > 0;
     pageDock.toggleAttribute("data-held", hold);
     if (hold)
       pageDock.style.setProperty(
@@ -1161,7 +1181,7 @@ export function NoticeCenter() {
         `${Math.round(dockRoom.current)}px`,
       );
     else pageDock.style.removeProperty("--sx-dock-held");
-  }, [sheet, pageDock]);
+  }, [sheet, pageDock, dockLines]);
 
   return (
     <>
