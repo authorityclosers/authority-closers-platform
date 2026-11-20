@@ -45,6 +45,7 @@ from ac_platform.lead_desk import (
     notify_prefs,
     owner_alerts,
     push,
+    recording_guard,
     revenue_push,
     saved_views,
     shelf,
@@ -1178,13 +1179,24 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         lead_id: UUID, command: RecordingCommand, request: Request, response: Response
     ) -> LeadDetail:
         no_query(request)
-        async with desk_for(request, response, write=True) as lead_desk:
-            return await lead_desk.attach_recording(
-                lead_id,
-                command_id=command.command_id,
-                submission_id=command.submission_id,
-                call_event_id=command.call_event_id,
-            )
+        try:
+            async with desk_for(request, response, write=True) as lead_desk:
+                return await lead_desk.attach_recording(
+                    lead_id,
+                    command_id=command.command_id,
+                    submission_id=command.submission_id,
+                    call_event_id=command.call_event_id,
+                )
+        except HTTPException as refused:
+            if refused.status_code != 409 or refused.detail != recording_guard.DUPLICATE:
+                raise
+            # The same audio is on another call (recording_guard.py): the refusal rolled its
+            # transaction back, so its audit event goes in a new one.
+            async with desk_for(request, response, write=True) as lead_desk:
+                await recording_guard.record(
+                    lead_desk, lead_id, command.submission_id, command.call_event_id
+                )
+            raise
 
     @router.get(
         "/calls/{submission_id}/lead",
