@@ -885,13 +885,13 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         library_page.get_by_role(
                             "complementary", name="Sales Xray navigation", exact=True
                         )
-                        .get_by_role("link", name="Reports", exact=True)
+                        .get_by_role("link", name="Calls", exact=True)
                         .click()
                     )
                     # The calls page has one page heading, its name (calls-page-name.ts,
-                    # "Reports" since 13 Nov 2026), whichever link opened it.
+                    # "Calls" again since 20 Nov 2026), whichever link opened it.
                     await expect(
-                        library_page.get_by_role("heading", name="Reports", exact=True, level=1)
+                        library_page.get_by_role("heading", name="Calls", exact=True, level=1)
                     ).to_be_visible()
                     # Reports V4 (Dipak's spec, 13 Nov 2026): the page opens on Main,
                     # whose recent reports hold this call's card; the card's link opens

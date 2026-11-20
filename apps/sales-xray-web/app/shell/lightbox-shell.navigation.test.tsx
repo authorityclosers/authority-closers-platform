@@ -260,8 +260,8 @@ it("keeps the phone tab bar to its five tabs, plus a dev settings control", () =
       Array.from(nav.children, (item) => item.textContent?.trim()),
     ).toEqual(
       liveData
-        ? ["Home", "Leads", "Ask Dipak", "Reports", "Growth", "Settings"]
-        : ["Home", "Leads", "Ask Dipak", "Reports", "Growth"],
+        ? ["Home", "Leads", "Ask Dipak", "Calls", "Growth", "Settings"]
+        : ["Home", "Leads", "Ask Dipak", "Calls", "Growth"],
     );
     // Prospects and Coaching open from You, not from the tab bar.
     expect(nav.querySelector('a[href="/prospects"]')).toBeNull();
@@ -300,7 +300,7 @@ it("keeps the five tabs for an unconfirmed session; signed out offers Home, New 
         <p>Dashboard</p>
       </AcquisitionShell>,
     ),
-  ).toEqual(["Home", "Leads", "Ask Dipak", "Reports", "Growth"]);
+  ).toEqual(["Home", "Leads", "Ask Dipak", "Calls", "Growth"]);
   // B22: Leads and Calls only lead to a sign-in prompt for a visitor.
   expect(
     tabs(
