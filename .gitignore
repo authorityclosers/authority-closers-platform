@@ -30,3 +30,7 @@ __pycache__/
 *.tsbuildinfo
 .DS_Store
 Thumbs.db
+
+# Ask Dipak lesson videos on the dev workbench only (owner, 19 Nov 2026: not approved for the
+# app). Untracked, so no web image or phone bundle built from git can ever serve them.
+/apps/sales-xray-web/public/dev-media/

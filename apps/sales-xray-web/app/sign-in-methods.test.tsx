@@ -346,8 +346,20 @@ it("reads the Connect list, trusting the account's own methods", () => {
     ],
   });
   expect(parsed?.available).toEqual([
-    { kind: "google", label: "Google", connected: true, addAnother: false },
-    { kind: "apple", label: "Apple", connected: false, addAnother: false },
+    {
+      kind: "google",
+      label: "Google",
+      connected: true,
+      addAnother: false,
+      atLimit: false,
+    },
+    {
+      kind: "apple",
+      label: "Apple",
+      connected: false,
+      addAnother: false,
+      atLimit: false,
+    },
   ]);
   expect(parseSignInMethods({ methods: [] })?.available).toEqual([]);
 });
@@ -365,6 +377,7 @@ const TWO_GOOGLE = {
           added_at: "2026-10-01T10:00:00+00:00",
           last_used_at: "2026-10-18T09:00:00+00:00",
           removable: true,
+          email: "work@example.test",
         },
         {
           id: "acc-2",
@@ -406,9 +419,9 @@ it("offers another Google account once Google is connected", async () => {
   await act(async () => root.render(<SignInMethods active />));
   await flush();
   expect(host.querySelector('[data-connect="google"]')).not.toBeNull();
-  expect(host.textContent).toContain("Another Google account");
+  expect(host.textContent).toContain("Add another Google account");
   expect(host.textContent).toContain(
-    "Have a second Google login? Connect it, and either one signs you in here.",
+    "Work and personal Google logins? Connect up to 5, and each one signs you in here.",
   );
   await act(async () => button("Connect")!.click());
   await flush();
@@ -434,6 +447,9 @@ it("lists each Google account and removes only the one asked", async () => {
   expect(host.textContent).toContain("Google account 1");
   expect(host.textContent).toContain("Google account 2");
   expect(host.textContent).toContain("Added 18 Nov 2026");
+  // Each account says which Google it is; one not used since has no email yet.
+  expect(host.textContent).toContain("work@example.test, Added 1 Oct 2026");
+  expect(host.textContent).not.toContain("null");
   const removes = Array.from(host.querySelectorAll("button")).filter((item) =>
     item.textContent?.includes("Remove"),
   );
@@ -456,8 +472,51 @@ it("reads each provider account and the add-another offer", () => {
     "acc-1",
     "acc-2",
   ]);
+  expect(parsed?.methods[2]?.accounts.map((account) => account.email)).toEqual([
+    "work@example.test",
+    null,
+  ]);
   expect(parsed?.methods[0]?.accounts).toEqual([]);
   expect(parsed?.available).toEqual([
-    { kind: "google", label: "Google", connected: true, addAnother: true },
+    {
+      kind: "google",
+      label: "Google",
+      connected: true,
+      addAnother: true,
+      atLimit: false,
+    },
   ]);
+  expect(parsed?.maxAccounts).toBe(5);
+});
+
+// Owner, 19 Nov 2026: work and personal Gmails, up to the server's limit.
+it("says when no more Google accounts can be added, and why a trip came back", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json({
+        ...TWO_GOOGLE,
+        available: [
+          {
+            kind: "google",
+            label: "Google",
+            connected: true,
+            add_another: false,
+            at_limit: true,
+          },
+        ],
+        max_accounts: 5,
+      }),
+    ),
+  );
+  await act(async () => root.render(<SignInMethods active />));
+  await flush();
+  expect(host.querySelector('[data-connect="google"]')).toBeNull();
+  expect(host.querySelector('[data-connect-full="google"]')?.textContent).toBe(
+    "You have 5 Google accounts, the most allowed. Remove one to add another.",
+  );
+  expect(connectReturnNotice("?connect_error=limit", "google")).toMatchObject({
+    tone: "info",
+    title: "Google wasn’t connected",
+  });
 });

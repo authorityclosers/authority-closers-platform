@@ -41,6 +41,18 @@ Workspaces:
                                                    apps); no flag shows it. Sales X-Ray itself
                                                    is on for every active organisation.
 
+Ask Dipak (the whole platform; no --tenant-id):
+    ask-dipak videos [on|off]                      the lesson-video switch; no word shows it
+                                                   and the approved videos. OFF until Dipak
+                                                   and the owner approve (owner, 19 Nov 2026:
+                                                   "the videos are not approved")
+    ask-dipak add-video --lesson Q --src URL --poster URL --seconds N
+                                                   one approved video for lesson Q (a /path or
+                                                   https:// address); shown only while on
+    ask-dipak remove-video --lesson Q              that lesson shows no video
+Each change appends Dipak's lessons again with the new videos (ask_dipak/videos.py), so the
+history stays; the app sees it at its next visit.
+
 Leads (--tenant-id T):
     leads list [--search S] [--where-* ...] [--names] [--offset N] [--limit N]
     leads add --name N [--phone] [--email] [--company] [--city] [--note]
@@ -144,10 +156,12 @@ COMMANDS: dict[str, tuple[str, ...]] = {
         "restore-bin",
         "import",
     ),
+    "ask-dipak": ("videos", "add-video", "remove-video"),
 }
 READS = {("people", "list"), ("people", "show"), ("workspaces", "list"), ("workspaces", "show")}
 READS |= {("leads", "list")}
 NO_TENANT = {("workspaces", "list"), ("workspaces", "create")}
+NO_TENANT |= {("ask-dipak", name) for name in ("videos", "add-video", "remove-video")}
 SHELF = {"archive": "archive", "restore-archive": "restore_archive", "bin": "bin"}
 SHELF["restore-bin"] = "restore_bin"
 SWITCHES = ("paused", "note", "task", "outcome", "update", "stage")
@@ -301,6 +315,13 @@ def _parser() -> argparse.ArgumentParser:
     stage.add_argument("--reason-note")
     stage.add_argument("--next-action-at", type=_when)
     made[("leads", "import")].add_argument("--input", type=Path, required=True)
+    made[("ask-dipak", "videos")].add_argument("state", nargs="?", choices=("on", "off"))
+    for name in ("add-video", "remove-video"):
+        made[("ask-dipak", name)].add_argument("--lesson", type=_reference, required=True)
+    video = made[("ask-dipak", "add-video")]
+    video.add_argument("--src", required=True)
+    video.add_argument("--poster", required=True)
+    video.add_argument("--seconds", type=int, required=True)
     return parser
 
 
@@ -327,6 +348,8 @@ def _key(args: argparse.Namespace) -> tuple[str, str]:
 def _writes(args: argparse.Namespace) -> bool:
     if _key(args) == ("workspaces", "switches"):
         return any(getattr(args, switch) is not None for switch in SWITCHES)
+    if _key(args) == ("ask-dipak", "videos"):
+        return args.state is not None
     return _key(args) not in READS
 
 
@@ -984,6 +1007,42 @@ async def workspaces_switches(ctx: Context) -> Result:
     return {"status": "eligible", "before": before, "after": after}
 
 
+# ----- ask dipak -----------------------------------------------------------------------------
+
+
+async def ask_dipak_videos(ctx: Context) -> Result:
+    """The lesson-video switch and the approved videos; with on or off, the switch changes."""
+    from ac_platform.ask_dipak import videos
+
+    before = await videos.current(ctx.database)
+    tenant = {"tenant_id": str(ctx.settings.operations_tenant_id)}
+    key = _key(ctx.args)
+    if key == ("ask-dipak", "videos") and ctx.args.state is None:
+        return {"status": "read", "lesson_videos": before}
+    after = {"enabled": before["enabled"], "videos": dict(before["videos"])}
+    try:
+        if key == ("ask-dipak", "videos"):
+            after["enabled"] = ctx.args.state == "on"
+        elif key == ("ask-dipak", "add-video"):
+            lesson = ctx.args.lesson.upper()
+            after["videos"][lesson] = videos.check_video(
+                lesson, ctx.args.src, ctx.args.poster, ctx.args.seconds
+            )
+        else:
+            after["videos"].pop(ctx.args.lesson.upper(), None)
+    except videos.VideoError as error:
+        raise OrganisationCommandError(str(error)) from None
+    result = await videos.record(
+        ctx.database,
+        state=after,
+        approved_by=ctx.args.approver,
+        issue=ctx.args.issue_reference,
+        note=f"admin.py {ctx.args.group} {ctx.args.command}",
+        now=datetime.now(UTC),
+    )
+    return {**result, **tenant}
+
+
 # ----- leads ---------------------------------------------------------------------------------
 
 
@@ -1223,6 +1282,7 @@ HANDLERS: dict[tuple[str, str], Handler] = {
     ("leads", "stage"): leads_stage,
     **{("leads", name): leads_shelf for name in SHELF},
     ("leads", "import"): leads_import,
+    **{("ask-dipak", name): ask_dipak_videos for name in COMMANDS["ask-dipak"]},
 }
 RESOURCES = {
     "people rename": "person",
@@ -1233,6 +1293,9 @@ RESOURCES = {
     "workspaces rename": "organisation",
     "workspaces domains": "organisation_domains",
     "workspaces switches": "lead_desk_settings",
+    "ask-dipak videos": "ask_dipak_library",
+    "ask-dipak add-video": "ask_dipak_library",
+    "ask-dipak remove-video": "ask_dipak_library",
 }
 
 

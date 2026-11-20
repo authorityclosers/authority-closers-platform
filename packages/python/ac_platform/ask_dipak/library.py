@@ -34,6 +34,9 @@ from ac_platform.ask_dipak.models import SalesXrayAskDipakLibraryVersion as Vers
 REQUIRED = ("quick", "scenario", "options", "deep", "cue", "mission", "next")
 #: Server-only fields: never in what a seller's screen or a key receives.
 SERVER_ONLY = frozenset({"lock"})
+#: The key in a row's ``source`` holding the lesson-video switch and the approved videos
+#: (videos.py; owner, 19 Nov 2026: off until Dipak and the owner approve each video).
+VIDEOS = "lesson_videos"
 
 
 class LibraryError(ValueError):
@@ -145,6 +148,12 @@ async def record_import(
     }
     if result["unchanged"] or not apply:
         return result
+    # A new import of his docs keeps the video switch and the approved videos as they were.
+    kept = await db.scalar(
+        select(Version.source).order_by(Version.created_at.desc(), Version.id.desc()).limit(1)
+    )
+    if isinstance(kept, Mapping) and VIDEOS in kept and VIDEOS not in source:
+        source = {**source, VIDEOS: kept[VIDEOS]}
     row = Version(
         id=uuid4(),
         content_sha256=sha,
@@ -165,6 +174,7 @@ async def record_import(
 __all__ = [
     "REQUIRED",
     "SERVER_ONLY",
+    "VIDEOS",
     "LibraryError",
     "Served",
     "bundled",

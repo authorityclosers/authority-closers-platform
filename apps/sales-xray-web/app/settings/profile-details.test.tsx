@@ -334,3 +334,13 @@ it("shows a name saved in lower case with capitals", async () => {
   expect(host.textContent).toContain("Vikram Example");
   expect(host.textContent).not.toContain("vikram example");
 });
+
+// Owner, 19 Nov 2026: work and personal Gmails; the profile leads to adding one.
+it("opens Sign-in & security from the profile to add another Google account", async () => {
+  serve(() => Response.json(PROFILE));
+  await act(async () => root.render(<ProfileDetailsPanel />));
+  await settle();
+  expect(host.textContent).toContain("Google logins");
+  await act(async () => button("Add another Google account")!.click());
+  expect(opener.openSettings).toHaveBeenCalledWith("security");
+});

@@ -392,13 +392,17 @@ def test_the_analysis_starts_by_itself_only_on_ones_own_call_with_a_current_cons
 
 
 async def _standing_call(
-    setup: Any, client: httpx.AsyncClient, consent: str = "standing", done_at: Any = None
+    setup: Any,
+    client: httpx.AsyncClient,
+    consent: str = "standing",
+    done_at: Any = None,
+    extra: dict[str, str] | None = None,
 ) -> tuple[str, UUID]:
     """The signed-in seller uploads one call marked "standing"; its audio check (C1) is then
     done, as the worker leaves it: C0/C1 checkpoints saved and the local run completed."""
     data, submission = _wav_one_second_48k(), uuid4()
     path = f"{PREFIX}/submissions/{submission}"
-    headers = {**await _headers(client, data), "X-Upload-Consent": consent}
+    headers = {**await _headers(client, data), "X-Upload-Consent": consent, **(extra or {})}
     uploaded = await client.put(path + "/source", content=data, headers=headers)
     assert uploaded.status_code == 202, uploaded.text
     await _reconcile(setup.sessions, setup.state)
@@ -628,6 +632,52 @@ def test_calls_waiting_for_a_tap_never_hide_one_that_starts_here(
                 assert len(await _plans(setup, standing)) == 1
                 assert await _plans(setup, tapped) == []  # still waits for its tap
                 assert await starter.tick(now=setup.clock[0]) == []
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_a_ticked_lead_call_starts_here_under_the_sellers_standing_consent(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Wise Life, 19 Nov 2026: a seller with "Analyse my calls automatically" on ticked and
+    sent a 13-minute lead call; it uploaded, but only the page that sent it would accept its
+    plan, and he had left it, so the call was never analysed. A lead's ticked call
+    ("X-Upload-Start: on-arrival") is now covered by the seller's own standing consent when
+    it is on, and starts here. A ticked call sent without it (the studio, which may still ask
+    about an earlier report) and a ticked call whose seller has no consent keep their tap."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path, gemini=True)
+        setup.native.validate_source = ValidationFixtureRuntime().validate_source
+        try:
+            await _organisation(setup)
+            _install(setup)
+            starter = _starter(setup)
+            on_arrival = {"X-Upload-Start": "on-arrival"}
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                seller = await _seller_with_consent(setup, client)
+                _, lead_call = await _standing_call(setup, client, "accepted", extra=on_arrival)
+                _, studio_call = await _standing_call(setup, client, "accepted")
+
+                assert await starter.tick(now=setup.clock[0]) == ["started"]
+                (plan,) = await _plans(setup, lead_call)
+                assert plan.acceptance_command_id is not None
+                assert await _plans(setup, studio_call) == []
+                consent = (await _events(setup, seller.person_id, auto_consent.ACTION))[-1]
+                (uploaded,) = await _events(setup, seller.person_id, auto_start.UPLOADED)
+                assert uploaded.payload["standing_consent_event_id"] == str(consent.id)
+
+                # Consent off: the ticked lead call still uploads, and waits for its tap.
+                withdrawn = await client.post(AUTO, json={"decision": "withdrawn"}, headers=WRITE)
+                assert withdrawn.status_code == 200, withdrawn.text
+                _, tapped = await _standing_call(setup, client, "accepted", extra=on_arrival)
+                assert len(await _events(setup, seller.person_id, auto_start.UPLOADED)) == 1
+                assert await starter.tick(now=setup.clock[0]) == []
+                assert await _plans(setup, tapped) == []
         finally:
             await setup.engine.dispose()
 

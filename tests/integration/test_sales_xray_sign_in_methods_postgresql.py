@@ -298,6 +298,7 @@ def test_staff_see_no_email_code_and_their_only_provider_is_not_removable(
                     "added_at": account["added_at"],
                     "last_used_at": account["last_used_at"],
                     "removable": False,
+                    "email": None,
                 }
             ],
         }

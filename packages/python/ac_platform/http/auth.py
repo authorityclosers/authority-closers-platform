@@ -92,7 +92,6 @@ from ac_platform.identity.models import (
     IdentityCommandIdempotency,
     Person,
     PersonStatus,
-    ProviderIdentity,
 )
 from ac_platform.identity.onboarding import (
     LearnerOnboardingService,
@@ -144,8 +143,10 @@ from ac_platform.identity.services import (
 )
 from ac_platform.identity.services import AuthorizationDenied as IdentityAuthorizationDenied
 from ac_platform.identity.sign_in_methods import (
+    MAX_PROVIDER_ACCOUNTS,
     MULTI_ACCOUNT_PROVIDERS,
-    PROVIDER_ISSUERS,
+    may_add_account,
+    provider_account_count,
     session_is_fresh,
 )
 from ac_platform.kernel.authz import ActorContext
@@ -229,6 +230,22 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
     "learner": frozenset(),
     "member": frozenset(),
 }
+
+
+class _AccountLimitReached(IdentityServiceError):
+    """A connect that would pass MAX_PROVIDER_ACCOUNTS; raised in the link's transaction,
+    so the link rolls back. Other callers see an IdentityServiceError ("failed")."""
+
+
+async def _enforce_account_limit(database: AsyncSession, person_id: UUID, provider: str) -> None:
+    """After a new link: two connect trips started together can't pass the limit, as the
+    link locks the person row, so the later one counts both."""
+
+    if provider not in MULTI_ACCOUNT_PROVIDERS:
+        return
+    count = await provider_account_count(database, person_id, provider)
+    if count > MAX_PROVIDER_ACCOUNTS:
+        raise _AccountLimitReached("provider account limit reached")
 
 
 class AuthenticationRequired(DomainError):
@@ -1715,7 +1732,7 @@ def _settings_connect_response(
     transaction_cookie_names: tuple[str, ...],
     host: str | None,
     connected: str | None = None,
-    error: Literal["in_use", "cancelled", "failed"] | None = None,
+    error: Literal["in_use", "cancelled", "failed", "limit"] | None = None,
 ) -> Response:
     """Back to the Settings page with one bounded outcome in the query."""
 
@@ -3611,15 +3628,15 @@ def install_identity_http(
                     "fresh_sign_in",
                     "For your safety, sign in again, then connect within 10 minutes.",
                 )
-            already = await database.scalar(
-                select(ProviderIdentity.id)
-                .where(
-                    ProviderIdentity.person_id == person_id,
-                    ProviderIdentity.issuer.in_(PROVIDER_ISSUERS[provider_name]),
-                )
-                .limit(1)
-            )
-            if already is not None and provider_name not in MULTI_ACCOUNT_PROVIDERS:
+            already = await provider_account_count(database, person_id, provider_name)
+            if not may_add_account(provider_name, already):
+                if provider_name in MULTI_ACCOUNT_PROVIDERS:
+                    return refuse(
+                        409,
+                        "account_limit",
+                        f"You can connect up to {MAX_PROVIDER_ACCOUNTS}"
+                        f" {_provider_label(provider_name)} accounts. Remove one first.",
+                    )
                 return refuse(
                     409,
                     "already_connected",
@@ -3676,7 +3693,7 @@ def install_identity_http(
         def back(
             *,
             connected: str | None = None,
-            error: Literal["in_use", "cancelled", "failed"] | None = None,
+            error: Literal["in_use", "cancelled", "failed", "limit"] | None = None,
         ) -> Response:
             return _settings_connect_response(
                 settings,
@@ -3720,12 +3737,15 @@ def install_identity_http(
                     pkce_verifier=transaction.pkce_verifier,
                 )
                 if newly_linked:
+                    await _enforce_account_limit(database, linked.person_id, provider_name)
                     await _record_connected_provider(
                         database,
                         request,
                         person_id=linked.person_id,
                         provider=provider_name,
                     )
+        except _AccountLimitReached:
+            return back(error="limit")
         except ConflictingProviderIdentityError:
             return back(error="in_use")
         except (
@@ -4307,6 +4327,7 @@ def install_identity_http(
                             pkce_verifier=transaction.pkce_verifier,
                         )
                         if newly_linked:
+                            await _enforce_account_limit(database, linked.person_id, provider_name)
                             await _record_connected_provider(
                                 database,
                                 request,

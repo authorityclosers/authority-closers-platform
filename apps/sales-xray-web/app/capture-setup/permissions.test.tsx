@@ -284,6 +284,8 @@ function fakePhone(
   checks: () => Record<string, boolean>,
   family = "xiaomi",
   folderPicked = true,
+  /** The phone's call-log answers, by method, when a test needs its own. */
+  log?: (method: string) => Record<string, unknown> | undefined,
 ) {
   const listeners: Listener[] = [];
   const sent: Sent[] = [];
@@ -294,7 +296,8 @@ function fakePhone(
       const message = JSON.parse(data) as Sent & { id: string };
       sent.push({ method: message.method, args: message.args });
       const result =
-        message.method === "callLogStatus"
+        log?.(message.method) ??
+        (message.method === "callLogStatus"
           ? { on: false, sims: [{ id: "sim-1", label: "SIM 1" }] }
           : {
               checks: checks(),
@@ -305,7 +308,7 @@ function fakePhone(
               folderPickSupported: true,
               folderPicked,
               callLogSupported: true,
-            };
+            });
       queueMicrotask(() =>
         listeners.forEach((listener) =>
           listener({
@@ -528,6 +531,41 @@ describe("PermissionsGate", () => {
       method: "callLogSetup",
       args: { on: true, sim: "sim-1" },
     });
+  });
+
+  it("turns call logging on for a two-SIM phone, whose SIMs show only once it is allowed", async () => {
+    // Wise Life, 19 Nov 2026: before access the phone lists no SIMs, so the
+    // first turn-on had none and a two-SIM phone kept logging off.
+    let allowed = false;
+    const sims = [
+      { id: "sim-1", label: "SIM 1" },
+      { id: "sim-2", label: "SIM 2" },
+    ];
+    const sent = fakePhone(
+      () => ({ ...ALL, callLog: false }),
+      "oppo",
+      true,
+      (method) => {
+        if (method === "callLogStatus")
+          return { on: false, access: allowed, sims: allowed ? sims : [] };
+        if (method !== "callLogSetup") return undefined;
+        const asked = sent.filter((item) => item.method === method).at(-1);
+        const sim = (asked?.args as { sim?: string } | undefined)?.sim ?? "";
+        allowed = true;
+        return { on: sim !== "", access: true, sims, sim };
+      },
+    );
+    await mount();
+    await act(async () => button("Allow Call log").click());
+    await settle();
+    expect(
+      sent
+        .filter((message) => message.method === "callLogSetup")
+        .map((message) => message.args),
+    ).toEqual([
+      { on: true, sim: "" },
+      { on: true, sim: "sim-1" },
+    ]);
   });
 
   it("puts call history off with Not now, and keeps one slim reminder instead", async () => {

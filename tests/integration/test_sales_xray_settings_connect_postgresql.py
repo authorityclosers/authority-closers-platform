@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
@@ -185,7 +186,13 @@ def test_settings_connect_links_the_provider_and_goes_back_to_the_settings_hash(
     assert notice.payload == {"audit_event_id": str(event.id)}
     label = {"google": "Google", "apple": "Apple", "facebook": "Facebook"}[provider_name]
     assert listings["before"]["available"] == [  # type: ignore[index]
-        {"kind": provider_name, "label": label, "connected": False, "add_another": False}
+        {
+            "kind": provider_name,
+            "label": label,
+            "connected": False,
+            "add_another": False,
+            "at_limit": False,
+        }
     ]
     # Google may add another account once one is connected.
     assert listings["after"]["available"] == [  # type: ignore[index]
@@ -194,6 +201,7 @@ def test_settings_connect_links_the_provider_and_goes_back_to_the_settings_hash(
             "label": label,
             "connected": True,
             "add_another": provider_name == "google",
+            "at_limit": False,
         }
     ]
 
@@ -394,3 +402,77 @@ def test_refusals_answer_with_a_code_and_start_nothing(postgres_harness: _Harnes
     }
     assert provider.transactions == []
     assert _transactions(postgres_harness, person_id) == 0
+
+
+def _more_google(harness: _Harness, person_id: UUID, count: int) -> None:
+    with Session(harness.engine) as database, database.begin():
+        for _ in range(count):
+            database.add(
+                ProviderIdentity(
+                    person_id=person_id, issuer=ISSUERS["google"], subject=f"g-{uuid4().hex}"
+                )
+            )
+
+
+def test_each_google_account_is_listed_with_the_email_it_signed_in_with(
+    postgres_harness: _Harness,
+) -> None:
+    """Owner, 19 Nov 2026: work and personal Gmails; the person sees which is which."""
+
+    tenant_id, person_id = _seed(postgres_harness, password=True, providers=(ISSUERS["google"],))
+    email = f"personal-{uuid4().hex}@example.test"
+    provider = _Provider("google", email=email, subject=f"google-personal-{uuid4().hex}")
+
+    async def scenario() -> Any:
+        async with _sales_xray(
+            postgres_harness, tenant_id=tenant_id, person_id=person_id, provider=provider
+        ) as client:
+            assert (await _start(client, "google")).status_code == 200
+            await _come_back(client, provider)
+            return (await client.get("/v1/me/sign-in-methods")).json()
+
+    listing = _run_async(scenario())
+    [google] = [method for method in listing["methods"] if method["kind"] == "google"]
+    # The older link has no email until it next signs in; the new one has Google's.
+    assert [account["email"] for account in google["accounts"]] == [None, email]
+    assert listing["max_accounts"] == 5
+
+
+def test_a_sixth_google_account_is_refused_before_and_after_the_trip(
+    postgres_harness: _Harness,
+) -> None:
+    tenant_id, person_id = _seed(postgres_harness, password=True, providers=(ISSUERS["google"],))
+    _more_google(postgres_harness, person_id, 3)
+    subject = f"google-sixth-{uuid4().hex}"
+    provider = _Provider("google", email=f"x-{uuid4().hex}@example.test", subject=subject)
+
+    async def scenario() -> tuple[httpx.Response, httpx.Response, Any, Any]:
+        async with _sales_xray(
+            postgres_harness, tenant_id=tenant_id, person_id=person_id, provider=provider
+        ) as client:
+            # Four connected: a fifth may start; a fifth lands elsewhere meanwhile.
+            assert (await _start(client, "google")).status_code == 200
+            _more_google(postgres_harness, person_id, 1)
+            finished = await _come_back(client, provider)
+            listing = (await client.get("/v1/me/sign-in-methods")).json()
+            refused = await _start(client, "google")
+            return finished, refused, listing, len(provider.transactions)
+
+    finished, refused, listing, trips = _run_async(scenario())
+
+    # The trip that would make six comes back with "limit" and links nothing.
+    assert finished.headers["location"] == (
+        f"{SALES_ORIGIN}/?connect_error=limit#settings/security"
+    )
+    assert _rows(postgres_harness, ISSUERS["google"], subject) == []
+    assert _connected(postgres_harness, person_id) == ([], [])
+    # At five, Settings offers no more and a new start is refused before Google.
+    assert listing["providers"]["google"] == {"linked": True, "can_connect": False}
+    [offer] = [option for option in listing["available"] if option["kind"] == "google"]
+    assert (offer["add_another"], offer["at_limit"]) == (False, True)
+    assert refused.status_code == 409
+    assert refused.json() == {
+        "detail": "You can connect up to 5 Google accounts. Remove one first.",
+        "code": "account_limit",
+    }
+    assert trips == 1

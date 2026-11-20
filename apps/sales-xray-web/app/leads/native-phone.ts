@@ -11,6 +11,7 @@
 import { fromPhone, rememberCapture } from "../capture-source";
 import { followFontScale } from "../in-app";
 import { hapticsOn } from "../ui/haptics";
+import { rememberDial } from "./pending-answer";
 
 /**
  * Is anyone heard in a recording? The phone decodes it to tell (app 0.3.80+,
@@ -399,6 +400,9 @@ export async function startPhoneCall(lead: {
   number: string;
   name: string;
 }): Promise<void> {
+  // Its answer is held even if Android closes this page during the call
+  // (AfterCallGuard, owner 19 Nov 2026).
+  rememberDial(lead.leadId);
   // The app's own tick as it dials follows Settings, Vibration (1.0.25+).
   await ask("call", { ...lead, vibrate: hapticsOn() });
 }

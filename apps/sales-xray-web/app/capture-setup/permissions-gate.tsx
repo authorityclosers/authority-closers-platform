@@ -350,7 +350,17 @@ async function ask(key: PermissionKey): Promise<void> {
     case "callLog": {
       // Work calls are logged from the SIM the seller works on; the first one by default.
       const log = await callLogStatus();
-      await callLogSetup(true, log?.sim || log?.sims[0]?.id || "");
+      const after = await callLogSetup(
+        true,
+        log?.sim || log?.sims[0]?.id || "",
+      );
+      // Until call history is allowed the phone lists no SIMs, so a two-SIM
+      // phone was sent none, kept logging off and said nothing (Wise Life,
+      // 19 Nov 2026: an Oppo whose calls never reached Sales X-Ray). Now that
+      // it lists them: the first one, as above.
+      const first = after?.sims[0]?.id;
+      if (after && !after.on && after.access && !log?.sims.length && first)
+        await callLogSetup(true, first);
       return;
     }
     case "phone":

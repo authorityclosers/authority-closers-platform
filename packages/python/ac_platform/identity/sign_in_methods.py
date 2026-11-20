@@ -8,6 +8,10 @@ last way in, and every removal is audited and emailed (http/routes/sign_in_metho
 18 Nov 2026 (Wise Life: one person, two Google logins): Google may hold more than one
 account. Each account is listed under its provider and can be removed on its own;
 every account is a way in.
+
+20 Nov 2026 (owner, 19 Nov: "more than one Gmail account to log in with"): up to
+MAX_PROVIDER_ACCOUNTS Google accounts per person, each listed with the email Google
+last gave for it (migration 0164) so the person can tell them apart.
 """
 
 from __future__ import annotations
@@ -17,7 +21,7 @@ from datetime import datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.identity.application import has_platform_staff_membership
@@ -46,6 +50,9 @@ PROVIDER_ISSUERS: dict[Provider, tuple[str, ...]] = {
 FRESH_SIGN_IN = timedelta(minutes=10)
 # Providers one person may connect more than one account of.
 MULTI_ACCOUNT_PROVIDERS: frozenset[Provider] = frozenset({"google"})
+# How many accounts of one such provider a person may connect (owner, 19 Nov 2026: work
+# and personal Gmails; five covers a person in several companies).
+MAX_PROVIDER_ACCOUNTS = 5
 
 
 def register_pulse_issuer(issuer: str) -> None:
@@ -70,6 +77,8 @@ class ProviderAccount:
     added_at: datetime | None
     last_used_at: datetime | None
     removable: bool
+    # The email the provider last gave for this account; None until it is next used.
+    email: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,12 +149,44 @@ async def sign_in_methods(database: AsyncSession, person_id: UUID) -> list[SignI
                 # Removing the provider takes all its accounts: something must stay.
                 removable=ways_in > len(rows),
                 accounts=tuple(
-                    ProviderAccount(row.id, row.created_at, row.last_authenticated_at, ways_in > 1)
+                    ProviderAccount(
+                        row.id,
+                        row.created_at,
+                        row.last_authenticated_at,
+                        ways_in > 1,
+                        row.email,
+                    )
                     for row in rows
                 ),
             )
         )
     return methods
+
+
+async def provider_account_count(
+    database: AsyncSession, person_id: UUID, provider: Provider
+) -> int:
+    """How many accounts of ``provider`` the person has connected."""
+
+    return int(
+        await database.scalar(
+            select(func.count())
+            .select_from(ProviderIdentity)
+            .where(
+                ProviderIdentity.person_id == person_id,
+                ProviderIdentity.issuer.in_(PROVIDER_ISSUERS[provider]),
+            )
+        )
+        or 0
+    )
+
+
+def may_add_account(provider: Provider, linked: int) -> bool:
+    """Whether one more account of ``provider`` may be connected, given ``linked``."""
+
+    if linked == 0:
+        return True
+    return provider in MULTI_ACCOUNT_PROVIDERS and linked < MAX_PROVIDER_ACCOUNTS
 
 
 async def session_is_fresh(database: AsyncSession, session_id: UUID | None, now: datetime) -> bool:
@@ -203,9 +244,12 @@ async def remove_provider(
 
 __all__ = [
     "FRESH_SIGN_IN",
+    "MAX_PROVIDER_ACCOUNTS",
     "MULTI_ACCOUNT_PROVIDERS",
     "PROVIDER_ISSUERS",
     "ProviderAccount",
+    "may_add_account",
+    "provider_account_count",
     "register_pulse_issuer",
     "SignInMethod",
     "SignInMethodError",

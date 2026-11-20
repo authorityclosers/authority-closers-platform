@@ -8,38 +8,19 @@
  *
  * The player: the poster frame first; a tap plays it with sound (never autoplay with sound); the phone's own
  * controls after that. Captions show when a lesson has a caption file; none has one yet, and the videos carry
- * their Hindi words on screen. Files are encoded for phones (540 x 960, about 1.1 to 1.4 MB each) and served
- * from the app's static media path; nothing loads before the tap but the poster.
+ * their Hindi words on screen. Nothing loads before the tap but the poster.
+ *
+ * Only an approved video shows (owner, 19 Nov 2026 23:36 IST: "the videos are not approved for Ask Dipak").
+ * The server's switch says which (lesson-videos.ts): while it is off, or the lesson has no approved video,
+ * this draws nothing at all. No video file ships with the app.
  */
 import { Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import styles from "./lesson-video.module.css";
+import { useLessonVideoFile } from "./lesson-videos";
 
-const BASE = "/media/ask-dipak/lessons";
-
-export type LessonVideoFile = {
-  src: string;
-  poster: string;
-  /** Whole seconds, for the time on the poster. */
-  seconds: number;
-  captions?: { src: string; lang: string; label: string };
-};
-
-export const LESSON_VIDEOS: Readonly<Record<string, LessonVideoFile>> = {
-  // "Lesson 01 - PB03 with characters - Light" (Mac studio, 19 Nov 2026).
-  PB03: {
-    src: `${BASE}/pb03-lesson.mp4`,
-    poster: `${BASE}/pb03-lesson-poster.jpg`,
-    seconds: 61,
-  },
-  // "Lesson 02 - sochna-hai - Light" (मुझे सोचना है; Mac studio, 19 Nov 2026).
-  OB03: {
-    src: `${BASE}/ob03-lesson.mp4`,
-    poster: `${BASE}/ob03-lesson-poster.jpg`,
-    seconds: 55,
-  },
-};
+export type { LessonVideoFile } from "./lesson-videos";
 
 export const VIDEO_COPY = {
   title: "The lesson in a minute",
@@ -51,7 +32,7 @@ export const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
 export function LessonVideo({ id }: { id: string }) {
-  const file = LESSON_VIDEOS[id];
+  const file = useLessonVideoFile(id);
   const [playing, setPlaying] = useState(false);
   const video = useRef<HTMLVideoElement | null>(null);
   useEffect(() => {

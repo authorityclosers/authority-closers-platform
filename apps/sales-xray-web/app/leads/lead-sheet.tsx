@@ -72,6 +72,11 @@ import { notify } from "../notice-center";
 import { unsentWrites, useWrites } from "../sync/write-queue";
 import { rememberOpened } from "../pick-up";
 import { useWorkspaceAccess } from "../workspace-access";
+import {
+  answerAccount,
+  answeredCallFor,
+  useCallToAnswer,
+} from "./pending-answer";
 import { haptic } from "../ui/haptics";
 import { useFlow } from "../telemetry-flows";
 import { CallFacts } from "../call-engine/call-facts";
@@ -4828,7 +4833,13 @@ export function LeadSheet({
     setLoggedFor(null);
   }
   const logIntent = intent === "log" && loggedFor !== leadId;
-  const questionOpen = asking || logIntent || logging === leadId;
+  // A call this phone placed to this lead still waits for its answer (owner,
+  // 19 Nov 2026: "lock until answered"): its question stays open, with no "I
+  // didn't call", until it is saved (AfterCallGuard brings the seller back).
+  const holdAccount = answerAccount(useWorkspaceAccess()?.context ?? null);
+  const heldCall = useCallToAnswer(holdAccount);
+  const mustAnswer = !!leadId && heldCall?.leadId === leadId;
+  const questionOpen = asking || logIntent || logging === leadId || mustAnswer;
 
   // Home's "Pick up where you left off" (owner, 27 Oct 2026): the lead this
   // person opened last, kept on this device only.
@@ -4981,7 +4992,9 @@ export function LeadSheet({
               phoneCall={phoneCall}
               intent={intent}
               focusAt={focusAt}
-              afterCall={asking || logIntent ? { step: "outcome" } : null}
+              afterCall={
+                asking || logIntent || mustAnswer ? { step: "outcome" } : null
+              }
               outcome={
                 questionOpen ? (
                   <CallOutcome
@@ -4989,18 +5002,23 @@ export function LeadSheet({
                     detail={detail}
                     submitLabel={queue ? "Save & Next Lead" : "Save & Close"}
                     heard={after?.heard ?? null}
-                    attention={asking}
-                    ask={logIntent || logging === leadId}
+                    attention={asking || mustAnswer}
+                    ask={logIntent || logging === leadId || mustAnswer}
                     beforeSave={() => logWaitingCall(detail)}
-                    onSkip={() => {
-                      // Nothing saved; in a round, on to the next lead (ph2-16).
-                      setBackFrom(null);
-                      setLogging(null);
-                      setLoggedFor(leadId);
-                      if (asked) setAnswered(asked.startedMs);
-                      if (queue && onNext && leadId) onNext(leadId);
-                    }}
+                    onSkip={
+                      mustAnswer
+                        ? undefined
+                        : () => {
+                            // Nothing saved; in a round, on to the next lead (ph2-16).
+                            setBackFrom(null);
+                            setLogging(null);
+                            setLoggedFor(leadId);
+                            if (asked) setAnswered(asked.startedMs);
+                            if (queue && onNext && leadId) onNext(leadId);
+                          }
+                    }
                     onSaved={(next) => {
+                      if (leadId) answeredCallFor(holdAccount, leadId);
                       setBackFrom(null);
                       setLogging(null);
                       setLoggedFor(leadId);
