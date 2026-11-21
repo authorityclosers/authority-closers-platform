@@ -74,6 +74,7 @@ import {
   accountRedirect,
   hubTabSetting,
   isSettingsSection,
+  sectionById,
   settingsPath,
 } from "./settings-sections";
 
@@ -143,6 +144,8 @@ it("maps every section, and the old account sections, to an address of its own",
   expect(isSettingsSection("ai-replies")).toBe(true);
   expect(isSettingsSection("billing")).toBe(false);
   expect(currentSection("/settings/team")).toBe("team");
+  // The subtitle names no way in the page may not list (Apple: judge, 21 Nov 2026).
+  expect(sectionById("security").hint).toBe("How you sign in, and signing out");
   expect(currentSection("/settings")).toBeNull();
 });
 

@@ -249,7 +249,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     id: "security",
     label: "Sign-in & security",
-    hint: "Google, Facebook and Apple sign-in, signing out",
+    // Says only what the rows hold: Apple shows only where it is offered.
+    hint: "How you sign in, and signing out",
     icon: ShieldCheck,
     group: "Just me",
   },
