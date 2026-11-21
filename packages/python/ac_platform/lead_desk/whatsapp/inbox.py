@@ -889,6 +889,9 @@ async def send(
         command_id=command_id,
     )
     lead.updated_at = desk.now
+    if not auto and message.status != "failed":
+        # A person's WhatsApp is contact: auto-reassign stops (lead_desk/reassign_guard.py).
+        lead.first_contact_at = lead.first_contact_at or desk.now
     await desk.db.flush()
     return message
 

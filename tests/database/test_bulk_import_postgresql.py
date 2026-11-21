@@ -425,10 +425,12 @@ def test_manifest_receipt_is_replayed_without_content_jobs_or_minutes_and_migrat
                     .values(expires_at=setup.clock[0] + timedelta(days=1))
                 )
             async with await client_for(setup) as client:
-                expired = await client.get(PREFIX + "/imports/" + batch["batch_id"])
-                assert expired.status_code == 200, expired.text
-                assert expired.json()["terminal_state"] == "failed"
-                assert {item["state"] for item in expired.json()["files"]} == {"expired"}
+                # Nothing expires by itself (owner, 20 Nov 2026): eight days on, the import waits.
+                later = await client.get(PREFIX + "/imports/" + batch["batch_id"])
+                assert later.status_code == 200, later.text
+                assert later.json()["state"] == "in_progress"
+                assert later.json()["terminal_state"] is None
+                assert "expired" not in {item["state"] for item in later.json()["files"]}
         finally:
             await setup.engine.dispose()
 

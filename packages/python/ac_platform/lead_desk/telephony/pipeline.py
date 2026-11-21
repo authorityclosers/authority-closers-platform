@@ -57,8 +57,9 @@ STORED = "lead_desk.company_call.recording_stored.v1"
 SUBMITTED = "lead_desk.company_call.submitted.v1"
 STARTED = "lead_desk.company_call.analysis_started.v1"
 READY = "lead_desk.company_call.report_ready.v1"
-# Waiting provider recordings are bounded to the same seven-day inbox window as app uploads.
-WINDOW = timedelta(days=7)
+# A provider call is swept until its recording is in (nothing dropped by itself, owner 20 Nov 2026):
+# the window is the 10-year sanity bound, as for the phone's call log and app uploads.
+WINDOW = timedelta(days=3653)
 
 
 class Pipeline:

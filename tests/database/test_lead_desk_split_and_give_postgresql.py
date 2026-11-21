@@ -78,6 +78,8 @@ def test_a_split_gives_by_percent_and_auto_reassign_counts_work_minutes(
                 ],
                 auto_reassign=True,
                 reassign_minutes=30,
+                # Switched on before these leads came (only later givings move).
+                auto_reassign_since=(setup.state.now - timedelta(hours=1)).isoformat(),
                 # Every day, all day: the work-minute clock without a night in the way.
                 work_hours={
                     "days": [0, 1, 2, 3, 4, 5, 6],
