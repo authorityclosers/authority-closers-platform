@@ -1,0 +1,17 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "0e03a50ffe42a26e92ef666b676d3e65e2961f6b",
+  "full": true,
+  "checks": [],
+  "changed_files": null,
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [
+    "apps/sales-xray-web/app/settings/sounds.tsx",
+    "apps/sales-xray-web/app/settings/sounds.module.css",
+    "apps/sales-xray-web/app/settings/sounds.test.tsx",
+    "apps/sales-xray-web/app/settings/settings-sections.ts"
+  ],
+  "py_shards": 17,
+  "requested_by": "root@ac-kvm4-prod"
+}
