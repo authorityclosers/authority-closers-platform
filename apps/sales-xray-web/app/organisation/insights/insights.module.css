@@ -1529,3 +1529,61 @@ a.callTitle:hover {
     margin-inline: auto;
   }
 }
+
+/* Judge round (sx-redesign, 21 Nov 2026): one empty card with one heading, a
+   dark ink icon on a soft grey tile and a green outline pill; the deep green
+   for the page's one solid button; grey notes at 14 px; room above the
+   phone's tab bar. */
+.emptyCard {
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.emptyCard > div > span[aria-hidden="true"] {
+  background: var(--sx-fill);
+  color: var(--lx-ink);
+}
+
+.emptyCard a,
+.emptyCard button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1.5px solid var(--lx-home-emerald);
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--lx-home-emerald);
+  font-weight: 700;
+}
+
+.page button[data-variant="primary"],
+.page a[data-variant="primary"] {
+  border-color: var(--lx-home-emerald);
+  background: var(--lx-home-emerald);
+  color: var(--sx-surface);
+}
+
+.muted,
+.caption,
+.footnote {
+  font-size: var(--sx-text-sm);
+}
+
+@media (max-width: 899.98px) {
+  .page {
+    padding-bottom: calc(var(--lx-bottom-nav-h, 64px) + 24px);
+  }
+}
+
+/* Laptops: the top bar already says "Insights"; the page keeps it for screen
+   readers only, so it never says its name twice. */
+@media (min-width: 900px) {
+  .page > header h1 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

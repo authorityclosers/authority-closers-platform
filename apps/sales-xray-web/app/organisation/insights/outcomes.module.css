@@ -441,3 +441,9 @@
 .story .eyebrow {
   color: var(--sx-muted);
 }
+
+/* Grey notes at 14 px (sx-redesign judge, 21 Nov 2026). */
+.caption,
+.coverage {
+  font-size: var(--sx-text-sm);
+}

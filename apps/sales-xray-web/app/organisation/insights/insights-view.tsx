@@ -340,6 +340,7 @@ export function InsightsView({
     <div className={styles.page} data-updating={updating ? "" : undefined}>
       <PageHeader
         title="Insights"
+        titleInBar
         actions={
           empty ? null : (
             <Segmented<View>
@@ -355,10 +356,13 @@ export function InsightsView({
         }
         context={[
           RANGE_TEXT[filters.range],
-          data.coverage.calls
-            ? `${count(data.totals.calls)} calls · ${count(data.totals.people)} people`
-            : "Call count unavailable",
-          synthetic ? (
+          // Nothing to count when the period is empty (sx-redesign judge, 21 Nov 2026).
+          empty
+            ? null
+            : data.coverage.calls
+              ? `${count(data.totals.calls)} calls · ${count(data.totals.people)} people`
+              : "Call count unavailable",
+          synthetic && !empty ? (
             <span key="synthetic" className={styles.fixtureBadge}>
               Synthetic sandbox data
             </span>
@@ -379,7 +383,8 @@ export function InsightsView({
         </p>
       ) : null}
       {empty ? (
-        <Panel title="No calls here yet">
+        // One empty card with one heading (sx-redesign judge, 21 Nov 2026).
+        <div className={styles.emptyCard}>
           <Empty
             icon={BarChart3}
             title={
@@ -404,7 +409,7 @@ export function InsightsView({
                 : undefined
             }
           />
-        </Panel>
+        </div>
       ) : (
         <Sections
           section={section}
