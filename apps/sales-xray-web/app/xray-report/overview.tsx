@@ -9,8 +9,8 @@ import {
   Info,
   MessagesSquare,
   Pencil,
-  TrendingUp,
-  Trophy,
+  Target,
+  ThumbsUp,
   X,
 } from "lucide-react";
 import { useId, useRef, useState, type ReactNode } from "react";
@@ -546,6 +546,37 @@ function DealOutcomeBar({ example }: { example: OutcomeKind | null }) {
 }
 
 /** 1. Overview & Score (image7). */
+/** The overall score as a ring in its band's colour; a dash before it is scored. */
+function ScoreRing({ value }: { value: number | null }) {
+  const radius = 42;
+  const length = 2 * Math.PI * radius;
+  const share = value === null ? 0 : Math.min(100, Math.max(0, value)) / 100;
+  return (
+    <span className={styles.scoreRing}>
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <circle className={styles.ringTrack} cx="50" cy="50" r={radius} />
+        {share > 0 ? (
+          <circle
+            className={styles.ringArc}
+            cx="50"
+            cy="50"
+            r={radius}
+            strokeDasharray={`${share * length} ${length}`}
+          />
+        ) : null}
+      </svg>
+      <span className={styles.scoreLine}>
+        {value === null ? (
+          <span className={styles.scoreEmpty}>&ndash;</span>
+        ) : (
+          <span className={styles.scoreValue}>{value}</span>
+        )}
+        <span className={styles.scoreOf}>/100</span>
+      </span>
+    </span>
+  );
+}
+
 export function OverviewScore({
   view,
   onSelect,
@@ -581,6 +612,7 @@ export function OverviewScore({
     : view.overview;
   const { state } = useCallOutcome();
   const outcomeEditor = useRef<HTMLDivElement>(null);
+  const glanceId = useId();
   const recorded = state.status === "ready" ? state.record.value : null;
   const resultLabel = recorded
     ? CALL_OUTCOME_LABELS[recorded.outcome]
@@ -591,17 +623,6 @@ export function OverviewScore({
         : "Not recorded yet";
   return (
     <div className={styles.xr} data-xray-part="overview">
-      {/* The summary card is the AI notes: Recap, Next step and Copy, each
-          rated, with the talk line (competitor teardown 24, 1 Nov 2026). */}
-      <AiNotes
-        view={view}
-        talk={talk}
-        callKey={callKey}
-        onSelect={onSelect}
-        onApply={onApply}
-        applicable={applicable}
-      />
-
       <section
         className={`${styles.card} ${styles.scoreCard}`}
         aria-label={scores ? "Overall score" : "Call statistics"}
@@ -614,51 +635,46 @@ export function OverviewScore({
         ) : scores ? (
           <>
             <div
-              className={`${styles.score} ${band ? BAND_TONE[band] : styles.neutral}`}
+              className={`${styles.score} ${styles.heroScore} ${band ? BAND_TONE[band] : styles.neutral}`}
             >
-              <span className={styles.eyebrow}>
-                Overall Score{" "}
-                {view.illustrative ? (
-                  <Illustrative />
-                ) : view.aiDraft && score ? (
+              <ScoreRing value={score?.value ?? null} />
+              <div className={styles.heroWords}>
+                <span className={styles.eyebrow}>
+                  Overall Score{" "}
+                  {view.illustrative ? (
+                    <Illustrative />
+                  ) : view.aiDraft && score ? (
+                    <>
+                      <AiDraft />
+                      {view.beta ? (
+                        <BetaScore version={view.beta.version} />
+                      ) : null}
+                    </>
+                  ) : null}
+                </span>
+                {score ? (
                   <>
-                    <AiDraft />
-                    {view.beta ? (
-                      <BetaScore version={view.beta.version} />
-                    ) : null}
+                    <p className={styles.verdict}>{score.line}</p>
+                    <span className={`${styles.pill} ${styles.scoreBadge}`}>
+                      {score.label}
+                    </span>
                   </>
-                ) : null}
-              </span>
-              {score ? (
-                <>
-                  <span className={styles.scoreLine}>
-                    <span className={styles.scoreValue}>{score.value}</span>
-                    <span className={styles.scoreOf}>/100</span>
-                  </span>
-                  <span className={`${styles.pill} ${styles.scoreBadge}`}>
-                    {score.label}
-                  </span>
-                  <p className={styles.body}>{score.line}</p>
-                </>
-              ) : (
-                <>
-                  <span className={styles.scoreLine}>
-                    <span className={styles.scoreEmpty}>&ndash;</span>
-                    <span className={styles.scoreOf}>/100</span>
-                  </span>
-                  <span className={`${styles.pill} ${styles.scoreBadge}`}>
-                    {scoring.pending ? scoring.title : "Not scored yet"}
-                  </span>
-                  <p
-                    className={styles.body}
-                    role={scoring.pending ? "status" : undefined}
-                  >
-                    {scoring.pending
-                      ? scoring.body
-                      : "The score appears when this call’s pointers are evaluated."}
-                  </p>
-                </>
-              )}
+                ) : (
+                  <>
+                    <p
+                      className={styles.body}
+                      role={scoring.pending ? "status" : undefined}
+                    >
+                      {scoring.pending
+                        ? scoring.body
+                        : "The score appears when this call’s pointers are evaluated."}
+                    </p>
+                    <span className={`${styles.pill} ${styles.scoreBadge}`}>
+                      {scoring.pending ? scoring.title : "Not scored yet"}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
             <hr className={styles.rule} />
           </>
@@ -708,57 +724,81 @@ export function OverviewScore({
             missing="Mark who is who on the call map"
           />
         </div>
-        <div className={styles.highlights}>
-          <div
-            className={`${styles.card} ${styles.tinted} ${styles.highlight} ${styles.green}`}
-          >
-            <span className={styles.disc}>
-              <Trophy />
-            </span>
-            <div>
-              <h4 className={styles.highlightTitle}>Biggest Strength</h4>
-              <p className={styles.body}>
-                {strength ? (
-                  <LineWithClip
-                    line={strength}
-                    title="Biggest strength"
-                    onSelect={onSelect}
-                  />
-                ) : (
-                  <span className={styles.muted}>
-                    No clear strength in this report.
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
-          <div
-            className={`${styles.card} ${styles.tinted} ${styles.highlight} ${styles.amber}`}
-          >
-            <span className={styles.disc}>
-              <TrendingUp />
-            </span>
-            <div>
-              <h4 className={styles.highlightTitle}>
-                Biggest Improvement Area
-              </h4>
-              <p className={styles.body}>
-                {improvement ? (
-                  <LineWithClip
-                    line={improvement}
-                    title="Biggest improvement area"
-                    onSelect={onSelect}
-                  />
-                ) : (
-                  <span className={styles.muted}>
-                    No clear improvement area in this report.
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
-        </div>
       </section>
+
+      {/* What went well and what to fix, as two short cards (sx-redesign
+          board pick 09-call-report, 21 Nov 2026), each with its moment. */}
+      <div className={styles.glance}>
+        <section
+          className={`${styles.card} ${styles.glanceCard}`}
+          aria-labelledby={`${glanceId}-well`}
+        >
+          <span className={styles.inkTile} aria-hidden="true">
+            <ThumbsUp />
+          </span>
+          <div className={styles.glanceText}>
+            <div className={styles.glanceHead}>
+              <h3 id={`${glanceId}-well`} className={styles.cardTitle}>
+                What went well
+              </h3>
+              <span className={`${styles.pill} ${styles.green}`}>Good</span>
+            </div>
+            <p className={styles.body}>
+              {strength ? (
+                <LineWithClip
+                  line={strength}
+                  title="Biggest strength"
+                  onSelect={onSelect}
+                />
+              ) : (
+                <span className={styles.muted}>
+                  No clear strength in this report.
+                </span>
+              )}
+            </p>
+          </div>
+        </section>
+        <section
+          className={`${styles.card} ${styles.glanceCard}`}
+          aria-labelledby={`${glanceId}-fix`}
+        >
+          <span className={styles.inkTile} aria-hidden="true">
+            <Target />
+          </span>
+          <div className={styles.glanceText}>
+            <div className={styles.glanceHead}>
+              <h3 id={`${glanceId}-fix`} className={styles.cardTitle}>
+                Fix next time
+              </h3>
+              <span className={`${styles.pill} ${styles.amber}`}>Action</span>
+            </div>
+            <p className={styles.body}>
+              {improvement ? (
+                <LineWithClip
+                  line={improvement}
+                  title="Biggest improvement area"
+                  onSelect={onSelect}
+                />
+              ) : (
+                <span className={styles.muted}>
+                  No clear improvement area in this report.
+                </span>
+              )}
+            </p>
+          </div>
+        </section>
+      </div>
+
+      {/* The summary card is the AI notes: Recap, Next step and Copy, each
+          rated, with the talk line (competitor teardown 24, 1 Nov 2026). */}
+      <AiNotes
+        view={view}
+        talk={talk}
+        callKey={callKey}
+        onSelect={onSelect}
+        onApply={onApply}
+        applicable={applicable}
+      />
 
       {/* The call's outcome comes after the read (orchestrator, 13 Nov 2026,
           Flow 2 G6: the report's first job is what happened and what to

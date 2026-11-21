@@ -1656,3 +1656,38 @@
     white-space: nowrap;
   }
 }
+
+/* ---------- Report, Prospect, Coaching as Home's pill (sx-redesign board
+   pick 09-call-report, owner 21 Nov 2026) ----------
+   A sunken well with the current page in Home's solid green, on a phone and
+   in the computer's top bar alike. */
+.navRow:not([data-sx-x]) .toolbar.toolbar[data-labelled] {
+  gap: 4px;
+  padding: 4px;
+  border: var(--sx-well-edge);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-well-fill);
+  box-shadow: var(--sx-well-depth);
+}
+.navRow:not([data-sx-x]) .toolbar.toolbar[data-labelled] > button {
+  min-height: 40px;
+  margin: 0;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  box-shadow: none;
+  color: var(--sx-ink-2);
+}
+.navRow:not([data-sx-x])
+  .toolbar.toolbar[data-labelled]
+  > button[aria-pressed="true"] {
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+.navRow:not([data-sx-x])
+  .toolbar.toolbar[data-labelled]
+  > button[aria-pressed="true"]
+  svg {
+  color: inherit;
+}

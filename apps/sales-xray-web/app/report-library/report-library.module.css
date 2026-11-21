@@ -42,34 +42,44 @@
   line-height: var(--sx-leading-20);
 }
 
-/* ---------- Main / All Reports ---------- */
+/* ---------- All | Needs review | Reports ready: Home's pill ---------- */
 
 .tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* "Needs review (12)" is the longest word; All the shortest. */
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr) minmax(0, 1fr);
   gap: 4px;
   padding: 4px;
-  border-radius: var(--sx-radius-md);
-  background: var(--sx-fill);
+  border: var(--sx-well-edge);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-well-fill);
+  box-shadow: var(--sx-well-depth);
 }
 
 .tab {
   min-height: 44px;
-  padding: 8px 6px;
+  min-width: 0;
+  padding: 8px 4px;
   border: 0;
-  border-radius: calc(var(--sx-radius-md) - 4px);
+  border-radius: var(--sx-radius-pill);
   background: transparent;
-  color: var(--sx-muted);
+  color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 650;
+  line-height: var(--sx-leading-20);
   cursor: pointer;
+  transition: transform 140ms ease-out;
 }
 
 .tab[aria-selected="true"] {
-  background: var(--sx-surface);
-  color: var(--sx-ink);
-  box-shadow: var(--sx-shadow-1);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
+.tab:active {
+  transform: var(--sx-press-sink);
 }
 
 .tab:focus-visible,
@@ -85,7 +95,7 @@
 .quiet:focus-visible,
 .back:focus-visible,
 .callLog:focus-visible,
-.cardLink:focus-visible {
+.rowLink:focus-visible {
   outline: none;
   box-shadow: var(--sx-focus-ring);
 }
@@ -95,30 +105,6 @@
   align-content: start;
   gap: 14px;
   min-width: 0;
-}
-
-/* ---------- The waveform and Analyse a call ---------- */
-
-.analyse {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-}
-
-.waveform {
-  display: flex;
-  justify-content: center;
-  width: 100%;
-  height: 87px;
-  overflow: hidden;
-}
-
-.waveform svg {
-  width: 100%;
-  max-width: 340px;
-  height: 78px;
-  align-self: center;
-  fill: var(--sx-accent);
 }
 
 .primary,
@@ -140,31 +126,28 @@
 }
 
 .primary {
-  border: 1px solid var(--sx-call-fill);
-  background: var(--sx-call-fill);
-  color: var(--sx-call-ink);
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
 }
 
 .secondary {
-  border: 1px solid var(--sx-line);
-  background: var(--sx-surface);
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
   color: var(--sx-ink);
 }
 
 .primary:active,
-.secondary:active,
-.card:active {
+.secondary:active {
   transform: scale(var(--sx-press-scale, 0.98));
 }
 
 .primary[aria-disabled="true"] {
   opacity: 0.55;
-}
-
-.analyseButton {
-  width: 100%;
-  min-height: 52px;
-  font-size: var(--sx-text-md);
 }
 
 /* ---------- Section heads ---------- */
@@ -216,11 +199,13 @@
   gap: 4px;
   min-width: 0;
   min-height: 48px;
-  padding: 0 8px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-sm);
-  background: var(--sx-surface);
+  padding: 0 14px;
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
   color: var(--sx-muted);
+  gap: 8px;
 }
 
 .search:focus-within {
@@ -252,10 +237,11 @@
   align-items: center;
   gap: 6px;
   min-height: 48px;
-  padding: 0 8px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-sm);
-  background: var(--sx-surface);
+  padding: 0 14px;
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
@@ -355,163 +341,6 @@
   background: var(--sx-surface);
 }
 
-/* ---------- Report cards ---------- */
-
-.list {
-  display: grid;
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.card {
-  position: relative;
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-  padding: 14px 14px 12px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-md);
-  background: var(--sx-surface);
-  box-shadow: var(--sx-shadow-1);
-  transition: transform var(--sx-dur-fast, 120ms) var(--sx-ease-out, ease-out);
-}
-
-.cardTop {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px 8px;
-  min-width: 0;
-}
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 8px;
-  border-radius: var(--sx-radius-pill);
-  background: var(--sx-fill);
-  color: var(--sx-ink-2);
-  font-size: var(--sx-text-xs);
-  font-weight: 600;
-  line-height: var(--sx-leading-16);
-}
-
-.pill[data-source="inbound_auto"] {
-  background: var(--sx-accent-soft);
-  color: var(--sx-accent);
-}
-
-.pill[data-source="manual"] {
-  border: 1px solid var(--sx-line);
-  background: transparent;
-}
-
-.when {
-  color: var(--sx-muted);
-  font-size: var(--sx-text-xs);
-  line-height: var(--sx-leading-16);
-  white-space: nowrap;
-}
-
-.cardTitle {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 44px;
-  align-items: start;
-  gap: 4px;
-}
-
-.cardTitle h3 {
-  padding-block-start: 2px;
-  font-size: var(--sx-text-md);
-  font-weight: 650;
-  line-height: var(--sx-leading-24);
-  overflow-wrap: anywhere;
-}
-
-.cardLink {
-  color: inherit;
-  text-decoration: none;
-  border-radius: var(--sx-radius-sm);
-}
-
-/* The whole card opens the report; the Save button sits above it. */
-.cardLink::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: var(--sx-radius-md);
-}
-
-.save {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  margin: -8px -8px 0 0;
-  padding: 0;
-  border: 0;
-  border-radius: var(--sx-radius-pill);
-  background: transparent;
-  color: var(--sx-muted);
-  cursor: pointer;
-}
-
-.save[aria-pressed="true"] {
-  color: var(--sx-accent);
-}
-
-.save[aria-pressed="true"] svg {
-  fill: currentColor;
-}
-
-.summary {
-  color: var(--sx-muted);
-  font-size: var(--sx-text-sm);
-  line-height: var(--sx-leading-20);
-  overflow-wrap: anywhere;
-}
-
-.cardFoot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px 12px;
-  padding-block-start: 10px;
-  border-top: 1px solid var(--sx-hairline);
-}
-
-.meta {
-  color: var(--sx-muted);
-  font-size: var(--sx-text-xs);
-  line-height: var(--sx-leading-16);
-}
-
-.open {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-inline-start: auto;
-  color: var(--sx-accent);
-  font-size: var(--sx-text-sm);
-  font-weight: 650;
-  line-height: var(--sx-leading-20);
-}
-
-.cardSkeleton {
-  display: grid;
-  gap: 10px;
-  padding: 16px 14px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-md);
-  background: var(--sx-surface);
-}
-
 /* ---------- No matching reports ---------- */
 
 .empty {
@@ -554,18 +383,38 @@
 
 /* ---------- The phone's own calls, a tap from Main ---------- */
 
+.links {
+  display: grid;
+  overflow: hidden;
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+}
+
 .callLog {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) 20px;
+  grid-template-columns: 40px minmax(0, 1fr) 20px;
   align-items: center;
   gap: 12px;
-  min-height: 56px;
+  width: 100%;
+  min-height: 64px;
   padding: 10px 14px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-md);
-  background: var(--sx-surface);
+  border: 0;
+  background: transparent;
   color: var(--sx-ink);
+  font: inherit;
+  text-align: start;
   text-decoration: none;
+  cursor: pointer;
+}
+
+.callLog + .callLog {
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.callLog > svg {
+  color: var(--sx-muted);
 }
 
 .callLog span {
@@ -574,14 +423,25 @@
 }
 
 .callLog b {
-  font-size: var(--sx-text-sm);
+  font-size: var(--sx-text-md);
   font-weight: 650;
+  line-height: var(--sx-leading-24);
 }
 
 .callLog small {
   color: var(--sx-muted);
-  font-size: var(--sx-text-xs);
-  line-height: var(--sx-leading-16);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.linkIcon {
+  display: grid !important;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--lx-ink) 7%, var(--lx-elevated));
+  color: var(--lx-ink);
 }
 
 .back {
@@ -865,141 +725,492 @@
 @media (prefers-reduced-motion: reduce) {
   .primary,
   .secondary,
-  .card {
+  .tab,
+  .row {
     transition: none;
   }
 
   .primary:active,
   .secondary:active,
-  .card:active {
+  .tab:active {
     transform: none;
   }
 }
 
-/* Home's finish on Reports (owner, 15 Nov 2026): Main | All Reports as Home's
-   pill, Analyse a call in the glossy green, report cards as Home's tiles. */
-.tabs {
-  border: var(--sx-well-edge);
-  background: var(--sx-well-fill);
-  box-shadow: var(--sx-well-depth);
+/* ---------- Calls, summary first (sx-redesign pick 08-calls, 21 Nov 2026) ----------
+   One hero tile with a calls-blue wash in its corner and a ring, Home's pill
+   switch, then the calls in Home's tiles under their day, one row each. */
+
+.hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  padding: 18px;
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background:
+    radial-gradient(
+      120% 90% at 100% 0%,
+      color-mix(in oklab, var(--sx-tone-calls) 16%, transparent),
+      transparent 62%
+    ),
+    var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
 }
 
+.heroText {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.heroText h2 {
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-xl);
+  font-weight: 750;
+  line-height: var(--sx-leading-28);
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.heroText p {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.heroButton {
+  margin-block-start: 6px;
+  padding-inline: 18px;
+  font-size: var(--sx-text-md);
+}
+
+.ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+}
+
+.ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.ring circle {
+  fill: none;
+  stroke-width: 9;
+}
+
+.ringTrack {
+  stroke: color-mix(in oklab, var(--sx-tone-calls) 16%, transparent);
+}
+
+.ringArc {
+  stroke: var(--sx-tone-calls);
+  stroke-linecap: round;
+}
+
+.ringText {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  line-height: 1;
+}
+
+.ringText b {
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-3xl);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.ringText small {
+  margin-block-start: 2px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+/* The switch's count words never wrap the pill on a phone. */
 .tab {
-  transition: transform 140ms ease-out;
+  white-space: nowrap;
 }
 
-.tab[aria-selected="true"] {
-  background: var(--sx-gloss);
-  box-shadow: var(--sx-gloss-depth);
-  color: var(--sx-gloss-ink);
+.groups {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
 }
 
-.tab:active {
-  transform: var(--sx-press-sink);
+.group {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
 }
 
-.analyseButton {
-  background: var(--sx-gloss);
-  box-shadow: var(--sx-gloss-depth);
-  color: var(--sx-gloss-ink);
-  transition: transform 140ms ease-out;
+.dayHead {
+  padding-inline: 4px;
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+  line-height: var(--sx-leading-24);
 }
 
-.analyseButton:active {
-  transform: var(--sx-press-sink);
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.card,
-.cardSkeleton {
+.rowsCard {
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
   border: var(--sx-tile-edge);
   border-radius: var(--sx-tile-radius);
   background: var(--sx-tile-fill);
   box-shadow: var(--sx-tile-depth);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .tab,
-  .analyseButton {
-    transition: none;
+.rowsCard > li + li,
+.rowSkeleton + .rowSkeleton {
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 44px 16px;
+  grid-template-areas:
+    "avatar main save chevron"
+    ". chips save chevron";
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 6px;
+  min-width: 0;
+  min-height: 72px;
+  padding: 12px 10px 12px 14px;
+  transition: background-color 120ms ease-out;
+}
+
+.row:active {
+  background: color-mix(in oklab, var(--lx-ink) 4%, transparent);
+}
+
+.avatar {
+  grid-area: avatar;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--sx-tone-calls-soft);
+  color: var(--sx-tone-calls);
+  font-size: var(--sx-text-sm);
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+
+.avatar[data-tone="good"] {
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-tone-good);
+}
+
+.avatar[data-tone="info"] {
+  background: var(--sx-tone-info-soft);
+  color: var(--sx-tone-info);
+}
+
+.avatar[data-tone="action"] {
+  background: var(--sx-tone-action-soft);
+  color: var(--sx-tone-action);
+}
+
+.avatar[data-tone="problem"] {
+  background: var(--sx-tone-problem-soft);
+  color: var(--sx-tone-problem);
+}
+
+.avatar[data-tone="muted"] {
+  background: color-mix(in oklab, var(--lx-ink) 7%, var(--lx-elevated));
+  color: var(--lx-ink);
+}
+
+.rowMain {
+  grid-area: main;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rowName {
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  line-height: var(--sx-leading-24);
+  overflow-wrap: anywhere;
+}
+
+.rowLink {
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--sx-radius-sm);
+}
+
+/* The whole row opens the report; Save sits above it. */
+.rowLink::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.rowMeta {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  overflow-wrap: anywhere;
+}
+
+.rowChips {
+  grid-area: chips;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.word {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 2px 10px;
+  border-radius: var(--sx-radius-pill);
+  background: color-mix(in oklab, var(--lx-ink) 7%, var(--lx-elevated));
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  line-height: var(--sx-leading-16);
+  white-space: nowrap;
+}
+
+.word[data-tone="good"] {
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-tone-good);
+}
+
+.word[data-tone="action"] {
+  background: var(--sx-tone-action-soft);
+  color: var(--sx-tone-action);
+}
+
+.word[data-tone="calls"] {
+  background: var(--sx-tone-calls-soft);
+  color: var(--sx-tone-calls);
+}
+
+.word[data-tone="problem"] {
+  background: var(--sx-tone-problem-soft);
+  color: var(--sx-tone-problem);
+}
+
+.save {
+  grid-area: save;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-muted);
+  cursor: pointer;
+}
+
+.save[aria-pressed="true"] {
+  color: var(--sx-primary-ink);
+}
+
+.save[aria-pressed="true"] svg {
+  fill: currentColor;
+}
+
+.chevron {
+  grid-area: chevron;
+  color: var(--sx-muted);
+}
+
+.rowSkeleton {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+  padding: 12px 14px;
+}
+
+.rowSkeleton span {
+  display: grid;
+  gap: 6px;
+}
+
+.firstTime {
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+}
+
+/* A narrow phone: the ring sits a little smaller beside the words. */
+@media (max-width: 380px) {
+  .ring {
+    width: 84px;
+    height: 84px;
+  }
+
+  .hero {
+    gap: 12px;
+    padding: 16px 14px;
   }
 }
 
-/* ---------- On a computer, 1024 px and up (owner, 20 Nov 2026: "learn how
-   Vitals OS is so great on PC"; board ~/orch/boards/sx-desktop, option B) ----
-   Calls was the phone's 720 px column in the middle of the window (60 % of a
-   1920 screen empty), with a full-width Analyse bar. Now the page runs from the
-   gutter to 1180 px; the subtitle and a 320 px Main / All Reports switch share
-   the header row; Main lists Recent reports on the left and keeps Analyse a call
-   (its waveform and button) and Your phone calls in a context column on the
-   right, as Vitals keeps its numbers beside its list. All Reports uses the
-   width: two cards a row from 1280 px. Phones keep the column. */
+/* A phone keeps Filters as its icon, so the search box stays wide. */
+@media (max-width: 599px) {
+  .filters {
+    width: 48px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .filtersWord {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+/* Tablet and up: each row on one line (who, how it ended, the report). */
+@media (min-width: 600px) {
+  .hero {
+    gap: 24px;
+    padding: 22px 26px;
+  }
+
+  .ring {
+    width: 112px;
+    height: 112px;
+  }
+
+  .ringText b {
+    font-size: var(--sx-text-3xl);
+  }
+
+  .heroText h2 {
+    font-size: var(--sx-text-2xl);
+    line-height: var(--sx-leading-36);
+  }
+
+  .heroText p {
+    font-size: var(--sx-text-md);
+    line-height: var(--sx-leading-24);
+  }
+
+  .row {
+    grid-template-columns: 40px minmax(0, 1fr) minmax(0, auto) 44px 18px;
+    grid-template-areas: "avatar main chips save chevron";
+    padding-inline: 18px 12px;
+  }
+
+  .rowChips {
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+  }
+
+  .word {
+    min-height: 30px;
+    padding-inline: 12px;
+    font-size: var(--sx-text-sm);
+  }
+}
+
+/* ---------- On a computer, 1024 px and up ----------
+   The page runs from the gutter to 1040 px; the hero puts its button on the
+   right; the switch is a compact pill on the left, not the full width. */
 @media (min-width: 1024px) {
   .page[data-reports-v4],
   .page[data-reports-loading] {
-    max-width: 1180px;
+    max-width: 1040px;
     margin-inline: 0;
   }
 
-  .page[data-reports-v4] {
-    grid-template-columns: minmax(0, 1fr) 320px;
+  .hero[data-calls-hero] {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 24px 32px;
+  }
+
+  .hero[data-calls-hero] .heroText {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "title button"
+      "line button";
     column-gap: 24px;
+    align-items: center;
   }
 
-  .page[data-reports-v4] > * {
-    grid-column: 1 / -1;
+  .hero[data-calls-hero] .heroText h2 {
+    grid-area: title;
   }
 
-  .page[data-reports-v4] > .subtitle {
-    grid-column: 1;
-    align-self: center;
+  .hero[data-calls-hero] .heroText p {
+    grid-area: line;
+  }
+
+  .hero[data-calls-hero] .heroButton {
+    grid-area: button;
+    margin: 0;
+    min-height: 52px;
+    padding-inline: 24px;
   }
 
   .page[data-reports-v4] > .tabs {
-    grid-column: 2;
+    justify-self: start;
+    grid-template-columns: repeat(3, auto);
   }
 
-  .page[data-tab="main"] > .panel {
-    grid-template-columns: minmax(0, 1fr) 320px;
-    grid-template-rows: auto auto auto 1fr;
-    align-items: start;
-    column-gap: 24px;
+  .page[data-reports-v4] .tab {
+    padding-inline: 22px;
   }
 
-  .page[data-tab="main"] > .panel > * {
-    grid-column: 1;
-    grid-row: 2 / span 3;
+  .page[data-reports-v4] .tools {
+    max-width: 520px;
   }
 
-  .page[data-tab="main"] > .panel > .sectionLine {
-    grid-row: 1;
+  .row {
+    grid-template-columns: 40px minmax(0, 1fr) 280px 44px 18px;
   }
 
-  .page[data-tab="main"] > .panel > .analyse {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    gap: 12px;
-    padding: 20px;
-    border: 1px solid var(--sx-line);
-    border-radius: var(--sx-radius-lg);
-    background: var(--sx-surface);
+  .rowChips {
+    justify-content: flex-start;
   }
 
-  .page[data-tab="main"] > .panel > .callLog {
-    grid-column: 2;
-    grid-row: 3;
+  .rowName {
+    font-size: var(--sx-text-md);
   }
 
-  .page[data-tab="main"] .waveform {
-    height: 72px;
-  }
-
-  .page[data-tab="main"] .waveform svg {
-    height: 64px;
-  }
-}
-
-@media (min-width: 1280px) {
-  .page[data-tab="all"] .list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .rowMeta {
+    font-size: var(--sx-text-sm);
   }
 }

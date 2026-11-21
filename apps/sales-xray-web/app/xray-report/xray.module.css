@@ -2022,3 +2022,197 @@
     display: none;
   }
 }
+
+/* ---------- The score first (sx-redesign board pick 09-call-report, owner
+   21 Nov 2026) ----------
+   The Overall score card is the page's one hero: Home's tile with a faint
+   wash of the score's colour in one corner, the score as a ring in its band's
+   colour (Bricolage figures), and one plain sentence beside it. What went well
+   and Fix next time follow as two short cards of equal height, each with a
+   dark ink icon in a soft tile and its word chip beside the title. */
+.scoreCard {
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background:
+    radial-gradient(
+      110% 80% at 100% 0%,
+      color-mix(in oklab, var(--sx-tone-good) 12%, transparent),
+      transparent 60%
+    ),
+    var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+}
+.heroScore {
+  align-items: center;
+  column-gap: 18px;
+  grid-template-columns: auto minmax(0, 1fr);
+  justify-items: stretch;
+}
+.heroWords {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  min-width: 0;
+}
+.verdict {
+  color: var(--xr-text);
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: var(--sx-leading-24);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.scoreRing {
+  display: grid;
+  flex: none;
+  height: 104px;
+  place-items: center;
+  position: relative;
+  width: 104px;
+}
+.scoreRing svg {
+  height: 100%;
+  inset: 0;
+  position: absolute;
+  transform: rotate(-90deg);
+  width: 100%;
+}
+.scoreRing circle {
+  fill: none;
+  stroke-width: 9;
+}
+.ringTrack {
+  stroke: color-mix(in oklab, var(--tone-mark) 18%, transparent);
+}
+.ringArc {
+  stroke: var(--tone-mark);
+  stroke-linecap: round;
+}
+.scoreRing .scoreLine {
+  align-items: center;
+  display: grid;
+  gap: 0;
+  justify-items: center;
+  position: relative;
+}
+.scoreRing .scoreValue,
+.scoreRing .scoreEmpty {
+  color: var(--xr-text);
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-3xl);
+  line-height: 1;
+}
+.scoreRing .scoreOf {
+  color: var(--xr-text-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+.scoreCard .stat {
+  border-radius: 16px;
+}
+.glance {
+  align-items: stretch;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.glanceCard {
+  align-items: flex-start;
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+  display: flex;
+  gap: 14px;
+  padding: 18px;
+}
+.inkTile {
+  align-items: center;
+  background: color-mix(in oklab, var(--lx-ink) 7%, var(--lx-elevated));
+  border-radius: 12px;
+  color: var(--lx-ink);
+  display: inline-flex;
+  flex: none;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+.inkTile svg {
+  height: 20px;
+  width: 20px;
+}
+.glanceText {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.glanceHead {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.glanceText .body {
+  color: var(--xr-text-2);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+@media (min-width: 761px) {
+  .scoreRing {
+    height: 120px;
+    width: 120px;
+  }
+  .verdict {
+    font-size: var(--sx-text-xl);
+    line-height: var(--sx-leading-28);
+  }
+}
+@media (max-width: 760px) {
+  .glance {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .scoreCard {
+    padding: 16px;
+  }
+  .heroScore {
+    column-gap: 14px;
+  }
+  .scoreRing {
+    height: 92px;
+    width: 92px;
+  }
+  .glanceCard {
+    padding: 16px;
+  }
+}
+/* The numbers under the hero stay small: label and figure, no picture, so
+   the score and its sentence lead. */
+.scoreCard .stats {
+  gap: 10px;
+}
+.scoreCard .stat {
+  background: color-mix(in oklab, var(--lx-ink) 4%, var(--lx-elevated));
+  border: 0;
+  box-shadow: none;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.scoreCard .stat .disc {
+  height: 32px;
+  width: 32px;
+}
+.scoreCard .stat .disc svg {
+  height: 16px;
+  width: 16px;
+}
+@media (max-width: 760px) {
+  .scoreCard .stat .disc {
+    display: none;
+  }
+  .scoreCard .statValue {
+    font-size: var(--sx-text-md);
+    line-height: var(--sx-leading-24);
+  }
+}
