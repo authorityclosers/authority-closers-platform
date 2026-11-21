@@ -11,11 +11,12 @@ import { OrganisationHub } from "./org-hub";
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 const replace = vi.hoisted(() => vi.fn());
+const prefetch = vi.hoisted(() => vi.fn());
 let query = "";
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(query),
   usePathname: () => "/organisation",
-  useRouter: () => ({ replace }),
+  useRouter: () => ({ replace, prefetch }),
 }));
 vi.mock("../settings/settings-shell", () => ({
   SettingsOverview: () => <div data-settings-overview="" />,
@@ -178,6 +179,8 @@ it("sends every old hub address to its Settings section, its own query kept", as
     window.history.replaceState(null, "", `/organisation?${asked}`);
     await render("owner");
     expect(replace, asked).toHaveBeenCalledWith(to);
+    // Its Settings page loads while the workspace is checked (sx-redesign).
+    expect(prefetch).toHaveBeenCalled();
     expect(host.querySelector('nav[aria-label="Organisation"]')).toBeNull();
   }
   // A connect flow coming back keeps its answer.

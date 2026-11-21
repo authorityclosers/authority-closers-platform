@@ -407,6 +407,22 @@ export function hubTabSetting(
   }
 }
 
+/**
+ * Where an /organisation address goes in Settings, with its own query kept
+ * (a connect flow's ?connected=…) and tab/part dropped; null for Analytics.
+ * Pure, so the server can redirect with it (sx-redesign, 21 Nov 2026).
+ */
+export function hubQueryTarget(search: URLSearchParams): string | null {
+  const to = hubTabSetting(search.get("tab"), search.get("part"));
+  if (!to) return null;
+  const kept = new URLSearchParams();
+  search.forEach((value, key) => {
+    if (key !== "tab" && key !== "part") kept.append(key, value);
+  });
+  const rest = kept.toString();
+  return rest ? `${to}?${rest}` : to;
+}
+
 export const isSettingsSection = (
   value: string | null | undefined,
 ): value is SettingsSectionId =>

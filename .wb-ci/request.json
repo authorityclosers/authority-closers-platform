@@ -1,0 +1,39 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "cec3a132bb6030fbbc991ef4995f99299622994c",
+  "full": false,
+  "checks": [
+    "web"
+  ],
+  "changed_files": [
+    "apps/sales-xray-web/app/account-delete.test.tsx",
+    "apps/sales-xray-web/app/account-settings.tsx",
+    "apps/sales-xray-web/app/organisation/org-hub.test.tsx",
+    "apps/sales-xray-web/app/organisation/org-hub.tsx",
+    "apps/sales-xray-web/app/organisation/page-redirect.test.tsx",
+    "apps/sales-xray-web/app/organisation/page.tsx",
+    "apps/sales-xray-web/app/settings/profile-details.module.css",
+    "apps/sales-xray-web/app/settings/profile-details.tsx",
+    "apps/sales-xray-web/app/settings/settings-hub.tsx",
+    "apps/sales-xray-web/app/settings/settings-sections.ts",
+    "apps/sales-xray-web/app/settings/settings-shell.module.css",
+    "apps/sales-xray-web/app/settings/settings.test.tsx",
+    "apps/sales-xray-web/app/settings/setup-checklist.module.css",
+    "apps/sales-xray-web/app/settings/theme-pills.tsx",
+    "apps/sales-xray-web/app/sign-in-methods.module.css",
+    "apps/sales-xray-web/app/sign-in-methods.tsx",
+    "apps/sales-xray-web/app/ui/brand-tile.module.css",
+    "apps/sales-xray-web/app/ui/brand-tile.tsx"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [
+    "apps/sales-xray-web/app/organisation/org-hub.test.tsx",
+    "apps/sales-xray-web/app/organisation/org-hub.tsx",
+    "apps/sales-xray-web/app/organisation/page.tsx",
+    "apps/sales-xray-web/app/settings/settings-sections.ts",
+    "apps/sales-xray-web/app/organisation/page-redirect.test.tsx"
+  ],
+  "py_shards": 17,
+  "requested_by": "root@ac-kvm4-prod"
+}

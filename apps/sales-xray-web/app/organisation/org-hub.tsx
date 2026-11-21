@@ -172,6 +172,14 @@ export function OrganisationHub({
         hubTarget(moved, window.location.search, window.location.hash),
       );
   }, [moved, real, router]);
+  // Its Settings page loads while the workspace is still being checked, so
+  // the move is instant once it is (sx-redesign, 21 Nov 2026).
+  const early = real
+    ? hubTabSetting(query?.get("tab") ?? null, query?.get("part") ?? null)
+    : null;
+  useEffect(() => {
+    if (early) router.prefetch(early);
+  }, [early, router]);
   // Not in an organisation (or not known yet): the page as it was.
   if (!inOrganisation)
     return <OrganisationView initial={initial} sections={["overview"]} />;
