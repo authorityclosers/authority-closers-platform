@@ -3,7 +3,13 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { resetBackCloseForTests } from "../ui/back-close";
-import { ago, groupNotifications, initials, UpdatesBell } from "./updates-bell";
+import {
+  ago,
+  groupNotifications,
+  initials,
+  stamp,
+  UpdatesBell,
+} from "./updates-bell";
 import type { UpdateNotification } from "./updates-client";
 
 (
@@ -58,8 +64,9 @@ it("words times as people say them", () => {
   expect(ago("2026-10-12T06:00:00Z", now)).toBe("12 Oct");
 });
 
-// UI loop item 7 (owner's pick, 20 Nov 2026): Today and Earlier, newest first.
-it("groups today's lines first, then earlier ones, newest first", () => {
+// sx-redesign board pick A (owner, 21 Nov 2026): Today, Yesterday and
+// Earlier, one card each, newest first.
+it("groups today's lines first, then yesterday's, then earlier ones, newest first", () => {
   const now = Date.parse("2026-10-10T08:00:00Z");
   const earlyToday = {
     ...release,
@@ -68,7 +75,7 @@ it("groups today's lines first, then earlier ones, newest first", () => {
     created_at: "2026-10-10T01:00:00Z",
   };
   const groups = groupNotifications([release, earlyToday, event], now);
-  expect(groups.map((group) => group.title)).toEqual(["Today", "Earlier"]);
+  expect(groups.map((group) => group.title)).toEqual(["Today", "Yesterday"]);
   expect(groups[0].items.map((entry) => entry.id)).toEqual([
     "early-today",
     "fictional-event",
@@ -78,10 +85,22 @@ it("groups today's lines first, then earlier ones, newest first", () => {
   ]);
   expect(
     groupNotifications([release], now).map((group) => group.title),
-  ).toEqual(["Earlier"]);
+  ).toEqual(["Yesterday"]);
+  const older = { ...release, id: "older", created_at: "2026-10-01T06:00:00Z" };
+  expect(
+    groupNotifications([older, release], now).map((group) => group.title),
+  ).toEqual(["Yesterday", "Earlier"]);
 });
 
-it("shows a lead's initials and where it came from, a dot when unread, and names the tap", async () => {
+it("shows the clock for today and yesterday, the date before that", () => {
+  const now = Date.parse("2026-10-10T08:00:00Z");
+  expect(stamp("2026-10-01T06:00:00Z", now)).toBe("1 Oct");
+  expect(stamp(new Date(now - 60_000).toISOString(), now)).toMatch(
+    /^\d{1,2}:\d{2} (am|pm)$/,
+  );
+});
+
+it("shows a lead's chip, name and where it came from, unread, and names the tap", async () => {
   expect(initials("Sameer Sheikh")).toBe("SS");
   expect(initials("Asha")).toBe("A");
   expect(initials("Ravi Kumar Rao")).toBe("RR");
@@ -108,8 +127,11 @@ it("shows a lead's initials and where it came from, a dot when unread, and names
   );
   await act(async () => trigger().click());
   const [row] = rows();
-  expect(row.querySelector("span[aria-hidden]")?.textContent).toBe("SS");
-  expect(row.querySelector("small")?.textContent).toBe("Meta Ads · Just now");
+  expect(row.querySelector("span[aria-hidden] svg")).not.toBeNull();
+  expect(row.querySelector("strong")?.textContent).toBe("Sameer Sheikh");
+  expect(row.textContent).toContain("Your lead");
+  expect(row.querySelector("small")?.textContent).toBe("Meta Ads");
+  expect(row.querySelector("time")).not.toBeNull();
   expect(row.textContent).toContain("Unread");
   expect(row.textContent).toContain("Open lead");
   expect(row.dataset.sxFeature).toBe("notice_row_opened");

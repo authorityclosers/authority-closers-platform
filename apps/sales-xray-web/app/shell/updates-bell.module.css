@@ -1,7 +1,5 @@
 /* The bell, and Notifications in a sheet (owner program, 25 Oct 2026, item
-   5): groups by priority, each line in its kind's colour (reports teal,
-   paused analysis amber, invites slate, what's new violet), unread lines
-   marked with a dot. 8 pt grid, tokens only. */
+   5; sx-redesign board pick A, 21 Nov 2026). 8 pt grid, tokens only. */
 
 .trigger {
   position: relative;
@@ -60,13 +58,13 @@
 .readAll {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-height: 44px;
-  padding: 0 16px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-pill);
-  background: var(--sx-surface);
-  color: var(--sx-ink-2);
+  margin-left: auto;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--lx-home-emerald);
   font: inherit;
   font-size: var(--sx-text-sm);
   font-weight: 650;
@@ -83,37 +81,54 @@
   gap: 8px;
 }
 
-/* UI loop item 7 (owner's pick, 20 Nov 2026, option B): a calm list. Today
-   and Earlier, rows split by a hairline instead of cards, no red rails; unread
-   is a dot on the avatar and a bolder title. */
+/* sx-redesign board pick A (owner, 21 Nov 2026): one white radius-22 card
+   per day with hairlines; dark ink icons in soft meaning tiles; a word chip
+   per row; one button, solid green only on the top-most row. */
 .group h3 {
-  margin: 0;
-  color: var(--lx-teal);
-  font-size: var(--sx-text-sm);
+  margin: 0 4px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
   font-weight: 700;
 }
 
 .group ul {
   display: grid;
   margin: 0;
-  padding: 0;
+  padding: 2px 0;
+  overflow: hidden;
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
   list-style: none;
 }
 
+.group li {
+  position: relative;
+}
+
+.group li + li::before {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 16px;
+  left: 70px;
+  border-top: 1px solid var(--sx-hairline, var(--sx-line));
+  content: "";
+  pointer-events: none;
+}
+
 .row {
-  --kind: var(--lx-teal);
-  --kind-soft: var(--lx-teal-soft);
+  --kind-soft: var(--sx-fill);
   position: relative;
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 20px;
-  gap: 12px;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 14px;
   align-items: center;
   box-sizing: border-box;
   width: 100%;
-  min-height: 64px;
-  padding: 12px 4px;
+  min-height: 72px;
+  padding: 14px 16px;
   border: 0;
-  border-bottom: 1px solid var(--sx-hairline, var(--sx-line));
   border-radius: 0;
   background: transparent;
   color: var(--sx-ink);
@@ -123,35 +138,23 @@
   touch-action: manipulation;
 }
 
-.group li:last-child > .row {
-  border-bottom: 0;
+/* The meaning's colour lives only in the soft tile and the chip. */
+.row[data-tone="report"] {
+  --kind-soft: var(--lx-home-sky-soft);
 }
 
 .row[data-tone="paused"] {
-  --kind: var(--lx-warning);
-  --kind-soft: var(--lx-warning-soft);
+  --kind-soft: var(--lx-home-orange-soft);
 }
 
-.row[data-tone="invite"] {
-  --kind: var(--lx-info);
-  --kind-soft: var(--lx-info-soft);
-}
-
-/* "Fixed: <your report>" (v0.93). */
-.row[data-tone="solved"] {
-  --kind: var(--lx-success, var(--sx-good));
-  --kind-soft: var(--lx-success-soft, var(--sx-fill-soft));
-}
-
-/* "A new lead for you" (27 Oct 2026): the accent, as new leads are on Leads. */
-.row[data-tone="lead"] {
-  --kind: var(--sx-accent);
-  --kind-soft: var(--sx-accent-soft);
-}
-
+.row[data-tone="invite"],
 .row[data-tone="news"] {
-  --kind: var(--lx-missed);
-  --kind-soft: var(--lx-missed-soft);
+  --kind-soft: var(--lx-home-violet-soft);
+}
+
+.row[data-tone="solved"],
+.row[data-tone="lead"] {
+  --kind-soft: var(--lx-home-emerald-soft);
 }
 
 .row:disabled {
@@ -162,65 +165,142 @@
   position: relative;
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: var(--sx-radius-pill);
+  align-self: start;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   background: var(--kind-soft);
-  color: var(--kind);
+  color: var(--lx-ink);
 }
 
-.initials {
-  font-size: var(--sx-text-sm);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-/* Unread: a small dot in the kind's colour on the avatar. */
+/* Unread: a small green dot on the tile and a bolder title. */
 li[data-unread="true"] .icon::after {
   content: "";
   position: absolute;
-  top: 0;
-  right: 0;
+  top: -2px;
+  right: -2px;
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--kind);
-  box-shadow: 0 0 0 2px var(--sx-elevated, var(--sx-surface));
+  background: var(--lx-home-emerald);
+  box-shadow: 0 0 0 2px var(--sx-surface);
 }
 
 .words {
   display: grid;
-  gap: 2px;
+  justify-items: start;
+  gap: 3px;
   min-width: 0;
 }
 
-.words strong,
-.words small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  margin-bottom: 2px;
+  padding: 0 9px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--kind-soft);
+  color: var(--lx-ink);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  line-height: 1;
 }
 
 .words strong {
+  display: -webkit-box;
+  overflow: hidden;
   font-size: var(--sx-text-md);
-  font-weight: 500;
+  font-weight: 600;
+  line-height: var(--sx-leading-20);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 li[data-unread="true"] .words strong {
-  font-weight: 700;
+  font-weight: 750;
 }
 
 .words small {
-  color: var(--sx-muted);
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  opacity: 0.85;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
-.chevron {
+.side {
+  display: grid;
+  justify-items: end;
+  align-self: stretch;
+  align-content: space-between;
+  gap: 10px;
+}
+
+.side time {
   color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.row:disabled .chevron {
-  opacity: 0.4;
+/* One button per row: an outline pill; the top-most one solid green. */
+.go {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  height: 34px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border: 1.5px solid var(--lx-home-emerald);
+  border-radius: var(--sx-radius-pill);
+  color: var(--lx-home-emerald);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.go[data-first] {
+  background: var(--lx-home-emerald);
+  color: var(--sx-surface);
+}
+
+/* The switch: v1.90 Home pills, solid deep green when chosen. */
+.pills {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+}
+
+.pill {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pill[aria-pressed="true"] {
+  background: var(--lx-home-emerald);
+  color: var(--sx-surface);
+}
+
+.pill:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
 }
 
 .failed {
@@ -289,6 +369,6 @@ li[data-unread="true"] .words strong {
 
 @media (hover: hover) and (pointer: fine) {
   .row:not(:disabled):hover {
-    background: var(--sx-sunken);
+    background: var(--sx-fill-soft, var(--sx-sunken));
   }
 }
