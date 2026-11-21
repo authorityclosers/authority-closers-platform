@@ -417,3 +417,27 @@
     text-decoration: underline;
   }
 }
+
+/* sx-redesign (owner, 21 Nov 2026): the sales story is the page's one hero, a
+   white radius-22 card with a faint green wash in its corner, not a teal slab;
+   the other cards are calm white cards. */
+.story,
+.card {
+  border: 0;
+  border-radius: var(--lx-radius-lg);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.story {
+  background:
+    radial-gradient(
+      110% 100% at 100% 0%,
+      color-mix(in oklab, var(--lx-home-emerald-soft) 90%, transparent),
+      transparent 60%
+    ),
+    var(--sx-surface);
+}
+
+.story .eyebrow {
+  color: var(--sx-muted);
+}
