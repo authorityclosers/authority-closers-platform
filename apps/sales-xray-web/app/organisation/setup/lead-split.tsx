@@ -6,9 +6,13 @@
  * 2026). The server keeps it as a routing rule with no conditions and one share per
  * seller (lead_desk/routing_rules.py, `shares`): the next lead goes to whoever is
  * furthest behind their share. Rules for some leads (a source, a city) still come first.
+ *
+ * v1.93 (22 Nov 2026): the rows, the bar and "out of every 10" show while the
+ * split is off too (greyed), so the page explains itself; the page's one Save
+ * button saves it with the other rules (`useLeadSplit().save`).
  */
 import { Check } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { notify } from "../../notice-center";
 import {
   readRouting,
@@ -16,10 +20,12 @@ import {
   RoutingError,
   saveRouting,
   type Routing,
+  type RoutingPerson,
   type RoutingRule,
 } from "../../leads/routing-client";
-import { Avatar, Skeleton } from "../../ui/kit";
-import setup from "./setup.module.css";
+import { Skeleton } from "../../ui/kit";
+import { Initials } from "../family";
+import { OnOff } from "./on-off";
 import styles from "./lead-split.module.css";
 
 const SPLIT_NAME = "Split new leads";
@@ -59,44 +65,100 @@ export function nextTurns(
   return turns;
 }
 
-const firstName = (name: string) => name.split(" ")[0] ?? name;
+/** An even split to start from: 34 / 33 / 33 for three. */
+export function evenShares(ids: readonly string[]): Record<string, string> {
+  if (!ids.length) return {};
+  const base = Math.floor(100 / ids.length);
+  const extra = 100 - base * ids.length;
+  return Object.fromEntries(
+    ids.map((id, at) => [id, String(base + (at < extra ? 1 : 0))]),
+  );
+}
 
-export function LeadSplit() {
+/** Who an even split starts with: those taking leads (everyone if none is). */
+export function takers(people: readonly RoutingPerson[]): string[] {
+  const free = people.filter((person) => person.available);
+  return (free.length ? free : people).map((person) => person.person_id);
+}
+
+export const firstName = (name: string) => name.split(" ")[0] ?? name;
+
+const savedShares = (rule: RoutingRule | null) =>
+  Object.fromEntries(
+    (rule?.give_to ?? []).map((id, at) => [
+      id,
+      String(rule?.shares?.[at] ?? 0),
+    ]),
+  );
+
+export type SplitPart = { id: string; name: string; share: number };
+
+export type LeadSplitState = {
+  status: "loading" | "hidden" | "ready";
+  retry: () => void;
+  people: readonly RoutingPerson[];
+  parts: SplitPart[];
+  shares: Record<string, string>;
+  setShare: (id: string, value: string) => void;
+  on: boolean;
+  setOn: (on: boolean) => void;
+  total: number;
+  /** The shares add up to 100 and someone gets leads. */
+  ready: boolean;
+  /** Something differs from what is saved. */
+  changed: boolean;
+  /** Save can go: off, or on with shares that add up. */
+  valid: boolean;
+  canEdit: boolean;
+  busy: boolean;
+  /** Who the next five leads go to, by first name (on and adding up). */
+  turns: string[];
+  discard: () => void;
+  /** Saves on the newest rules; true when saved (or nothing to save). */
+  save: () => Promise<boolean>;
+};
+
+export function useLeadSplit(): LeadSplitState {
   const [routing, setRouting] = useState<Routing | null | "hidden">(null);
   const [shares, setShares] = useState<Record<string, string>>({});
-  const [on, setOn] = useState(false);
+  const [on, setOnState] = useState(false);
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
+  const take = useCallback((next: Routing) => {
+    setRouting(next);
+    const rule = splitRule(next.rules);
+    setOnState(!!rule?.enabled);
+    setShares(rule ? savedShares(rule) : evenShares(takers(next.people)));
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
-    const take = (next: Routing) => {
-      if (controller.signal.aborted) return;
-      setRouting(next);
-      const rule = splitRule(next.rules);
-      setOn(!!rule?.enabled);
-      setShares(
-        Object.fromEntries(
-          (rule?.give_to ?? []).map((id, at) => [
-            id,
-            String(rule?.shares?.[at] ?? 0),
-          ]),
-        ),
-      );
-    };
-    readRouting(controller.signal).then(take, () => {
-      if (!controller.signal.aborted) setRouting("hidden");
-    });
+    readRouting(controller.signal).then(
+      (next) => {
+        if (!controller.signal.aborted) take(next);
+      },
+      () => {
+        if (!controller.signal.aborted) setRouting("hidden");
+      },
+    );
     const again = () => void readRouting().then(take, () => undefined);
     window.addEventListener(ROUTING_CHANGED, again);
     return () => {
       controller.abort();
       window.removeEventListener(ROUTING_CHANGED, again);
     };
-  }, [attempt]);
+  }, [attempt, take]);
 
+  // Those taking leads first, the rest after, each in the server's order.
   const people = useMemo(
-    () => (routing && routing !== "hidden" ? routing.people : []),
+    () =>
+      routing && routing !== "hidden"
+        ? [
+            ...routing.people.filter((person) => person.available),
+            ...routing.people.filter((person) => !person.available),
+          ]
+        : [],
     [routing],
   );
   const parts = useMemo(
@@ -112,46 +174,30 @@ export function LeadSplit() {
     [people, shares],
   );
   const total = parts.reduce((sum, part) => sum + part.share, 0);
-  const turns = useMemo(() => nextTurns(parts, 5), [parts]);
-
-  if (routing === "hidden")
-    return (
-      <section className={setup.card}>
-        <h3>Who gets new leads</h3>
-        <p className={setup.help}>
-          The split didn&apos;t load.{" "}
-          <button
-            type="button"
-            className={setup.button}
-            onClick={() => {
-              setRouting(null);
-              setAttempt((value) => value + 1);
-            }}
-          >
-            Try again
-          </button>
-        </p>
-      </section>
-    );
-  if (!routing)
-    return (
-      <div aria-busy="true" aria-label="Loading who gets new leads">
-        <Skeleton height={200} />
-      </div>
-    );
-
-  const saved = splitRule(routing.rules);
   const ready = total === 100 && parts.some((part) => part.share > 0);
+  const saved =
+    routing && routing !== "hidden" ? splitRule(routing.rules) : null;
   const savedShare = (id: string) => {
     const at = saved ? saved.give_to.indexOf(id) : -1;
     return at < 0 ? 0 : (saved?.shares?.[at] ?? 0);
   };
   const changed =
     on !== !!saved?.enabled ||
-    parts.some((part) => part.share !== savedShare(part.id));
+    (on && parts.some((part) => part.share !== savedShare(part.id)));
+  const turns = useMemo(() => {
+    const names = new Map(parts.map((part) => [part.id, firstName(part.name)]));
+    return nextTurns(parts, 5).map((id) => names.get(id) ?? "");
+  }, [parts]);
 
-  const save = async (turnOn: boolean) => {
-    if (busy || (turnOn && !ready)) return;
+  const reset = (next: Routing) => {
+    const rule = splitRule(next.rules);
+    setOnState(!!rule?.enabled);
+    setShares(rule ? savedShares(rule) : evenShares(takers(next.people)));
+  };
+
+  const save = async (): Promise<boolean> => {
+    if (!routing || routing === "hidden" || !changed) return true;
+    if (busy || (on && !ready)) return false;
     setBusy(true);
     try {
       // The newest rules, so a rule saved elsewhere on the page stays.
@@ -161,31 +207,25 @@ export function LeadSplit() {
       const rule: RoutingRule = {
         id: old?.id ?? null,
         name: old?.name || SPLIT_NAME,
-        enabled: turnOn,
+        enabled: on,
         when: [],
-        give_to: turnOn || !old ? chosen.map((part) => part.id) : old.give_to,
+        // Off keeps the saved shares for next time.
+        give_to: on || !old ? chosen.map((part) => part.id) : old.give_to,
         shares:
-          turnOn || !old
+          on || !old
             ? chosen.map((part) => part.share)
             : [...(old.shares ?? [])],
       };
       // Rules for some leads first; the split takes every lead they leave.
       const rules = [
         ...fresh.rules.filter((item) => item !== old),
-        ...(rule.give_to.length ? [rule] : []),
+        ...(rule.give_to.length && (on || old) ? [rule] : []),
       ];
       const next = await saveRouting(fresh.revision, fresh.value_answer, rules);
       setRouting(next);
-      setOn(turnOn);
+      reset(next);
       window.dispatchEvent(new Event(ROUTING_CHANGED));
-      notify({
-        id: "lead-split",
-        tone: "success",
-        title: turnOn ? "Split saved" : "Split off",
-        message: turnOn
-          ? "New leads go by these shares from now on."
-          : "New leads go to whoever is free with the fewest open leads.",
-      });
+      return true;
     } catch (reason) {
       notify({
         id: "lead-split",
@@ -196,54 +236,123 @@ export function LeadSplit() {
             ? reason.message
             : "Check your connection and try again.",
       });
+      return false;
     } finally {
       setBusy(false);
     }
   };
 
-  const nameOf = (id: string) =>
-    firstName(parts.find((part) => part.id === id)?.name ?? "");
-  const canEdit = routing.can_edit;
+  return {
+    status: routing === "hidden" ? "hidden" : routing ? "ready" : "loading",
+    retry: () => {
+      setRouting(null);
+      setAttempt((value) => value + 1);
+    },
+    people,
+    parts,
+    shares,
+    setShare: (id, value) =>
+      setShares((now) => ({
+        ...now,
+        [id]: value.replace(/\D/g, "").slice(0, 3),
+      })),
+    on,
+    setOn: (next) => {
+      if (!routing || routing === "hidden") return;
+      if (!next) {
+        // Off shows the saved shares again, greyed.
+        reset(routing);
+        setOnState(false);
+        return;
+      }
+      setOnState(true);
+      // On with no shares starts from an even split.
+      if (!Object.values(shares).some((value) => Number(value) > 0))
+        setShares(evenShares(takers(people)));
+    },
+    total,
+    ready,
+    changed,
+    valid: !on || ready,
+    canEdit: routing && routing !== "hidden" ? routing.can_edit : false,
+    busy,
+    turns: on && ready ? turns : [],
+    discard: () => {
+      if (routing && routing !== "hidden") reset(routing);
+    },
+    save,
+  };
+}
+
+/** "Out of every 10 new leads: Mira 2 · Anika 4 · Ravi 4". */
+export function perTen(parts: readonly SplitPart[]): string {
+  return parts
+    .filter((part) => part.share > 0)
+    .map(
+      (part) =>
+        `${firstName(part.name)} ${Number((part.share / 10).toFixed(1))}`,
+    )
+    .join(" · ");
+}
+
+/** The "Who gets new leads" card. */
+export function LeadSplitCard({ split }: { split: LeadSplitState }) {
+  if (split.status === "hidden")
+    return (
+      <section className={styles.card}>
+        <h3 className={styles.title}>Who gets new leads</h3>
+        <p className={styles.sub}>The split didn&apos;t load.</p>
+        <button type="button" className={styles.retry} onClick={split.retry}>
+          Try again
+        </button>
+      </section>
+    );
+  if (split.status === "loading")
+    return (
+      <div aria-busy="true" aria-label="Loading who gets new leads">
+        <Skeleton height={220} />
+      </div>
+    );
+
+  const { on, parts, canEdit, busy, total } = split;
+  const editable = canEdit && on && !busy;
+  const shown = parts.filter((part) => part.share > 0);
 
   return (
-    <section className={setup.card} aria-labelledby="lead-split-title">
-      <div className={setup.head}>
-        <div>
-          <h3 id="lead-split-title">Who gets new leads</h3>
-          <p>
-            {on
-              ? "Split by percent. Rules for some leads, below, come first."
-              : "Off: each new lead goes to whoever is free with the fewest open leads."}
-          </p>
-        </div>
-        <label className={styles.toggle}>
-          <input
-            type="checkbox"
-            role="switch"
-            className={styles.switch}
-            aria-label="Split new leads by percent"
-            checked={on}
-            disabled={!canEdit || busy}
-            data-sx-feature="lead_split_switch"
-            onChange={(event) => {
-              const next = event.target.checked;
-              // Turning on waits for shares that add up; turning off saves.
-              if (next) setOn(true);
-              else if (saved?.enabled) void save(false);
-              else setOn(false);
-            }}
-          />
-          {on ? "On" : "Off"}
-        </label>
+    <section
+      className={styles.card}
+      aria-labelledby="lead-split-title"
+      data-off={on ? undefined : ""}
+    >
+      <div className={styles.head}>
+        <h3 id="lead-split-title" className={styles.title}>
+          Who gets new leads
+        </h3>
+        <OnOff
+          label="Split new leads by percent"
+          on={on}
+          disabled={!canEdit || busy}
+          feature="lead_split_switch"
+          onChange={split.setOn}
+        />
       </div>
-      {on ? (
-        <>
+      <p className={styles.sub}>
+        {on
+          ? "Split by percent. Rules for some leads, below, come first."
+          : "Off: each new lead goes to whoever is free with the fewest open leads. Turn on to split by percent."}
+      </p>
+      {parts.length === 0 ? (
+        <p className={styles.sub}>Invite a seller from Team to split leads.</p>
+      ) : (
+        <div className={styles.split}>
           <ul className={styles.people} aria-label="Shares">
             {parts.map((part) => {
-              const person = people.find((item) => item.person_id === part.id);
+              const person = split.people.find(
+                (item) => item.person_id === part.id,
+              );
               return (
                 <li key={part.id} className={styles.person}>
-                  <Avatar name={part.name} size={32} />
+                  <Initials name={part.name} id={part.id} size={36} />
                   <span className={styles.name}>
                     <strong>{part.name}</strong>
                     {person && !person.available ? (
@@ -252,41 +361,32 @@ export function LeadSplit() {
                   </span>
                   <label className={styles.percent}>
                     <input
-                      type="number"
+                      type="text"
                       inputMode="numeric"
-                      min={0}
-                      max={100}
-                      step={5}
                       aria-label={`${part.name}'s share in percent`}
-                      value={shares[part.id] ?? ""}
+                      value={split.shares[part.id] ?? ""}
                       placeholder="0"
-                      disabled={!canEdit || busy}
+                      disabled={!editable}
                       onChange={(event) =>
-                        setShares((now) => ({
-                          ...now,
-                          [part.id]: event.target.value
-                            .replace(/\D/g, "")
-                            .slice(0, 3),
-                        }))
+                        split.setShare(part.id, event.target.value)
                       }
                     />
-                    %
+                    <span aria-hidden="true">%</span>
                   </label>
                 </li>
               );
             })}
           </ul>
           <div className={styles.bar} aria-hidden="true">
-            {parts
-              .filter((part) => part.share > 0)
-              .map((part) => (
-                <span
-                  key={part.id}
-                  style={{ width: `${Math.min(100, part.share)}%` }}
-                />
-              ))}
+            {shown.map((part) => (
+              <span
+                key={part.id}
+                title={`${part.name} ${part.share} %`}
+                style={{ flexBasis: `${Math.min(100, part.share)}%` }}
+              />
+            ))}
           </div>
-          <p className={styles.sum} aria-live="polite">
+          <div className={styles.sum} aria-live="polite">
             {total === 100 ? (
               <span className={styles.good}>
                 Adds up to 100 %
@@ -300,37 +400,20 @@ export function LeadSplit() {
                   : `${total - 100} % too much`}
               </span>
             )}
-          </p>
-          {ready ? (
-            <p className={styles.preview}>
-              <strong>Out of every 10 new leads</strong>
-              <span>
-                {parts
-                  .filter((part) => part.share > 0)
-                  .map(
-                    (part) =>
-                      `${firstName(part.name)} ${Number((part.share / 10).toFixed(1))}`,
-                  )
-                  .join(" · ")}
+            {shown.length ? (
+              <span className={styles.ten}>
+                Out of every 10 new leads: {perTen(parts)}
               </span>
-              <span>From a fresh start: {turns.map(nameOf).join(", ")}…</span>
+            ) : null}
+          </div>
+          {split.turns.length ? (
+            <p className={styles.next} data-inline-preview="">
+              <strong>The next 5 leads go to:</strong>
+              <span>{split.turns.join(", ")}</span>
             </p>
           ) : null}
-          {canEdit ? (
-            <div className={styles.actions}>
-              <button
-                type="button"
-                className={setup.primary}
-                disabled={!ready || busy || !changed}
-                data-sx-feature="lead_split_saved"
-                onClick={() => void save(true)}
-              >
-                {busy ? "Saving…" : "Save split"}
-              </button>
-            </div>
-          ) : null}
-        </>
-      ) : null}
+        </div>
+      )}
     </section>
   );
 }

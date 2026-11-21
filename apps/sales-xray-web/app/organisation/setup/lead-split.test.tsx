@@ -10,7 +10,13 @@ vi.mock("../../leads/routing-client", async (importOriginal) => ({
 }));
 vi.mock("../../notice-center", () => ({ notify: vi.fn() }));
 
-import { LeadSplit, nextTurns, splitRule } from "./lead-split";
+import {
+  evenShares,
+  LeadSplitCard,
+  nextTurns,
+  splitRule,
+  useLeadSplit,
+} from "./lead-split";
 import type { Routing } from "../../leads/routing-client";
 
 (
@@ -66,6 +72,23 @@ afterEach(async () => {
   host.remove();
 });
 
+// The card with the page's Save (v1.93: one Save for the whole page).
+function LeadSplit() {
+  const split = useLeadSplit();
+  return (
+    <>
+      <LeadSplitCard split={split} />
+      <button
+        type="button"
+        disabled={!split.changed || !split.valid}
+        onClick={() => void split.save()}
+      >
+        Save rules
+      </button>
+    </>
+  );
+}
+
 const field = (name: string) =>
   host.querySelector<HTMLInputElement>(
     `input[aria-label="${name}'s share in percent"]`,
@@ -107,23 +130,37 @@ it("finds the split among the rules: no conditions, with shares", () => {
   expect(splitRule([cityRule, split])).toBe(split);
 });
 
-it("saves the split after the rules for some leads, adding up to 100", async () => {
+it("starts an even split among those taking leads", () => {
+  expect(evenShares(["a", "b", "c"])).toEqual({ a: "34", b: "33", c: "33" });
+  expect(evenShares([])).toEqual({});
+});
+
+it("shows the split greyed while off, then saves it after the rules for some leads", async () => {
   calls.read.mockResolvedValue(routing());
   calls.save.mockImplementation(async (_revision, _value, rules) =>
     routing({ revision: 4, rules }),
   );
   await act(async () => root.render(<LeadSplit />));
-  const toggle = host.querySelector<HTMLInputElement>('[role="switch"]')!;
-  expect(toggle.checked).toBe(false);
+  const toggle = host.querySelector<HTMLButtonElement>('[role="switch"]')!;
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  // Off: the rows, the shares and "out of every 10" still show, greyed.
+  expect(host.querySelector("section")?.hasAttribute("data-off")).toBe(true);
+  expect(field("Mira Sample").value).toBe("34");
+  expect(field("Mira Sample").disabled).toBe(true);
+  expect(host.textContent).toContain("Out of every 10 new leads");
+  expect(button("Save rules")?.disabled).toBe(true);
   await act(async () => toggle.click());
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
   await type(field("Mira Sample"), "20");
   await type(field("Anika Fictional"), "40");
+  await type(field("Ravi Example"), "0");
   expect(host.textContent).toContain("40 % left to give");
-  expect(button("Save split")?.disabled).toBe(true);
+  expect(button("Save rules")?.disabled).toBe(true);
   await type(field("Ravi Example"), "40");
   expect(host.textContent).toContain("Adds up to 100 %");
   expect(host.textContent).toContain("Mira 2 · Anika 4 · Ravi 4");
-  await act(async () => button("Save split")!.click());
+  expect(host.textContent).toContain("The next 5 leads go to:");
+  await act(async () => button("Save rules")!.click());
   expect(calls.save).toHaveBeenCalledTimes(1);
   const [revision, , rules] = calls.save.mock.calls[0];
   expect(revision).toBe(3);
@@ -137,7 +174,7 @@ it("saves the split after the rules for some leads, adding up to 100", async () 
   });
 });
 
-it("turns a saved split off and keeps its shares for next time", async () => {
+it("turns a saved split off on Save and keeps its shares for next time", async () => {
   const saved = {
     id: "split1",
     name: "Split new leads",
@@ -152,9 +189,12 @@ it("turns a saved split off and keeps its shares for next time", async () => {
   );
   await act(async () => root.render(<LeadSplit />));
   expect(field("Mira Sample").value).toBe("50");
-  const toggle = host.querySelector<HTMLInputElement>('[role="switch"]')!;
-  expect(toggle.checked).toBe(true);
+  const toggle = host.querySelector<HTMLButtonElement>('[role="switch"]')!;
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
   await act(async () => toggle.click());
+  // Nothing is sent until the page's Save.
+  expect(calls.save).not.toHaveBeenCalled();
+  await act(async () => button("Save rules")!.click());
   const [, , rules] = calls.save.mock.calls[0];
   expect(rules[1]).toMatchObject({
     id: "split1",

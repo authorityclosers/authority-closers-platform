@@ -1,0 +1,76 @@
+/* Off | On: the family's pill switch (v1.90 Home), sized for a card's head.
+   The well is sunken, the lit pill solid deep green (never teal). Tokens only. */
+.switch {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  padding: 3px;
+  border: var(--sx-well-edge);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-well-fill);
+  box-shadow: var(--sx-well-depth);
+  font: inherit;
+  cursor: pointer;
+  box-sizing: border-box;
+  touch-action: manipulation;
+}
+
+.switch span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 56px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: var(--sx-radius-pill);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  white-space: nowrap;
+  box-sizing: border-box;
+  transition:
+    background var(--sx-dur-fast, 160ms) var(--sx-ease-out, ease),
+    color var(--sx-dur-fast, 160ms) var(--sx-ease-out, ease);
+}
+
+.switch span[data-lit] {
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
+/* Off lit: a white pill, not green (green means on). */
+.switch span:first-child[data-lit] {
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+  color: var(--sx-ink);
+}
+
+.switch:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-well-depth), var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+.switch:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.switch:not(:disabled):active span[data-lit] {
+  transform: var(--sx-press-sink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch span {
+    transition: none;
+  }
+}
+
+/* A phone: a card's title keeps its one line beside the switch. */
+@media (max-width: 599px) {
+  .switch span {
+    min-width: 42px;
+    padding: 0 8px;
+  }
+}

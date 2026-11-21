@@ -1,0 +1,659 @@
+/* Settings → Lead rules (v1.93, round-2 board 3 option C, 22 Nov 2026).
+   One column of the family's cards; the page's one Save in a bar that shows
+   only when something changed (sticky above the tab bar on a phone). From a
+   wide laptop the right side holds a live preview with the Save on top of
+   it. Tokens only; light and dark. */
+
+.frame {
+  container: rules / inline-size;
+  min-width: 0;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+  color: var(--sx-ink);
+}
+
+.main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+}
+
+/* ---------- Move untouched leads: one clean row ---------- */
+
+.wait {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.wait[data-off] > span:not(.stepper) {
+  color: var(--sx-ink-2);
+}
+
+.stepper {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: 12px;
+  background: var(--lx-elevated, var(--sx-surface));
+}
+
+.stepper button {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.stepper button:disabled {
+  color: var(--sx-muted);
+  cursor: default;
+}
+
+.stepper button:focus-visible {
+  outline: none;
+  box-shadow: inset var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+.stepper input {
+  width: 3.2em;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-inline: 1px solid var(--sx-hairline);
+  border-radius: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  appearance: textfield;
+}
+
+.stepper input::-webkit-inner-spin-button,
+.stepper input::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.stepper input:focus {
+  outline: none;
+  background: var(--sx-tone-good-soft);
+}
+
+/* ---------- Work hours ---------- */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.chip[data-tone="good"] {
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-tone-good);
+}
+
+.chip[data-tone="amber"] {
+  background: var(--sx-tone-action-soft);
+  color: var(--sx-tone-action);
+}
+
+.days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  max-width: 520px;
+}
+
+.days button {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-elevated, var(--sx-surface));
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.days button[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--sx-gloss);
+  /* Seven in a row: the gloss's top light only, no drop shadow. */
+  box-shadow: inset 0 1px 0 color-mix(in oklab, white 30%, transparent);
+  color: var(--sx-gloss-ink);
+}
+
+.days button:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+.days button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.times {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 220px));
+  gap: 12px;
+}
+
+.time {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.time > span {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.time input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: 12px;
+  background: var(--lx-elevated, var(--sx-surface));
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color-scheme: light dark;
+}
+
+.time input:focus-visible {
+  outline: none;
+  border-color: var(--sx-primary-ink);
+  box-shadow: var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+.checks {
+  display: grid;
+  gap: 4px;
+}
+
+/* The family's check box: 20 px, radius 6, solid deep green when ticked. */
+.check {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.check input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.box {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border: 1.5px solid var(--sx-line-strong);
+  border-radius: 6px;
+  background: var(--lx-elevated, var(--sx-surface));
+  color: transparent;
+  box-sizing: border-box;
+}
+
+.check input:checked + .box {
+  border-color: transparent;
+  background: var(--sx-gloss);
+  box-shadow: inset 0 1px 0 color-mix(in oklab, white 30%, transparent);
+  color: var(--sx-gloss-ink);
+}
+
+.check input:focus-visible + .box {
+  box-shadow: var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+.check input:disabled + .box {
+  opacity: 0.6;
+}
+
+.problem {
+  margin: 0;
+  color: var(--sx-tone-problem);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+/* Quiet words as a button (Clear, Undo). */
+.quiet {
+  flex: none;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.quiet:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+.quiet:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.outline {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1.5px solid var(--sx-primary-ink);
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-primary-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.outline:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+/* ---------- More: white chevron rows in one card ---------- */
+
+.more {
+  display: grid;
+  min-width: 0;
+  padding: 4px 24px;
+  box-sizing: border-box;
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+  color: var(--sx-ink);
+}
+
+.moreItem {
+  min-width: 0;
+}
+
+.moreItem + .moreItem {
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.moreItem summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 72px;
+  padding: 12px 0;
+  list-style: none;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.moreItem summary::-webkit-details-marker {
+  display: none;
+}
+
+.moreItem summary:focus-visible {
+  outline: none;
+  border-radius: 12px;
+  box-shadow: var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+@media (hover: hover) {
+  .moreItem summary:hover > span:nth-child(2) > span:first-child {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
+.chevron {
+  width: 18px;
+  height: 18px;
+  margin: 0 2px;
+  color: var(--sx-muted);
+  transition: transform var(--sx-dur-fast, 160ms) var(--sx-ease-out, ease);
+}
+
+.moreItem[open] .chevron {
+  transform: rotate(90deg);
+}
+
+.moreBody {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 0 0 20px;
+}
+
+/* The routing editor's own intro repeats the row's words. */
+.routing > section > header > p {
+  display: none;
+}
+
+/* An off rule keeps readable conditions; its switch carries the off state. */
+.routing :global(li[data-off]) {
+  opacity: 1;
+}
+
+/* The reused seller sheet renders in a portal. Scope its tab ink here. */
+:global(body):has(.sellerScope) :global(dialog [aria-pressed]) {
+  color: var(--sx-ink);
+}
+
+/* The row's title wraps rather than cut ("Each seller's areas and limits"). */
+.moreTitle {
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  line-height: var(--sx-leading-24);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- The rail: live preview and the one Save ---------- */
+
+.rail {
+  position: sticky;
+  /* Above the floating tab bar (owner bug #75). */
+  bottom: calc(
+    var(--lx-bottom-nav-h, 78px) + env(safe-area-inset-bottom, 0px) + 8px
+  );
+  z-index: 3;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.rail:not([data-dirty]) {
+  display: none;
+}
+
+.preview {
+  display: none;
+}
+
+.save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 14px 16px 14px 20px;
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background: var(--lx-elevated, var(--sx-surface));
+  box-shadow:
+    var(--sx-tile-depth),
+    0 12px 32px -12px
+      color-mix(in oklab, var(--lx-film, black) 28%, transparent);
+}
+
+.saveWords {
+  display: grid;
+  flex: 1 1 180px;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.saveWords strong {
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+}
+
+.saveWords span {
+  color: var(--sx-muted);
+}
+
+.saveWords span[data-problem] {
+  color: var(--sx-tone-action);
+  font-weight: 650;
+}
+
+.saveActions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (min-width: 900px) {
+  .rail {
+    bottom: 16px;
+  }
+}
+
+/* A wide laptop: the preview on the right, the Save on top of the rail. */
+@container rules (min-width: 730px) {
+  .page {
+    grid-template-columns: minmax(0, 1fr) 260px;
+    align-items: start;
+  }
+
+  .rail,
+  .rail:not([data-dirty]) {
+    top: 16px;
+    bottom: auto;
+    display: flex;
+    flex-direction: column-reverse;
+    justify-content: flex-end;
+  }
+
+  .preview {
+    display: grid;
+    gap: 14px;
+    padding: 20px;
+    border: var(--sx-tile-edge);
+    border-radius: var(--sx-tile-radius);
+    background: var(--sx-tile-fill);
+    box-shadow: var(--sx-tile-depth);
+  }
+
+  .save {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 18px 20px 20px;
+  }
+
+  .saveWords {
+    flex: none;
+  }
+
+  .saveActions {
+    flex-direction: row-reverse;
+  }
+
+  /* Save takes the width; Undo stays quiet beside it. */
+  .saveActions > :last-child {
+    flex: 1;
+  }
+
+  /* The split card's own "next 5" lives in the preview here. */
+  .page :global([data-inline-preview]) {
+    display: none;
+  }
+}
+
+.previewLead {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--sx-tone-good-soft);
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
+}
+
+.previewLead strong {
+  font-weight: 750;
+}
+
+.previewLead span {
+  color: var(--sx-ink-2);
+}
+
+.previewTen {
+  margin: -4px 0 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  line-height: var(--sx-leading-20);
+}
+
+.facts {
+  display: grid;
+  margin: 0;
+}
+
+.facts > div {
+  display: grid;
+  gap: 2px;
+  padding: 10px 0;
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.facts dt {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+.facts dd {
+  margin: 0;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  line-height: var(--sx-leading-20);
+}
+
+@media (max-width: 599px) {
+  .more {
+    padding: 4px 20px;
+  }
+
+  /* One row on a phone: what is unsaved, Undo, Save. */
+  .save {
+    flex-wrap: nowrap;
+    padding: 10px 10px 10px 18px;
+  }
+
+  .saveWords {
+    flex: 1 1 auto;
+  }
+
+  .saveWords span:not([data-problem]) {
+    display: none;
+  }
+
+  .saveWords strong {
+    font-size: var(--sx-text-sm);
+    white-space: nowrap;
+  }
+
+  .saveActions {
+    gap: 2px;
+  }
+
+  .saveActions .quiet {
+    padding: 0 10px;
+  }
+
+  .saveActions > :last-child {
+    padding: 0 18px;
+  }
+
+  .save:has([data-problem]) {
+    flex-wrap: wrap;
+  }
+
+  .stepper button {
+    width: 42px;
+  }
+
+  .stepper input {
+    width: 2.8em;
+  }
+
+  .times {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .days {
+    gap: 4px;
+  }
+
+  .days button {
+    font-size: var(--sx-text-xs);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
+}
