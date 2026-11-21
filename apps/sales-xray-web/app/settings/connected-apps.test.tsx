@@ -691,7 +691,7 @@ it("says what connecting gives instead of sending people to Settings, and names 
   await act(async () => root.render(<ConnectedApps />));
   await flush();
   expect(card("google_ads").textContent).toContain(
-    "Leads from your Google Ads lead forms arrive in Leads every few minutes.",
+    "Leads from your Google Ads lead forms.",
   );
   expect(card("google_ads").textContent).not.toContain("Not connected.");
   expect(host.textContent).not.toMatch(/in Settings\./);

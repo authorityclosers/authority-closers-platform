@@ -1041,3 +1041,41 @@
 .cardHead > [data-kind="icon"] {
   color: var(--lx-ink);
 }
+
+/* Judge round (sx-redesign, 21 Nov 2026): the status chips wrap instead of
+   being cut; a row shows its button or its chevron, never both; on a phone
+   only the first app to connect keeps its line, so nine rows stay short. */
+.filters {
+  flex-wrap: wrap;
+}
+
+.card:has(> .actions) .chevron {
+  display: none;
+}
+
+@media (max-width: 599.98px) {
+  .card:is(
+      [data-state="not_connected"],
+      [data-state="not_set_up"],
+      [data-state="off"]
+    ):not([data-lead])
+    .words {
+    display: none;
+  }
+}
+
+@media (min-width: 600px) {
+  .card > .actions {
+    margin-right: 0;
+  }
+}
+
+/* The chips' row is a side-scroller; let the group take its width and wrap. */
+.summary .filters.filters {
+  width: auto;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+  row-gap: 6px;
+}

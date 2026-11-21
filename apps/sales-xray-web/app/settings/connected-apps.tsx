@@ -203,20 +203,17 @@ function connectApp(app: AppHealth) {
   if (target) goToProvider(target.path);
 }
 
+// One short line each (sx-redesign judge, 21 Nov 2026: cut paragraphs on a phone).
 const GIVES: Record<AppKey, string> = {
-  meta_leads:
-    "New leads from your Facebook and Instagram forms arrive in Leads by themselves.",
-  whatsapp: "Message leads on WhatsApp and answer their replies in Chats.",
-  messenger: "Answer Messenger chats from Sales X-Ray.",
-  instagram: "Answer Instagram DMs and comments from Sales X-Ray.",
-  google_ads:
-    "Leads from your Google Ads lead forms arrive in Leads every few minutes.",
-  phone_calls:
-    "Your team's calls from the Sales X-Ray phone app are logged on their leads.",
-  webhook_sources: "Bring leads in from your website, sheets and other apps.",
-  ai_replies: "Draft or send first replies to new lead messages.",
-  lead_stages:
-    "Tell Meta and Google which leads became customers, so your ads find more like them.",
+  meta_leads: "Leads from your Facebook and Instagram forms.",
+  whatsapp: "Message leads and answer them in Chats.",
+  messenger: "Answer Messenger chats here.",
+  instagram: "Answer Instagram DMs and comments here.",
+  google_ads: "Leads from your Google Ads lead forms.",
+  phone_calls: "Your team's phone calls, logged on their leads.",
+  webhook_sources: "Leads from your website, sheets and other apps.",
+  ai_replies: "Draft or send first replies to new messages.",
+  lead_stages: "Tell Meta and Google which leads became customers.",
 };
 
 /** The card's one line: the app's own words, or what connecting gives. */
