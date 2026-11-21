@@ -5,6 +5,8 @@ import {
   AudioLines,
   Building2,
   ChevronDown,
+  ChevronRight,
+  Info,
   Crown,
   Ellipsis,
   Pencil,
@@ -63,10 +65,8 @@ import {
 import { CompanyDetailsPanel } from "./company-details-panel";
 import { type PulsePerson, readPulsePeople } from "./pulse/pulse-client";
 import { PersonDisplayName } from "./people/person-display-name";
-import { CompanyLogoPanel } from "./company-logo-panel";
 import {
   addMember,
-  changeRole,
   noOrganisationSelected,
   notLive,
   OrgApiError,
@@ -89,9 +89,17 @@ import {
 import { can, ROLE_HINT, ROLE_LABEL, rolesToGive } from "./roles";
 import styles from "./organisation.module.css";
 import { ReceiptActivitySection } from "./receipt-activity";
-import { CaptureSetupPanel } from "./capture-setup-panel";
-import { inviteBlock, SeatUsePanel, seatUseFrom } from "./seats-panel";
-import { readEffort, type Effort } from "../performance/performance-client";
+import {
+  captureBadge,
+  needsAction,
+  SetupStepsSheet,
+  useCaptureTeam,
+} from "./capture-setup-panel";
+import type { CaptureTeamRow } from "../capture-setup/capture-setup-client";
+import { readTeam, type RepView } from "../leads/leads-client";
+import family from "./family.module.css";
+import { Initials, PillSwitch, Ring } from "./family";
+import { inviteBlock } from "./seats-panel";
 import { TeamPatternsSection } from "./team-patterns-section";
 import {
   IntegrationsPanel,
@@ -393,6 +401,16 @@ export function OrganisationView({
   const canManage = live && can(myRole, "members.manage");
   const seesTeam = live && can(myRole, "team.view");
   const managesOrg = live && can(myRole, "org.manage");
+  // Each person's phone, for Team's hero and rows (owners, admins, managers).
+  const seesPhones = live && can(myRole, "leads.manage");
+  const capture = useCaptureTeam(seesPhones && shows("members"));
+  const captureByPerson = useMemo(
+    () =>
+      capture.team
+        ? new Map(capture.team.people.map((row) => [row.person_id, row]))
+        : null,
+    [capture.team],
+  );
   const refreshAccess = useCallback(() => {
     refreshOrganisation();
     access?.retry();
@@ -421,23 +439,6 @@ export function OrganisationView({
   }, [seesSeats, onTeam, tenantId, seatsVersion]);
   // Overview's Invite people opens Team with the invite sheet up.
   const [inviteOnOpen, setInviteOnOpen] = useState(false);
-  // Seat use counts the calls Analytics counts: the lead desk's own, last 30
-  // days (persona QA, 31 Oct 2026: 0 here, 343 in Analytics).
-  const [deskCalls, setDeskCalls] = useState<Effort | null>(null);
-  useEffect(() => {
-    if (!seesSeats) return;
-    const controller = new AbortController();
-    readEffort(30, controller.signal).then(setDeskCalls, () => undefined);
-    return () => controller.abort();
-  }, [seesSeats, tenantId]);
-  const seatUse = useMemo(
-    () =>
-      seatUseFrom(
-        activity.status === "ready" ? activity.value.members : null,
-        deskCalls,
-      ),
-    [activity, deskCalls],
-  );
   const personal =
     base.status === "ready" &&
     (!isOrganisation ||
@@ -508,7 +509,9 @@ export function OrganisationView({
         />
       ) : (
         <>
-          {integrationsOnly || headless ? null : (
+          {/* Inside a Settings section the frame names the page: no second
+              organisation header (sx-redesign board, owner 21 Nov 2026). */}
+          {integrationsOnly || headless || (embedded && sections) ? null : (
             <header className={styles.header}>
               <span className={styles.orgTile} aria-hidden="true">
                 <OrgLogo src={branding?.logoUrl} fallback={initials(name)} />
@@ -590,6 +593,12 @@ export function OrganisationView({
               />
             )}
 
+            {shows("members") && seesPhones && capture.team?.people.length ? (
+              <SectionBoundary name="Phones ready">
+                <TeamHero rows={capture.team.people} />
+              </SectionBoundary>
+            ) : null}
+
             {shows("members") && (
               <SectionBoundary name="Members">
                 <MembersPanel
@@ -608,37 +617,15 @@ export function OrganisationView({
                   inviteBlocked={seesSeats ? inviteBlock(orgSeats) : null}
                   inviteOnOpen={inviteOnOpen}
                   onInviteOpened={() => setInviteOnOpen(false)}
+                  capture={captureByPerson}
                 />
               </SectionBoundary>
             )}
 
-            {/* Who hasn't set up call capture (owner, 30 Oct 2026). It waits
-                for the people above it, whose list grows from its loading rows
-                when they come and would push it down the page (QA robot
-                0f2cebf6, 8 Nov 2026, on 3G at 363). */}
-            {shows("members") &&
-              live &&
-              can(myRole, "leads.manage") &&
-              members.status !== "loading" && (
-                <SectionBoundary name="Call capture">
-                  <CaptureSetupPanel key={tenantId} />
-                </SectionBoundary>
-              )}
-
-            {shows("members") && seesSeats && seesTeam && (
-              <SectionBoundary name="Seat use">
-                <SeatUsePanel
-                  people={
-                    members.status === "ready"
-                      ? members.value.filter(
-                          (member) => member.status === "active",
-                        )
-                      : null
-                  }
-                  usage={seatUse}
-                />
-              </SectionBoundary>
-            )}
+            {/* Call capture and seat use left Team (sx-redesign board, owner
+                21 Nov 2026): each phone is on Sellers' phones, each person's
+                minutes on Plan & billing. Team says how many phones are
+                ready (the hero) and each person's phone in their row. */}
 
             {shows("integrations") && managesOrg && (
               <SectionBoundary name="Integrations">
@@ -666,26 +653,18 @@ export function OrganisationView({
                   isOwner={live && myRole === "owner"}
                   reload={reloadOrg}
                   details={
-                    <>
-                      <SectionBoundary name="Logo">
-                        <CompanyLogoPanel
-                          key={`${access?.context?.sessionId}:${tenantId}`}
-                          name={name}
-                          canEdit={managesOrg}
-                        />
-                      </SectionBoundary>
-                      <SectionBoundary name="Company details">
-                        <CompanyDetailsPanel
-                          key={`${access?.context?.sessionId}:${tenantId}`}
-                          tenantId={tenantId}
-                          role={myRole}
-                          authenticated={authenticated}
-                          refresh={refreshOrganisation}
-                          onAccessLost={refreshAccess}
-                          onPersonal={showPersonal}
-                        />
-                      </SectionBoundary>
-                    </>
+                    <SectionBoundary name="Company details">
+                      <CompanyDetailsPanel
+                        key={`${access?.context?.sessionId}:${tenantId}`}
+                        tenantId={tenantId}
+                        role={myRole}
+                        orgName={name}
+                        authenticated={authenticated}
+                        refresh={refreshOrganisation}
+                        onAccessLost={refreshAccess}
+                        onPersonal={showPersonal}
+                      />
+                    </SectionBoundary>
                   }
                 />
               </SectionBoundary>
@@ -705,6 +684,68 @@ export function OrganisationView({
     >
       {page}
     </AcquisitionShell>
+  );
+}
+
+/**
+ * Team's one hero (sx-redesign board, pick 03 C): how many of the team's
+ * phones are ready to record, and one button to help whoever isn't.
+ */
+function TeamHero({ rows }: { rows: readonly CaptureTeamRow[] }) {
+  const [helping, setHelping] = useState(false);
+  const waiting = rows.filter(needsAction);
+  const ready =
+    rows.length - rows.filter((row) => row.state !== "set_up").length;
+  const first = (name: string) => name.trim().split(/\s+/)[0] || name;
+  const left = rows.length - ready;
+  return (
+    <div
+      className={family.hero}
+      data-tone={waiting.length ? "amber" : undefined}
+    >
+      <Ring
+        done={ready}
+        total={rows.length}
+        label={`${ready} of ${rows.length} phones ready`}
+      >
+        <b>{`${ready} of ${rows.length}`}</b>
+        <small>ready</small>
+      </Ring>
+      <div className={family.heroBody}>
+        <h2 className={family.heroTitle}>
+          {left === 0
+            ? waiting.length
+              ? "Check 1 phone"
+              : "Every phone is ready"
+            : `Set up ${left} more ${left === 1 ? "phone" : "phones"}`}
+        </h2>
+        <p className={family.heroLine}>
+          {waiting.length === 1
+            ? `${first(waiting[0].name)}'s phone is not ready to record calls.`
+            : waiting.length
+              ? `${ready} of ${rows.length} team phones are ready to record calls.`
+              : "Every call your team makes can be recorded."}
+        </p>
+        {waiting.length ? (
+          <div className={family.heroActions}>
+            <button
+              type="button"
+              className={family.primary}
+              onClick={() => setHelping(true)}
+            >
+              {waiting.length === 1
+                ? `Help ${first(waiting[0].name)} set up`
+                : `Help ${waiting.length} people set up`}
+            </button>
+          </div>
+        ) : null}
+      </div>
+      <SetupStepsSheet
+        rows={waiting}
+        open={helping}
+        onClose={() => setHelping(false)}
+      />
+    </div>
   );
 }
 
@@ -1489,7 +1530,10 @@ function MembersPanel({
   inviteBlocked = null,
   inviteOnOpen = false,
   onInviteOpened,
+  capture = null,
 }: {
+  /** Each person's phone, by person id (Sellers' phones), when it was read. */
+  capture?: ReadonlyMap<string, CaptureTeamRow> | null;
   members: Live<OrgMember[]>;
   reload: () => void;
   canManage: boolean;
@@ -1514,7 +1558,6 @@ function MembersPanel({
   useEffect(() => {
     if (inviteOnOpen) onInviteOpened?.();
   }, [inviteOnOpen, onInviteOpened]);
-  const dates = useDisplayDates();
   // Photos, titles and teams from the organisation's Pulse link, when it has one.
   const [pulsePeople, setPulsePeople] = useState<Record<string, PulsePerson>>(
     {},
@@ -1633,40 +1676,62 @@ function MembersPanel({
   // Removing someone or revoking an invite stays open: that frees a seat.
   const addDisabled = disabled || Boolean(inviteBlocked);
   const invited = rows.filter((member) => member.status === "invited").length;
+  // People or Invites (sx-redesign board, owner 21 Nov 2026): one list at a
+  // time. Someone who can't manage sees only their own row.
+  const [list, setList] = useState<"people" | "invites">("people");
+  const shownRows = canManage
+    ? rows.filter(
+        (member) => (list === "invites") === (member.status === "invited"),
+      )
+    : rows;
+  const [rolesOpen, setRolesOpen] = useState(false);
+  // Who isn't taking leads today (the lead desk's own switch), for managers.
+  const [reps, setReps] = useState<Map<string, RepView> | null>(null);
+  useEffect(() => {
+    if (!canManage) return;
+    const controller = new AbortController();
+    readTeam(controller.signal).then(
+      (team) => setReps(new Map(team.reps.map((rep) => [rep.person_id, rep]))),
+      () => undefined,
+    );
+    return () => controller.abort();
+  }, [canManage]);
 
   return (
-    <section className={styles.section} aria-labelledby="org-members">
-      <div className={styles.sectionHead}>
-        <h2 id="org-members">
-          People
-          {/* A member's list is just them; the tab counts everyone. */}
-          {members.status === "ready" && canManage ? (
-            <span className={styles.count}>{rows.length - invited}</span>
-          ) : null}
-        </h2>
-        <span className={styles.headTools}>
-          {invited > 0 ? (
-            <span>
-              {invited} {invited === 1 ? "invite" : "invites"} waiting
-            </span>
-          ) : null}
-          {canManage ? (
-            <button
-              type="button"
-              className={styles.inviteButton}
-              aria-label="Invite people"
-              title="Invite people"
-              disabled={members.status !== "ready"}
-              onClick={() => setInviting(true)}
-            >
-              <UserPlus size={18} aria-hidden="true" />
-            </button>
-          ) : null}
-        </span>
+    <section className={family.stack} aria-labelledby="org-members">
+      <h2 id="org-members" className={styles.srOnly}>
+        People
+      </h2>
+      <div className={family.toolbar}>
+        {canManage && members.status === "ready" ? (
+          <PillSwitch
+            label="People or invites"
+            value={list}
+            onChange={setList}
+            options={[
+              { key: "people", label: `People (${rows.length - invited})` },
+              { key: "invites", label: `Invites (${invited})` },
+            ]}
+          />
+        ) : (
+          <span />
+        )}
+        {canManage ? (
+          <button
+            type="button"
+            className={family.neutral}
+            aria-label="Invite people"
+            disabled={members.status !== "ready"}
+            onClick={() => setInviting(true)}
+          >
+            <Plus size={16} aria-hidden="true" />
+            Invite
+          </button>
+        ) : null}
       </div>
-      <div className={styles.surface}>
+      <div className={family.card}>
         {!canManage && members.status === "ready" ? (
-          <p className={styles.footnote}>
+          <p className={`${family.note} ${styles.cardNote}`}>
             Only owners and admins see everyone, add people or change roles.
           </p>
         ) : null}
@@ -1854,15 +1919,8 @@ function MembersPanel({
           ) : null}
         </Sheet>
 
-        <div className={styles.memberTable} role="table" aria-label="People">
-          <div className={styles.memberHead} role="row">
-            <span role="columnheader">Person</span>
-            <span role="columnheader">Role</span>
-            <span role="columnheader">Joined</span>
-            <span role="columnheader">Last active</span>
-            <span role="columnheader" aria-label="Actions" />
-          </div>
-          {rows.map((member) => {
+        <div className={family.plainList} role="table" aria-label="People">
+          {shownRows.map((member) => {
             const isYou =
               member.personId !== null && member.personId === yourPersonId;
             const name = memberName(member);
@@ -1930,119 +1988,90 @@ function MembersPanel({
                         }),
                     },
               );
+            const phone = member.personId
+              ? (capture?.get(member.personId) ?? null)
+              : null;
+            const badge = phone ? captureBadge(phone) : null;
+            const away =
+              member.personId !== null &&
+              reps?.get(member.personId)?.available === false;
             return (
               <div
                 key={`${member.status}:${member.personId ?? member.inviteId}`}
-                className={styles.memberRow}
+                className={`${family.row} ${family.personRow} ${styles.teamRow}`}
                 role="row"
                 data-invited={member.status === "invited" ? "" : undefined}
                 data-you={isYou ? "" : undefined}
               >
-                <span role="cell" className={styles.person}>
-                  <i className={styles.avatar} aria-hidden="true">
-                    {member.personId && photos[member.personId] ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- Private, session-bound photo; already 256 px.
-                      <img
-                        src={photos[member.personId]}
-                        alt=""
-                        loading="lazy"
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          borderRadius: "inherit",
-                          objectFit: "cover",
-                        }}
-                      />
-                    ) : (
-                      initials(name)
-                    )}
-                  </i>
-                  <span className={styles.personName}>
-                    <b>
-                      <Link
-                        href={personHref(member.personId ?? member.inviteId)}
-                        prefetch={false}
-                        className={`${styles.nameText} ${styles.memberLink}`}
-                      >
-                        <PersonDisplayName name={name} />
-                      </Link>
-                      {isYou ? (
-                        <span className={styles.you}> (you)</span>
-                      ) : null}
-                      {member.status === "invited" ? (
-                        <span className={styles.tag} data-tone="info">
-                          Invited
-                        </span>
-                      ) : null}
-                      {isTestEmail(member.email) ? (
-                        <span className={styles.tag}>Test</span>
-                      ) : null}
-                    </b>
-                    <small>
-                      {member.status === "invited" && !member.name
-                        ? "Has not joined yet"
-                        : [
-                            member.personId
-                              ? [
-                                  pulsePeople[member.personId]?.title,
-                                  pulsePeople[member.personId]?.team,
-                                ]
-                                  .filter(Boolean)
-                                  .join(", ")
-                              : "",
-                            member.email,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                    </small>
+                <Initials
+                  name={name}
+                  id={member.personId ?? member.inviteId}
+                  photo={member.personId ? photos[member.personId] : null}
+                />
+                <span role="cell" className={family.rowText}>
+                  <span className={styles.memberName}>
+                    <Link
+                      href={personHref(member.personId ?? member.inviteId)}
+                      prefetch={false}
+                      className={`${family.rowTitle} ${styles.memberLink}`}
+                    >
+                      <PersonDisplayName name={name} />
+                    </Link>
+                    {isYou ? <span className={styles.you}>(you)</span> : null}
+                    {isTestEmail(member.email) ? (
+                      <span className={family.chip}>Test</span>
+                    ) : null}
                   </span>
+                  <small className={`${family.rowSub} ${styles.memberSub}`}>
+                    {member.status === "invited" && !member.name
+                      ? "Has not joined yet"
+                      : [
+                          member.personId
+                            ? [
+                                pulsePeople[member.personId]?.title,
+                                pulsePeople[member.personId]?.team,
+                              ]
+                                .filter(Boolean)
+                                .join(", ")
+                            : "",
+                          member.email,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                  </small>
                 </span>
-                <span role="cell" className={styles.roleCell}>
-                  {isOwner &&
-                  member.status === "active" &&
-                  !isYou &&
-                  member.role !== "owner" ? (
-                    <Picker
-                      className={styles.roleSelect}
-                      title={`Role for ${name}`}
-                      value={member.role}
-                      options={rolesToGive(true).map((item) => ({
-                        key: item,
-                        label: ROLE_LABEL[item],
-                      }))}
-                      disabled={busy || confirming !== null}
-                      onChange={(key) => {
-                        const nextRole = key as OrgRole;
-                        setConfirming({
-                          message: `Change ${name} to ${ROLE_LABEL[nextRole]}? ${ROLE_HINT[nextRole]}`,
-                          verb: "Change role",
-                          action: () => changeRole(member.personId, nextRole),
-                        });
-                      }}
-                      ariaLabel={`Role for ${name}`}
-                    />
-                  ) : (
-                    <span className={styles.role} data-role={member.role}>
+                <span className={family.rowEnd}>
+                  <span
+                    role="cell"
+                    className={`${family.chips} ${styles.memberChips}`}
+                  >
+                    <span
+                      className={family.chip}
+                      data-role={member.role}
+                      data-tone={member.role === "owner" ? "info" : undefined}
+                    >
                       {member.role === "owner" ? (
                         <Crown size={12} aria-hidden="true" />
                       ) : null}
                       {ROLE_LABEL[member.role]}
                     </span>
-                  )}
-                </span>
-                <span role="cell" className={styles.dateCell}>
-                  <span className={styles.cellLabel}>Joined </span>
-                  {member.joinedAt
-                    ? callDate(member.joinedAt, undefined, dates)
-                    : "—"}
-                </span>
-                <span role="cell" className={styles.dateCell}>
-                  <span className={styles.cellLabel}>Last active </span>
-                  {member.lastActiveAt
-                    ? callDate(member.lastActiveAt, undefined, dates)
-                    : "—"}
-                </span>
-                <span role="cell" className={styles.rowActions}>
+                    {member.status === "invited" ? (
+                      <span className={family.chip} data-tone="info">
+                        Invited
+                      </span>
+                    ) : badge ? (
+                      <span className={family.chip} data-tone={badge.tone}>
+                        {phone?.state === "set_up"
+                          ? "Phone ready"
+                          : badge.label}
+                      </span>
+                    ) : null}
+                    {away ? (
+                      <span className={family.chip} data-away="">
+                        Not taking leads
+                      </span>
+                    ) : null}
+                  </span>
                   {isYou ? (
                     // Everyone keeps their own name, phone and photo current.
                     <button
@@ -2054,8 +2083,7 @@ function MembersPanel({
                     >
                       <Pencil size={15} />
                     </button>
-                  ) : null}
-                  {actions.length > 0 ? (
+                  ) : actions.length > 0 ? (
                     <button
                       type="button"
                       className={styles.icon}
@@ -2067,7 +2095,12 @@ function MembersPanel({
                     >
                       <Ellipsis size={18} aria-hidden="true" />
                     </button>
-                  ) : null}
+                  ) : (
+                    <ChevronRight
+                      className={family.chevron}
+                      aria-hidden="true"
+                    />
+                  )}
                 </span>
               </div>
             );
@@ -2095,9 +2128,38 @@ function MembersPanel({
                 Try again
               </button>
             </div>
+          ) : members.status === "ready" && shownRows.length === 0 ? (
+            <p className={`${family.note} ${styles.cardNote}`}>
+              {list === "invites"
+                ? "No invites waiting. Invite someone with the button above."
+                : "No one here yet."}
+            </p>
           ) : null}
         </div>
       </div>
+      <button
+        type="button"
+        className={family.link}
+        onClick={() => setRolesOpen(true)}
+      >
+        <Info size={16} aria-hidden="true" />
+        Who can do what
+      </button>
+      <Sheet
+        open={rolesOpen}
+        onClose={() => setRolesOpen(false)}
+        title="Who can do what"
+        wide="center"
+      >
+        <dl className={styles.roleList}>
+          {ORG_ROLES.map((role) => (
+            <div key={role}>
+              <dt>{ROLE_LABEL[role]}</dt>
+              <dd>{ROLE_HINT[role]}</dd>
+            </div>
+          ))}
+        </dl>
+      </Sheet>
     </section>
   );
 }
@@ -2154,9 +2216,12 @@ function CompanyPanel({
   };
 
   return (
-    <div className={styles.settings}>
+    <div className={family.stack}>
       {details}
-      <section className={styles.setting} aria-labelledby="org-domains">
+      <section
+        className={`${family.card} ${styles.domainsCard}`}
+        aria-labelledby="org-domains"
+      >
         <div className={styles.settingIntro}>
           <h2 id="org-domains">Email domains</h2>
           <p>

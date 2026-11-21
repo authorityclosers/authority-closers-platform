@@ -263,6 +263,9 @@ async function typeOrganisationName(value: string) {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
+/** The invite sheet's own Invite (the toolbar's Invite opens the sheet). */
+const sendInvite = () =>
+  host.querySelector<HTMLButtonElement>('dialog[open] button[type="submit"]')!;
 /** People's + opens the invite sheet (owner's bug 185); its X closes it. */
 const openInvite = () => click("Invite people");
 const closeInvite = () =>
@@ -299,12 +302,13 @@ it("reads the header, zero usage, dates and invite identity from the real contra
   expect(host.querySelector("h1")?.textContent).toBe("Authority Closers");
   expect(host.textContent).toContain("2 people");
   await click("Members");
-  expect(host.querySelectorAll('[role="row"]')).toHaveLength(4);
+  // People, then Invites: one list at a time (sx-redesign board, pick 03 C).
+  expect(host.querySelectorAll('[role="row"]')).toHaveLength(2);
+  expect(host.textContent).toContain("Admin(you)");
+  await click("Invites (1)");
+  expect(host.querySelectorAll('[role="row"]')).toHaveLength(1);
   expect(host.textContent).toContain("Invited");
   expect(host.textContent).toContain("Has not joined yet");
-  expect(host.textContent).toContain("Joined");
-  expect(host.textContent).toContain("Last active");
-  expect(host.textContent).toContain("Admin (you)");
   expect(button("More actions for new@example.com")).toBeDefined();
   expect(picker("Role for new@example.com")).toBeNull();
   // Usage figures live on Overview only, from one source; no zero columns here.
@@ -340,13 +344,6 @@ it("sends an invite from its sheet as one keyed action and refreshes both reads"
 
 it.each([
   [
-    "role",
-    () => select("Role for Dipak", "admin"),
-    `/v1/organisation/members/${memberId}`,
-    "PATCH",
-    { role: "admin" },
-  ],
-  [
     "remove",
     () => pick("Dipak", "Remove"),
     `/v1/organisation/members/${memberId}`,
@@ -365,7 +362,10 @@ it.each([
   ],
   [
     "revoke",
-    () => pick("new@example.com", "Revoke invite"),
+    async () => {
+      await click("Invites (1)");
+      await pick("new@example.com", "Revoke invite");
+    },
     `/v1/organisation/invites/${inviteId}`,
     "DELETE",
     undefined,
@@ -429,14 +429,6 @@ it("starts from the app's workspace directory, so its own reads start at once", 
   expect(host.querySelector("h1")?.textContent).toBe("Authority Closers");
 });
 
-it("cancels a role change without writing", async () => {
-  await render();
-  await click("Members");
-  await select("Role for Dipak", "admin");
-  await click("Cancel");
-  expect(writes()).toHaveLength(0);
-  expect(picker("Role for Dipak")?.getAttribute("data-value")).toBe("member");
-});
 it("refreshes ownership permissions and uses member additions after a transfer", async () => {
   await render();
   await click("Members");
@@ -477,19 +469,20 @@ it("allows admins to add/remove members and revoke pending invites", async () =>
   expect(picker("Role for Dipak")).toBeNull();
   expect(button("More actions for Admin")).toBeUndefined();
   expect(button("More actions for Dipak").disabled).toBe(false);
-  expect(button("More actions for new@example.com").disabled).toBe(false);
   // An admin removes a seller but never hands over ownership.
   expect(await moreItems("Dipak")).toEqual(["Remove"]);
   // Every row opens that person's profile (an invitation by its id).
-  expect(
+  const links = () =>
     [...host.querySelectorAll('a[href^="/organisation/people/"]')].map((link) =>
       link.getAttribute("href"),
-    ),
-  ).toEqual([
+    );
+  expect(links()).toEqual([
     `/organisation/people/${ownerId}`,
-    `/organisation/people/${inviteId}`,
     `/organisation/people/${memberId}`,
   ]);
+  await click("Invites (1)");
+  expect(button("More actions for new@example.com").disabled).toBe(false);
+  expect(links()).toEqual([`/organisation/people/${inviteId}`]);
 });
 it("uses the API role and shows members only their own row read-only", async () => {
   org().role = "member";
@@ -498,7 +491,7 @@ it("uses the API role and shows members only their own row read-only", async () 
   expect(host.querySelector("header")?.textContent).toContain(
     "Your role: Seller",
   );
-  expect(host.querySelectorAll('[role="row"]')).toHaveLength(2);
+  expect(host.querySelectorAll('[role="row"]')).toHaveLength(1);
   expect(host.textContent).not.toContain("dipak@example.com");
   expect(host.textContent).not.toContain("new@example.com");
   // Members see one quiet line instead of a form they cannot use.
@@ -603,35 +596,49 @@ it("does not invent rows or usage when members cannot load", async () => {
   delete routes["/v1/organisation/members"];
   await render();
   await click("Members");
-  expect(host.querySelectorAll('[role="row"]')).toHaveLength(1);
+  expect(host.querySelectorAll('[role="row"]')).toHaveLength(0);
   expect(host.textContent).toContain("Members could not be loaded");
   expect(host.textContent).not.toContain("admin@example.com");
   expect(button("Invite people").disabled).toBe(true);
 });
-it("shows Call capture only once the people have loaded, so the list never pushes it down", async () => {
-  // The QA robot, 8 Nov 2026 (0f2cebf6): on 3G at 363 the People list grew
-  // from its loading rows and pushed Call capture, already on screen, down.
-  const serve = fetchMock.getMockImplementation() as (
-    path: string,
-    init?: RequestInit,
-  ) => Promise<Response>;
-  let release = () => {};
-  const people = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  fetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
-    if (path === "/v1/organisation/members") await people;
-    if (path.endsWith("/capture-setup/team"))
-      return new Promise<Response>(() => {});
-    return serve(path, init);
-  });
+it("says on Team how many phones are ready, each person's phone in their row, and helps who isn't", async () => {
+  // sx-redesign board, pick 03 C (owner 21 Nov 2026): the phones' list is on
+  // Sellers' phones; Team says how many are ready and offers the steps.
+  routes["/v1/sales-xray/call-ai/capture-setup/team"] = {
+    schema: "sales-xray-capture-setup-team/1",
+    people: [
+      {
+        person_id: ownerId,
+        name: "Admin",
+        role: "owner",
+        state: "set_up",
+        at: null,
+        phone: "Redmi 13",
+      },
+      {
+        person_id: memberId,
+        name: "Dipak",
+        role: "member",
+        state: "not_started",
+        at: null,
+        phone: null,
+      },
+    ],
+    missing_today: 0,
+  };
   await render();
   await click("Members");
-  expect(host.querySelector('[aria-label="Loading members"]')).not.toBeNull();
+  await vi.waitFor(() =>
+    expect(host.textContent).toContain("Set up 1 more phone"),
+  );
+  expect(host.textContent).toContain("Dipak's phone is not ready");
+  expect(host.textContent).toContain("Phone ready");
+  expect(host.textContent).toContain("Not set up");
   expect(host.textContent).not.toContain("Call capture");
-  await act(async () => release());
-  await vi.waitFor(() => expect(host.textContent).toContain("Call capture"));
-  expect(host.textContent).toContain("Checking…");
+  await click("Help Dipak set up");
+  expect(
+    host.querySelector('dialog[open], [role="dialog"]')?.textContent,
+  ).toContain("Settings, Selling, Phone setup, then Set up.");
 });
 
 it("shows no promised Create/Join buttons on Personal and reads only your invitations", async () => {
@@ -1223,6 +1230,15 @@ const settingsCalls = () =>
 const detailsForm = () =>
   host.querySelector<HTMLFormElement>('form[aria-label="Company details"]');
 async function editCompanyName(name: string) {
+  // A row opens its one field in a sheet (sx-redesign board, pick 06 C).
+  if (!detailsForm())
+    await act(async () =>
+      [...host.querySelectorAll<HTMLButtonElement>("button")]
+        .find((item) =>
+          item.getAttribute("aria-label")?.startsWith("Company name:"),
+        )!
+        .click(),
+    );
   await act(async () => {
     const field =
       detailsForm()!.querySelector<HTMLInputElement>('input[name="name"]')!;
@@ -1247,7 +1263,7 @@ it.each(["owner", "admin"])(
     await render();
     expect(settingsCalls()).toHaveLength(0);
     await click("Company");
-    expect(detailsForm()?.querySelectorAll("input")).toHaveLength(8);
+    await vi.waitFor(() => expect(host.textContent).toContain("details added"));
     const domainInput = host.querySelector('input[aria-label="Domain to add"]');
     if (role === "owner") {
       // One filled button at a time: Save domains waits for a change.
@@ -1270,17 +1286,14 @@ it.each(["owner", "admin"])(
     expect(host.querySelector("h1")?.textContent).toBe(
       "Fictional Renamed Studio",
     );
-    expect(detailsForm()?.textContent).toContain("Saved.");
+    expect(host.textContent).toContain("Saved.");
     const body = JSON.parse(String(writes()[0][1].body));
     expect(body.team_size).toBe("3-10");
     expect(body.legal_name).toBe("Fictional Limited");
     expect(body.city).toBe("Example City");
     await click("Overview");
     await click("Company");
-    expect(
-      detailsForm()?.querySelector<HTMLInputElement>('input[name="name"]')
-        ?.value,
-    ).toBe("Fictional Renamed Studio");
+    expect(host.textContent).toContain("Fictional Renamed Studio");
     expect(settingsCalls().filter(([, init]) => !init?.method)).toHaveLength(2);
   },
 );
@@ -1334,6 +1347,7 @@ it.each(["read", "write"])(
       await click("Company");
     } else {
       await click("Company");
+      await editCompanyName("Changed Fictional Studio");
       writeStatus = 404;
       writeDetail = "No organisation selected.";
       await saveDetails();
@@ -1403,9 +1417,7 @@ it("aborts an old details write on session tenant change so it cannot rename the
   expect(signal.aborted).toBe(true);
   await act(async () => resolve(json(oldSettings)));
   expect(host.querySelector("h1")?.textContent).toBe("Other Fictional Studio");
-  expect(
-    detailsForm()?.querySelector<HTMLInputElement>('input[name="name"]')?.value,
-  ).toBe("Other Fictional Studio");
+  expect(detailsForm()).toBeNull();
   expect(host.textContent).not.toContain("Saved.");
 });
 
@@ -1539,9 +1551,11 @@ it("closes Invite with the reason when no seat is free, and keeps Remove and Rev
   )!;
   expect(input.disabled).toBe(true);
   expect(input.getAttribute("aria-describedby")).toBe("org-add-blocked");
-  expect(button("Invite").disabled).toBe(true);
+  expect(sendInvite().disabled).toBe(true);
   // Freeing a seat is how Invite opens again.
+  await closeInvite();
   expect(button("More actions for Dipak").disabled).toBe(false);
+  await click("Invites (1)");
   expect(button("More actions for new@example.com").disabled).toBe(false);
 });
 
@@ -1568,7 +1582,7 @@ it.each([
   await act(async () => undefined);
   await openInvite();
   expect(host.querySelector("#org-add-blocked")).toBeNull();
-  expect(button("Invite").disabled).toBe(false);
+  expect(sendInvite().disabled).toBe(false);
   expect(
     host.querySelector<HTMLInputElement>('input[aria-label="Email to invite"]')!
       .disabled,
