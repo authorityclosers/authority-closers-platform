@@ -14,14 +14,11 @@
     calc(var(--lx-bottom-nav-h, 0px) + env(safe-area-inset-bottom, 0px)) 0;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  /* What is scrolled to (focus, See more) clears the bar, the Call band and a
-     corner card over it (QA robot 8a93e05c, 9 Nov 2026: Copy link took focus
-     under "Open lead"; --sx-corner-h is the card's top, from the window's
-     bottom). */
-  scroll-padding-block: 64px
-    max(80px, calc(var(--sx-corner-h, 0px) - var(--lx-bottom-nav-h, 0px) + 8px));
+  /* The lead scrolls in .body, between the bar and the Call band (v1.93
+     Readability Gate, axe target-size: scrolled under a sticky Call band, the
+     row of actions sat half under its buttons). Nothing is ever under the
+     band now. */
+  overflow: hidden;
   background: var(--sx-paper);
   color: var(--sx-ink);
 }
@@ -72,8 +69,19 @@
 /* Its end scrolls clear of a corner card over the Call band, as the app's
    pages do (--sx-corner-h: the card's top, from the window's bottom). */
 .body {
-  flex: 1 0 auto;
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* What is scrolled to (focus, See more) clears a corner card over the band
+     (QA robot 8a93e05c, 9 Nov 2026; --sx-corner-h is the card's top, from
+     the window's bottom). */
+  scroll-padding-block: 8px
+    max(
+      16px,
+      calc(var(--sx-corner-h, 0px) - var(--lx-bottom-nav-h, 0px) - 64px)
+    );
   padding: 8px 16px
     max(
       16px,
@@ -81,13 +89,13 @@
     );
 }
 
-/* The one Call, 8 dp above and below, on the page colour; the page ends above
-   it, so nothing is ever under it. */
-/* Held 1 px past the page's end, so no words show through a rounding seam
-   above the tab bar (3.5x phones). */
+/* The one Call, 8 dp above and below, on the page colour; the scroll ends
+   above it, so nothing is ever under it. */
 .dock {
+  /* Sticky though nothing scrolls under it: the page's scans read it as a
+     layer of its own, as before. */
   position: sticky;
-  bottom: -1px;
+  bottom: 0;
   z-index: 3;
   flex: none;
   padding: 8px 16px 9px;
