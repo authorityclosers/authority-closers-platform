@@ -1723,3 +1723,18 @@
     white-space: nowrap;
   }
 }
+
+/* Every width (judge round 2, 21 Nov 2026): the Report opens on its score
+   card, not on "1. Overview & Score" and its icon tile; the name stays for
+   screen readers and the section switch. */
+.workspace[data-view="story"]:has([data-xray-part])
+  .section:first-child
+  > header:first-child {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

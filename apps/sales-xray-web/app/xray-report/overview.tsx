@@ -187,7 +187,14 @@ function shortDay(iso: string) {
  * Pending; Lost asks why, Follow-up asks the date. A person's record only:
  * nothing here is guessed, and nothing shows as saved until it reads back.
  */
-function DealOutcomeBar({ example }: { example: OutcomeKind | null }) {
+function DealOutcomeBar({
+  example,
+  header,
+}: {
+  example: OutcomeKind | null;
+  /** The recorded outcome's line, first in the card. */
+  header?: ReactNode;
+}) {
   const { state, save } = useCallOutcome();
   const id = useId();
   const [ask, setAsk] = useState<"lost" | "follow_up" | null>(null);
@@ -200,7 +207,8 @@ function DealOutcomeBar({ example }: { example: OutcomeKind | null }) {
   const [error, setError] = useState<string | null>(null);
   const pending = useRef(false);
 
-  if (state.status === "off" || state.status === "not_owner") return null;
+  if (state.status === "off" || state.status === "not_owner")
+    return header ? <>{header}</> : null;
   const ready = state.status === "ready";
   const record = ready ? state.record.value : null;
   const canEdit = ready && state.record.can_edit;
@@ -305,6 +313,7 @@ function DealOutcomeBar({ example }: { example: OutcomeKind | null }) {
         if (event.key === "Escape" && (ask || editingValue)) cancel();
       }}
     >
+      {header ? <div className={styles.dealHeader}>{header}</div> : null}
       <span className={styles.square}>
         <TargetArrow />
       </span>
@@ -797,40 +806,40 @@ export function OverviewScore({
           Flow 2 G6: the report's first job is what happened and what to
           improve). A filled Record outcome only while the call has none and
           the viewer may set it; otherwise one quiet line. */}
-      {state.status === "ready" && state.record.can_edit && !recorded ? (
-        <section
-          className={`${styles.card} ${styles.result}`}
-          aria-label="Call result"
-        >
-          <span className={styles.square} aria-hidden="true">
-            <TargetArrow />
-          </span>
-          <div>
-            <span className={styles.statLabel}>Recorded outcome</span>
-            <strong>{resultLabel}</strong>
-            <button
-              type="button"
-              className={styles.save}
-              onClick={() => {
-                const editor = outcomeEditor.current;
-                editor?.scrollIntoView({ block: "center" });
-                editor?.querySelector<HTMLButtonElement>("button")?.focus({
-                  preventScroll: true,
-                });
-              }}
-            >
-              Record outcome
-            </button>
-          </div>
-        </section>
-      ) : (
-        <p className={styles.resultLine}>
-          Recorded outcome · <strong>{resultLabel}</strong>
-        </p>
-      )}
+      {/* One card for the outcome (judge round, 21 Nov 2026): the recorded
+          outcome leads the Deal Outcome card; while the call has none and
+          the viewer may set it, a quiet Record outcome takes them to it. */}
       <div ref={outcomeEditor}>
         <DealOutcomeBar
           example={view.illustrative ? view.outcome.kind : null}
+          header={
+            state.status === "ready" && state.record.can_edit && !recorded ? (
+              <div className={styles.resultInline} aria-label="Call result">
+                <span>
+                  Recorded outcome &middot; <strong>{resultLabel}</strong>
+                </span>
+                <button
+                  type="button"
+                  className={styles.resultLink}
+                  onClick={() => {
+                    const editor = outcomeEditor.current;
+                    editor?.scrollIntoView({ block: "center" });
+                    editor
+                      ?.querySelector<HTMLButtonElement>(
+                        "[data-outcome-choice]",
+                      )
+                      ?.focus({ preventScroll: true });
+                  }}
+                >
+                  Record outcome
+                </button>
+              </div>
+            ) : (
+              <p className={styles.resultLine}>
+                Recorded outcome &middot; <strong>{resultLabel}</strong>
+              </p>
+            )
+          }
         />
       </div>
 

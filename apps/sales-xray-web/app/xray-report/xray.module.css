@@ -2260,3 +2260,35 @@
   background: var(--tone-soft);
   color: var(--tone);
 }
+/* The recorded outcome leads the Deal Outcome card (judge round, 21 Nov
+   2026): one card, a quiet text action, no second button. */
+.dealHeader {
+  border-bottom: 1px solid var(--xr-line);
+  flex: 1 1 100%;
+  padding-bottom: 12px;
+}
+.resultInline {
+  align-items: center;
+  color: var(--xr-text-2);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--sx-text-sm);
+  gap: 4px 12px;
+  justify-content: space-between;
+  line-height: var(--sx-leading-20);
+}
+.resultInline strong {
+  color: var(--xr-text);
+  font-weight: 600;
+}
+.resultLink {
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--sx-primary-ink);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+  min-height: 44px;
+  padding: 0 4px;
+}
