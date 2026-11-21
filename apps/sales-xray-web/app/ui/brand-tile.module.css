@@ -19,6 +19,12 @@
   background: var(--sx-accent-soft);
 }
 
+/* Dark ink in a soft grey tile (sx-redesign, 21 Nov 2026: no teal in mint). */
+.tile[data-kind="icon"][data-tone="ink"] {
+  background: var(--sx-fill);
+  color: var(--lx-ink);
+}
+
 .corner {
   position: absolute;
   right: -5px;

@@ -184,7 +184,10 @@ it("shows the hub: a card for each group, every section still in the side list",
     ["Company", "/settings/organisation"],
     ["Plan & billing", "/settings/group/plan-billing"],
   ]);
-  expect(cards("Just me")).toEqual([["Just me", "/settings/group/just-me"]]);
+  expect(cards("Just me")).toEqual([
+    ["Just me", "/settings/group/just-me"],
+    ["This phone", "/settings/group/this-phone"],
+  ]);
   expect(host.querySelector("[data-hub] [data-scope]")).toBeNull();
   expect(host.querySelector("h1")?.textContent).toBe("Settings");
   expect(
@@ -333,7 +336,7 @@ it("keeps the Settings frame while the session is checked", async () => {
   expect(host.querySelector("h1")?.textContent).toBe("Settings");
   expect(
     host.querySelectorAll("[data-hub] section[aria-label] a[data-group]"),
-  ).toHaveLength(7);
+  ).toHaveLength(8);
 });
 
 // Round-2 board 7 (20 Nov 2026): the organisation's settings live in Settings

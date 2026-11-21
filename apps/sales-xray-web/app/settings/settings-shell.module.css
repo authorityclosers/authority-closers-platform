@@ -309,3 +309,12 @@
     display: none;
   }
 }
+
+/* Tablet: a section's page is one centred column, like the hub. */
+@media (min-width: 600px) and (max-width: 899px) {
+  .shell:not([data-section="index"]) .content {
+    width: 100%;
+    max-width: 720px;
+    margin-inline: auto;
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "3a6a5c09c97af849322316d964e7db546d12c56e",
+  "full": true,
+  "checks": [],
+  "changed_files": null,
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [
+    "apps/sales-xray-web/app/account-settings.tsx",
+    "apps/sales-xray-web/app/settings/profile-details.module.css",
+    "apps/sales-xray-web/app/settings/profile-details.tsx",
+    "apps/sales-xray-web/app/settings/settings-hub.tsx",
+    "apps/sales-xray-web/app/settings/settings-shell.module.css",
+    "apps/sales-xray-web/app/settings/settings.test.tsx",
+    "apps/sales-xray-web/app/settings/setup-checklist.module.css",
+    "apps/sales-xray-web/app/sign-in-methods.module.css",
+    "apps/sales-xray-web/app/sign-in-methods.tsx",
+    "apps/sales-xray-web/app/ui/brand-tile.module.css",
+    "apps/sales-xray-web/app/ui/brand-tile.tsx",
+    "apps/sales-xray-web/app/settings/theme-pills.tsx",
+    "apps/sales-xray-web/app/account-delete.test.tsx"
+  ],
+  "py_shards": 17,
+  "requested_by": "root@ac-kvm4-prod"
+}

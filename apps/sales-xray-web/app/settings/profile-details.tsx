@@ -17,7 +17,16 @@ import {
   useState,
   type FormEvent,
 } from "react";
-import { Camera, PawPrint, Trash2 } from "lucide-react";
+import {
+  Camera,
+  ChevronRight,
+  LogIn,
+  Mail,
+  PawPrint,
+  Pencil,
+  Phone,
+  Trash2,
+} from "lucide-react";
 
 import {
   readAccountProfile,
@@ -299,6 +308,7 @@ export function ProfileDetailsPanel() {
           variant="primary"
           type="submit"
           form={formId}
+          className={styles.save}
           disabled={!dirty || busy !== null}
         >
           {busy === "save" ? "Saving…" : "Save profile"}
@@ -399,44 +409,79 @@ export function ProfileDetailsPanel() {
             }}
           />
         ) : (
-          <div className={styles.contact}>
-            <dl>
-              <div>
-                <dt>Email</dt>
-                <dd>{profile.email}</dd>
-              </div>
-              <div>
-                <dt>Phone</dt>
-                <dd>
-                  {profile.phone_number_e164 ?? "Not added yet"}
-                  {profile.phone_number_e164 ? (
-                    <span
-                      className={styles.badge}
-                      data-tone={profile.phone_verified ? "ok" : "pending"}
-                    >
-                      {profile.phone_verified ? "Verified" : "Not verified"}
-                    </span>
-                  ) : null}
-                </dd>
-              </div>
-              {/* Owner, 19 Nov 2026: work and personal Gmails sign in to one account;
-                  Sign-in & security lists each and adds another. */}
-              <div>
-                <dt>Google logins</dt>
-                <dd>
-                  <Button
-                    variant="ghost"
-                    onClick={() => openSettings("security")}
+          // Short rows like the rest of Settings: a dark icon tile, the
+          // name, its value; the two ways on are rows with a chevron
+          // (sx-redesign, 21 Nov 2026).
+          <ul className={styles.contact}>
+            <li className={styles.row}>
+              <span className={styles.tile} aria-hidden="true">
+                <Mail size={18} />
+              </span>
+              {/* A long address goes under its name, never cut mid-word. */}
+              <span className={styles.rowText}>
+                <span className={styles.rowName}>Email</span>
+                <span className={styles.rowHint}>{profile.email}</span>
+              </span>
+            </li>
+            <li className={styles.row}>
+              <span className={styles.tile} aria-hidden="true">
+                <Phone size={18} />
+              </span>
+              <span className={styles.rowName}>Phone</span>
+              <span className={styles.rowValue}>
+                {profile.phone_number_e164 ?? "Not added yet"}
+                {profile.phone_number_e164 ? (
+                  <span
+                    className={styles.badge}
+                    data-tone={profile.phone_verified ? "ok" : "pending"}
                   >
+                    {profile.phone_verified ? "Verified" : "Not verified"}
+                  </span>
+                ) : null}
+              </span>
+            </li>
+            {/* Owner, 19 Nov 2026: work and personal Gmails sign in to one account;
+                Sign-in & security lists each and adds another. */}
+            <li>
+              <button
+                type="button"
+                className={styles.row}
+                onClick={() => openSettings("security")}
+              >
+                <span className={styles.tile} aria-hidden="true">
+                  <LogIn size={18} />
+                </span>
+                <span className={styles.rowText}>
+                  <span className={styles.rowName}>Google logins</span>
+                  <span className={styles.rowHint}>
                     Add another Google account
-                  </Button>
-                </dd>
-              </div>
-            </dl>
-            <Button variant="ghost" onClick={() => setContact(true)}>
-              Edit name and phone
-            </Button>
-          </div>
+                  </span>
+                </span>
+                <ChevronRight
+                  size={18}
+                  aria-hidden="true"
+                  className={styles.chevron}
+                />
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                className={styles.row}
+                onClick={() => setContact(true)}
+              >
+                <span className={styles.tile} aria-hidden="true">
+                  <Pencil size={18} />
+                </span>
+                <span className={styles.rowName}>Edit name and phone</span>
+                <ChevronRight
+                  size={18}
+                  aria-hidden="true"
+                  className={styles.chevron}
+                />
+              </button>
+            </li>
+          </ul>
         )}
         {completion && !complete ? <Progress completion={completion} /> : null}
         {profile.phone_number_e164 && !profile.phone_verified ? (

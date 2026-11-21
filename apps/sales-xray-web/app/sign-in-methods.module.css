@@ -34,10 +34,15 @@
   height: 12px;
 }
 
-/* Connect: the same tinted accent as in Connected apps (design review, 20 Oct). */
+/* Connect: the green outline pill (sx-redesign, 21 Nov 2026). */
 button.connect,
 button.connect:hover {
-  border-color: transparent;
-  background: var(--sx-accent-soft);
-  color: var(--sx-accent);
+  border: 1px solid var(--lx-home-emerald);
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--lx-home-emerald);
+}
+
+button.connect:hover {
+  background: var(--lx-home-emerald-soft);
 }
