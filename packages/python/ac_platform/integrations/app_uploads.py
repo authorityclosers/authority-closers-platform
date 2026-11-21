@@ -1,7 +1,8 @@
 """Recordings an authorised app sends for a person (Pulse first): ``POST /v1/api/calls``.
 
 An app holding ``calls:write`` on a person's connection sends the recording bytes. Sales
-X-Ray keeps them for that person for 7 days, in their workspace, and does nothing else
+X-Ray keeps them for that person, in their workspace, until they add or discard them (nothing
+is deleted by itself, owner 20 Nov 2026), and does nothing else
 with them: no analysis, no provider call, no allowance used. The person sees "From Pulse:
 2 recordings" on their Calls page and adds each one through the usual upload (the same
 file checks, upload terms, allowance, plan and AI-on-calls settings as a file they pick),
@@ -60,7 +61,10 @@ from ac_platform.pulse.models import AppCallUpload
 
 _LOGGER = logging.getLogger(__name__)
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
-KEEP_FOR = timedelta(days=7)
+# Nothing is deleted by itself (owner, 20 Nov 2026): a waiting recording stays until its person
+# adds or discards it. expires_at keeps a 10-year sanity bound and nothing reads it as a deadline.
+KEEP_FOR = timedelta(days=3653)
+AUTOMATIC_EXPIRY = False
 MAX_BYTES = 100_000_000
 MAX_WAITING = 20
 CHUNK = 1024 * 1024
@@ -209,7 +213,6 @@ async def receive(
                         AppCallUpload.tenant_id == tenant_id,
                         AppCallUpload.person_id == person_id,
                         AppCallUpload.state == "waiting",
-                        AppCallUpload.expires_at > now,
                     )
                 )
             ).all()
@@ -368,7 +371,6 @@ def install_app_uploads_http(application: FastAPI, ctx: RouteContext) -> None:
             return {"uploads": [], "on": False}
         async with mine(request) as auth:
             actor = auth.resolved.actor
-            now = datetime.now(UTC)
             rows = (
                 await auth.database.scalars(
                     select(AppCallUpload)
@@ -376,7 +378,6 @@ def install_app_uploads_http(application: FastAPI, ctx: RouteContext) -> None:
                         AppCallUpload.tenant_id == actor.tenant_id,
                         AppCallUpload.person_id == actor.person_id,
                         AppCallUpload.state == "waiting",
-                        AppCallUpload.expires_at > now,
                     )
                     .order_by(AppCallUpload.created_at.desc())
                     .limit(MAX_WAITING)
@@ -406,7 +407,7 @@ def install_app_uploads_http(application: FastAPI, ctx: RouteContext) -> None:
     async def file(upload_id: UUID, request: Request) -> Response:
         async with mine(request) as auth:
             row = await own(auth, upload_id)
-            if row.state != "waiting" or row.expires_at <= datetime.now(UTC) or root is None:
+            if row.state != "waiting" or root is None:
                 raise HTTPException(410, "That recording is no longer kept.", headers=PRIVATE)
             path = _path(root, row)
             media, name = row.media_type, row.file_name
@@ -527,7 +528,9 @@ async def _role(auth: Any) -> str:
 
 
 async def expire(database: AsyncSession, root: Path | None, *, now: datetime) -> int:
-    """Waiting recordings past their 7 days: marked expired, bytes deleted."""
+    """Off (AUTOMATIC_EXPIRY): a waiting recording is never expired or deleted by itself."""
+    if not AUTOMATIC_EXPIRY:
+        return 0
     rows = (
         await database.scalars(
             select(AppCallUpload)
@@ -544,6 +547,7 @@ async def expire(database: AsyncSession, root: Path | None, *, now: datetime) ->
 
 
 __all__ = [
+    "AUTOMATIC_EXPIRY",
     "CONSENT",
     "KEEP_FOR",
     "MAX_BYTES",

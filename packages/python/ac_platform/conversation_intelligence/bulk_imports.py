@@ -41,12 +41,16 @@ from ac_platform.tenancy.models import Membership
 from ac_platform.tenancy.roles import roles_with
 
 IMPORT_LIFETIME = timedelta(days=7)
+# Nothing expires by itself (owner, 20 Nov 2026): a confirmed import stays resumable.
+# IMPORT_LIFETIME stays the consent receipt's recorded window (verify_batch_consent); it is
+# no longer a deadline.
+AUTOMATIC_EXPIRY = False
 IMPORT_SOURCE_NAMESPACE = UUID("3d11e2cc-3b70-4f8d-ae49-52b5d7cec676")
 IMPORT_ACTION = "recording_import_confirmed"
 MEMBER_SETUP_REQUIRED = (
     "This member must add their name and phone number in Sales X-Ray before their calls "
-    "can be analysed. Their recordings wait in this import for up to 7 days; resume once "
-    "they have."
+    "can be analysed. Their recordings wait in this import; resume once they "
+    "have."
 )
 
 
@@ -110,6 +114,11 @@ async def verify_batch_consent(
         or [item.item_index for item in items] != list(range(batch.total_files))
     ):
         raise ConversationDenied("The exact batch consent receipt is unavailable.")
+
+
+def batch_expired(batch: ConversationRecordingImport, now: datetime) -> bool:
+    """Never, while AUTOMATIC_EXPIRY is off: an import waits for its uploader."""
+    return AUTOMATIC_EXPIRY and utc(batch.expires_at) <= now
 
 
 class RecordingImports:
@@ -272,7 +281,7 @@ class RecordingImports:
         )
         if batch.uploader_person_id != actor.person_id:
             raise ConversationDenied("Only this batch's current uploader can resume its import.")
-        if utc(batch.expires_at) <= utc(self.ownership.clock()):
+        if batch_expired(batch, utc(self.ownership.clock())):
             raise ConversationConflict("This batch expired. Preview the folder again to continue.")
         item = await self.database.get(
             ConversationRecordingImportItem,
@@ -305,7 +314,7 @@ class RecordingImports:
                 setup_pending.add(person_id)
         for item in items:
             waiting_setup = (
-                utc(batch.expires_at) > now
+                not batch_expired(batch, now)
                 and item.usage_id is None
                 and item.person_id in setup_pending
             )
@@ -320,7 +329,7 @@ class RecordingImports:
                 "submission_id": None,
                 "upload_submission_id": str(item.submission_id),
                 "state": "expired"
-                if utc(batch.expires_at) <= now
+                if batch_expired(batch, now)
                 else "needs_member"
                 if item.person_id is None or item.person_id in unavailable_members or waiting_setup
                 else "awaiting_upload",
@@ -405,10 +414,10 @@ class RecordingImports:
             "state": "finished"
             if finished
             else "expired"
-            if utc(batch.expires_at) <= now
+            if batch_expired(batch, now)
             else "in_progress",
             "terminal_state": "failed"
-            if utc(batch.expires_at) <= now
+            if batch_expired(batch, now)
             and not finished
             or finished
             and any(state in {"failed", "expired"} for state in states)
