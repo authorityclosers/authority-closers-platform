@@ -488,7 +488,7 @@ export function SettingsMenu({
           disabled={signingOut}
         >
           <LogOut size={15} aria-hidden="true" />
-          {signingOut ? "Logging out…" : "Log out"}
+          {signingOut ? "Signing out…" : "Sign out"}
         </button>
       </div>
 

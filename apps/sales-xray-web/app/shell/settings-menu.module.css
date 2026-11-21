@@ -615,3 +615,25 @@
   box-shadow: none;
   color: var(--sx-surface);
 }
+
+/* Judge round (sx-redesign, 21 Nov 2026): the theme switch sits in its own
+   white card under "Appearance", like the other groups. */
+.sheet .theme {
+  margin: 0;
+  padding: 12px 16px 14px;
+  border: 0;
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+/* "Appearance" names the card; the switch's own "Theme" stays for screen
+   readers only, so it never sits on the card's edge. */
+.sheet .theme > legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
