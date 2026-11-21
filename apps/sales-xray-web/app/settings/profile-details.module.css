@@ -191,7 +191,7 @@ button.row:focus-visible {
 .rowHint {
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .rowValue {

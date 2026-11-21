@@ -1532,6 +1532,12 @@
   opacity: 0.5;
 }
 
+/* v1.92 judge round (21 Nov 2026): on the dark card the off track (line-strong)
+   vanished; an ink-tinted track shows in both themes. */
+.toggle input:not(:checked) + .switch {
+  background: color-mix(in srgb, var(--lx-ink) 34%, transparent);
+}
+
 .toggle span:last-child {
   display: grid;
   gap: 1px;
