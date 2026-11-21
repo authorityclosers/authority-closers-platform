@@ -12,6 +12,7 @@ import { Skeleton } from "../ui/kit";
 import {
   SettingsOverview,
   SettingsShell,
+  currentGroup,
   currentSection,
 } from "./settings-shell";
 import styles from "./settings-shell.module.css";
@@ -20,7 +21,9 @@ import styles from "./settings-shell.module.css";
 const PANELS = [3, 2] as const;
 
 export function SettingsSkeleton() {
-  const section = currentSection(usePathname());
+  const pathname = usePathname();
+  const section = currentSection(pathname);
+  const group = currentGroup(pathname);
   return (
     <SettingsShell>
       <div
@@ -29,7 +32,7 @@ export function SettingsSkeleton() {
         aria-busy="true"
         aria-label="Loading settings"
       >
-        {section === null ? (
+        {section === null && group === null ? (
           <SettingsOverview />
         ) : (
           PANELS.map((rows, panel) => (

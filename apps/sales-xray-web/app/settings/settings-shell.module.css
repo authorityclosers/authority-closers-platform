@@ -21,18 +21,25 @@
   overflow-y: auto;
 }
 
+/* Back to the hub from any section; the top bar already says Settings. */
 .navTitle {
   display: flex;
   align-items: center;
+  gap: 10px;
   min-height: 44px;
   margin: 0 0 2px;
   padding: 0 10px;
   border-radius: var(--sx-radius-sm);
   text-decoration: none;
   color: var(--sx-ink);
-  font-size: var(--sx-text-title);
-  font-weight: 750;
-  letter-spacing: -0.01em;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.navTitle:hover,
+.navTitle:focus-visible {
+  background: var(--sx-sunken);
+  outline: none;
 }
 
 .navTitle[aria-current="page"] {
@@ -159,120 +166,69 @@
   min-width: 0;
 }
 
-.header h1 {
-  margin: 0;
-  color: var(--sx-ink);
-  font-size: var(--sx-text-title);
-  font-weight: 750;
-  letter-spacing: -0.01em;
-}
-
-.header p {
-  margin: 2px 0 0;
-  color: var(--sx-muted);
-  font-size: var(--sx-text-sm);
-}
-
-/* The section's name with the way back beside it, on phones: the chevron
-   centred on the name, the line under it starting under the name. */
-.titleRow {
+/* A section's (or group's) frame, one title row (sx-redesign, 21 Nov 2026):
+   the way back on phones, the name, a tiny chip saying who it affects; one
+   short line under it. */
+.header {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px;
+  min-width: 0;
+  margin-bottom: 2px;
+}
+
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 4px 10px;
   min-width: 0;
 }
 
-.titleRow > .header {
-  display: contents;
+.header h1 {
+  min-width: 0;
+  margin: 0;
+  color: var(--sx-ink);
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-xl);
+  font-weight: 750;
+  line-height: var(--sx-leading-28);
+  letter-spacing: -0.015em;
 }
 
-.titleRow > .header > h1,
-.titleRow > .header > p {
-  grid-column: 2;
+.header p {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  opacity: 0.82;
 }
 
-.titleRow > .header > h1 {
-  grid-row: 1;
-}
-
-/* The way back, a chevron alone with a full tap target: the top bar already
-   says Settings (Redmi QA on production, 10 Nov 2026). */
+/* The way back, a chevron with a full tap target, on phones only (the side
+   list leads back on a computer). */
 .back {
   display: none;
-  grid-row: 1;
+  flex: none;
   min-width: 44px;
   min-height: 44px;
-  margin-inline-start: -12px;
+  margin: -6px -10px -6px -14px;
   place-items: center;
-  justify-content: center;
-  align-items: center;
-  gap: 2px;
-  justify-self: start;
-  color: var(--sx-accent);
-  font-size: var(--sx-text-sm);
-  font-weight: 650;
+  color: var(--sx-ink);
   text-decoration: none;
 }
 
-/* Who the open section affects, under its line. */
 .scope {
-  display: flex;
-  margin-top: 6px;
+  display: inline-flex;
+  flex: none;
 }
 
-.titleRow > .header > .scope {
-  grid-column: 2;
+/* The hub: no side list, hero and cards across the page. */
+.shell[data-section="index"] {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 1080px;
 }
 
-/* The overview: the groups as cards, each with its sections. */
-.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
-  align-items: start;
-  gap: 18px 16px;
-}
-
-.cards > .group {
-  padding: 14px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-md);
-  background: var(--sx-surface);
-}
-
-/* The overview: every section as a card. */
-.overview {
-  display: grid;
-  gap: 18px;
-}
-
-.overview .group ul {
-  gap: 2px;
-}
-
-/* Inside its group's card a section is a plain row, not a card of its own. */
-.cards .item[data-variant="list"] {
-  min-height: 52px;
-  padding: 6px 8px;
-  border: 0;
-  background: transparent;
-}
-
-.cards .item[data-variant="list"]:hover,
-.cards .item[data-variant="list"]:focus-visible {
-  background: var(--sx-sunken);
-}
-
-.overviewHead h1 {
-  margin: 0;
-  color: var(--sx-ink);
-  font-size: var(--sx-text-title);
-  font-weight: 750;
-}
-
-.overviewHead p {
-  margin: 2px 0 0;
-  color: var(--sx-muted);
-  font-size: var(--sx-text-sm);
+.shell[data-section="index"] .nav {
+  display: none;
 }
 
 /* While the session is checked: panels shaped like a section's own. */
@@ -321,18 +277,6 @@
 }
 
 @media (max-width: 899px) {
-  /* On a phone the top bar already says Settings: the overview's own heading
-     is for screen readers only (Redmi QA on production, 10 Nov 2026:
-     "Settings" twice, top bar and heading). */
-  .overviewHead h1 {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
   /* The app already gives phones one 16 px gutter; a second one here made
      every card float 32 px in (owner, 26 Oct 2026). */
   .shell {
@@ -347,10 +291,21 @@
   }
 
   .back {
-    display: inline-flex;
+    display: inline-grid;
   }
 
-  .cards {
-    grid-template-columns: minmax(0, 1fr);
+  .header {
+    padding-inline-start: 2px;
+  }
+
+  .header p {
+    padding-inline-start: 28px;
+  }
+
+  /* The frame's own page row ("Settings") steps aside while a section shows
+     its name (sx-redesign: no "Settings" over "Profile"). */
+  :global(html[data-sx-settings-own-title])
+    :global(div:has(> [data-page-title])) {
+    display: none;
   }
 }

@@ -46,6 +46,14 @@ vi.mock("./developers", () => ({
 vi.mock("./connected-apps", () => ({
   ConnectedApps: () => <p data-testid="connected-apps">apps grid</p>,
 }));
+// The hub's own reads answer nothing here (settings-hub.test.tsx has them).
+vi.mock("../capture-setup/capture-setup-client", () => ({
+  readCaptureSetup: () => Promise.reject(new Error("offline")),
+  readCaptureTeam: () => Promise.reject(new Error("offline")),
+}));
+vi.mock("./ai-apps-client", () => ({
+  readAiApps: () => Promise.reject(new Error("offline")),
+}));
 vi.mock("./ai-apps", () => ({
   AiAppsSection: () => <p data-testid="ai-apps">ai apps</p>,
 }));
@@ -55,7 +63,12 @@ import { SettingsSectionView } from "./sections";
 import { SettingsSkeleton } from "./settings-skeleton";
 import { AccountRedirect } from "./account-redirect";
 import SettingsPage from "./page";
-import { SettingsShell, currentSection } from "./settings-shell";
+import {
+  OWN_TITLE_ATTRIBUTE,
+  SettingsShell,
+  currentGroup,
+  currentSection,
+} from "./settings-shell";
 import {
   SETTINGS_SECTIONS,
   accountRedirect,
@@ -133,17 +146,18 @@ it("maps every section, and the old account sections, to an address of its own",
   expect(currentSection("/settings")).toBeNull();
 });
 
-it("lists every section in groups on the Settings page", async () => {
+it("shows the hub: a card for each group, every section still in the side list", async () => {
   nav.pathname = "/settings";
   await act(async () =>
     root.render(<SettingsShell>{<SettingsPage />}</SettingsShell>),
   );
-  const links = [
-    ...host.querySelectorAll<HTMLAnchorElement>("a[href^='/settings/']"),
+  // The side list (computers) keeps every section one click away.
+  const listed = [
+    ...host.querySelectorAll<HTMLAnchorElement>(
+      'nav[aria-label="Settings sections"] a[href^="/settings/"]',
+    ),
   ];
-  // Once in the side list (computers), once as cards (the page itself);
-  // the organisation's sections live in its hub (owner, 23 Oct 2026).
-  expect(new Set(links.map((link) => link.getAttribute("href")))).toEqual(
+  expect(new Set(listed.map((link) => link.getAttribute("href")))).toEqual(
     new Set(
       // Privacy and Apps & devices open inside Phone & alerts (owner, 24 Oct 2026).
       SETTINGS_SECTIONS.filter((item) => !item.within).map(
@@ -151,32 +165,75 @@ it("lists every section in groups on the Settings page", async () => {
       ),
     ),
   );
-  expect(
-    host.querySelector('nav[aria-label="Settings sections"]'),
-  ).not.toBeNull();
-  // Every group says who it affects (round-2 board 7).
-  const overview = host.querySelector('[class*="cards"]');
-  expect(
-    [...(overview?.querySelectorAll("section[aria-label]") ?? [])].map(
-      (group) => [
-        group.getAttribute("aria-label"),
-        group.querySelector("[data-scope]")?.getAttribute("data-scope"),
-      ],
-    ),
-  ).toEqual([
-    ["Team", "everyone"],
-    ["Leads", "everyone"],
-    ["Calls & phones", "everyone"],
-    ["Connections", "everyone"],
-    ["Company", "everyone"],
-    ["Plan & billing", "everyone"],
-    ["Just me", "me"],
-    ["This phone", "phone"],
+  // sx-redesign pick C (owner, 21 Nov 2026): one card a group, under two
+  // labels instead of a scope chip on each; a group with one section opens it.
+  const cards = (label: string) =>
+    [
+      ...host.querySelectorAll<HTMLAnchorElement>(
+        `[data-hub] section[aria-label="${label}"] a`,
+      ),
+    ].map((link) => [
+      link.querySelector('[class*="name"]')?.textContent,
+      link.getAttribute("href"),
+    ]);
+  expect(cards("For everyone")).toEqual([
+    ["Team", "/settings/team"],
+    ["Leads", "/settings/group/leads"],
+    ["Calls & phones", "/settings/group/calls-phones"],
+    ["Connections", "/settings/group/connections"],
+    ["Company", "/settings/organisation"],
+    ["Plan & billing", "/settings/group/plan-billing"],
   ]);
-  expect(host.textContent).toContain("Google, Facebook and Apple sign-in");
+  expect(cards("Just me")).toEqual([["Just me", "/settings/group/just-me"]]);
+  expect(host.querySelector("[data-hub] [data-scope]")).toBeNull();
+  expect(host.querySelector("h1")?.textContent).toBe("Settings");
   expect(
     host.querySelector("nav a[aria-current='page']")?.getAttribute("href"),
   ).toBe("/settings");
+});
+
+it("opens a group's page with its sections, the way back and who it affects", async () => {
+  nav.pathname = "/settings/group/leads";
+  const { SettingsGroupView } = await import("./settings-hub");
+  await act(async () =>
+    root.render(
+      <SettingsShell>
+        <SettingsGroupView group="Leads" />
+      </SettingsShell>,
+    ),
+  );
+  expect(currentGroup("/settings/group/leads")).toBe("Leads");
+  expect(currentGroup("/settings/group/nonsense")).toBeNull();
+  expect(host.querySelector("h1")?.textContent).toBe("Leads");
+  expect(
+    host.querySelector("header [data-scope]")?.getAttribute("data-scope"),
+  ).toBe("everyone");
+  expect(
+    host
+      .querySelector('header a[title="Back to Settings"]')
+      ?.getAttribute("href"),
+  ).toBe("/settings");
+  expect(
+    [...host.querySelectorAll("[data-hub] a")].map((link) =>
+      link.getAttribute("href"),
+    ),
+  ).toEqual(["/settings/lead-rules", "/settings/stages", "/settings/sources"]);
+  // Just me lists This phone too, with Privacy and Apps & devices.
+  nav.pathname = "/settings/group/just-me";
+  await act(async () =>
+    root.render(
+      <SettingsShell>
+        <SettingsGroupView group="Just me" />
+      </SettingsShell>,
+    ),
+  );
+  const hrefs = [...host.querySelectorAll("[data-hub] a")].map((link) =>
+    link.getAttribute("href"),
+  );
+  expect(hrefs).toContain("/settings/privacy");
+  expect(hrefs).toContain("/settings/notifications");
+  expect(hrefs).toContain("/settings/devices");
+  expect(host.textContent).toContain("Sign out");
 });
 
 it("shows one section with its title, the way back, and the side list lit", async () => {
@@ -189,10 +246,18 @@ it("shows one section with its title, the way back, and the side list lit", asyn
     ),
   );
   expect(host.querySelector("h1")?.textContent).toBe("Selling");
-  // The top bar says Settings; the way back is its chevron, named for readers.
-  const back = host.querySelector('a[href="/settings"][title]');
-  expect(back?.getAttribute("aria-label")).toBe("Back to Settings");
+  // The way back is a chevron beside the name, named for readers; on the
+  // owner's hub it goes one step up, to the group's page (sx-redesign).
+  const back = host.querySelector("header a[title]");
+  expect(back?.getAttribute("href")).toBe("/settings/group/just-me");
+  expect(back?.getAttribute("aria-label")).toBe("Back to Just me");
   expect(back?.textContent).toBe("");
+  // The chip beside the title is the short one, the full words its title.
+  expect(host.querySelector("header [data-scope]")?.textContent).toBe(
+    "Just me",
+  );
+  // No "Settings" page row over the section's name on a phone.
+  expect(document.documentElement.hasAttribute(OWN_TITLE_ATTRIBUTE)).toBe(true);
   expect(
     host.querySelector("a[aria-current='page']")?.getAttribute("href"),
   ).toBe("/settings/selling");
@@ -266,9 +331,9 @@ it("keeps the Settings frame while the session is checked", async () => {
   nav.pathname = "/settings";
   await act(async () => root.render(<SettingsSkeleton />));
   expect(host.querySelector("h1")?.textContent).toBe("Settings");
-  expect(host.querySelectorAll("a[data-variant='list']")).toHaveLength(
-    SETTINGS_SECTIONS.filter((item) => !item.within).length,
-  );
+  expect(
+    host.querySelectorAll("[data-hub] section[aria-label] a[data-group]"),
+  ).toHaveLength(7);
 });
 
 // Round-2 board 7 (20 Nov 2026): the organisation's settings live in Settings
@@ -320,13 +385,13 @@ it("lists only your own settings in a personal workspace", async () => {
   expect(host.querySelector('a[href="/settings/apps"]')).toBeNull();
   expect(host.querySelector('a[href="/settings/plan"]')).not.toBeNull();
   expect(host.querySelector('a[href="/settings/sounds"]')).not.toBeNull();
-  // Plan & billing is yours there.
-  const plan = host.querySelector(
-    '[class*="cards"] section[aria-label="Plan & billing"]',
+  // Plan & billing is yours there: the seller's hub, under "Plan".
+  expect(host.querySelector("[data-hub]")?.getAttribute("data-hub")).toBe(
+    "personal",
   );
-  expect(plan?.querySelector("[data-scope]")?.getAttribute("data-scope")).toBe(
-    "me",
-  );
+  expect(
+    host.querySelector('section[aria-label="Plan"] a[href="/settings/plan"]'),
+  ).not.toBeNull();
 });
 
 // Billing belongs to whoever pays (roles.ts "billing.view"): a Seller of an
@@ -431,17 +496,20 @@ it("keeps Plan & billing for an organisation's owner and in a personal workspace
 it("says Settings once on a phone and lets a row's line wrap", async () => {
   // Redmi QA on production (10 Nov 2026, 363 px at 130% text): "Settings" in
   // the top bar and again as the heading; row lines cut to "phone a...".
-  const css = (await import("node:fs")).readFileSync(
-    (await import("node:path")).join(
-      process.cwd(),
-      "app/settings/settings-shell.module.css",
-    ),
-    "utf8",
-  );
-  expect(css).toMatch(
-    /@media \(max-width: 899px\) \{[\s\S]*?\.overviewHead h1 \{[^}]*clip-path: inset\(50%\);/,
-  );
+  const read = async (name: string) =>
+    (await import("node:fs")).readFileSync(
+      (await import("node:path")).join(process.cwd(), "app/settings", name),
+      "utf8",
+    );
+  const hub = await read("settings-hub.module.css");
+  expect(hub).toMatch(/\.readerOnly \{[^}]*clip-path: inset\(50%\);/);
+  const line = /\n\.line \{([^}]*)\}/.exec(hub)?.[1] ?? "";
+  expect(line).not.toContain("ellipsis");
+  expect(line).not.toContain("nowrap");
+  const css = await read("settings-shell.module.css");
   const hint = /\n\.hint \{([^}]*)\}/.exec(css)?.[1] ?? "";
   expect(hint).not.toContain("ellipsis");
   expect(hint).not.toContain("nowrap");
+  // The frame's "Settings" row steps aside while a section shows its name.
+  expect(css).toContain("html[data-sx-settings-own-title]");
 });

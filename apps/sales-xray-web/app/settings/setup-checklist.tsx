@@ -2,14 +2,14 @@
 
 /**
  * What's left to set up, on top of Settings (owner's round-2 board 7, option
- * A with B's checklist, 20 Nov 2026): "Your organisation is 4 of 5 set up",
- * each thing still to do one tap from its page. Owners, admins and managers of
- * an organisation; read from what the app already reads (the company, seats,
+ * A with B's checklist, 20 Nov 2026; sx-redesign pick C, 21 Nov 2026: a ring,
+ * "Your company is 4 of 5 set up", the next step and one button to it).
+ * Owners, admins and managers of an organisation; read from what the app already reads (the company, seats,
  * connected apps, working hours, sellers' phones). A read that fails leaves
  * its line out rather than guessing.
  */
 import Link from "next/link";
-import { CheckCircle2, ChevronRight, Circle } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { readCaptureTeam } from "../capture-setup/capture-setup-client";
@@ -34,11 +34,27 @@ export type SetupItem = {
   href: string;
 };
 
-/** The checklist from whatever answered; one rejected read leaves its line out. */
-export async function readSetup(
+/**
+ * What the hub's cards say in one short line (sx-redesign pick C, 21 Nov
+ * 2026: "Sellers' phones 4 of 6 ready"), from the same reads as the checklist.
+ * A read that failed leaves its fact out; the card keeps its plain line.
+ */
+export type SetupFacts = {
+  people?: number;
+  invited?: number;
+  phonesReady?: number;
+  phonesTotal?: number;
+  appsConnected?: number;
+  companyDone?: boolean;
+};
+
+export type Setup = { items: SetupItem[]; facts: SetupFacts };
+
+/** The checklist and the cards' facts from whatever answered. */
+export async function readSetupFacts(
   tenantId: string,
   signal?: AbortSignal,
-): Promise<SetupItem[]> {
+): Promise<Setup> {
   const [company, seats, health, notify, phones] = await Promise.allSettled([
     readOrganisationSettings(tenantId, signal),
     readSeats(signal),
@@ -47,17 +63,22 @@ export async function readSetup(
     readCaptureTeam(signal),
   ]);
   const items: SetupItem[] = [];
+  const facts: SetupFacts = {};
   if (company.status === "fulfilled") {
     const value = company.value;
+    const done = Boolean(value.logo_url || value.legal_name || value.gstin);
+    facts.companyDone = done;
     items.push({
       key: "company",
-      done: Boolean(value.logo_url || value.legal_name || value.gstin),
+      done,
       todo: "Add your company's logo and details",
       name: "Company",
       href: "/settings/organisation",
     });
   }
   if (seats.status === "fulfilled") {
+    facts.people = seats.value.activeMembers;
+    facts.invited = seats.value.pendingInvites;
     items.push({
       key: "team",
       done: seats.value.activeMembers + seats.value.pendingInvites > 1,
@@ -67,11 +88,13 @@ export async function readSetup(
     });
   }
   if (health.status === "fulfilled") {
+    const connected = health.value.apps.filter(
+      (app) => app.state === "ready" || app.connections.length > 0,
+    ).length;
+    facts.appsConnected = connected;
     items.push({
       key: "sources",
-      done: health.value.apps.some(
-        (app) => app.state === "ready" || app.connections.length > 0,
-      ),
+      done: connected > 0,
       todo: "Connect where your leads come from",
       name: "Lead sources",
       href: "/settings/apps",
@@ -90,6 +113,8 @@ export async function readSetup(
     const waiting = phones.value.people.filter(
       (person) => person.state !== "set_up",
     );
+    facts.phonesTotal = phones.value.people.length;
+    facts.phonesReady = phones.value.people.length - waiting.length;
     items.push({
       key: "phones",
       done: waiting.length === 0,
@@ -101,81 +126,142 @@ export async function readSetup(
       href: "/settings/phones",
     });
   }
-  return items;
+  return { items, facts };
 }
 
-export function SetupChecklist() {
+/** The checklist alone; one rejected read leaves its line out. */
+export async function readSetup(
+  tenantId: string,
+  signal?: AbortSignal,
+): Promise<SetupItem[]> {
+  return (await readSetupFacts(tenantId, signal)).items;
+}
+
+/** The one word on the hero's button for the next thing to do. */
+const ACTION: Record<SetupItem["key"], string> = {
+  company: "Add details",
+  team: "Invite",
+  sources: "Connect",
+  hours: "Set hours",
+  phones: "Set up phones",
+};
+
+/**
+ * The setup and the cards' facts for an organisation's owners, admins and
+ * managers; null for everyone else and until the reads answer.
+ */
+export function useSetup(): Setup | null {
   const canHere = useCanHere();
   const org = useOrgName();
   const tenantId = useWorkspaceAccess()?.context?.tenantId ?? null;
   const manages =
     org !== null && tenantId !== null && canHere("leads.manage") === true;
-  const [items, setItems] = useState<SetupItem[] | null>(null);
+  const [setup, setSetup] = useState<{ tenant: string; value: Setup } | null>(
+    null,
+  );
   useEffect(() => {
     if (!manages || !tenantId) return;
     const controller = new AbortController();
-    readSetup(tenantId, controller.signal).then(
+    readSetupFacts(tenantId, controller.signal).then(
       (value) => {
-        if (!controller.signal.aborted) setItems(value);
+        if (!controller.signal.aborted) setSetup({ tenant: tenantId, value });
       },
       () => undefined,
     );
     return () => controller.abort();
   }, [manages, tenantId]);
-  if (!manages || !items || items.length === 0) return null;
+  return manages && setup?.tenant === tenantId ? setup.value : null;
+}
+
+/** The ring: how many of the setup steps are done. */
+function SetupRing({ done, total }: { done: number; total: number }) {
+  const r = 34;
+  const length = 2 * Math.PI * r;
+  const part = total > 0 ? done / total : 0;
+  return (
+    <span
+      className={styles.ring}
+      role="progressbar"
+      aria-label="Set up"
+      aria-valuemin={0}
+      aria-valuemax={total}
+      aria-valuenow={done}
+    >
+      <svg viewBox="0 0 80 80" width="80" height="80" aria-hidden="true">
+        <circle className={styles.ringTrack} cx="40" cy="40" r={r} />
+        <circle
+          className={styles.ringFill}
+          cx="40"
+          cy="40"
+          r={r}
+          strokeDasharray={`${length * part} ${length}`}
+        />
+      </svg>
+      <span className={styles.ringWords} aria-hidden="true">
+        <b>
+          {done} of {total}
+        </b>
+        <small>set up</small>
+      </span>
+    </span>
+  );
+}
+
+/**
+ * The hub's one hero (sx-redesign pick C, owner 21 Nov 2026): the ring, how
+ * far the company is, the next step and one green button to it. The rest of
+ * what's left is one tap away on the cards below.
+ */
+export function SetupHero({ setup }: { setup: Setup | null }) {
+  const org = useOrgName();
+  if (!setup || setup.items.length === 0) return null;
+  const { items } = setup;
   const done = items.filter((item) => item.done);
   const left = items.filter((item) => !item.done);
+  const next = left[0] ?? null;
   return (
-    <section className={styles.card} aria-label="Setup">
-      <div className={styles.head}>
-        {left.length === 0 ? (
-          <CheckCircle2 size={20} aria-hidden="true" className={styles.ok} />
-        ) : null}
+    <section
+      className={styles.card}
+      aria-label="Setup"
+      data-done={next ? undefined : ""}
+    >
+      <SetupRing done={done.length} total={items.length} />
+      <div className={styles.words}>
         <h2>
-          {left.length === 0 ? (
-            <>{org} is all set up</>
-          ) : (
+          {next ? (
             <>
-              Your organisation is{" "}
-              <b>
-                {done.length} of {items.length} set up
-              </b>
+              Your company is {done.length} of {items.length} set up
             </>
+          ) : (
+            <>{org ?? "Your company"} is all set up</>
           )}
         </h2>
+        {next ? (
+          <p>
+            <span className={styles.nextLabel}>Next step</span>
+            <span className={styles.next}>{next.todo}</span>
+          </p>
+        ) : (
+          <p>
+            <CheckCircle2 size={16} aria-hidden="true" className={styles.ok} />
+            <span className={styles.next}>Everything is ready.</span>
+          </p>
+        )}
       </div>
-      <div
-        className={styles.bar}
-        role="progressbar"
-        aria-label="Set up"
-        aria-valuemin={0}
-        aria-valuemax={items.length}
-        aria-valuenow={done.length}
-      >
-        <span style={{ width: `${(done.length / items.length) * 100}%` }} />
-      </div>
-      {left.length > 0 ? (
-        <ul className={styles.todos}>
-          {left.map((item) => (
-            <li key={item.key}>
-              <Link
-                href={item.href}
-                className={styles.todo}
-                data-sx-feature={`setup_${item.key}`}
-              >
-                <Circle size={18} aria-hidden="true" />
-                <span>{item.todo}</span>
-                <ChevronRight size={16} aria-hidden="true" />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {done.length > 0 && left.length > 0 ? (
-        <p className={styles.done}>
-          Done: {done.map((item) => item.name).join(", ")}
-        </p>
+      {next ? (
+        <Link
+          href={next.href}
+          className={styles.go}
+          data-sx-feature={`setup_${next.key}`}
+        >
+          {ACTION[next.key]}
+        </Link>
       ) : null}
     </section>
   );
+}
+
+/** The setup hero on its own, reading for itself. */
+export function SetupChecklist() {
+  return <SetupHero setup={useSetup()} />;
 }

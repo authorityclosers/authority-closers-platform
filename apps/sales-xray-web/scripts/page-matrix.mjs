@@ -56,6 +56,8 @@ const PARAMS = {
   personId: PERSON_ID,
   // Settings sections (20 Oct): one address each; the matrix opens Profile.
   section: "profile",
+  // Settings groups (sx-redesign, 21 Nov 2026): the hub card opens Leads.
+  group: "leads",
 };
 
 /** Pages drawn in the app shell (navigation rail on wide windows). */

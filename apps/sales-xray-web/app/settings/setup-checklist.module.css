@@ -1,91 +1,197 @@
-/* What's left to set up (round-2 board 7): a card on top of Settings. Tokens only. */
+/* The hub's one hero (sx-redesign pick C, 21 Nov 2026): the v1.90 Home card,
+   a faint green wash in one corner, the ring, the next step, one green
+   button. Tokens only. */
 
 .card {
+  position: relative;
   display: grid;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-md);
-  background: var(--sx-accent-soft);
-}
-
-.head {
-  display: flex;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 16px 20px;
+  overflow: hidden;
+  padding: 20px 22px;
+  border-radius: var(--lx-radius-lg);
+  background:
+    radial-gradient(
+      120% 140% at 100% 0%,
+      color-mix(in oklab, var(--lx-home-emerald) 14%, transparent) 0%,
+      transparent 55%
+    ),
+    var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
 }
 
-.head h2 {
+.ring {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+}
+
+.ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.ringTrack,
+.ringFill {
+  fill: none;
+  stroke-width: 7;
+}
+
+.ringTrack {
+  stroke: var(--sx-fill-strong);
+}
+
+.ringFill {
+  stroke: var(--lx-home-emerald);
+  stroke-linecap: round;
+}
+
+.ringWords {
+  display: grid;
+  justify-items: center;
+  line-height: var(--sx-leading-16);
+}
+
+.ringWords b {
+  color: var(--sx-ink);
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-xl);
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.ringWords small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+}
+
+.words {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.words h2 {
   margin: 0;
   color: var(--sx-ink);
-  font-size: var(--sx-text-md);
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-xl);
+  font-weight: 750;
+  line-height: var(--sx-leading-28);
+  letter-spacing: -0.01em;
+}
+
+.words p {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.card[data-done] .words p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nextLabel {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
   font-weight: 600;
 }
 
-.head b {
-  font-weight: 750;
+.next {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  line-height: var(--sx-leading-20);
 }
 
 .ok {
   flex: none;
-  color: var(--sx-accent);
+  color: var(--lx-home-emerald);
 }
 
-.bar {
-  overflow: hidden;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--sx-surface);
-}
-
-.bar > span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--sx-accent);
-}
-
-.todos {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.todo {
-  display: flex;
+/* The screen's one solid green button: v1.90 Home's deep-green pill. */
+.go {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
   min-height: 44px;
-  padding: 0 10px;
-  border-radius: var(--sx-radius-sm);
-  background: var(--sx-surface);
-  color: var(--sx-ink);
+  padding: 0 22px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-home-emerald);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 25%, transparent),
+    0 6px 14px -8px color-mix(in oklab, var(--lx-home-emerald) 70%, transparent);
+  color: var(--sx-surface);
   font-size: var(--sx-text-sm);
-  font-weight: 600;
+  font-weight: 700;
   text-decoration: none;
+  white-space: nowrap;
 }
 
-.todo > span {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
+.go:hover {
+  background: color-mix(in oklab, black 8%, var(--lx-home-emerald));
 }
 
-.todo > svg {
-  flex: none;
-  color: var(--sx-muted);
+.go:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
 }
 
-.todo:hover,
-.todo:focus-visible {
-  outline: 2px solid var(--sx-accent);
-  outline-offset: -2px;
+/* Phones: ring and words side by side, the button full width under them. */
+@media (max-width: 599px) {
+  .card {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 14px;
+    padding: 18px 16px;
+  }
+
+  .ring {
+    width: 68px;
+    height: 68px;
+  }
+
+  .ringWords b {
+    font-size: var(--sx-text-md);
+  }
+
+  .words h2 {
+    font-size: var(--sx-text-md);
+    line-height: var(--sx-leading-24);
+  }
+
+  .go {
+    grid-column: 1 / -1;
+  }
 }
 
-.done {
-  margin: 0;
-  color: var(--sx-ink-2);
-  font-size: var(--sx-text-xs);
+/* Laptop: a roomier hero, the number a little larger. */
+@media (min-width: 900px) {
+  .card {
+    gap: 16px 28px;
+    padding: 24px 28px;
+  }
+
+  .ring {
+    width: 104px;
+    height: 104px;
+  }
+
+  .ringWords b {
+    font-size: var(--sx-text-2xl);
+    line-height: var(--sx-leading-36);
+  }
+
+  .next {
+    font-size: var(--sx-text-md);
+  }
 }

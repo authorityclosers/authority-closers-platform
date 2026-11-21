@@ -43,18 +43,27 @@ export function savedFor(scope: SettingScope, org: string | null): string {
 export function ScopeChip({
   scope,
   org,
+  short = false,
 }: {
   scope: SettingScope;
   /** The organisation's name; read from the workspace when left out. */
   org?: string | null;
+  /**
+   * The tiny chip beside a section's title (sx-redesign, 21 Nov 2026):
+   * "Everyone", "Just me", "This phone"; the full words stay for readers.
+   */
+  short?: boolean;
 }) {
   const here = useOrgName();
+  const words = scopeWords(scope, org === undefined ? here : org);
   return (
     // Its own design-system scope: the chip sits in pages that have none.
-    <span data-pulse-scope="" data-scope={scope}>
-      <Tag hue={HUE[scope]}>
-        {scopeWords(scope, org === undefined ? here : org)}
-      </Tag>
+    <span
+      data-pulse-scope=""
+      data-scope={scope}
+      title={short ? words : undefined}
+    >
+      <Tag hue={HUE[scope]}>{short ? scopeWords(scope, null) : words}</Tag>
     </span>
   );
 }
