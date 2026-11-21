@@ -4,16 +4,20 @@ Lead rules → Auto-reassign promises "new leads move after N minutes without a 
 the move ran only when a manager pressed "Check now" (POST /sweep). This pass runs that
 same sweep every minute, from the API's work-hours loop (``push.run_hours_release``), for
 every workspace that has it switched on. The sweep's own rules hold: new leads only, no
-call yet, not test data, nothing while work hours pause new leads.
+call yet, not test data, nothing while work hours pause new leads, and the guard rails of
+reassign_guard (20 Nov 2026). Each pass logs what it did per workspace.
 """
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+log = logging.getLogger(__name__)
 
 
 async def reassign_due(database: AsyncSession, now: datetime) -> int:
@@ -34,4 +38,8 @@ async def reassign_due(database: AsyncSession, now: datetime) -> int:
             now=now,
         )
         moved += await desk.sweep()
+        if desk.reassign_tally.counts:
+            # Telemetry (reassign_guard): moved, needs_manager_cap/away/nobody, away_skipped,
+            # own_pick, per workspace and pass; ids only.
+            log.info("auto-reassign tenant=%s %s", row.tenant_id, desk.reassign_tally.line())
     return moved

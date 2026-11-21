@@ -115,16 +115,11 @@ def test_auto_reassign_moves_an_uncalled_lead_by_itself(
             lead = await _add(here, "Fictional Uncalled", "98760 81011")
             first_owner = lead["owner_person_id"]
             assert first_owner is not None
-            async with here.setup.sessions() as db, db.begin():
-                await db.execute(
-                    update(Lead)
-                    .where(Lead.id == UUID(lead["lead_id"]))
-                    .values(assigned_at=datetime.now(UTC) - timedelta(minutes=10))
-                )
 
             async def pass_now() -> int:
+                # Six minutes on: past the five below.
                 async with here.setup.sessions() as db, db.begin():
-                    return await reassign.reassign_due(db, datetime.now(UTC))
+                    return await reassign.reassign_due(db, datetime.now(UTC) + timedelta(minutes=6))
 
             # Off: nothing moves.
             assert await pass_now() == 0
@@ -139,6 +134,13 @@ def test_auto_reassign_moves_an_uncalled_lead_by_itself(
                 headers=WRITE,
             )
             assert saved.status_code == 200, saved.text
+            # Only a lead given out after it was switched on moves (Wise Life, 20 Nov 2026).
+            async with here.setup.sessions() as db, db.begin():
+                await db.execute(
+                    update(Lead)
+                    .where(Lead.id == UUID(lead["lead_id"]))
+                    .values(assigned_at=datetime.now(UTC))
+                )
             # On: the minute's pass moves it, with nobody pressing "Check now".
             assert await pass_now() == 1
             stored = await here.stored(lead["lead_id"])

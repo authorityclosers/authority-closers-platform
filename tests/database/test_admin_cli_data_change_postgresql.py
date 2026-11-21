@@ -430,5 +430,9 @@ def test_workspace_lead_rules(postgres_harness: Any, tmp_path: Path) -> None:
             _, cleared, _ = await cli.twice("workspaces", "lead-rules", "--no-split")
             assert cleared["after"]["split"] is None
             assert cleared["after"]["auto_reassign"] is True
+            # "off" switches it off (it only read before, 20 Nov 2026); the rest stays.
+            _, off, _ = await cli.twice("workspaces", "lead-rules", "--auto-reassign", "off")
+            assert off["after"]["auto_reassign"] is False
+            assert off["after"]["reassign_minutes"] == 30
 
     run(exercise())

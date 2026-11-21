@@ -37,6 +37,7 @@ from ac_platform.lead_desk import (
     deletion,
     duplicate_queue,
     owner_words,
+    reassign_guard,
     recording_guard,
     reports,
     routing_rules,
@@ -860,6 +861,8 @@ class LeadDesk:
         # Per routing split, the leads it gave each person, read once and kept current
         # as this request gives more out (an import gives many).
         self._split_given: dict[str, Counter[UUID]] | None = None
+        # What the last auto-reassign sweep did (reassign_guard.Tally; the API logs it).
+        self.reassign_tally = reassign_guard.Tally()
 
     # ----- shared reads --------------------------------------------------------
 
@@ -4652,6 +4655,7 @@ class LeadDesk:
         actor: UUID | None = None,
         prefix: str = "",
         command_id: UUID | None = None,
+        extra: Mapping[str, Any] | None = None,
     ) -> allocation.Allocation:
         _, config = await self.settings()
         hours = work_hours.parse(config)
@@ -4661,7 +4665,14 @@ class LeadDesk:
                 f"{work_hours.opening_words(hours, self.now)}."
             )
             await self._set_owner(
-                lead, None, reason, "hours", actor=actor, kind=kind, command_id=command_id
+                lead,
+                None,
+                reason,
+                "hours",
+                actor=actor,
+                kind=kind,
+                command_id=command_id,
+                extra=extra,
             )
             return allocation.Allocation(None, reason, "hours")
         team = reps if reps is not None else await self._reps()
@@ -4706,6 +4717,7 @@ class LeadDesk:
             kind=kind,
             command_id=command_id,
             split=decision.split,
+            extra=extra,
         )
         if reps is not None and decision.person_id is not None:
             # Keep the caller's load counts current inside a batch import.
@@ -5176,6 +5188,9 @@ class LeadDesk:
         if not (self.viewer.can_manage or lead.owner_person_id == self.viewer.person_id):
             raise DeskError(403, "Only the lead's owner or a manager can add notes.")
         lead.updated_at = self.now
+        if by_app is None and lead.owner_person_id == self.viewer.person_id:
+            # The owner working it: first contact, and auto-reassign stops (reassign_guard).
+            lead.first_contact_at = lead.first_contact_at or self.now
         self._event(
             lead,
             "note",
@@ -5377,6 +5392,8 @@ class LeadDesk:
         if command.template is not None and command.template not in TEMPLATE_KEYS:
             raise DeskError(422, "Pick one of the ready messages.")
         lead.updated_at = self.now
+        # A WhatsApp or SMS from the app is contact: auto-reassign stops (reassign_guard).
+        lead.first_contact_at = lead.first_contact_at or self.now
         self._event(
             lead,
             "message",
@@ -5769,6 +5786,9 @@ class LeadDesk:
         lead.calls += 1
         lead.revision += 1
         lead.updated_at = self.now
+        # A call tap is first contact, with or without a saved result (Wise Life, 20 Nov
+        # 2026: a lead called twice moved as "No call in 30 work minutes"; reassign_guard).
+        lead.first_contact_at = lead.first_contact_at or self.now
         if submission_id is not None:
             lead.last_submission_id = submission_id
         self._event(
@@ -7451,6 +7471,11 @@ class LeadDesk:
         if current != command.expected_revision:
             raise DeskError(409, "Someone changed these settings. Reload and try again.")
         config = {**DEFAULT_SETTINGS, **(row.config if row else {})}
+        # When it was switched on: only leads given out since then move (reassign_guard).
+        if not command.auto_reassign:
+            config.pop(reassign_guard.ENABLED_AT, None)
+        elif not config["auto_reassign"] or reassign_guard.enabled_at(config) is None:
+            config[reassign_guard.ENABLED_AT] = self.now.isoformat()
         config.update(
             auto_reassign=command.auto_reassign, reassign_minutes=command.reassign_minutes
         )
@@ -7699,10 +7724,27 @@ class LeadDesk:
         work hours set, the time is work time (``work_hours.working_minutes``): a lead given
         out at night, or on a day off, starts its clock when work starts (owner, Wise Life,
         19 Nov 2026). Only leads that came in the last ``SWEEP_DAYS`` move: an older one
-        nobody called is a manager's backlog, not a lead to pass round every half hour."""
+        nobody called is a manager's backlog, not a lead to pass round every half hour.
+
+        The guard rails (reassign_guard, Wise Life's first day, 20 Nov 2026): any call,
+        message or owner's note stops the clock; only leads given out since the rule was
+        switched on move; at most two automatic moves a lead a day, never back to someone
+        it left today, never to someone away; after that, or with nobody left, it waits
+        for a manager. ``self.reassign_tally`` keeps what it did."""
+        tally = self.reassign_tally = reassign_guard.Tally()
         _, config = await self.settings()
         hours = work_hours.parse(config)
         if not config["auto_reassign"] or work_hours.paused(hours, self.now):
+            return 0
+        since = reassign_guard.enabled_at(config)
+        if since is None:
+            # Switched on before the switch kept its time: from now on (nothing given out
+            # before moves by itself).
+            row = await self.db.get(LeadDeskSettings, self.tenant_id, with_for_update=True)
+            if row is not None:
+                row.config = {**row.config, reassign_guard.ENABLED_AT: self.now.isoformat()}
+                await self.db.flush()
+            tally.add("enabled_at_set")
             return 0
         minutes = int(config["reassign_minutes"])
         stale = (
@@ -7711,8 +7753,11 @@ class LeadDesk:
                 .where(
                     Lead.tenant_id == self.tenant_id,
                     Lead.stage == "new",
-                    Lead.attempts == 0,
                     Lead.owner_person_id.is_not(None),
+                    # Nobody called, messaged or wrote a note on it (reassign_guard).
+                    reassign_guard.not_contacted(),
+                    # Given out since the rule was switched on: never retroactive.
+                    Lead.assigned_at >= since,
                     # Work time is never more than the time on the clock, so this finds
                     # every lead that may be due; work time decides below.
                     Lead.assigned_at < self.now - timedelta(minutes=minutes),
@@ -7737,17 +7782,132 @@ class LeadDesk:
         if not stale:
             return 0
         reps = await self._reps()
+        moves = await reassign_guard.moves(
+            self.db, self.tenant_id, [lead.id for lead in stale], self._day_start()
+        )
+        away = await reassign_guard.away(
+            self.db,
+            [rep.state.person_id for rep in reps],
+            hours=hours,
+            now=self.now,
+            after_hours=reassign_guard.away_hours(config),
+        )
         moved = 0
-        late = f"No call in {minutes} {'work ' if hours is not None else ''}minutes. "
+        work = "work " if hours is not None else ""
+        late = f"No call in {minutes} {work}minutes. "
+        audit = AuditRepository(self.db)
         for lead in stale:
             owner = lead.owner_person_id
-            decision = await self._allocate(
-                lead,
-                exclude=frozenset({owner}) if owner else frozenset(),
-                reps=reps,
-                kind="reassigned",
-                prefix=late,
+            done = moves[lead.id]
+            if done.own_pick:
+                # Their own lead: they added it or took it for themselves.
+                tally.add("own_pick")
+                continue
+            left = {*done.left_today, *([owner] if owner else [])}
+            free = [
+                rep.state.person_id
+                for rep in reps
+                if rep.state.available
+                and rep.state.person_id not in left
+                and rep.state.person_id not in away
+            ]
+            skipped = sum(
+                rep.state.available
+                and rep.state.person_id not in left
+                and rep.state.person_id in away
+                for rep in reps
             )
-            moved += decision.person_id is not None
+            tally.add("away_skipped", skipped)
+            why = None
+            if done.auto_today >= reassign_guard.HOPS_PER_DAY:
+                why = "cap"
+                reason = (
+                    f"{reassign_guard.NEEDS_MANAGER} no call in {minutes} {work}minutes, and "
+                    f"it moved {done.auto_today} times today by itself."
+                )
+            elif not free:
+                why = "away"
+                reason = (
+                    f"{reassign_guard.NEEDS_MANAGER} no call in {minutes} {work}minutes, and "
+                    "every other seller is away or had it today."
+                )
+            mark = {"auto": reassign_guard.NO_CALL, "hop": done.auto_today + 1}
+            event: LeadEvent | None = None
+            to: UUID | None = None
+            if why is not None:
+                event = await self._set_owner(
+                    lead, None, reason, "manager", kind="reassigned", extra={**mark, "why": why}
+                )
+            else:
+                decision = await self._allocate(
+                    lead,
+                    exclude=frozenset({*left, *away}),
+                    reps=reps,
+                    kind="reassigned",
+                    prefix=late,
+                    extra=mark,
+                )
+                to = decision.person_id
+                if to is None:
+                    why = "nobody"
+            if to is None:
+                await self._ring_managers(lead, event)
+                tally.add(f"needs_manager_{why}")
+            else:
+                moved += 1
+                tally.add("moved")
+            await audit.append(
+                tenant_id=self.tenant_id,
+                actor_person_id=None,
+                actor_type="system",
+                action=reassign_guard.AUDIT_MOVED if to else reassign_guard.AUDIT_WAITING,
+                resource_type=reassign_guard.AUDIT_RESOURCE,
+                resource_id=lead.id,
+                payload={
+                    "from": str(owner) if owner else None,
+                    "to": str(to) if to else None,
+                    "why": why or "no_call",
+                    "minutes": minutes,
+                    "hop": done.auto_today + 1,
+                    "away_skipped": skipped,
+                },
+                reason=(lead.owner_reason or "")[:500] or None,
+                now=self.now,
+            )
         await self.db.flush()
         return moved
+
+    async def _ring_managers(self, lead: Lead, event: LeadEvent | None) -> None:
+        """A lead auto-reassign leaves with no owner: one urgent bell line for each owner,
+        admin and manager (bell.WAITING_HEAR); it goes quiet when someone takes it."""
+        people = (
+            await self.db.scalars(
+                select(Membership.person_id)
+                .where(
+                    Membership.tenant_id == self.tenant_id,
+                    Membership.role.in_(bell.WAITING_HEAR),
+                    Membership.status == "active",
+                    Membership.ended_at.is_(None),
+                )
+                .distinct()
+            )
+        ).all()
+        from ac_platform.product_updates.models import Notification
+
+        name = " ".join(word[:1].upper() + word[1:] for word in lead.name.split()) or "A lead"
+        key = f"lead-needs-manager:{event.id if event is not None else lead.id}:{lead.revision}"
+        for person_id in people:
+            self.db.add(
+                Notification(
+                    id=uuid4(),
+                    person_id=person_id,
+                    tenant_id=lead.tenant_id,
+                    kind=bell.NEW,
+                    dedupe_key=key[:128],
+                    title=f"{name} needs an owner"[:200],
+                    body=(lead.owner_reason or "")[:1000],
+                    href=bell.link(lead.id),
+                    urgent=True,
+                    created_at=self.now,
+                )
+            )
