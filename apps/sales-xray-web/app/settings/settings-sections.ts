@@ -152,7 +152,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     // Owner's round-2 board 4: the team's sound for each moment.
     id: "team-sounds",
     label: "Sounds for everyone",
-    hint: "The team's sound for each moment, and whether sellers pick their own",
+    hint: "The team’s sound for each moment",
     icon: Music2,
     group: "Calls & phones",
     needs: "leads.manage",
@@ -242,7 +242,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     // moment, hear it as you pick; the team's unless you pick your own.
     id: "sounds",
     label: "Sounds & alerts",
-    hint: "A sound for each moment: new lead, call, follow-up, report",
+    hint: "Pick or hear a sound for each moment",
     icon: Music2,
     group: "Just me",
   },

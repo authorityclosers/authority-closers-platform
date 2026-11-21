@@ -15,6 +15,7 @@
 import {
   CalendarClock,
   Check,
+  ChevronRight,
   CircleCheck,
   MessageCircle,
   Pause,
@@ -27,7 +28,7 @@ import {
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { Button, IconTile, Tag, type Hue } from "../ds";
+import { Button } from "../ds";
 import { DsScope } from "../ds/scope";
 import { notify } from "../notice-center";
 import {
@@ -61,14 +62,33 @@ import { soundPicked, soundPreviewed } from "../sounds/telemetry";
 import { savedFor, useOrgName } from "./scope-chip";
 import styles from "./sounds.module.css";
 
-const ICON: Record<SxEventId, { icon: ReactNode; hue: Hue }> = {
-  "sx.incoming_call": { icon: <PhoneIncoming />, hue: "sky" },
-  "sx.new_lead": { icon: <UsersRound />, hue: "green" },
-  "sx.new_message": { icon: <MessageCircle />, hue: "indigo" },
-  "sx.follow_up_due": { icon: <CalendarClock />, hue: "orange" },
-  "sx.report_ready": { icon: <CircleCheck />, hue: "teal" },
-  "sx.upload_failed": { icon: <TriangleAlert />, hue: "pink" },
+// Dark ink icons on one soft neutral tile, as on the Settings hub
+// (sx-redesign judge, 21 Nov 2026: no teal, amber or violet tiles).
+const ICON: Record<SxEventId, { icon: ReactNode }> = {
+  "sx.incoming_call": { icon: <PhoneIncoming size={20} /> },
+  "sx.new_lead": { icon: <UsersRound size={20} /> },
+  "sx.new_message": { icon: <MessageCircle size={20} /> },
+  "sx.follow_up_due": { icon: <CalendarClock size={20} /> },
+  "sx.report_ready": { icon: <CircleCheck size={20} /> },
+  "sx.upload_failed": { icon: <TriangleAlert size={20} /> },
 };
+
+/** One line a row at 390 px: the short names; the sheet keeps the full ones. */
+const SHORT: Partial<Record<SxEventId, string>> = {
+  "sx.new_lead": "New lead",
+  "sx.new_message": "New message",
+  "sx.upload_failed": "Upload problem",
+};
+const shortLabel = (event: { id: SxEventId; label: string }) =>
+  SHORT[event.id] ?? event.label;
+
+function Tile({ id }: { id: SxEventId }) {
+  return (
+    <span className={styles.tile} aria-hidden="true">
+      {ICON[id].icon}
+    </span>
+  );
+}
 
 /** When the picked sound is next heard, in the words of its moment. */
 const NEXT: Record<SxEventId, string> = {
@@ -400,9 +420,6 @@ export function MySounds() {
 
   return (
     <DsScope className={styles.page}>
-      <div className={styles.lead}>
-        <p>Pick a sound for each moment. Tap ▶ to hear it.</p>
-      </div>
       <div className={styles.actions}>
         <Button
           variant="secondary"
@@ -414,13 +431,14 @@ export function MySounds() {
           {running ? "Stop" : "Test all"}
         </Button>
         {view?.manager ? (
-          <Button
+          <Link
             href="/settings/team-sounds"
-            variant="ghost"
+            className={styles.teamLink}
             data-sx-feature="sound_team_open"
           >
             Sounds for everyone
-          </Button>
+            <ChevronRight size={16} aria-hidden="true" />
+          </Link>
         ) : null}
       </div>
       {locked ? (
@@ -442,22 +460,29 @@ export function MySounds() {
               <h2>{group.label}</h2>
               <ul className={styles.card}>
                 {group.rows.map(({ event, row }) => {
-                  const look = ICON[event.id];
                   const body = (
                     <>
-                      <IconTile icon={look.icon} hue={look.hue} size="lg" />
+                      <Tile id={event.id} />
                       <span className={styles.rowText}>
-                        <strong>{event.label}</strong>
-                        <small>{choiceLabel(row.plays)}</small>
-                      </span>
-                      <span className={styles.rowMeta}>
-                        {running === event.id ? (
-                          <Tag hue="green">Playing</Tag>
-                        ) : row.mine ? (
-                          <Tag hue="green">Mine</Tag>
-                        ) : (
-                          <Tag>{team ? "Team default" : "Default"}</Tag>
-                        )}
+                        <strong>{shortLabel(event)}</strong>
+                        {/* The chip sits beside the sound's name, so the
+                            title keeps one line at 390 px. */}
+                        <span className={styles.rowSub}>
+                          <small>{choiceLabel(row.plays)}</small>
+                          {running === event.id ? (
+                            <span className={styles.chip} data-tone="good">
+                              Playing
+                            </span>
+                          ) : row.mine ? (
+                            <span className={styles.chip} data-tone="good">
+                              Mine
+                            </span>
+                          ) : (
+                            <span className={styles.chip}>
+                              {team ? "Team default" : "Default"}
+                            </span>
+                          )}
+                        </span>
                       </span>
                     </>
                   );
@@ -474,9 +499,11 @@ export function MySounds() {
                           onClick={() => setOpen(event.id)}
                         >
                           {body}
-                          <span className={styles.chevron} aria-hidden="true">
-                            ›
-                          </span>
+                          <ChevronRight
+                            size={18}
+                            aria-hidden="true"
+                            className={styles.chevron}
+                          />
                         </button>
                       )}
                     </li>
@@ -487,11 +514,18 @@ export function MySounds() {
           ))}
         </div>
       )}
-      <p className={styles.note}>
-        On some phones (Redmi, Oppo, Samsung) the phone’s own notification
-        settings can change these sounds. If a sound isn’t what you picked,
-        check Sales X-Ray’s notifications in the phone’s settings.
-      </p>
+      {/* Sellers on Android meet this most: a card they see, not small print. */}
+      <aside
+        className={styles.phoneNote}
+        aria-label="Sound not what you picked?"
+      >
+        <strong>Sound not what you picked?</strong>
+        <span>
+          On some phones (Redmi, Oppo, Samsung) the phone’s own notification
+          settings can change these sounds. Check Sales X-Ray’s notifications in
+          the phone’s settings.
+        </span>
+      </aside>
       {openEvent && openRow ? (
         <PickSheet
           key={openEvent.id}
@@ -507,6 +541,20 @@ export function MySounds() {
       ) : null}
     </DsScope>
   );
+}
+
+/** One true line under the switch: it says what the switch does now. */
+export function teamStatus(
+  view: Pick<SoundsView, "sellers_pick" | "own_picks">,
+) {
+  if (!view.sellers_pick) return "Off: everyone hears the sounds below.";
+  const picked =
+    view.own_picks === 0
+      ? "No one has picked their own yet."
+      : view.own_picks === 1
+        ? "1 person picked sounds of their own."
+        : `${view.own_picks} people picked sounds of their own.`;
+  return `On: ${picked} The rest hear the sounds below.`;
 }
 
 /** The team's sounds: Settings › Sounds for everyone (owners, admins, managers). */
@@ -573,17 +621,46 @@ export function TeamSounds() {
 
   return (
     <DsScope className={styles.page}>
-      <div className={styles.lead}>
-        <p>Sellers hear these unless they pick their own.</p>
-      </div>
       {view ? (
-        <p className={styles.count}>
-          {view.own_picks === 0
-            ? "Everyone uses the team’s sounds."
-            : view.own_picks === 1
-              ? "1 person picked sounds of their own."
-              : `${view.own_picks} people picked sounds of their own.`}
-        </p>
+        // The main control first, in its own card, with one status line
+        // that follows it (sx-redesign judge, 21 Nov 2026).
+        <section className={styles.topCard} aria-label="Who picks">
+          <label className={styles.switchRow}>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={view.sellers_pick}
+              aria-label="Sellers can pick their own sounds"
+              className={styles.toggle}
+              disabled={busy}
+              data-sx-feature="team_sound_sellers_pick"
+              onClick={() => void save({}, !view.sellers_pick)}
+            >
+              <span aria-hidden="true" />
+            </button>
+            <span>
+              <strong>Sellers can pick their own sounds</strong>
+              <small>{teamStatus(view)}</small>
+            </span>
+          </label>
+          <button
+            type="button"
+            className={styles.reset}
+            disabled={busy}
+            data-sx-feature="team_sound_reset"
+            onClick={() =>
+              void save(
+                Object.fromEntries(
+                  SX_EVENTS.map((event) => [event.id, event.default]),
+                ),
+                view.sellers_pick,
+              )
+            }
+          >
+            <RotateCcw size={15} aria-hidden="true" />
+            Reset to the app’s sounds
+          </button>
+        </section>
       ) : null}
       {!view ? (
         <RowsReading />
@@ -598,21 +675,20 @@ export function TeamSounds() {
               <h2>{group.label}</h2>
               <ul className={styles.card}>
                 {group.rows.map(({ event }) => {
-                  const look = ICON[event.id];
                   const current = teamOf(event.id);
                   return (
                     <li key={event.id} className={styles.teamRow}>
-                      <IconTile icon={look.icon} hue={look.hue} size="lg" />
+                      <Tile id={event.id} />
                       <strong className={styles.teamLabel}>
-                        {event.label}
+                        {shortLabel(event)}
                       </strong>
                       <span
                         className={styles.teamPick}
                         data-sx-feature="team_sound_pick"
                       >
                         <Picker
-                          title={event.label}
-                          ariaLabel={`Sound for ${event.label}`}
+                          title={shortLabel(event)}
+                          ariaLabel={`Sound for ${shortLabel(event)}`}
                           value={current}
                           disabled={busy}
                           options={[
@@ -649,48 +725,6 @@ export function TeamSounds() {
           ))}
         </div>
       )}
-      {view ? (
-        <div className={styles.teamFoot}>
-          <label className={styles.switchRow}>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={view.sellers_pick}
-              aria-label="Sellers can pick their own sounds"
-              className={styles.toggle}
-              disabled={busy}
-              data-sx-feature="team_sound_sellers_pick"
-              onClick={() => void save({}, !view.sellers_pick)}
-            >
-              <span aria-hidden="true" />
-            </button>
-            <span>
-              <strong>Sellers can pick their own sounds</strong>
-              <small>
-                {view.sellers_pick
-                  ? "On: a seller’s own pick plays on their phone."
-                  : "Off: everyone hears the sounds above."}
-              </small>
-            </span>
-          </label>
-          <Button
-            variant="secondary"
-            icon={<RotateCcw size={16} />}
-            disabled={busy}
-            data-sx-feature="team_sound_reset"
-            onClick={() =>
-              void save(
-                Object.fromEntries(
-                  SX_EVENTS.map((event) => [event.id, event.default]),
-                ),
-                view.sellers_pick,
-              )
-            }
-          >
-            Reset to library default
-          </Button>
-        </div>
-      ) : null}
     </DsScope>
   );
 }

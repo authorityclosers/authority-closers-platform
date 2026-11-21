@@ -115,6 +115,10 @@ it("lists every moment in the library's groups, the team's or mine", async () =>
   expect(host.textContent).toContain("Warm V1 · Success");
   expect(host.textContent).toContain("Mine");
   expect(host.textContent).toContain("Team default");
+  // The phone note is a card with a heading, not small print (sx-redesign).
+  expect(
+    host.querySelector('aside[aria-label="Sound not what you picked?"]'),
+  ).not.toBeNull();
   // Every row is a 44 px tap that opens its picker, with a telemetry name.
   const rows = host.querySelectorAll('button[data-sx-feature="sound_open"]');
   expect(rows).toHaveLength(6);
@@ -127,7 +131,7 @@ it("picks from the sheet: hear it, pick it, Done saves mine and says when it pla
     ...host.querySelectorAll<HTMLButtonElement>(
       'button[data-sx-feature="sound_open"]',
     ),
-  ].find((row) => row.textContent?.includes("New lead given to me"));
+  ].find((row) => row.textContent?.includes("New lead"));
   await act(async () => lead?.click());
   const sheet = document.querySelector("dialog");
   expect(sheet?.textContent).toContain("Glass");
@@ -179,10 +183,12 @@ it("goes back to the team's sound, and locks the rows when sellers can't pick", 
 it("lets the owner set the team's sound per moment, who may pick their own, and reset", async () => {
   mocks.view = view({ manager: true });
   await act(async () => root.render(<TeamSounds />));
-  expect(host.textContent).toContain(
-    "Sellers hear these unless they pick their own.",
+  // One status line that follows the switch, in the top card (sx-redesign).
+  expect(
+    host.querySelector('section[aria-label="Who picks"]')?.textContent,
+  ).toContain(
+    "On: 1 person picked sounds of their own. The rest hear the sounds below.",
   );
-  expect(host.textContent).toContain("1 person picked sounds of their own.");
   expect(
     host.querySelectorAll('[data-sx-feature="team_sound_pick"]'),
   ).toHaveLength(6);
@@ -192,7 +198,7 @@ it("lets the owner set the team's sound per moment, who may pick their own, and 
     host.querySelector<HTMLButtonElement>('button[role="switch"]')?.click(),
   );
   expect(mocks.team.at(-1)).toEqual({ team: {}, sellersPick: false });
-  await act(async () => button("Reset to library default")?.click());
+  await act(async () => button("Reset to the app’s sounds")?.click());
   expect(mocks.team.at(-1)).toEqual(
     expect.objectContaining({
       team: Object.fromEntries(
@@ -203,6 +209,20 @@ it("lets the owner set the team's sound per moment, who may pick their own, and 
   expect(mocks.notify).toHaveBeenCalledWith(
     expect.objectContaining({ title: "Saved for everyone" }),
   );
+});
+
+it("says what the switch does now, and shows short one-line names", async () => {
+  const { teamStatus } = await import("./sounds");
+  expect(teamStatus({ sellers_pick: false, own_picks: 3 })).toBe(
+    "Off: everyone hears the sounds below.",
+  );
+  expect(teamStatus({ sellers_pick: true, own_picks: 0 })).toBe(
+    "On: No one has picked their own yet. The rest hear the sounds below.",
+  );
+  mocks.view = view({ manager: true });
+  await act(async () => root.render(<TeamSounds />));
+  expect(host.textContent).toContain("New lead");
+  expect(host.textContent).not.toContain("given to me");
 });
 
 it("sends a seller to their own sounds from the team's page", async () => {
