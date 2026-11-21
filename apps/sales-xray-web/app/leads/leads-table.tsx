@@ -304,18 +304,20 @@ export function fitColumns<C extends string>(
 // 164 px of name at 22 letters beside its 44 px avatar.
 const NAME_FULL = 228;
 const WIDE_WIDTH: Record<Exclude<Column, "name">, number> = {
-  // "•• 0332" (50 px).
-  phone: 72,
-  // "Meeting Scheduled" (130 px) after its dot.
-  stage: 166,
+  // "•• 0332" whole (it read "•• 10…" at 72; v1.93).
+  phone: 80,
+  // "Meeting Scheduled" (130 px at 14 px, 150 at the table's 15) after its
+  // dot, whole (v1.93: "Meeting Schedul…" at 1440).
+  stage: 184,
   pipeline: 120,
   // An avatar and a first name ("Sneha", 70 px); a long one ends in "…".
   owner: 96,
   // "Website" beside its mark.
   source: 100,
   // "Yesterday" in bold (69 px).
-  next: 92,
-  last: 132,
+  next: 100,
+  // "Out of coverage · 6 calls" whole (v1.93: "Did not pick · 1 …" at 1440).
+  last: 208,
   age: 84,
   contact: 108,
   reason: 124,
@@ -323,9 +325,11 @@ const WIDE_WIDTH: Record<Exclude<Column, "name">, number> = {
 };
 /** A whole number ("+91 98765 43210") rather than its last four digits. */
 const WIDE_PHONE_FULL = 128;
+// Created goes before Last call (v1.93: an owner's 1440 table lost Last call,
+// the column a caller reads, to keep Created).
 const DROP_FIRST: Column[] = [
-  "last",
   "created",
+  "last",
   "contact",
   "age",
   "reason",

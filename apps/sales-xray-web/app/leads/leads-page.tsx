@@ -2546,13 +2546,18 @@ export function LeadsRoute({
                   the list's first lead, in a band above the tab bar; an empty
                   view has none. */}
               {/* It holds its place while the list loads, and hides only on a
-                  known zero (Leads part 05; L1's empty rule). */}
-              {(
-                workView === "all"
-                  ? (bandCount ?? 0) > 0
-                  : !!topLead || bandCount !== 0
-              ) ? (
+                  known zero (Leads part 05; L1's empty rule). v1.93 (round-2
+                  board 3, option C): it never offers someone else's lead, so
+                  an owner viewing the team's list has none (their own list,
+                  or "Assigned to" themselves, keeps it); and with a lead open
+                  beside the list, that lead's own Call is the one green. */}
+              {(workView === "all"
+                ? (bandCount ?? 0) > 0
+                : !!topLead || bandCount !== 0) &&
+              !(paneShown && shownLead) &&
+              (scope === "mine" || sellerOwner === desk.me.person_id) ? (
                 <CallBand
+                  className={styles.listBand}
                   side={side}
                   view={callNextView(workView)}
                   disabled={finding}

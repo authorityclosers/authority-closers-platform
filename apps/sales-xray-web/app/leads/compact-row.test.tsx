@@ -122,7 +122,7 @@ it("leads line 2 with the stage's dot and draws WhatsApp in one colour", async (
   ).toBe("var(--sx-line-strong)");
 });
 
-it("says a passed follow-up is late in words: Late · was due …", () => {
+it("says a passed follow-up is late in words: Late · yesterday 7:36 pm", () => {
   const now = new Date("2026-11-08T06:30:00Z");
   const due = { ...row, why: "Call back", why_kind: "due" } as LeadRow;
   const today = stepLine(
@@ -130,14 +130,15 @@ it("says a passed follow-up is late in words: Late · was due …", () => {
     now,
   );
   expect(today.late).toBe(true);
-  expect(today.text).toMatch(/^was due \d/);
+  // v1.93: short enough for one line at 390 ("was due" went).
+  expect(today.text).toMatch(/^today \d/);
   const before = stepLine(
     { ...due, next_action_at: "2026-11-07T03:30:00Z" } as LeadRow,
     now,
   );
   expect(before).toEqual({
     late: true,
-    text: expect.stringMatching(/^was due yesterday /),
+    text: expect.stringMatching(/^yesterday \d/),
   });
   // Before yesterday: the day alone, no time, so it stays on one line.
   const older = stepLine(
@@ -146,7 +147,10 @@ it("says a passed follow-up is late in words: Late · was due …", () => {
   );
   expect(older.late).toBe(true);
   expect(older.text).toBe(
-    `was due ${new Date("2026-10-31T02:03:00Z").toLocaleDateString(undefined, { day: "numeric", month: "short" })}`,
+    new Date("2026-10-31T02:03:00Z").toLocaleDateString(undefined, {
+      day: "numeric",
+      month: "short",
+    }),
   );
   expect(older.text).not.toMatch(/\d:\d\d/);
   // Still to come, a missed call and a closed lead are never "Late".
@@ -216,13 +220,21 @@ it("adds the owner for a team's list, and keeps the full card elsewhere", async 
       </ul>,
     ),
   );
-  // Part 01 (15 Nov 2026): line 2 is the stage and source; the owner its own line.
-  expect(host.querySelector('[class*="leadSub"]')?.textContent).toBe(
-    "Interested · Website",
+  // Part 01 (15 Nov 2026): line 2 is the stage and source; the owner its own
+  // line on a phone. v1.93: from 600 px the owner's first name ends line 2
+  // instead (CSS shows one or the other), and the age follows the words.
+  expect(host.querySelector('[class*="leadSubWords"]')?.textContent).toBe(
+    "Interested · Website · Fictional",
+  );
+  expect(host.querySelector('[class*="leadOwnerWord"]')?.textContent).toBe(
+    " · Fictional",
   );
   expect(host.querySelector('[class*="leadOwnerLine"]')?.textContent).toBe(
     "Owner: Fictional Seller",
   );
+  expect(
+    host.querySelector('[class*="leadSub"] > [data-lead-age]')?.textContent,
+  ).toMatch(/^· /);
   await act(async () =>
     root.render(
       <ul>
@@ -265,12 +277,13 @@ it("turns the next action red only when truly late, and never on a seller's Cold
   expect(tone()).toBe("bad");
   // The word says it too, in 500, before the time it was due.
   const why = host.querySelector('[class*="leadWhy"]')!;
-  expect(why.textContent).toMatch(/^Late · was due /);
+  // v1.93: the day alone, no "was due" (one line at 390).
+  expect(why.textContent).toMatch(/^Late · (?!was )\S/);
   expect(why.querySelector('[class*="lateWord"]')?.textContent).toBe("Late");
   await show(late, true);
   expect(tone()).toBeNull();
   expect(host.querySelector('[class*="leadWhy"]')!.textContent).toMatch(
-    /^Late · was due /,
+    /^Late · /,
   );
   await show({ ...late, next_action_at: "2099-01-01T04:00:00Z" } as LeadRow);
   expect(tone()).toBeNull();
@@ -367,7 +380,7 @@ it("puts a new Inbound enquiry's wait on its last line, quiet", async () => {
   } as LeadRow;
   const why = () => host.querySelector('[class*="leadWhy"]')!;
   await show(fresh);
-  expect(host.querySelector('[class*="leadSub"]')!.textContent).toBe(
+  expect(host.querySelector('[class*="leadSubWords"]')!.textContent).toBe(
     "New Lead · Website",
   );
   expect(why().textContent).toBe("Waiting 12 min");

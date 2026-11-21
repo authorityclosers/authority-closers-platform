@@ -280,7 +280,7 @@ it("fits Name and the key columns to the pane's width", () => {
 
 // Pick M2-A at 1280 (17 Nov 2026: "Akash Jadh", "New Lea"): every name and
 // stage word whole; the lowest-value columns go first where the pane is short.
-it("keeps a whole name in a computer's pane, dropping Last call, then Created", () => {
+it("keeps a whole name in a computer's pane, dropping Created, then Last call", () => {
   const all = [
     "name",
     "phone",
@@ -292,9 +292,21 @@ it("keeps a whole name in a computer's pane, dropping Last call, then Created", 
     "created",
   ] as const;
   expect(wideColumns(0, all, true)).toEqual([...all]);
-  // 1440 x 900 beside the sidebar: every column.
-  expect(wideColumns(1042, all, true)).toEqual([...all]);
-  // 1280 x 800: 882 px, Last call goes.
+  // 1440 x 900 beside the sidebar: Stage and Last call whole (v1.93), so
+  // Created goes for an owner's ticks and Owner column.
+  expect(wideColumns(1042, all, true)).toEqual([
+    "name",
+    "phone",
+    "stage",
+    "owner",
+    "source",
+    "next",
+    "last",
+  ]);
+  // A seller's (no ticks, no Owner): every column.
+  const mine = all.filter((column) => column !== "owner");
+  expect(wideColumns(1042, mine, false)).toEqual([...mine]);
+  // 1280 x 800: 882 px, Last call goes too.
   expect(wideColumns(882, all, true)).toEqual([
     "name",
     "phone",
@@ -302,17 +314,15 @@ it("keeps a whole name in a computer's pane, dropping Last call, then Created", 
     "owner",
     "source",
     "next",
-    "created",
   ]);
-  // 1100 x 800: 708 px, then Created and Source.
+  // 1100 x 800: 708 px, then Source and Phone.
   expect(wideColumns(708, all, true)).toEqual([
     "name",
-    "phone",
     "stage",
     "owner",
     "next",
   ]);
-  // Narrower still: Phone, then Owner.
+  // Narrower still: Owner.
   expect(wideColumns(620, all, true)).toEqual(["name", "stage", "next"]);
   // Whole numbers take more room than the last four digits.
   expect(wideColumns(882, all, true, true)).not.toContain("created");

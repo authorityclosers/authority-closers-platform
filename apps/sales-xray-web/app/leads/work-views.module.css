@@ -176,9 +176,10 @@
   padding: 0 4px;
   place-items: center;
   border-radius: var(--sx-radius-pill);
-  background: var(--sx-accent);
+  /* Home's deep green, never the teal accent (turquoise in dark; v1.93). */
+  background: var(--lx-home-primary);
   box-shadow: 0 0 0 2px var(--sx-paper);
-  color: var(--sx-accent-ink);
+  color: var(--sx-gloss-ink);
   font-size: min(var(--sx-text-2xs), 11px);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -644,4 +645,64 @@
   .callBandWho {
     animation: none;
   }
+}
+
+/* ---------- v1.93 (round-2 board 3, option C; owner 22 Nov 2026): the stage
+   chip row. ---------- */
+
+/* The defaults, "All stages" and "Any day", read as plain chips: no tick, no
+   tint (they looked like filters that were on). A date picked is on, tinted;
+   it is also in the row of filters that are on, with Clear. The stage picked
+   keeps its tick. Tints are Home's green in both themes, never the teal. */
+.headStage [role="group"] > [data-variant="chip"] > button[data-current] {
+  border-color: var(--sx-line);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font-weight: 400;
+}
+
+.headStage
+  [role="group"]
+  > [data-variant="chip"]
+  > button[data-current]
+  > svg:not(:last-child) {
+  display: none;
+}
+
+.headStage
+  [role="group"]
+  > [data-variant="chip"]:not(:first-child)
+  > button:not([data-current]),
+.headStage [role="group"] > button[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-tone-good);
+  font-weight: 500;
+}
+
+/* The row stops where the pinned end (List | Table, Filter) starts, so its
+   own fade shows instead of a chip chopped under them, and the last chip
+   scrolls fully clear of the fade. */
+.headStage [role="group"] {
+  margin-right: 24px;
+}
+
+.headStage [role="group"][data-more] {
+  mask-image: linear-gradient(
+    90deg,
+    var(--less, black),
+    black 28px,
+    black calc(100% - 48px),
+    transparent
+  );
+}
+
+.headStage [role="group"]::after {
+  width: 40px;
+}
+
+/* The chosen work view's bar in Home's green: deep in light, its mint ink in
+   dark, never the turquoise accent (v1.93). */
+.head [role="tablist"][aria-label="Work views"] [aria-selected="true"]::after {
+  background: var(--sx-primary-ink);
 }
