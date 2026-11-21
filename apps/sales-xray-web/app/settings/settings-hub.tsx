@@ -53,6 +53,7 @@ import {
   type SettingsSectionId,
 } from "./settings-sections";
 import { SetupHero, useSetup, type SetupFacts } from "./setup-checklist";
+import { ThemePills } from "./theme-pills";
 import styles from "./settings-hub.module.css";
 
 /**
@@ -190,6 +191,8 @@ function OwnerHub() {
   );
   const mine = groups.filter(({ group }) => PERSONAL_GROUPS.includes(group));
   const mineSections = mine.flatMap(({ sections }) => sections);
+  const phoneSections =
+    mine.find(({ group }) => group === "This phone")?.sections ?? [];
   return (
     <>
       <SetupHero setup={setup} />
@@ -211,12 +214,20 @@ function OwnerHub() {
       {mineSections.length > 0 ? (
         <section className={styles.block} aria-label="Just me">
           <Label>Just me</Label>
+          {/* Two cards, so a laptop's row is never a lone half (judge, 21 Nov 2026). */}
           <div className={styles.grid}>
             <GroupCard
               group="Just me"
               sections={mineSections}
-              line={GROUP_LINE["Just me"]}
+              line="Profile, sounds, sign-in"
             />
+            {phoneSections.length > 0 ? (
+              <GroupCard
+                group="This phone"
+                sections={phoneSections}
+                line={GROUP_LINE["This phone"]}
+              />
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -289,40 +300,17 @@ function Rows({
   );
 }
 
-/** Light or Dark, as v1.90 Home's pills: the picked one solid deep green. */
+/** The Look row: Light or Dark. */
 export function LookRow() {
   const theme = useTheme();
   if (!theme) return null;
-  const current = theme.preference === "dark" ? "dark" : "light";
-  const options = [
-    { id: "light", label: "Light", icon: Sun },
-    { id: "dark", label: "Dark", icon: Moon },
-  ] as const;
   return (
     <li className={styles.look}>
-      <IconTile icon={current === "dark" ? Moon : Sun} />
+      <IconTile icon={theme.preference === "dark" ? Moon : Sun} />
       <span className={styles.rowName} id="settings-look">
         Look
       </span>
-      <span
-        className={styles.pills}
-        role="radiogroup"
-        aria-labelledby="settings-look"
-      >
-        {options.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            role="radio"
-            aria-checked={current === id}
-            className={styles.pill}
-            onClick={() => theme.setPreference(id)}
-          >
-            <Icon size={15} aria-hidden="true" />
-            {label}
-          </button>
-        ))}
-      </span>
+      <ThemePills labelledBy="settings-look" />
     </li>
   );
 }

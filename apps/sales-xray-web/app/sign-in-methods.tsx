@@ -545,7 +545,7 @@ export function SignInMethods({ active }: { active: boolean }) {
             {method.kind === "pulse" ? (
               <PulseTile size={36} />
             ) : (
-              <BrandTile {...TILES[method.kind]} size={36} />
+              <BrandTile {...TILES[method.kind]} size={36} tone="ink" />
             )}
             <div className={styles.rowText}>
               <span className={styles.rowLabel}>{method.label}</span>
