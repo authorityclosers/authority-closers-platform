@@ -8,7 +8,6 @@ import { AcquisitionShell } from "../../acquisition-shell";
 import { Empty } from "../../ui/kit";
 import { useWorkspaceAccess } from "../../workspace-access";
 import { useCanHere } from "../../workspace-role";
-import { OrgHubFrame } from "../org-hub";
 import { filtersFrom, type Filters, type View } from "./insights-data";
 import {
   InsightsSkeleton,
@@ -64,7 +63,10 @@ export function InsightsPage({
       active="insights"
       mobileFit={false}
     >
-      <OrgHubFrame current="insights">
+      {/* No organisation row or hub tabs here: they repeated "Insights" and
+          were cut on tablets (sx-redesign judge, 21 Nov 2026); the sidebar
+          and the top bar say where you are. */}
+      <>
         {!seesTeam ? (
           <Empty
             icon={Lock}
@@ -89,7 +91,7 @@ export function InsightsPage({
         ) : (
           <InsightsSkeleton />
         )}
-      </OrgHubFrame>
+      </>
     </AcquisitionShell>
   );
 }
