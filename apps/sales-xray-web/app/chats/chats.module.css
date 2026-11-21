@@ -2200,3 +2200,15 @@
   background: var(--sx-fill);
   color: var(--lx-ink);
 }
+
+/* Readability gate (wb-ci, 21 Nov 2026): a channel mark's monogram stays
+   inside its circle, never running into the row below. */
+.channelMark {
+  overflow: hidden;
+  line-height: 1;
+}
+
+.chatAvatar > .channelMark {
+  right: -2px;
+  bottom: -2px;
+}
