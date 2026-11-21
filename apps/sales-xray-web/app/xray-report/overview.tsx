@@ -2,7 +2,6 @@
 
 import {
   AudioLines,
-  ChartPie,
   Check,
   CircleCheck,
   CircleHelp,
@@ -640,7 +639,7 @@ export function OverviewScore({
               <ScoreRing value={score?.value ?? null} />
               <div className={styles.heroWords}>
                 <span className={styles.eyebrow}>
-                  Overall Score{" "}
+                  Overall score{" "}
                   {view.illustrative ? (
                     <Illustrative />
                   ) : view.aiDraft && score ? (
@@ -688,38 +687,32 @@ export function OverviewScore({
           >
             <Info aria-hidden="true" />
             <span className={styles.tip} role="tooltip">
-              Counted from the recording and its transcript, not guessed: how
-              long the call ran, who talked how much, questions each side asked,
-              and the longest stretch you spoke without a break.
+              Counted from the recording and its transcript, not guessed: who
+              talked how much, questions each side asked, and the longest
+              stretch you spoke without a break. The call&rsquo;s length is
+              beside its name.
             </span>
           </button>
         </div>
         <div className={styles.stats}>
           <StatCard
-            icon={<ChartPie />}
-            tone={styles.blue}
-            label="Call Duration"
-            stat={stats.duration}
-            missing="Length not known"
-          />
-          <StatCard
             icon={<MessagesSquare />}
             tone={styles.green}
-            label="Talk Share"
+            label="Talk share"
             stat={stats.talk}
             missing="Mark who is who on the call map"
           />
           <StatCard
             icon={<CircleHelp />}
             tone={styles.amber}
-            label="Questions Asked"
+            label="Questions asked"
             stat={stats.questions}
             missing="Mark who is who on the call map"
           />
           <StatCard
             icon={<AudioLines />}
             tone={styles.purple}
-            label="Longest Turn"
+            label="Longest turn"
             stat={stats.longest}
             missing="Mark who is who on the call map"
           />

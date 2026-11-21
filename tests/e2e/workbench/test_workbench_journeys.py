@@ -6576,7 +6576,7 @@ def test_fixture_report_15oct_structure(browser: Browser, viewport: tuple[int, s
         capture(score.locator(":scope > div").first, "overview-score")
         stats = score.get_by_role("heading", name="Call Statistics", exact=True)
         capture(stats.locator(".."), "overview-statistics")
-        for words in ("Call Duration", "Talk Share", "Questions Asked", "Longest Turn"):
+        for words in ("Talk share", "Questions asked", "Longest turn"):
             expect(score).to_contain_text(words)
         about = score.get_by_role("button", name="About these numbers", exact=True)
         center(about)

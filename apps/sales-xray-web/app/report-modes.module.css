@@ -1691,3 +1691,35 @@
   svg {
   color: inherit;
 }
+
+/* Tablets as phones (judge round, 21 Nov 2026): below the computer's top bar
+   the Report is one switch, Report · Prospect · Coaching, and its parts
+   follow each other down the page with no second row of part tabs; the first
+   part's numbered name stays for screen readers only. */
+@media (min-width: 761px) and (max-width: 899.98px) {
+  .workspace[data-view="story"]:has([data-xray-part])
+    .navRow:not([data-placement="toolbar"])
+    .contents,
+  .workspace[data-view="coaching"]
+    .navRow:not([data-placement="toolbar"])
+    .contents {
+    display: none;
+  }
+  .workspace[data-view="story"]:has([data-xray-part])
+    .navRow.navRow:not([data-placement="toolbar"]),
+  .workspace[data-view="coaching"]
+    .navRow.navRow:not([data-placement="toolbar"]) {
+    position: static;
+  }
+  .workspace[data-view="story"]:has([data-xray-part])
+    .section:first-child
+    > header:first-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

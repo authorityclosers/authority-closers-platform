@@ -1214,3 +1214,31 @@
     font-size: var(--sx-text-sm);
   }
 }
+
+/* Whose call (an owner's view): beside the length on a wider screen; on a
+   phone it leads the chip row, so the length and time stay on one line. */
+.chipOwner {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  line-height: var(--sx-leading-20);
+}
+
+@media (min-width: 600px) {
+  .chipOwner {
+    display: none;
+  }
+}
+
+@media (max-width: 599px) {
+  .metaOwner {
+    display: none;
+  }
+}
+
+/* A computer: the chips sit beside Save, not in the middle of the row. */
+@media (min-width: 1024px) {
+  .rowChips {
+    justify-content: flex-end;
+  }
+}

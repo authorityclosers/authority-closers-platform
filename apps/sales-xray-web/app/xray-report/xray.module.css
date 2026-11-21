@@ -2216,3 +2216,47 @@
     line-height: var(--sx-leading-24);
   }
 }
+/* Judge round (21 Nov 2026): three numbers (the length is beside the call's
+   name, once), each with a dark ink icon in a soft tile. */
+.scoreCard .stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.scoreCard .stat .disc {
+  background: color-mix(in oklab, var(--lx-ink) 7%, var(--lx-elevated));
+  border-radius: 10px;
+  color: var(--lx-ink);
+}
+@media (max-width: 760px) {
+  .scoreCard .stats {
+    gap: 8px;
+  }
+  .scoreCard .stat {
+    padding: 10px;
+  }
+  .scoreCard .statSub {
+    display: none;
+  }
+}
+/* The report's lower parts in the same family (judge round, 21 Nov 2026):
+   Home's tile radius, dark ink icons in soft tiles (the outcome's own card
+   keeps its meaning colour), and the follow-up date as a soft chip. */
+.card {
+  border-radius: var(--sx-tile-radius);
+}
+.outcomeCard:not(.tinted) .disc,
+.listCard .disc {
+  background: color-mix(in oklab, var(--lx-ink) 7%, var(--lx-elevated));
+  border-radius: 12px;
+  color: var(--lx-ink);
+  height: 40px;
+  width: 40px;
+}
+.outcomeCard:not(.tinted) .disc svg,
+.listCard .disc svg {
+  height: 20px;
+  width: 20px;
+}
+.outcomeCard .pill.solid {
+  background: var(--tone-soft);
+  color: var(--tone);
+}

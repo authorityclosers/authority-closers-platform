@@ -3672,3 +3672,20 @@
 .reportMenuSupport[data-tone="danger"] {
   color: var(--lx-danger);
 }
+
+/* The report fills the window on a computer (judge round, 21 Nov 2026): the
+   shell's main keeps room at its end for a corner notice, which on a page
+   that scrolls itself is right, but the report scrolls inside its own pane,
+   so that room cut the pane off with a blank band below. The pane now runs
+   to the bottom and keeps the room inside, after the report's last line. */
+@media (min-width: 900px) {
+  :global(main):has(> * > .app[data-stage="report"]) {
+    padding-bottom: 0;
+  }
+  .app.app[data-stage="report"] :global(.studio-main) {
+    padding-bottom: max(
+      24px,
+      calc(max(var(--sx-corner-h, 0px), var(--sx-guide-h, 0px)) + 16px)
+    );
+  }
+}

@@ -910,10 +910,17 @@ function CallRow({
         </h3>
         <span className={styles.rowMeta}>
           {lengthWords(row.durationSeconds)} · {clockWords(row, dates)}
-          {row.owner ? ` · ${row.owner}` : ""}
+          {row.owner ? (
+            <span className={styles.metaOwner}> · {row.owner}</span>
+          ) : null}
         </span>
       </span>
       <span className={styles.rowChips}>
+        {row.owner ? (
+          <span className={styles.chipOwner} title={row.owner}>
+            {row.owner.split(" ")[0]}
+          </span>
+        ) : null}
         {outcome ? (
           <span className={styles.word} data-tone={outcome.tone}>
             {outcome.word}
