@@ -1,18 +1,24 @@
 /* The wrap-up screen after a call (round-2 board 1, option B, 20 Nov 2026).
    A phone: the whole screen, over the lead page and the tab bar. A computer:
-   a centred card over a dimmed page. Tokens only; the four answers wear the
-   app's own result colours (talked, missed, warning, danger). */
+   a centred white card (radius 22) over a dimmed page. Tokens only; the four
+   answers wear the app's own result colours (talked, missed, warning, danger).
+   v1.93 (22 Nov 2026): one surface, white in light and the card colour in
+   dark, under everything, the Save row included (--wrap-bg), and the
+   family's deep green for the one main button. */
 .scrim {
   position: fixed;
   z-index: 70;
   inset: 0;
   display: flex;
   justify-content: center;
-  background: var(--sx-paper);
+  background: var(--sx-surface);
   overscroll-behavior: contain;
 }
 
 .screen {
+  --wrap-pad: 16px;
+  --wrap-bg: var(--sx-surface);
+
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -21,9 +27,10 @@
   min-width: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: calc(env(safe-area-inset-top, 0px) + 8px) 16px
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) var(--wrap-pad)
     calc(env(safe-area-inset-bottom, 0px) + 16px);
   box-sizing: border-box;
+  background: var(--wrap-bg);
   color: var(--sx-ink);
 }
 
@@ -35,11 +42,12 @@
   }
 
   .screen {
+    --wrap-pad: 24px;
+
     max-height: calc(100dvh - 48px);
-    padding: 20px 24px 24px;
+    padding: 20px var(--wrap-pad) 24px;
     border: 1px solid var(--sx-line);
-    border-radius: var(--lx-radius-lg);
-    background: var(--sx-paper);
+    border-radius: var(--sx-tile-radius, 22px);
     box-shadow: var(--lx-shadow-2);
   }
 }
@@ -76,7 +84,12 @@
 .didntCall:focus-visible,
 .back:focus-visible,
 .primary:focus-visible,
-.secondary:focus-visible {
+.secondary:focus-visible,
+.next:focus-visible,
+.chip:focus-visible,
+.moreStages:focus-visible,
+.save:focus-visible,
+.timeInput:focus-visible + .timeFace {
   outline: none;
   box-shadow: var(--sx-focus-ring);
 }
@@ -113,6 +126,12 @@
   box-shadow: none;
 }
 
+/* The wrap-up never wears the lead card's "asks first" ring. */
+.screenCard[data-attention] {
+  border: 0;
+  box-shadow: none;
+}
+
 .title {
   margin: 4px 0 0;
   font-size: var(--sx-text-xl);
@@ -120,6 +139,8 @@
   line-height: var(--sx-leading-28);
   overflow-wrap: anywhere;
 }
+
+/* ---------- Step 1: four big answers ---------- */
 
 .tiles {
   display: grid;
@@ -136,7 +157,7 @@
   min-height: 120px;
   padding: 16px;
   border: 1px solid var(--sx-line-strong);
-  border-radius: var(--lx-radius-lg);
+  border-radius: var(--sx-tile-radius, 22px);
   background: var(--sx-surface);
   color: var(--sx-ink);
   font: inherit;
@@ -157,47 +178,53 @@
   transform: scale(0.98);
 }
 
+/* Each answer's faint wash and an edge of the same family: no answer wears a
+   stronger edge than the others (v1.93: Busy's was the full amber). */
 .tile[data-tone="good"] {
-  border-color: var(--lx-strength-edge);
-  background: var(--lx-strength-soft);
-  color: var(--lx-strength-ink);
+  border-color: color-mix(in oklab, var(--sx-tone-good) 22%, var(--sx-surface));
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-tone-good);
 }
 
 .tile[data-tone="info"] {
-  border-color: var(--lx-missed-edge);
+  border-color: color-mix(
+    in oklab,
+    var(--lx-closing-ink) 22%,
+    var(--sx-surface)
+  );
   background: var(--lx-closing-soft);
   color: var(--lx-closing-ink);
 }
 
 .tile[data-tone="later"] {
-  border-color: var(--sx-warn);
+  border-color: color-mix(in oklab, var(--lx-warning) 22%, var(--sx-surface));
   background: var(--lx-warning-soft);
   color: var(--lx-warning);
 }
 
 .tile[data-tone="bad"] {
-  border-color: var(--lx-danger-edge);
+  border-color: color-mix(in oklab, var(--lx-danger) 22%, var(--sx-surface));
   background: var(--lx-danger-soft);
   color: var(--lx-danger);
 }
 
-.other {
-  justify-self: center;
-  min-height: 44px;
-  padding: 0 12px;
-  border: 0;
-  background: none;
-  color: var(--sx-accent);
-  font: inherit;
-  font-size: var(--sx-text-sm);
-  font-weight: 600;
-  cursor: pointer;
+/* "Something else happened" and "I didn't call": two equal outline buttons
+   under the four answers, the same height and shape. */
+.otherRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
+.otherRow > :only-child {
+  grid-column: 1 / -1;
+}
+
+.other,
 .didntCall {
   width: 100%;
   min-height: 52px;
-  padding: 0 16px;
+  padding: 0 12px;
   border: 1px solid var(--sx-line-strong);
   border-radius: var(--sx-radius-pill);
   background: var(--sx-surface);
@@ -205,16 +232,49 @@
   font: inherit;
   font-size: var(--sx-text-md);
   font-weight: 650;
+  line-height: var(--sx-leading-20);
   cursor: pointer;
 }
 
+.other {
+  color: var(--sx-ink-2);
+  font-weight: 600;
+}
+
+/* ---------- Where the wrap-up is: "Step 2 of 2", two segments ---------- */
+
 .stepBar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 8px 12px;
   min-width: 0;
 }
 
+.stepCount {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.progress {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.progress i {
+  height: 4px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-line);
+}
+
+.progress i[data-done] {
+  background: var(--sx-primary-ink);
+}
+
+/* The way back when no frame holds it (the frame's chevron, otherwise). */
 .back {
   display: inline-grid;
   flex: none;
@@ -229,14 +289,7 @@
   cursor: pointer;
 }
 
-.stepCount {
-  color: var(--sx-muted);
-  font-size: var(--sx-text-sm);
-  font-weight: 600;
-}
-
 .answer {
-  margin-left: auto;
   padding: 4px 12px;
   border-radius: var(--sx-radius-pill);
   font-size: var(--sx-text-sm);
@@ -245,8 +298,8 @@
 }
 
 .answer[data-tone="good"] {
-  background: var(--lx-strength-soft);
-  color: var(--lx-strength-ink);
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-tone-good);
 }
 
 .answer[data-tone="info"] {
@@ -264,7 +317,255 @@
   color: var(--lx-danger);
 }
 
-/* Saved: where the lead went, the report on its way, Call next lead. */
+/* ---------- Step 2: one group of next steps ---------- */
+
+.nexts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.next {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: 18px;
+  background: color-mix(in oklab, var(--sx-ink) 3%, var(--sx-surface));
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+  line-height: var(--sx-leading-20);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.next > span:last-child {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+/* Dark ink line icon in a soft grey tile. */
+.nextIcon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--sx-ink) 7%, var(--sx-surface));
+  color: var(--sx-ink);
+}
+
+/* Chosen: the deep green ring and a pale green wash. */
+.next[aria-pressed="true"] {
+  border-color: var(--sx-primary-ink);
+  background: var(--sx-tone-good-soft);
+  box-shadow: inset 0 0 0 1px var(--sx-primary-ink);
+  color: var(--sx-primary-ink);
+}
+
+.next[aria-pressed="true"] .nextIcon {
+  background: var(--sx-surface);
+  color: var(--sx-primary-ink);
+}
+
+/* "Change stage": the organisation's other stages, one tap down. */
+.moreStages {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  margin: -6px 0 -6px -4px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: none;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--sx-line-strong);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* ---------- The follow-up time: a field, three quick chips ---------- */
+
+.time {
+  display: grid;
+  gap: 10px;
+}
+
+.timeLabel {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+/* The field shows the time in words; the real date-time input lies over it,
+   so a tap opens the phone's own picker. */
+.timeField {
+  position: relative;
+  min-width: 0;
+}
+
+.timeFace {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 0 16px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: 16px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+}
+
+.timeFace > svg {
+  flex: none;
+  color: var(--sx-ink-2);
+}
+
+.timeFace > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeFace[data-auto] > span {
+  color: var(--sx-ink-2);
+  font-weight: 500;
+}
+
+.timeInput {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--sx-primary-ink);
+  color: var(--sx-primary-ink);
+}
+
+.timeNote {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+/* "What did they say?": a white field, a hairline, radius 14, 72 px tall. */
+.note textarea {
+  min-height: 72px;
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: 14px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  resize: vertical;
+}
+
+/* ---------- Save: the one solid deep green, on the screen's own colour ---------- */
+
+/* Sticky at the screen's foot, edge to edge, the same colour as the screen:
+   never an inset box of another colour (v1.93, light and dark). */
+.saveRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  position: sticky;
+  bottom: calc(-1 * (env(safe-area-inset-bottom, 0px) + 16px));
+  z-index: 2;
+  margin: 0 calc(-1 * var(--wrap-pad))
+    calc(-1 * (env(safe-area-inset-bottom, 0px) + 16px));
+  padding: 12px var(--wrap-pad) calc(env(safe-area-inset-bottom, 0px) + 16px);
+  border-top: 1px solid var(--sx-line);
+  background: var(--wrap-bg);
+  box-shadow: none;
+}
+
+@media (min-width: 760px) {
+  .saveRow {
+    bottom: -24px;
+    margin-bottom: -24px;
+    padding-bottom: 24px;
+  }
+}
+
+.saveRow > :only-child {
+  grid-column: 1 / -1;
+}
+
+.save {
+  width: 100%;
+  min-height: 56px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.save:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.save[data-pressed]:not(:disabled) {
+  transform: var(--sx-press-sink);
+}
+
+/* The message button beside Save stays a quiet outline. */
+.saveRow > button:not(.save) {
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+}
+
+/* ---------- Saved: where the lead went, the report on its way, Call next lead ---------- */
+
 .done {
   display: grid;
   justify-items: center;
@@ -274,7 +575,7 @@
 }
 
 .doneMark {
-  color: var(--lx-strength-ink);
+  color: var(--sx-primary-ink);
 }
 
 .doneTitle {
@@ -289,27 +590,89 @@
   font-size: var(--sx-text-md);
 }
 
+/* A calm card: a soft green wash, the ink dark, its steps ticked as known. */
 .report {
   display: flex;
   align-items: flex-start;
   gap: 12px;
   width: 100%;
-  padding: 14px 16px;
-  border-radius: var(--lx-radius-lg);
-  background: var(--lx-strength-soft);
-  color: var(--lx-strength-ink);
+  margin-top: 4px;
+  padding: 16px;
+  border: 1px solid color-mix(in oklab, var(--sx-primary-ink) 18%, transparent);
+  border-radius: 18px;
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-ink);
   text-align: left;
   box-sizing: border-box;
 }
 
-.report span {
-  display: grid;
-  gap: 4px;
+.reportIcon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--sx-surface);
+  color: var(--sx-primary-ink);
 }
 
-.report small {
+.reportWords {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.reportWords strong {
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  line-height: var(--sx-leading-24);
+}
+
+.reportWords small {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.reportRows {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reportRows li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.reportRows li > svg {
+  flex: none;
+}
+
+.reportRows li[data-state="done"] > svg {
+  color: var(--sx-primary-ink);
+}
+
+.reportRows li[data-state="now"] > svg {
+  color: var(--sx-primary-ink);
+  animation: wrap-spin 1.2s linear infinite;
+}
+
+.reportRows li[data-state="wait"] {
+  color: var(--sx-muted);
+}
+
+@keyframes wrap-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .doneActions {
@@ -326,7 +689,7 @@
   justify-content: center;
   gap: 8px;
   width: 100%;
-  min-height: 52px;
+  min-height: 56px;
   padding: 0 16px;
   border-radius: var(--sx-radius-pill);
   font: inherit;
@@ -335,10 +698,12 @@
   cursor: pointer;
 }
 
+/* The family's one solid deep green (Home's Call band). */
 .primary {
   border: 0;
-  background: var(--sx-accent);
-  color: var(--sx-accent-ink);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
 }
 
 .secondary {
@@ -347,13 +712,24 @@
   color: var(--sx-ink);
 }
 
+.primary:active,
+.secondary:active {
+  transform: var(--sx-press-sink);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tile {
     transition: none;
   }
 
-  .tile:active {
+  .tile:active,
+  .primary:active,
+  .secondary:active {
     transform: none;
+  }
+
+  .reportRows li[data-state="now"] > svg {
+    animation: none;
   }
 }
 

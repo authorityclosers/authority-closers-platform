@@ -301,3 +301,51 @@ it("lights the lead's row for a second back on the list, a positioned row only",
   expect(row.classList.length).toBe(before);
   list.remove();
 });
+
+// v1.93 (round-2 board 3, option C): Give to a colleague in sight, in the row,
+// only where the server says this seller may; a late follow-up in one short line.
+it("puts Give lead in the row only where the seller may give it", async () => {
+  const words = () =>
+    [
+      ...(host.querySelector('[data-sx-equal="lead actions"]')?.children ?? []),
+    ].map((item) => item.textContent);
+  await show(base);
+  expect(words()).toEqual(["WhatsApp", "Note", "Follow-up", "More"]);
+  await show({
+    ...base,
+    can_give: true,
+    reps: [
+      {
+        person_id: "55555555-5555-4555-8555-555555555555",
+        name: "Rohan Fictional",
+        open_leads: 3,
+        available: true,
+      },
+    ],
+  } as unknown as LeadDetail);
+  expect(words()).toEqual([
+    "WhatsApp",
+    "Note",
+    "Follow-up",
+    "Give lead",
+    "More",
+  ]);
+  expect(
+    host
+      .querySelector('[data-sx-equal="lead actions"]')
+      ?.hasAttribute("data-five"),
+  ).toBe(true);
+});
+
+it("says a late follow-up as Late · its time", async () => {
+  await show({
+    ...base,
+    lead: {
+      ...base.lead,
+      next_action_at: new Date(Date.now() - 26 * 3600e3).toISOString(),
+    },
+  });
+  const late = host.querySelector("[data-late]");
+  expect(late?.textContent).toMatch(/^Late · /);
+  expect(late?.textContent).not.toContain("was due");
+});

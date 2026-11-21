@@ -102,7 +102,7 @@
 div.stack {
   gap: 12px;
   width: 100%;
-  max-width: 560px;
+  max-width: 680px;
   margin-inline: auto;
 }
 
@@ -156,13 +156,16 @@ div.stack {
    stepper and close under the facts (the pipeline's round 2). */
 .follow {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  /* The icon on the first line when the words wrap (v1.93: it hung between
+     two lines); one line keeps the 48 dp row as before. */
+  align-items: flex-start;
+  gap: 6px;
   width: fit-content;
   max-width: 100%;
   min-height: 48px;
+  box-sizing: border-box;
   margin-block: -8px -14px;
-  padding: 0;
+  padding: 14px 0;
   border: 0;
   background: none;
   color: var(--sx-ink);
@@ -177,6 +180,7 @@ div.stack {
 
 .follow > svg {
   flex: none;
+  margin-top: 2px;
   color: var(--sx-muted);
 }
 
@@ -203,7 +207,7 @@ div.stack {
 .followEdit {
   display: inline-block;
   margin-left: 8px;
-  color: var(--sx-accent);
+  color: var(--sx-primary-ink);
   vertical-align: -3px;
 }
 
@@ -266,7 +270,7 @@ div.stack {
 
 .step[data-state="done"]::before,
 .step[data-state="current"]::before {
-  background: var(--sx-accent);
+  background: var(--sx-primary-ink);
 }
 
 .stepButton {
@@ -319,14 +323,14 @@ button.stepButton:focus-visible {
   height: 16px;
   margin-top: 2px;
   border: 0;
-  background: var(--sx-accent);
+  background: var(--sx-primary-ink);
 }
 
 .stepDot svg {
   width: 12px;
   height: 12px;
   fill: none;
-  stroke: var(--sx-accent-ink);
+  stroke: var(--sx-surface);
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 2;
@@ -337,11 +341,11 @@ button.stepButton:focus-visible {
   width: 20px;
   height: 20px;
   margin-top: 0;
-  border-color: var(--sx-accent);
+  border-color: var(--sx-primary-ink);
 }
 
 .step[data-state="current"] .stepButton {
-  color: var(--sx-accent);
+  color: var(--sx-primary-ink);
   font-weight: 500;
 }
 
@@ -454,7 +458,7 @@ button.stepButton:focus-visible {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--sx-accent);
+  color: var(--sx-primary-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
   font-weight: 500;
@@ -636,8 +640,8 @@ button.stepButton:focus-visible {
 }
 
 .disc[data-tone="accent"] {
-  background: color-mix(in oklab, var(--sx-accent) 14%, var(--sx-surface));
-  color: var(--sx-accent);
+  background: color-mix(in oklab, var(--sx-primary-ink) 14%, var(--sx-surface));
+  color: var(--sx-primary-ink);
 }
 
 .disc[data-tone="good"] {
@@ -657,8 +661,8 @@ button.stepButton:focus-visible {
 
 /* The follow-up to come: a teal clock disc. */
 .disc[data-tone="now"] {
-  background: var(--sx-accent);
-  color: var(--sx-accent-ink);
+  background: var(--sx-primary-ink);
+  color: var(--sx-surface);
 }
 
 .tlBody {
@@ -703,7 +707,7 @@ button.stepButton:focus-visible {
   padding: 0 0 0 8px;
   border: 0;
   background: none;
-  color: var(--sx-accent);
+  color: var(--sx-primary-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
   font-weight: 500;
@@ -752,7 +756,7 @@ button.stepButton:focus-visible {
   justify-self: start;
   min-height: 48px;
   margin: -14px 0 -16px;
-  color: var(--sx-accent);
+  color: var(--sx-primary-ink);
   font-size: var(--sx-text-xs);
   font-weight: 500;
   line-height: var(--sx-leading-16);
@@ -925,7 +929,7 @@ button.stepButton:focus-visible {
 /* On a computer, as wide as the lead's 560 dp column. */
 .callBand {
   width: 100%;
-  max-width: 560px;
+  max-width: 680px;
   margin-inline: auto;
   border: 0;
   font-family: inherit;
@@ -935,7 +939,7 @@ button.stepButton:focus-visible {
 /* No phone, or a closed lead: the same place, an outline button. */
 .callOutline {
   display: flex;
-  max-width: 560px;
+  max-width: 680px;
   margin-inline: auto;
   align-items: center;
   justify-content: center;
@@ -996,6 +1000,16 @@ button.stepButton:focus-visible {
   min-width: 72px;
 }
 
+/* A two-word step ("Not connected") on one line (v1.93: the current step's
+   name wrapped at every width). */
+.stepper > .step {
+  min-width: 92px;
+}
+
+.stepper > .step[data-state="current"] .stepLabel {
+  white-space: nowrap;
+}
+
 .stepper .stepLabel {
   display: block;
   overflow: visible;
@@ -1045,7 +1059,7 @@ button.stepButton:focus-visible {
   padding: 0 4px 0 12px;
   border: 0;
   background: none;
-  color: var(--sx-accent);
+  color: var(--sx-primary-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
   font-weight: 600;
@@ -1100,5 +1114,39 @@ a.callBand {
 
 .dockLog button {
   border: 1px solid var(--sx-line-strong);
-  color: var(--sx-accent);
+  color: var(--sx-primary-ink);
+}
+
+/* ---------- v1.93 (round-2 board 3, option C): the lead's panel ---------- */
+
+/* The row with Give to a colleague: five equal cells. */
+.row4[data-five] {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+/* What scrolls under the sticky Call fades out above it, never sliced by a
+   hard edge (the "Before you call" card was cut by the Call footer). */
+.dock::before,
+.paneDock::before {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: 24px;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--sx-paper) 0%, transparent),
+    var(--sx-paper)
+  );
+  content: "";
+  pointer-events: none;
+}
+
+/* Room at the pane's end, so its last card clears the Call footer. */
+.pane {
+  scroll-padding-bottom: 160px;
+}
+
+.paneDock {
+  margin-top: 8px;
 }

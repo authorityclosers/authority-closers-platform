@@ -20,7 +20,9 @@ import {
   Check,
   CheckCircle2,
   ChevronRight,
+  CircleX,
   Clock,
+  FileText,
   History as HistoryIcon,
   Link2,
   Mail,
@@ -44,6 +46,7 @@ import {
   ListChecks,
   ListPlus,
   Sparkles,
+  ThumbsUp,
   Upload,
   UserPlus,
   Inbox,
@@ -215,7 +218,7 @@ import { LeadBrief } from "./lead-brief";
 import { LeadPageFrame } from "./lead-page-frame";
 import page from "./lead-page.module.css";
 import wrap from "./wrap-up.module.css";
-import { WrapUpDone, WrapUpFrame } from "./wrap-up";
+import { WrapBack, WrapUpDone, WrapUpFrame } from "./wrap-up";
 import { shortSource, sourceKind } from "./source-mark";
 import { mainPath, StageStepper } from "./stage-stepper";
 
@@ -540,6 +543,236 @@ function wrapTone(talk: Talk, reason: string | null): string {
   );
 }
 
+/** One of the wrap-up's next steps after "We talked" (round-2 board 1, option
+ *  B, step 2): plain words over the organisation's own stages. */
+export type WrapNext = {
+  id: "interested" | "send-details" | "meeting" | "call-back" | "lost";
+  label: string;
+  icon: LucideIcon;
+  stage: Stage;
+  step: string | null;
+  /** Send details: the note says what was promised (as the quick answer did). */
+  note?: string;
+  /** Not interested: its reason, when the organisation's Lost has it. */
+  reason?: string;
+};
+
+/**
+ * The wrap-up's small 2x2 set (v1.93, owner 22 Nov 2026): Interested, Send
+ * details, Meeting booked (a stage whose move asks for a meeting) or else Call
+ * back, and Not interested; each lands on a stage the server already offers, and
+ * a set without one of them is just smaller. The rest stay behind Change stage.
+ */
+export function wrapNexts(detail: {
+  stage_choices?: LeadDetail["stage_choices"];
+  moves?: LeadDetail["moves"];
+}): WrapNext[] {
+  const choices = stageChoices(detail);
+  const moves = detail.moves ?? [];
+  const meetingStep = (step?: string) =>
+    !!step &&
+    moves.some((move) => move.step === step && move.needs.includes("meeting"));
+  const on = (choice: Choice) => ({
+    stage: choice.key,
+    step: choice.step ?? null,
+  });
+  const interested = choices.find(
+    (item) => item.key === "interested" && !meetingStep(item.step),
+  );
+  const later = choices.find((item) => item.key === "follow_up");
+  const meeting = choices.find((item) => meetingStep(item.step));
+  const lost = choices.find((item) => item.key === "lost");
+  const lostReasons =
+    moves.find((move) => move.step === lost?.step)?.reasons ?? [];
+  const out: WrapNext[] = [];
+  if (interested)
+    out.push({
+      id: "interested",
+      label: "Interested",
+      icon: ThumbsUp,
+      ...on(interested),
+    });
+  if (later)
+    out.push({
+      id: "send-details",
+      label: "Send details",
+      icon: FileText,
+      ...on(later),
+      note: "Asked for the details: send them.",
+    });
+  if (meeting)
+    out.push({
+      id: "meeting",
+      label: "Meeting booked",
+      icon: CalendarCheck,
+      ...on(meeting),
+    });
+  else if (later)
+    out.push({
+      id: "call-back",
+      label: "Call back",
+      icon: Clock,
+      ...on(later),
+    });
+  if (lost)
+    out.push({
+      id: "lost",
+      label: "Not interested",
+      icon: CircleX,
+      ...on(lost),
+      reason: lostReasons.some((item) => item.key === "not_interested")
+        ? "not_interested"
+        : undefined,
+    });
+  return out;
+}
+
+/**
+ * The most likely next step, chosen before the seller taps (v1.93): the stage
+ * the last call suggests, else the lead's own open stage, else Interested. Send
+ * details is never assumed (it writes a note). Null: nothing in the set fits
+ * the lead's stage, which then stays chosen with the other stages open.
+ */
+export function likelyNext(
+  nexts: WrapNext[],
+  {
+    suggested,
+    stage,
+    step,
+  }: { suggested: string | null; stage: Stage | null; step: string | null },
+): WrapNext | null {
+  const plain = nexts.filter((item) => item.id !== "send-details");
+  return (
+    (suggested ? plain.find((item) => item.step === suggested) : undefined) ??
+    (stage
+      ? (plain.find((item) => item.stage === stage && item.step === step) ??
+        null)
+      : (plain.find((item) => item.id === "interested") ?? null))
+  );
+}
+
+/** "In 2 days" at 10:00 (v1.93's third chip; the follow-up field's own time). */
+function inTwoDays(now: Date = new Date()): Date {
+  const at = new Date(now);
+  at.setDate(at.getDate() + 2);
+  at.setHours(10, 0, 0, 0);
+  return at;
+}
+
+/** "Mon, 23 Nov · 10:00 am": the follow-up field's words. */
+function fieldWhen(at: Date): string {
+  const day = at.toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+  const time = at
+    .toLocaleTimeString("en-IN", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    })
+    .replace(/\s(am|pm)$/i, " $1");
+  return `${day} · ${time}`;
+}
+
+/**
+ * The wrap-up's follow-up time (v1.93): the time in words in a field that
+ * opens the phone's own picker, and three quick chips. Null (a missed call's
+ * default) leaves the next try to the desk, as before, and says when.
+ */
+function WrapTime({
+  label,
+  pick,
+  custom,
+  auto,
+  onPick,
+  onCustom,
+}: {
+  label?: string;
+  pick: Pick | null;
+  custom: string;
+  /** What happens with no time picked ("Back on your desk in 1 hour"). */
+  auto?: string;
+  onPick: (pick: Pick) => void;
+  onCustom: (value: string) => void;
+}) {
+  const at = timeOf(pick, custom);
+  const two = localInputValue(inTwoDays());
+  const chips: { key: string; label: string; on: boolean; run: () => void }[] =
+    [
+      {
+        key: "hour",
+        label: "In 1 hour",
+        on: pick === "hour",
+        run: () => onPick("hour"),
+      },
+      {
+        key: "morning",
+        label: "Tomorrow",
+        on: pick === "morning",
+        run: () => onPick("morning"),
+      },
+      {
+        key: "two",
+        label: "In 2 days",
+        on: pick === "custom" && custom === two,
+        run: () => {
+          onCustom(two);
+          onPick("custom");
+        },
+      },
+    ];
+  return (
+    <div className={wrap.time}>
+      {label ? <span className={wrap.timeLabel}>{label}</span> : null}
+      <div className={wrap.timeField}>
+        <input
+          type="datetime-local"
+          className={wrap.timeInput}
+          aria-label={label ?? "When to try again"}
+          value={pick === "custom" ? custom : at ? localInputValue(at) : ""}
+          min={localInputValue(new Date())}
+          onClick={(event) => {
+            try {
+              event.currentTarget.showPicker?.();
+            } catch {
+              // An older browser opens its picker by itself.
+            }
+          }}
+          onChange={(event) => {
+            onCustom(event.target.value);
+            onPick("custom");
+          }}
+        />
+        <span className={wrap.timeFace} data-auto={at ? undefined : ""}>
+          <CalendarClock size={20} aria-hidden="true" />
+          <span>{at ? fieldWhen(at) : (auto ?? "Pick a time")}</span>
+          <ChevronDown size={18} aria-hidden="true" />
+        </span>
+      </div>
+      <div className={wrap.chips} role="group" aria-label="Quick times">
+        {chips.map((chip) => (
+          <button
+            key={chip.key}
+            type="button"
+            className={wrap.chip}
+            aria-pressed={chip.on}
+            onClick={chip.run}
+          >
+            {chip.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** The wrap-up's note: a white field with a hairline (v1.93); elsewhere as it was. */
+function NoteWrap({ on, children }: { on: boolean; children: ReactNode }) {
+  return on ? <div className={wrap.note}>{children}</div> : <>{children}</>;
+}
+
 export function CallOutcome({
   detail,
   submitLabel,
@@ -611,14 +844,34 @@ export function CallOutcome({
     choices.some((item) => item.step === detail.lead.step)
       ? detail.lead.step
       : null;
-  const [stage, setStage] = useState<Stage | null>(lastStage);
-  const [step, setStep] = useState<string | null>(lastStep);
   // What the last call suggests, when it is one of the choices (Lead stages).
   const suggested =
     detail.stage_suggestion &&
     choices.some((item) => item.step === detail.stage_suggestion?.step)
       ? detail.stage_suggestion
       : null;
+  // The wrap-up's next steps, the likely one chosen before any tap (v1.93,
+  // board 1 option B: "the result chip and follow-up time pre-filled").
+  const nexts = wrapUp ? wrapNexts(detail) : [];
+  const firstNext = wrapUp
+    ? likelyNext(nexts, {
+        suggested: suggested?.step ?? null,
+        stage: lastStage,
+        step: lastStep,
+      })
+    : null;
+  const talkedFirst = heard?.connected === true;
+  const [nextId, setNextId] = useState<WrapNext["id"] | null>(
+    talkedFirst ? (firstNext?.id ?? null) : null,
+  );
+  // The organisation's other stages, one tap down (Change stage).
+  const [allStages, setAllStages] = useState(false);
+  const [stage, setStage] = useState<Stage | null>(
+    talkedFirst && firstNext ? firstNext.stage : lastStage,
+  );
+  const [step, setStep] = useState<string | null>(
+    talkedFirst && firstNext ? firstNext.step : lastStep,
+  );
   const [next, setNext] = useState<Pick>("morning");
   const [retry, setRetry] = useState<Pick | null>(null);
   const [custom, setCustom] = useState(() =>
@@ -634,6 +887,32 @@ export function CallOutcome({
       return text;
     });
   const [deal, setDeal] = useState("");
+  // A next step chosen in the wrap-up: its stage, and what it says for itself.
+  const chooseNext = (item: WrapNext, tapped: boolean) => {
+    setNextId(item.id);
+    setStage(item.stage);
+    setStep(item.step);
+    if (item.reason) setCloseReason(item.reason);
+    if (tapped && item.note) setNote((current) => current || item.note || "");
+  };
+  // Back to the four answers, nothing saved: everything as it first was.
+  const backToStart = () => {
+    setTalk(null);
+    setReason(null);
+    setRetry(null);
+    setQuick(false);
+    setNextId(null);
+    setAllStages(false);
+    setStage(lastStage);
+    setStep(lastStep);
+  };
+  // In the wrap-up the frame's one back arrow goes back to step 1 (v1.93: two
+  // arrows were stacked, "<" and "←").
+  const wrapBack = useContext(WrapBack);
+  const backLatest = useRef(backToStart);
+  useEffect(() => {
+    backLatest.current = backToStart;
+  });
   // ph2-16 (1 Nov 2026): plain answers, each on the organisation's own stage,
   // when What happens next lists its stages (the desk's four say them already).
   const ownLost = choices.find((item) => item.step && item.key === "lost");
@@ -685,6 +964,12 @@ export function CallOutcome({
       },
     );
   const [saving, setSaving] = useState(false);
+  const backShown = wrapUp && talk !== null && !saving;
+  useEffect(() => {
+    if (!wrapBack) return;
+    wrapBack(backShown ? () => backLatest.current() : null);
+    return () => wrapBack(null);
+  }, [wrapBack, backShown]);
   // Set at the tap itself: a second tap before the next paint never saves twice
   // (production 161, 3 Nov 2026: taps landing twice on Save & Close).
   const busy = useRef(false);
@@ -731,6 +1016,10 @@ export function CallOutcome({
   // Whose call this is, in the question itself (the name may be above the fold).
   const first = detail.lead.name.split(" ")[0];
 
+  // The wrap-up's stage list stays open while the chosen stage is none of the
+  // set's (the lead's own stage kept, or one picked from the list).
+  const stageKept = wrapUp && stage !== null && nextId === null;
+  const showStages = !wrapUp || !nexts.length || allStages || stageKept;
   const closes = stage === "won" || stage === "lost";
   // What the picked stage's move needs, by the server's rules.
   const chosenMove =
@@ -1003,27 +1292,32 @@ export function CallOutcome({
       data-attention={attention || undefined}
       aria-labelledby={`${id}-q`}
     >
-      {wrapUp && talk !== null ? (
+      {wrapUp ? (
+        // Where the wrap-up is: "Step 1 of 2" or "Step 2 of 2", two segments,
+        // and on step 2 the answer given (v1.93, board 1 option B).
         <div className={wrap.stepBar}>
-          <button
-            type="button"
-            className={wrap.back}
-            aria-label="Change how it went"
-            disabled={saving}
-            onClick={() => {
-              setTalk(null);
-              setReason(null);
-              setRetry(null);
-              setQuick(false);
-              setStage(lastStage);
-              setStep(lastStep);
-            }}
-          >
-            <ArrowLeft size={20} aria-hidden="true" />
-          </button>
-          <span className={wrap.stepCount}>Step 2 of 2</span>
-          <span className={wrap.answer} data-tone={wrapTone(talk, reason)}>
-            {wrapLabel(talk, reason)}
+          {talk !== null && !wrapBack ? (
+            <button
+              type="button"
+              className={wrap.back}
+              aria-label="Change how it went"
+              disabled={saving}
+              onClick={backToStart}
+            >
+              <ArrowLeft size={20} aria-hidden="true" />
+            </button>
+          ) : null}
+          <span className={wrap.stepCount}>
+            Step {talk === null ? 1 : 2} of 2
+          </span>
+          {talk !== null ? (
+            <span className={wrap.answer} data-tone={wrapTone(talk, reason)}>
+              {wrapLabel(talk, reason)}
+            </span>
+          ) : null}
+          <span className={wrap.progress} aria-hidden="true">
+            <i data-done="" />
+            <i data-done={talk !== null ? "" : undefined} />
           </span>
         </div>
       ) : null}
@@ -1073,7 +1367,9 @@ export function CallOutcome({
                     setTalk("talked");
                     setReason(null);
                     setRetry(null);
-                    setStage((current) => current ?? lastStage);
+                    // The likely next step, chosen already: Save is ready.
+                    if (firstNext) chooseNext(firstNext, false);
+                    else setStage((current) => current ?? lastStage);
                     return;
                   }
                   setTalk("missed");
@@ -1090,30 +1386,35 @@ export function CallOutcome({
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            className={wrap.other}
-            onClick={() => {
-              setTalk("missed");
-              setQuick(false);
-              setReason(null);
-              setRetry(null);
-              setStage(null);
-              setStep(null);
-            }}
-          >
-            Something else happened
-          </button>
-          {onSkip ? (
+          {/* Two equal outline buttons under the answers (v1.93): the rarer
+              miss, and "I didn't call" as a real button. */}
+          <div className={wrap.otherRow}>
             <button
               type="button"
-              className={wrap.didntCall}
-              data-sx-feature="wrap_up_didnt_call"
-              onClick={onSkip}
+              className={wrap.other}
+              data-sx-feature="wrap_up_other"
+              onClick={() => {
+                setTalk("missed");
+                setQuick(false);
+                setReason(null);
+                setRetry(null);
+                setStage(null);
+                setStep(null);
+              }}
             >
-              I didn&apos;t call
+              Something else
             </button>
-          ) : null}
+            {onSkip ? (
+              <button
+                type="button"
+                className={wrap.didntCall}
+                data-sx-feature="wrap_up_didnt_call"
+                onClick={onSkip}
+              >
+                I didn&apos;t call
+              </button>
+            ) : null}
+          </div>
         </>
       ) : null}
       {wrapUp ? null : (
@@ -1207,7 +1508,21 @@ export function CallOutcome({
               </div>
             </>
           )}
-          {reason && retry === null ? (
+          {/* The wrap-up: the next try's time is the point (v1.93). Left
+              alone the desk brings the lead back by itself, as before. */}
+          {wrapUp && reason && NO_RETRY.has(reason) ? (
+            <p className={wrap.timeNote}>{autoRetry}</p>
+          ) : null}
+          {wrapUp && reason && !NO_RETRY.has(reason) ? (
+            <WrapTime
+              pick={retry}
+              custom={custom}
+              auto={`Back on your desk ${detail.lead.attempts ? "tomorrow" : "in 1 hour"}`}
+              onPick={setRetry}
+              onCustom={setCustom}
+            />
+          ) : null}
+          {!wrapUp && reason && retry === null ? (
             <p className={styles.retryLine}>
               {autoRetry}
               {!NO_RETRY.has(reason) ? (
@@ -1221,7 +1536,7 @@ export function CallOutcome({
               ) : null}
             </p>
           ) : null}
-          {reason && retry !== null ? (
+          {!wrapUp && reason && retry !== null ? (
             <TimePicker
               label="Try again"
               pick={retry}
@@ -1242,7 +1557,43 @@ export function CallOutcome({
           {wrapUp ? null : (
             <span className={styles.stepLabel}>What happens next?</span>
           )}
-          {answers.length ? (
+          {wrapUp && nexts.length ? (
+            // One clear group (v1.93, board 1 option B): the small set, the
+            // likely one chosen; the other stages one tap down.
+            <div className={wrap.nexts} role="group" aria-label="Next step">
+              {nexts.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={wrap.next}
+                  aria-pressed={nextId === item.id}
+                  data-sx-feature={`wrap_up_next_${item.id}`}
+                  onClick={() => chooseNext(item, true)}
+                >
+                  <span className={wrap.nextIcon}>
+                    <item.icon size={20} aria-hidden="true" />
+                  </span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {wrapUp && nexts.length && !stageKept ? (
+            <button
+              type="button"
+              className={wrap.moreStages}
+              aria-expanded={showStages}
+              onClick={() => setAllStages((open) => !open)}
+            >
+              {showStages ? "Fewer choices" : "Change stage"}
+              <ChevronDown
+                size={16}
+                aria-hidden="true"
+                style={showStages ? { transform: "rotate(180deg)" } : undefined}
+              />
+            </button>
+          ) : null}
+          {!wrapUp && answers.length ? (
             // Plain answers over the organisation's own stages (ph2-16).
             <div
               className={styles.quickAnswers}
@@ -1262,7 +1613,7 @@ export function CallOutcome({
               ))}
             </div>
           ) : null}
-          {suggested ? (
+          {suggested && !wrapUp ? (
             <SuggestionHint
               suggestion={suggested}
               active={step === suggested.step}
@@ -1272,32 +1623,43 @@ export function CallOutcome({
               }}
             />
           ) : null}
-          <div
-            className={styles.stageGrid}
-            role="group"
-            aria-label="What happens next"
-          >
-            {choices.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={styles.stageTile}
-                data-tone={item.tone}
-                aria-pressed={
-                  item.step
-                    ? step === item.step
-                    : stage === item.key && step === null
-                }
-                onClick={() => {
-                  setStage(item.key);
-                  setStep(item.step ?? null);
-                }}
-              >
-                <strong>{breakable(item.label)}</strong>
-                <small>{item.sub}</small>
-              </button>
-            ))}
-          </div>
+          {showStages ? (
+            <div
+              className={styles.stageGrid}
+              role="group"
+              aria-label="What happens next"
+            >
+              {choices.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={styles.stageTile}
+                  data-tone={item.tone}
+                  aria-pressed={
+                    item.step
+                      ? step === item.step
+                      : stage === item.key && step === null
+                  }
+                  onClick={() => {
+                    setStage(item.key);
+                    setStep(item.step ?? null);
+                    // The same stage as a tile in the set lights that tile.
+                    setNextId(
+                      nexts.find(
+                        (next) =>
+                          next.id !== "send-details" &&
+                          next.stage === item.key &&
+                          next.step === (item.step ?? null),
+                      )?.id ?? null,
+                    );
+                  }}
+                >
+                  <strong>{breakable(item.label)}</strong>
+                  <small>{item.sub}</small>
+                </button>
+              ))}
+            </div>
+          ) : null}
           {wantsMeeting ? (
             <MeetingBlock draft={meeting} onChange={setMeeting} />
           ) : null}
@@ -1337,7 +1699,15 @@ export function CallOutcome({
               ))}
             </div>
           ) : null}
-          {needsTime ? (
+          {needsTime && wrapUp ? (
+            <WrapTime
+              label="Next call"
+              pick={next}
+              custom={custom}
+              onPick={setNext}
+              onCustom={setCustom}
+            />
+          ) : needsTime ? (
             <TimePicker
               label="Next call"
               pick={next}
@@ -1351,7 +1721,9 @@ export function CallOutcome({
               This closes the lead. It reopens if they get in touch again.
             </p>
           ) : null}
-          {stage === "interested" || stage === "won" ? (
+          {/* The wrap-up asks only what Save needs: an optional deal value
+              waits for the lead's stage sheet (v1.93, board 1 option B). */}
+          {(stage === "interested" && !wrapUp) || stage === "won" ? (
             <Field
               label={
                 stage === "won" ? "Deal amount (₹)" : "Deal value (₹, optional)"
@@ -1378,22 +1750,30 @@ export function CallOutcome({
       ) : null}
 
       {talk !== null ? (
-        <Field
-          label={talk === "talked" ? "What did they say?" : "Note (optional)"}
-          wide
-        >
-          <textarea
-            rows={2}
-            value={note}
-            maxLength={1000}
-            placeholder={
+        <NoteWrap on={wrapUp}>
+          <Field
+            label={
               talk === "talked"
-                ? "What they need, what you promised"
-                : "Anything to know before the next try"
+                ? wrapUp
+                  ? "What did they say? (optional)"
+                  : "What did they say?"
+                : "Note (optional)"
             }
-            onChange={(event) => setNote(event.target.value)}
-          />
-        </Field>
+            wide
+          >
+            <textarea
+              rows={2}
+              value={note}
+              maxLength={1000}
+              placeholder={
+                talk === "talked"
+                  ? "What they need, what you promised"
+                  : "Anything to know before the next try"
+              }
+              onChange={(event) => setNote(event.target.value)}
+            />
+          </Field>
+        </NoteWrap>
       ) : null}
 
       {error ? (
@@ -1401,7 +1781,9 @@ export function CallOutcome({
           {error}
         </p>
       ) : null}
-      {talk !== null && missing ? (
+      {/* The wrap-up starts ready to save: what is missing shows only once
+          Save was tapped (v1.93: the amber line read as an error at once). */}
+      {talk !== null && missing && (!wrapUp || nudged) ? (
         <p
           className={styles.saveHint}
           data-nudged={nudged || undefined}
@@ -1412,7 +1794,7 @@ export function CallOutcome({
       ) : null}
       {talk !== null ? upNext : null}
       {talk !== null ? (
-        <div className={styles.saveRow}>
+        <div className={wrapUp ? wrap.saveRow : styles.saveRow}>
           {openMessage && detail.phone ? (
             <button
               type="button"
@@ -1430,7 +1812,7 @@ export function CallOutcome({
           ) : null}
           <button
             type="button"
-            className={styles.saveButton}
+            className={wrapUp ? wrap.save : styles.saveButton}
             data-incomplete={!valid || undefined}
             onClick={() => trySave()}
             disabled={saving}
@@ -3602,6 +3984,11 @@ export function LeadCard({
   const [more, setMore] = useState(false);
   // Give to a colleague, from More (a seller, when the workspace allows it).
   const [giving, setGiving] = useState(false);
+  // Give sits in the row when there is someone to give it to (give-lead.tsx).
+  const canGive =
+    !detail.can_assign &&
+    !!detail.can_give &&
+    detail.reps.some((rep) => rep.person_id !== lead.owner_person_id);
   const [menuOpen, setMenuOpen] = useState(false);
   const afterMore = (run: () => void) => {
     setMore(false);
@@ -3986,8 +4373,10 @@ export function LeadCard({
     <Pencil size={16} aria-hidden="true" className={page.followEdit} />
   ) : null;
   const followWords = lateWhen ? (
+    // "Late · yesterday 7:36 pm": short enough for one line (v1.93; "was due"
+    // wrapped it at 390 px). The red and the word say it is late.
     <span>
-      <span className={page.lateWord}>Late</span> · was due{" "}
+      <span className={page.lateWord}>Late</span> ·{" "}
       <span className={page.followWhen}>
         {lateWhen}
         {pencil}
@@ -4203,7 +4592,11 @@ export function LeadCard({
         {/* One row of four, like a phone's contact card (lead page P5; the
             orchestrator, 3 Nov 2026): WhatsApp, Note, Follow-up and More,
             which holds the rest, one row each. Call is the band below. */}
-        <div className={page.row4} data-sx-equal="lead actions">
+        <div
+          className={page.row4}
+          data-sx-equal="lead actions"
+          data-five={canGive && detail.can_edit ? "" : undefined}
+        >
           <ActionBox
             round
             kind="message"
@@ -4244,6 +4637,19 @@ export function LeadCard({
                 onClick={() => setReminding(true)}
               />
             </>
+          ) : null}
+          {/* Give to a colleague, in sight (v1.93, board 3 option C): only
+              where the server says this seller may (can_give). */}
+          {canGive ? (
+            <ActionBox
+              round
+              kind="stage"
+              channel="give"
+              label="Give lead"
+              name="Give to a colleague"
+              icon={<ArrowRightLeft size={22} aria-hidden="true" />}
+              onClick={() => setGiving(true)}
+            />
           ) : null}
           <ActionBox
             round
@@ -4412,7 +4818,7 @@ export function LeadCard({
           ) : null}
           {/* A seller's own lead, where the workspace lets sellers give
               leads on (round-2 board 3): the same sheet as on the lead. */}
-          {!detail.can_assign && detail.can_give ? (
+          {!detail.can_assign && detail.can_give && !canGive ? (
             <li>
               <button
                 type="button"
@@ -5420,7 +5826,7 @@ function PaneOrSheet({
     );
   if (!open) return null;
   return (
-    <section className={styles.leadPane} aria-label={label}>
+    <section className={`${styles.leadPane} ${page.pane}`} aria-label={label}>
       <button
         type="button"
         className={styles.leadPaneClose}
@@ -5430,7 +5836,11 @@ function PaneOrSheet({
         <X size={18} aria-hidden="true" />
       </button>
       {children}
-      {footer ? <div className={styles.leadPaneDock}>{footer}</div> : null}
+      {footer ? (
+        <div className={`${styles.leadPaneDock} ${page.paneDock}`}>
+          {footer}
+        </div>
+      ) : null}
     </section>
   );
 }

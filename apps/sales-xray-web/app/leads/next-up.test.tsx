@@ -11,6 +11,7 @@ vi.mock("../notice-center", () => ({ notify: () => undefined }));
 import { resetBackCloseForTests } from "../ui/back-close";
 import { CallNext } from "./call-next";
 import { LeadSheet } from "./lead-sheet";
+import { reportRows, WrapUpDone } from "./wrap-up";
 import type { LeadDetail, LeadEvent } from "./leads-client";
 
 (
@@ -360,4 +361,105 @@ it("wraps up a call: busy sets the next try, a talk ends with Call next lead", a
     ).click(),
   );
   expect(tile("Wrong number")).toBeDefined();
+});
+
+// v1.93 (round-2 board 1, option B, owner 22 Nov 2026: "Yes, build them"):
+// step 2 starts ready to save, the likely next step chosen and the follow-up
+// time filled; the other stages one tap down; one back arrow.
+it("starts step 2 ready: Interested chosen, tomorrow's time, one way back", async () => {
+  await act(async () =>
+    root.render(
+      <LeadSheet
+        leadId={ONE}
+        me={null}
+        intent="log"
+        onClose={() => undefined}
+        onChanged={() => undefined}
+      />,
+    ),
+  );
+  await flush();
+  expect(document.body.textContent).toContain("Step 1 of 2");
+  await act(async () => tile("We talked").click());
+  expect(document.body.textContent).toContain("Step 2 of 2");
+  const group = document.querySelector('[aria-label="Next step"]')!;
+  expect(
+    [...group.querySelectorAll("button")].map((b) => b.textContent),
+  ).toEqual(["Interested", "Send details", "Call back", "Not interested"]);
+  expect(group.querySelector('[aria-pressed="true"]')?.textContent).toBe(
+    "Interested",
+  );
+  // Nothing missing to say: Save is ready.
+  expect(document.body.textContent).not.toContain("to save");
+  expect(
+    document.querySelectorAll('button[aria-label="Change how it went"]'),
+  ).toHaveLength(1);
+  expect(tile("Tomorrow").getAttribute("aria-pressed")).toBe("true");
+  // The organisation's other stages, one tap down.
+  expect(document.querySelector('[aria-label="What happens next"]')).toBeNull();
+  await act(async () => tile("Change stage").click());
+  expect(
+    document.querySelector('[aria-label="What happens next"]'),
+  ).not.toBeNull();
+  await act(async () => tile("Save").click());
+  await flush();
+  const sent = vi
+    .mocked(fetch)
+    .mock.calls.find(([url]) => String(url).endsWith("/dispose"));
+  const body = JSON.parse(String(sent?.[1]?.body));
+  expect(body).toMatchObject({ connected: true, stage: "interested" });
+  expect(new Date(body.follow_up_at).getTime()).toBeGreaterThan(Date.now());
+  expect(document.body.textContent).toContain("Saved");
+});
+
+it("says only what it knows of the report on its way", () => {
+  expect(reportRows(null, "Ravi").rows).toEqual([]);
+  expect(reportRows(null, "Ravi").line).toContain("about 2 min");
+  expect(
+    reportRows(
+      { done: 4, label: "Analysing", stuck: false, recording: "arrived" },
+      "Ravi",
+    ).rows,
+  ).toEqual([
+    { label: "Recording found", state: "done" },
+    { label: "Uploaded", state: "done" },
+    { label: "Reading the call · about 2 min", state: "now" },
+  ]);
+  expect(
+    reportRows(
+      {
+        done: 0,
+        label: "No recording after 30 minutes",
+        stuck: false,
+        ended: true,
+        recording: "not found",
+      },
+      "Ravi",
+    ).title,
+  ).toBe("No recording for this call");
+});
+
+it("ends a talk on Saved with the report on its way and one Call next lead", async () => {
+  const saved = {
+    ...detail(ONE, "Ravi Kulkarni"),
+    lead: { ...detail(ONE, "Ravi Kulkarni").lead, stage_label: "Interested" },
+  };
+  const onCallNext = vi.fn();
+  await act(async () =>
+    root.render(
+      <WrapUpDone
+        saved={saved}
+        talked
+        reportExpected
+        onCallNext={onCallNext}
+        onBack={() => undefined}
+      />,
+    ),
+  );
+  expect(host.textContent).toContain("Your call report is on its way");
+  const next = tile("Call next lead");
+  expect(next.className).toMatch(/primary/);
+  expect(tile("Back to Ravi").className).toMatch(/secondary/);
+  await act(async () => next.click());
+  expect(onCallNext).toHaveBeenCalledTimes(1);
 });
