@@ -2040,15 +2040,6 @@
   }
 }
 
-/* Tablets: a centred column, so the time and count stay near the words. */
-@media (min-width: 600px) and (max-width: 899.98px) {
-  .listPane {
-    width: 100%;
-    max-width: 720px;
-    margin: 0 auto;
-  }
-}
-
 /* Computers: the list keeps its pane beside the open chat; same rows. */
 @media (min-width: 900px) {
   .listBody > li + li .row {
@@ -2189,4 +2180,23 @@
   overflow: visible;
   text-overflow: clip;
   white-space: nowrap;
+}
+
+/* Judge round (sx-redesign, 21 Nov 2026): the filters fade at the edge where
+   more of them slide in; the empty state's mark is dark ink on soft grey. */
+@media (max-width: 899.98px) {
+  .filterRow {
+    padding-right: 32px;
+    -webkit-mask-image: linear-gradient(
+      to right,
+      black calc(100% - 32px),
+      transparent
+    );
+    mask-image: linear-gradient(to right, black calc(100% - 32px), transparent);
+  }
+}
+
+.emptyMark {
+  background: var(--sx-fill);
+  color: var(--lx-ink);
 }
