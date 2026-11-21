@@ -151,3 +151,18 @@
   text-decoration: none;
   font-weight: 650;
 }
+
+/* The kind's badge on a face sits off its corner, small, clear of the
+   initials (sx-redesign fix round, owner 21 Nov 2026). */
+.timeline span[aria-hidden="true"] > span[data-kind] {
+  right: -7px;
+  bottom: -7px;
+  width: 15px;
+  height: 15px;
+  border-width: 1.5px;
+}
+
+.timeline span[aria-hidden="true"] > span[data-kind] svg {
+  width: 9px;
+  height: 9px;
+}

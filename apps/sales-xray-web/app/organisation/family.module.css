@@ -601,10 +601,23 @@ a.row {
   color: var(--sx-tone-problem);
 }
 
+.avatar {
+  position: relative;
+}
+
 .avatar img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* Hero rings get a little more room from tablet up. */
+@media (min-width: 600px) {
+  .hero .ring {
+    --ring: 108px !important;
+  }
 }
 
 .plainList {

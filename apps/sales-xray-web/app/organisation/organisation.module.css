@@ -2411,32 +2411,13 @@
   }
 }
 
-@media (max-width: 1099px) {
-  .memberChips > [data-away] {
-    display: none;
-  }
-}
-
-/* Role and phone chips line up in columns from tablet up. */
+/* Role and phone chips line up in two columns from tablet up, so the email
+   keeps its width. */
 @media (min-width: 600px) {
   .memberChips {
     display: grid;
     grid-template-columns: 112px 150px;
     justify-items: start;
-  }
-
-  .memberChips > :nth-child(3) {
-    grid-column: 2;
-  }
-}
-
-@media (min-width: 1100px) {
-  .memberChips {
-    grid-template-columns: 120px 150px 140px;
-  }
-
-  .memberChips > :nth-child(3) {
-    grid-column: 3;
   }
 }
 

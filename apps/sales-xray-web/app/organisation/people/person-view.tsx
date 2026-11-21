@@ -4,6 +4,7 @@ import { can, ROLE_HINT, roleLabel } from "../roles";
 import {
   ArrowLeft,
   Building2,
+  ChevronLeft,
   ChevronRight,
   Phone,
   ShieldCheck,
@@ -144,6 +145,9 @@ export function PersonView({ id }: { id: string }) {
       homeHref="/"
       active="organisation"
       mobileFit={false}
+      // A team member lives under Team (sx-redesign fix round): the bar
+      // says Team, the page's own title row names the person.
+      pageName="Team"
     >
       <div className={styles.page}>
         {access?.authenticated === false ? (
@@ -325,9 +329,22 @@ function PersonPage({
     : null;
   return (
     <>
-      <Link href="/settings/team" className={styles.backLink}>
-        <ArrowLeft size={18} aria-hidden="true" />
-        Team
+      <Link
+        href="/settings/team"
+        className={styles.backLink}
+        aria-label="Back to Team"
+      >
+        <ArrowLeft size={18} aria-hidden="true" className={styles.backArrow} />
+        <ChevronLeft
+          size={24}
+          aria-hidden="true"
+          className={styles.backChevron}
+        />
+        <span className={styles.backTeam}>Team</span>
+        {/* A phone's title row is the person (the hero then skips the name). */}
+        {member ? (
+          <span className={styles.backName}>{memberName(member)}</span>
+        ) : null}
       </Link>
       {member ? (
         <PersonHeader

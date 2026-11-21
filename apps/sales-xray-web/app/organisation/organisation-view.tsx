@@ -1696,6 +1696,15 @@ function MembersPanel({
     );
     return () => controller.abort();
   }, [canManage]);
+  const awayNames = reps
+    ? rows
+        .filter(
+          (member) =>
+            member.status === "active" &&
+            reps.get(member.personId)?.available === false,
+        )
+        .map((member) => memberName(member).split(/\s+/)[0])
+    : [];
 
   return (
     <section className={family.stack} aria-labelledby="org-members">
@@ -1992,9 +2001,6 @@ function MembersPanel({
               ? (capture?.get(member.personId) ?? null)
               : null;
             const badge = phone ? captureBadge(phone) : null;
-            const away =
-              member.personId !== null &&
-              reps?.get(member.personId)?.available === false;
             return (
               <div
                 key={`${member.status}:${member.personId ?? member.inviteId}`}
@@ -2066,11 +2072,6 @@ function MembersPanel({
                           : badge.label}
                       </span>
                     ) : null}
-                    {away ? (
-                      <span className={family.chip} data-away="">
-                        Not taking leads
-                      </span>
-                    ) : null}
                   </span>
                   {isYou ? (
                     // Everyone keeps their own name, phone and photo current.
@@ -2137,6 +2138,11 @@ function MembersPanel({
           ) : null}
         </div>
       </div>
+      {/* Who isn't taking leads, said once for the list (sx-redesign fix
+          round): each person's page says it too. */}
+      {awayNames.length && list === "people" ? (
+        <p className={family.note}>Not taking leads: {awayNames.join(", ")}</p>
+      ) : null}
       <button
         type="button"
         className={family.link}

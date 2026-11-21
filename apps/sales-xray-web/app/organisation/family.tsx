@@ -97,12 +97,19 @@ export function Initials({
       aria-hidden="true"
       style={size ? { width: size, height: size } : undefined}
     >
+      {/* The initials stay under a photo, so a photo still loading (or
+          one that fails) never leaves a blank circle. */}
+      {initialsOf(name)}
       {photo ? (
         // eslint-disable-next-line @next/next/no-img-element -- Private, session-bound photo; already small.
-        <img src={photo} alt="" loading="lazy" />
-      ) : (
-        initialsOf(name)
-      )}
+        <img
+          src={photo}
+          alt=""
+          onError={(event) => {
+            event.currentTarget.hidden = true;
+          }}
+        />
+      ) : null}
     </i>
   );
 }

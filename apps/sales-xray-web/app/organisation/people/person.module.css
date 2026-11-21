@@ -902,3 +902,62 @@
     grid-row: 1;
   }
 }
+
+/* The title row is "‹ Name" on every device, like Settings' sections (the
+   bar says Team); the hero keeps the name for screen readers only. */
+.backArrow,
+.backTeam {
+  display: none;
+}
+
+.backChevron {
+  display: block;
+  flex: none;
+  margin-left: -4px;
+}
+
+.backName {
+  display: block;
+  overflow: hidden;
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-xl);
+  font-weight: 750;
+  line-height: var(--sx-leading-28);
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 600px) {
+  .backName {
+    font-size: var(--sx-text-2xl);
+    line-height: var(--sx-leading-36);
+  }
+}
+
+.header .name {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.header .who {
+  align-self: center;
+}
+
+/* Timeline faces: the kind's badge sits off the corner, clear of the
+   initials (sx-redesign fix round). */
+.page [data-sentence] {
+  min-width: 0;
+}
+
+/* Tablet: one centred column (sx-redesign fix round). */
+@media (min-width: 600px) and (max-width: 1099px) {
+  .page {
+    max-width: 720px;
+    margin-inline: auto;
+  }
+}

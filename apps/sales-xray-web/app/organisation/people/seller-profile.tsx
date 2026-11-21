@@ -59,7 +59,7 @@ import {
 } from "../../leads/limit-field";
 import { phoneDot } from "../../leads/phone-setup-words";
 import { notify } from "../../notice-center";
-import { CaptureRates } from "../../capture-guard/capture-rates";
+import { PersonCapture } from "./person-capture";
 import family from "../family.module.css";
 import styles from "./seller-profile.module.css";
 
@@ -240,7 +240,7 @@ export function SellerSections({
           <>
             <div
               className={styles.overviewTop}
-              data-two={cards ? "" : undefined}
+              data-two={cards || canManage || isYou ? "" : undefined}
             >
               <div className={styles.column}>
                 <section className={family.card} aria-label="Today">
@@ -325,12 +325,22 @@ export function SellerSections({
                   </section>
                 ) : null}
               </div>
-              {cards ? <div className={styles.column}>{cards}</div> : null}
+              {cards || canManage || isYou ? (
+                <div className={styles.column}>
+                  {cards}
+                  {/* One status line and one Fix (sx-redesign fix round);
+                      each day's counts stay on Sellers' phones. */}
+                  {canManage || isYou ? (
+                    <PersonCapture
+                      key={personId}
+                      personId={personId}
+                      isYou={isYou}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
             </div>
             {overview}
-            {canManage || isYou ? (
-              <CaptureRates key={personId} personId={personId} />
-            ) : null}
           </>
         )}
       </div>
