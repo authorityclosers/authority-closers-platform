@@ -420,7 +420,7 @@ export function ProfileDetailsPanel() {
               {/* A long address goes under its name, never cut mid-word. */}
               <span className={styles.rowText}>
                 <span className={styles.rowName}>Email</span>
-                <span className={styles.rowHint}>{profile.email}</span>
+                <span className={styles.rowHint}>{emailWithBreak(profile.email)}</span>
               </span>
             </li>
             <li className={styles.row}>
@@ -563,5 +563,18 @@ export function ProfileCompletionCard() {
     >
       <Progress completion={completion} />
     </Panel>
+  );
+}
+
+/** A long address breaks at its "@" on a narrow phone, never mid-word (v1.92 judge round, 21 Nov 2026). */
+function emailWithBreak(email: string) {
+  const at = email.lastIndexOf("@");
+  if (at <= 0) return email;
+  return (
+    <>
+      {email.slice(0, at)}
+      <wbr />
+      {email.slice(at)}
+    </>
   );
 }
