@@ -531,7 +531,7 @@ export function SettingsMenu({
       {phone ? (
         <section className={styles.group} aria-label="Appearance">
           <h3 className={styles.heading}>Appearance</h3>
-          <ThemeControl />
+          <ThemeControl className={styles.theme} />
         </section>
       ) : null}
 
