@@ -911,3 +911,58 @@
 .wrap[data-wide-table]:not([data-fit]) .table .sort {
   padding-inline: 10px;
 }
+
+/* v1.93 (round-2 board 3, round-3 judge): the family's tick, a 6 px rounded
+   square that fills with Home's green when ticked, not the browser's grey box. */
+.table thead .pick input,
+.table td.pick input {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  place-content: center;
+  border: 1.5px solid var(--sx-line-strong);
+  border-radius: 6px;
+  background: var(--sx-surface);
+  vertical-align: middle;
+  appearance: none;
+}
+
+.table thead .pick input:checked,
+.table td.pick input:checked,
+.table thead .pick input:indeterminate {
+  border-color: var(--lx-home-primary);
+  background: var(--lx-home-primary);
+}
+
+.table thead .pick input:checked::after,
+.table td.pick input:checked::after {
+  width: 9px;
+  height: 5px;
+  border: solid var(--sx-gloss-ink);
+  border-width: 0 0 2px 2px;
+  content: "";
+  transform: translateY(-1px) rotate(-45deg);
+}
+
+.table thead .pick input:indeterminate::after {
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--sx-gloss-ink);
+  content: "";
+}
+
+.table thead .pick input:focus-visible,
+.table td.pick input:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* Last call reads whole on a computer: a long result ("Out of coverage /
+   network · 6 calls") takes a second line instead of ending in "…". */
+.wrap[data-wide-table]:not([data-fit]) td[data-column="last"] .text {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}

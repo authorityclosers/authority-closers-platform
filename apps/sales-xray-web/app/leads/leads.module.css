@@ -8832,3 +8832,184 @@ fieldset.form {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---------- v1.93 (round-2 board 3, option C; owner 22 Nov 2026: "Yes,
+   build them"): the Leads list, its rows and its Call. ---------- */
+
+/* A work-view row. Line 1 is the whole name (New's dot may sit at its end).
+   Line 2, "● Stage · Source · Sneha · 3 d" (the owner's first name on someone
+   else's lead, then the age), then the next step on a line of its own. Never
+   cut (the readability gate): the line wraps, but only between whole parts,
+   each carrying the "·" that leads it, so "Meta Ads" stays whole and no line
+   ends on "·" (round-3 judge). Under 600 px the age stays on the lead's page,
+   and an owner's row puts the stage alone on line 2 and "Meta Ads · Sneha"
+   with the next step on line 3, so it keeps three lines. */
+.leadFace[data-compact] .leadNameText {
+  flex: 1 1 auto;
+}
+
+/* The text column takes what the quick actions leave and grows downwards: a
+   long name wraps (whole, never cut or run under Call and WhatsApp; the
+   readability gate at 360 px with long data), and so does every line under
+   it. */
+.leadFace[data-compact] .leadButton,
+.leadFace[data-compact] .leadMain {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.leadFace[data-compact] .leadName {
+  align-items: baseline;
+}
+
+.leadFace[data-compact] .leadNameText {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.leadFace[data-compact] .leadSub[data-aged] {
+  display: block;
+  overflow: visible;
+  padding-left: 0;
+  text-indent: 0;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.leadFace[data-compact] .leadSub[data-aged] > .leadSubWords {
+  white-space: normal;
+}
+
+/* A part wraps as one box: it moves to the next line whole, and breaks
+   inside itself only when it is wider than the line. */
+.leadFace[data-compact] .leadSub .leadPart {
+  display: inline-block;
+  max-width: 100%;
+  white-space: normal;
+}
+
+/* The owner's own line ("Owner: Sneha Iyer") gives way to line 2's name. */
+.leadFace[data-compact] .leadOwnerLine {
+  display: none;
+}
+
+.leadSubAge {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The next step, "Late · yesterday 7:36 pm": its own line, from the row's
+   left edge like the lines above (it sat 14 px in). */
+.leadFace[data-compact] .leadSub[data-aged] > .leadWhy {
+  display: block;
+  overflow: visible;
+  padding-left: 0;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+@media (max-width: 599.98px) {
+  .leadFace[data-compact] .leadSub .leadSubAge {
+    display: none;
+  }
+
+  .leadFace[data-compact] .leadSub[data-owned] .leadSourcePart {
+    display: inline;
+  }
+
+  .leadFace[data-compact] .leadSub[data-owned] .leadSourcePart::before {
+    display: block;
+    content: "";
+  }
+
+  .leadFace[data-compact] .leadSub[data-owned] .leadSourcePart > .leadSep {
+    display: none;
+  }
+
+  /* The next step joins line 3 when it fits there, else takes the next line
+     whole ("Late · 1 Nov" never splits). */
+  .leadFace[data-compact] .leadSub[data-owned] > .leadWhy {
+    display: inline-block;
+    max-width: 100%;
+  }
+}
+
+/* The lead open beside the list (option C): Home's soft green and a 3 px bar
+   at the row's start. */
+.leadLine[aria-current="true"] .leadFace,
+.leadLine[aria-current="true"] .leadButton:hover {
+  background: var(--sx-tone-good-soft);
+}
+
+.leadLine[aria-current="true"] .leadFace {
+  box-shadow: inset 3px 0 0 var(--sx-primary-ink);
+}
+
+/* The table's empty strip under Sort: the columns picker it held is off. */
+.listAux:not(:has(button:not([class*="columnsButton"]))) {
+  display: none;
+}
+
+/* One Add: from 1024 px with the panel open the shell's top bar has its
+   own (lightbox-shell.module.css), so this one shows only below that. */
+@media (min-width: 1024px) {
+  .headAdd {
+    display: none;
+  }
+}
+
+/* Under 600 px the list's row keeps "Sort: Next call first" whole beside
+   List | Table: Select is its icon (still named Select for screen readers
+   and on hover). */
+@media (max-width: 599.98px) {
+  .listHead .selectToggle .controlLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .listHead .listTools .selectToggle {
+    justify-content: center;
+    min-width: 44px;
+    padding: 0;
+  }
+
+  /* An owner's list: a long press on a row picks leads, so Select gives the
+     sort and List | Table their room (owner bug 194 keeps the switch). */
+  .listHead .listTools .selectToggle[data-held] {
+    display: none;
+  }
+}
+
+/* Call Next Lead at the foot of the list's column on a computer. The shell
+   keeps room under the page for its corner cards and holds that room a
+   moment after one leaves (--sx-end-hold, end-hold.ts); the band is offset by
+   all of it, so it always docks at the window's foot instead of rising over
+   the rows (v1.93 judge: at 1440 it floated mid-table once a card left). The
+   list ends above it, so the last row is never under it. */
+@media (min-width: 900px) {
+  .listBand[data-call-band] {
+    bottom: calc(
+      -1 *
+        max(
+          24px,
+          calc(max(var(--sx-corner-h, 0px), var(--sx-guide-h, 0px)) + 16px),
+          var(--sx-end-hold, 0px)
+        )
+    );
+    margin-top: 8px;
+  }
+}
+
+/* The list row's tools in ink, never teal (turquoise in dark; v1.93): Select's
+   icon, and its pressed fill in Home's soft green. */
+.listHead .listTools .statusChip > svg {
+  color: var(--sx-ink-2);
+}
+
+.listHead .listTools .statusChip[aria-pressed="true"] {
+  background: var(--sx-tone-good-soft);
+}

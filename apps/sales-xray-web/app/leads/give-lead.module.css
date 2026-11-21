@@ -1,0 +1,25 @@
+/* Give to a colleague (round-2 board 3, option C): the sheet's two questions
+   are named on screen, Why with its "needed" mark. */
+.ask {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 4px 0 -4px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.needed {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.chosen {
+  color: var(--sx-accent);
+}
+
+.free {
+  color: var(--sx-muted);
+}

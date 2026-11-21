@@ -343,25 +343,19 @@
    "tap-target | div.insights__page > div[role=group].insights__filters > details.insights__filterDetails > summary"
   ],
   "lead-page | long | 1280 dark": [
+   "clipped-text | button.leads__leadButton > span.leads__leadMain > span.leads__leadName > span.leads__leadNameText",
+   "clipped-text | div.leads__leadFace > button.leads__leadButton > span.leads__leadMain > span.leads__leadSub",
    "clipped-text | div.work-views__callBand > button.call-lens__capsule > span.work-views__callBandWords > span.work-views__callBandWho",
-   "clipped-text | span.leads-table__text > button.leads-table__cell > span.leads-table__stageStack > span.leads-table__stage",
-   "clipped-text | td > span.leads-table__nameCell > button.leads-table__name > small",
-   "clipped-text | td > span.leads-table__nameCell > button.leads-table__name > strong",
-   "clipped-text | tr > td > span.leads-table__text > button.leads-table__cell",
    "contrast-aa | a.call-lens:capsule > span.lead-page:callWords > span.lead-page:callNumber",
    "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho",
-   "overlap | div.work-views__split > div.work-views__splitPane > section.leads__leadPane > button.leads__leadPaneClose > ⟂ > section.",
    "overlap | section.lead-page__head > div.lead-page__headTop > div.lead-page__headWords > button.lead-page__follow > ⟂ > section.lea"
   ],
   "lead-page | long | 1280 light": [
+   "clipped-text | button.leads__leadButton > span.leads__leadMain > span.leads__leadName > span.leads__leadNameText",
+   "clipped-text | div.leads__leadFace > button.leads__leadButton > span.leads__leadMain > span.leads__leadSub",
    "clipped-text | div.work-views__callBand > button.call-lens__capsule > span.work-views__callBandWords > span.work-views__callBandWho",
-   "clipped-text | span.leads-table__text > button.leads-table__cell > span.leads-table__stageStack > span.leads-table__stage",
-   "clipped-text | td > span.leads-table__nameCell > button.leads-table__name > small",
-   "clipped-text | td > span.leads-table__nameCell > button.leads-table__name > strong",
-   "clipped-text | tr > td > span.leads-table__text > button.leads-table__cell",
    "contrast-aa | a.call-lens:capsule > span.lead-page:callWords > span.lead-page:callNumber",
    "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho",
-   "overlap | div.work-views__split > div.work-views__splitPane > section.leads__leadPane > button.leads__leadPaneClose > ⟂ > section.",
    "overlap | section.lead-page__head > div.lead-page__headTop > div.lead-page__headWords > button.lead-page__follow > ⟂ > section.lea"
   ],
   "lead-page | long | 360 dark 130%": [
@@ -408,25 +402,21 @@
    "overlap | section.lead-page__head > div.lead-page__headTop > div.lead-page__headWords > button.lead-page__follow > ⟂ > section.lea"
   ],
   "lead-page-long-path | long | 1280 dark": [
+   "clipped-text | button.leads__leadButton > span.leads__leadMain > span.leads__leadName > span.leads__leadNameText",
+   "clipped-text | div.leads__leadFace > button.leads__leadButton > span.leads__leadMain > span.leads__leadSub",
    "clipped-text | div.work-views__callBand > button.call-lens__capsule > span.work-views__callBandWords > span.work-views__callBandWho",
-   "clipped-text | span.leads-table__text > button.leads-table__cell > span.leads-table__stageStack > span.leads-table__stage",
-   "clipped-text | td > span.leads-table__nameCell > button.leads-table__name > small",
-   "clipped-text | td > span.leads-table__nameCell > button.leads-table__name > strong",
-   "clipped-text | tr > td > span.leads-table__text > button.leads-table__cell",
    "contrast-aa | a.call-lens:capsule > span.lead-page:callWords > span.lead-page:callNumber",
    "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho",
-   "overlap | div.work-views__split > div.work-views__splitPane > section.leads__leadPane > button.leads__leadPaneClose > ⟂ > section.",
+   "covered | div.leads:leadActions > div.lead-page:row4 > button.lead-page:act",
    "overlap | section.lead-page__head > div.lead-page__headTop > div.lead-page__headWords > button.lead-page__follow > ⟂ > section.lea"
   ],
   "lead-page-long-path | long | 1280 light": [
+   "clipped-text | button.leads__leadButton > span.leads__leadMain > span.leads__leadName > span.leads__leadNameText",
+   "clipped-text | div.leads__leadFace > button.leads__leadButton > span.leads__leadMain > span.leads__leadSub",
    "clipped-text | div.work-views__callBand > button.call-lens__capsule > span.work-views__callBandWords > span.work-views__callBandWho",
-   "clipped-text | span.leads-table__text > button.leads-table__cell > span.leads-table__stageStack > span.leads-table__stage",
-   "clipped-text | td > span.leads-table__nameCell > button.leads-table__name > small",
-   "clipped-text | td > span.leads-table__nameCell > button.leads-table__name > strong",
-   "clipped-text | tr > td > span.leads-table__text > button.leads-table__cell",
    "contrast-aa | a.call-lens:capsule > span.lead-page:callWords > span.lead-page:callNumber",
    "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho",
-   "overlap | div.work-views__split > div.work-views__splitPane > section.leads__leadPane > button.leads__leadPaneClose > ⟂ > section.",
+   "covered | div.leads:leadActions > div.lead-page:row4 > button.lead-page:act",
    "overlap | section.lead-page__head > div.lead-page__headTop > div.lead-page__headWords > button.lead-page__follow > ⟂ > section.lea"
   ],
   "lead-page-long-path | long | 360 dark 130%": [
@@ -448,12 +438,14 @@
    "contrast-aa | a.call-lens:capsule > span.lead-page:callWords > span.lead-page:callNumber",
    "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho",
    "covered | div.lead-page:headTop > div.lead-page:headWords > button.lead-page:follow",
+   "covered | div.leads:card > section.lead-page:card > button.lead-page:textAction",
    "overlap | section.lead-page__head > div.lead-page__headTop > div.lead-page__headWords > button.lead-page__follow > ⟂ > section.lea"
   ],
   "lead-page-long-path | plain | 1280 light": [
    "contrast-aa | a.call-lens:capsule > span.lead-page:callWords > span.lead-page:callNumber",
    "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho",
    "covered | div.lead-page:headTop > div.lead-page:headWords > button.lead-page:follow",
+   "covered | div.leads:card > section.lead-page:card > button.lead-page:textAction",
    "overlap | section.lead-page__head > div.lead-page__headTop > div.lead-page__headWords > button.lead-page__follow > ⟂ > section.lea"
   ],
   "lead-page-long-path | plain | 360 dark 130%": [

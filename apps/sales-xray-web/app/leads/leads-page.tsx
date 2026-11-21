@@ -88,7 +88,7 @@ import { useImportAsked } from "./import-asked";
 import { LeadsMenu, type LeadsMenuItem } from "./leads-menu";
 import { ArrivedPick, LeadsPerDaySheet } from "./arrived-pick";
 import { useMarkSeen } from "./arrival";
-import { screenChanged } from "../telemetry";
+import { screenChanged, track } from "../telemetry";
 
 import { useNudgeCard } from "./nudge-card";
 import { StartWhenAsked } from "./start-when-asked";
@@ -315,6 +315,8 @@ const SINCE = new Set(["today", "week", "month", "never"]);
 const MADE = new Set(["today", "yesterday", "week", "month", "history"]);
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const SORTS = new Set(["next_action", "last_contact", "name", "created"]);
+// What a work tab shares with the others; every other filter is the tab's own.
+const TAB_WIDE = new Set(["side", "view", "when", "sort", "order"]);
 const SIDE_KEYS = new Set(["inbound", "cold"]);
 const VIEW_KEYS = new Set(["to_call", "follow_ups", "all"]);
 const WHEN_KEYS = new Set(["today", "overdue", "upcoming"]);
@@ -1072,8 +1074,21 @@ export function LeadsRoute({
     !!more.step &&
     journey?.view.stages.find((stage) => stage.key === more.step)?.kind ===
       "new";
+  // All Leads with no sort picked says "Follow-up soonest": ask the server for
+  // exactly that, so a lead with no next step or a closed one is not first
+  // (round-2 board 3, glitch "Sort looks wrong", 20 Nov 2026).
+  const sayFollowUp = workView === "all" && !more.sort && !newestFirst;
   const listMore: ListMore | null =
-    view === TEST ? null : { ...more, side, view: workView };
+    view === TEST
+      ? null
+      : {
+          ...more,
+          side,
+          view: workView,
+          ...(sayFollowUp
+            ? { sort: "next_action" as const, order: "asc" as const }
+            : {}),
+        };
   const warmMore = JSON.stringify(listMore);
   const waitingForPipeline = !!requestedPipeline && !pipes;
   const deskReady = current && !!desk;
@@ -1294,6 +1309,10 @@ export function LeadsRoute({
   });
   // A table on a computer takes the whole width; a lead opens beside it.
   const [tableMode, setTableMode] = useState(false);
+  // Each work tab keeps its own filters (round-2 board 3, 20 Nov 2026: Open
+  // Leads picked on To call followed you to Follow-ups and All leads, and the
+  // tab's count no longer matched its list).
+  const tabFilters = useRef<Partial<Record<WorkView, Partial<ListMore>>>>({});
   const onCounts = useCallback(
     (value: Record<string, number>) =>
       setCounts({ key: countsKey, question: countsQuestion, value }),
@@ -1990,6 +2009,12 @@ export function LeadsRoute({
       // To Call says it didn't load, with Try again; Call Next stays.
     }
   };
+  // The wrap-up's Call next lead outside a round: To call's next lead
+  // (round-2 board 1).
+  const callNextFromLead = () => {
+    closeLead(false);
+    void callToCall();
+  };
   const callCount =
     viewCounts?.key === viewCountsKey
       ? (viewCounts.value[callNextView(workView)] ?? null)
@@ -2078,6 +2103,7 @@ export function LeadsRoute({
         focusAt={openLead ? focusAt : null}
         onClose={closeLead}
         onChanged={refresh}
+        onCallNext={callNextFromLead}
         stages={stagesShown}
         queue={!!shownLead && !!queue?.has(shownLead)}
         onNext={nextLead}
@@ -2305,14 +2331,32 @@ export function LeadsRoute({
                           ? viewCounts.value
                           : null
                       }
-                      onChange={(next) =>
+                      onChange={(next) => {
+                        // This tab's filters stay with it; the next tab gets
+                        // its own back (none the first time).
+                        const picked = Object.fromEntries(
+                          Object.entries(more).filter(
+                            ([key]) => !TAB_WIDE.has(key),
+                          ),
+                        ) as Partial<ListMore>;
+                        tabFilters.current[workView] = picked;
+                        const cleared = Object.fromEntries(
+                          Object.keys(picked).map((key) => [key, null]),
+                        ) as Partial<ListMore>;
+                        if (Object.values(picked).some(Boolean))
+                          track("sx.feature_used", {
+                            feature: "leads_tab_filters_kept",
+                            screen: "leads",
+                          });
                         pickWork({
+                          ...cleared,
+                          ...(tabFilters.current[next] ?? {}),
                           view: next,
                           // Every follow-up, so the tab's count is its rows;
                           // Due Today stays one tap away (owner, 2 Nov 2026).
                           when: null,
-                        })
-                      }
+                        });
+                      }}
                     />
                   }
                 />
@@ -2460,6 +2504,8 @@ export function LeadsRoute({
                 onChanged={refresh}
                 onCounts={onCounts}
                 onTable={setTableMode}
+                besideLead={paneShown && !!shownLead}
+                openLead={paneShown ? shownLead : null}
                 onStepCounts={onStepCounts}
                 onViewCounts={onViewCounts}
                 pipeline={pipeline}
@@ -2501,13 +2547,18 @@ export function LeadsRoute({
                   the list's first lead, in a band above the tab bar; an empty
                   view has none. */}
               {/* It holds its place while the list loads, and hides only on a
-                  known zero (Leads part 05; L1's empty rule). */}
-              {(
-                workView === "all"
-                  ? (bandCount ?? 0) > 0
-                  : !!topLead || bandCount !== 0
-              ) ? (
+                  known zero (Leads part 05; L1's empty rule). v1.93 (round-2
+                  board 3, option C): it never offers someone else's lead, so
+                  an owner viewing the team's list has none (their own list,
+                  or "Assigned to" themselves, keeps it); and with a lead open
+                  beside the list, that lead's own Call is the one green. */}
+              {(workView === "all"
+                ? (bandCount ?? 0) > 0
+                : !!topLead || bandCount !== 0) &&
+              !(paneShown && shownLead) &&
+              (scope === "mine" || sellerOwner === desk.me.person_id) ? (
                 <CallBand
+                  className={styles.listBand}
                   side={side}
                   view={callNextView(workView)}
                   disabled={finding}
