@@ -43,20 +43,13 @@ function uploadError(error: unknown) {
 }
 
 /**
- * The organisation's logo: everyone sees it; owners and admins upload or
- * replace it. The preview shows the centre square the server keeps, so what
- * you save is what the sidebar and this page show.
+ * The logo's picker and upload, for the logo panel and Company's hero and row
+ * (sx-redesign board, 21 Nov 2026). `input` is the hidden file field to render.
  */
-export function CompanyLogoPanel({
-  name,
-  canEdit,
-}: {
-  name: string;
-  canEdit: boolean;
-}) {
+export function useLogoUpload(canEdit = true) {
   const context = useWorkspaceAccess()?.context ?? null;
   const branding = useBranding();
-  const input = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -139,6 +132,44 @@ export function CompanyLogoPanel({
     }
   };
 
+  return {
+    canEdit,
+    logoUrl: branding?.logoUrl ?? null,
+    file,
+    preview,
+    saving,
+    message,
+    save,
+    cancel,
+    pick: () => inputRef.current?.click(),
+    input: canEdit ? (
+      <input
+        ref={inputRef}
+        type="file"
+        accept={LOGO_TYPES.join(",")}
+        hidden
+        aria-label="Choose a logo image"
+        onChange={choose}
+      />
+    ) : null,
+  };
+}
+
+/**
+ * The organisation's logo: everyone sees it; owners and admins upload or
+ * replace it. The preview shows the centre square the server keeps, so what
+ * you save is what the sidebar and this page show.
+ */
+export function CompanyLogoPanel({
+  name,
+  canEdit,
+}: {
+  name: string;
+  canEdit: boolean;
+}) {
+  const branding = useBranding();
+  const { file, preview, saving, message, save, cancel, pick, input } =
+    useLogoUpload(canEdit);
   const hasLogo = Boolean(branding?.logoUrl);
   return (
     <section className={styles.setting} aria-labelledby="org-logo">
@@ -189,19 +220,12 @@ export function CompanyLogoPanel({
                     <button
                       type="button"
                       className={styles.secondary}
-                      onClick={() => input.current?.click()}
+                      onClick={pick}
                     >
                       {hasLogo ? "Replace logo" : "Upload logo"}
                     </button>
                   )}
-                  <input
-                    ref={input}
-                    type="file"
-                    accept={LOGO_TYPES.join(",")}
-                    hidden
-                    aria-label="Choose a logo image"
-                    onChange={choose}
-                  />
+                  {input}
                 </div>
                 <small className={styles.hint}>
                   {file

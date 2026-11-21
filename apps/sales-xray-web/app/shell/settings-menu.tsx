@@ -354,7 +354,8 @@ export function SettingsMenu({
     ...(organisation && !insights
       ? [
           {
-            href: "/organisation",
+            // The organisation's settings are one Settings (round-2 board 7).
+            href: "/settings",
             label: "Organisation",
             icon: <Building2 size={20} />,
           },
@@ -394,19 +395,19 @@ export function SettingsMenu({
     href: `/settings/${id}`,
     icon,
   }));
-  // Owner, 23 Oct 2026: the organisation's hub holds every management area
-  // (team, analytics, insights, leads setup, connections, company), so You
-  // offers the hub and its most used tab.
+  // Round-2 board 7 (20 Nov 2026): the organisation's settings are one
+  // Settings again, each saying who it affects, so You offers it and its
+  // most used section.
   const theirs = [
     {
       label: "Organisation",
-      hint: "Team, analytics, insights, leads setup, connections and company",
-      href: "/organisation",
+      hint: "Team, leads setup, phones, connections, company and billing",
+      href: "/settings",
       icon: <Building2 size={18} />,
     },
     {
       ...sectionById("team"),
-      href: "/organisation?tab=team",
+      href: "/settings/team",
       icon: <UsersRound size={18} />,
     },
   ];
@@ -487,7 +488,7 @@ export function SettingsMenu({
           disabled={signingOut}
         >
           <LogOut size={15} aria-hidden="true" />
-          {signingOut ? "Logging out…" : "Log out"}
+          {signingOut ? "Signing out…" : "Sign out"}
         </button>
       </div>
 
@@ -530,7 +531,7 @@ export function SettingsMenu({
       {phone ? (
         <section className={styles.group} aria-label="Appearance">
           <h3 className={styles.heading}>Appearance</h3>
-          <ThemeControl />
+          <ThemeControl className={styles.theme} />
         </section>
       ) : null}
 

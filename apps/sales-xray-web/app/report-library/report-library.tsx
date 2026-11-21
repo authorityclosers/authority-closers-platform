@@ -1,26 +1,34 @@
 "use client";
 
 /**
- * Reports, the phone's Reports tab (/analysis/calls): Dipak's Reports V4
- * (docs/handoffs/dipak-folder-20261113/REPORTS-V4-SPEC.md, 13 Nov 2026).
+ * Calls (/analysis/calls): the seller's recorded calls and, for an owner, the
+ * team's. sx-redesign board pick 08-calls, "summary first" (owner, 21 Nov
+ * 2026), on Dipak's Reports V4 (docs/handoffs/dipak-folder-20261113/
+ * REPORTS-V4-SPEC.md, 13 Nov 2026).
  *
- * - Main (the default): a waveform, "+ Analyse a call", and the three newest
- *   reports with View all.
- * - All Reports: "+ New analysis", a search, Filters (lead type and a From–To
- *   calendar), the filters as chips, "N of M reports", newest first, and the
- *   cards; nothing matching says so and clears everything in one tap.
+ * - One hero card says the one thing that matters: how many calls need your
+ *   review (no report yet, and nothing working on it), with one green button
+ *   that shows them. With none, it counts the reports ready and the button is
+ *   Analyse a call.
+ * - A switch: All, Needs review (N), Reports ready. Search and Filters (lead
+ *   type and a From–To calendar) work on every view; the filters show as
+ *   chips, and nothing matching says so and clears everything in one tap.
+ * - The calls, newest first, under Today, Yesterday and earlier days: the
+ *   lead, how long and when, how the call ended in one word, and the report's
+ *   state. Save keeps a report in Saved Reports.
+ * - Under the list: Analyse a call (when the hero button is Review), Your
+ *   phone calls in a workspace, and Find my old calls in the phone app.
  * - Analyse a call (?view=analyse): "Make your next call better." and Choose
  *   audio file; the file goes on to New analysis, the existing flow.
  * - Your calls (?view=calls, or a number from Home or Team): the phone's own
- *   calls, as before, behind a link on Main.
+ *   calls, as before.
  *
- * A card opens the call's existing report (Sales X-ray Report, Prospect's
- * Information, Coaching) unchanged. The tab, search and filters live in the
- * address, so Back from a report finds the list as it was left.
+ * A row opens the call's existing report (Report, Prospect, Coaching). The
+ * view, search and filters live in the address, so Back from a report finds
+ * the list as it was left.
  */
 
 import {
-  ArrowDownUp,
   Bookmark,
   ChevronLeft,
   ChevronRight,
@@ -44,10 +52,13 @@ import {
 
 import { AcquisitionShell } from "../acquisition-shell";
 import { CALLS_PATH, NEW_ANALYSIS_PATH, callPath } from "../analysis-routes";
+import { callDate } from "../call-status";
+import { OldCallsCard } from "../calls/old-calls/old-calls-card";
 import { callsFilter, PhoneCalls } from "../calls/phone-calls";
 import { CALLS_PAGE_NAME } from "../calls-page-name";
 import { RecordingLine } from "../capture-setup/recording-check";
 import { useDisplayDates } from "../display-clock";
+import type { DisplayDates } from "../display-dates";
 import { notify } from "../notice-center";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
 import { useTabAgain } from "../shell/tab-again";
@@ -59,7 +70,6 @@ import { FilterSheet } from "./filter-sheet";
 import {
   NO_FILTERS,
   SAVED_LABEL,
-  SOURCE_LABEL,
   activeFilterCount,
   completeRange,
   countLine,
@@ -68,7 +78,6 @@ import {
   leadTypeLabel,
   newestFirst,
   rangeWords,
-  summaryLine,
   visibleReports,
   type ReportQuery,
   type ReportRow,
@@ -87,15 +96,20 @@ import {
   RECORDING_FORMATS,
   handOverRecording,
 } from "./upload-handoff";
-import { Waveform } from "./waveform";
 
-/** Recent reports on Main (section 5). */
-export const RECENT_REPORTS = 3;
+/** Rows shown at first, and added by each Show more. */
+export const PAGE_ROWS = 20;
 /** While a call is being analysed, the list reads again this often. */
 const ACTIVE_REREAD_MS = 20_000;
 const RETURN_KEY = "sx.reports.return";
 
-type Tab = "main" | "all";
+/** The switch: every call, the ones waiting on you, the ones with a report. */
+export type Tab = "all" | "review" | "ready";
+export const TABS: readonly (readonly [Tab, string])[] = [
+  ["all", "All"],
+  ["review", "Needs review"],
+  ["ready", "Reports ready"],
+];
 
 /** The filters a list address carries (tab=all&q=…&type=…&from=…&to=…). */
 export function filtersFromAddress(params: URLSearchParams): ReportQuery {
@@ -113,13 +127,10 @@ export function filtersFromAddress(params: URLSearchParams): ReportQuery {
 
 export function tabFromAddress(params: URLSearchParams): Tab {
   const tab = params.get("tab");
-  if (tab === "all") return "all";
-  if (tab === "main") return "main";
-  // A search sent here (the header's "Search calls for …") is a library search.
-  return params.get("q") ? "all" : "main";
+  return tab === "review" || tab === "ready" ? tab : "all";
 }
 
-/** The list's address for this tab and these filters, other keys kept. */
+/** The list's address for this view and these filters, other keys kept. */
 export function listAddress(
   current: URLSearchParams,
   tab: Tab,
@@ -127,18 +138,23 @@ export function listAddress(
 ): string {
   const next = new URLSearchParams(current);
   for (const key of ["tab", "q", "type", "from", "to"]) next.delete(key);
-  if (tab === "all") {
-    next.set("tab", "all");
-    if (filters.query) next.set("q", filters.query);
-    if (filters.leadType) next.set("type", filters.leadType);
-    const range = completeRange(filters.from, filters.to);
-    if (range) {
-      next.set("from", range.from);
-      next.set("to", range.to);
-    }
+  if (tab !== "all") next.set("tab", tab);
+  if (filters.query) next.set("q", filters.query);
+  if (filters.leadType) next.set("type", filters.leadType);
+  const range = completeRange(filters.from, filters.to);
+  if (range) {
+    next.set("from", range.from);
+    next.set("to", range.to);
   }
   const search = next.toString();
   return `${CALLS_PATH}${search ? `?${search}` : ""}`;
+}
+
+/** The rows a view holds, before search and filters. */
+export function rowsForTab(rows: readonly ReportRow[], tab: Tab): ReportRow[] {
+  if (tab === "review") return rows.filter((row) => row.needsReview);
+  if (tab === "ready") return rows.filter((row) => row.ready);
+  return [...rows];
 }
 
 /** The list a report was opened from, for its way back (session only). */
@@ -292,18 +308,17 @@ function LibraryBody({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [load, retry] = useReports(identity, viewerId);
   const top = useRef<HTMLDivElement>(null);
-  // The Reports tab tapped while Reports is open: back to Main, at the top
-  // (the prototype's Reports tab; the filters stay for All Reports).
+  // The Calls tab tapped while Calls is open: every call, at the top.
   useTabAgain("reports", () => {
     setSheetOpen(false);
-    setTab("main");
+    setTab("all");
     window.scrollTo?.({ top: 0 });
   });
 
-  // The address follows the tab and the filters without a new history entry,
-  // so Back from a report returns to this list as it was left. Never on an
-  // open sheet's own entry (back-close.ts): once Back or the sheet's closing
-  // takes it off, the page's entry gets the address.
+  // The address follows the view and the filters without a new history
+  // entry, so Back from a report returns to this list as it was left. Never
+  // on an open sheet's own entry (back-close.ts): once Back or the sheet's
+  // closing takes it off, the page's entry gets the address.
   const syncAddress = useCallback(() => {
     if (!listShown) return;
     const state: unknown = window.history.state;
@@ -332,7 +347,6 @@ function LibraryBody({
   };
   const showTab = (next: Tab) => {
     setTab(next);
-    top.current?.scrollIntoView?.({ block: "start" });
   };
 
   if (view === "analyse")
@@ -371,23 +385,31 @@ function LibraryBody({
   const open = () =>
     rememberReturn(`${window.location.pathname}${window.location.search}`);
 
+  const needs = load.rows.filter((row) => row.needsReview).length;
+  const ready = load.rows.filter((row) => row.ready).length;
+  const tabRows = rowsForTab(newestFirst(load.rows), tab);
+  const shown = visibleReports(tabRows, filters);
+  const count = activeFilterCount(filters);
+  const range = completeRange(filters.from, filters.to);
+  const narrowed = count > 0 || Boolean(filters.query.trim());
+  const clearAll = () => setFilters(() => NO_FILTERS);
+  // Exactly one green button: the hero's. Review when calls wait, else Analyse.
+  const heroReviews = needs > 0;
+
   return (
     <div className={styles.page} ref={top} data-reports-v4="" data-tab={tab}>
       {/* The bar names the page; this is its heading for screen readers. */}
       <h1 className={styles.srOnly}>{CALLS_PAGE_NAME}</h1>
       <RecordingLine />
-      <p className={styles.subtitle}>
-        {tab === "main"
-          ? "Turn your sales conversations into clearer next steps."
-          : "All your analysed calls, easy to revisit."}
-      </p>
-      <div className={styles.tabs} role="tablist" aria-label="Report sections">
-        {(
-          [
-            ["main", "Main"],
-            ["all", "All Reports"],
-          ] as const
-        ).map(([key, label]) => (
+      <CallsHero
+        load={load}
+        needs={needs}
+        ready={ready}
+        onReview={() => showTab("review")}
+        onAnalyse={openAnalyse}
+      />
+      <div className={styles.tabs} role="tablist" aria-label="Which calls">
+        {TABS.map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -398,7 +420,9 @@ function LibraryBody({
             className={styles.tab}
             onClick={() => showTab(key)}
           >
-            {label}
+            {key === "review" && load.status === "ready"
+              ? `${label} (${needs})`
+              : label}
           </button>
         ))}
       </div>
@@ -408,28 +432,139 @@ function LibraryBody({
         id={`reports-panel-${tab}`}
         aria-labelledby={`reports-tab-${tab}`}
       >
-        {tab === "main" ? (
-          <MainTab
-            load={load}
-            retry={retry}
-            organisation={organisation}
-            onAnalyse={openAnalyse}
-            onViewAll={() => showTab("all")}
-            onOpen={open}
-            onSave={save}
-          />
-        ) : (
-          <AllTab
-            load={load}
-            retry={retry}
-            filters={filters}
-            setFilters={setFilters}
-            onAnalyse={openAnalyse}
-            onFilters={() => setSheetOpen(true)}
-            onOpen={open}
-            onSave={save}
-          />
-        )}
+        <div className={styles.tools}>
+          <label className={styles.search}>
+            <Search size={18} aria-hidden="true" />
+            <input
+              type="search"
+              placeholder="Search by lead name"
+              aria-label="Search calls"
+              value={filters.query}
+              enterKeyHint="search"
+              onChange={(event) => {
+                const query = event.target.value;
+                setFilters((current) => ({ ...current, query }));
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            className={styles.filters}
+            data-active={count ? "" : undefined}
+            aria-label={
+              count
+                ? `Filters, ${count} active ${count === 1 ? "filter" : "filters"}`
+                : "Filters"
+            }
+            onClick={() => setSheetOpen(true)}
+          >
+            {/* The count takes the icon's place, so the button keeps its
+                width and the search box stays whole at large text. */}
+            {count ? (
+              <span className={styles.filterCount} aria-hidden="true">
+                {count}
+              </span>
+            ) : (
+              <SlidersHorizontal size={18} aria-hidden="true" />
+            )}
+            <span className={styles.filtersWord}>Filters</span>
+          </button>
+        </div>
+        {count ? (
+          <div className={styles.chips} aria-label="Applied filters">
+            {filters.leadType ? (
+              <span className={styles.chip}>
+                {leadTypeLabel(filters.leadType)}
+                <button
+                  type="button"
+                  aria-label="Remove lead type filter"
+                  onClick={() =>
+                    setFilters((current) => ({ ...current, leadType: null }))
+                  }
+                >
+                  <X size={16} aria-hidden="true" />
+                </button>
+              </span>
+            ) : null}
+            {range ? (
+              <span className={styles.chip}>
+                {rangeWords(range.from, range.to)}
+                <button
+                  type="button"
+                  aria-label="Remove date filter"
+                  onClick={() =>
+                    setFilters((current) => ({
+                      ...current,
+                      from: null,
+                      to: null,
+                    }))
+                  }
+                >
+                  <X size={16} aria-hidden="true" />
+                </button>
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+        {narrowed && load.status === "ready" ? (
+          <p className={styles.resultRow} aria-live="polite">
+            <span data-report-count="">
+              {countLine(shown.length, tabRows.length, filters)}
+            </span>
+          </p>
+        ) : null}
+        <CallList
+          key={`${tab}:${filters.query}:${filters.leadType}:${filters.from}:${filters.to}`}
+          load={load}
+          rows={shown}
+          dates={dates}
+          retry={retry}
+          empty={
+            load.rows.length === 0 ? (
+              <div className={styles.firstTime} data-first-time="">
+                <p>No calls yet. Analyse a call and its report shows here.</p>
+              </div>
+            ) : narrowed ? (
+              <div className={styles.empty} data-no-match="">
+                <span className={styles.emptyIcon} aria-hidden="true">
+                  <Search size={20} />
+                </span>
+                <h3>No matching calls</h3>
+                <p>
+                  Try a different name, lead type or date. Your calls have not
+                  been removed.
+                </p>
+                <button
+                  type="button"
+                  className={styles.secondary}
+                  onClick={clearAll}
+                >
+                  Clear filters &amp; search
+                </button>
+              </div>
+            ) : (
+              <div className={styles.firstTime} data-first-time="">
+                <p>
+                  {tab === "review"
+                    ? "Nothing to review. Every call has its report or is on its way."
+                    : "No reports ready yet. They show here when they are done."}
+                </p>
+              </div>
+            )
+          }
+          onOpen={open}
+          onSave={save}
+        />
+        {load.status === "ready" && !load.complete ? (
+          <p className={styles.more} role="status">
+            Loading older calls…
+          </p>
+        ) : null}
+        <MoreLinks
+          analyse={heroReviews}
+          organisation={organisation}
+          onAnalyse={openAnalyse}
+        />
       </div>
       <FilterSheet
         open={sheetOpen}
@@ -446,269 +581,172 @@ function LibraryBody({
   );
 }
 
-function MainTab({
-  load,
-  retry,
-  organisation,
-  onAnalyse,
-  onViewAll,
-  onOpen,
-  onSave,
+/** The ring's arc: `part` of `whole`, a full ring when there is nothing yet. */
+function Ring({
+  part,
+  whole,
+  value,
+  label,
 }: {
-  load: Load;
-  retry: () => void;
-  organisation: boolean;
-  onAnalyse: () => void;
-  onViewAll: () => void;
-  onOpen: () => void;
-  onSave: (row: ReportRow) => void;
+  part: number;
+  whole: number;
+  value: ReactNode;
+  label: string;
 }) {
-  const recent = newestFirst(load.rows).slice(0, RECENT_REPORTS);
+  const radius = 42;
+  const length = 2 * Math.PI * radius;
+  const share = whole > 0 ? Math.min(1, Math.max(0, part / whole)) : 0;
   return (
-    <>
-      <section className={styles.analyse} aria-label="Analyse a call">
-        <Waveform />
-        <button
-          type="button"
-          className={`${styles.primary} ${styles.analyseButton}`}
-          onClick={onAnalyse}
-        >
-          <Plus size={20} aria-hidden="true" />
-          Analyse a call
-        </button>
-      </section>
-      <div className={styles.sectionLine}>
-        <h2 id="recent-reports">Recent reports</h2>
-        <button type="button" className={styles.textButton} onClick={onViewAll}>
-          View all
-          <ChevronRight size={18} aria-hidden="true" />
-        </button>
-      </div>
-      <ReportList
-        load={load}
-        rows={recent}
-        retry={retry}
-        labelledBy="recent-reports"
-        empty={
-          <div className={styles.firstTime} data-first-time="">
-            <p>No reports yet. Analyse a call and its report shows here.</p>
-          </div>
-        }
-        onOpen={onOpen}
-        onSave={onSave}
-        placeholders={RECENT_REPORTS}
-      />
-      {organisation ? (
-        <Link
-          href={`${CALLS_PATH}?view=calls`}
-          className={styles.callLog}
-          data-your-calls=""
-        >
-          <Phone size={18} aria-hidden="true" />
-          <span>
-            <b>Your phone calls</b>
-            <small>Calls and recordings on this phone, newest first</small>
-          </span>
-          <ChevronRight size={18} aria-hidden="true" />
-        </Link>
-      ) : null}
-    </>
-  );
-}
-
-function AllTab({
-  load,
-  retry,
-  filters,
-  setFilters,
-  onAnalyse,
-  onFilters,
-  onOpen,
-  onSave,
-}: {
-  load: Load;
-  retry: () => void;
-  filters: ReportQuery;
-  setFilters: (update: (current: ReportQuery) => ReportQuery) => void;
-  onAnalyse: () => void;
-  onFilters: () => void;
-  onOpen: () => void;
-  onSave: (row: ReportRow) => void;
-}) {
-  const shown = visibleReports(load.rows, filters);
-  const count = activeFilterCount(filters);
-  const range = completeRange(filters.from, filters.to);
-  const clearAll = () => setFilters(() => NO_FILTERS);
-  return (
-    <>
-      <div className={styles.sectionLine}>
-        <h2 id="all-reports">All reports</h2>
-        <button type="button" className={styles.textButton} onClick={onAnalyse}>
-          <Plus size={18} aria-hidden="true" />
-          New analysis
-        </button>
-      </div>
-      <div className={styles.tools}>
-        <label className={styles.search}>
-          <Search size={16} aria-hidden="true" />
-          <input
-            type="search"
-            placeholder="Search reports"
-            aria-label="Search reports"
-            value={filters.query}
-            enterKeyHint="search"
-            onChange={(event) => {
-              const query = event.target.value;
-              setFilters((current) => ({ ...current, query }));
-            }}
+    <span className={styles.ring} aria-hidden="true">
+      <svg viewBox="0 0 100 100">
+        <circle className={styles.ringTrack} cx="50" cy="50" r={radius} />
+        {share > 0 ? (
+          <circle
+            className={styles.ringArc}
+            cx="50"
+            cy="50"
+            r={radius}
+            strokeDasharray={`${share * length} ${length}`}
           />
-        </label>
-        <button
-          type="button"
-          className={styles.filters}
-          data-active={count ? "" : undefined}
-          aria-label={
-            count
-              ? `Filters, ${count} active ${count === 1 ? "filter" : "filters"}`
-              : "Filters"
-          }
-          onClick={onFilters}
-        >
-          {/* The count takes the icon's place, so the button keeps its width
-              and "Search reports" stays whole at large text. */}
-          {count ? (
-            <span className={styles.filterCount} aria-hidden="true">
-              {count}
-            </span>
-          ) : (
-            <SlidersHorizontal size={18} aria-hidden="true" />
-          )}
-          Filters
-        </button>
-      </div>
-      <div className={styles.resultRow} aria-live="polite">
-        <span data-report-count="">
-          {load.status === "ready" ? (
-            countLine(shown.length, load.rows.length, filters)
-          ) : (
-            <Skeleton width={120} height={14} />
-          )}
-        </span>
-        <span className={styles.sort}>
-          <ArrowDownUp size={14} aria-hidden="true" />
-          Newest first
-        </span>
-      </div>
-      {count ? (
-        <div className={styles.chips} aria-label="Applied filters">
-          {filters.leadType ? (
-            <span className={styles.chip}>
-              {leadTypeLabel(filters.leadType)}
-              <button
-                type="button"
-                aria-label="Remove lead type filter"
-                onClick={() =>
-                  setFilters((current) => ({ ...current, leadType: null }))
-                }
-              >
-                <X size={16} aria-hidden="true" />
-              </button>
-            </span>
-          ) : null}
-          {range ? (
-            <span className={styles.chip}>
-              {rangeWords(range.from, range.to)}
-              <button
-                type="button"
-                aria-label="Remove date filter"
-                onClick={() =>
-                  setFilters((current) => ({
-                    ...current,
-                    from: null,
-                    to: null,
-                  }))
-                }
-              >
-                <X size={16} aria-hidden="true" />
-              </button>
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-      <ReportList
-        load={load}
-        rows={shown}
-        retry={retry}
-        labelledBy="all-reports"
-        empty={
-          load.rows.length === 0 ? (
-            <div className={styles.firstTime} data-first-time="">
-              <p>No reports yet. Analyse a call and its report shows here.</p>
-            </div>
-          ) : (
-            <div className={styles.empty} data-no-match="">
-              <span className={styles.emptyIcon} aria-hidden="true">
-                <Search size={20} />
-              </span>
-              <h3>No matching reports</h3>
-              <p>
-                Try a different lead type or date range. Your reports have not
-                been removed.
-              </p>
-              <button
-                type="button"
-                className={styles.secondary}
-                onClick={clearAll}
-              >
-                Clear filters &amp; search
-              </button>
-            </div>
-          )
-        }
-        onOpen={onOpen}
-        onSave={onSave}
-        placeholders={4}
-      />
-      {load.status === "ready" && !load.complete ? (
-        <p className={styles.more} role="status">
-          Loading older reports…
-        </p>
-      ) : null}
-    </>
+        ) : null}
+      </svg>
+      <span className={styles.ringText}>
+        <b>{value}</b>
+        <small>{label}</small>
+      </span>
+    </span>
   );
 }
 
-function ReportList({
+const plural = (count: number, one: string, many: string) =>
+  `${count} ${count === 1 ? one : many}`;
+
+/** The one hero: calls waiting on you, else the reports ready. */
+function CallsHero({
   load,
-  rows,
-  retry,
-  labelledBy,
-  empty,
-  onOpen,
-  onSave,
-  placeholders,
+  needs,
+  ready,
+  onReview,
+  onAnalyse,
 }: {
   load: Load;
-  rows: readonly ReportRow[];
-  retry: () => void;
-  labelledBy: string;
-  empty: ReactNode;
-  onOpen: () => void;
-  onSave: (row: ReportRow) => void;
-  placeholders: number;
+  needs: number;
+  ready: number;
+  onReview: () => void;
+  onAnalyse: () => void;
 }) {
   if (load.status === "loading")
     return (
-      <div
-        className={styles.list}
+      <section
+        className={styles.hero}
         aria-busy="true"
-        aria-label="Loading reports"
+        aria-label="Loading your calls"
       >
-        {Array.from({ length: placeholders }, (_, index) => (
-          <div key={index} className={styles.cardSkeleton}>
-            <Skeleton width="40%" height={14} />
-            <Skeleton width="80%" height={18} />
-            <Skeleton width="95%" height={14} />
+        <Skeleton width={96} height={96} radius="circle" />
+        <span className={styles.heroText}>
+          <Skeleton width="80%" height={24} />
+          <Skeleton width="60%" height={16} />
+        </span>
+      </section>
+    );
+  const total = load.rows.length;
+  const review = needs > 0;
+  const title = review
+    ? `${plural(needs, "call needs", "calls need")} your review`
+    : total
+      ? `${plural(ready, "report", "reports")} ready`
+      : "No reports yet";
+  const line = review
+    ? "They have no report yet. Open each one to get it."
+    : total
+      ? "You are all caught up. Analyse a new call any time."
+      : "Analyse a call and its report shows here.";
+  return (
+    <section
+      className={styles.hero}
+      aria-labelledby="calls-hero-title"
+      data-calls-hero={review ? "review" : "ready"}
+    >
+      <Ring
+        part={review ? needs : ready}
+        whole={total}
+        value={review ? needs : ready}
+        label={review ? "to review" : "ready"}
+      />
+      <span className={styles.heroText}>
+        <h2 id="calls-hero-title">{title}</h2>
+        <p>{line}</p>
+        {review ? (
+          <button
+            type="button"
+            className={`${styles.primary} ${styles.heroButton}`}
+            onClick={onReview}
+          >
+            Review {plural(needs, "call", "calls")}
+            <ChevronRight size={18} aria-hidden="true" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={`${styles.primary} ${styles.heroButton}`}
+            onClick={onAnalyse}
+          >
+            <Plus size={18} aria-hidden="true" />
+            Analyse a call
+          </button>
+        )}
+      </span>
+    </section>
+  );
+}
+
+/** "Today", "Yesterday", "13 Nov": the day groups, newest first. */
+export function dayGroups(
+  rows: readonly ReportRow[],
+  dates: DisplayDates,
+): { label: string; rows: ReportRow[] }[] {
+  const groups: { label: string; rows: ReportRow[] }[] = [];
+  for (const row of rows) {
+    const label = callDate(row.createdAt, undefined, dates);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.rows.push(row);
+    else groups.push({ label, rows: [row] });
+  }
+  return groups;
+}
+
+function CallList({
+  load,
+  rows,
+  dates,
+  retry,
+  empty,
+  onOpen,
+  onSave,
+}: {
+  load: Load;
+  rows: readonly ReportRow[];
+  dates: DisplayDates;
+  retry: () => void;
+  empty: ReactNode;
+  onOpen: () => void;
+  onSave: (row: ReportRow) => void;
+}) {
+  const [limit, setLimit] = useState(PAGE_ROWS);
+  if (load.status === "loading")
+    return (
+      <div
+        className={styles.rowsCard}
+        aria-busy="true"
+        aria-label="Loading calls"
+      >
+        {Array.from({ length: 4 }, (_, index) => (
+          <div key={index} className={styles.rowSkeleton}>
+            <Skeleton width={40} height={40} radius="circle" />
+            <span>
+              <Skeleton width="55%" height={16} />
+              <Skeleton width="35%" height={13} />
+            </span>
           </div>
         ))}
       </div>
@@ -716,7 +754,7 @@ function ReportList({
   if (load.status === "error" && load.rows.length === 0)
     return (
       <div className={styles.empty} role="alert">
-        <h3>Your reports didn&apos;t load</h3>
+        <h3>Your calls didn&apos;t load</h3>
         <p>Check your connection and try again.</p>
         <button type="button" className={styles.secondary} onClick={retry}>
           Try again
@@ -724,14 +762,247 @@ function ReportList({
       </div>
     );
   if (rows.length === 0) return <>{empty}</>;
+  const groups = dayGroups(rows.slice(0, limit), dates);
   return (
-    <ol className={styles.list} aria-labelledby={labelledBy}>
-      {rows.map((row) => (
-        <li key={row.id}>
-          <ReportCard row={row} onOpen={onOpen} onSave={onSave} />
-        </li>
+    <div className={styles.groups}>
+      {groups.map((group, index) => (
+        <section
+          key={`${group.label}-${index}`}
+          className={styles.group}
+          aria-labelledby={`calls-day-${index}`}
+        >
+          <h2 id={`calls-day-${index}`} className={styles.dayHead}>
+            {group.label}
+          </h2>
+          <ol className={`${styles.rowsCard} ${styles.list}`}>
+            {group.rows.map((row) => (
+              <li key={row.id}>
+                <CallRow
+                  row={row}
+                  dates={dates}
+                  onOpen={onOpen}
+                  onSave={onSave}
+                />
+              </li>
+            ))}
+          </ol>
+        </section>
       ))}
-    </ol>
+      {rows.length > limit ? (
+        <button
+          type="button"
+          className={styles.secondary}
+          onClick={() => setLimit((value) => value + PAGE_ROWS)}
+        >
+          Show more calls
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/** How the Report says the call ended, in one word (sx-redesign 21 Nov 2026). */
+export const OUTCOME_WORD: Record<string, { word: string; tone: string }> = {
+  closed: { word: "Won", tone: "good" },
+  follow_up: { word: "Follow-up", tone: "action" },
+  future_date: { word: "Meeting", tone: "calls" },
+  no_sale: { word: "Lost", tone: "problem" },
+  disqualified: { word: "Not a fit", tone: "muted" },
+};
+
+/** The report's state, short: Report ready, Analysing, Needs review, … */
+export function statusWord(row: ReportRow): { word: string; tone: string } {
+  if (row.ready) return { word: "Report ready", tone: "good" };
+  if (row.active) return { word: "Analysing", tone: "calls" };
+  if (row.needsReview) return { word: "Needs review", tone: "action" };
+  return { word: row.status.split(" · ")[0], tone: "muted" };
+}
+
+/** "4 min 12 s", "56 s": the call's own length. */
+export function lengthWords(seconds: number): string {
+  const whole = Math.max(0, Math.round(seconds));
+  if (whole < 60) return `${Math.max(1, whole)} s`;
+  const minutes = Math.floor(whole / 60);
+  const rest = whole % 60;
+  return rest ? `${minutes} min ${rest} s` : `${minutes} min`;
+}
+
+/** "10:40 am" in the reader's zone. */
+export function clockWords(
+  row: Pick<ReportRow, "createdAt">,
+  dates: Pick<DisplayDates, "locale" | "timeZone">,
+): string {
+  const at = new Date(row.createdAt);
+  if (Number.isNaN(at.getTime())) return "";
+  return new Intl.DateTimeFormat(dates.locale, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: dates.timeZone,
+  })
+    .format(at)
+    .replace(
+      /\s?([ap])\.?\s?m\.?$/i,
+      (_, half: string) => ` ${half.toLowerCase()}m`,
+    );
+}
+
+/** "AS" for Ashwini Salunkhe; null when no lead names the call. */
+export function initials(name: string | null): string | null {
+  const words = (name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return null;
+  const letters =
+    words.length > 1 ? [words[0], words[words.length - 1]] : words;
+  return letters
+    .map((word) => Array.from(word)[0] ?? "")
+    .join("")
+    .toLocaleUpperCase();
+}
+
+const AVATAR_TONES = ["good", "info", "action", "calls", "problem"] as const;
+
+function avatarTone(name: string): string {
+  let sum = 0;
+  for (const char of name) sum = (sum + (char.codePointAt(0) ?? 0)) % 9973;
+  return AVATAR_TONES[sum % AVATAR_TONES.length];
+}
+
+function CallRow({
+  row,
+  dates,
+  onOpen,
+  onSave,
+}: {
+  row: ReportRow;
+  dates: DisplayDates;
+  onOpen: () => void;
+  onSave: (row: ReportRow) => void;
+}) {
+  const name = row.prospect ?? row.topic;
+  const letters = initials(row.prospect);
+  const outcome = row.outcome ? OUTCOME_WORD[row.outcome] : undefined;
+  const status = statusWord(row);
+  const heading = row.prospect ? `${row.prospect} · ${row.topic}` : row.topic;
+  return (
+    <article
+      className={styles.row}
+      data-report-card={row.id}
+      data-source={row.source}
+      data-saved={row.saved ? "" : undefined}
+    >
+      <span
+        className={styles.avatar}
+        data-tone={letters ? avatarTone(name) : "muted"}
+        aria-hidden="true"
+      >
+        {letters ?? <Phone size={18} />}
+      </span>
+      <span className={styles.rowMain}>
+        <h3 className={styles.rowName}>
+          <Link
+            href={callPath(row.id)}
+            className={styles.rowLink}
+            aria-label={heading}
+            onClick={onOpen}
+          >
+            {name}
+          </Link>
+        </h3>
+        <span className={styles.rowMeta}>
+          {lengthWords(row.durationSeconds)} · {clockWords(row, dates)}
+          {row.owner ? (
+            <span className={styles.metaOwner}> · {row.owner}</span>
+          ) : null}
+        </span>
+      </span>
+      <span className={styles.rowChips}>
+        {row.owner ? (
+          <span className={styles.chipOwner} title={row.owner}>
+            {row.owner.split(" ")[0]}
+          </span>
+        ) : null}
+        {outcome ? (
+          <span className={styles.word} data-tone={outcome.tone}>
+            {outcome.word}
+          </span>
+        ) : null}
+        <span
+          className={styles.word}
+          data-tone={status.tone}
+          data-report-status=""
+        >
+          {status.word}
+        </span>
+      </span>
+      <button
+        type="button"
+        className={styles.save}
+        aria-pressed={row.saved}
+        aria-label={
+          row.saved ? `${SAVED_LABEL}: ${heading}` : `Save report: ${heading}`
+        }
+        title={row.saved ? SAVED_LABEL : "Save report"}
+        onClick={() => onSave(row)}
+      >
+        <Bookmark size={18} aria-hidden="true" />
+      </button>
+      <ChevronRight className={styles.chevron} size={18} aria-hidden="true" />
+    </article>
+  );
+}
+
+/** Under the list: Analyse a call (when the hero reviews), the phone's calls, old calls. */
+function MoreLinks({
+  analyse,
+  organisation,
+  onAnalyse,
+}: {
+  analyse: boolean;
+  organisation: boolean;
+  onAnalyse: () => void;
+}) {
+  return (
+    <>
+      {analyse || organisation ? (
+        <div className={styles.links}>
+          {analyse ? (
+            <button
+              type="button"
+              className={styles.callLog}
+              onClick={onAnalyse}
+              data-analyse-link=""
+            >
+              <span className={styles.linkIcon} aria-hidden="true">
+                <Plus size={20} />
+              </span>
+              <span>
+                <b>Analyse a call</b>
+                <small>Upload a recording and get its report</small>
+              </span>
+              <ChevronRight size={18} aria-hidden="true" />
+            </button>
+          ) : null}
+          {organisation ? (
+            <Link
+              href={`${CALLS_PATH}?view=calls`}
+              className={styles.callLog}
+              data-your-calls=""
+            >
+              <span className={styles.linkIcon} aria-hidden="true">
+                <Phone size={20} />
+              </span>
+              <span>
+                <b>Your phone calls</b>
+                <small>Calls and recordings on this phone, newest first</small>
+              </span>
+              <ChevronRight size={18} aria-hidden="true" />
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
+      {/* Find my old calls: the phone app only; nothing shows elsewhere. */}
+      <OldCallsCard />
+    </>
   );
 }
 
@@ -772,70 +1043,6 @@ export function durationWords(seconds: number): string {
   return `${Math.round(seconds / 60)} min`;
 }
 
-function ReportCard({
-  row,
-  onOpen,
-  onSave,
-}: {
-  row: ReportRow;
-  onOpen: () => void;
-  onSave: (row: ReportRow) => void;
-}) {
-  const dates = useDisplayDates();
-  const heading = `${row.prospect ?? "Unassigned prospect"} · ${row.topic}`;
-  return (
-    <article
-      className={styles.card}
-      data-report-card={row.id}
-      data-source={row.source}
-      data-saved={row.saved ? "" : undefined}
-    >
-      <div className={styles.cardTop}>
-        <span className={styles.pill} data-source={row.source}>
-          {SOURCE_LABEL[row.source]}
-        </span>
-        <span className={styles.when}>{cardWhen(row, dates)}</span>
-      </div>
-      <div className={styles.cardTitle}>
-        <h3>
-          <Link
-            href={callPath(row.id)}
-            className={styles.cardLink}
-            onClick={onOpen}
-          >
-            {heading}
-          </Link>
-        </h3>
-        <button
-          type="button"
-          className={styles.save}
-          aria-pressed={row.saved}
-          aria-label={
-            row.saved ? `${SAVED_LABEL}: ${heading}` : `Save report: ${heading}`
-          }
-          title={row.saved ? SAVED_LABEL : "Save report"}
-          onClick={() => onSave(row)}
-        >
-          <Bookmark size={20} aria-hidden="true" />
-        </button>
-      </div>
-      {row.summary ? (
-        <p className={styles.summary}>{summaryLine(row.summary)}</p>
-      ) : null}
-      <div className={styles.cardFoot}>
-        <span className={styles.meta}>
-          {durationWords(row.durationSeconds)} · {row.status}
-          {row.owner ? ` · ${row.owner}` : ""}
-        </span>
-        <span className={styles.open} aria-hidden="true">
-          View report
-          <ChevronRight size={16} />
-        </span>
-      </div>
-    </article>
-  );
-}
-
 function AnalyseScreen({ onBack }: { onBack: () => void }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
@@ -844,7 +1051,7 @@ function AnalyseScreen({ onBack }: { onBack: () => void }) {
     <div className={styles.page} data-reports-analyse="">
       <button type="button" className={styles.back} onClick={onBack}>
         <ChevronLeft size={20} aria-hidden="true" />
-        Back to Reports
+        Back to Calls
       </button>
       <h1 className={styles.uploadTitle}>Make your next call better.</h1>
       <p className={styles.subtitle}>
@@ -872,7 +1079,7 @@ function AnalyseScreen({ onBack }: { onBack: () => void }) {
             if (!file) return;
             setChosen(file.name);
             handOverRecording(file);
-            // New analysis takes this screen's place: its Back is Reports.
+            // New analysis takes this screen's place: its Back is Calls.
             router.replace(NEW_ANALYSIS_PATH);
           }}
         />
@@ -898,7 +1105,7 @@ function YourCalls({
     <div className={styles.page} data-reports-calls="">
       <Link href={CALLS_PATH} className={styles.back}>
         <ChevronLeft size={20} aria-hidden="true" />
-        Back to Reports
+        Back to Calls
       </Link>
       <RecordingLine />
       <SectionBoundary name="Your calls" resetKey={identity}>
@@ -912,13 +1119,20 @@ export function ReportsSkeleton() {
   return (
     <div className={styles.page} aria-busy="true" data-reports-loading="">
       <h1 className={styles.srOnly}>{CALLS_PAGE_NAME}</h1>
-      <Skeleton width="80%" height={16} />
+      <div className={styles.hero} aria-hidden="true">
+        <Skeleton width={96} height={96} radius="circle" />
+        <span className={styles.heroText}>
+          <Skeleton width="80%" height={24} />
+          <Skeleton width="60%" height={16} />
+        </span>
+      </div>
       <div className={styles.tabs} aria-hidden="true">
         <span className={styles.tab} />
         <span className={styles.tab} />
+        <span className={styles.tab} />
       </div>
-      <Skeleton width="100%" height={87} />
       <Skeleton width="100%" height={52} />
+      <Skeleton width="100%" height={180} />
     </div>
   );
 }

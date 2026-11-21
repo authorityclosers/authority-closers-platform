@@ -10,48 +10,39 @@
  * Overview, Team, Analytics and Company. Each tab shows the same panes that
  * Settings shows, so nothing is built twice. Outside an organisation the page
  * is the organisation view as before, with its own states.
+ *
+ * Round-2 board 7 (20 Nov 2026): the organisation's settings moved into one
+ * Settings, each with its scope. The hub keeps Analytics (until board 6's
+ * Team today); every other tab's address, old links and connect flows coming
+ * back with ?connected=… included, goes to its Settings section with its own
+ * query kept.
  */
 
 import { roleLabel } from "./roles";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, type ReactNode } from "react";
 
 import { useBranding } from "../shell/branding-store";
 import { WorkspaceTile } from "../shell/workspace-picker";
 import { AcquisitionShell } from "../acquisition-shell";
+import { hubTarget } from "../settings/hub-redirect";
 import { SettingsSectionView } from "../settings/sections";
 import {
-  sectionById,
-  type SettingsSectionId,
+  hubTabSetting,
+  isSettingsSection,
 } from "../settings/settings-sections";
-import { ActionList, ActionRow, Segmented } from "../ui/kit";
-import { SideScroll, sideScrollFades, useSideScroll } from "../ui/side-scroll";
+import { SettingsOverview } from "../settings/settings-shell";
+import { sideScrollFades, useSideScroll } from "../ui/side-scroll";
 import { useWorkspaceAccess } from "../workspace-access";
 import type { ServerOrganisation } from "./organisation-seed";
 import { AnalyticsView } from "./analytics-view";
 import { can } from "./roles";
 import { OrganisationView } from "./organisation-view";
+import { OrganisationSkeleton } from "./organisation-skeleton";
 import { HUB_PATH, HUB_TABS, hubHref, type HubTab } from "./hub-tabs";
 import { hubTabsFor } from "./setup-tabs";
 import styles from "./org-hub.module.css";
-import { OrganisationSources } from "./setup/sources";
-import { OrganisationStages } from "./setup/stages";
-import { OrganisationRules } from "./setup/rules";
-
-type Part = { key: string; label: string; section: SettingsSectionId };
-
-const LEAD_PARTS: readonly Part[] = [
-  { key: "rules", label: "Lead rules", section: "lead-rules" },
-  { key: "stages", label: "Stages", section: "stages" },
-  { key: "sources", label: "Sources", section: "sources" },
-];
-const CONNECTION_PARTS: readonly Part[] = [
-  { key: "apps", label: "Connected apps", section: "apps" },
-  { key: "ai-replies", label: "AI replies", section: "ai-replies" },
-  { key: "developers", label: "Developers", section: "developers" },
-  { key: "pulse", label: "Pulse", section: "pulse" },
-];
 
 /**
  * The tab row; Insights shows it too, so leaving for it keeps the place. On a
@@ -89,60 +80,6 @@ export function HubTabs({
         </Link>
       ))}
     </nav>
-  );
-}
-
-function Parts({
-  tab,
-  parts,
-  part,
-}: {
-  tab: HubTab;
-  parts: readonly Part[];
-  part: string | null;
-}) {
-  // A tap shows its part at once. The address alone can't: here a bare
-  // history.replaceState doesn't refresh useSearchParams, so Stages and Sources
-  // stayed on Lead rules (owner, 25 Oct 2026). The tap holds until the address's
-  // own part changes (a link, another tab).
-  const [chosen, setChosen] = useState<{
-    from: string | null;
-    key: string;
-  } | null>(null);
-  const shown = chosen && chosen.from === part ? chosen.key : part;
-  const current = parts.find((item) => item.key === shown) ?? parts[0];
-  return (
-    <div className={styles.parts}>
-      {/* Its own scroller: a bare segmented control widened the page. */}
-      <SideScroll chosen={current.key}>
-        <Segmented
-          label={tab.label}
-          value={current.key}
-          items={parts.map((item) => ({ key: item.key, label: item.label }))}
-          onChange={(next) => {
-            setChosen({ from: part, key: next });
-            // The part lives in the address too, so reload and links keep it.
-            const url = new URL(window.location.href);
-            url.searchParams.set("part", next);
-            window.history.replaceState(window.history.state, "", url);
-          }}
-        />
-      </SideScroll>
-      {current.section === "sources" ? (
-        <OrganisationSources key="sources" />
-      ) : current.section === "stages" ? (
-        // The switch above names it: no second title (owner, bug 192).
-        <OrganisationStages key="stages" bare />
-      ) : current.section === "lead-rules" ? (
-        <OrganisationRules key="rules" />
-      ) : (
-        <SettingsSectionView
-          key={current.section}
-          id={current.section}
-          headless
-        />
-      )}
-    </div>
   );
 }
 
@@ -217,87 +154,39 @@ export function OrganisationHub({
   base?: string;
 }) {
   const access = useWorkspaceAccess();
+  const router = useRouter();
   const query = useSearchParams() as URLSearchParams | null;
   const current = access?.workspaces?.find(
     (item) => item.tenant_id === access.context?.tenantId,
   );
+  const inOrganisation = current?.kind === "organisation";
+  // Every tab but Analytics is a Settings section now (round-2 board 7).
+  const moved = inOrganisation
+    ? hubTabSetting(query?.get("tab") ?? null, query?.get("part") ?? null)
+    : null;
+  // A review page (its own base) shows the section where it is, for its pictures.
+  const real = base === HUB_PATH;
+  useEffect(() => {
+    if (moved && real)
+      router.replace(
+        hubTarget(moved, window.location.search, window.location.hash),
+      );
+  }, [moved, real, router]);
+  // Its Settings page loads while the workspace is still being checked, so
+  // the move is instant once it is (sx-redesign, 21 Nov 2026).
+  const early = real
+    ? hubTabSetting(query?.get("tab") ?? null, query?.get("part") ?? null)
+    : null;
+  useEffect(() => {
+    if (early) router.prefetch(early);
+  }, [early, router]);
   // Not in an organisation (or not known yet): the page as it was.
-  if (current?.kind !== "organisation")
+  if (!inOrganisation)
     return <OrganisationView initial={initial} sections={["overview"]} />;
+  if (moved && real) return <OrganisationSkeleton />;
 
   const tabs = hubTabsFor(current.role);
-  const asked = query?.get("tab") ?? "overview";
-  const tab = tabs.find((item) => item.id === asked && !item.href) ?? tabs[0];
-  const part = query?.get("part") ?? null;
-  // A part shows only to the roles its server allows (settings-sections.ts
-  // needs): whoever sets up leads gets connected apps and AI replies, and API
-  // keys and Pulse stay with those who manage the organisation.
-  const mayOpen = (item: Part) => {
-    const needs = sectionById(item.section).needs;
-    return !needs || can(current.role, needs);
-  };
-
-  let body: ReactNode;
-  switch (tab.id) {
-    case "team":
-      body = <SettingsSectionView id="team" headless />;
-      break;
-    case "analytics":
-      body = (
-        <AnalyticsView
-          key={current.tenant_id}
-          team={can(current.role, "team.view")}
-          personId={access?.context?.personId}
-        />
-      );
-      break;
-    case "leads":
-      body = (
-        <Parts
-          key={current.tenant_id}
-          tab={tab}
-          parts={LEAD_PARTS.filter(mayOpen)}
-          part={part}
-        />
-      );
-      break;
-    case "connections":
-      body = (
-        <Parts
-          key={current.tenant_id}
-          tab={tab}
-          parts={CONNECTION_PARTS.filter(mayOpen)}
-          part={part}
-        />
-      );
-      break;
-    case "call-ai":
-      body = <SettingsSectionView id="call-ai" headless />;
-      break;
-    case "company":
-      body = <SettingsSectionView id="organisation" headless />;
-      break;
-    default:
-      body = (
-        <ActionList label="Organisation">
-          {tabs
-            .filter((item) => item.id !== "overview")
-            .map((item) => {
-              const Icon = item.icon;
-              return (
-                <ActionRow
-                  key={item.id}
-                  icon={<Icon size={20} />}
-                  title={item.label}
-                  note={item.note}
-                  href={hubHref(item, undefined, base)}
-                />
-              );
-            })}
-        </ActionList>
-      );
-  }
-
+  const section = moved?.split("/")[2] ?? null;
   return (
     <AcquisitionShell
       authenticated={access?.authenticated === true}
@@ -306,15 +195,25 @@ export function OrganisationHub({
       mobileFit={false}
     >
       <div className={styles.hub}>
-        {/* Leads setup and Connections keep their tabs but not the card, so
-            their settings start at the top (owner, 31 Oct 2026; production
-            report 123, 3 Nov 2026). The other tabs keep it with the
-            organisation's logo (owner, #25). */}
-        {tab.id === "leads" || tab.id === "connections" ? null : (
-          <OrgHeader workspace={current} />
-        )}
-        <HubTabs tabs={tabs} current={tab.id} base={base} />
-        <div className={styles.body}>{body}</div>
+        <OrgHeader workspace={current} />
+        <HubTabs
+          tabs={tabs}
+          current={moved ? (query?.get("tab") ?? "overview") : "analytics"}
+          base={base}
+        />
+        <div className={styles.body}>
+          {!moved ? (
+            <AnalyticsView
+              key={current.tenant_id}
+              team={can(current.role, "team.view")}
+              personId={access?.context?.personId}
+            />
+          ) : isSettingsSection(section) ? (
+            <SettingsSectionView id={section} headless />
+          ) : (
+            <SettingsOverview />
+          )}
+        </div>
       </div>
     </AcquisitionShell>
   );

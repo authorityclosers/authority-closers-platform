@@ -2,6 +2,12 @@
  * Settings (owner, 20 Oct: "revamp the settings with all this"): one place for
  * the account, the organisation, connected apps, developers and devices. Each
  * section is its own address under /settings; older addresses map here. Pure.
+ *
+ * Owner's round-2 board 7 (option A, 20 Nov 2026): one Settings, grouped the
+ * way an owner thinks (Team, Leads, Calls & phones, Connections, Company, Plan
+ * & billing), then Just me and This phone; every group says who it affects
+ * (Everyone in the organisation, Just me, This phone). The Organisation hub's
+ * settings live here again and its old addresses come here (org-hub.tsx).
  */
 import {
   Activity,
@@ -12,21 +18,26 @@ import {
   CircleUserRound,
   ClipboardList,
   Clock,
+  Filter,
+  Phone,
   Plug,
   CreditCard,
   Code,
   LifeBuoy,
   Link2,
+  Music2,
   PhoneCall,
   Route,
   Sparkles,
   ShieldCheck,
   Smartphone,
+  SmartphoneNfc,
   UsersRound,
   type LucideIcon,
 } from "lucide-react";
 
 import type { Capability } from "../organisation/roles";
+import type { SettingScope } from "./scope-chip";
 
 export type SettingsSectionId =
   | "profile"
@@ -36,11 +47,14 @@ export type SettingsSectionId =
   | "plan"
   | "analysis-time"
   | "privacy"
+  | "sounds"
   | "organisation"
   | "team"
   | "lead-rules"
   | "stages"
   | "call-ai"
+  | "phones"
+  | "team-sounds"
   | "sources"
   | "apps"
   | "ai-replies"
@@ -50,60 +64,151 @@ export type SettingsSectionId =
   | "devices"
   | "help";
 
+export type SettingsGroup =
+  | "Team"
+  | "Leads"
+  | "Calls & phones"
+  | "Connections"
+  | "Company"
+  | "Plan & billing"
+  | "Just me"
+  | "This phone";
+
 export type SettingsSection = {
   id: SettingsSectionId;
   label: string;
   /** One line under the label in the list. */
   hint: string;
   icon: LucideIcon;
-  group: "Account" | "Organisation" | "Connections" | "This device";
+  group: SettingsGroup;
   /**
    * Shown only to roles with this capability (roles.ts), the one its API's
    * server guard asks for; the API still decides the rest.
    */
   needs?: Capability;
+  /** The organisation's own: listed only inside an organisation (its address still works). */
+  org?: true;
   /** Opens inside that section's screen, so it isn't listed on its own (its address still works). */
   within?: SettingsSectionId;
 };
 
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
-    id: "profile",
-    label: "Profile",
-    hint: "Your name, photo, phone and theme",
-    icon: CircleUserRound,
-    group: "Account",
+    id: "team",
+    label: "Team & roles",
+    hint: "Members, invites and who can do what",
+    icon: UsersRound,
+    group: "Team",
+    org: true,
   },
   {
-    // Owner, 22 Oct 2026: salespeople need "much more settings".
-    id: "selling",
-    label: "Selling",
-    hint: "Taking new leads, calling from your phone, alerts, AI on your calls",
-    icon: PhoneCall,
-    group: "Account",
+    // Approved map, slice 5 (22 Oct 2026): Leads' own settings live here.
+    id: "lead-rules",
+    label: "Lead rules",
+    hint: "Who gets new leads, limits, reassigning and work hours",
+    icon: ClipboardList,
+    group: "Leads",
+    needs: "leads.manage",
+    org: true,
   },
   {
-    id: "security",
-    label: "Sign-in & security",
-    hint: "Google, Facebook and Apple sign-in, signing out",
-    icon: ShieldCheck,
-    group: "Account",
+    id: "stages",
+    label: "Lead stages",
+    hint: "What your sellers see",
+    icon: Route,
+    group: "Leads",
+    needs: "leads.manage",
+    org: true,
   },
   {
-    // Owner via the orchestrator, 24 Oct 2026: the AI apps a person connected
-    // (Pulse, ChatGPT, Claude) had no screen; everyone, members too.
-    id: "ai-apps",
-    label: "AI apps",
-    hint: "ChatGPT, Claude and Pulse with your calls and leads",
+    id: "sources",
+    label: "Lead sources",
+    hint: "Lead forms, sheets, webhooks and imports",
+    icon: Plug,
+    group: "Leads",
+    needs: "leads.manage",
+    org: true,
+  },
+  {
+    // Board 7's phone setup policy: each seller's phone, ready or what's missing.
+    id: "phones",
+    label: "Sellers' phones",
+    hint: "Each seller's phone: ready to record, or what's missing",
+    icon: SmartphoneNfc,
+    group: "Calls & phones",
+    needs: "team.view",
+    org: true,
+  },
+  {
+    id: "call-ai",
+    label: "AI on calls",
+    hint: "How much AI reads each seller's recorded calls",
     icon: Sparkles,
-    group: "Account",
+    group: "Calls & phones",
+    needs: "leads.manage",
+    org: true,
+  },
+  {
+    // Owner's round-2 board 4: the team's sound for each moment.
+    id: "team-sounds",
+    label: "Sounds for everyone",
+    hint: "The team’s sound for each moment",
+    icon: Music2,
+    group: "Calls & phones",
+    needs: "leads.manage",
+    org: true,
+  },
+  {
+    id: "apps",
+    label: "Connected apps",
+    hint: "Lead ads, WhatsApp, Messenger and Instagram",
+    icon: Blocks,
+    group: "Connections",
+    needs: "leads.manage",
+    org: true,
+  },
+  {
+    id: "ai-replies",
+    label: "AI replies",
+    hint: "Suggested and automatic replies to leads",
+    icon: Bot,
+    group: "Connections",
+    needs: "leads.manage",
+    org: true,
+  },
+  {
+    id: "developers",
+    label: "Developers",
+    hint: "API keys, AI assistants (MCP), webhooks and the docs",
+    icon: Code,
+    group: "Connections",
+    needs: "org.manage",
+    org: true,
+  },
+  {
+    // Owner, 25 Oct 2026: an organisation links its Pulse org.
+    id: "pulse",
+    label: "Pulse",
+    hint: "Your team's profiles from Pulse, and what you share with it",
+    icon: Link2,
+    group: "Connections",
+    needs: "org.manage",
+    org: true,
+  },
+  {
+    id: "organisation",
+    label: "Company",
+    hint: "Name, logo, details and your email domains",
+    icon: Building2,
+    group: "Company",
+    org: true,
   },
   {
     id: "plan",
-    label: "Plan & usage",
-    hint: "Your plan and invoices",
+    label: "Plan & billing",
+    hint: "Your plan, seats and invoices",
     icon: CreditCard,
-    group: "Account",
+    group: "Plan & billing",
     // Billing belongs to whoever pays: the person in a personal workspace,
     // in an organisation the roles that see billing (workspace-role.ts).
     needs: "billing.view",
@@ -115,7 +220,48 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     label: "Analysis time",
     hint: "How much call analysis you have left",
     icon: Clock,
-    group: "Account",
+    group: "Plan & billing",
+  },
+  {
+    id: "profile",
+    label: "Profile",
+    hint: "Your name, photo, phone and theme",
+    icon: CircleUserRound,
+    group: "Just me",
+  },
+  {
+    // Owner, 22 Oct 2026: salespeople need "much more settings".
+    id: "selling",
+    label: "Selling",
+    hint: "Taking new leads, calling from your phone, alerts, AI on your calls",
+    icon: PhoneCall,
+    group: "Just me",
+  },
+  {
+    // Owner's round-2 board 4 (option B, 20 Nov 2026): a sound for each
+    // moment, hear it as you pick; the team's unless you pick your own.
+    id: "sounds",
+    label: "Sounds & alerts",
+    hint: "Pick or hear a sound for each moment",
+    icon: Music2,
+    group: "Just me",
+  },
+  {
+    id: "security",
+    label: "Sign-in & security",
+    // Says only what the rows hold: Apple shows only where it is offered.
+    hint: "How you sign in, and signing out",
+    icon: ShieldCheck,
+    group: "Just me",
+  },
+  {
+    // Owner via the orchestrator, 24 Oct 2026: the AI apps a person connected
+    // (Pulse, ChatGPT, Claude) had no screen; everyone, members too.
+    id: "ai-apps",
+    label: "AI apps",
+    hint: "ChatGPT, Claude and Pulse with your calls and leads",
+    icon: Sparkles,
+    group: "Just me",
   },
   {
     // Owner, 24 Oct 2026: usage analytics on by default, each person can turn it off.
@@ -123,102 +269,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     label: "Privacy",
     hint: "Usage analytics, for you and your workspace",
     icon: Activity,
-    group: "Account",
+    group: "Just me",
     // Owner, 24 Oct 2026: one screen for your own switches.
-    within: "notifications",
-  },
-  {
-    id: "organisation",
-    label: "Organisation",
-    hint: "Company details, logo and activity",
-    icon: Building2,
-    group: "Organisation",
-  },
-  {
-    id: "team",
-    label: "Team & roles",
-    hint: "Members, invites and who can do what",
-    icon: UsersRound,
-    group: "Organisation",
-  },
-  {
-    // Approved map, slice 5 (22 Oct 2026): Leads' own settings live here.
-    id: "lead-rules",
-    label: "Lead rules",
-    hint: "Who gets new leads, limits, reassigning and work hours",
-    icon: ClipboardList,
-    group: "Organisation",
-    needs: "leads.manage",
-  },
-  {
-    id: "stages",
-    label: "Lead stages",
-    hint: "What your sellers see",
-    icon: Route,
-    group: "Organisation",
-  },
-  {
-    id: "call-ai",
-    label: "AI on calls",
-    hint: "How much AI reads each seller's recorded calls",
-    icon: Sparkles,
-    group: "Organisation",
-    needs: "leads.manage",
-  },
-  {
-    id: "sources",
-    label: "Lead sources",
-    hint: "Lead forms, sheets, webhooks and imports",
-    icon: Plug,
-    group: "Connections",
-    needs: "leads.manage",
-  },
-  {
-    id: "apps",
-    label: "Connected apps",
-    hint: "Lead ads, WhatsApp, Messenger and Instagram",
-    icon: Blocks,
-    group: "Connections",
-    needs: "leads.manage",
-  },
-  {
-    id: "ai-replies",
-    label: "AI replies",
-    hint: "Suggested and automatic replies to leads",
-    icon: Bot,
-    group: "Connections",
-    needs: "leads.manage",
-  },
-  {
-    id: "developers",
-    label: "Developers",
-    hint: "API keys, AI assistants (MCP), webhooks and the docs",
-    icon: Code,
-    group: "Connections",
-    needs: "org.manage",
-  },
-  {
-    // Owner, 25 Oct 2026: an organisation links its Pulse org.
-    id: "pulse",
-    label: "Pulse",
-    hint: "Your team's profiles from Pulse, and what you share with it",
-    icon: Link2,
-    group: "Connections",
-    needs: "org.manage",
-  },
-  {
-    id: "notifications",
-    label: "Phone & alerts",
-    hint: "Phone setup, alerts, vibration and usage analytics",
-    icon: BellRing,
-    group: "This device",
-  },
-  {
-    id: "devices",
-    label: "Apps & devices",
-    hint: "The phone app and call recording",
-    icon: Smartphone,
-    group: "This device",
     within: "notifications",
   },
   {
@@ -226,58 +278,151 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     label: "Help & support",
     hint: "First call guide and support",
     icon: LifeBuoy,
-    group: "This device",
+    group: "Just me",
   },
-];
-
-/**
- * Settings that live with their own work and are listed here so they are easy
- * to find; each opens its own page. None just now: Lead stages moved into
- * Settings (approved map, slice 5, 22 Oct 2026).
- */
-export type SettingsLink = Omit<SettingsSection, "id"> & {
-  key: string;
-  href: string;
-};
-
-export const SETTINGS_LINKS: readonly SettingsLink[] = [
   {
-    // Owner, 23 Oct 2026: the organisation's settings live in its hub.
-    key: "organisation",
-    label: "Organisation",
-    hint: "Team, leads setup, connections, AI on calls and company",
-    icon: Building2,
-    group: "Organisation",
-    href: "/organisation",
+    id: "notifications",
+    label: "Phone & alerts",
+    hint: "Phone setup, alerts, vibration and usage analytics",
+    icon: BellRing,
+    group: "This phone",
+  },
+  {
+    id: "devices",
+    label: "Apps & devices",
+    hint: "The phone app and call recording",
+    icon: Smartphone,
+    group: "This phone",
+    within: "notifications",
   },
 ];
 
+export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
+  "Team",
+  "Leads",
+  "Calls & phones",
+  "Connections",
+  "Company",
+  "Plan & billing",
+  "Just me",
+  "This phone",
+];
+
 /**
- * Where each of the organisation's sections lives in its hub (org-hub.tsx).
- * Settings doesn't list these; their old addresses go there (hub-redirect).
+ * The Settings hub (sx-redesign board pick C "Summary first", owner 21 Nov
+ * 2026): each group is one card that opens its own page (/settings/group/<slug>)
+ * listing its sections, or the section itself when it has only one. "Just me"
+ * holds "This phone" too, so an owner sees six company cards and one of their own.
  */
-const HUB_ADDRESSES: Partial<Record<SettingsSectionId, string>> = {
-  organisation: "/organisation?tab=company",
-  team: "/organisation?tab=team",
-  "lead-rules": "/organisation?tab=leads&part=rules",
-  // Its own full-screen page (owner, 31 Oct 2026).
-  stages: "/organisation/stages",
-  sources: "/organisation?tab=leads&part=sources",
-  "call-ai": "/organisation?tab=call-ai",
-  apps: "/organisation?tab=connections&part=apps",
-  "ai-replies": "/organisation?tab=connections&part=ai-replies",
-  developers: "/organisation?tab=connections&part=developers",
-  pulse: "/organisation?tab=connections&part=pulse",
+export const GROUP_SLUG: Record<SettingsGroup, string> = {
+  Team: "team",
+  Leads: "leads",
+  "Calls & phones": "calls-phones",
+  Connections: "connections",
+  Company: "company",
+  "Plan & billing": "plan-billing",
+  "Just me": "just-me",
+  "This phone": "this-phone",
 };
 
-export const hubAddress = (id: SettingsSectionId): string | null =>
-  HUB_ADDRESSES[id] ?? null;
+/** One short line under a group's name when nothing better is known. */
+export const GROUP_LINE: Record<SettingsGroup, string> = {
+  Team: "People and what they can do",
+  Leads: "Rules, stages and sources",
+  "Calls & phones": "Phones, AI on calls, sounds",
+  Connections: "Apps, AI replies, developers",
+  Company: "Name, logo and details",
+  "Plan & billing": "Plan and analysis time",
+  "Just me": "Profile, sounds, sign-in, this phone",
+  "This phone": "Phone setup and alerts",
+};
 
-export const SETTINGS_GROUPS = [
-  "Account",
-  "Organisation",
-  "This device",
-] as const;
+export const GROUP_ICON: Record<SettingsGroup, LucideIcon> = {
+  Team: UsersRound,
+  Leads: Filter,
+  "Calls & phones": Phone,
+  Connections: Plug,
+  Company: Building2,
+  "Plan & billing": CreditCard,
+  "Just me": CircleUserRound,
+  "This phone": Smartphone,
+};
+
+/** The group a /settings/group/<slug> address names; null for anything else. */
+export function groupBySlug(
+  slug: string | null | undefined,
+): SettingsGroup | null {
+  const hit = SETTINGS_GROUPS.find((group) => GROUP_SLUG[group] === slug);
+  return hit ?? null;
+}
+
+/** The groups a group page lists: "Just me" shows "This phone" under it. */
+export function groupPageGroups(group: SettingsGroup): SettingsGroup[] {
+  return group === "Just me" ? ["Just me", "This phone"] : [group];
+}
+
+/** Who a group's settings affect. */
+export function groupScope(
+  group: SettingsGroup,
+  inOrganisation: boolean,
+): SettingScope {
+  if (group === "This phone") return "phone";
+  if (group === "Just me" || !inOrganisation) return "me";
+  return "everyone";
+}
+
+/**
+ * Where an old Organisation hub address (/organisation?tab=…&part=…) lives in
+ * Settings now (an unknown tab: Settings itself); null for Analytics, the
+ * hub's own view, which stays there until the owner's Team today (board 6).
+ */
+export function hubTabSetting(
+  tab: string | null,
+  part: string | null,
+): string | null {
+  switch (tab ?? "overview") {
+    case "overview":
+      return "/settings";
+    case "team":
+      return "/settings/team";
+    case "leads":
+      return part === "stages"
+        ? "/settings/stages"
+        : part === "sources"
+          ? "/settings/sources"
+          : "/settings/lead-rules";
+    case "connections":
+      return part === "ai-replies" || part === "developers" || part === "pulse"
+        ? `/settings/${part}`
+        : "/settings/apps";
+    case "call-ai":
+      return "/settings/call-ai";
+    case "company":
+      return "/settings/organisation";
+    case "plan":
+      return "/settings/plan";
+    case "analytics":
+      return null;
+    default:
+      return "/settings";
+  }
+}
+
+/**
+ * Where an /organisation address goes in Settings, with its own query kept
+ * (a connect flow's ?connected=…) and tab/part dropped; null for Analytics.
+ * Pure, so the server can redirect with it (sx-redesign, 21 Nov 2026).
+ */
+export function hubQueryTarget(search: URLSearchParams): string | null {
+  const to = hubTabSetting(search.get("tab"), search.get("part"));
+  if (!to) return null;
+  const kept = new URLSearchParams();
+  search.forEach((value, key) => {
+    if (key !== "tab" && key !== "part") kept.append(key, value);
+  });
+  const rest = kept.toString();
+  return rest ? `${to}?${rest}` : to;
+}
 
 export const isSettingsSection = (
   value: string | null | undefined,

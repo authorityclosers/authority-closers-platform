@@ -66,9 +66,13 @@ export function activityDay(at: string, timeZone: string, now = new Date()) {
 export function PersonWork({
   personId,
   saved = [],
+  onToday,
 }: {
   personId: string;
   saved?: readonly PersonCall[];
+  /** Today's counts go up to the person's Today card, which shows them
+      instead of this strip (sx-redesign board, pick 04 A). */
+  onToday?: (today: Readonly<Record<string, number>>) => void;
 }) {
   const [page, setPage] = useState<ActivityPage | null>(null);
   const [shown, setShown] = useState(10);
@@ -99,6 +103,9 @@ export function PersonWork({
       });
     return () => control.abort();
   }, [personId, attempt]);
+  useEffect(() => {
+    if (page) onToday?.(page.today_counts ?? {});
+  }, [page, onToday]);
   const more = async () => {
     if (!page || busy) return;
     if (shown < rows.length) {
@@ -157,11 +164,13 @@ export function PersonWork({
               <Skeleton width="55%" height={18} />
               <Skeleton width="45%" height={14} />
             </div>
-            <div className={styles.strip}>
-              {[0, 1, 2, 3].map((i) => (
-                <Skeleton key={i} height={100} />
-              ))}
-            </div>
+            {onToday ? null : (
+              <div className={styles.strip}>
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton key={i} height={100} />
+                ))}
+              </div>
+            )}
             <h2>Recent activity</h2>
             <Skeleton height={300} />
           </>
@@ -206,7 +215,8 @@ export function PersonWork({
           <span>Last call {ago(page.last_call_at)}</span>
         ) : null}
       </p>
-      {rows.length || Object.values(week).some((value) => value > 0) ? (
+      {!onToday &&
+      (rows.length || Object.values(week).some((value) => value > 0)) ? (
         <div className={styles.strip} aria-label="Today and the last 7 days">
           {figures.map(([kind, label], index) => (
             <div

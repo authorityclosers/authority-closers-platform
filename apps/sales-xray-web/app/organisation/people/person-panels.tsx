@@ -3,7 +3,7 @@
 import { CALLS_PAGE_NAME } from "../../calls-page-name";
 import { AudioLines, ChevronDown, GraduationCap, Pencil } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { callHref } from "../../acquisition-client";
 import { unnamedCallName } from "../../call-label";
@@ -38,6 +38,7 @@ import {
   type SkillRow,
   type Week,
 } from "./person-data";
+import family from "../family.module.css";
 import styles from "./person.module.css";
 import { PersonDisplayName } from "./person-display-name";
 import { PersonSettingsMenu } from "./person-settings-menu";
@@ -67,7 +68,16 @@ export function PersonHeader({
   onAction,
   photoUrl = null,
   onRename,
+  chips = null,
+  actions = null,
+  request = null,
 }: {
+  /** More chips after the role (their phone), and the hero's buttons. */
+  chips?: ReactNode;
+  actions?: ReactNode;
+  /** Opens the sheet at a step from elsewhere on the page (Role & access,
+      Remove from team); a new object each time. */
+  request?: { step: "role" | "remove" } | null;
   member: OrgMember;
   isYou: boolean;
   test: boolean;
@@ -96,9 +106,19 @@ export function PersonHeader({
     setStep("confirm");
   };
   const valid = draft.trim().length > 0 && [...draft.trim()].length <= 40;
+  // A request from the page opens the sheet at its step, once per request.
+  const [seenRequest, setSeenRequest] = useState(request);
+  if (request && request !== seenRequest) {
+    setSeenRequest(request);
+    if (request.step === "role") setStep("role");
+    else {
+      setConfirming({ kind: "remove" });
+      setStep("confirm");
+    }
+  }
   return (
-    <header className={styles.header}>
-      <Avatar name={name} size={44} photoUrl={photoUrl} />
+    <header className={`${family.hero} ${styles.header}`}>
+      <Avatar name={name} size={64} photoUrl={photoUrl} />
       <div className={styles.who}>
         <div className={styles.nameLine}>
           <h1 className={styles.name}>
@@ -118,22 +138,26 @@ export function PersonHeader({
             </button>
           ) : null}
         </div>
-        <div className={styles.tags}>
-          <Badge tone={member.role === "member" ? "neutral" : "accent"}>
-            {ROLE_LABEL[member.role]}
-          </Badge>
-          {isYou ? <Badge>You</Badge> : null}
+        <div className={family.chips}>
+          <span className={family.chip}>{ROLE_LABEL[member.role]}</span>
+          {isYou ? <span className={family.chip}>You</span> : null}
           {invited ? (
-            <Badge tone="warn">Invited</Badge>
-          ) : (
-            <span>Active member</span>
-          )}
-          {test ? <Badge>Test account</Badge> : null}
+            <span className={family.chip} data-tone="amber">
+              Invited
+            </span>
+          ) : null}
+          {chips}
+          {test ? <span className={family.chip}>Test account</span> : null}
         </div>
         <p className={styles.email} title={member.email ?? undefined}>
           {member.email}
         </p>
       </div>
+      {actions ? (
+        <div className={`${family.heroActions} ${styles.headerActions}`}>
+          {actions}
+        </div>
+      ) : null}
       {canChangeRole || canRemove || onRename ? (
         <PersonSettingsMenu
           name={name}

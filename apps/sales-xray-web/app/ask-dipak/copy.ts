@@ -84,6 +84,9 @@ export const COPY = {
   // The coaching loop's way in (13 Nov 2026 meeting); words to redesign.
   myMissions: "My Next-call missions",
   myMissionsMeta: "Your active missions and calls to answer",
+  // The home's section names (sx-redesign board pick B, 21 Nov 2026).
+  myMissionsShort: "My missions",
+  lessonsLabel: "Lessons",
   // A lesson drafted for Dipak to confirm (owner, 16 Nov 2026).
   draftTag: "Draft · Dipak to confirm",
   draftMission: "Dipak के confirm करने के बाद यह mission mark कर पाएँगे।",

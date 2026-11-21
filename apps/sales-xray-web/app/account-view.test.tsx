@@ -156,8 +156,8 @@ it("shows a confirmed empty subscription with the server plan and invoices", asy
   respond(billingReads());
   const pane = await openBilling();
   expect(pane.textContent).toContain("Trial");
+  // Summary first (sx-redesign board, pick 07 C): said once, in the hero.
   expect(pane.textContent).toContain("No subscription yet.");
-  expect(pane.textContent).toContain("No renewal scheduled");
   expect(pane.textContent).toContain("No invoices or receipts yet.");
   expect(pane.textContent).not.toMatch(/Billing (is )?unavailable|Unavailable/);
   const cancel = [...pane.querySelectorAll<HTMLButtonElement>("button")].find(
@@ -237,9 +237,7 @@ it("retries failed invoice reads without changing billing state", async () => {
     );
   });
   const pane = await openBilling();
-  expect(pane.textContent).toContain(
-    "Invoices and receipts are currently unavailable.",
-  );
+  expect(pane.textContent).toContain("Invoices are unavailable right now");
   expect(pane.querySelector('[role="alert"]')).toBeNull();
   expect(pane.textContent).toContain("No subscription yet.");
   expect(pane.textContent).not.toContain("No invoices or receipts yet.");

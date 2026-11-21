@@ -450,3 +450,190 @@
     animation-duration: 1ms;
   }
 }
+
+/* ---------- sx-redesign board pick B "calm list" (owner, 21 Nov 2026) ----------
+   The v1.90 Home family on the phone's sheet: who you are as a white card,
+   calm radius-22 cards of short rows with dark ink icon tiles, the pages that
+   are not tabs as rows instead of tiles, and Log out as quiet red words.
+   Tokens only; light and dark from them. */
+
+.sheet .who {
+  padding: 14px 16px;
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.sheet .avatar {
+  width: 48px;
+  height: 48px;
+  background: var(--lx-home-violet-soft);
+  color: var(--lx-ink);
+  font-size: var(--sx-text-md);
+}
+
+.logOut {
+  min-height: 36px;
+  margin-left: -10px;
+  padding: 0 10px;
+  background: transparent;
+  color: var(--lx-danger);
+}
+
+.logOut:hover,
+.logOut:focus-visible {
+  background: color-mix(in oklab, var(--lx-danger) 8%, transparent);
+  color: var(--lx-danger);
+}
+
+.heading {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+.sheet .view {
+  gap: 14px;
+}
+
+/* Pages that are not tabs: one card of rows, not a grid of tiles. */
+.sheet .goTo {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding: 4px 0;
+  overflow: hidden;
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.sheet .tile {
+  position: relative;
+  gap: 14px;
+  min-height: 56px;
+  padding: 0 16px;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+}
+
+.sheet .tile + .tile::before {
+  position: absolute;
+  top: 0;
+  right: 16px;
+  left: 66px;
+  border-top: 1px solid var(--sx-hairline);
+  content: "";
+}
+
+.sheet .tile > span {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--sx-fill);
+  color: var(--lx-ink);
+}
+
+.sheet .tile > span svg {
+  width: 19px;
+  height: 19px;
+}
+
+.sheet .tile[aria-current="page"] {
+  box-shadow: none;
+  color: var(--lx-home-emerald);
+}
+
+.sheet .tile[aria-current="page"] > span {
+  background: var(--lx-home-emerald-soft);
+}
+
+.sheet .tile:active {
+  transform: none;
+  background: var(--sx-fill-soft);
+}
+
+/* Rows: dark ink icons in soft tiles, a little taller on a phone. */
+.sheet .list {
+  padding: 4px 0;
+  border-radius: var(--lx-radius-lg);
+}
+
+.sheet .row {
+  min-height: 56px;
+  gap: 14px;
+  padding: 0 16px;
+  font-weight: 600;
+}
+
+.sheet .row + .row {
+  box-shadow: inset 66px 1px 0 -65px var(--sx-hairline);
+}
+
+.sheet .rowIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  color: var(--lx-ink);
+}
+
+.sheet .section {
+  padding: 12px 8px 8px;
+  border-radius: var(--lx-radius-lg);
+}
+
+.badge {
+  background: var(--lx-home-emerald);
+  color: var(--sx-surface);
+  font-size: var(--sx-text-xs);
+}
+
+.switch[data-on] {
+  background: var(--lx-home-emerald);
+}
+
+/* Your settings: the rows' icons dark ink in soft grey tiles, never teal. */
+.sheet .group [data-tone] {
+  border-radius: 12px;
+  background: var(--sx-fill);
+  color: var(--lx-ink);
+}
+
+/* Theme: Light | Dark as v1.90 Home's pills, solid deep green when chosen. */
+.theme > div {
+  border-radius: var(--sx-radius-pill);
+}
+
+.theme label > span {
+  border-radius: var(--sx-radius-pill);
+}
+
+.theme label input[type]:checked + span {
+  background: var(--lx-home-emerald);
+  box-shadow: none;
+  color: var(--sx-surface);
+}
+
+/* Judge round (sx-redesign, 21 Nov 2026): the theme switch sits in its own
+   white card under "Appearance", like the other groups. */
+.sheet .theme {
+  margin: 0;
+  padding: 12px 16px 14px;
+  border: 0;
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+/* "Appearance" names the card; the switch's own "Theme" stays for screen
+   readers only, so it never sits on the card's edge. */
+.sheet .theme > legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

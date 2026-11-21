@@ -110,6 +110,13 @@ async function openDelete() {
     ),
   );
   await settle();
+  // The app says Sign out everywhere (sx-redesign, 21 Nov 2026); privacy is
+  // one line under the rows.
+  expect(host.textContent).toContain("Sign out of this device");
+  expect(host.textContent).not.toContain("Log out");
+  expect(host.textContent).toContain(
+    "Your calls and reports stay private to you and this workspace.",
+  );
   const button = Array.from(host.querySelectorAll("button")).find(
     (item) => item.textContent?.trim() === "Delete account",
   )!;

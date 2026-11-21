@@ -132,6 +132,19 @@ export function topicOf(
   return callTitle(submission.label, fallback);
 }
 
+/** States where a call has no report and waits on a person (call-status.ts). */
+const WAITING = new Set(["awaiting_upload", "ready"]);
+
+/**
+ * Needs review (Calls, sx-redesign 21 Nov 2026): no report yet, and nothing
+ * is working on it: never analysed, or analysis stopped with a problem. A
+ * call the seller's AI level or a short call kept from a report never does.
+ */
+export function needsReview(submission: LibrarySubmission): boolean {
+  if (submission.hasReport) return false;
+  return callTone(submission) === "attention" || WAITING.has(submission.state);
+}
+
 export function toReportRow(
   submission: LibrarySubmission,
   facts: ReportFacts,
@@ -159,6 +172,8 @@ export function toReportRow(
       submission.owner && submission.owner.personId !== viewerId
         ? displayName(submission.owner.name)
         : null,
+    outcome: summary?.outcome ?? null,
+    needsReview: needsReview(submission),
   };
 }
 

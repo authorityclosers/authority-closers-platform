@@ -842,3 +842,240 @@
     min-height: 0;
   }
 }
+
+/* ---------- sx-redesign board pick B "calm list" (owner, 21 Nov 2026) ----------
+   A slim status card, then each group's white radius-22 card of rows: the
+   app's tile, its name and a word chip (green Connected, grey Not connected,
+   amber only for one that needs attention), one grey line, and one action as
+   an outline green pill. Only the page's first Connect (or a Reconnect) is
+   solid green. Tokens only; light and dark from them. */
+
+.summary {
+  padding: 14px 16px;
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.filter {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: var(--sx-text-xs);
+}
+
+.filter[aria-pressed="true"] {
+  background: var(--lx-home-emerald);
+  color: var(--sx-surface);
+}
+
+.filter[aria-pressed="true"] strong {
+  color: var(--sx-surface);
+}
+
+.groupTitle {
+  margin: 0 4px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+}
+
+.grid {
+  border-radius: var(--lx-radius-lg);
+}
+
+.card {
+  gap: 6px;
+  padding: 16px 16px 16px 16px;
+}
+
+.card + .card {
+  border-top: 0;
+}
+
+.card + .card::before {
+  position: absolute;
+  top: 0;
+  right: 16px;
+  left: 68px;
+  border-top: 1px solid var(--sx-hairline, var(--lx-line-soft));
+  content: "";
+}
+
+.cardTitle {
+  gap: 4px;
+}
+
+.cardTitle h3 {
+  font-size: var(--sx-text-md);
+  white-space: normal;
+}
+
+/* The status as a word chip. */
+.cardTitle > [data-tone] {
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.cardTitle > [data-tone]::before {
+  display: none;
+}
+
+.cardTitle > [data-tone="good"] {
+  background: var(--lx-home-emerald-soft);
+  color: var(--lx-home-emerald);
+}
+
+.cardTitle > [data-tone="warn"] {
+  background: var(--lx-home-orange-soft);
+  color: var(--lx-ink);
+}
+
+.words,
+.reviewLine,
+.actions {
+  margin-left: 52px;
+}
+
+.words {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  opacity: 0.85;
+}
+
+.reviewLine {
+  font-size: var(--sx-text-xs);
+}
+
+/* One action: an outline green pill (Connect, Set up, Ask us, Manage). */
+.actions > button[data-variant],
+.actions > .linkButton,
+.actions .tinted,
+.linkButton[data-variant="tinted"],
+.linkButton[data-variant="secondary"] {
+  min-height: 36px;
+  padding: 0 16px;
+  border: 1.5px solid var(--lx-home-emerald);
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--lx-home-emerald);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.actions > button[data-variant="ghost"] {
+  border-color: transparent;
+  padding: 0 8px;
+}
+
+/* The page's one solid green: the first Connect, or a Reconnect. */
+.card[data-lead] .actions .tinted,
+.actions > button[data-variant="primary"],
+.linkButton[data-variant="primary"] {
+  border-color: var(--lx-home-emerald);
+  background: var(--lx-home-emerald);
+  color: var(--sx-surface);
+}
+
+.testPassed {
+  border-color: transparent;
+  background: var(--lx-home-emerald-soft);
+  color: var(--lx-home-emerald);
+}
+
+/* Tablets: one centred column. */
+@media (min-width: 600px) and (max-width: 899.98px) {
+  .page {
+    width: 100%;
+    max-width: 720px;
+    margin-inline: auto;
+  }
+}
+
+/* Wider: the action sits at the row's end, beside the words. */
+@media (min-width: 600px) {
+  .card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 16px;
+  }
+
+  .card > * {
+    grid-column: 1;
+  }
+
+  .card > .actions {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    align-self: center;
+    margin: 0 28px 0 0;
+  }
+
+  .card > .open {
+    grid-column: 1 / -1;
+  }
+
+  .cardHead .chevron {
+    position: absolute;
+    top: 50%;
+    right: 14px;
+    transform: translateY(-50%);
+  }
+
+  .card > .outcome {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Tiles: dark ink on a soft grey tile, never teal; a brand's own mark keeps
+   its colours on the same soft tile. */
+.cardHead > [data-kind] {
+  border-color: transparent;
+  background: var(--sx-fill);
+}
+
+.cardHead > [data-kind="icon"] {
+  color: var(--lx-ink);
+}
+
+/* Judge round (sx-redesign, 21 Nov 2026): the status chips wrap instead of
+   being cut; a row shows its button or its chevron, never both; on a phone
+   only the first app to connect keeps its line, so nine rows stay short. */
+.filters {
+  flex-wrap: wrap;
+}
+
+.card:has(> .actions) .chevron {
+  display: none;
+}
+
+@media (max-width: 599.98px) {
+  .card:is(
+      [data-state="not_connected"],
+      [data-state="not_set_up"],
+      [data-state="off"]
+    ):not([data-lead])
+    .words {
+    display: none;
+  }
+}
+
+@media (min-width: 600px) {
+  .card > .actions {
+    margin-right: 0;
+  }
+}
+
+/* The chips' row is a side-scroller; let the group take its width and wrap. */
+.summary .filters.filters {
+  width: auto;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+  row-gap: 6px;
+}

@@ -76,9 +76,29 @@ async function render(change: Partial<typeof props> = {}) {
   props = { ...props, ...change };
   await act(async () => root.render(<CompanyDetailsPanel {...props} />));
 }
+// Company details are rows; a row opens a sheet with its one field and Save
+// (sx-redesign board, pick 06 C). The sheet draws outside the host.
+const LABEL: Record<string, string> = {
+  name: "Company name",
+  legal_name: "Legal name",
+  industry: "Industry",
+  team_size: "Team size",
+  gstin: "GSTIN",
+  city: "City",
+  website: "Website",
+  address: "Address",
+};
+const row = (key: string) =>
+  [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
+    button.getAttribute("aria-label")?.startsWith(`${LABEL[key]}:`),
+  )!;
 const input = (key: string) =>
-  host.querySelector<HTMLInputElement>(`input[name="${key}"]`)!;
+  document.querySelector<HTMLInputElement>(`input[name="${key}"]`)!;
+async function open(key: string) {
+  await act(async () => row(key).click());
+}
 async function edit(key: string, value: string) {
+  if (!input(key)) await open(key);
   await act(async () => {
     Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
@@ -88,8 +108,8 @@ async function edit(key: string, value: string) {
   });
 }
 function submit() {
-  host
-    .querySelector("form")!
+  document
+    .querySelector('form[aria-label="Company details"]')!
     .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
 }
 const save = () => act(async () => submit());
@@ -105,9 +125,11 @@ it.each(["owner", "admin"] as const)(
   "loads and saves all details as %s, adopts server normalization and reads persisted values on entry",
   async (role) => {
     await render({ role });
-    expect(host.querySelectorAll("input")).toHaveLength(8);
+    // Eight details and no logo yet: the logo is the one hero.
+    expect(host.textContent).toContain("8 of 9 details added");
+    expect(host.textContent).toContain("Add your logo");
     for (const key of organisationDetailFields)
-      expect(input(key).value).toBe(server[key]);
+      expect(row(key).textContent).toContain(server[key]);
     for (const key of organisationDetailFields)
       await edit(
         key,
@@ -118,7 +140,8 @@ it.each(["owner", "admin"] as const)(
     expect(Object.keys(JSON.parse(String(writes()[0][1].body))).sort()).toEqual(
       [...organisationDetailFields].sort(),
     );
-    expect(input("name").value).toBe("New Fictional Studio");
+    expect(row("name").textContent).toContain("New Fictional Studio");
+    expect(input("name")).toBeNull();
     expect(host.textContent).toContain("Saved.");
     expect(props.refresh).toHaveBeenCalledOnce();
     await act(async () => root.render(null));
@@ -127,7 +150,7 @@ it.each(["owner", "admin"] as const)(
       fetchMock.mock.calls.filter(([, init]) => !init?.method),
     ).toHaveLength(2);
     for (const key of organisationDetailFields)
-      expect(input(key).value).toBe(server[key]);
+      expect(row(key).textContent).toContain(server[key]);
     expect(host.textContent).not.toContain("Saved.");
   },
 );
@@ -135,12 +158,13 @@ it.each(["owner", "admin"] as const)(
 it("clears optional fields without dropping unchanged loaded values and uses the exact field limits", async () => {
   await render();
   const limits = [80, 200, 32, 1000, 100, 80, 500, 100];
-  organisationDetailFields.forEach((key, index) => {
+  for (const [index, key] of organisationDetailFields.entries()) {
+    await open(key);
     expect(input(key).maxLength).toBe(limits[index]);
     expect(input(key).type).toBe("text");
     expect(input(key).required).toBe(key === "name");
     expect(input(key).closest("label")?.textContent).toBeTruthy();
-  });
+  }
   await edit("city", "");
   await save();
   const body = JSON.parse(String(writes()[0][1].body));
@@ -155,11 +179,14 @@ it.each([" ", " a ", "a".repeat(81)])(
     await edit("name", name);
     await save();
     expect(writes()).toHaveLength(0);
-    expect(host.querySelector('[role="alert"]')?.textContent).toContain("2–80");
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+      "2–80",
+    );
   },
 );
 it("disables duplicate submission while preserving visible pending state", async () => {
   await render();
+  await edit("name", "Pending Fictional Studio");
   const pending = deferred();
   fetchMock.mockImplementationOnce(() => pending.promise);
   await act(async () => {
@@ -168,11 +195,12 @@ it("disables duplicate submission while preserving visible pending state", async
   });
   expect(writes()).toHaveLength(1);
   expect(
-    host.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled,
+    document.querySelector<HTMLButtonElement>('button[type="submit"]')
+      ?.disabled,
   ).toBe(true);
-  expect(host.textContent).toContain("Saving…");
+  expect(document.body.textContent).toContain("Saving…");
   expect(
-    [...host.querySelectorAll<HTMLInputElement>("input")].every(
+    [...document.querySelectorAll<HTMLInputElement>("input[name]")].every(
       (field) => field.disabled,
     ),
   ).toBe(true);
@@ -195,8 +223,8 @@ it.each([404, 409, 422, 500, "network"])(
     expect(server.name).toBe("Fictional Studio");
     expect(props.refresh).not.toHaveBeenCalled();
     expect(host.textContent).not.toContain("Saved.");
-    expect(host.querySelector('[role="alert"]')).not.toBeNull();
-    expect(host.textContent).toContain(
+    expect(document.querySelector('[role="alert"]')).not.toBeNull();
+    expect(document.body.textContent).toContain(
       status === 422 ? "Check the company details" : "not saved",
     );
   },
@@ -206,7 +234,7 @@ it("offers an explicit same-key 409 retry, then gives an edited intent a new UUI
   await edit("name", "Fictional Second Studio");
   fetchMock.mockResolvedValueOnce(json({ detail: "Busy" }, 409));
   await save();
-  expect(host.textContent).toContain("Retry save");
+  expect(document.body.textContent).toContain("Retry save");
   expect(writes()).toHaveLength(1);
   fetchMock.mockResolvedValueOnce(json({ detail: "Busy" }, 409));
   await save();
@@ -225,8 +253,8 @@ it.each([401, 403])(
     await edit("name", "Private Fictional Draft");
     fetchMock.mockResolvedValueOnce(json({ detail: "Access changed" }, status));
     await save();
-    expect(host.querySelector("input")).toBeNull();
-    expect(host.textContent).not.toContain("Private Fictional Draft");
+    expect(document.querySelector("input[name]")).toBeNull();
+    expect(document.body.textContent).not.toContain("Private Fictional Draft");
     expect(props.onAccessLost).toHaveBeenCalledOnce();
     expect(props.refresh).not.toHaveBeenCalled();
     await render();
@@ -259,13 +287,16 @@ it.each([404, 500, "network"])(
     await act(async () =>
       host.querySelector<HTMLButtonElement>("button")!.click(),
     );
-    expect(input("name").value).toBe("Fictional Studio");
+    expect(row("name").textContent).toContain("Fictional Studio");
   },
 );
 it.each(["read", "write"])(
   "uses the exact Personal fallback on a %s 404",
   async (operation) => {
-    if (operation === "write") await render();
+    if (operation === "write") {
+      await render();
+      await edit("name", "Changed Fictional Studio");
+    }
     fetchMock.mockResolvedValueOnce(
       json({ detail: "No organisation selected." }, 404),
     );
@@ -294,7 +325,12 @@ it.each(["tenant", "role", "sign-out", "unmount"])(
     await render();
     const signal = fetchMock.mock.calls[0][1].signal as AbortSignal;
     if (change === "tenant") {
-      server = { ...server, tenant_id: other, name: "Other Fictional Studio" };
+      server = {
+        ...server,
+        tenant_id: other,
+        name: "Other Fictional Studio",
+        legal_name: "Other Limited",
+      };
       await render({ tenantId: other });
     }
     if (change === "role") await render({ role: "member" });
@@ -307,14 +343,15 @@ it.each(["tenant", "role", "sign-out", "unmount"])(
     await act(async () => pending.resolve(json(old)));
     expect(host.textContent).not.toContain("Fictional Limited");
     expect(
-      host.querySelector<HTMLInputElement>('input[name="name"]')?.value,
-    ).toBe(change === "tenant" ? "Other Fictional Studio" : undefined);
+      row("name")?.textContent?.includes("Other Fictional Studio") ?? false,
+    ).toBe(change === "tenant");
   },
 );
 it.each(["tenant", "role", "sign-out", "unmount"])(
   "ignores a delayed write and header refresh after %s",
   async (change) => {
     await render();
+    await edit("name", "Changed Fictional Studio");
     const old = { ...server, name: "Old Saved Fictional Studio" };
     const pending = deferred();
     fetchMock.mockImplementationOnce(() => pending.promise);
@@ -335,8 +372,8 @@ it.each(["tenant", "role", "sign-out", "unmount"])(
     expect(props.refresh).not.toHaveBeenCalled();
     expect(host.textContent).not.toContain("Saved.");
     expect(
-      host.querySelector<HTMLInputElement>('input[name="name"]')?.value,
-    ).toBe(change === "tenant" ? "Other Fictional Studio" : undefined);
+      row("name")?.textContent?.includes("Other Fictional Studio") ?? false,
+    ).toBe(change === "tenant");
   },
 );
 it("rejects a different returned tenant without a successful save or header refresh", async () => {
@@ -355,8 +392,8 @@ it("clears a denied scope when switching tenant or losing and regaining manageme
   await render();
   await render({ role: "member" });
   await render({ role: "admin" });
-  expect(input("name").value).toBe(server.name);
+  expect(row("name").textContent).toContain(server.name);
   server = { ...server, tenant_id: other, name: "Other Fictional Studio" };
   await render({ tenantId: other });
-  expect(input("name").value).toBe(server.name);
+  expect(row("name").textContent).toContain(server.name);
 });

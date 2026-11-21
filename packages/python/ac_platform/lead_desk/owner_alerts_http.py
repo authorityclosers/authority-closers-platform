@@ -9,6 +9,8 @@ competitor teardown 19 and 20, 1 Nov 2026).
 - ``POST /owner-alerts/summary/test``: the summary to this person's own phones now.
 - ``GET|PUT /notifications``: anyone's own notification choices (teardown 26).
 - ``POST /notifications/test``: a test to this person's own phones now.
+- ``GET|PUT /sounds``: the sound for each moment, the team's and this person's own (round-2
+  board 4, 20 Nov 2026); ``PUT /sounds/team``: the team's sounds (owners, admins, managers).
 
 Same workspace rule as the CRM's own routes. The work is in ``owner_alerts``.
 """
@@ -28,7 +30,7 @@ from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
-from ac_platform.lead_desk import notify_prefs, owner_alerts, push
+from ac_platform.lead_desk import notify_prefs, owner_alerts, push, sound_prefs
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
 from ac_platform.tenancy.models import Membership, Organisation
 
@@ -220,5 +222,27 @@ def install_owner_alerts_http(application: FastAPI, ctx: RouteContext) -> None:
             for token in test.tokens:
                 sent += await fcm.send(client, token, test.data()) == "sent"
         return TestSent(phones=len(test.tokens), sent=sent, ready=True)
+
+    @router.get("/sounds", response_model=sound_prefs.SoundsView)
+    async def sounds_view(request: Request, response: Response) -> sound_prefs.SoundsView:
+        no_query(request)
+        async with desk_for(request, response, manager=False) as desk:
+            return await sound_prefs.view(desk)
+
+    @router.put("/sounds", response_model=sound_prefs.SoundsView)
+    async def sounds_save(
+        command: sound_prefs.MySoundsCommand, request: Request, response: Response
+    ) -> sound_prefs.SoundsView:
+        no_query(request)
+        async with desk_for(request, response, write=True, manager=False) as desk:
+            return await sound_prefs.save_mine(desk, command)
+
+    @router.put("/sounds/team", response_model=sound_prefs.SoundsView)
+    async def sounds_team_save(
+        command: sound_prefs.TeamSoundsCommand, request: Request, response: Response
+    ) -> sound_prefs.SoundsView:
+        no_query(request)
+        async with desk_for(request, response, write=True) as desk:
+            return await sound_prefs.save_team(desk, command)
 
     application.include_router(router)

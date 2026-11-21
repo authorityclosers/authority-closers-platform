@@ -218,7 +218,7 @@ describe("Homepage", () => {
       expect(text()).toContain(line);
   });
 
-  it("is the Coach's desk: Dipak's monogram (no generated face), Continue, search, situations, topics (owner's pick H-A, 17 Nov 2026)", async () => {
+  it("is Dipak's card with the ask box, then missions, lessons and topics (sx-redesign board pick B, 21 Nov 2026)", async () => {
     await show();
     expect(
       host.querySelector('[role="img"][aria-label="Dipak Vishwakarma"]')
@@ -232,12 +232,20 @@ describe("Homepage", () => {
         'img:not([src^="/brand/"]):not([src^="/media/ask-dipak/characters/"])',
       ),
     ).toBeNull();
-    // The strong card at the top carries Continue (owner, 17 Nov 2026).
-    expect(host.querySelector("section a[data-continue]")).not.toBeNull();
+    // Continue leads the Lessons card.
+    expect(
+      host.querySelector(
+        'section[aria-labelledby="ask-lessons"] a[data-continue]',
+      ),
+    ).not.toBeNull();
+    // The ask box opens Search; its round arrow is the page's one solid green.
+    expect(
+      host.querySelectorAll('section a[href="/ask-dipak?view=search"]'),
+    ).toHaveLength(1);
     // No active mission (the coaching API isn't served here): no strip.
     expect(host.querySelector("[data-mission-strip]")).toBeNull();
-    // Three situations and four topics, each with its drawing.
-    expect(host.querySelectorAll("svg[data-art]")).toHaveLength(7);
+    // Four topics, each with its drawing; the situations carry Rohit.
+    expect(host.querySelectorAll("svg[data-art]")).toHaveLength(4);
     // No emoji after his hello: Mukta has none (an empty box, 17 Nov 2026).
     expect(COPY.hello).not.toMatch(/\p{Extended_Pictographic}/u);
   });
@@ -251,10 +259,11 @@ describe("Homepage", () => {
       Array.from(card?.classList ?? []).join(" "),
     );
     expect(new Set(looks).size).toBe(3);
-    for (const card of cards) {
-      expect(card?.querySelector("svg[data-art]")).not.toBeNull();
-      expect(card?.textContent).toContain(COPY.parts);
-    }
+    // Rohit, the customer, beside each one's words (character kit v2).
+    const faces = cards.map((card) =>
+      card?.querySelector("img")?.getAttribute("src"),
+    );
+    expect(new Set(faces).size).toBe(3);
   });
 
   it("numbers a topic's questions, each its own card (Dipak's report 227)", async () => {
@@ -316,7 +325,9 @@ describe("Homepage", () => {
   it("shows the four featured topics, each opening its question list", async () => {
     await show();
     const cards = Array.from(
-      host.querySelectorAll('a[href^="/ask-dipak?topic="]'),
+      host.querySelectorAll(
+        'section[aria-labelledby="ask-topics"] a[href^="/ask-dipak?topic="]',
+      ),
     );
     expect(cards.map((card) => card.textContent)).toEqual([
       "Communication & RapportTrust और listening",
@@ -353,7 +364,7 @@ describe("Homepage", () => {
     async (id, title) => {
       await show();
       const entry = link(`/ask-dipak?lesson=${id}`);
-      expect(entry?.textContent).toContain(COPY.parts);
+      expect(entry?.textContent).toContain(questionLabel(questionById(id)!));
       expect(questionById(id)?.title).toBe(title);
       await click(entry);
       await openAnswer();

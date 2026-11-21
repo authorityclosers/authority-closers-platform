@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 /**
- * Reports V4 (Dipak's spec, 13 Nov 2026): every check in its section 25, on
- * the real page, sheet and calendar with fictional reports from the list API.
+ * Calls (sx-redesign pick 08-calls, 21 Nov 2026) on Reports V4 (Dipak's spec,
+ * 13 Nov 2026): the hero, the switch, the day groups, and every check in the
+ * spec's section 25, on the real page, sheet and calendar with fictional
+ * reports from the list API.
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -65,6 +67,9 @@ vi.mock("../calls/phone-calls", () => ({
     <section data-phone-calls={filter ? "filtered" : "all"} />
   ),
 }));
+vi.mock("../calls/old-calls/old-calls-card", () => ({
+  OldCallsCard: () => <div data-old-calls="" />,
+}));
 vi.mock("../display-clock", () => ({
   useDisplayDates: () => ({
     locale: "en-IN",
@@ -84,7 +89,6 @@ vi.mock("./upload-handoff", async (original) => ({
 
 import { ReportLibrary } from "./report-library";
 import { forgetReports } from "./report-rows";
-import { WAVEFORM_BARS } from "./waveform";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -102,6 +106,9 @@ type Fixture = {
   side: "inbound" | "cold" | null;
   saved?: boolean;
   summary?: string;
+  /** No report yet: never analysed, so it needs review. */
+  waiting?: boolean;
+  outcome?: string | null;
 };
 
 /** Fictional reports; times in UTC (India is 5:30 ahead). */
@@ -143,6 +150,7 @@ const FIXTURES: Fixture[] = [
     name: "neha sample",
     upload: "manual",
     side: "inbound",
+    waiting: true,
   },
   {
     n: 6,
@@ -158,13 +166,13 @@ function submission(fixture: Fixture) {
   return {
     submission_id: id(fixture.n),
     created_at: fixture.at,
-    duration_seconds: 21 * 60,
-    state: "report_ready",
-    has_report: true,
+    duration_seconds: 21 * 60 + 4,
+    state: fixture.waiting ? "awaiting_upload" : "report_ready",
+    has_report: !fixture.waiting,
     display_name: fixture.title ?? null,
     display_name_revision: fixture.title ? 1 : 0,
     summary: {
-      outcome: "follow_up",
+      outcome: fixture.outcome === undefined ? "follow_up" : fixture.outcome,
       assessment: fixture.summary ?? null,
       fix_first: null,
       next_focus: null,
@@ -284,57 +292,75 @@ async function chooseLeadType(label: string) {
   );
 }
 
-describe("Main page", () => {
-  it("opens Reports on Main by default, with the tabs at the top", async () => {
+describe("Calls page", () => {
+  it("opens on All, with the switch under the hero", async () => {
     await open();
-    expect(tab("Main")?.getAttribute("aria-selected")).toBe("true");
-    expect(tab("All Reports")?.getAttribute("aria-selected")).toBe("false");
-    expect(host.textContent).toContain(
-      "Turn your sales conversations into clearer next steps.",
+    expect(tab("All")?.getAttribute("aria-selected")).toBe("true");
+    expect(tab("Needs review (1)")?.getAttribute("aria-selected")).toBe(
+      "false",
     );
+    expect(tab("Reports ready")?.getAttribute("aria-selected")).toBe("false");
     expect($("h1")?.textContent).toBe("Calls");
   });
 
-  it("switches between Main and All Reports", async () => {
+  it("says how many calls need review, with one green button that shows them", async () => {
     await open();
-    await click(tab("All Reports"));
-    expect(tab("All Reports")?.getAttribute("aria-selected")).toBe("true");
-    expect(host.textContent).toContain(
-      "All your analysed calls, easy to revisit.",
+    const hero = $("[data-calls-hero]")!;
+    expect(hero.getAttribute("data-calls-hero")).toBe("review");
+    expect(hero.querySelector("h2")?.textContent).toBe(
+      "1 call needs your review",
     );
-    await click(tab("Main"));
-    expect(tab("Main")?.getAttribute("aria-selected")).toBe("true");
-    expect($('[aria-label="Analyse a call"]')).not.toBeNull();
+    expect(hero.textContent).toContain("to review");
+    expect(hero.querySelectorAll("button")).toHaveLength(1);
+    await click(byText("button", "Review 1 call"));
+    expect(tab("Needs review (1)")?.getAttribute("aria-selected")).toBe("true");
+    expect(cards()).toEqual([id(5)]);
+    expect(
+      $(`[data-report-card="${id(5)}"] [data-report-status]`)?.textContent,
+    ).toBe("Needs review");
+    // Analyse a call is then the quiet row under the list.
+    await click($("[data-analyse-link]"));
+    expect(router.push).toHaveBeenCalledWith("/analysis/calls?view=analyse");
   });
 
-  it("shows the waveform as a picture only, beside one Analyse a call button", async () => {
+  it("counts the reports ready when nothing waits, and the button is Analyse a call", async () => {
+    api.acquisition.mockImplementation(async () => ({
+      submissions: FIXTURES.slice(0, 2).map(submission),
+      next_cursor: null,
+    }));
     await open();
-    const section = $('[aria-label="Analyse a call"]')!;
-    const wave = section.querySelector("[data-waveform]")!;
-    expect(wave.getAttribute("aria-hidden")).toBe("true");
-    expect(wave.querySelectorAll("rect")).toHaveLength(WAVEFORM_BARS);
-    // Not a player: nothing to press, nothing else in the section.
-    expect(wave.querySelectorAll("button, audio, input")).toHaveLength(0);
-    expect(
-      Array.from(section.querySelectorAll("button"), (b) => b.textContent),
-    ).toEqual(["Analyse a call"]);
+    const hero = $("[data-calls-hero]")!;
+    expect(hero.getAttribute("data-calls-hero")).toBe("ready");
+    expect(hero.querySelector("h2")?.textContent).toBe("2 reports ready");
+    expect($("[data-analyse-link]")).toBeNull();
     await click(byText("button", "Analyse a call"));
     expect(router.push).toHaveBeenCalledWith("/analysis/calls?view=analyse");
   });
 
-  it("shows the three newest reports, newest first, and View all opens All Reports", async () => {
+  it("shows Reports ready only", async () => {
     await open();
-    expect(cards()).toEqual([id(1), id(2), id(3)]);
-    await click(byText("button", "View all"));
-    expect(tab("All Reports")?.getAttribute("aria-selected")).toBe("true");
-    expect(cards()).toEqual(FIXTURES.map((fixture) => id(fixture.n)));
+    await click(tab("Reports ready"));
+    expect(cards()).toEqual([1, 2, 3, 4, 6].map(id));
   });
 
-  it("keeps the phone's own calls a tap away in a workspace", async () => {
+  it("groups the calls under their day, newest first", async () => {
+    await open();
+    expect(cards()).toEqual(FIXTURES.map((fixture) => id(fixture.n)));
+    expect(all("h2[id^=calls-day-]").map((h) => h.textContent)).toEqual([
+      "Today",
+      "Yesterday",
+      "11 Nov",
+      "5 Nov",
+      "1 Nov",
+    ]);
+  });
+
+  it("keeps the phone's own calls and Find my old calls a tap away in a workspace", async () => {
     await open();
     expect(
       $<HTMLAnchorElement>("[data-your-calls]")?.getAttribute("href"),
     ).toBe("/analysis/calls?view=calls");
+    expect($("[data-old-calls]")).not.toBeNull();
     await act(async () => root.unmount());
     root = createRoot(host);
     await open("/analysis/calls?view=calls");
@@ -357,16 +383,10 @@ describe("Main page", () => {
   });
 });
 
-describe("All Reports", () => {
-  it("shows every report without filters, newest first, with the count", async () => {
-    await open("/analysis/calls?tab=all");
-    expect(cards()).toEqual(FIXTURES.map((fixture) => id(fixture.n)));
-    expect(count()).toBe("6 of 6 reports");
-    expect(host.textContent).toContain("Newest first");
-  });
-
+describe("Call rows", () => {
   it("searches while typing, any case, and the count follows", async () => {
-    await open("/analysis/calls?tab=all");
+    await open();
+    expect(count()).toBeUndefined();
     await type("ROHIT");
     expect(cards()).toEqual([id(1)]);
     expect(count()).toBe("1 of 6 reports");
@@ -376,14 +396,8 @@ describe("All Reports", () => {
     expect(cards()).toHaveLength(6);
   });
 
-  it("opens the same upload screen from New analysis", async () => {
-    await open("/analysis/calls?tab=all");
-    await click(byText("button", "New analysis"));
-    expect(router.push).toHaveBeenCalledWith("/analysis/calls?view=analyse");
-  });
-
-  it("opens each card's own report", async () => {
-    await open("/analysis/calls?tab=all");
+  it("opens each row's own report", async () => {
+    await open();
     for (const fixture of FIXTURES) {
       const card = $(`[data-report-card="${id(fixture.n)}"]`)!;
       expect(card.querySelector("a")?.getAttribute("href")).toBe(
@@ -391,25 +405,21 @@ describe("All Reports", () => {
       );
     }
     const first = $(`[data-report-card="${id(1)}"]`)!;
-    expect(first.textContent).toContain("Inbound · Auto");
-    expect(first.textContent).toContain("13 Nov · 6:40 PM");
-    expect(first.querySelector("h3")?.textContent).toBe(
+    expect(first.querySelector("h3")?.textContent).toBe("Rohit Example");
+    expect(first.querySelector("a")?.getAttribute("aria-label")).toBe(
       "Rohit Example · Discovery call",
     );
-    expect(first.textContent).toContain(
-      "Good connection. The business impact needed more exploration.",
-    );
-    expect(first.textContent).toContain("21 min · Report ready");
-    expect(first.textContent).toContain("View report");
+    expect(first.textContent).toContain("21 min 4 s · 6:40 pm");
+    // How it ended in one word, then the report.
+    expect(
+      Array.from(first.querySelectorAll("[data-tone]"), (n) => n.textContent),
+    ).toEqual(["RE", "Follow-up", "Report ready"]);
     const manual = $(`[data-report-card="${id(3)}"]`)!;
-    expect(manual.textContent).toContain("Manual upload");
-    expect(manual.querySelector("h3")?.textContent).toBe(
-      "Unassigned prospect · Pricing discussion",
-    );
+    expect(manual.querySelector("h3")?.textContent).toBe("Pricing discussion");
   });
 
-  it("saves a report for this person, and the card says so", async () => {
-    await open("/analysis/calls?tab=all");
+  it("saves a report for this person, and the row says so", async () => {
+    await open();
     const save = $(`[data-report-card="${id(4)}"] button[aria-pressed]`)!;
     expect(save.getAttribute("aria-pressed")).toBe("false");
     await click(save);
@@ -431,7 +441,7 @@ describe("All Reports", () => {
 
 describe("Filters: lead type", () => {
   it("opens the sheet with All lead types chosen", async () => {
-    await open("/analysis/calls?tab=all");
+    await open();
     await openFilters();
     expect(sheet()).not.toBeNull();
     expect(host.textContent).toContain("Filter reports");
@@ -446,7 +456,7 @@ describe("Filters: lead type", () => {
     ["Saved Reports", [2, 6]],
   ] as const) {
     it(`shows only ${label}`, async () => {
-      await open("/analysis/calls?tab=all");
+      await open();
       await openFilters();
       await chooseLeadType(label);
       expect(applyButton()?.textContent).toBe(
@@ -467,7 +477,7 @@ describe("Filters: lead type", () => {
 
 describe("Filters: date range", () => {
   it("opens on the current month and moves between months", async () => {
-    await open("/analysis/calls?tab=all");
+    await open();
     await openFilters();
     expect($("[data-calendar-month]")?.textContent).toBe("November 2026");
     await click($('button[aria-label="Previous month"]'));
@@ -478,7 +488,7 @@ describe("Filters: date range", () => {
   });
 
   it("selects From and To, highlights the range, includes both days", async () => {
-    await open("/analysis/calls?tab=all");
+    await open();
     await openFilters();
     await click($('[data-day="2026-11-05"]'));
     expect($('[data-slot="from"]')?.textContent).toContain("5 Nov 2026");
@@ -507,7 +517,7 @@ describe("Filters: date range", () => {
   });
 
   it("refuses a range with only one date", async () => {
-    await open("/analysis/calls?tab=all");
+    await open();
     await openFilters();
     await click($('[data-day="2026-11-05"]'));
     expect(applyButton()?.textContent).toBe("Select an end date");
@@ -519,7 +529,7 @@ describe("Filters: date range", () => {
   });
 
   it("clears the dates but keeps the lead type", async () => {
-    await open("/analysis/calls?tab=all");
+    await open();
     await openFilters();
     await chooseLeadType("Cold leads (Auto-uploaded)");
     await click($('[data-day="2026-11-01"]'));
@@ -532,7 +542,7 @@ describe("Filters: date range", () => {
   });
 
   it("works together with a lead type", async () => {
-    await open("/analysis/calls?tab=all");
+    await open();
     await openFilters();
     await chooseLeadType("Cold leads (Auto-uploaded)");
     await click($('[data-day="2026-11-10"]'));
@@ -552,9 +562,7 @@ describe("Filters: date range", () => {
 
 describe("Filters: chips, reset, empty state", () => {
   async function filtered() {
-    await open(
-      "/analysis/calls?tab=all&type=cold_auto&from=2026-11-01&to=2026-11-13",
-    );
+    await open("/analysis/calls?type=cold_auto&from=2026-11-01&to=2026-11-13");
   }
 
   it("reads filters from the address, so Back from a report keeps them", async () => {
@@ -567,16 +575,19 @@ describe("Filters: chips, reset, empty state", () => {
     });
     await click($(`[data-report-card="${id(4)}"] a`));
     expect(sessionStorage.getItem("sx.reports.return")).toBe(
-      "/analysis/calls?tab=all&type=cold_auto&from=2026-11-01&to=2026-11-13",
+      "/analysis/calls?type=cold_auto&from=2026-11-01&to=2026-11-13",
     );
   });
 
-  it("writes the tab, search and filters into the address", async () => {
+  it("writes the view, search and filters into the address", async () => {
     await open();
-    await click(tab("All Reports"));
+    await click(tab("Reports ready"));
     await type("sample");
     await flush();
-    expect(window.location.search).toBe("?tab=all&q=sample");
+    expect(window.location.search).toBe("?tab=ready&q=sample");
+    await click(tab("All"));
+    await flush();
+    expect(window.location.search).toBe("?q=sample");
   });
 
   it("removes one filter with its chip and keeps the other", async () => {
@@ -588,7 +599,7 @@ describe("Filters: chips, reset, empty state", () => {
     );
     await click($('button[aria-label="Remove date filter"]'));
     expect($('[aria-label="Applied filters"]')).toBeNull();
-    expect(count()).toBe("6 of 6 reports");
+    expect(count()).toBeUndefined();
   });
 
   it("resets everything in the sheet, and closing without applying changes nothing", async () => {
@@ -608,7 +619,7 @@ describe("Filters: chips, reset, empty state", () => {
     await click(applyButton());
     await flush();
     expect(cards()).toHaveLength(6);
-    expect(count()).toBe("6 of 6 reports");
+    expect(count()).toBeUndefined();
   });
 
   it("says nothing matched, and one tap clears filters and search", async () => {
@@ -616,12 +627,12 @@ describe("Filters: chips, reset, empty state", () => {
     await type("nobody by this name");
     expect(cards()).toHaveLength(0);
     const empty = $("[data-no-match]")!;
-    expect(empty.querySelector("h3")?.textContent).toBe("No matching reports");
-    expect(empty.textContent).toContain("Your reports have not been removed.");
+    expect(empty.querySelector("h3")?.textContent).toBe("No matching calls");
+    expect(empty.textContent).toContain("Your calls have not been removed.");
     await click(byText("button", "Clear filters & search"));
     expect(cards()).toEqual(FIXTURES.map((fixture) => id(fixture.n)));
     expect($<HTMLInputElement>('input[type="search"]')?.value).toBe("");
-    expect(count()).toBe("6 of 6 reports");
+    expect(count()).toBeUndefined();
   });
 });
 
@@ -650,9 +661,9 @@ describe("Analyse a call", () => {
     expect(router.replace).toHaveBeenCalledWith("/analysis/new");
   });
 
-  it("goes back to Reports", async () => {
+  it("goes back to Calls", async () => {
     await open("/analysis/calls?view=analyse");
-    await click(byText("button", "Back to Reports"));
+    await click(byText("button", "Back to Calls"));
     expect(
       router.back.mock.calls.length + router.replace.mock.calls.length,
     ).toBe(1);
