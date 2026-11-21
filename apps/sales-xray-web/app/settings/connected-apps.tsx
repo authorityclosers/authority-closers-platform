@@ -22,6 +22,7 @@ import {
   Hourglass,
   Loader2,
   Lock,
+  Megaphone,
   PhoneCall,
   PlugZap,
   RefreshCw,
@@ -66,7 +67,8 @@ import { GoogleFilesCard } from "./google-files-card";
 import styles from "./connected-apps.module.css";
 
 const LOGOS: Record<AppKey, { brands?: string[]; icon?: LucideIcon }> = {
-  meta_leads: { brands: ["facebook", "instagram"] },
+  // Lead ads, not the networks: a dark ink megaphone (sx-redesign board 15).
+  meta_leads: { icon: Megaphone },
   whatsapp: { brands: ["whatsapp"] },
   messenger: { brands: ["messenger"] },
   instagram: { brands: ["instagram"] },
@@ -343,11 +345,14 @@ function Outcome({
 function AppCard({
   app,
   result,
+  lead = false,
   onManage,
   onTest,
   onDismiss,
 }: {
   app: AppHealth;
+  /** The page's first Connect: drawn solid green, the page's one (board 15). */
+  lead?: boolean;
   result: Running | undefined;
   onManage: () => void;
   onTest: (offer: TestOffer) => void;
@@ -412,6 +417,7 @@ function AppCard({
       data-app={app.app}
       data-state={app.state}
       data-passed={passed ? "" : undefined}
+      data-lead={lead ? "" : undefined}
       aria-labelledby={titleId}
     >
       <div className={styles.cardHead}>
@@ -1204,6 +1210,25 @@ export function ConnectedApps() {
   for (const app of apps) counts[showOf(app)] += 1;
   const shown = show ? counts[show] : apps.length;
   const open = drawn ? apps.find((app) => app.app === drawn.app) : undefined;
+  // One solid green on the page (sx-redesign board 15): a Reconnect when an
+  // app needs it, else the first app shown that can be connected.
+  const offers = (app: AppHealth) =>
+    app.state !== "ready" &&
+    app.state !== "problem" &&
+    app.state !== "off" &&
+    app.state !== "not_set_up" &&
+    !app.page &&
+    Boolean(app.connect);
+  const leadApp = apps.some(
+    (app) => app.state === "problem" && app.connect && !app.page,
+  )
+    ? null
+    : (GROUPS.flatMap((group) => group.apps)
+        .map((key) => apps.find((app) => app.app === key))
+        .find(
+          (app): app is AppHealth =>
+            app !== undefined && (!show || showOf(app) === show) && offers(app),
+        )?.app ?? null);
   const checked = checkedWords(
     loaded.state === "ready" ? loaded.checkedAt : null,
   );
@@ -1320,6 +1345,7 @@ export function ConnectedApps() {
                       <AppCard
                         key={app.app}
                         app={app}
+                        lead={app.app === leadApp}
                         result={
                           sheet?.app === app.app ? undefined : tests[app.app]
                         }
