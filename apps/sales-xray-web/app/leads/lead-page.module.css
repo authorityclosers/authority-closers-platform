@@ -1150,3 +1150,10 @@ a.callBand {
 .paneDock {
   margin-top: 8px;
 }
+
+/* The sliding stage strip takes the keyboard's focus: a visible ring. */
+.stepper:focus-visible {
+  outline: 2px solid var(--sx-primary-ink);
+  outline-offset: 2px;
+  border-radius: var(--sx-radius-sm);
+}

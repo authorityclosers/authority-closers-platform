@@ -73,7 +73,7 @@ import {
 import { createPortal } from "react-dom";
 
 import { callHref, type UploadPolicy } from "../acquisition-client";
-import { notify } from "../notice-center";
+import { dismissNotice, notify } from "../notice-center";
 import { unsentWrites, useWrites } from "../sync/write-queue";
 import { rememberOpened } from "../pick-up";
 import { useWorkspaceAccess } from "../workspace-access";
@@ -1020,6 +1020,19 @@ export function CallOutcome({
   // set's (the lead's own stage kept, or one picked from the list).
   const stageKept = wrapUp && stage !== null && nextId === null;
   const showStages = !wrapUp || !nexts.length || allStages || stageKept;
+  // Behind Change stage: only the stages none of the set's tiles is (v1.93
+  // judge round 2: "Interested" showed twice, both lit).
+  const otherStages = wrapUp
+    ? choices.filter(
+        (item) =>
+          !nexts.some(
+            (next) =>
+              next.id !== "send-details" &&
+              next.stage === item.key &&
+              next.step === (item.step ?? null),
+          ),
+      )
+    : [];
   const closes = stage === "won" || stage === "lost";
   // What the picked stage's move needs, by the server's rules.
   const chosenMove =
@@ -1078,6 +1091,12 @@ export function CallOutcome({
   const nudged = nudges > 0;
   const nudge = nudges ? (nudges % 2 ? "odd" : "even") : undefined;
   const stepRef = useRef<HTMLDivElement>(null);
+  // When the desk brings a missed lead back by itself (the server's rule:
+  // in 1 hour the first time, then a day later), said as a time.
+  const [openedAt] = useState(() => Date.now());
+  const autoBack = new Date(
+    openedAt + (detail.lead.attempts ? 24 : 1) * 60 * 60 * 1000,
+  );
   const autoRetry =
     reason === null
       ? null
@@ -1517,7 +1536,7 @@ export function CallOutcome({
             <WrapTime
               pick={retry}
               custom={custom}
-              auto={`Back on your desk ${detail.lead.attempts ? "tomorrow" : "in 1 hour"}`}
+              auto={`Back ${when(autoBack.toISOString())}`}
               onPick={setRetry}
               onCustom={setCustom}
             />
@@ -1578,19 +1597,15 @@ export function CallOutcome({
               ))}
             </div>
           ) : null}
-          {wrapUp && nexts.length && !stageKept ? (
+          {wrapUp && nexts.length && otherStages.length && !stageKept ? (
             <button
               type="button"
               className={wrap.moreStages}
               aria-expanded={showStages}
               onClick={() => setAllStages((open) => !open)}
             >
-              {showStages ? "Fewer choices" : "Change stage"}
-              <ChevronDown
-                size={16}
-                aria-hidden="true"
-                style={showStages ? { transform: "rotate(180deg)" } : undefined}
-              />
+              Change stage
+              <ChevronDown size={16} aria-hidden="true" />
             </button>
           ) : null}
           {!wrapUp && answers.length ? (
@@ -1623,7 +1638,42 @@ export function CallOutcome({
               }}
             />
           ) : null}
-          {showStages ? (
+          {wrapUp && showStages && otherStages.length ? (
+            // The other stages, under their own small heading, in the same
+            // look as the set above; lit only when chosen here.
+            <div className={wrap.stages}>
+              <span className={wrap.timeLabel} id={`${id}-stage`}>
+                Stage
+              </span>
+              <div
+                className={wrap.stageChips}
+                role="group"
+                aria-label="What happens next"
+              >
+                {otherStages.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={wrap.stage}
+                    aria-pressed={
+                      nextId === null &&
+                      (item.step
+                        ? step === item.step
+                        : stage === item.key && step === null)
+                    }
+                    onClick={() => {
+                      setStage(item.key);
+                      setStep(item.step ?? null);
+                      setNextId(null);
+                    }}
+                  >
+                    {breakable(item.label)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {!wrapUp ? (
             <div
               className={styles.stageGrid}
               role="group"
@@ -5571,6 +5621,9 @@ export function LeadSheet({
         // next lead; a missed call in a round goes straight on
         // to the next lead (board 1, "No answer" path).
         if (wrapping && leadId && !(queue && onNext && !talked)) {
+          // The Saved screen says where the lead went, with its Undo: the
+          // corner card would only repeat it (v1.93 judge round 2).
+          dismissNotice(`outcome-${leadId}`);
           setWrapDone({ leadId, saved: next, talked });
           return;
         }
@@ -5757,6 +5810,42 @@ export function LeadSheet({
                 ? () => {
                     setWrapDone(null);
                     callNext();
+                  }
+                : undefined
+            }
+            onUndo={
+              wrapDone.saved.undo_result
+                ? () => {
+                    const answer = wrapDone.saved.undo_result;
+                    if (!answer) return;
+                    void undoResult(wrapDone.saved.lead, answer.event_id).then(
+                      (back) => {
+                        setWrapDone(null);
+                        setLoaded((current) =>
+                          current?.lead.lead_id === back.lead.lead_id
+                            ? back
+                            : current,
+                        );
+                        onChanged();
+                        notify({
+                          id: `outcome-${back.lead.lead_id}`,
+                          tone: "info",
+                          title: `Undone: back to ${back.lead.stage_label}`,
+                          message: back.lead.name,
+                          timeout: 6000,
+                        });
+                      },
+                      (failure: unknown) =>
+                        notify({
+                          id: `outcome-${wrapDone.saved.lead.lead_id}`,
+                          tone: "error",
+                          title:
+                            failure instanceof LeadsError
+                              ? failure.message
+                              : "Can't undo now.",
+                          message: wrapDone.saved.lead.name,
+                        }),
+                    );
                   }
                 : undefined
             }

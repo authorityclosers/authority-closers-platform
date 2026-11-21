@@ -6,7 +6,10 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 vi.mock("next/link", () => ({
   default: ({ children }: { children: unknown }) => children,
 }));
-vi.mock("../notice-center", () => ({ notify: () => undefined }));
+vi.mock("../notice-center", () => ({
+  notify: () => undefined,
+  dismissNotice: () => undefined,
+}));
 
 import { resetBackCloseForTests } from "../ui/back-close";
 import { CallNext } from "./call-next";
@@ -398,9 +401,15 @@ it("starts step 2 ready: Interested chosen, tomorrow's time, one way back", asyn
   // The organisation's other stages, one tap down.
   expect(document.querySelector('[aria-label="What happens next"]')).toBeNull();
   await act(async () => tile("Change stage").click());
+  // Only the stages none of the four is, under "Stage", none lit twice
+  // (v1.93 judge round 2); the toggle keeps its words.
+  const others = document.querySelector('[aria-label="What happens next"]')!;
   expect(
-    document.querySelector('[aria-label="What happens next"]'),
-  ).not.toBeNull();
+    [...others.querySelectorAll("button")].map((b) => b.textContent),
+  ).toEqual(["Won"]);
+  expect(others.querySelector('[aria-pressed="true"]')).toBeNull();
+  expect(others.parentElement?.textContent).toMatch(/^Stage/);
+  expect(tile("Change stage").getAttribute("aria-expanded")).toBe("true");
   await act(async () => tile("Save").click());
   await flush();
   const sent = vi
@@ -462,4 +471,20 @@ it("ends a talk on Saved with the report on its way and one Call next lead", asy
   expect(tile("Back to Ravi").className).toMatch(/secondary/);
   await act(async () => next.click());
   expect(onCallNext).toHaveBeenCalledTimes(1);
+  // Undo sits on the Saved screen itself, only while the server offers it.
+  expect(tile("Undo")).toBeUndefined();
+  const onUndo = vi.fn();
+  await act(async () =>
+    root.render(
+      <WrapUpDone
+        saved={saved}
+        talked
+        reportExpected
+        onUndo={onUndo}
+        onBack={() => undefined}
+      />,
+    ),
+  );
+  await act(async () => tile("Undo").click());
+  expect(onUndo).toHaveBeenCalledTimes(1);
 });

@@ -255,9 +255,12 @@ export function WrapUpDone({
   talked,
   reportExpected,
   onCallNext,
+  onUndo,
   onBack,
 }: {
   saved: LeadDetail;
+  /** Take the answer back, while the server allows it (the corner card's Undo, here). */
+  onUndo?: () => void;
   talked: boolean;
   /** A call the phone records: its report follows by itself. */
   reportExpected: boolean;
@@ -280,6 +283,16 @@ export function WrapUpDone({
         {saved.lead.next_action_at
           ? ` · next call ${when(saved.lead.next_action_at)}`
           : ""}
+        {onUndo ? (
+          <button
+            type="button"
+            className={styles.undo}
+            data-sx-feature="wrap_up_undo"
+            onClick={onUndo}
+          >
+            Undo
+          </button>
+        ) : null}
       </p>
       {talked && reportExpected ? (
         <ReportOnItsWay eventId={callId} first={first} />

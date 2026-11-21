@@ -19,6 +19,9 @@
   --wrap-pad: 16px;
   --wrap-bg: var(--sx-surface);
 
+  /* A field scrolled to clears the stuck Save row. */
+  scroll-padding-bottom: 120px;
+
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -88,6 +91,8 @@
 .next:focus-visible,
 .chip:focus-visible,
 .moreStages:focus-visible,
+.stage:focus-visible,
+.undo:focus-visible,
 .save:focus-visible,
 .timeInput:focus-visible + .timeFace {
   outline: none;
@@ -397,6 +402,43 @@
   cursor: pointer;
 }
 
+/* The other stages, under "Stage": compact pills in the set's own surface
+   and edge (dark too), lit like a chosen tile. */
+.stages {
+  display: grid;
+  gap: 8px;
+}
+
+.stageChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stage {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  background: color-mix(in oklab, var(--sx-ink) 3%, var(--sx-surface));
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.stage[aria-pressed="true"] {
+  border-color: var(--sx-primary-ink);
+  background: var(--sx-tone-good-soft);
+  box-shadow: inset 0 0 0 1px var(--sx-primary-ink);
+  color: var(--sx-primary-ink);
+}
+
+.moreStages[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+
 /* ---------- The follow-up time: a field, three quick chips ---------- */
 
 .time {
@@ -517,9 +559,26 @@
   margin: 0 calc(-1 * var(--wrap-pad))
     calc(-1 * (env(safe-area-inset-bottom, 0px) + 16px));
   padding: 12px var(--wrap-pad) calc(env(safe-area-inset-bottom, 0px) + 16px);
+  margin-top: 8px;
   border-top: 1px solid var(--sx-line);
   background: var(--wrap-bg);
   box-shadow: none;
+}
+
+/* What scrolls under the stuck Save fades out above it, never a hard cut. */
+.saveRow::before {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: 24px;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--wrap-bg) 0%, transparent),
+    var(--wrap-bg)
+  );
+  content: "";
+  pointer-events: none;
 }
 
 @media (min-width: 760px) {
@@ -588,6 +647,20 @@
   margin: 0;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-md);
+}
+
+/* Undo, beside where the lead went (in place of the corner card's). */
+.undo {
+  min-height: 44px;
+  margin: -12px 0 -12px 8px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: none;
+  color: var(--sx-primary-ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 /* A calm card: a soft green wash, the ink dark, its steps ticked as known. */

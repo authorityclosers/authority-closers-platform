@@ -167,6 +167,8 @@ it("puts the lead's stage on top with Change, and keeps Move stage and Close as 
     change!.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
   expect(change!.closest("section")?.textContent).toContain("StageFollow-up");
+  // The sliding strip is reached by keyboard (axe scrollable-region-focusable).
+  expect(strip.getAttribute("tabindex")).toBe("0");
   const more = buttons().find(
     (button) =>
       button.getAttribute("aria-label") === `More for ${base.lead.name}`,
