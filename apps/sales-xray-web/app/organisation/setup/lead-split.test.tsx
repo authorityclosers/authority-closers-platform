@@ -203,3 +203,22 @@ it("turns a saved split off on Save and keeps its shares for next time", async (
     shares: [50, 50],
   });
 });
+
+it("keeps sellers not taking leads, at 0 %, behind one row", async () => {
+  const away = { ...person(C, "Ravi Example"), available: false };
+  calls.read.mockResolvedValue(
+    routing({
+      people: [person(A, "Mira Sample"), away, person(B, "Anika Fictional")],
+    }),
+  );
+  await act(async () => root.render(<LeadSplit />));
+  // The even split starts with those taking leads; Ravi waits behind a row.
+  expect(field("Mira Sample").value).toBe("50");
+  expect(field("Anika Fictional").value).toBe("50");
+  expect(field("Ravi Example")).toBeNull();
+  const more = button("1 not taking leads")!;
+  expect(more.getAttribute("aria-expanded")).toBe("false");
+  await act(async () => more.click());
+  expect(field("Ravi Example").value).toBe("");
+  expect(host.textContent).toContain("Not taking leads now");
+});

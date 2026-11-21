@@ -46,6 +46,7 @@ vi.mock("./lead-split", () => ({
     discard: () => undefined,
   }),
   LeadSplitCard: () => <section>Who gets new leads</section>,
+  Face: () => null,
   perTen: () => "",
 }));
 (

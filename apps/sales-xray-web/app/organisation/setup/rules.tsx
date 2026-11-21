@@ -22,10 +22,9 @@ import { TeamView } from "../../leads/team-view";
 import { SellerSheet } from "../../leads/seller-sheet";
 import { readCallAi, type CallAiSettings } from "../../call-ai/call-ai-client";
 import { Skeleton } from "../../ui/kit";
-import { Initials } from "../family";
 import family from "../family.module.css";
 import { PersonDisplayName } from "../people/person-display-name";
-import { LeadSplitCard, perTen, useLeadSplit } from "./lead-split";
+import { Face, LeadSplitCard, perTen, useLeadSplit } from "./lead-split";
 import { OnOff } from "./on-off";
 import {
   clock,
@@ -326,7 +325,7 @@ function SellerRules({ rules }: { rules: TeamRules }) {
                   setRound((value) => value + 1);
                 }}
               >
-                <Initials name={rep.name} id={rep.person_id} size={36} />
+                <Face name={rep.name} />
                 <span className={family.rowText}>
                   <span className={family.rowTitle}>
                     <PersonDisplayName name={rep.name} />

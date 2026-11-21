@@ -11,7 +11,7 @@
  * split is off too (greyed), so the page explains itself; the page's one Save
  * button saves it with the other rules (`useLeadSplit().save`).
  */
-import { Check } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { notify } from "../../notice-center";
 import {
@@ -24,7 +24,7 @@ import {
   type RoutingRule,
 } from "../../leads/routing-client";
 import { Skeleton } from "../../ui/kit";
-import { Initials } from "../family";
+import { initialsOf } from "../family";
 import { OnOff } from "./on-off";
 import styles from "./lead-split.module.css";
 
@@ -295,8 +295,53 @@ export function perTen(parts: readonly SplitPart[]): string {
     .join(" · ");
 }
 
+/** One person's initials on a neutral tile (colour only by meaning). */
+export function Face({ name }: { name: string }) {
+  return (
+    <i className={styles.avatar} aria-hidden="true">
+      {initialsOf(name)}
+    </i>
+  );
+}
+
+function ShareRow({
+  part,
+  split,
+  editable,
+}: {
+  part: SplitPart;
+  split: LeadSplitState;
+  editable: boolean;
+}) {
+  const person = split.people.find((item) => item.person_id === part.id);
+  return (
+    <li className={styles.person}>
+      <Face name={part.name} />
+      <span className={styles.name}>
+        <strong>{part.name}</strong>
+        {person && !person.available ? (
+          <small>Not taking leads now</small>
+        ) : null}
+      </span>
+      <label className={styles.percent}>
+        <input
+          type="text"
+          inputMode="numeric"
+          aria-label={`${part.name}'s share in percent`}
+          value={split.shares[part.id] ?? ""}
+          placeholder="0"
+          disabled={!editable}
+          onChange={(event) => split.setShare(part.id, event.target.value)}
+        />
+        <span aria-hidden="true">%</span>
+      </label>
+    </li>
+  );
+}
+
 /** The "Who gets new leads" card. */
 export function LeadSplitCard({ split }: { split: LeadSplitState }) {
+  const [showAll, setShowAll] = useState(false);
   if (split.status === "hidden")
     return (
       <section className={styles.card}>
@@ -316,6 +361,15 @@ export function LeadSplitCard({ split }: { split: LeadSplitState }) {
 
   const { on, parts, canEdit, busy, total } = split;
   const editable = canEdit && on && !busy;
+  // Sellers not taking leads, at 0 %, wait behind one row (v1.93 judge r2):
+  // the off state stays one screen, and one tap shows them to give a share.
+  const away = new Set(
+    split.people
+      .filter((person) => !person.available)
+      .map((person) => person.person_id),
+  );
+  const resting = (part: SplitPart) => away.has(part.id) && part.share === 0;
+  const restingCount = parts.filter(resting).length;
   const shown = parts.filter((part) => part.share > 0);
 
   return (
@@ -346,37 +400,32 @@ export function LeadSplitCard({ split }: { split: LeadSplitState }) {
       ) : (
         <div className={styles.split}>
           <ul className={styles.people} aria-label="Shares">
-            {parts.map((part) => {
-              const person = split.people.find(
-                (item) => item.person_id === part.id,
-              );
-              return (
-                <li key={part.id} className={styles.person}>
-                  <Initials name={part.name} id={part.id} size={36} />
-                  <span className={styles.name}>
-                    <strong>{part.name}</strong>
-                    {person && !person.available ? (
-                      <small>Not taking leads now</small>
-                    ) : null}
-                  </span>
-                  <label className={styles.percent}>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      aria-label={`${part.name}'s share in percent`}
-                      value={split.shares[part.id] ?? ""}
-                      placeholder="0"
-                      disabled={!editable}
-                      onChange={(event) =>
-                        split.setShare(part.id, event.target.value)
-                      }
-                    />
-                    <span aria-hidden="true">%</span>
-                  </label>
-                </li>
-              );
-            })}
+            {(showAll ? parts : parts.filter((part) => !resting(part))).map(
+              (part) => (
+                <ShareRow
+                  key={part.id}
+                  part={part}
+                  split={split}
+                  editable={editable}
+                />
+              ),
+            )}
           </ul>
+          {restingCount ? (
+            <button
+              type="button"
+              className={styles.more}
+              aria-expanded={showAll}
+              onClick={() => setShowAll((value) => !value)}
+            >
+              <span>
+                {showAll
+                  ? `Hide the ${restingCount} not taking leads`
+                  : `${restingCount} not taking leads`}
+              </span>
+              <ChevronDown aria-hidden="true" />
+            </button>
+          ) : null}
           <div className={styles.bar} aria-hidden="true">
             {shown.map((part) => (
               <span

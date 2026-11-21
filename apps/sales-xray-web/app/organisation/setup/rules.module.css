@@ -154,8 +154,9 @@
 .days button[aria-pressed="true"] {
   border-color: transparent;
   background: var(--sx-gloss);
-  /* Seven in a row: the gloss's top light only, no drop shadow. */
-  box-shadow: inset 0 1px 0 color-mix(in oklab, white 30%, transparent);
+  /* Seven in a row: a flat deep green, not seven main buttons. */
+  background: var(--lx-home-primary);
+  box-shadow: none;
   color: var(--sx-gloss-ink);
 }
 
@@ -256,8 +257,8 @@
 
 .check input:checked + .box {
   border-color: transparent;
-  background: var(--sx-gloss);
-  box-shadow: inset 0 1px 0 color-mix(in oklab, white 30%, transparent);
+  background: var(--lx-home-primary);
+  box-shadow: none;
   color: var(--sx-gloss-ink);
 }
 
@@ -480,6 +481,54 @@
   flex: none;
   align-items: center;
   gap: 6px;
+}
+
+/* Phone and tablet: the bar docks flush on the tab bar, full width, solid,
+   with a short fade above; the page keeps room so no row hides under it. */
+@media (max-width: 899px) {
+  .rail {
+    position: fixed;
+    right: 0;
+    bottom: calc(
+      var(--lx-bottom-nav-h, 64px) + env(safe-area-inset-bottom, 0px)
+    );
+    left: 0;
+    z-index: 30;
+  }
+
+  .rail::before {
+    position: absolute;
+    right: 0;
+    bottom: 100%;
+    left: 0;
+    height: 24px;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      color-mix(in oklab, var(--lx-paper) 85%, transparent)
+    );
+    content: "";
+    pointer-events: none;
+  }
+
+  .save {
+    border-width: 0;
+    border-top: var(--sx-tile-edge);
+    border-radius: 22px 22px 0 0;
+    background: var(--lx-elevated, var(--sx-surface));
+    box-shadow: 0 -8px 24px -12px
+      color-mix(in oklab, var(--lx-film, black) 30%, transparent);
+  }
+
+  .frame:has(.rail[data-dirty]) {
+    padding-bottom: 96px;
+  }
+}
+
+@media (min-width: 600px) and (max-width: 899px) {
+  .save {
+    padding: 14px max(24px, calc((100vw - 720px) / 2));
+  }
 }
 
 @media (min-width: 900px) {
