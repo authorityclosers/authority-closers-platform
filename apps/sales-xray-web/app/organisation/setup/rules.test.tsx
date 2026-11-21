@@ -126,7 +126,7 @@ it("puts every lead rule on one page, with no rows of tabs", async () => {
     "Who gets new leads",
     "Move untouched leads",
     "Work hours",
-    "Sellers can reassign leads",
+    "Sellers can give leads to a colleague",
   ])
     expect(text).toContain(words);
   expect(text.indexOf("Who gets new leads")).toBeLessThan(
@@ -179,7 +179,7 @@ it("saves work hours on the revision the settings save returned", async () => {
   await act(async () =>
     host
       .querySelector<HTMLButtonElement>(
-        '[role="switch"][aria-label="Sellers can reassign leads"]',
+        '[role="switch"][aria-label="Sellers can give leads to a colleague"]',
       )!
       .click(),
   );

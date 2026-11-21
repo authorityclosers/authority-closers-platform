@@ -147,7 +147,9 @@ it("shows the split greyed while off, then saves it after the rules for some lea
   expect(host.querySelector("section")?.hasAttribute("data-off")).toBe(true);
   expect(field("Mira Sample").value).toBe("34");
   expect(field("Mira Sample").disabled).toBe(true);
-  expect(host.textContent).toContain("Out of every 10 new leads");
+  // Off says no sums: they would read as a rule in force.
+  expect(host.textContent).not.toContain("Out of every 10 new leads");
+  expect(host.textContent).not.toContain("Adds up to");
   expect(button("Save rules")?.disabled).toBe(true);
   await act(async () => toggle.click());
   expect(toggle.getAttribute("aria-checked")).toBe("true");

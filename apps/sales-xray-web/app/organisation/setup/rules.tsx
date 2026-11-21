@@ -127,7 +127,7 @@ export function OrganisationRules() {
                   </dd>
                 </div>
                 <div>
-                  <dt>Sellers give leads</dt>
+                  <dt>Sellers can give leads</dt>
                   <dd>{rules.giving ? "Yes, with a reason" : "No"}</dd>
                 </div>
               </dl>
@@ -424,19 +424,17 @@ function SellerRules({ rules }: { rules: TeamRules }) {
       <section className={card.card} aria-labelledby="give-title">
         <div className={card.head}>
           <h3 id="give-title" className={card.title}>
-            Sellers can reassign leads
+            Sellers can give leads to a colleague
           </h3>
           <OnOff
-            label="Sellers can reassign leads"
+            label="Sellers can give leads to a colleague"
             on={rules.giving}
             disabled={busy}
             feature="lead_rules_give_switch"
             onChange={rules.setGiving}
           />
         </div>
-        <p className={card.sub}>
-          A seller gives their lead to a colleague and says why.
-        </p>
+        <p className={card.sub}>They say why. Owners and admins always can.</p>
       </section>
       <section className={styles.more} aria-label="More lead rules">
         <More

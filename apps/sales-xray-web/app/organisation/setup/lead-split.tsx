@@ -435,26 +435,30 @@ export function LeadSplitCard({ split }: { split: LeadSplitState }) {
               />
             ))}
           </div>
-          <div className={styles.sum} aria-live="polite">
-            {total === 100 ? (
-              <span className={styles.good}>
-                Adds up to 100 %
-                <Check size={16} strokeWidth={2.5} aria-hidden="true" />
-              </span>
-            ) : (
-              <span className={styles.short}>
-                Adds up to {total} %:{" "}
-                {total < 100
-                  ? `${100 - total} % left to give`
-                  : `${total - 100} % too much`}
-              </span>
-            )}
-            {shown.length ? (
-              <span className={styles.ten}>
-                Out of every 10 new leads: {perTen(parts)}
-              </span>
-            ) : null}
-          </div>
+          {/* Off: no sums or "out of 10", which would read as a rule in force
+              (v1.93 judge r3); the rows and shares stay to show the split. */}
+          {on ? (
+            <div className={styles.sum} aria-live="polite">
+              {total === 100 ? (
+                <span className={styles.good}>
+                  Adds up to 100 %
+                  <Check size={16} strokeWidth={2.5} aria-hidden="true" />
+                </span>
+              ) : (
+                <span className={styles.short}>
+                  Adds up to {total} %:{" "}
+                  {total < 100
+                    ? `${100 - total} % left to give`
+                    : `${total - 100} % too much`}
+                </span>
+              )}
+              {shown.length ? (
+                <span className={styles.ten}>
+                  Out of every 10 new leads: {perTen(parts)}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           {split.turns.length ? (
             <p className={styles.next} data-inline-preview="">
               <strong>The next 5 leads go to:</strong>
