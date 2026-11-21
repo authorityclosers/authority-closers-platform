@@ -1,0 +1,753 @@
+/* The settings family (sx-redesign board, owner 21 Nov 2026): Team, a team
+   member, Sellers' phones, Company and Plan share these pieces, built from
+   v1.90 Home's tile tokens (--sx-tile-*, --sx-gloss, --sx-tone-*). At most
+   one hero card with a real number on top, then calm white radius-22 cards of
+   short rows: a dark ink icon tile, a label, a quiet value, a chevron. One
+   solid green button a screen; text 12 px and up. Light and dark both come
+   from the tokens. */
+
+.stack {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* ---------- Hero ---------- */
+
+.hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  padding: 20px;
+  overflow: hidden;
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+  color: var(--sx-ink);
+  isolation: isolate;
+}
+
+/* The faint meaning-colour wash in one corner. */
+.hero::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(
+    120% 140% at 100% 0%,
+    color-mix(in oklab, var(--wash, var(--sx-tone-good)) 16%, transparent),
+    transparent 62%
+  );
+  content: "";
+  pointer-events: none;
+}
+
+.hero[data-tone="amber"] {
+  --wash: var(--sx-tone-action);
+}
+
+.hero[data-tone="red"] {
+  --wash: var(--sx-tone-problem);
+}
+
+.hero[data-ringless] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.heroBody {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* A divider between the ring and the words, from tablet up. */
+@media (min-width: 600px) {
+  .hero:not([data-ringless]) .heroBody {
+    padding-left: 20px;
+    border-left: 1px solid var(--sx-hairline);
+  }
+
+  .hero {
+    padding: 24px 28px;
+  }
+}
+
+.heroTitle {
+  margin: 0;
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-xl);
+  font-weight: 750;
+  line-height: var(--sx-leading-28);
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 600px) {
+  .heroTitle {
+    font-size: var(--sx-text-2xl);
+    line-height: var(--sx-leading-36);
+  }
+}
+
+.heroLine {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+@media (max-width: 599px) {
+  .hero {
+    gap: 14px;
+    padding: 18px 16px;
+  }
+
+  .hero .ring {
+    --ring: 84px !important;
+  }
+
+  .heroTitle {
+    font-size: var(--sx-text-xl);
+    line-height: var(--sx-leading-28);
+  }
+}
+
+/* On a phone the hero's one button takes the width; tablet and laptop keep
+   it a normal pill at the left. */
+@media (max-width: 599px) {
+  .hero[data-stack-phone] {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .hero[data-stack-phone] .heroBody {
+    grid-row: 1;
+  }
+
+  .hero[data-stack-phone] .heroActions {
+    grid-column: 1 / -1;
+  }
+
+  .hero[data-stack-phone] .heroActions > * {
+    flex: 1 1 100%;
+  }
+}
+
+/* ---------- Ring ---------- */
+
+.ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--ring, 96px);
+  height: var(--ring, 96px);
+  flex: none;
+}
+
+.ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.ringTrack {
+  fill: none;
+  stroke: var(--sx-fill);
+}
+
+.ringArc {
+  fill: none;
+  stroke: var(--sx-primary-ink);
+  stroke-linecap: round;
+  transition: stroke-dashoffset var(--lx-dur-develop) var(--lx-ease-move);
+}
+
+.ring[data-tone="amber"] .ringArc {
+  stroke: var(--sx-tone-action);
+}
+
+.ringText {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  line-height: 1;
+}
+
+.ringText b {
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-xl);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.ringText small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+/* ---------- Buttons ---------- */
+
+/* The one solid deep-green pill (v1.90 Home's gloss). */
+.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform var(--sx-dur-instant, 90ms) var(--sx-ease-out, ease);
+}
+
+.primary:active {
+  transform: var(--sx-press-sink);
+}
+
+.primary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* A neutral white pill with dark words (Invite). */
+.neutral {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.neutral:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* The app's secondary pill: green outline, green words. */
+.outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1.5px solid var(--sx-primary-ink);
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-primary-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.outline:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* Sign out, Remove: quiet red words. */
+.dangerText {
+  justify-self: center;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-tone-problem);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.dangerText:disabled {
+  opacity: 0.55;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--sx-primary-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.primary:focus-visible,
+.neutral:focus-visible,
+.outline:focus-visible,
+.dangerText:focus-visible,
+.link:focus-visible,
+.row:focus-visible,
+.switch button:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+/* ---------- Pill switch (v1.90 Home: solid deep green selected) ---------- */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.switch {
+  display: inline-flex;
+  padding: 3px;
+  border: var(--sx-well-edge);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-well-fill);
+  box-shadow: var(--sx-well-depth);
+}
+
+.switch button {
+  min-height: 38px;
+  min-width: 96px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.switch button[aria-pressed="true"],
+.switch button[aria-selected="true"] {
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
+/* ---------- Cards and rows ---------- */
+
+.card {
+  display: grid;
+  min-width: 0;
+  padding: 4px 16px;
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+  color: var(--sx-ink);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0 6px;
+}
+
+.cardHead h2,
+.cardHead h3 {
+  margin: 0;
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+}
+
+/* Small bold section words inside a card: "Needs action (2)". */
+.sectionLabel {
+  margin: 0;
+  padding: 16px 0 4px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 750;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 10px 0;
+  border: 0;
+  border-top: 1px solid var(--sx-hairline);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.card > .row:first-child,
+.card > :first-child > .row:first-child,
+.sectionLabel + .row,
+.cardHead + .row {
+  border-top: 0;
+}
+
+button.row,
+a.row {
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  button.row:hover .rowTitle,
+  a.row:hover .rowTitle {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
+/* A person's row on a phone: the chips go under the name, the chevron stays
+   at the end (the name keeps its width at 390 px). */
+@media (max-width: 599px) {
+  .personRow {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    row-gap: 6px;
+  }
+
+  .personRow > .avatar {
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+
+  .personRow > .rowText {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .personRow > .rowEnd {
+    display: contents;
+  }
+
+  .personRow > .rowEnd > .chip,
+  .personRow > .rowEnd > .chips {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+  }
+
+  .personRow > .rowEnd > .chevron {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+}
+
+.rowText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rowTitle {
+  overflow: hidden;
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  line-height: var(--sx-leading-24);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowLabel {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.rowSub {
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowSub[data-wrap] {
+  white-space: normal;
+}
+
+.rowValue {
+  overflow-wrap: anywhere;
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+}
+
+.rowValue[data-empty] {
+  color: var(--sx-muted);
+  font-weight: 600;
+}
+
+.rowEnd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chevron {
+  width: 18px;
+  height: 18px;
+  margin: 0 6px;
+  color: var(--sx-muted);
+  flex: none;
+}
+
+/* Dark ink icon tile, soft fill (never teal). */
+.tile {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--sx-fill);
+  color: var(--sx-ink);
+  flex: none;
+}
+
+.tile svg {
+  width: 20px;
+  height: 20px;
+}
+
+.tile[data-tone="amber"] {
+  background: var(--sx-tone-action-soft);
+}
+
+.tile img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--sx-tone-info-soft);
+  color: var(--sx-tone-info);
+  font-size: var(--sx-text-sm);
+  font-style: normal;
+  font-weight: 750;
+  flex: none;
+}
+
+.avatar[data-hue="1"] {
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-tone-good);
+}
+
+.avatar[data-hue="2"] {
+  background: var(--sx-tone-action-soft);
+  color: var(--sx-tone-action);
+}
+
+.avatar[data-hue="3"] {
+  background: var(--sx-tone-calls-soft);
+  color: var(--sx-tone-calls);
+}
+
+.avatar[data-hue="4"] {
+  background: var(--sx-tone-problem-soft);
+  color: var(--sx-tone-problem);
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.plainList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plainList > li:first-child > .row,
+.plainList > .row:first-child {
+  border-top: 0;
+}
+
+/* ---------- Chips: a soft fill with the strong ink, always a word ---------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.chip svg {
+  width: 13px;
+  height: 13px;
+}
+
+.chip[data-tone="good"] {
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-tone-good);
+}
+
+.chip[data-tone="amber"] {
+  background: var(--sx-tone-action-soft);
+  color: var(--sx-tone-action);
+}
+
+.chip[data-tone="red"] {
+  background: var(--sx-tone-problem-soft);
+  color: var(--sx-tone-problem);
+}
+
+.chip[data-tone="info"] {
+  background: var(--sx-tone-info-soft);
+  color: var(--sx-tone-info);
+}
+
+.note {
+  margin: 0;
+  padding: 0 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.skeleton {
+  height: 60px;
+  border-radius: 12px;
+  background: var(--sx-fill);
+}
+
+/* ---------- A sheet's form: one field, one Save ---------- */
+
+.sheetForm {
+  display: grid;
+  gap: 12px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field span {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.field input,
+.field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: var(--sx-well-edge);
+  border-radius: 14px;
+  background: var(--sx-well-fill);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+}
+
+.field textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.field input:focus-visible,
+.field textarea:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+.hint {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.hint[data-tone="error"] {
+  color: var(--sx-tone-problem);
+}
+
+.steps {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ringArc,
+  .primary {
+    transition: none;
+  }
+}
