@@ -36,6 +36,7 @@ import {
 } from "./acquisition-client";
 import { DeleteAccountRow } from "./account-delete";
 import { BuildLine } from "./settings/build-line";
+import { PlanOverview } from "./settings/plan-overview";
 import { openBugReport } from "./bug-report/open";
 import { useSalesXraySignOut } from "./account-navigation";
 import type { BillingViewProps } from "./billing/billing-view";
@@ -1331,6 +1332,28 @@ export function PlanAndBillingPane({
     });
     return () => dismissNotice(id);
   }, [active, error, status]);
+
+  // Settings' Plan & billing, summary first (sx-redesign board, pick 07 C,
+  // owner 21 Nov 2026); the purchase dialog keeps its long form.
+  if (variant !== "dialog")
+    return (
+      <PlanOverview
+        allowance={allowance}
+        mePlan={mePlan}
+        subs={subs}
+        documents={documents}
+        status={status}
+        invoicesStatus={invoicesStatus}
+        busy={busy}
+        onCancel={onCancel}
+        onRefund={onRefund}
+        onBuyTopUp={onBuyTopUp}
+        packs={packs}
+        purchasesAllowed={purchasesAllowed}
+        plansOnWeb={plansOnWeb}
+        seesSeats={seesSeats}
+      />
+    );
 
   return (
     <div className={styles.billingBlock}>
