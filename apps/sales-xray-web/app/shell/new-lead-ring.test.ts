@@ -64,8 +64,31 @@ describe("new lead ring", () => {
 
   it("rings without sound support or page notifications", () => {
     vi.stubGlobal("Notification", undefined);
-    vi.stubGlobal("AudioContext", undefined);
+    vi.stubGlobal("Audio", undefined);
     expect(() => ringNewLead("n3", "New lead", "x", vi.fn())).not.toThrow();
+  });
+
+  it("rings with the sound picked for a new lead, from the library", () => {
+    vi.stubGlobal("Notification", undefined);
+    const made: string[] = [];
+    vi.stubGlobal(
+      "Audio",
+      class {
+        src = "";
+        loop = false;
+        preload = "";
+        canPlayType = () => "probably";
+        addEventListener = () => undefined;
+        play = async () => made.push(this.src);
+      },
+    );
+    window.localStorage.setItem(
+      "sx-sounds-plays",
+      JSON.stringify({ "sx.new_lead": "pulse-v2.mention" }),
+    );
+    ringNewLead("n4", "New lead", "x", vi.fn());
+    expect(made).toEqual(["/sounds/pulse-v2/mention.mp3"]);
+    window.localStorage.removeItem("sx-sounds-plays");
   });
 
   it("keeps lead_new lines from the server", () => {

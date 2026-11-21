@@ -454,3 +454,14 @@
     min-height: var(--lx-row-min-h, 44px);
   }
 }
+
+/* sx-redesign judge round (owner, 21 Nov 2026): rows at 14 px at least, and
+   Sign out as quiet red words, never grey. */
+.item {
+  font-size: max(var(--sx-text-sm), 14px);
+}
+
+.signOut,
+.signOut svg {
+  color: var(--lx-danger);
+}

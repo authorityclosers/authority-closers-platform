@@ -1,0 +1,146 @@
+/* Plan & billing, summary first (sx-redesign board, pick 07 C). The family's
+   pieces are in organisation/family.module.css; this lays out the hero and
+   the one-line rows. */
+
+/* The account pane around it is a card of its own elsewhere; here the hero
+   and rows are the cards. */
+:global(#account-pane-billing):has(> div > .overview) {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.overview {
+  min-width: 0;
+}
+
+.hero {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.heroMain {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.planLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.planName {
+  margin: 0;
+  font-size: var(--sx-text-xl);
+  font-weight: 750;
+  line-height: var(--sx-leading-28);
+}
+
+.minutes {
+  margin: 0;
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-2xl);
+  font-weight: 750;
+  line-height: var(--sx-leading-36);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 600px) {
+  .minutes {
+    font-size: max(var(--sx-text-3xl), 36px);
+  }
+}
+
+/* Phone: the button takes the hero's width under the ring; from tablet a
+   normal pill at the left. */
+@media (max-width: 599px) {
+  .hero .heroMain {
+    display: contents;
+  }
+
+  .hero {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 6px;
+  }
+
+  .hero .planLine,
+  .hero .minutes,
+  .hero p {
+    grid-column: 1;
+  }
+
+  .hero > [role="img"] {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    align-self: center;
+    --ring: 88px !important;
+  }
+
+  .heroButton {
+    grid-column: 1 / -1;
+  }
+
+  .heroButton > * {
+    flex: 1 1 100%;
+  }
+
+  .minutes {
+    font-size: var(--sx-text-xl);
+    line-height: var(--sx-leading-28);
+  }
+}
+
+@media (min-width: 600px) {
+  .hero:not([data-ringless]) .heroMain {
+    padding-right: 8px;
+  }
+
+  /* The family puts a divider before the body; here the ring is last. */
+  .hero:not([data-ringless]) > [role="img"] {
+    padding-left: 8px;
+  }
+}
+
+.rows {
+  display: grid;
+  gap: 10px;
+}
+
+/* Laptop: two balanced columns of one-line cards. */
+@media (min-width: 1100px) {
+  .rows {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* A row that is its own card: the card's fill and edge win over a row's. */
+.rows .rowCard {
+  min-height: 72px;
+  padding: 12px 16px;
+  border: var(--sx-tile-edge);
+  background: var(--sx-tile-fill);
+}
+
+button.rowCard:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.invoice {
+  align-items: start;
+}
+
+.confirm {
+  gap: 8px;
+  padding: 14px 16px;
+}

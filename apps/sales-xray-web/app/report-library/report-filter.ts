@@ -67,6 +67,10 @@ export type ReportRow = Readonly<{
   saved: boolean;
   /** Whose call, when an owner or admin sees the team's calls. */
   owner: string | null;
+  /** How the Report says the call ended (the list's summary.outcome). */
+  outcome?: string | null;
+  /** No report yet and it waits on a person: not analysed, or a problem. */
+  needsReview?: boolean;
 }>;
 
 /** Where the library stands: search words, lead type, and a From–To range. */

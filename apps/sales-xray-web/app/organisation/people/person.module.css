@@ -835,3 +835,129 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+/* ---------- A team member, pick 04 A (sx-redesign board, owner 21 Nov 2026) ---------- */
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+  min-height: 40px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* The header is the page's one hero: photo, name, chips, then its button. */
+.header.header {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 14px 16px;
+}
+
+.header .name {
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-2xl);
+  font-weight: 750;
+  line-height: var(--sx-leading-36);
+  letter-spacing: -0.02em;
+}
+
+.header .who {
+  gap: 8px;
+  align-self: center;
+}
+
+.headerActions {
+  grid-column: 2 / -1;
+  margin-top: 0;
+}
+
+/* Phone: the buttons on their own row under the name and chips. */
+@media (max-width: 599px) {
+  .header .name {
+    font-size: var(--sx-text-xl);
+    line-height: var(--sx-leading-28);
+  }
+
+  .headerActions {
+    grid-column: 1 / -1;
+  }
+
+  .headerActions > * {
+    flex: 1 1 100%;
+  }
+}
+
+@media (min-width: 1100px) {
+  .header.header {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+  }
+
+  .headerActions {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}
+
+/* The title row is "‹ Name" on every device, like Settings' sections (the
+   bar says Team); the hero keeps the name for screen readers only. */
+.backArrow,
+.backTeam {
+  display: none;
+}
+
+.backChevron {
+  display: block;
+  flex: none;
+  margin-left: -4px;
+}
+
+.backName {
+  display: block;
+  overflow: hidden;
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-xl);
+  font-weight: 750;
+  line-height: var(--sx-leading-28);
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 600px) {
+  .backName {
+    font-size: var(--sx-text-2xl);
+    line-height: var(--sx-leading-36);
+  }
+}
+
+.header .name {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.header .who {
+  align-self: center;
+}
+
+/* Timeline faces: the kind's badge sits off the corner, clear of the
+   initials (sx-redesign fix round). */
+.page [data-sentence] {
+  min-width: 0;
+}
+
+/* Tablet: one centred column (sx-redesign fix round). */
+@media (min-width: 600px) and (max-width: 1099px) {
+  .page {
+    max-width: 720px;
+    margin-inline: auto;
+  }
+}

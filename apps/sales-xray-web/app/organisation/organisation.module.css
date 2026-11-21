@@ -2347,3 +2347,153 @@
     display: none;
   }
 }
+
+/* ---------- Team (sx-redesign board, pick 03 C, owner 21 Nov 2026) ---------- */
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.cardNote {
+  padding: 14px 0;
+}
+
+/* The whole row opens the person (the name's link stretches over it); its
+   buttons sit above that. */
+.teamRow {
+  position: relative;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.teamRow button {
+  position: relative;
+  z-index: 1;
+}
+
+.teamRow[data-invited] .memberName {
+  color: var(--sx-muted);
+}
+
+@media (hover: hover) {
+  .teamRow:hover .memberLink {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
+.memberName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.memberName > a {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.memberName .you {
+  flex: none;
+  font-size: var(--sx-text-sm);
+}
+
+/* The email is for a wide screen; a phone row keeps to the name, its role
+   and its phone (Not taking leads shows on the person's page). */
+@media (max-width: 599px) {
+  .memberSub {
+    display: none;
+  }
+}
+
+/* Role and phone chips line up in two columns from tablet up, so the email
+   keeps its width. */
+@media (min-width: 600px) {
+  .memberChips {
+    display: grid;
+    grid-template-columns: 112px 150px;
+    justify-items: start;
+  }
+}
+
+.roleList {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+}
+
+.roleList dt {
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+}
+
+.roleList dd {
+  margin: 2px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+/* ---------- Company (sx-redesign board, pick 06 C) ---------- */
+
+.heroLogo {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.heroLogo .heroLogoActions {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+
+@media (min-width: 1100px) {
+  .heroLogo {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .heroLogo .heroLogoActions {
+    grid-column: auto;
+  }
+}
+
+.heroLogo > .tileFix,
+.heroLogo > span:first-child {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+}
+
+.detailsCount {
+  margin: 4px 4px -4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+/* Two columns of rows on a laptop (pick 06, laptop B). */
+@media (min-width: 1100px) {
+  .detailsCard {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 32px;
+  }
+
+  .detailsCard > :nth-child(2) {
+    border-top: 0;
+  }
+}
+
+.domainsCard {
+  padding: 18px 20px;
+}
+
+.domainsCard .settingIntro h2 {
+  margin: 0;
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+}

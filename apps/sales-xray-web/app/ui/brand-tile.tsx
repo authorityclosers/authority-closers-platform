@@ -20,7 +20,10 @@ export function BrandTile({
   brands,
   icon: Icon,
   size = 36,
+  tone,
 }: {
+  /** "ink": a dark line icon on a soft grey tile, the app's own family (sx-redesign). */
+  tone?: "ink";
   /** Brand keys from the brand library; a second one sits on the corner. */
   brands?: readonly string[];
   icon?: LucideIcon;
@@ -34,6 +37,7 @@ export function BrandTile({
       className={styles.tile}
       data-kind={first ? "brand" : "icon"}
       data-brand={first?.key}
+      data-tone={tone}
       style={{ "--tile": `${size}px` } as CSSProperties}
       aria-hidden="true"
     >

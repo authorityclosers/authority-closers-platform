@@ -1656,3 +1656,85 @@
     white-space: nowrap;
   }
 }
+
+/* ---------- Report, Prospect, Coaching as Home's pill (sx-redesign board
+   pick 09-call-report, owner 21 Nov 2026) ----------
+   A sunken well with the current page in Home's solid green, on a phone and
+   in the computer's top bar alike. */
+.navRow:not([data-sx-x]) .toolbar.toolbar[data-labelled] {
+  gap: 4px;
+  padding: 4px;
+  border: var(--sx-well-edge);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-well-fill);
+  box-shadow: var(--sx-well-depth);
+}
+.navRow:not([data-sx-x]) .toolbar.toolbar[data-labelled] > button {
+  min-height: 40px;
+  margin: 0;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  box-shadow: none;
+  color: var(--sx-ink-2);
+}
+.navRow:not([data-sx-x])
+  .toolbar.toolbar[data-labelled]
+  > button[aria-pressed="true"] {
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+.navRow:not([data-sx-x])
+  .toolbar.toolbar[data-labelled]
+  > button[aria-pressed="true"]
+  svg {
+  color: inherit;
+}
+
+/* Tablets as phones (judge round, 21 Nov 2026): below the computer's top bar
+   the Report is one switch, Report · Prospect · Coaching, and its parts
+   follow each other down the page with no second row of part tabs; the first
+   part's numbered name stays for screen readers only. */
+@media (min-width: 761px) and (max-width: 899.98px) {
+  .workspace[data-view="story"]:has([data-xray-part])
+    .navRow:not([data-placement="toolbar"])
+    .contents,
+  .workspace[data-view="coaching"]
+    .navRow:not([data-placement="toolbar"])
+    .contents {
+    display: none;
+  }
+  .workspace[data-view="story"]:has([data-xray-part])
+    .navRow.navRow:not([data-placement="toolbar"]),
+  .workspace[data-view="coaching"]
+    .navRow.navRow:not([data-placement="toolbar"]) {
+    position: static;
+  }
+  .workspace[data-view="story"]:has([data-xray-part])
+    .section:first-child
+    > header:first-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* Every width (judge round 2, 21 Nov 2026): the Report opens on its score
+   card, not on "1. Overview & Score" and its icon tile; the name stays for
+   screen readers and the section switch. */
+.workspace[data-view="story"]:has([data-xray-part])
+  .section:first-child
+  > header:first-child {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

@@ -102,7 +102,7 @@ it("opens as a sheet on a phone, named You, which swipes away", async () => {
   const title = document.getElementById(sheet.getAttribute("aria-labelledby")!);
   expect(title?.textContent).toBe("You");
   expect(sheet.textContent).toContain("Fictional User");
-  expect(sheet.textContent).toContain("Log out");
+  expect(sheet.textContent).toContain("Sign out");
 });
 
 it.each<[Allowance, string | null]>([
@@ -143,7 +143,7 @@ it("lists only what a person needs: Settings, Plan & usage, What's new, Help", a
   );
   expect(rows).toEqual(
     expect.arrayContaining([
-      "Log out",
+      "Sign out",
       "Settings",
       "Plan & usage",
       "What's new",
@@ -362,7 +362,7 @@ it("offers invitations and Create apart, even with one workspace", async () => {
   expect(onCreateOrganisation).toHaveBeenCalledTimes(1);
 });
 
-it("offers Log out next to who is signed in, without focusing it", async () => {
+it("offers Sign out next to who is signed in, without focusing it", async () => {
   asPhone(false);
   const fetchMock = vi
     .fn()
@@ -370,7 +370,7 @@ it("offers Log out next to who is signed in, without focusing it", async () => {
   vi.stubGlobal("fetch", fetchMock);
   const menu = await open();
   const logOut = [...menu.querySelectorAll("button")].find(
-    (button) => button.textContent === "Log out",
+    (button) => button.textContent === "Sign out",
   )!;
   // Owner, 17 Oct: in the first block of the menu, beside the name.
   expect(logOut.parentElement?.textContent).toContain("Fictional User");
@@ -494,7 +494,8 @@ it("puts your settings, and an organisation's for its managers, in You", async (
     "/settings/selling",
     "/settings/notifications",
   ]);
-  expect(manager.theirs).toEqual(["/organisation", "/organisation?tab=team"]);
+  // One Settings for the organisation (round-2 board 7, 20 Nov 2026).
+  expect(manager.theirs).toEqual(["/settings", "/settings/team"]);
   await act(async () => root.unmount());
   host.remove();
   const seller = await rows({ organisation: true, insights: false });

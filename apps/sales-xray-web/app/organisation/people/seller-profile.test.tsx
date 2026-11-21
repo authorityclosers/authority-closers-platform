@@ -152,8 +152,8 @@ it("shows a manager the seller's day, their AI level and five tabs at most", asy
   expect(host.textContent).not.toContain("Takes new leads");
   expect(host.textContent).not.toContain("AI on calls");
   expect(host.textContent).not.toContain("Over limit");
-  expect(host.textContent).toContain("31open leads");
-  expect(host.textContent).toContain("4due now");
+  expect(host.textContent).toContain("31 open leads");
+  expect(host.textContent).toContain("4Follow-ups");
   expect(host.textContent).toContain("Calls and charts");
   const tabs = [...host.querySelectorAll('[role="tablist"] button')].map(
     (item) => item.textContent,
@@ -238,7 +238,7 @@ it("shows No limit as no limit, never as a number", async () => {
   Object.assign(team.reps[0], { max_open: null });
   try {
     await show();
-    expect(host.textContent).toContain("open leadsNo limit");
+    expect(host.textContent).toContain("open leads · No limit");
     expect(host.textContent).not.toContain("null");
     expect(host.textContent).not.toContain("Over limit");
     await act(async () => tab("Settings").click());

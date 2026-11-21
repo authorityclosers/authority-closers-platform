@@ -1,5 +1,5 @@
 /**
- * Reports V4 on a phone (Dipak's spec, sections 20-22 and 25, "Mobile
+ * Calls (Reports V4) on a phone (Dipak's spec, sections 20-22 and 25, "Mobile
  * usability"): every control can be tapped (44 px or more), text is in rem so
  * it grows with the phone's font size, the calendar's seven columns shrink to
  * fit a narrow screen, long names wrap instead of widening the page, and the
@@ -72,11 +72,12 @@ describe("text and layout", () => {
     expect(rule(".day")["min-width"]).toBe("0");
   });
 
-  it("wraps long names and summaries instead of widening the page", () => {
-    expect(rule(".cardTitle h3")["overflow-wrap"]).toBe("anywhere");
-    expect(rule(".summary")["overflow-wrap"]).toBe("anywhere");
-    expect(rule(".cardTitle")["grid-template-columns"]).toBe(
-      "minmax(0, 1fr) 44px",
+  it("wraps long names instead of widening the page", () => {
+    expect(rule(".rowName")["overflow-wrap"]).toBe("anywhere");
+    expect(rule(".rowMeta")["overflow-wrap"]).toBe("anywhere");
+    expect(rule(".heroText h2")["overflow-wrap"]).toBe("anywhere");
+    expect(rule(".row")["grid-template-columns"]).toBe(
+      "40px minmax(0, 1fr) 44px 16px",
     );
     // No clipped labels: nothing in the list hides its overflow.
     expect(css).not.toMatch(/text-overflow:\s*ellipsis/);

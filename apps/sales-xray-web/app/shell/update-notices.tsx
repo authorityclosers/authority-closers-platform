@@ -25,6 +25,8 @@ import {
 } from "./updates-client";
 import type { useShellUpdates } from "./updates-store";
 import { ringNewLead } from "./new-lead-ring";
+import type { SxEventId } from "../sounds/library";
+import { playEvent } from "../sounds/player";
 
 type Updates = ReturnType<typeof useShellUpdates>;
 
@@ -39,6 +41,20 @@ const VERB: Record<UpdateNotification["kind"], string> = {
   invite_received: "Open invite",
   bug_solved: "Open",
   updates: "What's new",
+};
+
+/**
+ * The library moment each bell line sounds as (round-2 board 4, 20 Nov 2026);
+ * a new lead rings through ringNewLead, What's new stays quiet.
+ */
+export const LINE_SOUND: Partial<
+  Record<UpdateNotification["kind"], SxEventId>
+> = {
+  report_ready: "sx.report_ready",
+  lead_assigned: "sx.new_lead",
+  analysis_paused: "sx.upload_failed",
+  invite_received: "sx.new_message",
+  bug_solved: "sx.new_message",
 };
 
 const POPPED_KEY = "sx-activity-popped";
@@ -96,6 +112,11 @@ function raiseNewest(to: Raiser, entries: readonly UpdateNotification[]) {
     ringNewLead(event.id, event.title, event.body, () => {
       if (isRelativeUpdateHref(href)) to.openEvent(href);
     });
+  else {
+    // Every other line plays the sound picked for its moment.
+    const sound = LINE_SOUND[event.kind];
+    if (sound) playEvent(sound);
+  }
   raiseAlert({
     id,
     level: "normal",

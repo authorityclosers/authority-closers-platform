@@ -135,79 +135,103 @@ function Tools({ view, open }: { view: AskView; open: Open }) {
 }
 
 /**
- * Dipak's card, the Coach's desk (owner's pick H-A, 17 Nov 2026), the strong
- * card at the top (owner, 17 Nov 2026): his monogram until an approved photo
- * exists (never a generated face), his hello and his question, and the lesson
- * to Continue inside it; his three intro lines fold behind "Dipak के बारे में"
- * (owner, 16 Nov 2026: keep it compact), sliding open and shut (none with
- * reduced motion). Saved lessons opens from its corner. No listen pill until
- * Dipak records his own voice.
+ * Dipak's card (sx-redesign board pick B "calm list", owner 21 Nov 2026): the
+ * one hero on the page. The kit's Ask Dipak lockup, his monogram (never a
+ * generated face) and his hello in Newsreader, his question, his intro lines
+ * folded behind "Dipak के बारे में" (owner, 16 Nov 2026), then the ask box
+ * (Search of his library, with the round green arrow, the page's one solid
+ * green) and two topics to try. Saved lessons opens from its corner.
  */
 function Greeting({ open }: { open: Open }) {
   const [more, setMore] = useState(false);
   const moreId = useId();
   return (
-    <section className={styles.hero} data-more={more || undefined}>
-      <div className={styles.heroMain}>
-        {/* The Ask Dipak lockup heads the card on phones, where the top bar
-            shows the workspace; on laptops it is in the top bar (brand
-            order, 19 Nov 2026). */}
+    <section
+      className={`${styles.hero} ${styles.homeHero}`}
+      data-more={more || undefined}
+    >
+      <div className={styles.homeHeroTop}>
         <AskDipakLockup className={styles.heroLockup} />
-        <div className={styles.coachRow}>
-          <CoachMark />
-          <div className={styles.coachWords}>
-            <p className={styles.eyebrow}>{COPY.eyebrow}</p>
-            <h2 className={styles.hello}>{COPY.hello}</h2>
-            <p className={styles.heroAsk}>
-              <strong>{COPY.introAsk}</strong>
-            </p>
-          </div>
-          <button
-            type="button"
-            className={styles.heroSaved}
-            aria-label={COPY.savedLessons}
-            onClick={() => open({ kind: "saved" })}
-          >
-            <AskIcon name="bookmark" size={20} />
-          </button>
-        </div>
-        <div
-          className={styles.introMore}
-          id={moreId}
-          aria-hidden={!more}
-          inert={!more}
-        >
-          <div>
-            {COPY.intro.map((line) => (
-              <p key={line}>{line}</p>
-            ))}
-          </div>
-        </div>
         <button
           type="button"
-          className={styles.introToggle}
-          aria-expanded={more}
-          aria-controls={moreId}
-          onClick={() => setMore((now) => !now)}
+          className={styles.heroSaved}
+          aria-label={COPY.savedLessons}
+          onClick={() => open({ kind: "saved" })}
         >
-          {more ? COPY.introLess : COPY.introMore}
-          <span className={styles.foldArrow} data-open={more || undefined}>
-            <AskIcon name="right" size={16} />
-          </span>
+          <AskIcon name="bookmark" size={20} />
         </button>
       </div>
-      <ContinueCard open={open} />
+      <div className={styles.coachRow}>
+        <CoachMark />
+        <div className={styles.coachWords}>
+          <p className={styles.eyebrow}>{COPY.eyebrow}</p>
+          <h2 className={styles.hello}>{COPY.hello}</h2>
+          <p className={styles.heroAsk}>
+            <strong>{COPY.introAsk}</strong>
+          </p>
+        </div>
+      </div>
+      <div
+        className={styles.introMore}
+        id={moreId}
+        aria-hidden={!more}
+        inert={!more}
+      >
+        <div>
+          {COPY.intro.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
+      </div>
+      <button
+        type="button"
+        className={styles.introToggle}
+        aria-expanded={more}
+        aria-controls={moreId}
+        onClick={() => setMore((now) => !now)}
+      >
+        {more ? COPY.introLess : COPY.introMore}
+        <span className={styles.foldArrow} data-open={more || undefined}>
+          <AskIcon name="right" size={16} />
+        </span>
+      </button>
+      <ScreenButton
+        view={{ kind: "search" }}
+        open={open}
+        className={`${styles.searchHome} ${styles.askBox}`}
+      >
+        <AskIcon name="search" size={21} />
+        <span>{COPY.searchPlaceholder}</span>
+        <span className={styles.askGo} aria-hidden="true">
+          <AskIcon name="right" size={20} />
+        </span>
+      </ScreenButton>
+      <div className={styles.askChips}>
+        {ASK_CHIPS.map((id) => {
+          const topic = featuredById(id);
+          return topic ? (
+            <ScreenButton
+              key={id}
+              view={{ kind: "topic", id }}
+              open={open}
+              className={styles.askChip}
+            >
+              {topic.name}
+            </ScreenButton>
+          ) : null;
+        })}
+      </div>
     </section>
   );
 }
 
+/** The two topics the ask box offers to try, as Dipak's library names them. */
+const ASK_CHIPS = ["price", "close"] as const;
+
 /**
  * The three real situations each look like their own moment (Dipak's report
- * 226, 16 Nov 2026: "teenhi goshti ek distay", the three look the same): the
- * colour and drawing of what the customer's words are about, by meaning:
- * price (Price & Objections), a decision someone else shares (Qualification
- * & Decision Process) and "I'll think about it", a follow-up (Closing &
- * Follow-Up).
+ * 226, 16 Nov 2026): Rohit, the customer, with the face their words bring
+ * (character kit v2: hook only), and the topic each belongs to.
  */
 const SITUATION_LOOK: Readonly<
   Record<string, { tone: Tone; category: string; face: CharacterStillName }>
@@ -218,108 +242,112 @@ const SITUATION_LOOK: Readonly<
 };
 
 /**
- * The Coach's desk, top to bottom (redesign study §5 S1, with H-B's situation
- * block): Dipak's card; Continue; today's mission and its check-in (only while
- * one is active); search; real situations as the customer's own words; the
- * four topics, each with its drawing; My missions. Computers lay the same
- * blocks on a wider grid (the stylesheet).
+ * Ask Dipak's home (sx-redesign board pick B, owner 21 Nov 2026), top to
+ * bottom: Dipak's card with the ask box; My missions (today's mission while
+ * one is active, and the way into all of them); Lessons in one white card
+ * (Continue, then the three real situations in the customer's words); the
+ * four topics in another, with See all. Short rows, one solid green.
  */
 function HomeScreen({ open }: { open: Open }) {
   return (
-    <>
-      <div className={styles.desk}>
-        <Greeting open={open} />
-        <MissionStrip open={open} />
-      </div>
-      <ScreenButton
-        view={{ kind: "search" }}
-        open={open}
-        className={styles.searchHome}
-      >
-        <AskIcon name="search" size={21} />
-        <span>{COPY.searchPlaceholder}</span>
-      </ScreenButton>
-      <div className={`${styles.hrow} ${styles.realTitle}`}>
-        <h2>{COPY.real}</h2>
-      </div>
-      <div className={styles.situations}>
-        {REAL_SITUATIONS.map((id) => {
-          const question = questionById(id);
-          if (!question) return null;
-          const look = SITUATION_LOOK[id];
-          return (
-            <ScreenButton
-              key={id}
-              view={{ kind: "lesson", id }}
-              open={open}
-              className={`${styles.situation} ${styles[look?.tone ?? toneOfCategory(question.categoryId)]}`}
-            >
-              <span className={styles.situationTop}>
-                <span className={styles.situationArt} aria-hidden="true">
-                  <TopicArt
-                    category={look?.category ?? question.categoryId}
-                    size={36}
-                  />
-                </span>
-                <span className={styles.chip}>{lessonChip(question)}</span>
-              </span>
-              {/* The hook: Rohit, the customer, says these words (character
-                  kit v2: hook and payoff only); the bubble's tail is his. */}
-              <span className={styles.situationSay}>
-                {look ? <CharacterStill name={look.face} size={40} /> : null}
-                <span className={styles.bubble}>{questionLabel(question)}</span>
-              </span>
-              <span className={styles.situationFoot}>
-                <span className={styles.entryMeta}>{COPY.parts}</span>
-                <AskIcon name="right" size={18} />
-              </span>
-            </ScreenButton>
-          );
-        })}
-      </div>
-      <div className={styles.hrow}>
-        <h2>{COPY.explore}</h2>
-        <ScreenButton
-          view={{ kind: "topics" }}
-          open={open}
-          className={styles.see}
-        >
-          {`${COPY.seeAll} ${CATEGORIES.length}`}
-          <AskIcon name="right" size={16} />
-        </ScreenButton>
-      </div>
-      <div className={`${styles.topicGrid} ${styles.homeTopics}`}>
-        {FEATURED.map((topic) => (
+    <div className={styles.home}>
+      <Greeting open={open} />
+      <section className={styles.homeBlock} aria-labelledby="ask-missions">
+        <h2 className={styles.homeLabel} id="ask-missions">
+          {COPY.myMissionsShort}
+        </h2>
+        <div className={styles.homeCard}>
+          <MissionStrip open={open} />
           <ScreenButton
-            key={topic.id}
-            view={{ kind: "topic", id: topic.id }}
+            view={{ kind: "missions" }}
             open={open}
-            className={`${styles.topicCard} ${styles.topicTile} ${styles[toneOfFeatured(topic.id)]}`}
+            className={`${styles.entry} ${styles.missionsEntry} ${styles.homeRow}`}
           >
-            <span className={styles.topicArt}>
-              <TopicArt featured={topic.id} size={56} />
+            <span className={styles.homeTile} data-tone="mission">
+              <AskIcon name="target" size={21} />
             </span>
-            <span className={styles.topicTitle}>{topic.name}</span>
-            <span className={styles.topicSub}>{topic.sub}</span>
-            <span className={styles.arr}>
-              <AskIcon name="right" size={18} />
+            <span className={styles.entryCopy}>
+              <span className={styles.entryTitle}>{COPY.myMissions}</span>
+              <span className={styles.entryMeta}>{COPY.myMissionsMeta}</span>
             </span>
+            <AskIcon name="right" size={18} />
           </ScreenButton>
-        ))}
-      </div>
-      <ScreenButton
-        view={{ kind: "missions" }}
-        open={open}
-        className={`${styles.entry} ${styles.missionsEntry}`}
-      >
-        <span className={styles.entryCopy}>
-          <span className={styles.entryTitle}>{COPY.myMissions}</span>
-          <span className={styles.entryMeta}>{COPY.myMissionsMeta}</span>
-        </span>
-        <AskIcon name="right" size={18} />
-      </ScreenButton>
+        </div>
+      </section>
+      <section className={styles.homeBlock} aria-labelledby="ask-lessons">
+        <h2 className={styles.homeLabel} id="ask-lessons">
+          {COPY.lessonsLabel}
+        </h2>
+        <div className={styles.homeCard}>
+          <ContinueCard open={open} />
+          {REAL_SITUATIONS.map((id) => {
+            const question = questionById(id);
+            if (!question) return null;
+            const look = SITUATION_LOOK[id];
+            return (
+              <ScreenButton
+                key={id}
+                view={{ kind: "lesson", id }}
+                open={open}
+                className={`${styles.situation} ${styles.homeRow} ${styles[look?.tone ?? toneOfCategory(question.categoryId)]}`}
+              >
+                <span className={styles.homeFace} aria-hidden="true">
+                  {look ? (
+                    <CharacterStill name={look.face} size={40} />
+                  ) : (
+                    <TopicArt category={question.categoryId} size={28} />
+                  )}
+                </span>
+                <span className={styles.entryCopy}>
+                  <span className={styles.homeTitle}>
+                    {questionLabel(question)}
+                  </span>
+                  <span className={styles.entryMeta}>
+                    {lessonChip(question)}
+                  </span>
+                </span>
+                <AskIcon name="right" size={18} />
+              </ScreenButton>
+            );
+          })}
+        </div>
+      </section>
+      <section className={styles.homeBlock} aria-labelledby="ask-topics">
+        <div className={styles.homeLabelRow}>
+          <h2 className={styles.homeLabel} id="ask-topics">
+            {COPY.explore}
+          </h2>
+          <ScreenButton
+            view={{ kind: "topics" }}
+            open={open}
+            className={styles.see}
+          >
+            {`${COPY.seeAll} ${CATEGORIES.length}`}
+            <AskIcon name="right" size={16} />
+          </ScreenButton>
+        </div>
+        <div className={`${styles.homeCard} ${styles.homeTopics}`}>
+          {FEATURED.map((topic) => (
+            <ScreenButton
+              key={topic.id}
+              view={{ kind: "topic", id: topic.id }}
+              open={open}
+              className={`${styles.topicTile} ${styles.homeRow} ${styles[toneOfFeatured(topic.id)]}`}
+            >
+              <span className={styles.homeTile} data-tone="topic">
+                <TopicArt featured={topic.id} size={30} />
+              </span>
+              <span className={styles.entryCopy}>
+                <span className={styles.topicTitle}>{topic.name}</span>
+                <span className={styles.topicSub}>{topic.sub}</span>
+              </span>
+              <AskIcon name="right" size={18} />
+            </ScreenButton>
+          ))}
+        </div>
+      </section>
       <p className={styles.notice}>{COPY.notice}</p>
-    </>
+    </div>
   );
 }
 

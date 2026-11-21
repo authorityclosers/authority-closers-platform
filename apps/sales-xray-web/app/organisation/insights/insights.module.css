@@ -1471,3 +1471,119 @@ a.callTitle:hover {
 .nowrap {
   white-space: nowrap;
 }
+
+/* ---------- sx-redesign: the v1.90 Home family (owner, 21 Nov 2026) ----------
+   Board 14 (team analytics + Insights): white radius-22 cards with a soft
+   shadow and no outline, the card title as a plain heading without a rule
+   under it, v1.90 pills (solid deep green when chosen). Tokens only. */
+
+.page {
+  gap: 16px;
+}
+
+.page section[data-panel] {
+  border: 0;
+  border-radius: var(--lx-radius-lg);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.page section[data-panel] > div:first-child {
+  min-height: 56px;
+  padding: 14px 18px 4px;
+  border-bottom: 0;
+}
+
+.page section[data-panel] > div:first-child > h2 {
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  line-height: var(--sx-leading-24);
+}
+
+.page [role="group"][aria-label]:has(> span[aria-hidden="true"]) {
+  padding: 3px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+}
+
+.page [role="group"][aria-label] > span[aria-hidden="true"] {
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-home-emerald);
+  box-shadow: none;
+}
+
+.page [role="group"][aria-label] > button {
+  border-radius: var(--sx-radius-pill);
+  font-weight: 650;
+}
+
+.page [role="group"][aria-label] > button[aria-pressed="true"] {
+  position: relative;
+  z-index: 1;
+  background: var(--lx-home-emerald);
+  color: var(--sx-surface);
+}
+
+@media (min-width: 600px) and (max-width: 899.98px) {
+  .page {
+    max-width: 720px;
+    margin-inline: auto;
+  }
+}
+
+/* Judge round (sx-redesign, 21 Nov 2026): one empty card with one heading, a
+   dark ink icon on a soft grey tile and a green outline pill; the deep green
+   for the page's one solid button; grey notes at 14 px; room above the
+   phone's tab bar. */
+.emptyCard {
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.emptyCard > div > span[aria-hidden="true"] {
+  background: var(--sx-fill);
+  color: var(--lx-ink);
+}
+
+.emptyCard a,
+.emptyCard button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1.5px solid var(--lx-home-emerald);
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--lx-home-emerald);
+  font-weight: 700;
+}
+
+.page button[data-variant="primary"],
+.page a[data-variant="primary"] {
+  border-color: var(--lx-home-emerald);
+  background: var(--lx-home-emerald);
+  color: var(--sx-surface);
+}
+
+.muted,
+.caption,
+.footnote {
+  font-size: var(--sx-text-sm);
+}
+
+@media (max-width: 899.98px) {
+  .page {
+    padding-bottom: calc(var(--lx-bottom-nav-h, 64px) + 24px);
+  }
+}
+
+/* Laptops: the top bar already says "Insights"; the page keeps it for screen
+   readers only, so it never says its name twice. */
+@media (min-width: 900px) {
+  .page > header h1 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

@@ -22,6 +22,7 @@ import {
   Hourglass,
   Loader2,
   Lock,
+  Megaphone,
   PhoneCall,
   PlugZap,
   RefreshCw,
@@ -66,7 +67,8 @@ import { GoogleFilesCard } from "./google-files-card";
 import styles from "./connected-apps.module.css";
 
 const LOGOS: Record<AppKey, { brands?: string[]; icon?: LucideIcon }> = {
-  meta_leads: { brands: ["facebook", "instagram"] },
+  // Lead ads, not the networks: a dark ink megaphone (sx-redesign board 15).
+  meta_leads: { icon: Megaphone },
   whatsapp: { brands: ["whatsapp"] },
   messenger: { brands: ["messenger"] },
   instagram: { brands: ["instagram"] },
@@ -201,20 +203,17 @@ function connectApp(app: AppHealth) {
   if (target) goToProvider(target.path);
 }
 
+// One short line each (sx-redesign judge, 21 Nov 2026: cut paragraphs on a phone).
 const GIVES: Record<AppKey, string> = {
-  meta_leads:
-    "New leads from your Facebook and Instagram forms arrive in Leads by themselves.",
-  whatsapp: "Message leads on WhatsApp and answer their replies in Chats.",
-  messenger: "Answer Messenger chats from Sales X-Ray.",
-  instagram: "Answer Instagram DMs and comments from Sales X-Ray.",
-  google_ads:
-    "Leads from your Google Ads lead forms arrive in Leads every few minutes.",
-  phone_calls:
-    "Your team's calls from the Sales X-Ray phone app are logged on their leads.",
-  webhook_sources: "Bring leads in from your website, sheets and other apps.",
-  ai_replies: "Draft or send first replies to new lead messages.",
-  lead_stages:
-    "Tell Meta and Google which leads became customers, so your ads find more like them.",
+  meta_leads: "Leads from your Facebook and Instagram forms.",
+  whatsapp: "Message leads and answer them in Chats.",
+  messenger: "Answer Messenger chats here.",
+  instagram: "Answer Instagram DMs and comments here.",
+  google_ads: "Leads from your Google Ads lead forms.",
+  phone_calls: "Your team's phone calls, logged on their leads.",
+  webhook_sources: "Leads from your website, sheets and other apps.",
+  ai_replies: "Draft or send first replies to new messages.",
+  lead_stages: "Tell Meta and Google which leads became customers.",
 };
 
 /** The card's one line: the app's own words, or what connecting gives. */
@@ -343,11 +342,14 @@ function Outcome({
 function AppCard({
   app,
   result,
+  lead = false,
   onManage,
   onTest,
   onDismiss,
 }: {
   app: AppHealth;
+  /** The page's first Connect: drawn solid green, the page's one (board 15). */
+  lead?: boolean;
   result: Running | undefined;
   onManage: () => void;
   onTest: (offer: TestOffer) => void;
@@ -412,6 +414,7 @@ function AppCard({
       data-app={app.app}
       data-state={app.state}
       data-passed={passed ? "" : undefined}
+      data-lead={lead ? "" : undefined}
       aria-labelledby={titleId}
     >
       <div className={styles.cardHead}>
@@ -1204,6 +1207,25 @@ export function ConnectedApps() {
   for (const app of apps) counts[showOf(app)] += 1;
   const shown = show ? counts[show] : apps.length;
   const open = drawn ? apps.find((app) => app.app === drawn.app) : undefined;
+  // One solid green on the page (sx-redesign board 15): a Reconnect when an
+  // app needs it, else the first app shown that can be connected.
+  const offers = (app: AppHealth) =>
+    app.state !== "ready" &&
+    app.state !== "problem" &&
+    app.state !== "off" &&
+    app.state !== "not_set_up" &&
+    !app.page &&
+    Boolean(app.connect);
+  const leadApp = apps.some(
+    (app) => app.state === "problem" && app.connect && !app.page,
+  )
+    ? null
+    : (GROUPS.flatMap((group) => group.apps)
+        .map((key) => apps.find((app) => app.app === key))
+        .find(
+          (app): app is AppHealth =>
+            app !== undefined && (!show || showOf(app) === show) && offers(app),
+        )?.app ?? null);
   const checked = checkedWords(
     loaded.state === "ready" ? loaded.checkedAt : null,
   );
@@ -1320,6 +1342,7 @@ export function ConnectedApps() {
                       <AppCard
                         key={app.app}
                         app={app}
+                        lead={app.app === leadApp}
                         result={
                           sheet?.app === app.app ? undefined : tests[app.app]
                         }

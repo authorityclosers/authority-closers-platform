@@ -1,0 +1,516 @@
+/* Sounds & alerts (round-2 board 4, option B): rows per moment, a picker
+   sheet, and the owner's dropdowns. Tokens only; 44 px taps. */
+
+.page {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.lead p {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.groups {
+  display: grid;
+  gap: 18px;
+}
+
+.group h2 {
+  margin: 0 0 8px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+}
+
+/* The v1.90 Home card (sx-redesign): white, radius 22, a soft shadow. */
+.card {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+  list-style: none;
+}
+
+/* Dark ink on one soft neutral tile for every moment. */
+.tile {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--sx-fill);
+  color: var(--lx-ink);
+}
+
+/* The sound's name and whose it is, on one line under the title. */
+.rowSub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+/* Chips carry a word, at 12 px or more. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chip[data-tone="good"] {
+  background: var(--lx-home-emerald-soft);
+  color: var(--lx-home-emerald);
+}
+
+/* Sounds for everyone: a quiet outlined pill that says it opens a page. */
+.teamLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 0 12px 0 16px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.teamLink:hover {
+  background: var(--sx-fill-soft);
+}
+
+.teamLink:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* The phone note: a card sellers see, with a short heading. */
+.phoneNote {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: var(--lx-radius-lg);
+  background:
+    linear-gradient(
+      color-mix(in oklab, var(--lx-warning) 10%, transparent),
+      color-mix(in oklab, var(--lx-warning) 10%, transparent)
+    ),
+    var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.phoneNote strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.phoneNote span {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+/* The team page's main control, in its own card at the top. */
+.topCard {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+/* Reset: quiet words, never the main action. */
+.reset {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reset:hover:not(:disabled) {
+  color: var(--sx-ink);
+  text-decoration: underline;
+}
+
+.reset:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.card > li + li {
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: start;
+}
+
+button.row {
+  cursor: pointer;
+}
+
+button.row:hover {
+  background: var(--sx-sunken);
+}
+
+button.row:focus-visible,
+.play:focus-visible,
+.optionPick:focus-visible,
+.toggle:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: -2px;
+}
+
+.rowText {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rowText strong {
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+/* The sound's name: 13 px floor on rows. */
+.rowText small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.chevron {
+  flex: none;
+  color: var(--sx-muted);
+}
+
+.bone {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 14px;
+}
+
+.note {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+}
+
+.count {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.link {
+  color: var(--sx-accent);
+  font-weight: 650;
+}
+
+/* ▶ on every sound: a round 44 px button. */
+.play {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--sx-fill-strong);
+  color: var(--sx-ink);
+  cursor: pointer;
+}
+
+.play[data-playing] {
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.play:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* The picker sheet: packs, each sound with ▶, name and a check. */
+.sheetBody {
+  display: grid;
+  gap: 14px;
+  padding-bottom: 8px;
+}
+
+.pack h3 {
+  margin: 0 0 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.pack ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 4px 8px 4px 4px;
+  border-radius: var(--sx-radius-sm);
+}
+
+.option[aria-selected="true"] {
+  background: var(--sx-accent-soft);
+}
+
+.optionPick {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  text-align: start;
+  cursor: pointer;
+}
+
+.optionPick > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.option[aria-selected="true"] .optionPick {
+  font-weight: 700;
+}
+
+.check {
+  flex: none;
+  color: var(--sx-accent);
+}
+
+.playingNote {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+/* A small live wave while a sound plays. */
+.wave {
+  width: 28px;
+  height: 14px;
+  background: linear-gradient(90deg, currentColor 2px, transparent 2px) 0 50% /
+    5px 100% repeat-x;
+  mask: linear-gradient(
+    transparent,
+    currentColor 30%,
+    currentColor 70%,
+    transparent
+  );
+  animation: wave 0.9s ease-in-out infinite alternate;
+  transform-origin: center;
+}
+
+@keyframes wave {
+  from {
+    transform: scaleY(0.45);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.sheetFoot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* The owner's page: label, dropdown, ▶ on one line; stacked on a phone. */
+.teamRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 240px) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 14px;
+}
+
+.teamLabel {
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.teamPick {
+  min-width: 0;
+}
+
+.teamFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+}
+
+.switchRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.switchRow > span {
+  display: grid;
+  gap: 2px;
+}
+
+.switchRow strong {
+  font-size: var(--sx-text-md);
+}
+
+.switchRow small {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.toggle {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sx-fill);
+  cursor: pointer;
+  transition: background var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.toggle > span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--sx-elevated);
+  transition: transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.toggle[aria-checked="true"] {
+  background: var(--lx-home-emerald);
+}
+
+.toggle[aria-checked="true"] > span {
+  transform: translateX(20px);
+}
+
+.toggle:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (pointer: coarse) {
+  .toggle::after {
+    position: absolute;
+    inset: -8px -2px;
+    content: "";
+  }
+}
+
+/* Laptop: one column about 700 px wide, so a chip sits near its label. */
+@media (min-width: 900px) {
+  .page {
+    max-width: 720px;
+  }
+}
+
+/* Phones only: the dropdown goes under the label (a tablet keeps one line). */
+@media (max-width: 599px) {
+  .teamRow {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .teamPick {
+    grid-column: 2 / 3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wave {
+    animation: none;
+  }
+  .toggle,
+  .toggle > span {
+    transition: none;
+  }
+}

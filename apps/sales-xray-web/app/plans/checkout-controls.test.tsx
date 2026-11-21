@@ -428,13 +428,10 @@ it.each([false, true])(
         ]}
       />,
     );
-    const renewal = [...host.querySelectorAll("dt")].find(
-      (label) =>
-        label.textContent ===
-        (cancelAtPeriodEnd ? "Access through" : "Next renewal"),
-    )!;
-    expect(renewal.nextElementSibling?.textContent).toBe("—");
-    expect(host.querySelector("tbody tr td:last-child")?.textContent).toBe("—");
+    // Summary first (sx-redesign board, pick 07 C): no renewal date is said
+    // when there is none, never a made-up one.
+    expect(host.textContent).not.toContain("Renews");
+    expect(host.textContent).not.toContain("Access until 1");
     expect(host.textContent).not.toMatch(/unavailable/i);
   },
 );
@@ -460,9 +457,7 @@ it("Settings keeps a paid subscription usable when only invoice reads fail", asy
     await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
   expect(button("Cancel renewal").disabled).toBe(false);
   expect(host.textContent).toContain("Personal");
-  expect(host.textContent).toContain(
-    "Invoices and receipts are currently unavailable.",
-  );
+  expect(host.textContent).toContain("Invoices are unavailable right now");
   expect(vi.mocked(notify)).toHaveBeenCalledWith(
     expect.objectContaining({
       id: "settings-read-error",

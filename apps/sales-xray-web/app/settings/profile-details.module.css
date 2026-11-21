@@ -60,9 +60,13 @@
   min-width: min(100%, min-content);
 }
 
+/* The name is the largest thing in the card (sx-redesign, 21 Nov 2026). */
 .photoText strong {
   color: var(--sx-ink);
-  font-size: var(--sx-text-sm);
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-xl);
+  font-weight: 750;
+  line-height: var(--sx-leading-28);
   overflow-wrap: anywhere;
 }
 
@@ -100,55 +104,112 @@
   font-size: var(--sx-text-xs);
 }
 
+/* One grid: every field's label and box start on the same lines. */
 .form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: start;
   gap: 12px;
 }
 
-/* Email and phone, in the profile's one card (owner, 3 Nov 2026), with the
-   way to change the name and phone under them. */
+/* Save: the one solid deep-green button, once something changed. */
+button.save[data-variant]:not(:disabled) {
+  border-color: transparent;
+  background: var(--lx-home-emerald);
+  color: var(--sx-surface);
+}
+
+/* Email, phone and the two ways on, as short rows (sx-redesign, 21 Nov 2026). */
 .contact {
   display: grid;
-  gap: 4px;
   margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
 }
 
-.contact dl {
-  display: grid;
-  margin: 0;
+.contact > li + li {
+  border-top: 1px solid var(--sx-hairline);
 }
 
-.contact dl > div {
+.row {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 4px 12px;
-  min-height: 40px;
-  border-bottom: 1px solid var(--sx-line);
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  box-sizing: border-box;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: start;
 }
 
-.contact dt {
+button.row {
+  cursor: pointer;
+}
+
+button.row:hover .rowName {
+  text-decoration: underline;
+}
+
+button.row:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.tile {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--sx-fill);
+  color: var(--lx-ink);
+}
+
+.rowText {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rowName {
+  flex: 1;
   color: var(--sx-ink);
-  font-size: var(--sx-text-sm);
+  font-size: var(--sx-text-md);
   font-weight: 650;
 }
 
-.contact dd {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  margin: 0;
-  color: var(--sx-ink);
+.rowText .rowName {
+  flex: none;
+}
+
+.rowHint {
+  color: var(--sx-muted);
   font-size: var(--sx-text-sm);
   overflow-wrap: anywhere;
 }
 
-.contact > :last-child {
-  justify-self: start;
+.rowValue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+
+.chevron {
+  flex: none;
+  color: var(--sx-muted);
 }
 
 .badge {

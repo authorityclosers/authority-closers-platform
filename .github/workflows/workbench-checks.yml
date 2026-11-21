@@ -279,6 +279,12 @@ jobs:
         if: always()
         timeout-minutes: 15
         run: node --test scripts/ci/wb_overlap_lib.test.mjs && node scripts/ci/wb_overlap.mjs "$RUNNER_TEMP/wb-overlap"
+      # Owner, 21 Nov 2026 (Home, Leads and the bottom panel stay exactly as they are): Home, the Leads page and the
+      # phone tab bar at 390 and 1440, light and dark, against scripts/ci/guard-baselines/. Any changed pixel fails.
+      - name: Screen guard, Home, Leads and the phone tab bar unchanged to the pixel, fictional data only
+        if: always()
+        timeout-minutes: 15
+        run: node --test scripts/ci/wb_guard_screens.test.mjs && node scripts/ci/wb_guard_screens.mjs "$RUNNER_TEMP/wb-guard"
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -290,6 +296,10 @@ jobs:
             ${{ runner.temp }}/wb-overlap/report.md
             ${{ runner.temp }}/wb-overlap/overlap.json
             ${{ runner.temp }}/wb-overlap/*.jpg
+            ${{ runner.temp }}/wb-guard/report.md
+            ${{ runner.temp }}/wb-guard/guard.json
+            ${{ runner.temp }}/wb-guard/*.png
+            ${{ runner.temp }}/wb-guard/baselines/*.png
           if-no-files-found: warn
           retention-days: 1
 

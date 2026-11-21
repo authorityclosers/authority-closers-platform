@@ -93,7 +93,10 @@ it("counts who still needs it and names why, never a phone number", async () => 
     row("Ravi Fictional", "declined"),
     row("Karan Fictional", "set_up", { phone: "Redmi 13" }),
   ]);
-  expect(host.textContent).toContain("2 of 3 not set up");
+  expect(host.textContent).toContain("1 of 3 phones ready");
+  expect(host.textContent).toContain("2 phones need your action");
+  expect(host.textContent).toContain("Needs action (2)");
+  expect(host.textContent).toContain("Ready (1)");
   const items = [...host.querySelectorAll("li")].map(
     (item) => item.textContent,
   );
@@ -102,7 +105,7 @@ it("counts who still needs it and names why, never a phone number", async () => 
   expect(items[2]).toContain("Redmi 13 · since 29 Oct");
   expect(host.textContent).not.toMatch(/\+\d{6,}/);
   // Done reads Ready: "Set up" is only ever an action (ph1-38).
-  const badges = [...host.querySelectorAll("li > [data-state]")].map(
+  const badges = [...host.querySelectorAll("li span[data-state]")].map(
     (badge) => badge.textContent,
   );
   expect(badges).toEqual(["Not set up", "Said not now", "Ready"]);
@@ -207,9 +210,9 @@ const off = row("Karan Fictional", "recording_off", {
 
 it("never says Ready or everyone is set up beside recording off, and lists every phone", async () => {
   await mount([off]);
-  expect(host.textContent).toContain("1 of 1 not set up");
+  expect(host.textContent).toContain("1 phone needs your action");
   expect(host.textContent).not.toContain("Everyone is set up");
-  expect(host.querySelector("li > [data-state]")?.textContent).toBe(
+  expect(host.querySelector("li span[data-state]")?.textContent).toBe(
     "Recording off",
   );
   expect(host.querySelector("li")?.textContent).toContain(
@@ -299,4 +302,24 @@ it("makes the fix a button: on your own row, the recording check on this phone",
   );
   window.removeEventListener("sx-capture-setup-open", listen);
   expect(asked).toEqual(["recordings"]);
+});
+
+it("helps whoever isn't set up from the hero, with the steps for their phone", async () => {
+  await mount(
+    [
+      row("Asha Fictional", "not_started", { at: null }),
+      row("Karan Fictional", "set_up", { phone: "Redmi 13" }),
+    ],
+    200,
+    0,
+    "id-someone-else",
+  );
+  const help = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Help Asha set up",
+  );
+  expect(help).toBeDefined();
+  await act(async () => help?.click());
+  expect(document.body.textContent).toContain(
+    "On Asha's phone, open Sales X-Ray.",
+  );
 });
