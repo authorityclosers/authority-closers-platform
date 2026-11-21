@@ -9,27 +9,38 @@
  * organisation, grouped the way an owner thinks, each group saying who it
  * affects (Everyone in <organisation>, Just me, This phone); the overview has
  * the setup checklist on top.
+ *
+ * sx-redesign (owner 21 Nov 2026, board pick C): the overview is the hub
+ * (settings-hub.tsx), a group opens its own page, and a section's frame is
+ * one title row: the way back, the section's name and a tiny chip saying who
+ * it affects, then one short line. No second "Settings" over it.
  */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight, LayoutGrid } from "lucide-react";
 
 import {
-  SETTINGS_GROUPS,
-  SETTINGS_SECTIONS,
+  GROUP_LINE,
+  GROUP_SLUG,
+  groupBySlug,
   groupScope,
   isSettingsSection,
   sectionById,
   type SettingsGroup,
-  type SettingsSection,
   type SettingsSectionId,
 } from "./settings-sections";
 import { useCanHere } from "../workspace-role";
-import { useWorkspaceAccess } from "../workspace-access";
 import { ScopeChip } from "./scope-chip";
-import { SetupChecklist } from "./setup-checklist";
+import {
+  SettingsHub,
+  useHubKind,
+  useInOrganisation,
+  useVisibleGroups,
+} from "./settings-hub";
 import styles from "./settings-shell.module.css";
+
+export { useInOrganisation, useVisibleGroups };
 
 export function currentSection(
   pathname: string | null,
@@ -38,37 +49,26 @@ export function currentSection(
   return isSettingsSection(id) ? id : null;
 }
 
-/**
- * Whether the open workspace is an organisation: true outside the app frame
- * (tests, previews) and while it isn't known, so nothing flickers away.
- */
-export function useInOrganisation(): boolean {
-  const access = useWorkspaceAccess();
-  const here = access?.workspaces?.find(
-    (workspace) => workspace.tenant_id === access.context?.tenantId,
-  );
-  return here ? here.kind === "organisation" : true;
+/** The group a /settings/group/<slug> address opens; null elsewhere. */
+export function currentGroup(pathname: string | null): SettingsGroup | null {
+  const [, root, group, slug] = (pathname ?? "").split("/");
+  return root === "settings" && group === "group" ? groupBySlug(slug) : null;
 }
 
-/** The sections of each group this person may open, groups with none left out. */
-export function useVisibleGroups(): {
-  group: SettingsGroup;
-  sections: SettingsSection[];
-}[] {
-  // A section the server would refuse your role isn't listed (Plan & billing
-  // for a member of an organisation); it stays while your role is unknown.
-  const canHere = useCanHere();
-  const inOrganisation = useInOrganisation();
-  return SETTINGS_GROUPS.map((group) => ({
-    group,
-    sections: SETTINGS_SECTIONS.filter(
-      (item) =>
-        item.group === group &&
-        !item.within &&
-        (!item.org || inOrganisation) &&
-        (!item.needs || canHere(item.needs) !== false),
-    ),
-  })).filter((entry) => entry.sections.length > 0);
+/**
+ * While a section or group page shows its own title row, the phone's page row
+ * from the app frame ("Settings") steps aside (sx-redesign: no second
+ * "Settings" over the section's name).
+ */
+export const OWN_TITLE_ATTRIBUTE = "data-sx-settings-own-title";
+
+function useOwnTitle(on: boolean) {
+  useEffect(() => {
+    if (!on) return;
+    const html = document.documentElement;
+    html.setAttribute(OWN_TITLE_ATTRIBUTE, "");
+    return () => html.removeAttribute(OWN_TITLE_ATTRIBUTE);
+  }, [on]);
 }
 
 /** Sections grouped as the list shows them. */
@@ -132,48 +132,98 @@ export function SectionList({
 }
 
 export function SettingsShell({ children }: { children: ReactNode }) {
-  const current = currentSection(usePathname());
+  const pathname = usePathname();
+  const current = currentSection(pathname);
+  const group = current ? null : currentGroup(pathname);
   const section = current ? sectionById(current) : null;
   // A section your role can't use keeps its name, not its promise ("Your plan
   // and invoices" over a seller's billing line): the section says why itself.
   const canHere = useCanHere();
   const inOrganisation = useInOrganisation();
+  const groups = useVisibleGroups();
+  const kind = useHubKind();
   const promised = !section?.needs || canHere(section.needs) !== false;
   // The section it opens inside says who it is for (Privacy in Phone & alerts).
   const home = section?.within ? sectionById(section.within) : section;
+  useOwnTitle(Boolean(section || group));
+  // Back goes one step up: on the owner's hub a section of a group with
+  // several opens from the group's page; everything else from Settings.
+  const parent: SettingsGroup | null =
+    home && kind === "owner"
+      ? home.group === "This phone"
+        ? "Just me"
+        : home.group
+      : null;
+  const siblings = parent
+    ? groups
+        .filter(({ group: name }) =>
+          parent === "Just me"
+            ? name === "Just me" || name === "This phone"
+            : name === parent,
+        )
+        .flatMap(({ sections }) => sections).length
+    : 0;
+  const back =
+    parent && (siblings > 1 || parent === "Just me")
+      ? {
+          href: `/settings/group/${GROUP_SLUG[parent]}`,
+          label: `Back to ${parent}`,
+        }
+      : { href: "/settings", label: "Back to Settings" };
+  const title =
+    section && home
+      ? {
+          name: section.label,
+          line: promised ? section.hint : null,
+          scope: groupScope(home.group, inOrganisation),
+          back,
+        }
+      : group
+        ? {
+            name: group,
+            line: GROUP_LINE[group],
+            scope: groupScope(group, inOrganisation),
+            back: { href: "/settings", label: "Back to Settings" },
+          }
+        : null;
   return (
-    <div className={styles.shell} data-section={current ?? "index"}>
+    <div
+      className={styles.shell}
+      data-section={current ?? (group ? "group" : "index")}
+    >
       <nav className={styles.nav} aria-label="Settings sections">
         <Link
           href="/settings"
           className={styles.navTitle}
-          aria-current={current ? undefined : "page"}
+          aria-current={current || group ? undefined : "page"}
         >
-          Settings
+          <span className={styles.icon} aria-hidden="true">
+            <LayoutGrid size={17} />
+          </span>
+          All settings
         </Link>
         <SectionList current={current} variant="nav" />
       </nav>
       <div className={styles.content} id="settings-content">
-        {section && home ? (
-          // The chevron beside the section's name, not on a row of its own
-          // (Redmi QA on the owner's production build, 13 Nov 2026).
-          <div className={styles.titleRow}>
-            <Link
-              href="/settings"
-              className={styles.back}
-              aria-label="Back to Settings"
-              title="Back to Settings"
-            >
-              <ChevronLeft size={22} aria-hidden="true" />
-            </Link>
-            <header className={styles.header}>
-              <h1>{section.label}</h1>
-              {promised ? <p>{section.hint}</p> : null}
+        {title ? (
+          // One row: the way back, the name, who it affects; one line under.
+          <header className={styles.header}>
+            <div className={styles.titleRow}>
+              <Link
+                href={title.back.href}
+                className={styles.back}
+                aria-label={title.back.label}
+                title={title.back.label}
+              >
+                <ChevronLeft size={24} aria-hidden="true" />
+              </Link>
+              <h1>{title.name}</h1>
               <span className={styles.scope}>
-                <ScopeChip scope={groupScope(home.group, inOrganisation)} />
+                <ScopeChip scope={title.scope} short />
               </span>
-            </header>
-          </div>
+            </div>
+            {title.line ? <p>{title.line}</p> : null}
+          </header>
         ) : null}
         {children}
       </div>
@@ -181,21 +231,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
   );
 }
 
-/** Every section at a glance: the setup checklist, then the groups as cards. */
+/** Settings itself: the hub for whoever opened it (settings-hub.tsx). */
 export function SettingsOverview() {
-  return (
-    <div className={styles.overview}>
-      <header className={styles.overviewHead}>
-        <h1>Settings</h1>
-        <p>
-          Your organisation, just you, and this phone. Each group says who it
-          affects.
-        </p>
-      </header>
-      <SetupChecklist />
-      <div className={styles.cards}>
-        <SectionList current={null} variant="list" />
-      </div>
-    </div>
-  );
+  return <SettingsHub />;
 }

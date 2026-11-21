@@ -1,0 +1,27 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "aff03e150c088f2ff698915afcb522a537cb92f2",
+  "full": true,
+  "checks": [],
+  "changed_files": null,
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [
+    "apps/sales-xray-web/app/settings/scope-chip.tsx",
+    "apps/sales-xray-web/app/settings/settings-hub.module.css",
+    "apps/sales-xray-web/app/settings/settings-hub.tsx",
+    "apps/sales-xray-web/app/settings/settings-sections.ts",
+    "apps/sales-xray-web/app/settings/settings-shell.module.css",
+    "apps/sales-xray-web/app/settings/settings-shell.tsx",
+    "apps/sales-xray-web/app/settings/settings-skeleton.tsx",
+    "apps/sales-xray-web/app/settings/setup-checklist.module.css",
+    "apps/sales-xray-web/app/settings/setup-checklist.tsx",
+    "apps/sales-xray-web/app/settings/settings.test.tsx",
+    "apps/sales-xray-web/app/settings/setup-checklist.test.tsx",
+    "apps/sales-xray-web/app/settings/settings-hub.test.tsx",
+    "apps/sales-xray-web/app/settings/group/[group]/page.tsx",
+    "apps/sales-xray-web/scripts/page-matrix.mjs"
+  ],
+  "py_shards": 17,
+  "requested_by": "root@ac-kvm4-prod"
+}

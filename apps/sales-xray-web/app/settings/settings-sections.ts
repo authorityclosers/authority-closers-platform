@@ -18,6 +18,8 @@ import {
   CircleUserRound,
   ClipboardList,
   Clock,
+  Filter,
+  Phone,
   Plug,
   CreditCard,
   Code,
@@ -304,6 +306,59 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
   "Just me",
   "This phone",
 ];
+
+/**
+ * The Settings hub (sx-redesign board pick C "Summary first", owner 21 Nov
+ * 2026): each group is one card that opens its own page (/settings/group/<slug>)
+ * listing its sections, or the section itself when it has only one. "Just me"
+ * holds "This phone" too, so an owner sees six company cards and one of their own.
+ */
+export const GROUP_SLUG: Record<SettingsGroup, string> = {
+  Team: "team",
+  Leads: "leads",
+  "Calls & phones": "calls-phones",
+  Connections: "connections",
+  Company: "company",
+  "Plan & billing": "plan-billing",
+  "Just me": "just-me",
+  "This phone": "this-phone",
+};
+
+/** One short line under a group's name when nothing better is known. */
+export const GROUP_LINE: Record<SettingsGroup, string> = {
+  Team: "People and what they can do",
+  Leads: "Rules, stages and sources",
+  "Calls & phones": "Phones, AI on calls, sounds",
+  Connections: "Apps, AI replies, developers",
+  Company: "Name, logo and details",
+  "Plan & billing": "Plan and analysis time",
+  "Just me": "Profile, sounds, sign-in, this phone",
+  "This phone": "Phone setup and alerts",
+};
+
+export const GROUP_ICON: Record<SettingsGroup, LucideIcon> = {
+  Team: UsersRound,
+  Leads: Filter,
+  "Calls & phones": Phone,
+  Connections: Plug,
+  Company: Building2,
+  "Plan & billing": CreditCard,
+  "Just me": CircleUserRound,
+  "This phone": Smartphone,
+};
+
+/** The group a /settings/group/<slug> address names; null for anything else. */
+export function groupBySlug(
+  slug: string | null | undefined,
+): SettingsGroup | null {
+  const hit = SETTINGS_GROUPS.find((group) => GROUP_SLUG[group] === slug);
+  return hit ?? null;
+}
+
+/** The groups a group page lists: "Just me" shows "This phone" under it. */
+export function groupPageGroups(group: SettingsGroup): SettingsGroup[] {
+  return group === "Just me" ? ["Just me", "This phone"] : [group];
+}
 
 /** Who a group's settings affect. */
 export function groupScope(

@@ -1,0 +1,433 @@
+/* The Settings hub (sx-redesign pick C, owner 21 Nov 2026): the v1.90 Home
+   family. One hero at most, then calm radius-22 cards of short rows with dark
+   ink icon tiles. Tokens only; light and dark from them. */
+
+.hub {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.readerOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.block {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* "For everyone", "Just me": a small label over its cards, not a chip on each. */
+.label {
+  margin: 0 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  line-height: var(--sx-leading-20);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+/* A group's card: tile, name, one line, chevron. */
+.card,
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 72px;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+  color: var(--sx-ink);
+  text-decoration: none;
+}
+
+.card:hover {
+  background: color-mix(in oklab, var(--lx-ink) 2%, var(--sx-surface));
+}
+
+.card:focus-visible,
+.row:focus-visible,
+.signOut:focus-visible,
+.quiet:focus-visible,
+.go:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* The dark ink icon in a soft grey tile (never teal, never a coloured wash). */
+.tile {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--sx-fill);
+  color: var(--lx-ink);
+}
+
+.tile[data-tone="bad"] {
+  background: color-mix(in oklab, var(--lx-danger) 10%, transparent);
+  color: var(--lx-danger);
+}
+
+.text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.name {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  line-height: var(--sx-leading-24);
+}
+
+/* One line, 14 px, dark grey; it wraps rather than ending in "...". */
+.line {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  line-height: var(--sx-leading-20);
+  opacity: 0.82;
+  overflow-wrap: anywhere;
+}
+
+.chevron {
+  flex: none;
+  color: var(--sx-muted);
+}
+
+/* Rows inside one white card, a hairline between them. */
+.rows {
+  display: grid;
+  margin: 0;
+  padding: 4px 0;
+  overflow: hidden;
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+  list-style: none;
+}
+
+/* The hairline starts under the names, not under the tiles. */
+.rows > li {
+  position: relative;
+}
+
+.rows > li + li::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 70px;
+  border-top: 1px solid var(--sx-hairline);
+  content: "";
+}
+
+.row,
+.signOut,
+.look {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 60px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 16px;
+  color: var(--sx-ink);
+  text-decoration: none;
+}
+
+.row:hover,
+.signOut:hover:not(:disabled) {
+  background: var(--sx-fill-soft);
+}
+
+.rowName {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  line-height: var(--sx-leading-24);
+}
+
+.row .rowName {
+  font-weight: 650;
+}
+
+/* The quiet value on the right: "2 on", "Ready", "App 1.0.143". */
+.value {
+  flex: none;
+  max-width: 45%;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+
+/* Look: Light | Dark as v1.90 Home's pills. */
+.look .rowName {
+  flex: 1;
+}
+
+.pills {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pill[aria-checked="true"] {
+  background: var(--lx-home-emerald);
+  color: var(--sx-surface);
+  box-shadow: 0 4px 10px -6px
+    color-mix(in oklab, var(--lx-home-emerald) 70%, transparent);
+}
+
+.pill:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* Sign out: red words, never a primary button. */
+.signOut {
+  border: 0;
+  background: transparent;
+  color: var(--lx-danger);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+  text-align: start;
+  cursor: pointer;
+}
+
+.signOut:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.error {
+  color: var(--lx-danger);
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+}
+
+/* You: avatar, name, role, a quiet Edit profile. */
+.avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  overflow: hidden;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--lx-home-emerald-soft);
+  color: var(--lx-home-emerald);
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+}
+
+.avatar :global(img) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profileName {
+  color: var(--sx-ink);
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+  line-height: var(--sx-leading-24);
+}
+
+.quiet {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 6px;
+  border-radius: var(--sx-radius-pill);
+  color: var(--lx-home-emerald);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+/* The seller's hero: recording on (green wash, chips) or what to fix (amber). */
+.hero {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 16px;
+  overflow: hidden;
+  padding: 20px;
+  border-radius: var(--lx-radius-lg);
+  background:
+    radial-gradient(
+      120% 160% at 100% 0%,
+      color-mix(in oklab, var(--lx-home-emerald) 14%, transparent) 0%,
+      transparent 55%
+    ),
+    var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.hero[data-tone="warn"] {
+  background:
+    radial-gradient(
+      120% 160% at 100% 0%,
+      color-mix(in oklab, var(--lx-warning) 16%, transparent) 0%,
+      transparent 55%
+    ),
+    var(--sx-surface);
+}
+
+/* Dark ink phone in a soft tile of the hero's own tone. */
+.heroTile {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: var(--lx-home-emerald-soft);
+  color: var(--lx-ink);
+}
+
+.hero[data-tone="warn"] .heroTile {
+  background: var(--lx-warning-soft);
+}
+
+.heroWords {
+  display: grid;
+  flex: 1;
+  gap: 8px;
+  min-width: min(100%, 200px);
+}
+
+.heroWords h2 {
+  margin: 0;
+  color: var(--sx-ink);
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-xl);
+  font-weight: 750;
+  line-height: var(--sx-leading-28);
+  letter-spacing: -0.01em;
+}
+
+.heroLine {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.chip[data-tone="good"] {
+  background: var(--lx-home-emerald-soft);
+  color: var(--lx-home-emerald);
+}
+
+/* The screen's one solid green button, only when something is wrong. */
+.go {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-home-emerald);
+  color: var(--sx-surface);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+/* Tablet: one calm column, centred. */
+@media (min-width: 600px) and (max-width: 899px) {
+  .hub {
+    width: 100%;
+    max-width: 720px;
+    margin-inline: auto;
+  }
+}
+
+/* Laptop: the owner's cards in two columns under the hero; a seller's
+   page and a group's page one calm column of about 760 px. */
+@media (min-width: 900px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hub[data-hub="group"],
+  .hub[data-hub="personal"] {
+    width: 100%;
+    max-width: 760px;
+  }
+}
+
+/* Phones: the hero's button takes its own line. */
+@media (max-width: 599px) {
+  .hero .go {
+    flex: 1 1 100%;
+  }
+
+  .card {
+    min-height: 68px;
+  }
+}
