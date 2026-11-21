@@ -47,7 +47,7 @@ export function GiveLead({
         onClick={() => setOpen(true)}
       >
         <ArrowRightLeft size={16} aria-hidden="true" />
-        Give to a colleague
+        Give lead
       </Button>
       <GiveLeadSheet
         detail={detail}

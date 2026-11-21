@@ -659,6 +659,34 @@ function inTwoDays(now: Date = new Date()): Date {
   return at;
 }
 
+/**
+ * A missed call's next try, chosen for the seller and sent as the follow-up
+ * (v1.93 judge round 3: the desk's own retry, 1 hour or a day on, fell at 4 am):
+ * the desk's gap, kept when it lands in the working day (9:30 am to 7:30 pm),
+ * else the next 10:00 am. A seller's screen can't read the team's own hours
+ * (managers only), so the working day is the common one.
+ */
+export function daytimeRetry(
+  attempts: number,
+  now: Date = new Date(),
+): { pick: Pick; custom: string } {
+  const gapHours = attempts ? 24 : 1;
+  const at = new Date(now.getTime() + gapHours * 60 * 60 * 1000);
+  at.setSeconds(0, 0);
+  const minutes = at.getHours() * 60 + at.getMinutes();
+  if (minutes >= 9 * 60 + 30 && minutes <= 19 * 60 + 30)
+    return gapHours === 1
+      ? { pick: "hour", custom: localInputValue(at) }
+      : { pick: "custom", custom: localInputValue(at) };
+  const ten = new Date(at);
+  if (minutes > 19 * 60 + 30) ten.setDate(ten.getDate() + 1);
+  ten.setHours(10, 0, 0, 0);
+  const tomorrow = nextCallTime("morning", now);
+  return ten.getTime() === tomorrow.getTime()
+    ? { pick: "morning", custom: localInputValue(ten) }
+    : { pick: "custom", custom: localInputValue(ten) };
+}
+
 /** "Mon, 23 Nov · 10:00 am": the follow-up field's words. */
 function fieldWhen(at: Date): string {
   const day = at.toLocaleDateString("en-IN", {
@@ -873,10 +901,22 @@ export function CallOutcome({
     talkedFirst && firstNext ? firstNext.step : lastStep,
   );
   const [next, setNext] = useState<Pick>("morning");
-  const [retry, setRetry] = useState<Pick | null>(null);
-  const [custom, setCustom] = useState(() =>
-    localInputValue(nextCallTime("morning")),
+  // The wrap-up chooses a missed call's next try in the working day (v1.93).
+  const [firstRetry] = useState(() => {
+    const said = heard?.connected === false ? missedReason(heard.result) : null;
+    return wrapUp && said && !NO_RETRY.has(said)
+      ? daytimeRetry(detail.lead.attempts ?? 0)
+      : null;
+  });
+  const [retry, setRetry] = useState<Pick | null>(firstRetry?.pick ?? null);
+  const [custom, setCustom] = useState(
+    () => firstRetry?.custom ?? localInputValue(nextCallTime("morning")),
   );
+  const retryInHours = () => {
+    const chosen = daytimeRetry(detail.lead.attempts ?? 0);
+    setCustom(chosen.custom);
+    setRetry(chosen.pick);
+  };
   // The after-call note, kept on the phone until saved (ph2-19).
   const draftKey = `after-call:${detail.lead.lead_id}`;
   const [note, setNoteState] = useState(() => readDraft(draftKey));
@@ -1091,12 +1131,6 @@ export function CallOutcome({
   const nudged = nudges > 0;
   const nudge = nudges ? (nudges % 2 ? "odd" : "even") : undefined;
   const stepRef = useRef<HTMLDivElement>(null);
-  // When the desk brings a missed lead back by itself (the server's rule:
-  // in 1 hour the first time, then a day later), said as a time.
-  const [openedAt] = useState(() => Date.now());
-  const autoBack = new Date(
-    openedAt + (detail.lead.attempts ? 24 : 1) * 60 * 60 * 1000,
-  );
   const autoRetry =
     reason === null
       ? null
@@ -1396,8 +1430,10 @@ export function CallOutcome({
                   setReason(answer.reason);
                   setStage(null);
                   setStep(null);
-                  // Busy: the next try is set in the same tap (in 1 hour).
-                  setRetry(answer.key === "busy" ? "hour" : null);
+                  // The next try is set in the same tap, in the working day
+                  // (v1.93); a wrong number has none.
+                  if (NO_RETRY.has(answer.reason)) setRetry(null);
+                  else retryInHours();
                 }}
               >
                 <answer.icon size={28} aria-hidden="true" />
@@ -1519,7 +1555,12 @@ export function CallOutcome({
                     type="button"
                     className={styles.reasonTile}
                     aria-pressed={reason === item.key}
-                    onClick={() => setReason(item.key)}
+                    onClick={() => {
+                      setReason(item.key);
+                      if (!wrapUp) return;
+                      if (NO_RETRY.has(item.key)) setRetry(null);
+                      else if (retry === null) retryInHours();
+                    }}
                   >
                     {item.label}
                   </button>
@@ -1527,8 +1568,8 @@ export function CallOutcome({
               </div>
             </>
           )}
-          {/* The wrap-up: the next try's time is the point (v1.93). Left
-              alone the desk brings the lead back by itself, as before. */}
+          {/* The wrap-up: the next try's time is the point (v1.93), chosen
+              in the working day and sent as the follow-up. */}
           {wrapUp && reason && NO_RETRY.has(reason) ? (
             <p className={wrap.timeNote}>{autoRetry}</p>
           ) : null}
@@ -1536,7 +1577,6 @@ export function CallOutcome({
             <WrapTime
               pick={retry}
               custom={custom}
-              auto={`Back ${when(autoBack.toISOString())}`}
               onPick={setRetry}
               onCustom={setCustom}
             />
@@ -4696,7 +4736,7 @@ export function LeadCard({
               kind="stage"
               channel="give"
               label="Give lead"
-              name="Give to a colleague"
+              name="Give lead to a colleague"
               icon={<ArrowRightLeft size={22} aria-hidden="true" />}
               onClick={() => setGiving(true)}
             />
@@ -4877,7 +4917,7 @@ export function LeadCard({
                 onClick={() => afterMore(() => setGiving(true))}
               >
                 <ArrowRightLeft size={20} aria-hidden="true" />
-                Give to a colleague
+                Give lead
               </button>
             </li>
           ) : null}

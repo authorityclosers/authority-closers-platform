@@ -1157,3 +1157,17 @@ a.callBand {
   outline-offset: 2px;
   border-radius: var(--sx-radius-sm);
 }
+
+/* Every dot takes the same 18 dp, so the current step's name sits level with
+   its neighbours (v1.93: its 20 dp ring pushed it 3 px lower). */
+.stepper .stepDot {
+  margin-bottom: 1px;
+}
+
+.stepper .step[data-state="done"] .stepDot {
+  margin-bottom: 0;
+}
+
+.stepper .step[data-state="current"] .stepDot {
+  margin-bottom: -2px;
+}

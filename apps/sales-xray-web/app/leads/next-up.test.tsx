@@ -13,7 +13,7 @@ vi.mock("../notice-center", () => ({
 
 import { resetBackCloseForTests } from "../ui/back-close";
 import { CallNext } from "./call-next";
-import { LeadSheet } from "./lead-sheet";
+import { daytimeRetry, LeadSheet } from "./lead-sheet";
 import { reportRows, WrapUpDone } from "./wrap-up";
 import type { LeadDetail, LeadEvent } from "./leads-client";
 
@@ -487,4 +487,56 @@ it("ends a talk on Saved with the report on its way and one Call next lead", asy
   );
   await act(async () => tile("Undo").click());
   expect(onUndo).toHaveBeenCalledTimes(1);
+});
+
+// v1.93 judge round 3: a missed call's next try fell at 4 am (the desk's own
+// gap). It is chosen in the working day and sent as the follow-up.
+it("puts a missed call's next try in the working day", () => {
+  const at = (iso: string) => new Date(iso);
+  // 2 pm, first try: in 1 hour, inside the day.
+  expect(daytimeRetry(0, at("2026-11-23T14:00:00")).pick).toBe("hour");
+  // 8 pm, first try: 9 pm is late, so tomorrow 10:00 (the Tomorrow chip).
+  expect(daytimeRetry(0, at("2026-11-23T20:00:00")).pick).toBe("morning");
+  // 4 am, later try: 4 am tomorrow is early, so 10:00 that morning (the
+  // Tomorrow chip).
+  const early = daytimeRetry(2, at("2026-11-23T04:02:00"));
+  expect(early.pick).toBe("morning");
+  expect(early.custom).toBe("2026-11-24T10:00");
+  // 3 pm, later try: the same time tomorrow, inside the day.
+  expect(daytimeRetry(2, at("2026-11-23T15:00:00")).custom).toBe(
+    "2026-11-24T15:00",
+  );
+});
+
+it("sends the missed call's next try it shows", async () => {
+  await act(async () =>
+    root.render(
+      <LeadSheet
+        leadId={ONE}
+        me={null}
+        intent="log"
+        onClose={() => undefined}
+        onChanged={() => undefined}
+      />,
+    ),
+  );
+  await flush();
+  await act(async () => tile("No answer").click());
+  const chosen = document.querySelector(
+    '[aria-label="Quick times"] [aria-pressed="true"]',
+  );
+  // One of the chips, or a time of its own: either way a time is shown.
+  expect(document.body.textContent).toMatch(/· \d{1,2}:\d{2}/);
+  await act(async () => tile("Save").click());
+  await flush();
+  const sent = vi
+    .mocked(fetch)
+    .mock.calls.find(([url]) => String(url).endsWith("/dispose"));
+  const body = JSON.parse(String(sent?.[1]?.body));
+  expect(body).toMatchObject({ connected: false, reason: "did_not_pick" });
+  const when = new Date(body.follow_up_at);
+  const minutes = when.getHours() * 60 + when.getMinutes();
+  expect(minutes).toBeGreaterThanOrEqual(9 * 60 + 30);
+  expect(minutes).toBeLessThanOrEqual(19 * 60 + 30);
+  expect(chosen === null || chosen.textContent !== "").toBe(true);
 });

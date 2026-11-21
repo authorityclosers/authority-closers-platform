@@ -59,13 +59,16 @@ const detail = (extra: Partial<LeadDetail> = {}) =>
     ...extra,
   }) as unknown as LeadDetail;
 
-const button = (text: string) =>
-  [...document.querySelectorAll("button")].find((item) =>
-    item.textContent?.includes(text),
+// opener: the lead's own "Give lead" button (the sheet's Save says the same).
+const button = (text: string, opener = false) =>
+  [...document.querySelectorAll("button")].find(
+    (item) =>
+      item.textContent?.includes(text) &&
+      (item.dataset.sxFeature === "give_lead_open") === opener,
   ) as HTMLButtonElement | undefined;
 
-async function click(text: string) {
-  const found = button(text);
+async function click(text: string, opener = false) {
+  const found = button(text, opener);
   expect(found, text).toBeTruthy();
   await act(async () => found!.click());
 }
@@ -76,11 +79,11 @@ it("shows nothing unless the server lets this seller give the lead", async () =>
       <GiveLead detail={detail({ can_give: false })} onGiven={vi.fn()} />,
     ),
   );
-  expect(button("Give to a colleague")).toBeUndefined();
+  expect(button("Give lead", true)).toBeUndefined();
   await act(async () =>
     root.render(<GiveLead detail={detail({ reps: [] })} onGiven={vi.fn()} />),
   );
-  expect(button("Give to a colleague")).toBeUndefined();
+  expect(button("Give lead", true)).toBeUndefined();
 });
 
 it("asks who, then why, and sends the reason with the move", async () => {
@@ -90,7 +93,7 @@ it("asks who, then why, and sends the reason with the move", async () => {
   await act(async () =>
     root.render(<GiveLead detail={detail()} onGiven={onGiven} />),
   );
-  await click("Give to a colleague");
+  await click("Give lead", true);
   await click("Anika Sample");
   // No reason yet: nothing to send.
   expect(button("Give lead")?.disabled).toBe(true);
@@ -128,7 +131,7 @@ it("keeps the sheet open and says why when the server refuses", async () => {
   await act(async () =>
     root.render(<GiveLead detail={detail()} onGiven={onGiven} />),
   );
-  await click("Give to a colleague");
+  await click("Give lead", true);
   await click("Anika Sample");
   await click("Escalation");
   await click("Give lead");
@@ -161,7 +164,7 @@ it("asks who and why on one sheet and never offers the lead's own owner", async 
       />,
     ),
   );
-  await click("Give to a colleague");
+  await click("Give lead", true);
   // Both questions at once, with a way out.
   expect(button("Anika Sample")).toBeTruthy();
   expect(button("Escalation")).toBeTruthy();
@@ -185,5 +188,5 @@ it("asks who and why on one sheet and never offers the lead's own owner", async 
       />,
     ),
   );
-  expect(button("Give to a colleague")).toBeUndefined();
+  expect(button("Give lead", true)).toBeUndefined();
 });
