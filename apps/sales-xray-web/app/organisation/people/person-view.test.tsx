@@ -246,10 +246,13 @@ it("shows a teammate's profile to an owner: who, figures, weekly charts, reports
       (link) => link.textContent,
     ),
   ).toContainEqual(expect.stringContaining("Discovery · Amit, Pixel Digital"));
-  // The existing Calls view filters its loaded rows to this person.
+  // The existing Calls view filters its loaded rows to this person: the
+  // hero's one green button and the calls list both open it.
   expect(
-    host.querySelector(`a[href="/analysis/calls?rep=${ashaId}"]`)?.textContent,
-  ).toContain(`Open in ${CALLS_PAGE_NAME}`);
+    [...host.querySelectorAll(`a[href="/analysis/calls?rep=${ashaId}"]`)].map(
+      (link) => link.textContent,
+    ),
+  ).toEqual(["See Asha's calls", `Open in ${CALLS_PAGE_NAME}`]);
   // The existing shared reader decides whether their focus can be shown.
   expect(host.textContent).toContain("This coaching is not shared with you.");
   expect(
@@ -842,9 +845,10 @@ it("shows desk calls and notes with no reports even when the report read fails",
   await show(ashaId);
   expect(host.textContent).toContain("Asha called Rowan Example");
   expect(host.textContent).toContain("Send the details after lunch");
-  expect(
-    host.querySelector('[aria-label="Today and the last 7 days"]')?.textContent,
-  ).toContain("Calls1today");
+  // Today's counts are the Today card's (sx-redesign board, pick 04 A).
+  expect(host.querySelector('[aria-label="Today"]')?.textContent).toContain(
+    "1Calls",
+  );
   expect(host.textContent).toContain("Reports are unavailable");
 });
 

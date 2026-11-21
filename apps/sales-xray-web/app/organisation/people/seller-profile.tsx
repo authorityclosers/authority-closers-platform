@@ -9,6 +9,8 @@
  */
 
 import {
+  CalendarDays,
+  ChevronRight,
   CircleUserRound,
   LayoutDashboard,
   ListChecks,
@@ -34,7 +36,6 @@ import {
   EmptyState,
   List,
   ListRow,
-  Tabs,
   Tag,
   type Hue,
 } from "../../ds";
@@ -59,6 +60,7 @@ import {
 import { phoneDot } from "../../leads/phone-setup-words";
 import { notify } from "../../notice-center";
 import { CaptureRates } from "../../capture-guard/capture-rates";
+import family from "../family.module.css";
 import styles from "./seller-profile.module.css";
 
 export type SellerTab = "overview" | "leads" | "settings";
@@ -120,6 +122,8 @@ export function SellerSections({
   canManage,
   canSeeTeam = canManage,
   overview,
+  today = null,
+  cards = null,
 }: {
   personId: string;
   firstName: string;
@@ -127,6 +131,10 @@ export function SellerSections({
   canManage: boolean;
   canSeeTeam?: boolean;
   overview: ReactNode;
+  /** Today's counts from their activity (call, connected, note), when read. */
+  today?: Readonly<Record<string, number>> | null;
+  /** Cards for Overview after Today and Leads (phone, role). */
+  cards?: ReactNode;
 }) {
   const [tab, setTab] = useTab();
   const [team, setTeam] = useState<Team | null>(null);
@@ -176,63 +184,41 @@ export function SellerSections({
       : []),
   ];
 
+  const current = tab === "settings" && !canManage ? "overview" : tab;
+  const figure = (value: number | undefined) =>
+    value === undefined ? "–" : String(value);
+  // Today in three big numbers (sx-redesign board, pick 04 A): number first,
+  // then a dot and its word.
+  const figures: [string, string, string][] = [
+    [figure(today ? (today.call ?? 0) : undefined), "Calls", "calls"],
+    [figure(today ? (today.connected ?? 0) : undefined), "Connected", "good"],
+    rep
+      ? [String(rep.due_now), "Follow-ups", "action"]
+      : [figure(today ? (today.note ?? 0) : undefined), "Notes", "info"],
+  ];
+
   return (
     <DsScope className={styles.scope}>
-      {rep || (level && !canManage) ? (
-        <div className={styles.today}>
-          {/* Quiet chips (owner, 25 Oct 2026): only what needs a look. A
-              manager finds the phone app and AI on calls under Settings. */}
-          {(rep && !rep.available) || (level && !canManage) ? (
-            <div className={styles.tags}>
-              {rep && !rep.available ? (
-                <Tag hue="slate">Not taking leads</Tag>
-              ) : null}
-              {level && !canManage ? (
-                <Tag hue={LEVEL_HUE[level.level]}>
-                  AI on calls: {LEVEL_NAMES[level.level]}
-                  {level.own ? "" : " (default)"}
-                </Tag>
-              ) : null}
-            </div>
-          ) : null}
-          {rep && overBy(rep) > 0 ? (
-            <p className={styles.over} role="status">
-              {`Over limit by ${overBy(rep)}`}
-              {canManage ? (
-                <>
-                  <span aria-hidden="true">·</span>
-                  <button
-                    type="button"
-                    className={styles.overChange}
-                    onClick={() => setTab("settings")}
-                  >
-                    Change
-                  </button>
-                </>
-              ) : null}
-            </p>
-          ) : null}
-          {rep ? (
-            <p className={styles.workload}>
-              <span>
-                <strong>{rep.open_leads}</strong>
-                {rep.open_leads === 1 ? "open lead" : "open leads"}
-                {rep.max_open === null ? <small>No limit</small> : null}
-              </span>
-              <span>
-                <strong>{rep.due_now}</strong>
-                due now
-              </span>
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-      <Tabs
-        items={items}
-        current={tab === "settings" && !canManage ? "overview" : tab}
-        onSelect={(key) => setTab(key as SellerTab)}
-        label={`${firstName}'s profile`}
-      />
+      <div
+        className={`${family.switch} ${styles.tabs}`}
+        role="tablist"
+        aria-label={`${firstName}'s profile`}
+      >
+        {items.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            role="tab"
+            aria-selected={current === item.key}
+            onClick={() => setTab(item.key as SellerTab)}
+          >
+            {item.label}
+            {item.count !== undefined ? (
+              <span className={styles.tabCount}>{item.count}</span>
+            ) : null}
+          </button>
+        ))}
+      </div>
       <div className={styles.panel}>
         {tab === "leads" ? (
           <SellerLeads
@@ -252,6 +238,95 @@ export function SellerSections({
           />
         ) : (
           <>
+            <div
+              className={styles.overviewTop}
+              data-two={cards ? "" : undefined}
+            >
+              <div className={styles.column}>
+                <section className={family.card} aria-label="Today">
+                  <div className={family.cardHead}>
+                    <span className={family.tile}>
+                      <CalendarDays aria-hidden="true" />
+                    </span>
+                    <h2>Today</h2>
+                  </div>
+                  <div className={styles.figures}>
+                    {figures.map(([value, label, tone]) => (
+                      <div key={label} className={styles.figureCell}>
+                        <b>{value}</b>
+                        <span data-tone={tone}>{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+                {rep || (level && !canManage) ? (
+                  <section className={family.card} aria-label="Leads">
+                    {rep ? (
+                      <button
+                        type="button"
+                        className={family.row}
+                        onClick={() => setTab("leads")}
+                      >
+                        <span className={family.tile}>
+                          <Users aria-hidden="true" />
+                        </span>
+                        <span className={family.rowText}>
+                          <span className={family.rowTitle}>
+                            {isYou ? "Your leads" : `Leads with ${firstName}`}
+                          </span>
+                          <span className={family.rowSub}>
+                            <strong>{rep.open_leads}</strong>
+                            {rep.open_leads === 1
+                              ? " open lead"
+                              : " open leads"}
+                            {rep.max_open === null ? " · No limit" : null}
+                          </span>
+                        </span>
+                        <ChevronRight
+                          className={family.chevron}
+                          aria-hidden="true"
+                        />
+                      </button>
+                    ) : null}
+                    {/* Quiet chips (owner, 25 Oct 2026): only what needs a look. */}
+                    {(rep && !rep.available) ||
+                    (rep && overBy(rep) > 0) ||
+                    (level && !canManage) ? (
+                      <div className={`${family.chips} ${styles.leadChips}`}>
+                        {rep && !rep.available ? (
+                          <span className={family.chip}>Not taking leads</span>
+                        ) : null}
+                        {rep && overBy(rep) > 0 ? (
+                          <span
+                            className={family.chip}
+                            data-tone="amber"
+                            role="status"
+                          >
+                            {`Over limit by ${overBy(rep)}`}
+                          </span>
+                        ) : null}
+                        {rep && overBy(rep) > 0 && canManage ? (
+                          <button
+                            type="button"
+                            className={family.outline}
+                            onClick={() => setTab("settings")}
+                          >
+                            Change
+                          </button>
+                        ) : null}
+                        {level && !canManage ? (
+                          <Tag hue={LEVEL_HUE[level.level]}>
+                            AI on calls: {LEVEL_NAMES[level.level]}
+                            {level.own ? "" : " (default)"}
+                          </Tag>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </section>
+                ) : null}
+              </div>
+              {cards ? <div className={styles.column}>{cards}</div> : null}
+            </div>
             {overview}
             {canManage || isYou ? (
               <CaptureRates key={personId} personId={personId} />

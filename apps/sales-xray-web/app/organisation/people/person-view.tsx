@@ -1,7 +1,16 @@
 "use client";
 
-import { can, roleLabel } from "../roles";
-import { Building2, ChevronRight, UserRound } from "lucide-react";
+import { can, ROLE_HINT, roleLabel } from "../roles";
+import {
+  ArrowLeft,
+  Building2,
+  ChevronRight,
+  Phone,
+  ShieldCheck,
+  Smartphone,
+  UserRound,
+} from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -51,6 +60,8 @@ import {
   type PersonAction,
 } from "./person-panels";
 import styles from "./person.module.css";
+import family from "../family.module.css";
+import { captureBadge, useCaptureTeam } from "../capture-setup-panel";
 import { saveOwnDisplayName } from "./person-name-client";
 import { PersonWork } from "./person-work";
 import { SellerSections } from "./seller-profile";
@@ -201,6 +212,16 @@ function PersonPage({
     can(viewerRole, "team.view") || id === viewerId,
   );
   const [busy, setBusy] = useState(false);
+  // Today's counts from their activity, for the Today card.
+  const [today, setToday] = useState<Readonly<Record<string, number>> | null>(
+    null,
+  );
+  // Role & access and Remove open the header's sheet at that step.
+  const [request, setRequest] = useState<{ step: "role" | "remove" } | null>(
+    null,
+  );
+  // Their phone, from Sellers' phones, for those who see the team's phones.
+  const capture = useCaptureTeam(can(viewerRole, "leads.manage"));
   // Their photo (v0.93): initials while it loads or when there is none.
   const [photos, setPhotos] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -289,17 +310,48 @@ function PersonPage({
       viewerRole === "owner" ||
       member.role === "member");
 
+  const phone =
+    personId && capture.team
+      ? (capture.team.people.find((row) => row.person_id === personId) ?? null)
+      : null;
+  const phoneBadge = phone ? captureBadge(phone) : null;
+  const canChangeRole =
+    viewerRole === "owner" && manageable && member?.status === "active";
+  const firstName = (member ? memberName(member) : "This person").split(
+    /\s+/,
+  )[0];
+  const callsHref = personId
+    ? `/analysis/calls?rep=${encodeURIComponent(personId)}`
+    : null;
   return (
     <>
+      <Link href="/settings/team" className={styles.backLink}>
+        <ArrowLeft size={18} aria-hidden="true" />
+        Team
+      </Link>
       {member ? (
         <PersonHeader
+          request={request}
+          chips={
+            phoneBadge && member.status === "active" ? (
+              <span className={family.chip} data-tone={phoneBadge.tone}>
+                {phone?.state === "set_up" ? "Phone ready" : phoneBadge.label}
+              </span>
+            ) : null
+          }
+          actions={
+            sees && callsHref && member.status === "active" ? (
+              <Link className={family.primary} href={callsHref}>
+                <Phone size={17} aria-hidden="true" />
+                {isYou ? "See my calls" : `See ${firstName}'s calls`}
+              </Link>
+            ) : null
+          }
           member={member}
           isYou={isYou}
           photoUrl={member.personId ? (photos[member.personId] ?? null) : null}
           test={isTestEmail(member.email)}
-          canChangeRole={
-            viewerRole === "owner" && manageable && member.status === "active"
-          }
+          canChangeRole={canChangeRole}
           canRemove={manageable}
           onRename={
             isYou && member.status === "active"
@@ -348,14 +400,93 @@ function PersonPage({
           isYou={isYou}
           canManage={can(viewerRole, "leads.manage")}
           canSeeTeam={can(viewerRole, "team.view")}
-          firstName={
-            (member ? memberName(member) : "This person").split(/\s+/)[0]
+          firstName={firstName}
+          today={today}
+          cards={
+            <>
+              {phone ? (
+                <section className={family.card} aria-label="Phone setup">
+                  <div className={family.row}>
+                    <span className={family.tile}>
+                      <Smartphone aria-hidden="true" />
+                    </span>
+                    <span className={family.rowText}>
+                      <span className={family.rowTitle}>Phone setup</span>
+                      <span className={family.chips}>
+                        {phoneBadge ? (
+                          <span
+                            className={family.chip}
+                            data-tone={phoneBadge.tone}
+                          >
+                            {phone.state === "set_up"
+                              ? "Call recording on"
+                              : phoneBadge.label}
+                          </span>
+                        ) : null}
+                        {(phone.phones?.length
+                          ? phone.phones
+                          : phone.phone
+                            ? [phone.phone]
+                            : []
+                        ).map((name) => (
+                          <span key={name} className={family.chip}>
+                            {name}
+                          </span>
+                        ))}
+                        {phone.recording?.last_at ? (
+                          <span className={family.chip}>
+                            {`Last file ${new Date(
+                              phone.recording.last_at,
+                            ).toLocaleString("en-IN", {
+                              day: "numeric",
+                              month: "short",
+                              hour: "numeric",
+                              minute: "2-digit",
+                              timeZone: "Asia/Kolkata",
+                            })}`}
+                          </span>
+                        ) : null}
+                      </span>
+                    </span>
+                    <span />
+                  </div>
+                </section>
+              ) : null}
+              {member && member.status === "active" ? (
+                <section className={family.card} aria-label="Role and access">
+                  <div className={family.row}>
+                    <span className={family.tile}>
+                      <ShieldCheck aria-hidden="true" />
+                    </span>
+                    <span className={family.rowText}>
+                      <span className={family.rowTitle}>Role &amp; access</span>
+                      <span className={family.rowSub} data-wrap="">
+                        {roleLabel(member.role)}: {ROLE_HINT[member.role]}
+                      </span>
+                    </span>
+                    {canChangeRole ? (
+                      <button
+                        type="button"
+                        className={family.outline}
+                        disabled={busy}
+                        onClick={() => setRequest({ step: "role" })}
+                      >
+                        Change role
+                      </button>
+                    ) : (
+                      <span />
+                    )}
+                  </div>
+                </section>
+              ) : null}
+            </>
           }
           overview={
             <>
               <PersonWork
                 key={personId}
                 personId={personId}
+                onToday={setToday}
                 saved={
                   activity.status === "ready" ? activity.value.data.listed : []
                 }
@@ -399,6 +530,18 @@ function PersonPage({
             </>
           }
         />
+      ) : null}
+      {member && manageable ? (
+        <button
+          type="button"
+          className={family.dangerText}
+          disabled={busy}
+          onClick={() => setRequest({ step: "remove" })}
+        >
+          {member.status === "invited"
+            ? "Revoke invitation"
+            : "Remove from team"}
+        </button>
       ) : null}
     </>
   );

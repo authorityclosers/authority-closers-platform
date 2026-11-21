@@ -188,3 +188,121 @@
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
 }
+
+/* ---------- sx-redesign board, pick 04 A (owner 21 Nov 2026) ---------- */
+
+.tabs {
+  justify-self: start;
+}
+
+@media (max-width: 599px) {
+  .tabs {
+    display: flex;
+    justify-self: stretch;
+  }
+
+  .tabs button {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.tabCount {
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 6px 0 16px;
+}
+
+.figureCell {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 12px;
+  border-left: 1px solid var(--sx-hairline);
+}
+
+.figureCell:first-child {
+  padding-left: 4px;
+  border-left: 0;
+}
+
+.figureCell b {
+  font-family: var(--lx-font-display);
+  font-size: max(var(--sx-text-3xl), 36px);
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.figureCell span {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  line-height: var(--sx-leading-20);
+}
+
+.figureCell span::before {
+  width: 8px;
+  height: 8px;
+  transform: translateY(-1px);
+  border-radius: 50%;
+  background: var(--sx-tone-calls);
+  content: "";
+  flex: none;
+}
+
+.figureCell span[data-tone="good"]::before {
+  background: var(--sx-tone-good);
+}
+
+.figureCell span[data-tone="action"]::before {
+  background: var(--sx-tone-action);
+}
+
+.figureCell span[data-tone="info"]::before {
+  background: var(--sx-tone-info);
+}
+
+.leadChips {
+  padding: 0 0 14px 52px;
+}
+
+.overviewTop,
+.column {
+  display: grid;
+  gap: var(--ds-space-4);
+  align-content: start;
+  min-width: 0;
+}
+
+/* Laptop: Today and Leads on the left, phone and role on the right (pick 04,
+   laptop B). */
+@media (min-width: 1100px) {
+  .overviewTop[data-two] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 599px) {
+  .figureCell {
+    padding: 0 8px;
+  }
+
+  .figureCell b {
+    font-size: var(--sx-text-2xl);
+  }
+
+  .figureCell span {
+    font-size: var(--sx-text-xs);
+  }
+}
