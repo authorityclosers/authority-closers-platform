@@ -20,13 +20,13 @@
     "review": "Re-pin 14 Nov 2026 (ux-audit for the orchestrator, during the v1.60 hold while the CI queue was quiet; the 14025987287 pin from run 43402793658, made 09:40Z on 13 Nov, would pass its 36-hour window at about 21:40Z on 14 Nov): producer run 43619970592 (workbench-checks.yml, push, success) on a request whose only parent is workbench 0f33427e8 (dev/live HEAD; its lockfiles, packages, workflows and scripts/ci match main except .github/workflows/sales-xray-native-image.yml, checked by diff), and which changes only .wb-ci/request.json. Same identity 8fed5c6d; artifact digest from the API. The pinned 14025987287 bundle was deleted first so a fresh bundle could publish."
   },
   {
-    "artifact_id": 14694742386,
-    "digest": "d41d02645714d9360ea602c22653abaafbc4e4cd78bc6576f4277d2336db5fdb",
+    "artifact_id": 14557867918,
+    "digest": "f1a5b41e0cad8f95f4abbbde1a650356efbc4e84cbbca1c49e674a9ff987c31b",
     "identity": "df10b24de0db7bee94c7d0e374e55de165d998c577dfd93f3664144c284e3144",
     "repository": "authorityclosers/authority-closers-platform",
-    "run_id": 44872850607,
-    "source_sha": "5f7c3e479aceed5fe3ea532a858fad72979d5161",
-    "reviewed_source_sha": "97328f26de768cc54acf9e8b1edcfb95ca64f874",
-    "review": "Re-pin 21 Nov 2026 (Mac sx-redesign session, during the v1.91.2 cut): the df10b24d pin 14557867918 (made 17:45Z on 19 Nov) passed its 36-hour window at about 05:45Z on 21 Nov, so the v1.91.2 cut runs 44872974874 and 44873313098 failed ci-prerequisites with storage admission declined (two df10b24d bundles retained). A fresh df10b24d bundle had already published at 05:55:20Z: artifact 14694742386 from producer run 44872850607 (workbench-checks.yml, push) on request 5f7c3e479 whose only parent is workbench 97328f26d (dev/live HEAD); identity df10b24d, which main shares (same lockfiles and packages); artifact digest from the API. Nothing was deleted."
+    "run_id": 44579957916,
+    "source_sha": "74634f107d83cd689a90680b900c2eda79515ef2",
+    "reviewed_source_sha": "147336c45eecd93d4ce25bd488d6ccaeddf6c413",
+    "review": "Re-pin 19 Nov 2026 (WL worker for the orchestrator; the v1.88 release PR run 44576895965 failed every Python and validate job with 'GitHub artifact does not match the pinned producer' because the df10b24d pin 14397970343 had passed its 36-hour window at about 16:20Z on 19 Nov and was gone): producer run 44579957916 (workbench-checks.yml, push, success) on a request whose only parent is workbench 147336c45 (dev/live HEAD) and which changes only .wb-ci/request.json; identity df10b24d, which main shares (same lockfiles and packages); artifact digest from the API. 14557766350, published by that pull_request run (never pinnable), was deleted at a quiet moment (no runs in flight) so a fresh bundle could publish."
   }
 ]
