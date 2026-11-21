@@ -66,12 +66,12 @@ import {
   type AccountProfileRecord,
 } from "./account-profile-client";
 import { useTheme } from "./lightbox/theme-provider";
-import { parseThemePreference } from "./lightbox/theme";
 import { useFirstCallGuideSwitch } from "./guide-toggle";
 import { notify, dismissNotice } from "./notice-center";
 import { PROFILE_UPDATED_EVENT } from "./profile-menu";
 import { AccountAvatarImage } from "./speaker-avatar";
 import { SignInMethods } from "./sign-in-methods";
+import { ThemePills } from "./settings/theme-pills";
 import {
   analysedTrend,
   readCallActivity,
@@ -533,10 +533,6 @@ export function AccountSettings({
           only={only}
           onBack={back}
         >
-          <Row
-            label="Privacy"
-            hint="Calls and reports stay private to your account and selected workspace."
-          />
           <SignInMethods active={shows("security")} />
           <Row
             label="Log out of this device"
@@ -558,6 +554,10 @@ export function AccountSettings({
             </p>
           ) : null}
           <DeleteAccountRow />
+          {/* Privacy says it in one line under the rows (sx-redesign). */}
+          <p className={styles.muted}>
+            Your calls and reports stay private to you and this workspace.
+          </p>
         </Pane>
 
         <Pane
@@ -864,20 +864,9 @@ function ThemeRow() {
   // The theme control is only released where the provider is enabled.
   if (!theme) return null;
   return (
-    <Row label="Theme" hint="Light is the default.">
-      <label className={styles.selectWrap}>
-        <span className={styles.srOnly}>Theme</span>
-        <Picker
-          title="Theme"
-          value={theme.preference}
-          options={[
-            { key: "system", label: "System" },
-            { key: "light", label: "Light" },
-            { key: "dark", label: "Dark" },
-          ]}
-          onChange={(key) => theme.setPreference(parseThemePreference(key))}
-        />
-      </label>
+    // Light or Dark as pills, never a dropdown (sx-redesign, 21 Nov 2026).
+    <Row label="Look">
+      <ThemePills />
     </Row>
   );
 }
