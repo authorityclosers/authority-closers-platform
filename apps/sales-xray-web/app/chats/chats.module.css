@@ -1869,3 +1869,324 @@
     height: 36px;
   }
 }
+
+/* ---------- sx-redesign board pick "calm list" (owner, 21 Nov 2026) ----------
+   The v1.90 Home family: All | Waiting as solid deep-green pills, the chats in
+   one white radius-22 card with hairlines, soft lead faces, bold unread rows
+   and a solid green count. Tokens only, light and dark from them. */
+
+.segment {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+}
+
+.segmentItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.segmentItem[aria-pressed="true"] {
+  background: var(--lx-home-emerald);
+  color: var(--sx-surface);
+  box-shadow: 0 4px 10px -6px
+    color-mix(in oklab, var(--lx-home-emerald) 70%, transparent);
+}
+
+.segmentItem:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.filters {
+  border-bottom: 0;
+}
+
+.filterRow {
+  gap: 10px 8px;
+}
+
+.filterRow > .chip {
+  margin-left: auto;
+}
+
+/* Lead faces: soft v1.90 tints, dark ink letters. */
+.chatAvatar > span:first-child {
+  background: var(--sx-fill);
+  color: var(--lx-ink);
+}
+
+.chatAvatar[data-tone="emerald"] > span:first-child {
+  background: var(--lx-home-emerald-soft);
+}
+
+.chatAvatar[data-tone="sky"] > span:first-child {
+  background: var(--lx-home-sky-soft);
+}
+
+.chatAvatar[data-tone="orange"] > span:first-child {
+  background: var(--lx-home-orange-soft);
+}
+
+.chatAvatar[data-tone="violet"] > span:first-child {
+  background: var(--lx-home-violet-soft);
+}
+
+.chatAvatar[data-tone="rose"] > span:first-child {
+  background: var(--lx-home-rose-soft);
+}
+
+/* The unread count: a solid green circle, white number, 12 px. */
+.unreadCount {
+  min-width: 22px;
+  height: 22px;
+  background: var(--lx-home-emerald);
+  color: var(--sx-surface);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-20);
+  display: inline-grid;
+  place-items: center;
+}
+
+.row[data-unread] .rowTop time {
+  color: var(--lx-home-emerald);
+}
+
+.unreadDot {
+  background: var(--lx-home-emerald);
+}
+
+.rowTop strong {
+  font-weight: 650;
+}
+
+.row[data-unread] .rowText {
+  font-weight: 650;
+}
+
+/* Who and how long: quiet grey words, not more chips. */
+.owner {
+  height: auto;
+  padding: 0;
+  background: transparent;
+  color: var(--sx-muted);
+  font-weight: 600;
+}
+
+/* Phones and tablets: the canvas behind, the chats in one white card. */
+@media (max-width: 899.98px) {
+  .root,
+  .listPane {
+    background: transparent;
+  }
+
+  .root[data-open="thread"] {
+    background: var(--sx-surface);
+  }
+
+  .filters {
+    padding: 8px 16px 12px;
+  }
+
+  .listBody {
+    flex: 0 1 auto;
+    margin: 0 16px 16px;
+    padding: 4px 0;
+    border-radius: var(--lx-radius-lg);
+    background: var(--sx-surface);
+    box-shadow: var(--sx-shadow-1);
+  }
+
+  .listBody > li {
+    position: relative;
+  }
+
+  .listBody > li + li::before {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    right: 16px;
+    left: 68px;
+    border-top: 1px solid var(--sx-hairline);
+    content: "";
+    pointer-events: none;
+  }
+
+  .listBody .row {
+    padding: 14px 16px;
+    border-radius: 0;
+  }
+
+  .listEmpty {
+    margin: 0 16px 16px;
+    border-radius: var(--lx-radius-lg);
+    background: var(--sx-surface);
+    box-shadow: var(--sx-shadow-1);
+  }
+}
+
+/* Tablets: a centred column, so the time and count stay near the words. */
+@media (min-width: 600px) and (max-width: 899.98px) {
+  .listPane {
+    width: 100%;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+}
+
+/* Computers: the list keeps its pane beside the open chat; same rows. */
+@media (min-width: 900px) {
+  .listBody > li + li .row {
+    position: relative;
+  }
+
+  .listBody > li + li .row::before {
+    position: absolute;
+    top: 0;
+    right: 10px;
+    left: 62px;
+    border-top: 1px solid var(--sx-hairline);
+    content: "";
+  }
+
+  .listBody .row {
+    padding: 12px 10px;
+  }
+}
+
+/* One line of filters; it slides sideways on a narrow phone. */
+.filterRow {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: -2px -16px;
+  padding: 2px 16px;
+}
+
+.filterRow::-webkit-scrollbar {
+  display: none;
+}
+
+.pickChip button {
+  min-height: 40px;
+  border-radius: var(--sx-radius-pill);
+  color: var(--sx-ink-2);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.filterRow > .chip {
+  flex: none;
+  height: 40px;
+}
+
+@media (min-width: 900px) {
+  .filterRow {
+    margin: -2px -12px;
+    padding: 2px 12px;
+  }
+}
+
+/* Computers with no chat open: the list alone, one card at most 760 px wide,
+   so the time and count stay near the words (board fix). A chat opens beside
+   it as before. */
+@media (min-width: 900px) {
+  .root[data-open="list"] {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 760px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .root[data-open="list"] .threadPane {
+    display: none;
+  }
+
+  .root[data-open="list"] .listPane {
+    border-right: 0;
+    background: transparent;
+  }
+
+  .root[data-open="list"] .filters {
+    padding: 4px 0 14px;
+  }
+
+  .root[data-open="list"] .filterRow {
+    margin: -2px 0;
+    padding: 2px 0;
+  }
+
+  .root[data-open="list"] .listBody {
+    flex: 0 1 auto;
+    margin: 0 0 8px;
+    padding: 4px 0;
+    border-radius: var(--lx-radius-lg);
+    background: var(--sx-surface);
+    box-shadow: var(--sx-shadow-1);
+  }
+
+  .root[data-open="list"] .listBody .row {
+    padding: 16px 20px;
+    border-radius: 0;
+  }
+
+  .root[data-open="list"] .listBody > li + li .row::before {
+    right: 20px;
+    left: 72px;
+  }
+
+  .root[data-open="list"] .listEmpty {
+    border-radius: var(--lx-radius-lg);
+    background: var(--sx-surface);
+    box-shadow: var(--sx-shadow-1);
+  }
+}
+
+/* Readability gate (wb-ci, 21 Nov 2026): 44 px to tap on a phone, the
+   seller's name whole, and room under each face for its channel mark. */
+@media (max-width: 899.98px) {
+  .segmentItem,
+  .filterRow > .chip,
+  .pickChip button {
+    min-height: 44px;
+  }
+
+  .filterRow > .chip {
+    height: 44px;
+  }
+
+  .chatAvatar {
+    margin-bottom: 6px;
+  }
+}
+
+.rowMeta {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+
+.rowMeta > .owner {
+  flex: none;
+}
+
+.ownerName {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}

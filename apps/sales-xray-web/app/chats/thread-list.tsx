@@ -91,20 +91,32 @@ export function ThreadFilters({
         </label>
       </div>
     );
+  // sx-redesign board pick (owner, 21 Nov 2026): All | Waiting as the v1.90
+  // Home pills first, then the quieter pickers and the name filter.
   return (
     <div className={styles.filters}>
       <div className={styles.filterRow} role="group" aria-label="Show">
-        {/* A filter in words, not a second magnifier: the header's search is
-            the app's search (Liquid Glass, 22 Oct 2026). */}
-        <button
-          type="button"
-          className={styles.chip}
-          aria-label="Filter chats by name"
-          onClick={() => setSearching(true)}
-        >
-          <ListFilter size={12} aria-hidden="true" />
-          Name
-        </button>
+        <div className={styles.segment}>
+          <button
+            type="button"
+            className={styles.segmentItem}
+            aria-pressed={!filter.waitingOnly}
+            onClick={() => onChange({ ...filter, waitingOnly: false })}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            className={styles.segmentItem}
+            aria-pressed={filter.waitingOnly}
+            onClick={() =>
+              onChange({ ...filter, waitingOnly: !filter.waitingOnly })
+            }
+          >
+            <Hourglass size={13} aria-hidden="true" />
+            Waiting{counts.waiting ? ` ${counts.waiting}` : ""}
+          </button>
+        </div>
         {showScopes ? (
           <label className={styles.pickChip}>
             <UserRound size={13} aria-hidden="true" />
@@ -119,17 +131,6 @@ export function ThreadFilters({
             />
           </label>
         ) : null}
-        <button
-          type="button"
-          className={styles.chip}
-          aria-pressed={filter.waitingOnly}
-          onClick={() =>
-            onChange({ ...filter, waitingOnly: !filter.waitingOnly })
-          }
-        >
-          <Hourglass size={12} aria-hidden="true" />
-          Waiting{counts.waiting ? ` ${counts.waiting}` : ""}
-        </button>
         {shown.length > 1 ? (
           <label className={styles.pickChip}>
             {filter.channel === "all" ? null : (
@@ -153,6 +154,17 @@ export function ThreadFilters({
             />
           </label>
         ) : null}
+        {/* A filter in words, not a second magnifier: the header's search is
+            the app's search (Liquid Glass, 22 Oct 2026). */}
+        <button
+          type="button"
+          className={styles.chip}
+          aria-label="Filter chats by name"
+          onClick={() => setSearching(true)}
+        >
+          <ListFilter size={13} aria-hidden="true" />
+          Name
+        </button>
       </div>
     </div>
   );

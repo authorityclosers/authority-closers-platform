@@ -44,6 +44,18 @@ export function ChannelMark({
   );
 }
 
+/**
+ * A soft tone per name (sx-redesign board pick, owner 21 Nov 2026): lead
+ * faces in the v1.90 Home tints, so two leads with the same initials
+ * (Ashwini and the workspace's "AS") still look apart.
+ */
+const TONES = ["emerald", "sky", "orange", "violet", "rose"] as const;
+export function avatarTone(name: string): (typeof TONES)[number] {
+  let sum = 0;
+  for (const letter of name) sum = (sum * 31 + letter.charCodeAt(0)) >>> 0;
+  return TONES[sum % TONES.length];
+}
+
 /** The person's initials with their channel's mark on the corner. */
 export function ChatAvatar({
   name,
@@ -55,7 +67,11 @@ export function ChatAvatar({
   size?: number;
 }) {
   return (
-    <span className={styles.chatAvatar} aria-hidden="true">
+    <span
+      className={styles.chatAvatar}
+      data-tone={avatarTone(name)}
+      aria-hidden="true"
+    >
       <Avatar name={name} size={size} />
       <ChannelMark
         channel={channel}
