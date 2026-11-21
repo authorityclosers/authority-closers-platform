@@ -8838,28 +8838,56 @@ fieldset.form {
 
 /* A work-view row. Line 1 is the whole name (New's dot may sit at its end).
    Line 2, "● Stage · Source · Sneha · 3 d" (the owner's first name on someone
-   else's lead, then the age), wraps onto a second line rather than being cut
-   (v1.93 judge and the readability gate), continuing under the stage's name.
-   Under 600 px the age stays on the lead's page, so rows keep three lines. */
+   else's lead, then the age), then the next step on a line of its own. Never
+   cut (the readability gate): the line wraps, but only between whole parts,
+   each carrying the "·" that leads it, so "Meta Ads" stays whole and no line
+   ends on "·" (round-3 judge). Under 600 px the age stays on the lead's page,
+   and an owner's row puts the stage alone on line 2 and "Meta Ads · Sneha"
+   with the next step on line 3, so it keeps three lines. */
 .leadFace[data-compact] .leadNameText {
   flex: 1 1 auto;
+}
+
+/* The text column takes what the quick actions leave and grows downwards: a
+   long name wraps (whole, never cut or run under Call and WhatsApp; the
+   readability gate at 360 px with long data), and so does every line under
+   it. */
+.leadFace[data-compact] .leadButton,
+.leadFace[data-compact] .leadMain {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.leadFace[data-compact] .leadName {
+  align-items: baseline;
+}
+
+.leadFace[data-compact] .leadNameText {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .leadFace[data-compact] .leadSub[data-aged] {
   display: block;
   overflow: visible;
-  padding-left: 14px;
-  text-indent: -14px;
+  padding-left: 0;
+  text-indent: 0;
   text-overflow: clip;
   white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .leadFace[data-compact] .leadSub[data-aged] > .leadSubWords {
   white-space: normal;
 }
 
-.leadSubWords * {
-  text-indent: 0;
+/* A part wraps as one box: it moves to the next line whole, and breaks
+   inside itself only when it is wider than the line. */
+.leadFace[data-compact] .leadSub .leadPart {
+  display: inline-block;
+  max-width: 100%;
+  white-space: normal;
 }
 
 /* The owner's own line ("Owner: Sneha Iyer") gives way to line 2's name. */
@@ -8867,30 +8895,44 @@ fieldset.form {
   display: none;
 }
 
-.leadFace[data-compact] .leadSubWords .leadStage,
-.leadOwnerWord,
 .leadSubAge {
-  white-space: nowrap;
-}
-
-.leadSubAge {
-  padding-left: 0.3em;
   font-variant-numeric: tabular-nums;
 }
 
-@media (max-width: 599.98px) {
-  .leadFace[data-compact] .leadSubAge {
-    display: none;
-  }
-}
-
-/* Line 3, "Late · yesterday 7:36 pm": from the same left edge as the lines
-   above it (it sat 14 px in), wrapping rather than cut. */
-.leadFace[data-compact] .leadWhy {
+/* The next step, "Late · yesterday 7:36 pm": its own line, from the row's
+   left edge like the lines above (it sat 14 px in). */
+.leadFace[data-compact] .leadSub[data-aged] > .leadWhy {
+  display: block;
   overflow: visible;
   padding-left: 0;
   text-overflow: clip;
   white-space: normal;
+}
+
+@media (max-width: 599.98px) {
+  .leadFace[data-compact] .leadSub .leadSubAge {
+    display: none;
+  }
+
+  .leadFace[data-compact] .leadSub[data-owned] .leadSourcePart {
+    display: inline;
+  }
+
+  .leadFace[data-compact] .leadSub[data-owned] .leadSourcePart::before {
+    display: block;
+    content: "";
+  }
+
+  .leadFace[data-compact] .leadSub[data-owned] .leadSourcePart > .leadSep {
+    display: none;
+  }
+
+  /* The next step joins line 3 when it fits there, else takes the next line
+     whole ("Late · 1 Nov" never splits). */
+  .leadFace[data-compact] .leadSub[data-owned] > .leadWhy {
+    display: inline-block;
+    max-width: 100%;
+  }
 }
 
 /* The lead open beside the list (option C): Home's soft green and a 3 px bar

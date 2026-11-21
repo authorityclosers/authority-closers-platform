@@ -317,9 +317,24 @@ const BulkSheet = dynamic(
   { ssr: false },
 );
 
+// While its code loads, the table's place shows the rows' outline, never an
+// empty card under "Show more (50 of 74)" (v1.93: a slow first load at 1440
+// showed Sort and the pager with no table between them).
 const LeadsTable = dynamic(
   () => import("./leads-table").then((m) => m.LeadsTable),
-  { ssr: false },
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className={styles.listSkeleton}
+        role="status"
+        aria-busy="true"
+        aria-label="Loading leads"
+      >
+        <LoadingRows />
+      </div>
+    ),
+  },
 );
 
 const LoadAssignSheet = dynamic(

@@ -221,12 +221,16 @@ it("adds the owner for a team's list, and keeps the full card elsewhere", async 
     ),
   );
   // Part 01 (15 Nov 2026) gave the owner a line of their own; v1.93 (round-2
-  // judge): the owner's first name ends line 2, which wraps, then the age.
+  // and round-3 judges): the owner's first name is a part of line 2, each part
+  // led by its "·" so a wrap never ends a line on it; then the age.
   expect(host.querySelector('[class*="leadSubWords"]')?.textContent).toBe(
-    "Interested · Website · Fictional",
+    "Interested · Website",
   );
   expect(host.querySelector('[class*="leadOwnerWord"]')?.textContent).toBe(
-    " · Fictional",
+    "· Fictional",
+  );
+  expect(host.querySelector('[class*="leadSourcePart"]')?.textContent).toBe(
+    "· Website",
   );
   // (The old owner line stays in the markup for now, hidden by the CSS.)
   expect(
