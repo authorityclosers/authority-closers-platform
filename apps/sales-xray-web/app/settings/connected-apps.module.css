@@ -1042,6 +1042,12 @@
   color: var(--lx-ink);
 }
 
+/* v1.92 judge round (21 Nov 2026): Instagram's near-black mark vanished on the
+   dark tile; its artwork takes the ink colour, dark in light and light in dark. */
+.cardHead > [data-brand="instagram"] svg path {
+  fill: var(--lx-ink);
+}
+
 /* Judge round (sx-redesign, 21 Nov 2026): the status chips wrap instead of
    being cut; a row shows its button or its chevron, never both; on a phone
    only the first app to connect keeps its line, so nine rows stay short. */
