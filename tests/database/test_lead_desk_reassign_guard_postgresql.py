@@ -358,6 +358,9 @@ def test_only_new_givings_move_and_never_to_someone_away(
                 # A manager switching it off and on records the new time.
                 client.cookies.set(setup.settings.session_cookie_name, setup.token)
                 team = (await client.get(f"{BASE}/team")).json()
+                # The switch records the real time, not the test clock: compare with that so the
+                # test passes at any hour (before 11:00 IST, noon - 1 h was still ahead).
+                switched = datetime.now(UTC) - timedelta(seconds=5)
                 for on in (False, True):
                     saved = await client.put(
                         f"{BASE}/settings",
@@ -375,7 +378,7 @@ def test_only_new_givings_move_and_never_to_someone_away(
                         assert row is not None
                         stored = reassign_guard.enabled_at(row.config)
                     assert (stored is not None) is on
-                    assert stored is None or stored > since
+                    assert stored is None or stored > switched
         finally:
             await setup.engine.dispose()
 
