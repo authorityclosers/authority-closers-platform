@@ -420,7 +420,9 @@ export function ProfileDetailsPanel() {
               {/* A long address goes under its name, never cut mid-word. */}
               <span className={styles.rowText}>
                 <span className={styles.rowName}>Email</span>
-                <span className={styles.rowHint}>{emailWithBreak(profile.email)}</span>
+                <span className={styles.rowHint}>
+                  {emailWithBreak(profile.email)}
+                </span>
               </span>
             </li>
             <li className={styles.row}>
