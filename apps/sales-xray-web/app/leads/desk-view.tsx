@@ -238,6 +238,7 @@ export function LeadLine({
   quietLate = false,
   onPick,
   fresh = false,
+  current = false,
   at,
   index,
   count,
@@ -267,6 +268,9 @@ export function LeadLine({
   onPick?: (row: LeadRow) => void;
   /** Just arrived: the row pulses once as it joins the list (competitor teardown 12). */
   fresh?: boolean;
+  /** The lead open beside the list (round-2 board 3, option C): marked as
+   *  the current row. */
+  current?: boolean;
 }) {
   const reachable = !!row.phone_last4;
   const {
@@ -359,6 +363,7 @@ export function LeadLine({
       data-row-key={row.lead_id}
       data-overdue={(compact ? red : row.overdue) || undefined}
       data-fresh={fresh || undefined}
+      aria-current={current ? "true" : undefined}
       {...bind}
     >
       {reachable && actions ? (

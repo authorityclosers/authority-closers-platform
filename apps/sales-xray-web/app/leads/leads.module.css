@@ -8836,69 +8836,72 @@ fieldset.form {
 /* ---------- v1.93 (round-2 board 3, option C; owner 22 Nov 2026: "Yes,
    build them"): the Leads list, its rows and its Call. ---------- */
 
-/* A work-view row. Line 1 is the whole name (New's dot may sit at its end);
-   line 2 is "● Stage · Source", the owner's first name from 600 px, then the
-   age when it fits: the stage and source never give way to it. Where they
-   fill the line (a 390 px phone) the age wraps onto a second line that is
-   clipped away; the lead's page says when it came in. */
+/* A work-view row. Line 1 is the whole name (New's dot may sit at its end).
+   Line 2, "● Stage · Source · Sneha · 3 d" (the owner's first name on someone
+   else's lead, then the age), wraps onto a second line rather than being cut
+   (v1.93 judge and the readability gate), continuing under the stage's name.
+   Under 600 px the age stays on the lead's page, so rows keep three lines. */
 .leadFace[data-compact] .leadNameText {
   flex: 1 1 auto;
 }
 
 .leadFace[data-compact] .leadSub[data-aged] {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  min-width: 0;
-  height: calc(var(--sx-text-xs) * var(--sx-leading-20));
-  height: 1lh;
-  padding-left: 0;
-  overflow: hidden;
+  display: block;
+  overflow: visible;
+  padding-left: 14px;
+  text-indent: -14px;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.leadFace[data-compact] .leadSub[data-aged] > .leadSubWords {
+  white-space: normal;
+}
+
+.leadSubWords * {
   text-indent: 0;
 }
 
-.leadSubWords {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* The owner's own line ("Owner: Sneha Iyer") gives way to line 2's name. */
+.leadFace[data-compact] .leadOwnerLine {
+  display: none;
 }
 
-.leadFace[data-compact] .leadSubWords * {
-  overflow-wrap: normal;
+.leadFace[data-compact] .leadSubWords .leadStage,
+.leadOwnerWord,
+.leadSubAge {
   white-space: nowrap;
 }
 
 .leadSubAge {
-  flex: none;
   padding-left: 0.3em;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
-.leadOwnerWord {
-  display: none;
-}
-
-@media (min-width: 600px) {
-  .leadOwnerWord {
-    display: inline;
-  }
-
-  .leadFace[data-compact] .leadOwnerLine {
+@media (max-width: 599.98px) {
+  .leadFace[data-compact] .leadSubAge {
     display: none;
   }
 }
 
-/* Line 3, "Late · yesterday 7:36 pm": one line, from the same left edge as
-   the lines above it (it sat 14 px in, under the stage's name). */
+/* Line 3, "Late · yesterday 7:36 pm": from the same left edge as the lines
+   above it (it sat 14 px in), wrapping rather than cut. */
 .leadFace[data-compact] .leadWhy {
-  overflow: hidden;
+  overflow: visible;
   padding-left: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+/* The lead open beside the list (option C): Home's soft green and a 3 px bar
+   at the row's start. */
+.leadLine[aria-current="true"] .leadFace,
+.leadLine[aria-current="true"] .leadButton:hover {
+  background: var(--sx-tone-good-soft);
+}
+
+.leadLine[aria-current="true"] .leadFace {
+  box-shadow: inset 3px 0 0 var(--sx-primary-ink);
 }
 
 /* The table's empty strip under Sort: the columns picker it held is off. */
@@ -8930,6 +8933,12 @@ fieldset.form {
     justify-content: center;
     min-width: 44px;
     padding: 0;
+  }
+
+  /* An owner's list: a long press on a row picks leads, so Select gives the
+     sort and List | Table their room (owner bug 194 keeps the switch). */
+  .listHead .listTools .selectToggle[data-held] {
+    display: none;
   }
 }
 

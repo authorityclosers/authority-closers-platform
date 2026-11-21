@@ -369,6 +369,7 @@ export function ListView({
   onCounts,
   onTable,
   besideLead = false,
+  openLead = null,
   onStepCounts,
   onViewCounts,
   pipeline = null,
@@ -447,6 +448,8 @@ export function ListView({
   onTable?: (table: boolean) => void;
   /** A lead is open beside the list on a wide screen: rows, not the table. */
   besideLead?: boolean;
+  /** That lead: its row shows as the current one (v1.93, option C). */
+  openLead?: string | null;
   /** Each of the owner's stages' count, for the Pipeline stage picker. */
   onStepCounts?: (counts: Record<string, number>) => void;
   /** Each work view's count for these filters, for the To Call / Follow-ups / All tabs. */
@@ -1293,6 +1296,7 @@ export function ListView({
           : undefined
       }
       onPick={picksHere ? startPicking : undefined}
+      current={besideLead && row.lead_id === openLead}
       compact={stage === OPENING_STAGE}
       stageWord={stageWord?.(row)}
       stageTone={stageTone?.(row)}
@@ -1429,6 +1433,9 @@ export function ListView({
               <button
                 type="button"
                 className={`${styles.statusChip} ${styles.selectToggle}`}
+                // A long press on a row starts picking too: on a phone this
+                // one gives way to the sort and List | Table (v1.93).
+                data-held={managed && !selecting ? "" : undefined}
                 aria-label={selecting ? "Cancel" : "Select"}
                 title={selecting ? "Cancel selection" : "Select leads"}
                 aria-pressed={selecting}

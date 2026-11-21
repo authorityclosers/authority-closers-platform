@@ -2505,6 +2505,7 @@ export function LeadsRoute({
                 onCounts={onCounts}
                 onTable={setTableMode}
                 besideLead={paneShown && !!shownLead}
+                openLead={paneShown ? shownLead : null}
                 onStepCounts={onStepCounts}
                 onViewCounts={onViewCounts}
                 pipeline={pipeline}

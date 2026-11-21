@@ -220,21 +220,38 @@ it("adds the owner for a team's list, and keeps the full card elsewhere", async 
       </ul>,
     ),
   );
-  // Part 01 (15 Nov 2026): line 2 is the stage and source; the owner its own
-  // line on a phone. v1.93: from 600 px the owner's first name ends line 2
-  // instead (CSS shows one or the other), and the age follows the words.
+  // Part 01 (15 Nov 2026) gave the owner a line of their own; v1.93 (round-2
+  // judge): the owner's first name ends line 2, which wraps, then the age.
   expect(host.querySelector('[class*="leadSubWords"]')?.textContent).toBe(
     "Interested · Website · Fictional",
   );
   expect(host.querySelector('[class*="leadOwnerWord"]')?.textContent).toBe(
     " · Fictional",
   );
-  expect(host.querySelector('[class*="leadOwnerLine"]')?.textContent).toBe(
-    "Owner: Fictional Seller",
-  );
+  // (The old owner line stays in the markup for now, hidden by the CSS.)
   expect(
     host.querySelector('[class*="leadSub"] > [data-lead-age]')?.textContent,
   ).toMatch(/^· /);
+  expect(
+    host.querySelector("[data-lead-row]")!.getAttribute("aria-current"),
+  ).toBeNull();
+  // The lead open beside the list is the current row (option C).
+  await act(async () =>
+    root.render(
+      <ul>
+        <LeadLine
+          row={row}
+          onOpen={() => undefined}
+          compact
+          showOwner
+          current
+        />
+      </ul>,
+    ),
+  );
+  expect(
+    host.querySelector("[data-lead-row]")!.getAttribute("aria-current"),
+  ).toBe("true");
   await act(async () =>
     root.render(
       <ul>
