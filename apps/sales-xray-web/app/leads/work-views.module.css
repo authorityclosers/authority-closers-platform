@@ -261,6 +261,20 @@
   }
 }
 
+/* A computer's Call is a 420 px pill centred at the list's foot, not a slab
+   across the table (v1.96 device polish: 730 px at 1440 over the last row);
+   the band keeps its fade and the list its room below the last row. */
+@media (min-width: 900px) {
+  .callBand {
+    display: flex;
+    justify-content: center;
+  }
+
+  .callBandButton {
+    max-width: 420px;
+  }
+}
+
 .searchRow {
   display: flex;
   gap: 8px;

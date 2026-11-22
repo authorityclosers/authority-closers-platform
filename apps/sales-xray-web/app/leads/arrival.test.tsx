@@ -126,7 +126,7 @@ it("reads an unowned new Meta lead as one status line, with its time", async () 
     ),
   );
   expect(host.querySelector('[class*="leadSubWords"]')?.textContent).toMatch(
-    /^New · Meta.* · No owner$/,
+    /^New · Meta.* · No owner · \d+ d$/,
   );
   expect(host.textContent).not.toContain("No owner yet");
   expect(host.textContent).not.toContain("Waiting for an owner");

@@ -75,8 +75,9 @@ export const MADE_WORDS: Record<ListMade, string> = {
   history: "Old leads",
 };
 export const SORT_WORDS: Record<ListSort, string> = {
-  // Says what the order does (Leads part 03).
-  next_action: "Follow-up soonest",
+  // Says what the order does (Leads part 03), short enough for a 360 px
+  // phone's "Sort: …" (v1.96 device polish: "Follow-up soon…" was cut).
+  next_action: "Due soonest",
   last_contact: "Last contact",
   name: "Name",
   created: "Newest first",

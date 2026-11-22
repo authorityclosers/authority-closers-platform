@@ -267,24 +267,23 @@ export function OutreachLine({
         </span>
         <span className={styles.words}>
           {label ? <strong>{label}: </strong> : null}
-          {/* Each part keeps its words together: a line breaks at a dot.
-              The chip rides with the last part, never on a line alone
-              (v1.96 device polish: "3 this week" dropped under the words
-              in the 1440 pane). */}
+          {/* Each part keeps its words together: a line breaks at a dot. */}
           {parts.map((part, index) => (
             <Fragment key={index}>
               {index ? " · " : null}
-              <span className={styles.part}>
-                {part}
-                {chip && index === parts.length - 1 ? (
-                  <>
-                    {"\u00a0"}
-                    <span className={styles.chip} data-verdict={guard.verdict}>
-                      {chip}
-                    </span>
-                  </>
-                ) : null}
-              </span>
+              {chip && index === parts.length - 1 ? (
+                // The last part and the chip move to a new line together
+                // (v1.96: at 1440 "3 this week" dropped under the words
+                // alone); only a part wider than the line wraps inside.
+                <span className={styles.partLast}>
+                  {part}{" "}
+                  <span className={styles.chip} data-verdict={guard.verdict}>
+                    {chip}
+                  </span>
+                </span>
+              ) : (
+                <span className={styles.part}>{part}</span>
+              )}
             </Fragment>
           ))}
         </span>

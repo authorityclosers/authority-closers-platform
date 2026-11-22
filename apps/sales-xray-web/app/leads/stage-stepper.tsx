@@ -12,13 +12,17 @@
  * Junk aren't on the path: they are under the stage's Change, above the strip
  * (Shivam's review, 17 Nov 2026). A path wider than the card slides sideways,
  * each step at least 72 dp, so no name runs into the next at large text.
+ * On a phone the strip shows three steps, the one before, the current one
+ * and the next, each a third of the card, with a fading line at an edge
+ * where more steps sit (v1.96 device polish: at 360-430 the sliding strip
+ * cut the next name mid-word, "Meetin… schedu…"). The rest are under Change.
  */
 
 import { sideScrollFades, useSideScroll } from "@ac/ui/kit";
 
 import type { Kind, StageView } from "./journey/journey-client";
 import { stageName, type Side } from "./journey/stage-look";
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, type CSSProperties } from "react";
 
 import styles from "./lead-page.module.css";
 
@@ -77,6 +81,10 @@ export function StageStepper({
   onPick: (key: string) => void;
 }) {
   const at = steps.findIndex((step) => step.key === current);
+  // The phone's three: the step before, the current one and the next (the
+  // first three, or the last three, at an end of the path).
+  const first = Math.max(0, Math.min(at - 1, steps.length - 3));
+  const last = Math.min(steps.length - 1, first + 2);
   // A path wider than the card: the current step in view, a fade at the edge
   // where more steps sit.
   // The step's own column (its offset within the strip, which is their
@@ -90,7 +98,11 @@ export function StageStepper({
     const list = ref.current;
     if (!list) return;
     const place = () => {
-      const items = Array.from(list.children) as HTMLElement[];
+      // The steps drawn (a phone hides those away from the current one): a
+      // line joins each to the one drawn before it.
+      const items = (Array.from(list.children) as HTMLElement[]).filter(
+        (item) => item.offsetParent !== null,
+      );
       const centre = (item: HTMLElement) => {
         const dot = item.querySelector<HTMLElement>("[data-step-dot]");
         return (
@@ -99,7 +111,11 @@ export function StageStepper({
         );
       };
       items.forEach((item, index) => {
-        if (index === 0) return;
+        if (index === 0) {
+          item.style.removeProperty("--line-from");
+          item.style.removeProperty("--line-span");
+          return;
+        }
         const from = centre(items[index - 1]);
         const to = centre(item);
         item.style.setProperty("--line-from", `${from - item.offsetLeft}px`);
@@ -122,14 +138,18 @@ export function StageStepper({
       // scrollable-region-focusable, v1.93 Readability Gate): Tab, then the
       // arrow keys scroll it.
       tabIndex={0}
-      style={{
-        // Each column as wide as its step's longest word and at least 72 dp
-        // (the step's own min-width), spread across the card when they fit;
-        // a longer path slides, the next step peeking (Shivam's review, 17
-        // Nov 2026: minmax(36px, min-content) never grew past 36 dp in a
-        // full strip, so the names ran into each other).
-        gridTemplateColumns: `repeat(${steps.length}, min-content)`,
-      }}
+      style={
+        {
+          // Each column as wide as its step's longest word and at least 72 dp
+          // (the step's own min-width), spread across the card when they fit;
+          // a longer path slides, the next step peeking (Shivam's review, 17
+          // Nov 2026: minmax(36px, min-content) never grew past 36 dp in a
+          // full strip, so the names ran into each other).
+          // A phone's three columns come from lead-page.module.css.
+          "--step-count": steps.length,
+          "--step-near": last - first + 1,
+        } as CSSProperties
+      }
     >
       {steps.map((step, index) => {
         const state = index < at ? "done" : index === at ? "current" : "ahead";
@@ -146,7 +166,21 @@ export function StageStepper({
           <span className={styles.stepLabel}>{stripWord(step.label)}</span>
         );
         return (
-          <li key={step.key} className={styles.step} data-state={state}>
+          <li
+            key={step.key}
+            className={styles.step}
+            data-state={state}
+            // Away from the current step: hidden on a phone. At the edge of
+            // the phone's three with more beyond it: a fading line.
+            data-far={index < first || index > last ? "" : undefined}
+            data-more={
+              index === first && first > 0
+                ? "before"
+                : index === last && last < steps.length - 1
+                  ? "after"
+                  : undefined
+            }
+          >
             {state !== "current" && movable.has(step.key) ? (
               <button
                 type="button"
