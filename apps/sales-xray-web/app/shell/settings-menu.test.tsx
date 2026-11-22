@@ -55,6 +55,14 @@ afterEach(async () => {
 
 type Props = Partial<Parameters<typeof SettingsMenu>[0]>;
 
+/** Lets the menu's own reads settle until `ready` holds (up to ~2 s). */
+async function until(ready: () => boolean) {
+  for (let tries = 0; tries < 100 && !ready(); tries++)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+}
+
 /** Signed in to a fictional organisation with this role. */
 const orgAccess = (
   role: "member" | "manager" | "owner",
@@ -275,15 +283,21 @@ it.each(["main", "news"] as const)(
       button.textContent?.includes("What's new"),
     )!;
     if (initialView === "main") {
+      // The news loads on its own (as the lead split line does): wait for it.
+      await until(() => news.textContent?.includes("1 new") === true);
       expect(news.textContent).toContain("1 new");
       expect(
         fetcher.mock.calls.some(([path]) => path === "/v1/updates/seen"),
       ).toBe(false);
       await act(async () => news.click());
     }
+    await until(() => menu.textContent?.includes("Draft") === true);
     expect(menu.textContent).toContain("Draft");
     expect(menu.textContent).toContain("Updates follow your account");
     expect(menu.textContent).toContain("A fictional improvement");
+    await until(() =>
+      fetcher.mock.calls.some(([path]) => path === "/v1/updates/seen"),
+    );
     expect(fetcher).toHaveBeenCalledWith(
       "/v1/updates/seen",
       expect.objectContaining({
@@ -293,6 +307,7 @@ it.each(["main", "news"] as const)(
     await act(async () =>
       menu.querySelector<HTMLButtonElement>("button")!.click(),
     );
+    await until(() => menu.textContent?.includes("1 new") === false);
     expect(menu.textContent).not.toContain("1 new");
   },
 );
