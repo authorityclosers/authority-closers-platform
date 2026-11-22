@@ -114,7 +114,11 @@ import {
   type LeadDetail,
   type LeadEvent,
   type LeadRow,
+  type OutreachGuard,
   type Stage,
+  heldByLimits,
+  logTouch,
+  readOutreach,
   undoResult,
 } from "./leads-client";
 import { PersonAvatar } from "../people/person-avatar";
@@ -145,6 +149,15 @@ import {
 import { chatFacts, chatOrigin } from "./chat-origin";
 import { SocialThread } from "./social-thread";
 import { WhatsAppThread } from "./whatsapp-thread";
+import {
+  OutreachLine,
+  OverrideSheet,
+  TouchLine,
+  TouchSheet,
+  canPass,
+  isHeld,
+  whyWords,
+} from "./outreach";
 import { dueWords, whyLine } from "./desk-view";
 import type { Kind, StageView } from "./journey/journey-client";
 import { stageTone as stageDot } from "./journey/stage-look";
@@ -1775,6 +1788,10 @@ export function CallOutcome({
               ))}
             </div>
           ) : null}
+          {/* Send details is a message: its counter first (v1.95). */}
+          {wrapUp && nextId === "send-details" && detail.outreach ? (
+            <OutreachLine guard={detail.outreach} />
+          ) : null}
           {wrapUp && nexts.length && otherStages.length && !stageKept ? (
             <button
               type="button"
@@ -2891,8 +2908,11 @@ export function History({
   label = "History",
   upcoming = null,
   onGenerate,
+  onTouches,
   shown,
 }: {
+  /** A touch line's Details: the lead's touch sheet (v1.95). */
+  onTouches?: () => void;
   events: LeadEvent[];
   onChanged?: (next: LeadDetail) => void;
   /** For Undo on a change an AI app made: the lead is read again after. */
@@ -3032,7 +3052,9 @@ export function History({
                 data-kind={event.kind}
                 data-at={event.at}
                 data-report={report ? "" : undefined}
-                data-opens={report ? "" : undefined}
+                data-opens={
+                  report || (event.touch && onTouches) ? "" : undefined
+                }
                 data-missed={
                   event.direction === "missed" || event.direction === "rejected"
                     ? true
@@ -3063,6 +3085,9 @@ export function History({
                     {words ? `${words} · ` : null}
                     <time dateTime={event.at}>{stamp(event.at)}</time>
                   </span>
+                  {event.touch ? (
+                    <TouchLine touch={event.touch} actor={event.actor_name} />
+                  ) : null}
                   {event.kind === "call" ? (
                     <AutoCaptureState eventId={event.event_id} />
                   ) : null}
@@ -3081,6 +3106,15 @@ export function History({
                   <Link className={page.tlAction} href={callHref(report)}>
                     View report
                   </Link>
+                ) : event.touch && onTouches ? (
+                  <button
+                    type="button"
+                    className={page.tlAction}
+                    data-sx-feature="outreach_touch_details"
+                    onClick={onTouches}
+                  >
+                    Details
+                  </button>
                 ) : generate ? (
                   <button
                     type="button"
@@ -4212,6 +4246,52 @@ export function LeadCard({
   const [more, setMore] = useState(false);
   // Give to a colleague, from More (a seller, when the workspace allows it).
   const [giving, setGiving] = useState(false);
+  // The lead's touches (v1.95 outreach log), from the counter or the history.
+  const [touching, setTouching] = useState(false);
+  // An email past the limits, a manager's "Send anyway" first.
+  const [emailHold, setEmailHold] = useState<OutreachGuard | null>(null);
+  const sendEmail = () => {
+    if (!detail.email) return;
+    window.location.href = `mailto:${detail.email}`;
+    // Every message is tracked: the email opened in the mail app is a touch.
+    void logTouch(lead.lead_id, {
+      channel: "email",
+      via: "app_link",
+      content_kind: "text",
+    }).then(
+      () => void readLead(lead.lead_id).then(onChanged, () => undefined),
+      (problem: unknown) =>
+        heldByLimits(problem)
+          ? notify({
+              id: "why-email",
+              tone: "info",
+              title: (problem as Error).message,
+            })
+          : undefined,
+    );
+  };
+  const emailLead = async () => {
+    let guard: OutreachGuard | null = null;
+    try {
+      guard = await readOutreach(lead.lead_id, "email");
+    } catch {
+      guard = null;
+    }
+    if (guard && isHeld(guard)) {
+      if (canPass(guard, detail.can_assign)) {
+        setEmailHold(guard);
+        return;
+      }
+      notify({
+        id: "why-email",
+        tone: "info",
+        title: "Held by the outreach limits",
+        message: whyWords(guard) ?? undefined,
+      });
+      return;
+    }
+    sendEmail();
+  };
   // Give sits in the row when there is someone to give it to (give-lead.tsx).
   const canGive =
     !detail.can_assign &&
@@ -4789,6 +4869,16 @@ export function LeadCard({
             </div>
           </div>
         </div>
+        {/* The outreach counter (v1.95): how often we reached them, and
+            whether a message may go now; Touches opens every one. */}
+        {detail.outreach ? (
+          <div className={page.outreachRow}>
+            <OutreachLine
+              guard={detail.outreach}
+              onOpen={() => setTouching(true)}
+            />
+          </div>
+        ) : null}
         {stageBlock}
       </section>
       {canMove ? (
@@ -4995,14 +5085,15 @@ export function LeadCard({
               </li>
               <li>
                 {detail.email ? (
-                  <a
+                  <button
+                    type="button"
                     className={page.moreItem}
-                    href={`mailto:${detail.email}`}
-                    onClick={() => setMore(false)}
+                    data-sx-feature="outreach_email"
+                    onClick={() => afterMore(() => void emailLead())}
                   >
                     <Mail size={20} aria-hidden="true" />
                     Email
-                  </a>
+                  </button>
                 ) : (
                   <button
                     type="button"
@@ -5097,6 +5188,26 @@ export function LeadCard({
           )}
         </ul>
       </Picker>
+      <TouchSheet
+        open={touching}
+        leadId={lead.lead_id}
+        name={lead.name}
+        guard={detail.outreach ?? null}
+        onClose={() => setTouching(false)}
+      />
+      {emailHold ? (
+        <OverrideSheet
+          open
+          leadId={lead.lead_id}
+          name={lead.name}
+          guard={emailHold}
+          onClose={() => setEmailHold(null)}
+          onGranted={() => {
+            setEmailHold(null);
+            sendEmail();
+          }}
+        />
+      ) : null}
       {!detail.can_assign && detail.can_give ? (
         <GiveLeadSheet
           detail={detail}
@@ -5251,8 +5362,13 @@ export function LeadCard({
           org={setup.org}
           preset={messaging?.preset}
           channel={messaging?.channel}
+          manager={detail.can_assign}
+          outreach={detail.outreach ?? null}
           onClose={() => setMessaging(null)}
           onLogged={onChanged}
+          onHeld={() =>
+            void readLead(lead.lead_id).then(onChanged, () => undefined)
+          }
         />
       ) : null}
       {recordingNow ? recording : null}
@@ -5274,6 +5390,7 @@ export function LeadCard({
           events={detail.events}
           onChanged={onChanged}
           leadId={lead.lead_id}
+          onTouches={() => setTouching(true)}
           chats={chats}
           focusAt={focusAt}
           upcoming={
@@ -5324,8 +5441,13 @@ export function LeadCard({
 
       <WhatsAppThread
         leadId={lead.lead_id}
+        name={lead.name}
+        manager={detail.can_assign}
         canSend={detail.can_edit}
         shared={{ chat: conversations.wa }}
+        onChanged={() =>
+          void readLead(lead.lead_id).then(onChanged, () => undefined)
+        }
       />
       <SocialThread
         leadId={lead.lead_id}

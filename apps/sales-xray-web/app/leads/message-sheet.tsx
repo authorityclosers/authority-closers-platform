@@ -11,18 +11,22 @@
 import { MessageCircle, MessageSquareText, Send } from "lucide-react";
 import { createContext, useState } from "react";
 
+import { notify } from "../notice-center";
 import { ActionSheet } from "./action-sheet";
 import {
   displayPhone,
   fillTemplate,
   firstName,
+  heldByLimits,
   logMessage,
   smsHref,
   whatsappHref,
   type Channel,
   type LeadDetail,
   type MessageTemplate,
+  type OutreachGuard,
 } from "./leads-client";
+import { SendGuard, useOutreach } from "./outreach";
 import { buzz } from "./native-phone";
 import styles from "./message-sheet.module.css";
 
@@ -49,9 +53,18 @@ export function MessageSheet({
   org,
   preset,
   channel: initialChannel = "whatsapp",
+  manager = false,
+  outreach = null,
   onClose,
   onLogged,
+  onHeld,
 }: {
+  /** An owner, admin or manager: may send past a hold once, with a reason. */
+  manager?: boolean;
+  /** The lead's own counter (its main channel), shown until this channel's is read. */
+  outreach?: OutreachGuard | null;
+  /** The send was held by the outreach limits: read the lead again. */
+  onHeld?: () => void;
   open: boolean;
   target: MessageTarget | null;
   templates: MessageTemplate[];
@@ -80,6 +93,12 @@ export function MessageSheet({
   const [text, setText] = useState(() => fill(first));
   const chosen = templates.find((template) => template.key === picked);
   const edited = !!chosen && text.trim() !== fill(chosen).trim();
+  // The counter for this channel before the send (v1.95): read when it opens.
+  const { guard, reload } = useOutreach(
+    open && target ? target.leadId : null,
+    channel,
+    outreach,
+  );
 
   if (!target) return null;
   const href =
@@ -95,7 +114,17 @@ export function MessageSheet({
       edited: edited || !picked,
     })
       .then((next) => onLogged?.(next))
-      .catch(() => undefined);
+      .catch((problem: unknown) => {
+        // Held by the outreach limits after all (it changed meanwhile).
+        if (!heldByLimits(problem)) return;
+        notify({
+          id: "outreach-held",
+          tone: "info",
+          title: (problem as Error).message,
+        });
+        reload();
+        onHeld?.();
+      });
     // Leave the sheet up for a moment, so coming back shows where you were.
     window.setTimeout(onClose, 400);
   };
@@ -158,24 +187,32 @@ export function MessageSheet({
             onChange={(event) => setText(event.target.value)}
           />
         </label>
-        <a
-          className={styles.send}
-          data-channel={channel}
-          href={href}
-          target={channel === "whatsapp" ? "_blank" : undefined}
-          rel="noreferrer"
-          aria-disabled={!text.trim() || undefined}
-          onClick={(event) => {
-            if (!text.trim()) {
-              event.preventDefault();
-              return;
-            }
-            sent();
-          }}
+        <SendGuard
+          leadId={target.leadId}
+          name={target.name}
+          guard={guard}
+          manager={manager}
+          onPassed={reload}
         >
-          <Send size={18} aria-hidden="true" />
-          {channel === "whatsapp" ? "Open WhatsApp" : "Open Messages"}
-        </a>
+          <a
+            className={styles.send}
+            data-channel={channel}
+            href={href}
+            target={channel === "whatsapp" ? "_blank" : undefined}
+            rel="noreferrer"
+            aria-disabled={!text.trim() || undefined}
+            onClick={(event) => {
+              if (!text.trim()) {
+                event.preventDefault();
+                return;
+              }
+              sent();
+            }}
+          >
+            <Send size={18} aria-hidden="true" />
+            {channel === "whatsapp" ? "Open WhatsApp" : "Open Messages"}
+          </a>
+        </SendGuard>
         <p className={styles.hint}>
           It opens in your own{" "}
           {channel === "whatsapp" ? "WhatsApp" : "Messages"} app with the text

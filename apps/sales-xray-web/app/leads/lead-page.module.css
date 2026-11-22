@@ -1266,3 +1266,10 @@ section.pane {
 .stepper .step[data-state="current"] .stepDot {
   margin-bottom: -2px;
 }
+
+/* The outreach counter (v1.95): the header's full width, under the name,
+   the follow-up and the tags, a hairline above it. */
+.outreachRow {
+  padding-top: 12px;
+  border-top: 1px solid var(--sx-hairline);
+}
