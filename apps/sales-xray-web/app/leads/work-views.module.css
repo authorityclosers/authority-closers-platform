@@ -227,8 +227,10 @@
     padding-inline: 16px;
   }
 
+  /* The band's 72 px and its 32 px fade (v1.93.1, leads.module.css
+     .listBand), so the last row scrolls fully clear of both. */
   .splitList {
-    padding-bottom: 80px;
+    padding-bottom: 112px;
   }
 }
 
@@ -696,13 +698,13 @@
     90deg,
     var(--less, black),
     black 28px,
-    black calc(100% - 48px),
+    black calc(100% - 72px),
     transparent
   );
 }
 
 .headStage [role="group"]::after {
-  width: 40px;
+  width: 64px;
 }
 
 /* The chosen work view's bar in Home's green: deep in light, its mint ink in

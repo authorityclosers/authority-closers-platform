@@ -9000,8 +9000,28 @@ fieldset.form {
           var(--sx-end-hold, 0px)
         )
     );
-    margin-top: 8px;
+    margin-top: 32px;
   }
+}
+
+/* v1.93.1 (owner, 22 Nov 2026): the list ends cleanly at the docked Call, as
+   the lead page does: a 32 px fade into the page above the band, so a row
+   passing under it fades out instead of being sliced; the list keeps room
+   for band and fade (work-views.module.css .splitList), so its last row
+   scrolls fully clear. */
+.listBand[data-call-band]::before {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: 32px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--sx-paper) 0%, transparent),
+    var(--sx-paper)
+  );
+  content: "";
+  pointer-events: none;
 }
 
 /* The list row's tools in ink, never teal (turquoise in dark; v1.93): Select's
