@@ -22,6 +22,8 @@ import {
   analysisMinutesOut,
   minutesBlockedReason,
   minutesOutNotice,
+  minutesLimitError,
+  ADD_MINUTES_HREF,
   remainingAllowanceLabel,
 } from "./acquisition-studio";
 import { AcquisitionError } from "./acquisition-client";
@@ -2107,6 +2109,8 @@ it("says minutes ran out in New analysis's dock on a phone, never a corner card 
     timeout: 0,
     title: "Get more analysis minutes",
   });
+  // Issue 243: one clear step to more minutes.
+  expect(web.action?.label).toBe("Get more minutes");
   web.action?.run();
   expect(seePlans).toHaveBeenCalledOnce();
   const play = minutesOutNotice(false, seePlans);
@@ -4020,4 +4024,17 @@ it("says call analysis isn't on yet where no minutes were ever given, never 'exh
       "member",
     ),
   ).toBeNull();
+});
+
+it("knows the minutes limit, and sends Get more minutes to Plan & billing's Add minutes (issue 243)", () => {
+  expect(ADD_MINUTES_HREF).toBe("/settings/plan#add-minutes");
+  expect(
+    minutesLimitError(
+      new AcquisitionError(403, "trial_allowance_insufficient"),
+    ),
+  ).toBe(true);
+  expect(minutesLimitError(new AcquisitionError(403, "plan_permission"))).toBe(
+    false,
+  );
+  expect(minutesLimitError("Something else")).toBe(false);
 });

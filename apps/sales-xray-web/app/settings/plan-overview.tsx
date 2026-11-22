@@ -145,6 +145,13 @@ export function PlanOverview({
     .sort((a, b) => b.used_seconds - a.used_seconds);
   const latest = documents?.[0] ?? null;
 
+  // "Get more minutes" (a call report's limit, issue 243) lands here: the card
+  // comes into view once the top-up is read.
+  useEffect(() => {
+    if (!topUp || window.location.hash !== "#add-minutes") return;
+    document.getElementById("add-minutes")?.scrollIntoView({ block: "center" });
+  }, [topUp]);
+
   const heroButton =
     low && topUp ? (
       <button
@@ -261,7 +268,10 @@ export function PlanOverview({
         ) : null}
 
         {topUp ? (
-          <div className={`${family.card} ${family.row} ${styles.rowCard}`}>
+          <div
+            id="add-minutes"
+            className={`${family.card} ${family.row} ${styles.rowCard}`}
+          >
             <span className={family.tile}>
               <Plus aria-hidden="true" />
             </span>
