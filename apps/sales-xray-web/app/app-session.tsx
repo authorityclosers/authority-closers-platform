@@ -68,7 +68,10 @@ export function isShellRoute(pathname: string | null) {
   const personId = route.match(/^\/organisation\/people\/([^/]+)$/)?.[1];
   return (
     SHELL_ROUTES.has(route) ||
-    /^\/settings\/[a-z-]+$/.test(route) ||
+    // A section (/settings/team) or a group's page (/settings/group/leads):
+    // both inside the signed-in frame (v1.94, owner 22 Nov 2026: the group
+    // page showed the signed-out shell, Home / New / Sign in).
+    /^\/settings\/(group\/)?[a-z-]+$/.test(route) ||
     callIdFromPath(route) !== null ||
     (prospectId !== undefined && UUID_RE.test(prospectId)) ||
     (personId !== undefined && UUID_RE.test(personId))

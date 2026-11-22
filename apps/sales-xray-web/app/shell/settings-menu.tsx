@@ -31,6 +31,7 @@ import {
   ListChecks,
   LogOut,
   MailOpen,
+  Percent,
   PhoneCall,
   Rows3,
   Settings2,
@@ -71,6 +72,11 @@ import {
 import { notify } from "../notice-center";
 import { AccountAvatarImage } from "../speaker-avatar";
 import { sectionById } from "../settings/settings-sections";
+import {
+  LEAD_SPLIT_HREF,
+  SPLIT_LINE_UNKNOWN,
+  useLeadSplitLine,
+} from "../settings/lead-split-line";
 import { ActionList, ActionRow } from "../ui/kit";
 import { Sheet, SHEET_PHONE_QUERY } from "../ui/sheet";
 import { useShellUpdates } from "./updates-store";
@@ -237,6 +243,10 @@ export function SettingsMenu({
   // Plan & usage only for whoever pays (persona QA, 31 Oct 2026: a seller saw
   // prices and Top up); hidden while your role is unknown.
   const pays = useCanHere()("billing.view") === true;
+  // Who gets new leads, one tap from the sheet for whoever may manage leads
+  // (v1.94, owner 22 Nov 2026); read only while the phone sheet is open.
+  const managesLeads = useCanHere()("leads.manage") === true && organisation;
+  const splitNote = useLeadSplitLine(open && phone && managesLeads);
   // The phone app's own setup checklist (calls, alerts, recordings), once its
   // first run has taken the bar off Leads (owner, 19 Oct). Read after
   // hydration, so the first paint matches the server's.
@@ -492,11 +502,20 @@ export function SettingsMenu({
         </button>
       </div>
 
-      {phone && organisation && insights ? (
+      {phone && organisation && (insights || managesLeads) ? (
         <section className={styles.group} aria-label="Organisation settings">
           <h3 className={styles.heading}>Organisation</h3>
           <ActionList label="Organisation settings">
-            {theirs.map((item) => (
+            {managesLeads ? (
+              <ActionRow
+                icon={<Percent size={18} />}
+                title="Who gets new leads"
+                note={splitNote ?? SPLIT_LINE_UNKNOWN}
+                href={LEAD_SPLIT_HREF}
+                onClick={onClose}
+              />
+            ) : null}
+            {(insights ? theirs : []).map((item) => (
               <ActionRow
                 key={item.href}
                 icon={item.icon}

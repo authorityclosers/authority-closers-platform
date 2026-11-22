@@ -328,7 +328,7 @@ export const GROUP_SLUG: Record<SettingsGroup, string> = {
 /** One short line under a group's name when nothing better is known. */
 export const GROUP_LINE: Record<SettingsGroup, string> = {
   Team: "People and what they can do",
-  Leads: "Rules, stages and sources",
+  Leads: "Lead split, rules, stages and sources",
   "Calls & phones": "Phones, AI on calls, sounds",
   Connections: "Apps, AI replies, developers",
   Company: "Name, logo and details",
