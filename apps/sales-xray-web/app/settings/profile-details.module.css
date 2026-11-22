@@ -32,7 +32,7 @@
   border: 2px solid var(--sx-surface);
   border-radius: 50%;
   background: var(--lx-home-primary);
-  color: #fff;
+  color: var(--lx-film-text);
 }
 
 .phoneNote {

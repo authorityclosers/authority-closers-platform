@@ -9,9 +9,9 @@
 .shell {
   --lx-teal: var(--lx-home-primary);
   --lx-teal-hover: color-mix(in oklab, var(--lx-home-primary) 86%, black);
-  --lx-on-teal: #fff;
+  --lx-on-teal: var(--lx-film-text);
   --sx-accent: var(--lx-home-primary);
-  --sx-accent-ink: #fff;
+  --sx-accent-ink: var(--lx-film-text);
   --sx-accent-soft: color-mix(
     in oklab,
     var(--lx-home-primary) 12%,
