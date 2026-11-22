@@ -239,3 +239,16 @@
   font-size: var(--sx-text-sm);
   font-weight: 600;
 }
+
+/* The sheet's one main button in the family's deep green (never teal), light
+   and dark. Doubled to outweigh the kit's primary. */
+.green.green {
+  border-color: transparent;
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
+.green.green:disabled {
+  opacity: 0.5;
+}

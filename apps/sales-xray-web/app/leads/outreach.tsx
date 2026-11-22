@@ -370,6 +370,7 @@ export function OverrideSheet({
           </Button>
           <Button
             variant="primary"
+            className={styles.green}
             disabled={!reason || needsText || busy}
             data-sx-feature="outreach_send_anyway"
             onClick={() => void grant()}
