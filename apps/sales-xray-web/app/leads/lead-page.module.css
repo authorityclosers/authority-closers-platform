@@ -1225,12 +1225,25 @@ section.pane {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-bottom: 8px;
+  /* Room after the last card: it scrolls fully clear of the band. */
+  padding-bottom: 16px;
   scroll-padding-bottom: 24px;
 }
 
 .paneDock {
   margin-top: 8px;
+}
+
+/* The band takes taps only on its own buttons and links (v1.94 Readability
+   Gate, "covered" at 1280: a control cut off at the foot of the lead's box,
+   "See more", had its middle under the band's empty top). Taps on the band's
+   bare edge reach nothing either way: the lead's box ends where it begins. */
+.paneDock {
+  pointer-events: none;
+}
+
+.paneDock :is(a, button, input, select, textarea, [role="button"]) {
+  pointer-events: auto;
 }
 
 /* The sliding stage strip takes the keyboard's focus: a visible ring. */
