@@ -978,16 +978,27 @@
   white-space: nowrap;
 }
 
+/* The place keeps a floor (about eight letters, or half the line); the chip
+   gives way first, its name ending in "…" beside "+N" (v1.94 judge). */
 .nameWhere {
   flex: 0 1 auto;
-  min-width: 0;
+  min-width: min(8ch, 50%);
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Here the chip stays whole and the place gives way (the list's line-3
-   floor for a chip does not apply in a table cell). */
+/* The list's line-3 floor for a chip does not apply in a table cell. */
 .name small .nameTags {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   min-width: 0;
+}
+
+/* A tagged row's name button takes the whole cell, so the place and its
+   chip use the column's width, not just the name's. */
+.nameCell .name:has(> small[data-tagged]) {
+  flex: 1 1 auto;
+}
+
+.name small[data-tagged] {
+  align-self: stretch;
 }

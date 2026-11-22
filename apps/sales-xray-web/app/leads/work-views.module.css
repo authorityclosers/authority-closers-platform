@@ -686,6 +686,18 @@
   font-weight: 500;
 }
 
+/* A date or a tag picked reads clearly ON (v1.94 judge): Home's deep green
+   ink at 600 on the green wash, edged in the same green; in dark the ink is
+   the full mint. */
+.headStage
+  [role="group"]
+  > [data-variant="chip"]:not(:first-child)
+  > button:not([data-current]) {
+  border: 1px solid var(--sx-primary-ink);
+  color: var(--sx-primary-ink);
+  font-weight: 600;
+}
+
 /* The row stops where the pinned end (List | Table, Filter) starts, so its
    own fade shows instead of a chip chopped under them, and the last chip
    scrolls fully clear of the fade. */
@@ -693,12 +705,15 @@
   margin-right: 24px;
 }
 
+/* Only while chips sit past the right edge, and only its last 12 px, so a
+   chip that fits (the tag filter, on or off) is never washed out (v1.94
+   judge). */
 .headStage [role="group"][data-more] {
   mask-image: linear-gradient(
     90deg,
     var(--less, black),
     black 28px,
-    black calc(100% - 72px),
+    black calc(100% - 12px),
     transparent
   );
 }

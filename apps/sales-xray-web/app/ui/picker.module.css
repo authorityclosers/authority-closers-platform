@@ -379,6 +379,11 @@
   border-top: 1px solid var(--sx-line);
 }
 
+/* The footer takes its own room: the last choice never hides under it. */
+.pop:has(> .footer) {
+  max-height: min(464px, 66vh);
+}
+
 .pop .footer {
   position: sticky;
   bottom: -6px;

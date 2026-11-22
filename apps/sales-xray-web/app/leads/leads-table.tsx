@@ -317,8 +317,10 @@ const WIDE_WIDTH: Record<Exclude<Column, "name">, number> = {
   source: 100,
   // "Yesterday" in bold (69 px).
   next: 100,
-  // "Out of coverage · 6 calls" whole (v1.93: "Did not pick · 1 …" at 1440).
-  last: 208,
+  // "Did not pick · 10 calls" on one line, a longer answer on two (v1.94
+  // judge: 40 px went to the name, whose tags squeezed the place to "Ko…" at
+  // 1440; it was 208 for "Out of coverage · 6 calls" on one line, v1.93).
+  last: 168,
   age: 84,
   contact: 108,
   reason: 124,
