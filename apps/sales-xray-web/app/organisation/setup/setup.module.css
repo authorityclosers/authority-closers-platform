@@ -421,6 +421,18 @@
   font-weight: 600;
   white-space: nowrap;
 }
+/* A whole sentence in a status pill wraps on a phone (sx-tutorials, 23 Nov
+   2026: "Only Meta test leads so far…" was clipped at 390 px). */
+.statusLong {
+  max-width: 100%;
+  padding-block: 4px;
+  border-radius: 12px;
+  line-height: var(--sx-leading-16);
+  white-space: normal;
+}
+.statusLong::before {
+  flex: none;
+}
 .status::before {
   content: "";
   width: 7px;

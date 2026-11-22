@@ -183,7 +183,11 @@ export function OrganisationSources() {
           </button>
         </div>
         {configured && testOnly(pages) ? (
-          <span className={styles.status} data-tone="warn" role="status">
+          <span
+            className={`${styles.status} ${styles.statusLong}`}
+            data-tone="warn"
+            role="status"
+          >
             Only Meta test leads so far: no real form has sent a lead yet
           </span>
         ) : null}
