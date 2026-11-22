@@ -16,7 +16,7 @@ Gmail on the Mac) log what they send here and ask the same guard the app's send 
                                        (outreach:write)
 - POST   /outreach/opt-outs            record a STOP (outreach:write)
 - GET    /outreach/opt-outs?since=     the workspace's STOPs, so every engine honours one said
-                                       anywhere (outreach:read)
+                                       anywhere (outreach:read); since: a time, or next_since
 - GET    /outreach/touches?phone=|email=|lead_id=&since=&cursor=
                                        one recipient's touches (outreach:read)
 
@@ -619,6 +619,13 @@ async def log_touch(reader: Reader, body: TouchBody) -> tuple[dict[str, Any], in
     person_id, automation = _person(call, body.by)
     sha = _request_sha(body)
     found = await _existing(call, body)
+    if found is not None and found.status == "expired":
+        # A late send after its hold lapsed is a touch of its own, never a duplicate of the
+        # lapsed hold (PR #663 review): the lapsed row gives up the client_ref it kept.
+        if body.client_ref is not None and found.client_ref == body.client_ref:
+            found.client_ref = None
+            await call.reader.session.flush()
+        found = None
     if found is not None and found.status != "queued":
         return _duplicate(call, found, sha, body), 200
     reservation = await _reservation(call, body, found)
@@ -629,7 +636,15 @@ async def log_touch(reader: Reader, body: TouchBody) -> tuple[dict[str, Any], in
     if reservation is not None:
         if lead is not None and lead.id != reservation.lead_id:
             raise ApiError(409, "idempotency_mismatch", "That reservation is for someone else.")
-        lead = await call.desk._lead(reservation.lead_id) if lead is None else lead
+        if lead is None:
+            # An address no lead has is not the reserved lead's (PR #663 review): the send
+            # must name the person it held a place for.
+            lead = await call.desk._lead(reservation.lead_id)
+            same = (phone is not None and lead.phone == phone) or (
+                email is not None and (lead.email or "").lower() == email
+            )
+            if not same:
+                raise ApiError(409, "idempotency_mismatch", "That reservation is for someone else.")
     if lead is None:
         lead = await _create(call, body.lead, body.to, phone, email)
         created = lead is not None
@@ -907,9 +922,22 @@ def _since(raw: str | None) -> datetime | None:
     return at
 
 
+def _opt_out_cursor(raw: str | None) -> tuple[datetime | None, UUID | None]:
+    """``since`` is a time, or the ``next_since`` of the page before: "<time>|<event id>",
+    so a page that ends inside a group of STOPs at the same moment skips none of them
+    (PR #663 review)."""
+    if raw and "|" in raw:
+        at, _, ident = raw.rpartition("|")
+        try:
+            return _since(at), UUID(ident)
+        except ValueError:
+            raise ApiError(422, "bad_time", "Pass next_since back as it came.") from None
+    return _since(raw), None
+
+
 async def opt_outs(reader: Reader, since: str | None) -> dict[str, Any]:
     await _key_only(reader, READ)
-    after = _since(since)
+    after, after_id = _opt_out_cursor(since)
     marker = or_(
         LeadEvent.data[outreach.WHATSAPP_OPT_IN].as_string() == "false",
         LeadEvent.data[outreach.OPT_OUT].as_string().is_not(None),
@@ -921,7 +949,14 @@ async def opt_outs(reader: Reader, since: str | None) -> dict[str, Any]:
         .order_by(LeadEvent.created_at, LeadEvent.id)
         .limit(OPT_OUT_PAGE)
     )
-    if after is not None:
+    if after is not None and after_id is not None:
+        query = query.where(
+            or_(
+                LeadEvent.created_at > after,
+                and_(LeadEvent.created_at == after, LeadEvent.id > after_id),
+            )
+        )
+    elif after is not None:
         query = query.where(LeadEvent.created_at > after)
     rows = (await reader.session.execute(query)).all()
     items = []
@@ -939,9 +974,10 @@ async def opt_outs(reader: Reader, since: str | None) -> dict[str, Any]:
                 "at": event.created_at.isoformat(),
             }
         )
+    last = rows[-1][0] if len(rows) == OPT_OUT_PAGE else None
     return {
         "opt_outs": items,
-        "next_since": items[-1]["at"] if len(items) == OPT_OUT_PAGE else None,
+        "next_since": f"{last.created_at.isoformat()}|{last.id}" if last is not None else None,
     }
 
 
