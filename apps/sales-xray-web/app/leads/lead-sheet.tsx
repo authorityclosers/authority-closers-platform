@@ -659,32 +659,147 @@ function inTwoDays(now: Date = new Date()): Date {
   return at;
 }
 
+/** The team's hours as the after-call screen reads them (the lead's
+ *  ``work_hours``): days (0 is Monday), "HH:MM" start and end, and their clock. */
+export type TeamHours = {
+  days: number[];
+  start: string;
+  end: string;
+  timezone?: string;
+};
+
+/** No hours set: the common working day, every day, in the phone's own clock
+ *  (v1.93's rule, kept as the fallback). */
+const COMMON_DAY: TeamHours = {
+  days: [0, 1, 2, 3, 4, 5, 6],
+  start: "09:30",
+  end: "19:30",
+};
+
+/** A moment's wall clock in a time zone (the phone's own when none). */
+function wallClock(at: Date, timeZone?: string) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      weekday: "short",
+    })
+      .formatToParts(at)
+      .map((part) => [part.type, part.value]),
+  );
+  const weekday = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(
+    parts.weekday,
+  );
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    minutes: Number(parts.hour) * 60 + Number(parts.minute),
+    weekday,
+  };
+}
+
+/** The moment a wall clock (a date, then minutes into it) is in a time zone. */
+function fromWallClock(
+  year: number,
+  month: number,
+  day: number,
+  minutes: number,
+  timeZone?: string,
+): Date {
+  const wanted = Date.UTC(year, month - 1, day, 0, minutes);
+  let at = wanted;
+  for (let round = 0; round < 2; round += 1) {
+    const seen = wallClock(new Date(at), timeZone);
+    const got = Date.UTC(seen.year, seen.month - 1, seen.day, 0, seen.minutes);
+    at += wanted - got;
+  }
+  return new Date(at);
+}
+
+const clockMinutes = (value: string) => {
+  const [hours, minutes] = value.split(":").map(Number);
+  return (hours ?? 0) * 60 + (minutes ?? 0);
+};
+
+/**
+ * The first moment from ``at`` the team works (v1.93.1, owner 22 Nov 2026: the
+ * team's real hours, days off skipped, in the team's clock): ``at`` itself when
+ * it is inside the hours, else the next open day's 10:00, or its opening when
+ * that is later (never before it opens).
+ */
+export function inTeamHours(at: Date, hours: TeamHours | null = null): Date {
+  const team = hours?.days.length ? hours : null;
+  const day = team ?? COMMON_DAY;
+  const zone = team ? (team.timezone ?? "Asia/Kolkata") : undefined;
+  const opens = clockMinutes(day.start);
+  const closes = clockMinutes(day.end);
+  const here = wallClock(at, zone);
+  if (
+    day.days.includes(here.weekday) &&
+    here.minutes >= opens &&
+    here.minutes <= closes
+  )
+    return at;
+  const slot = 10 * 60 > opens && 10 * 60 < closes ? 10 * 60 : opens;
+  for (let ahead = 0; ahead <= 7; ahead += 1) {
+    const date = new Date(
+      Date.UTC(here.year, here.month - 1, here.day + ahead),
+    );
+    const weekday = (date.getUTCDay() + 6) % 7;
+    if (!day.days.includes(weekday)) continue;
+    const begins = fromWallClock(
+      date.getUTCFullYear(),
+      date.getUTCMonth() + 1,
+      date.getUTCDate(),
+      slot,
+      zone,
+    );
+    if (begins.getTime() > at.getTime()) return begins;
+  }
+  return at;
+}
+
+/** A time for the follow-up field: the Tomorrow chip's own when it is that. */
+function asPick(at: Date, now: Date): { pick: Pick; custom: string } {
+  const tomorrow = nextCallTime("morning", now);
+  return {
+    pick: at.getTime() === tomorrow.getTime() ? "morning" : "custom",
+    custom: localInputValue(at),
+  };
+}
+
 /**
  * A missed call's next try, chosen for the seller and sent as the follow-up
- * (v1.93 judge round 3: the desk's own retry, 1 hour or a day on, fell at 4 am):
- * the desk's gap, kept when it lands in the working day (9:30 am to 7:30 pm),
- * else the next 10:00 am. A seller's screen can't read the team's own hours
- * (managers only), so the working day is the common one.
+ * (v1.93 judge round 3: the desk's own retry fell at 4 am; v1.93.1: in the
+ * team's real hours). The desk's gap (1 hour the first time, then a day) when
+ * it lands inside the hours, else the next open slot (``inTeamHours``).
  */
 export function daytimeRetry(
   attempts: number,
   now: Date = new Date(),
+  hours: TeamHours | null = null,
 ): { pick: Pick; custom: string } {
   const gapHours = attempts ? 24 : 1;
   const at = new Date(now.getTime() + gapHours * 60 * 60 * 1000);
   at.setSeconds(0, 0);
-  const minutes = at.getHours() * 60 + at.getMinutes();
-  if (minutes >= 9 * 60 + 30 && minutes <= 19 * 60 + 30)
-    return gapHours === 1
-      ? { pick: "hour", custom: localInputValue(at) }
-      : { pick: "custom", custom: localInputValue(at) };
-  const ten = new Date(at);
-  if (minutes > 19 * 60 + 30) ten.setDate(ten.getDate() + 1);
-  ten.setHours(10, 0, 0, 0);
-  const tomorrow = nextCallTime("morning", now);
-  return ten.getTime() === tomorrow.getTime()
-    ? { pick: "morning", custom: localInputValue(ten) }
-    : { pick: "custom", custom: localInputValue(ten) };
+  const chosen = inTeamHours(at, hours);
+  if (chosen.getTime() === at.getTime() && gapHours === 1)
+    return { pick: "hour", custom: localInputValue(at) };
+  return asPick(chosen, now);
+}
+
+/** After a talk, the next call: tomorrow 10:00, moved into the team's hours. */
+export function talkedNext(
+  now: Date = new Date(),
+  hours: TeamHours | null = null,
+): { pick: Pick; custom: string } {
+  return asPick(inTeamHours(nextCallTime("morning", now), hours), now);
 }
 
 /** "Mon, 23 Nov · 10:00 am": the follow-up field's words. */
@@ -900,22 +1015,42 @@ export function CallOutcome({
   const [step, setStep] = useState<string | null>(
     talkedFirst && firstNext ? firstNext.step : lastStep,
   );
-  const [next, setNext] = useState<Pick>("morning");
+  // The team's hours, read on the lead (v1.93.1): the wrap-up's next try falls
+  // in them, skipping days off; none set, the common working day.
+  const teamHours = detail.work_hours ?? null;
+  // After a talk: tomorrow 10:00, moved into the hours (the Tomorrow chip when
+  // it stays there).
+  const [firstTalked] = useState(() =>
+    wrapUp ? talkedNext(new Date(), teamHours) : null,
+  );
+  const [next, setNext] = useState<Pick>(firstTalked?.pick ?? "morning");
   // The wrap-up chooses a missed call's next try in the working day (v1.93).
   const [firstRetry] = useState(() => {
     const said = heard?.connected === false ? missedReason(heard.result) : null;
     return wrapUp && said && !NO_RETRY.has(said)
-      ? daytimeRetry(detail.lead.attempts ?? 0)
+      ? daytimeRetry(detail.lead.attempts ?? 0, new Date(), teamHours)
       : null;
   });
   const [retry, setRetry] = useState<Pick | null>(firstRetry?.pick ?? null);
   const [custom, setCustom] = useState(
-    () => firstRetry?.custom ?? localInputValue(nextCallTime("morning")),
+    () =>
+      firstRetry?.custom ??
+      firstTalked?.custom ??
+      localInputValue(nextCallTime("morning")),
   );
   const retryInHours = () => {
-    const chosen = daytimeRetry(detail.lead.attempts ?? 0);
+    const chosen = daytimeRetry(
+      detail.lead.attempts ?? 0,
+      new Date(),
+      teamHours,
+    );
     setCustom(chosen.custom);
     setRetry(chosen.pick);
+  };
+  const talkedInHours = () => {
+    const chosen = talkedNext(new Date(), teamHours);
+    setCustom(chosen.custom);
+    setNext(chosen.pick);
   };
   // The after-call note, kept on the phone until saved (ph2-19).
   const draftKey = `after-call:${detail.lead.lead_id}`;
@@ -1420,7 +1555,9 @@ export function CallOutcome({
                     setTalk("talked");
                     setReason(null);
                     setRetry(null);
-                    // The likely next step, chosen already: Save is ready.
+                    // The likely next step and its time, chosen already:
+                    // Save is ready.
+                    talkedInHours();
                     if (firstNext) chooseNext(firstNext, false);
                     else setStage((current) => current ?? lastStage);
                     return;

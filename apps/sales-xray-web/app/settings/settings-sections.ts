@@ -105,7 +105,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     // Approved map, slice 5 (22 Oct 2026): Leads' own settings live here.
     id: "lead-rules",
     label: "Lead rules",
-    hint: "Who gets new leads, limits, reassigning and work hours",
+    hint: "Who gets new leads, limits, giving leads and work hours",
     icon: ClipboardList,
     group: "Leads",
     needs: "leads.manage",
