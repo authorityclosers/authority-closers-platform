@@ -253,11 +253,6 @@ export function PulsePanel() {
               {busy === "link" ? "Opening Pulse…" : "Connect your Pulse org"}
             </Button>
           )}
-          {!link && !pulse.configured ? (
-            <p className={styles.why}>
-              Pulse isn&apos;t set up for this workspace yet.
-            </p>
-          ) : null}
         </div>
       </section>
 

@@ -74,7 +74,8 @@
 }
 
 /* Connect: the family's solid deep-green pill, white words; when it can't be
-   used, plain grey with the reason under it, never a washed teal (v1.96). */
+   used, plain grey (the card's line above says why), never a washed teal
+   (v1.96). */
 .chip.chip[data-variant="primary"]:not(:disabled) {
   border-color: transparent;
   background: var(--sx-gloss);
@@ -88,13 +89,6 @@
   box-shadow: none;
   color: var(--sx-muted);
   opacity: 1;
-}
-
-.why {
-  flex-basis: 100%;
-  margin: 0;
-  color: var(--sx-muted);
-  font-size: var(--sx-text-sm);
 }
 
 .chip.chip[data-variant="ghost"][data-confirm] {
