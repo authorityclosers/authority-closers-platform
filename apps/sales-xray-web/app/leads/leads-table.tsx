@@ -58,6 +58,7 @@ import {
   type Move,
 } from "./table-edit";
 import { SourceMark, shortSource, sourceKind } from "./source-mark";
+import { TagChips } from "./tag-chips";
 import { sideStage } from "./work-views";
 import styles from "./leads-table.module.css";
 
@@ -316,8 +317,10 @@ const WIDE_WIDTH: Record<Exclude<Column, "name">, number> = {
   source: 100,
   // "Yesterday" in bold (69 px).
   next: 100,
-  // "Out of coverage · 6 calls" whole (v1.93: "Did not pick · 1 …" at 1440).
-  last: 208,
+  // "Did not pick · 10 calls" on one line, a longer answer on two (v1.94
+  // judge: 40 px went to the name, whose tags squeezed the place to "Ko…" at
+  // 1440; it was 208 for "Out of coverage · 6 calls" on one line, v1.93).
+  last: 168,
   age: 84,
   contact: 108,
   reason: 124,
@@ -767,8 +770,28 @@ export function LeadsTable({
                     </span>
                   ) : null}
                 </small>
-              ) : row.company || row.city ? (
-                <small>{row.company ?? row.city}</small>
+              ) : row.company || row.city || row.tags?.length ? (
+                <small data-tagged={row.tags?.length ? "" : undefined}>
+                  {row.tags?.length ? (
+                    <>
+                      {/* Tags (0165, v1.94): the place gives way, and one
+                          chip and "+N" stay whole on this line. */}
+                      {row.company || row.city ? (
+                        <span className={styles.nameWhere}>
+                          {row.company ?? row.city}
+                        </span>
+                      ) : null}
+                      <TagChips
+                        tags={row.tags}
+                        max={1}
+                        inline={!!(row.company || row.city)}
+                        className={styles.nameTags}
+                      />
+                    </>
+                  ) : (
+                    (row.company ?? row.city)
+                  )}
+                </small>
               ) : null}
             </button>
             {/* A narrow row keeps its width for the name: rename on the lead page. */}

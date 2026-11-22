@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -77,6 +78,27 @@ def _qualified_tail(node: ast.expr) -> str | None:
     if isinstance(node, ast.Name) and node.id == "sa":
         return tail
     return None
+
+
+# A bounded wait for this transaction's locks (v1.94, 0165): it changes no schema, so it never
+# makes a migration less additive. Only this exact literal form is recognised.
+_LOCK_TIMEOUT = re.compile(r"SET LOCAL lock_timeout = '[1-9][0-9]{0,4}(ms|s)'")
+
+
+def is_lock_timeout(call: ast.Call) -> bool:
+    """``op.execute("SET LOCAL lock_timeout = '5s'")``, or the same inside ``sa.text(...)``."""
+    if _call_name(call) != ("op", "execute") or len(call.args) != 1 or call.keywords:
+        return False
+    sql = call.args[0]
+    if isinstance(sql, ast.Call):
+        if _qualified_tail(sql.func) != "text" or len(sql.args) != 1 or sql.keywords:
+            return False
+        sql = sql.args[0]
+    return (
+        isinstance(sql, ast.Constant)
+        and isinstance(sql.value, str)
+        and _LOCK_TIMEOUT.fullmatch(sql.value) is not None
+    )
 
 
 def _is_safe_nested_call(call: ast.Call) -> bool:
@@ -162,6 +184,8 @@ def _classify_upgrade(module: ast.Module) -> tuple[str, tuple[str, ...]]:
             name = _call_name(call)
             if name and name[0] == "op":
                 operation = name[1]
+                if is_lock_timeout(call):
+                    return  # A lock wait bound, not a schema change.
                 if operation.startswith("drop_") or operation == "rename_table":
                     record("destructive", f"op.{operation} removes or renames schema objects")
                 elif operation == "add_column":

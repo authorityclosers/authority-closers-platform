@@ -461,3 +461,39 @@ def test_growth_counts_overdue_tasks_as_tasks_does(postgres_harness: Any, tmp_pa
             assert effort.json()["sellers"][0]["tasks_late"] == listed["counts"]["overdue"] == 1
 
     run(exercise())
+
+
+def test_w8_a_second_meeting_is_a_new_task_and_a_reused_command_the_first(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """W8 (AC tester, 4 Nov 2026): "a second meeting task is refused: same task already
+    done". A new command makes a second meeting on the same lead, even at the same time,
+    after the first is done; the same command again answers with the first task as it now
+    is (done), which is what a sheet that kept one command id showed."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            lead_id = await here.add("Fictional Meeting Two", "98760 60008")
+            at = later(hours=3)
+            command = str(uuid4())
+            body = {"command_id": command, "kind": "meeting", "starts_at": at}
+            first = await here.client.post(
+                f"{BASE}/leads/{lead_id}/tasks", json=body, headers=WRITE
+            )
+            assert first.status_code == 200, first.text
+            await act(here, first.json(), "done")
+
+            second = await task(here, lead_id, kind="meeting", starts_at=at)
+            assert second["task_id"] != first.json()["task_id"]
+            assert second["status"] == "open"
+            assert await tasks_in_db(here) == 2
+
+            reused = await here.client.post(
+                f"{BASE}/leads/{lead_id}/tasks", json=body, headers=WRITE
+            )
+            assert reused.status_code == 200, reused.text
+            assert reused.json()["task_id"] == first.json()["task_id"]
+            assert reused.json()["status"] == "done"
+            assert await tasks_in_db(here) == 2
+
+    run(exercise())

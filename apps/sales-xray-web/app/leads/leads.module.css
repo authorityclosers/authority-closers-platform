@@ -9033,3 +9033,29 @@ fieldset.form {
 .listHead .listTools .statusChip[aria-pressed="true"] {
   background: var(--sx-tone-good-soft);
 }
+
+/* A row's tags on line 3 (v1.94): after the next step, one chip and "+N"
+   that give way (the tag's name ends in "…"); only when a long next step
+   leaves no room for a readable chip do they take the line under it. */
+.leadFace[data-compact] .leadSub[data-aged] > .leadWhy[data-tagged] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* The gap spaces the tags; on their own line they start at the edge. */
+.leadFace[data-compact]
+  .leadSub[data-aged]
+  > .leadWhy[data-tagged]
+  > :last-child {
+  margin-inline-start: 0;
+}
+
+/* The line keeps the row's width: its tags never push it under Call. */
+.leadFace[data-compact] .leadSub[data-aged]:has(> .leadWhy[data-tagged]) {
+  min-width: 0;
+}

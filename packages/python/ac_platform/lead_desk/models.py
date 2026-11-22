@@ -1758,3 +1758,67 @@ class LeadSitePage(Base):
     leads: Mapped[int] = mapped_column(Integer)
     blocked: Mapped[int] = mapped_column(Integer)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadTag(Base):
+    """A workspace's own tag (migration 0165, tags.py): a short name and one of the app's
+    colours, in the workspace's order."""
+
+    __tablename__ = "lead_desk_tags"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_lead_desk_tag_tenant"),
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_desk_tag_tenant"),
+        ForeignKeyConstraint(
+            ["created_by_person_id"], ["persons.id"], name="fk_lead_desk_tag_creator"
+        ),
+        CheckConstraint("length(trim(name)) > 0", name="lead_desk_tag_name"),
+        CheckConstraint("revision >= 1", name="lead_desk_tag_revision"),
+        CheckConstraint(
+            "colour IN ('mint', 'sky', 'amber', 'rose', 'violet', 'slate', 'lime', 'orange')",
+            name="lead_desk_tag_colour",
+        ),
+        Index("ix_lead_desk_tag_tenant", "tenant_id", "position"),
+        # One name per workspace, case aside (tags.py turns a clash into that tag or a 409).
+        Index("uq_lead_desk_tag_name", "tenant_id", text("lower(name)"), unique=True),
+        Index("uq_lead_desk_tag_command", "tenant_id", "command_id", unique=True),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    name: Mapped[str] = mapped_column(String(32))
+    colour: Mapped[str] = mapped_column(String(12))
+    position: Mapped[int] = mapped_column(Integer)
+    revision: Mapped[int] = mapped_column(Integer)
+    command_id: Mapped[UUID] = mapped_column(Uuid)
+    created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadTagLink(Base):
+    """A lead carries a tag (migration 0165): current state; the lead's history keeps each
+    change."""
+
+    __tablename__ = "lead_desk_lead_tags"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "lead_id"],
+            ["lead_desk_leads.tenant_id", "lead_desk_leads.id"],
+            name="fk_lead_desk_lead_tag_lead",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "tag_id"],
+            ["lead_desk_tags.tenant_id", "lead_desk_tags.id"],
+            name="fk_lead_desk_lead_tag_tag",
+        ),
+        ForeignKeyConstraint(
+            ["added_by_person_id"], ["persons.id"], name="fk_lead_desk_lead_tag_person"
+        ),
+        Index("ix_lead_desk_lead_tag_tag", "tenant_id", "tag_id"),
+    )
+
+    lead_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tag_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    added_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

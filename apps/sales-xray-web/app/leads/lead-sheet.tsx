@@ -221,6 +221,7 @@ import wrap from "./wrap-up.module.css";
 import { WrapBack, WrapUpDone, WrapUpFrame } from "./wrap-up";
 import { shortSource, sourceKind } from "./source-mark";
 import { mainPath, StageStepper } from "./stage-stepper";
+import { LeadTagsLine } from "./tag-sheet";
 
 // Sources whose leads arrive with a form's own answers worth showing.
 const FORM_SOURCES = new Set(["meta", "webhook", "sheet", "csv", "google_ads"]);
@@ -4771,7 +4772,21 @@ export function LeadCard({
             {me?.can_manage && lead.owner_name ? (
               <p className={page.ownerLine}>Owner: {lead.owner_name}</p>
             ) : null}
-            {followLine}
+            {/* The follow-up, then its tags (0165) and Tag for whoever may
+                change the lead: beside it when they fit, else on the next
+                line, clear of the follow-up's 48 dp target (v1.94). */}
+            <div className={page.followRow}>
+              {followLine}
+              <LeadTagsLine
+                key={`${lead.lead_id}:${(lead.tags ?? []).map((tag) => tag.tag_id).join()}`}
+                leadId={lead.lead_id}
+                tags={lead.tags}
+                canEdit={detail.can_edit}
+                onChanged={() =>
+                  void readLead(lead.lead_id).then(onChanged, () => undefined)
+                }
+              />
+            </div>
           </div>
         </div>
         {stageBlock}
@@ -5830,8 +5845,11 @@ export function LeadSheet({
         framed={framed}
         open={leadId !== null}
         rowKey={leadId}
+        // The Call band stays while the question waits on the lead (Back from
+        // the wrap-up keeps it there, the W2 rule): only the wrap-up's own
+        // screen hides it (v1.94, the real-iPhone check: it went away).
         footer={
-          detail && !questionOpen ? (
+          detail && !wrapping ? (
             <div
               className={styles.primaryDock}
               data-sheet-no-drag
@@ -5871,7 +5889,7 @@ export function LeadSheet({
           <>
             <LeadCard
               primarySlot={primarySlot}
-              hidePrimary={questionOpen || typing}
+              hidePrimary={wrapping || typing}
               onSkip={
                 queue && onNext && leadId
                   ? () => onNext(leadId, true)
@@ -6101,7 +6119,7 @@ function PaneOrSheet({
       >
         <X size={18} aria-hidden="true" />
       </button>
-      {children}
+      <div className={page.paneBody}>{children}</div>
       {footer ? (
         <div className={`${styles.leadPaneDock} ${page.paneDock}`}>
           {footer}

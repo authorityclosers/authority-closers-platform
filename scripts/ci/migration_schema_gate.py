@@ -26,6 +26,7 @@ from scripts.ops.migration_safety import (  # noqa: E402
     ClassifierError,
     Migration,
     _is_safe_nested_call,
+    is_lock_timeout,
     load_migrations,
     migration_range,
 )
@@ -215,6 +216,8 @@ def check_operations(chain: list[Migration], tables: set[tuple[str, str]]) -> No
             operation = call.func.attr
             if operation == "get_context" and not call.args and not call.keywords:
                 continue
+            if is_lock_timeout(call):
+                continue  # Bounds this transaction's lock waits; changes no schema.
             if operation not in ALLOWED_OPS:
                 raise GateError("upgrade operation lock safety is unproven")
             keywords = {k.arg: k.value for k in call.keywords}

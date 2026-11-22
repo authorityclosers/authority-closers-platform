@@ -582,3 +582,70 @@ it("puts the next try in the team's own hours, skipping days off", () => {
     ist("2026-11-30T10:00:00").getTime(),
   );
 });
+
+// v1.94 (the real-iPhone check, 22 Nov 2026): with the keyboard up, the
+// wrap-up fits what is still seen, so Save rides just above the keyboard.
+it("fits the wrap-up to the visual viewport while the keyboard is up", async () => {
+  const view = new EventTarget() as EventTarget & {
+    height: number;
+    offsetTop: number;
+  };
+  view.height = 844;
+  view.offsetTop = 0;
+  vi.stubGlobal("visualViewport", view);
+  Object.defineProperty(window, "innerHeight", {
+    value: 844,
+    configurable: true,
+  });
+  await act(async () =>
+    root.render(
+      <LeadSheet
+        leadId={ONE}
+        me={null}
+        intent="log"
+        onClose={() => undefined}
+        onChanged={() => undefined}
+      />,
+    ),
+  );
+  await flush();
+  const layer = document.querySelector<HTMLElement>("[data-wrap-up]")!;
+  expect(layer.style.height).toBe("");
+  view.height = 420;
+  view.offsetTop = 60;
+  await act(async () => view.dispatchEvent(new Event("resize")));
+  expect(layer.style.top).toBe("60px");
+  expect(layer.style.height).toBe("420px");
+  view.height = 844;
+  view.offsetTop = 0;
+  await act(async () => view.dispatchEvent(new Event("resize")));
+  expect(layer.style.height).toBe("");
+});
+
+// v1.94 (the real-iPhone check): Back from the wrap-up keeps the question on
+// the lead (the W2 rule) and the Call band with it.
+it("keeps the Call band when the question waits on the lead", async () => {
+  await act(async () =>
+    root.render(
+      <LeadSheet
+        leadId={ONE}
+        me={null}
+        intent="log"
+        onClose={() => undefined}
+        onChanged={() => undefined}
+      />,
+    ),
+  );
+  await flush();
+  expect(document.querySelector("[data-call-band]")).toBeNull();
+  await act(async () =>
+    (
+      document.querySelector(
+        'button[aria-label="Back to Ravi Kulkarni"]',
+      ) as HTMLButtonElement
+    ).click(),
+  );
+  expect(document.querySelector("[data-wrap-up]")).toBeNull();
+  expect(document.body.textContent).toContain("How did the call with Ravi go?");
+  expect(document.querySelector("[data-call-band]")).not.toBeNull();
+});

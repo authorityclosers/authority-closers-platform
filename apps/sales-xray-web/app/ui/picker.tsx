@@ -193,6 +193,7 @@ export function Picker({
   icon = null,
   variant,
   display,
+  footer,
 }: {
   /** The list's name: the sheet's title and the listbox's label. */
   title: string;
@@ -231,6 +232,9 @@ export function Picker({
   variant?: "chip";
   /** The button's own words in place of the choice's ("All stages 929"). */
   display?: ReactNode;
+  /** A quiet action under the choices, such as "Manage tags" (v1.94); a tap
+      in it closes the list. */
+  footer?: ReactNode;
 }) {
   const phone = usePhone();
   const [open, setOpen] = useState(defaultOpen);
@@ -338,6 +342,11 @@ export function Picker({
       onEscape={sheet ? undefined : () => close()}
     />
   );
+  const tail = footer ? (
+    <div className={styles.footer} onClick={() => close(false)}>
+      {footer}
+    </div>
+  ) : null;
   return (
     <div
       ref={root}
@@ -424,11 +433,15 @@ export function Picker({
           data-open={open ? "" : undefined}
           inert={!open}
         >
-          <div className={styles.drawerInner}>{list}</div>
+          <div className={styles.drawerInner}>
+            {list}
+            {tail}
+          </div>
         </div>
       ) : sheet ? (
         <Sheet open={open} onClose={() => close(false)} title={title}>
           {list}
+          {tail}
         </Sheet>
       ) : open ? (
         <div
@@ -437,6 +450,7 @@ export function Picker({
           popover={floats ? "manual" : undefined}
         >
           {list}
+          {tail}
         </div>
       ) : null}
     </div>

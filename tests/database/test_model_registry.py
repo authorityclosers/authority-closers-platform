@@ -233,6 +233,8 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "lead_desk_whatsapp_campaigns",
         "lead_desk_whatsapp_campaign_leads",
         "lead_desk_whatsapp_campaign_messages",
+        "lead_desk_tags",
+        "lead_desk_lead_tags",
         "bug_issues",
         "bug_issue_reports",
         "bug_issue_events",

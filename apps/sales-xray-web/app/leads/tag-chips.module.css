@@ -1,0 +1,131 @@
+/* Tag chips (migration 0165; v1.94): small, one line, never crowding the row,
+   and never under 12 px. Tokens only: each tint is a token's ink on its soft
+   fill. */
+
+.chips {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.chip,
+.more {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  height: 20px;
+  padding: calc((20px - 1em) / 2) 7px 0;
+  border-radius: var(--sx-radius-pill);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chips[data-inline] {
+  margin-inline-start: 6px;
+  /* Never squeezed past reading: a chip keeps about six letters. */
+  min-width: min(100%, 84px);
+}
+
+.chips[data-size="sm"] .chip,
+.chips[data-size="sm"] .more {
+  height: 20px;
+  padding: calc((20px - 1em) / 2) 7px 0;
+}
+
+.chips[data-size="md"] {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chips[data-size="md"] .chip,
+.chips[data-size="md"] .more {
+  height: 26px;
+  padding: calc((26px - 1em) / 2) 10px 0;
+  font-size: var(--sx-text-xs);
+}
+
+.more {
+  flex: none;
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+}
+
+/* Each tag wears its own colour as a soft tint with a strong ink (v1.90's
+   meaning chips): Home's palette, light and dark, never the old teal. Amber
+   is the warning ink leaning gold, lime mixes green with it, slate is the
+   muted grey. */
+.chip,
+.dot {
+  --tag-ink: var(--sx-tone-good);
+  --tag-fill: var(--sx-tone-good-soft);
+  background: var(--tag-fill);
+  color: color-mix(in oklab, var(--tag-ink) 86%, var(--sx-ink));
+}
+
+.dot {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--tag-ink);
+}
+
+.chip[data-colour="sky"],
+.dot[data-colour="sky"] {
+  --tag-ink: var(--sx-tone-calls);
+  --tag-fill: var(--sx-tone-calls-soft);
+}
+
+.chip[data-colour="amber"],
+.dot[data-colour="amber"] {
+  --tag-ink: color-mix(in oklab, var(--sx-warn) 78%, var(--sx-tone-good));
+  --tag-fill: color-mix(
+    in oklab,
+    color-mix(in oklab, var(--sx-warn) 78%, var(--sx-tone-good)) 14%,
+    var(--sx-surface)
+  );
+}
+
+.chip[data-colour="rose"],
+.dot[data-colour="rose"] {
+  --tag-ink: var(--sx-tone-problem);
+  --tag-fill: var(--sx-tone-problem-soft);
+}
+
+.chip[data-colour="violet"],
+.dot[data-colour="violet"] {
+  --tag-ink: var(--sx-tone-info);
+  --tag-fill: var(--sx-tone-info-soft);
+}
+
+.chip[data-colour="slate"],
+.dot[data-colour="slate"] {
+  --tag-ink: var(--sx-muted);
+  --tag-fill: var(--sx-fill);
+}
+
+.chip[data-colour="lime"],
+.dot[data-colour="lime"] {
+  --tag-ink: color-mix(in oklab, var(--sx-tone-good) 55%, var(--sx-warn));
+  --tag-fill: color-mix(
+    in oklab,
+    color-mix(in oklab, var(--sx-tone-good) 55%, var(--sx-warn)) 14%,
+    var(--sx-surface)
+  );
+}
+
+.chip[data-colour="orange"],
+.dot[data-colour="orange"] {
+  --tag-ink: var(--sx-tone-action);
+  --tag-fill: var(--sx-tone-action-soft);
+}

@@ -44,12 +44,15 @@ export function displayNameOf<T extends string | null | undefined>(raw: T): T {
 
 /**
  * The same object with every listed key's string shown with capitals, at any
- * depth: for API answers whose people sit in lists and nested records.
+ * depth: for API answers whose people sit in lists and nested records. A tag
+ * (a record with a `tag_id`) is the team's own word and stays as typed:
+ * "VIP" is never "Vip" (v1.94).
  */
 export function withDisplayNames<T>(value: T, keys: ReadonlySet<string>): T {
   if (Array.isArray(value))
     return value.map((item) => withDisplayNames(item, keys)) as T;
   if (!value || typeof value !== "object") return value;
+  if ("tag_id" in value) return value;
   const out: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value as Record<string, unknown>))
     out[key] =

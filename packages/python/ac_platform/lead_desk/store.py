@@ -45,6 +45,7 @@ from ac_platform.lead_desk import (
 from ac_platform.lead_desk import breaks as call_breaks
 from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk import meetings as meeting_rows
+from ac_platform.lead_desk import tags as lead_tags
 from ac_platform.lead_desk import tasks as task_book
 from ac_platform.lead_desk.capture import (
     REFERENCE_KEYS,
@@ -146,6 +147,7 @@ from ac_platform.lead_desk.contracts import (
     StageCount,
     StageMove,
     StageSuggestion,
+    TagChip,
     TakingLeads,
     Team,
     TeamPool,
@@ -1189,6 +1191,7 @@ class LeadDesk:
         *,
         full_phone: bool = False,
         task_kind: str | None = None,
+        tags: tuple[TagChip, ...] = (),
     ) -> LeadRow:
         kind, why = self._why(lead, day_end, task_kind)
         result_label = (
@@ -1245,6 +1248,7 @@ class LeadDesk:
             has_email=bool(lead.email),
             archived_at=lead.archived_at,
             binned_at=lead.binned_at,
+            tags=tags,
         )
 
     def _reason_label(self, lead: Lead) -> str | None:
@@ -1267,8 +1271,16 @@ class LeadDesk:
         day_end = self._day_start() + timedelta(days=1)
         full = bool((await self.settings())[1].get("show_full_phones"))
         kinds = await self._next_task_kinds(leads)
+        chips = await lead_tags.chips(self, (lead.id for lead in leads))
         return tuple(
-            self._row(lead, names, day_end, full_phone=full, task_kind=kinds.get(lead.id))
+            self._row(
+                lead,
+                names,
+                day_end,
+                full_phone=full,
+                task_kind=kinds.get(lead.id),
+                tags=chips.get(lead.id, ()),
+            )
             for lead in leads
         )
 
@@ -2134,6 +2146,7 @@ class LeadDesk:
         since: date | None = None,
         until: date | None = None,
         shelf: Literal["archived", "bin"] | None = None,
+        tag: UUID | None = None,
         freeze: int | None = None,
     ) -> LeadPage:
         """One page of leads. ``freeze``: a bulk change's selection instead (bulk_jobs.py):
@@ -2228,6 +2241,9 @@ class LeadDesk:
         if older_only:
             # Older enquiries from a Facebook Page, to give out in bulk or leave on Cold.
             where.append(older_enquiry())
+        if tag is not None:
+            # The leads carrying one of the workspace's tags (migration 0165, tags.py).
+            where.append(lead_tags.clause(self, tag))
         if duplicates:
             # Leads that may be one person, for owners and managers to review (D4).
             if not self.viewer.can_manage:
@@ -2826,7 +2842,8 @@ class LeadDesk:
             )
             if value
         )
-        row = self._row(lead, names, day_end)
+        chips = await lead_tags.chips(self, [lead.id])
+        row = self._row(lead, names, day_end, tags=chips.get(lead.id, ()))
         # After-call answers their seller undid: marked, so they count nowhere (ph2-37).
         answers_undone = frozenset(
             str(event.data[transitions.UNDONE_RESULT])

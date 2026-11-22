@@ -1,0 +1,225 @@
+/* Manage tags (v1.94): the Tag sheet's rows, one opening into a small editor.
+   v1.90 family: soft rows, a white radius card for the open tag, the deep
+   green Save as the one main button, red only for Delete. Tokens only. */
+
+.sheet {
+  --sx-sheet-width: 460px;
+  color: var(--sx-ink);
+}
+
+.list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  border-radius: var(--sx-radius-lg);
+}
+
+.item[data-open] {
+  background: var(--sx-surface);
+  box-shadow:
+    0 0 0 1px var(--sx-line),
+    var(--sx-shadow-1);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto 28px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 8px 0 14px;
+  border: 0;
+  border-radius: var(--sx-radius-lg);
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .item:not([data-open]) .row:hover {
+    background: var(--sx-sunken);
+  }
+}
+
+.row:focus-visible,
+.field input:focus-visible,
+.swatch:focus-visible,
+.actions button:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.name {
+  overflow: hidden;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.count {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+}
+
+.editor {
+  display: grid;
+  gap: 14px;
+  padding: 2px 14px 14px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.field input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 500;
+}
+
+.field input:focus-visible {
+  border-color: var(--sx-primary-ink);
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.swatch {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--sx-fill-soft);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.swatch > span {
+  width: 18px;
+  height: 18px;
+}
+
+.swatch[data-on] {
+  background: var(--sx-surface);
+  box-shadow:
+    0 0 0 2px var(--sx-primary-ink),
+    var(--sx-shadow-1);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.save,
+.danger,
+.quiet,
+.delete {
+  min-height: 44px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.save {
+  min-width: 120px;
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
+.save:disabled,
+.danger:disabled {
+  cursor: default;
+  opacity: 0.45;
+  box-shadow: none;
+}
+
+.delete {
+  margin-left: -8px;
+  padding: 0 12px;
+  background: transparent;
+  color: var(--sx-tone-problem);
+}
+
+.quiet {
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink);
+}
+
+.danger {
+  background: var(--sx-tone-problem);
+  color: var(--sx-surface);
+}
+
+.ask {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-tone-problem-soft);
+}
+
+.ask p {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.ghost {
+  height: 52px;
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-fill-soft);
+}
+
+.note {
+  margin: 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
