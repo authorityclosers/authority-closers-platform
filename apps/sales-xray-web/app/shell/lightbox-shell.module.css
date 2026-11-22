@@ -1380,6 +1380,17 @@
   outline: 2px solid var(--lx-teal);
   outline-offset: 2px;
 }
+/* v1.93.1 (owner, 22 Nov 2026): in dark the header Add is the family's deep
+   green with white words, not mint. Light is unchanged; phones and tablets
+   never show it. */
+@media (min-width: 1101px) {
+  :global(:root[data-theme="dark"]) .newAnalysisButton,
+  :global(:root[data-theme="dark"]) .newAnalysisButton:hover {
+    background: var(--sx-gloss);
+    box-shadow: var(--sx-gloss-depth);
+    color: var(--sx-gloss-ink);
+  }
+}
 @media (max-width: 1100px) {
   .newAnalysisButton {
     width: 32px;

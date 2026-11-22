@@ -293,6 +293,11 @@ export type LeadDetail = {
   meeting?: MeetingView | null;
   /** Its open tasks, the next one first (work-memory engine). */
   tasks?: TaskView[];
+  /**
+   * The team's work hours, to read (v1.93.1): the after-call next try falls in
+   * them. Null when none are set; absent on an older server.
+   */
+  work_hours?: WorkHours | null;
 };
 
 export type StageSuggestion = {
@@ -358,6 +363,8 @@ export type WorkHours = {
   next_start: string | null;
   /** Breaks the team takes every work day (lunch); absent from an older server. */
   breaks?: { start: string; end: string }[];
+  /** The hours' clock ("Asia/Kolkata"); absent from an older server. */
+  timezone?: string;
 };
 
 export type PhoneHealth = {

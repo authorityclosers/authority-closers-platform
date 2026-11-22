@@ -1244,6 +1244,23 @@ def test_work_hours_hold_night_leads_and_keep_calls_on_the_phone(
                     headers=WRITE,
                 )
                 assert seller_lead.status_code == 201, seller_lead.text
+                # v1.93.1: a seller reads the team's hours on their lead (the after-call
+                # next try falls in them) but cannot change them.
+                mine = (
+                    await client.get(f"{BASE}/leads/{seller_lead.json()['lead']['lead_id']}")
+                ).json()
+                assert mine["work_hours"]["days"] == [(today + 1) % 7]
+                assert (mine["work_hours"]["start"], mine["work_hours"]["end"]) == (
+                    "09:30",
+                    "19:00",
+                )
+                assert mine["work_hours"]["timezone"] == "Asia/Kolkata"
+                refused = await client.put(
+                    f"{BASE}/work-hours",
+                    json={**body, "expected_revision": 1, "start": "08:00"},
+                    headers=WRITE,
+                )
+                assert refused.status_code == 403, refused.text
                 logged = await client.post(
                     f"{BASE}/phone-log",
                     json={

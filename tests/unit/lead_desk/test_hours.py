@@ -75,3 +75,16 @@ def test_work_minutes_count_only_work_time() -> None:
     # No work hours: every minute; the clock never runs backwards.
     assert hours.working_minutes(None, ist(18, 23), ist(19, 0)) == 60
     assert hours.working_minutes(TEAM, ist(19, 11), ist(19, 10)) == 0
+
+
+def test_the_hours_view_says_its_clock() -> None:
+    """v1.93.1: a seller's phone reads the hours on the lead and counts the next try in
+    the team's own clock, not the phone's."""
+    from ac_platform.lead_desk.store import hours_view
+
+    view = hours_view(TEAM, ist(19, 22))
+    assert view is not None
+    assert (view.days, view.start, view.end) == ((0, 1, 2, 3, 4, 5), "09:30", "19:00")
+    assert view.timezone == "Asia/Kolkata"
+    assert view.inside is False and view.next_start == ist(20, 9, 30)
+    assert hours_view(None, ist(19, 22)) is None
