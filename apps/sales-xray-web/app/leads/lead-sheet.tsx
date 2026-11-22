@@ -4772,17 +4772,21 @@ export function LeadCard({
             {me?.can_manage && lead.owner_name ? (
               <p className={page.ownerLine}>Owner: {lead.owner_name}</p>
             ) : null}
-            {followLine}
-            {/* Its tags (0165), and Tag for whoever may change the lead. */}
-            <LeadTagsLine
-              key={`${lead.lead_id}:${(lead.tags ?? []).map((tag) => tag.tag_id).join()}`}
-              leadId={lead.lead_id}
-              tags={lead.tags}
-              canEdit={detail.can_edit}
-              onChanged={() =>
-                void readLead(lead.lead_id).then(onChanged, () => undefined)
-              }
-            />
+            {/* The follow-up, then its tags (0165) and Tag for whoever may
+                change the lead: beside it when they fit, else on the next
+                line, clear of the follow-up's 48 dp target (v1.94). */}
+            <div className={page.followRow}>
+              {followLine}
+              <LeadTagsLine
+                key={`${lead.lead_id}:${(lead.tags ?? []).map((tag) => tag.tag_id).join()}`}
+                leadId={lead.lead_id}
+                tags={lead.tags}
+                canEdit={detail.can_edit}
+                onChanged={() =>
+                  void readLead(lead.lead_id).then(onChanged, () => undefined)
+                }
+              />
+            </div>
           </div>
         </div>
         {stageBlock}

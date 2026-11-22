@@ -186,6 +186,21 @@ div.stack {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* The follow-up and the lead's tags share a row (v1.94): side by side when
+   they fit; wrapped, the tags start 16 px under the follow-up's words, past
+   the 14 px its 48 dp target reaches below them, so the two never overlap. */
+.followRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 12px;
+  min-width: 0;
+}
+
+.followRow:empty {
+  display: none;
+}
+
 .follow > svg {
   flex: none;
   margin-top: 2px;

@@ -237,7 +237,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-top: 6px;
+  min-width: 0;
 }
 
 .leadEdit {
