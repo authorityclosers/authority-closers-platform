@@ -117,7 +117,10 @@ export function ManageTagsSheet({
       setTags(
         (current) =>
           current?.map((item) =>
-            item.tag_id === saved.tag_id ? { ...item, ...saved } : item,
+            item.tag_id === saved.tag_id
+              ? // A rename or recolour moves no lead: a known count stays.
+                { ...item, ...saved, leads: saved.leads || item.leads }
+              : item,
           ) ?? null,
       );
       setEditing(null);

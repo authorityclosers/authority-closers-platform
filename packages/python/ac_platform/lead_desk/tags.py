@@ -166,21 +166,30 @@ async def listed(desk: LeadDesk) -> Tags:
             .order_by(LeadTag.position, LeadTag.created_at, LeadTag.id)
         )
     ).all()
-    counts = {
-        tag_id: int(count)
-        for tag_id, count in (
-            await desk.db.execute(
-                select(LeadTagLink.tag_id, func.count())
-                .join(
-                    Lead,
-                    (Lead.id == LeadTagLink.lead_id) & (Lead.tenant_id == LeadTagLink.tenant_id),
-                )
-                .where(LeadTagLink.tenant_id == desk.tenant_id, desk._seen(), on_desk())
-                .group_by(LeadTagLink.tag_id)
-            )
-        ).all()
-    }
+    counts = await _counts(desk)
     return Tags(tags=tuple(_view(desk, tag, counts.get(tag.id, 0)) for tag in tags))
+
+
+async def _counts(desk: LeadDesk, tag_id: UUID | None = None) -> dict[UUID, int]:
+    """How many leads on the desk carry each tag (or this one), among those this person
+    may see; archived and binned leads aside."""
+    query = (
+        select(LeadTagLink.tag_id, func.count())
+        .join(
+            Lead,
+            (Lead.id == LeadTagLink.lead_id) & (Lead.tenant_id == LeadTagLink.tenant_id),
+        )
+        .where(LeadTagLink.tenant_id == desk.tenant_id, desk._seen(), on_desk())
+        .group_by(LeadTagLink.tag_id)
+    )
+    if tag_id is not None:
+        query = query.where(LeadTagLink.tag_id == tag_id)
+    return {found: int(count) for found, count in (await desk.db.execute(query)).all()}
+
+
+async def _counted(desk: LeadDesk, tag: LeadTag) -> TagView:
+    """One tag as the list shows it, its lead count included (a rename moves no lead)."""
+    return _view(desk, tag, (await _counts(desk, tag.id)).get(tag.id, 0))
 
 
 async def _same_name(
@@ -253,7 +262,8 @@ async def _make(desk: LeadDesk, command_id: UUID, name: str, colour: str | None)
 
 
 async def create(desk: LeadDesk, command: TagCommand) -> TagView:
-    return _view(desk, await _make(desk, command.command_id, command.name, command.colour))
+    # A name already here answers with that tag, its leads counted.
+    return await _counted(desk, await _make(desk, command.command_id, command.name, command.colour))
 
 
 def _may_change(desk: LeadDesk) -> None:
@@ -281,7 +291,7 @@ async def edit(desk: LeadDesk, tag_id: UUID, command: TagEdit) -> TagView:
         tag.position = command.position
         changed.append("position")
     if not changed:
-        return _view(desk, tag)
+        return await _counted(desk, tag)
     tag.revision += 1
     tag.updated_at = desk.now
     try:
@@ -297,7 +307,7 @@ async def edit(desk: LeadDesk, tag_id: UUID, command: TagEdit) -> TagView:
         {"changed": changed, "revision": tag.revision},
         "Tag changed in Leads",
     )
-    return _view(desk, tag)
+    return await _counted(desk, tag)
 
 
 async def remove(desk: LeadDesk, tag_id: UUID, command: TagDelete) -> Tags:

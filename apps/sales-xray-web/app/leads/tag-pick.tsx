@@ -11,10 +11,11 @@ import { Settings2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Picker } from "../ui/picker";
+import { onWorkspaceChange, workspaceGeneration } from "../workspace-change";
 import type { ListMore, TagColour, TagView } from "./leads-client";
 import { UNDONE_EVENT } from "./manage-bar";
 import { ManageTagsSheet } from "./manage-tags";
-import { readTagsSoon, TAGS_CHANGED_EVENT } from "./tag-sheet";
+import { forgetTags, readTagsSoon, TAGS_CHANGED_EVENT } from "./tag-sheet";
 import styles from "./tag-sheet.module.css";
 
 /** Each tag's dot in the picker, as a token (tag-chips.module.css). */
@@ -41,21 +42,35 @@ export function TagPick({
   const [manage, setManage] = useState<{ round: number; open: boolean } | null>(
     null,
   );
-  // A tag made, renamed or deleted elsewhere, or a bulk change: read again.
+  // A tag made, put on, taken off, renamed or deleted, or a bulk change
+  // undone: read again (counts moved).
   useEffect(() => {
     const again = () => setRound((value) => value + 1);
+    const undone = () => {
+      forgetTags();
+      again();
+    };
     window.addEventListener(TAGS_CHANGED_EVENT, again);
-    window.addEventListener(UNDONE_EVENT, again);
+    window.addEventListener(UNDONE_EVENT, undone);
+    // Another workspace (switched in place, no reload): these tags were the
+    // last one's. Show none, and read again once the server has the new one.
+    const off = onWorkspaceChange((reread) => {
+      setTags(null);
+      if (reread) again();
+    });
     return () => {
       window.removeEventListener(TAGS_CHANGED_EVENT, again);
-      window.removeEventListener(UNDONE_EVENT, again);
+      window.removeEventListener(UNDONE_EVENT, undone);
+      off();
     };
   }, []);
   useEffect(() => {
     let live = true;
+    const workspace = workspaceGeneration();
     readTagsSoon().then(
       (next) => {
-        if (live) setTags(next);
+        // An answer for a workspace this page has left is dropped.
+        if (live && workspace === workspaceGeneration()) setTags(next);
       },
       () => undefined,
     );

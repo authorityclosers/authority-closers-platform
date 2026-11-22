@@ -211,6 +211,10 @@ def test_tags_on_leads_end_to_end(postgres_harness: Any, tmp_path: Path) -> None
                 )
                 assert renamed.status_code == 200, renamed.text
                 assert (renamed.json()["name"], renamed.json()["colour"]) == ("Warm", "rose")
+                # The answer keeps the tag's lead count: the first lead and the seller's own.
+                assert renamed.json()["leads"] == 2
+                again = await post("/tags", {"command_id": str(uuid4()), "name": "warm"})
+                assert (again.json()["tag_id"], again.json()["leads"]) == (hot["tag_id"], 2)
                 stale = await client.put(
                     f"{BASE}/tags/{hot['tag_id']}",
                     json={"expected_revision": 1, "name": "Cold"},
@@ -353,6 +357,7 @@ def test_tag_rules_names_cap_audit_roles_and_merge(postgres_harness: Any, tmp_pa
                 )
                 assert renamed.status_code == 200, renamed.text
                 assert (renamed.json()["name"], renamed.json()["revision"]) == ("Callback list", 2)
+                assert renamed.json()["leads"] == 1  # Batch 2 is on the full lead
                 gone = await post(f"/tags/{ten[2]}/delete", {"expected_revision": 1})
                 assert gone.status_code == 200, gone.text
                 assert "Batch 3" not in [tag["name"] for tag in gone.json()["tags"]]

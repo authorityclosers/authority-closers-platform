@@ -12,6 +12,7 @@ import { Check, Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { notify } from "../notice-center";
+import { onWorkspaceChange, workspaceGeneration } from "../workspace-change";
 import { Sheet } from "../ui/sheet";
 import {
   changeLeadTags,
@@ -31,17 +32,30 @@ import {
 import { TagChips, TagDot } from "./tag-chips";
 import styles from "./tag-sheet.module.css";
 
-/** The workspace's tags, read once a sheet asks and kept for a minute. */
-let tagsRead: { at: number; read: Promise<TagView[]> } | null = null;
+/** The workspace's tags, read once a sheet asks and kept for a minute. Kept
+ *  for one workspace only: keyed by the workspace's generation (it moves on
+ *  every switch in place) and forgotten when the workspace changes, so a
+ *  switch never shows the last organisation's tags (v1.94 review). */
+let tagsRead: {
+  at: number;
+  workspace: number;
+  read: Promise<TagView[]>;
+} | null = null;
 const TAGS_FRESH_MS = 60_000;
 
 export function readTagsSoon(): Promise<TagView[]> {
-  if (tagsRead && Date.now() - tagsRead.at < TAGS_FRESH_MS)
+  const workspace = workspaceGeneration();
+  if (
+    tagsRead &&
+    tagsRead.workspace === workspace &&
+    Date.now() - tagsRead.at < TAGS_FRESH_MS
+  )
     return tagsRead.read;
   const read = readTags().then((answer) => answer.tags);
-  tagsRead = { at: Date.now(), read };
+  const entry = { at: Date.now(), workspace, read };
+  tagsRead = entry;
   read.catch(() => {
-    tagsRead = null;
+    if (tagsRead === entry) tagsRead = null;
   });
   return read;
 }
@@ -51,8 +65,21 @@ export function forgetTags() {
   tagsRead = null;
 }
 
-/** Said when a tag is renamed, recoloured or deleted (manage-tags.tsx). */
+/** Said whenever the workspace's tags change: made, put on or taken off
+ *  leads, renamed, recoloured or deleted. Every tag filter reads again. */
 export const TAGS_CHANGED_EVENT = "sx-leads-tags-changed";
+
+/** Forget the tags and tell every tag filter to read them again. */
+export function sayTagsMoved() {
+  forgetTags();
+  window.dispatchEvent(new Event(TAGS_CHANGED_EVENT));
+}
+
+// Another workspace: its tags are not these. A filter reads again once the
+// server has the new workspace (TagPick listens for this too).
+onWorkspaceChange(() => {
+  tagsRead = null;
+});
 
 /** Tags a lead may carry, and tags one bulk change may add or take off. */
 export const TAGS_AT_MOST = 10;
@@ -144,7 +171,7 @@ export function TagSheet({
     setMaking(true);
     try {
       const made = await createTag(words.slice(0, 32));
-      forgetTags();
+      sayTagsMoved();
       setTags((current) =>
         current?.some((tag) => tag.tag_id === made.tag_id)
           ? current
@@ -184,7 +211,7 @@ export function TagSheet({
           { selection: target.selection, tags: [...picked], mode },
           command,
         );
-        forgetTags();
+        sayTagsMoved();
         onDone();
       } else {
         const answer = await changeLeadTags(
@@ -192,7 +219,7 @@ export function TagSheet({
           { add: added, remove: removed },
           command,
         );
-        forgetTags();
+        sayTagsMoved();
         notify({
           id: "lead-tags",
           tone: "success",

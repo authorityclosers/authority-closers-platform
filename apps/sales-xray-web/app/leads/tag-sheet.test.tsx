@@ -18,12 +18,18 @@ vi.mock("../notice-center", () => ({
 }));
 
 import { resetBackCloseForTests } from "../ui/back-close";
+import { announceWorkspaceChange } from "../workspace-change";
 import { moreParams, type TagChip } from "./leads-client";
 import { filterOf } from "./manage-bar";
 import { ManageTagsSheet } from "./manage-tags";
 import { TagChips } from "./tag-chips";
 import { TagPick } from "./tag-pick";
-import { forgetTags, TagSheet, tagPreview } from "./tag-sheet";
+import {
+  forgetTags,
+  TAGS_CHANGED_EVENT,
+  TagSheet,
+  tagPreview,
+} from "./tag-sheet";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -37,6 +43,7 @@ const VIDEO = "00000000-0000-4000-8000-0000000000a2";
 const LEAD = (n: number) => `00000000-0000-4000-8000-0000000001${10 + n}`;
 let canChange = true;
 let stale = false;
+let editLeads = 12;
 let listed: ReturnType<typeof tag>[] = [];
 const tag = (tag_id: string, name: string, leads: number) => ({
   tag_id,
@@ -53,6 +60,7 @@ beforeEach(() => {
   sent = [];
   canChange = true;
   stale = false;
+  editLeads = 12;
   listed = [];
   forgetTags();
   vi.stubGlobal(
@@ -75,7 +83,7 @@ beforeEach(() => {
               { status: 409 },
             )
           : Response.json({
-              ...tag(HOT, body.name ?? "Hot", 12),
+              ...tag(HOT, body.name ?? "Hot", editLeads),
               colour: body.colour ?? "mint",
               revision: 2,
             });
@@ -465,4 +473,78 @@ it("each chip wears its tag's own colour", async () => {
       chip.getAttribute("data-colour"),
     ),
   ).toEqual(["rose", "lime"]);
+});
+
+// v1.94 review: the tag filter after a workspace switch, after a tag is made
+// or put on a lead, and a rename that keeps its lead count.
+it("a workspace switch forgets the last organisation's tags", async () => {
+  const onChange = vi.fn();
+  await act(async () => root.render(<TagPick more={{}} onChange={onChange} />));
+  await settle();
+  const open = async () =>
+    act(async () =>
+      document
+        .querySelector<HTMLButtonElement>('[aria-haspopup="listbox"]')!
+        .click(),
+    );
+  await open();
+  expect(document.body.textContent).toContain("Hot");
+  await open();
+  listed = [tag(VIDEO, "Other team's tag", 1)];
+  await act(async () => announceWorkspaceChange("arrived"));
+  await settle();
+  await open();
+  expect(document.body.textContent).toContain("Other team's tag");
+  expect(document.body.textContent).not.toContain("Hot");
+});
+
+it("making a tag and saving a lead's tags tell every tag filter", async () => {
+  const heard = vi.fn();
+  window.addEventListener(TAGS_CHANGED_EVENT, heard);
+  try {
+    await act(async () =>
+      root.render(
+        <TagSheet
+          open
+          target={{ kind: "one", leadId: LEAD(1), tags: [] }}
+          onClose={() => undefined}
+          onDone={() => undefined}
+        />,
+      ),
+    );
+    await settle();
+    await type(
+      document.querySelector<HTMLInputElement>(
+        'input[aria-label="Find or make a tag"]',
+      )!,
+      "Nov video ad",
+    );
+    await act(async () => button("Make “Nov video ad”")?.click());
+    await settle();
+    expect(heard).toHaveBeenCalledTimes(1);
+    await act(async () => button("Save tags")?.click());
+    await settle();
+    expect(heard).toHaveBeenCalledTimes(2);
+  } finally {
+    window.removeEventListener(TAGS_CHANGED_EVENT, heard);
+  }
+});
+
+it("a rename keeps the tag's lead count", async () => {
+  editLeads = 0;
+  await act(async () =>
+    root.render(<ManageTagsSheet open onClose={() => undefined} />),
+  );
+  await settle();
+  await act(async () =>
+    document.querySelector<HTMLButtonElement>("[aria-expanded]")!.click(),
+  );
+  await type(
+    document.querySelector<HTMLInputElement>('input[type="text"]')!,
+    "Warm",
+  );
+  await act(async () => button("Save")?.click());
+  await settle();
+  expect(document.body.textContent).toContain("Warm");
+  expect(document.body.textContent).toContain("12 leads");
 });
