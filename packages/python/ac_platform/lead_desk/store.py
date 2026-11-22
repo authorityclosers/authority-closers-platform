@@ -528,6 +528,7 @@ def hours_view(hours: work_hours.WorkHours | None, now: datetime) -> WorkHoursVi
         pause_leads=hours.pause_leads,
         inside=inside,
         next_start=None if inside else work_hours.next_start(hours, now),
+        timezone=work_hours.IST.key,
         breaks=tuple(
             BreakTime(start=begins.strftime("%H:%M"), end=ends.strftime("%H:%M"))
             for begins, ends in hours.breaks
@@ -2899,6 +2900,8 @@ class LeadDesk:
             worked_before=worked_before,
             undo_result=await self._undoable(lead),
             won_amount=await self._won_amount(lead),
+            # Read by any member (v1.93.1): the next try after a call falls in them.
+            work_hours=hours_view(work_hours.parse((await self.settings())[1]), self.now),
         )
 
     async def _won_amount(self, lead: Lead) -> int | None:

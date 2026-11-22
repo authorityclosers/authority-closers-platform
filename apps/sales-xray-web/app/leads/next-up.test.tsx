@@ -13,7 +13,7 @@ vi.mock("../notice-center", () => ({
 
 import { resetBackCloseForTests } from "../ui/back-close";
 import { CallNext } from "./call-next";
-import { daytimeRetry, LeadSheet } from "./lead-sheet";
+import { daytimeRetry, inTeamHours, LeadSheet, talkedNext } from "./lead-sheet";
 import { reportRows, WrapUpDone } from "./wrap-up";
 import type { LeadDetail, LeadEvent } from "./leads-client";
 
@@ -539,4 +539,46 @@ it("sends the missed call's next try it shows", async () => {
   expect(minutes).toBeGreaterThanOrEqual(9 * 60 + 30);
   expect(minutes).toBeLessThanOrEqual(19 * 60 + 30);
   expect(chosen === null || chosen.textContent !== "").toBe(true);
+});
+
+// v1.93.1 (owner, 22 Nov 2026): the next try uses the team's real hours, in the
+// team's clock, skipping days off; never before the team opens.
+it("puts the next try in the team's own hours, skipping days off", () => {
+  const ist = (wall: string) => new Date(`${wall}+05:30`);
+  const monSat = {
+    days: [0, 1, 2, 3, 4, 5],
+    start: "09:30",
+    end: "19:30",
+    timezone: "Asia/Kolkata",
+  };
+  // Inside the hours: kept as it is.
+  expect(inTeamHours(ist("2026-11-27T15:00:00"), monSat)).toEqual(
+    ist("2026-11-27T15:00:00"),
+  );
+  // Saturday night: Sunday is off, so Monday 10:00.
+  expect(inTeamHours(ist("2026-11-28T21:00:00"), monSat)).toEqual(
+    ist("2026-11-30T10:00:00"),
+  );
+  // Early morning: that day's 10:00, after the 9:30 opening.
+  expect(inTeamHours(ist("2026-11-27T04:02:00"), monSat)).toEqual(
+    ist("2026-11-27T10:00:00"),
+  );
+  // A team that opens at 10:30: never before it opens.
+  expect(
+    inTeamHours(ist("2026-11-27T06:00:00"), { ...monSat, start: "10:30" }),
+  ).toEqual(ist("2026-11-27T10:30:00"));
+  // A missed call on Saturday at 7 pm: 8 pm is closed, Monday 10:00.
+  const missed = daytimeRetry(0, ist("2026-11-28T19:00:00"), monSat);
+  expect(new Date(missed.custom).getTime()).toBe(
+    new Date(
+      inTeamHours(ist("2026-11-30T10:00:00"), monSat).getTime(),
+    ).setSeconds(0, 0),
+  );
+  // After a talk on Friday, with a Monday to Friday team: Monday 10:00.
+  const weekdays = { ...monSat, days: [0, 1, 2, 3, 4] };
+  const talked = talkedNext(ist("2026-11-27T15:00:00"), weekdays);
+  expect(talked.pick).toBe("custom");
+  expect(new Date(talked.custom).getTime()).toBe(
+    ist("2026-11-30T10:00:00").getTime(),
+  );
 });

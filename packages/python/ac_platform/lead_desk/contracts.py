@@ -1242,6 +1242,10 @@ class LeadDetail(Model):
     # "Sellers can reassign leads", owner, Wise Life, 19 Nov 2026); ``reps`` lists who.
     # Owners and admins use ``can_assign`` instead.
     can_give: bool = False
+    # The team's work hours, to read (v1.93.1, owner 22 Nov 2026): a seller's after-call
+    # screen sets the next try in them, skipping days off. None when none are set.
+    # Changing them stays with owners and admins (PUT /work-hours).
+    work_hours: WorkHoursView | None = None
 
 
 class PhoneHealth(Model):
@@ -1298,6 +1302,9 @@ class WorkHoursView(Model):
     inside: bool
     next_start: datetime | None = None
     breaks: tuple[BreakTime, ...] = ()
+    # The clock the hours are in (v1.93.1): India time for every workspace today, said so
+    # a phone counts the next work-hours slot in it, not in its own time zone.
+    timezone: str = "Asia/Kolkata"
 
 
 class SettingsView(Model):
