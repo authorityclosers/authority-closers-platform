@@ -35,7 +35,8 @@ import {
 import { telemetry } from "./telemetry";
 import { useInitialSession } from "./initial-session";
 import type { InitialSession } from "./server-reads";
-import { ConnectionNotice } from "./connection-notice";
+import { ConnectionNotice, retryDelay } from "./connection-notice";
+import { forgetAccess, keptAccess, rememberAccess } from "./last-access";
 import {
   WorkspaceAccessProvider,
   type WorkspaceAccessValue,
@@ -461,6 +462,10 @@ function StandaloneStudioView({
   const [frameRound, setFrameRound] = useState(0);
   // Failed access checks in a row, for the corner notice's retry pace.
   const [failures, setFailures] = useState(0);
+  // Quiet re-checks behind a kept frame: 5, 10, 20, then every 30 s.
+  const [quietAttempt, setQuietAttempt] = useState(0);
+  const quietRetry = useRef(0);
+  const quietTimer = useRef<number | undefined>(undefined);
   // A server-read session (dev) starts the page ready; the browser's check
   // below still runs and confirms it, so the page never trusts it alone.
   // The server's session for a server-rendered page (dev), never for embeds.
@@ -469,6 +474,11 @@ function StandaloneStudioView({
     const seeded = seededChoices(initialSession);
     return seeded ? { kind: "ready", choices: seeded } : { kind: "loading" };
   });
+  // What the frame shows now, for a failed check to keep (read in its callback).
+  const viewKind = useRef(view.kind);
+  useEffect(() => {
+    viewKind.current = view.kind;
+  }, [view.kind]);
   const [authRequested, setAuthRequested] = useState(false);
   const [dismissedAuthIntentId, setDismissedAuthIntentId] = useState<
     string | null
@@ -501,7 +511,9 @@ function StandaloneStudioView({
         )
           return;
         setFailures(0);
+        quietRetry.current = 0;
         if (read === null) {
+          forgetAccess();
           observeAccount?.(null);
           setView({ kind: "unauthenticated" });
           return;
@@ -519,6 +531,7 @@ function StandaloneStudioView({
           notify(leftNotice(left, choices));
         }
         if (choices.selected_tenant_id !== null) {
+          if (!embedded) rememberAccess(choices);
           setView({ kind: "ready", choices });
           return;
         }
@@ -534,7 +547,23 @@ function StandaloneStudioView({
           generation.current === requestGeneration
         ) {
           setFailures((count) => count + 1);
-          setView({ kind: "unavailable", message: GENERIC_LOAD_ERROR });
+          // The server didn't answer (a 502, a dropped line): keep the frame
+          // already up, or the one this tab last confirmed, and check again
+          // quietly; the page's own reads say what didn't load (v1.96 device
+          // polish, lane P: Leads swapped to the waiting shell on a 502).
+          const kept = embedded ? null : keptAccess<WorkspaceChoices>();
+          const shown = viewKind.current === "ready";
+          if (!shown && !kept) {
+            setView({ kind: "unavailable", message: GENERIC_LOAD_ERROR });
+            return;
+          }
+          if (!shown && kept) setView({ kind: "ready", choices: kept });
+          quietRetry.current += 1;
+          window.clearTimeout(quietTimer.current);
+          quietTimer.current = window.setTimeout(
+            () => setQuietAttempt((value) => value + 1),
+            retryDelay(quietRetry.current) * 1000,
+          );
         }
       });
     return () => {
@@ -545,6 +574,7 @@ function StandaloneStudioView({
     };
   }, [
     attempt,
+    quietAttempt,
     embedded,
     observeAccount,
     review.fixtureRequested,
@@ -555,6 +585,7 @@ function StandaloneStudioView({
     () => () => {
       generation.current += 1;
       activeController.current?.abort();
+      window.clearTimeout(quietTimer.current);
     },
     [],
   );

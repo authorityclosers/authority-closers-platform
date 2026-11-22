@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { callIdFromPath } from "./analysis-routes";
+import { forgetAccess } from "./last-access";
 import { ConsentRenewal } from "./consent-renewal";
 import { PhoneOnboarding } from "./leads/phone-onboarding";
 import { UUID_RE } from "./uuid";
@@ -183,6 +184,14 @@ function PurchaseSession({ children }: { children: ReactNode }) {
  */
 export function AppSession({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const inApp =
+    isShellRoute(pathname) ||
+    PURCHASE_ROUTES.has(pathname?.replace(/\/$/, "") ?? "");
+  // Sign-in, sign-out and other pages outside the app: the frame this tab
+  // last confirmed is forgotten, so no next person meets it (last-access.ts).
+  useEffect(() => {
+    if (!inApp) forgetAccess();
+  }, [inApp]);
   if (PURCHASE_ROUTES.has(pathname?.replace(/\/$/, "") ?? "")) {
     return <PurchaseSession>{children}</PurchaseSession>;
   }

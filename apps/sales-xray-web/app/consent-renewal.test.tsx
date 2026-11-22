@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { ConsentRenewal } from "./consent-renewal";
+import { CONSENT_RETRY_MS, ConsentRenewal } from "./consent-renewal";
 import { dismissNotice, NoticeCenter } from "./notice-center";
 import {
   WorkspaceAccessContext,
@@ -301,12 +301,18 @@ it("explains an account that cannot accept, without offering a retry", async () 
   expect(cornerButton("Try again")).toBeUndefined();
 });
 
-it("shows a failed check as a corner card and shows the card when retried", async () => {
-  server([json({ code: "boom" }, 500), json(answer("renewal_required"))]);
+it("retries a failed check quietly, with no second error card, and shows the card when it answers", async () => {
+  // v1.96 device polish, lane P: on a 502 Home showed two errors at once.
+  const wait = vi.spyOn(window, "setTimeout");
+  server([json({ code: "boom" }, 502), json(answer("renewal_required"))]);
   await mount();
   expect(card()).toBeNull();
-  expect(corner()?.textContent).toContain("Couldn't check the Terms");
-  await act(async () => cornerButton("Try again")!.click());
+  expect(corner()).toBeNull();
+  // The quiet try is set for 10 s: run it now.
+  const retry = wait.mock.calls.find(([, ms]) => ms === CONSENT_RETRY_MS[0]);
+  expect(retry).toBeDefined();
+  wait.mockRestore();
+  await act(async () => (retry![0] as () => void)());
   await tick();
   expect(card()).not.toBeNull();
   expect(corner()).toBeNull();
