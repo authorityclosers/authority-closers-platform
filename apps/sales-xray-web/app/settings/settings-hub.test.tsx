@@ -14,6 +14,7 @@ const reads = vi.hoisted(() => ({
   notify: vi.fn(),
   theme: { preference: "light", setPreference: vi.fn() },
   signOut: vi.fn(),
+  routing: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/settings",
@@ -38,6 +39,10 @@ vi.mock("../organisation/organisation-api", async (importOriginal) => ({
   readSeats: reads.seats,
 }));
 vi.mock("./connected-apps-client", () => ({ readHealth: reads.health }));
+vi.mock("../leads/routing-client", () => ({
+  readRouting: reads.routing,
+  ROUTING_CHANGED: "sx:routing-changed",
+}));
 vi.mock("./notifications-client", () => ({ readNotify: reads.notify }));
 vi.mock("../lightbox/theme-provider", () => ({
   useTheme: () => reads.theme,
@@ -112,6 +117,24 @@ beforeEach(() => {
   });
   reads.signOut.mockReset();
   reads.theme.setPreference.mockReset();
+  reads.routing.mockReset();
+  reads.routing.mockResolvedValue({
+    rules: [
+      {
+        id: "s",
+        name: "Split new leads",
+        enabled: true,
+        when: [],
+        give_to: ["a", "b", "c"],
+        shares: [20, 40, 40],
+      },
+    ],
+    people: [
+      { person_id: "a", name: "Farah Fictional" },
+      { person_id: "b", name: "Priya Fictional" },
+      { person_id: "c", name: "Rohan Fictional" },
+    ],
+  });
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -163,7 +186,7 @@ it("gives an owner the setup hero, one green button and a card for each group", 
   expect(line("calls-phones")).toBe("Sellers' phones 1 of 2 ready");
   expect(line("connections")).toBe("Nothing connected yet");
   expect(line("company")).toBe("Logo and details added");
-  expect(line("leads")).toBe("Rules, stages and sources");
+  expect(line("leads")).toBe("Lead split, rules, stages and sources");
   // No Sign out or theme on the owner's hub (they live in Just me).
   expect(host.textContent).not.toContain("Sign out");
 });
@@ -263,4 +286,39 @@ it("works out recording, card lines and where a card goes", () => {
     "3 apps connected",
   );
   expect(groupLine("Plan & billing", null)).toBe("Plan and analysis time");
+});
+
+it("puts who gets new leads first on an owner's hub, opening the split (v1.94)", async () => {
+  await act(async () => root.render(inOrg("owner")));
+  await settle();
+  const card = host.querySelector<HTMLAnchorElement>("a[data-split]");
+  expect(card?.getAttribute("href")).toBe("/settings/lead-rules");
+  expect(card?.textContent).toContain("Who gets new leads");
+  expect(card?.textContent).toContain(
+    "Split by percent: Farah 20 %, Priya 40 % +1",
+  );
+  // Right after the setup hero, before the company's cards.
+  const blocks = [...host.querySelectorAll("section[aria-label]")].map(
+    (section) => section.getAttribute("aria-label"),
+  );
+  expect(blocks.indexOf("Who gets new leads")).toBeLessThan(
+    blocks.indexOf("For everyone"),
+  );
+});
+
+it("says the split is off in plain words", async () => {
+  reads.routing.mockResolvedValue({ rules: [], people: [] });
+  await act(async () => root.render(inOrg("owner")));
+  await settle();
+  expect(host.querySelector("a[data-split]")?.textContent).toContain(
+    "Percent split is off: whoever is free gets the next lead",
+  );
+});
+
+it("never shows a seller the split card, nor reads the rules", async () => {
+  await act(async () => root.render(inOrg("member")));
+  await settle();
+  expect(host.querySelector("a[data-split]")).toBeNull();
+  expect(host.textContent).not.toContain("Who gets new leads");
+  expect(reads.routing).not.toHaveBeenCalled();
 });

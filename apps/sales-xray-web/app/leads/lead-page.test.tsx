@@ -351,3 +351,36 @@ it("says a late follow-up as Late · its time", async () => {
   expect(late?.textContent).toMatch(/^Late · /);
   expect(late?.textContent).not.toContain("was due");
 });
+
+// PR #662 review (v1.94): on a phone the lead scrolls the window, so the list
+// under it takes no height while the lead is open (a long list left a blank
+// stretch past a short lead), and its scroll comes back on close.
+it("takes the list out of the page's height on a phone and gives its scroll back", async () => {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: query.includes("max-width: 599.98px"),
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  }));
+  const shell = document.createElement("div");
+  shell.setAttribute("data-shell-content", "");
+  const list = document.createElement("div");
+  shell.append(list);
+  document.body.append(shell);
+  list.scrollTop = 640;
+  const frame = (open: boolean) => (
+    <LeadPageFrame open={open} label="Shrikant" onClose={() => undefined}>
+      <p>Lead</p>
+    </LeadPageFrame>
+  );
+  await act(async () => root.render(frame(true)));
+  expect(shell.style.height).toBe("0px");
+  expect(shell.style.overflow).toBe("hidden");
+  expect(shell.style.visibility).toBe("hidden");
+  list.scrollTop = 0;
+  await act(async () => root.render(frame(false)));
+  expect(shell.style.height).toBe("");
+  expect(shell.style.overflow).toBe("");
+  expect(shell.style.visibility).toBe("");
+  expect(list.scrollTop).toBe(640);
+  shell.remove();
+});

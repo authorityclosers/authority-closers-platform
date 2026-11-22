@@ -102,6 +102,44 @@
   background: var(--sx-paper);
 }
 
+/* Phones (v1.94, the real-iPhone check, 22 Nov 2026): the lead scrolls the
+   page itself, so Safari's bars fold away and the lead gets the screen (in its
+   own scroller it had about 340 of 844 pt). The page lies over the list (kept
+   as it was, unseen), under the tab bar; the Call band is fixed above the tab
+   bar, and the page ends its height (--lead-dock-h, lead-page-frame.tsx) above
+   it. Fixed, the band is a layer of its own for the page's checks (axe
+   target-size compares a control only with those in its own layer), so the
+   row of actions resting under it is never "half covered". */
+@media (max-width: 599.98px) {
+  .page {
+    position: absolute;
+    z-index: 29;
+    inset: 0 0 auto;
+    display: block;
+    min-height: 100dvh;
+    box-sizing: border-box;
+    overflow: visible;
+    padding-bottom: calc(
+      var(--lead-dock-h, 140px) + var(--lx-bottom-nav-h, 0px) +
+        env(safe-area-inset-bottom, 0px)
+    );
+  }
+
+  .body {
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .dock {
+    position: fixed;
+    right: 0;
+    bottom: calc(
+      var(--lx-bottom-nav-h, 0px) + env(safe-area-inset-bottom, 0px)
+    );
+    left: 0;
+  }
+}
+
 /* ---------- The header card ---------- */
 
 /* The lead's cards 12 dp apart (spec §2: header, row of four, brief), in a
@@ -172,7 +210,10 @@ div.stack {
   max-width: 100%;
   min-height: 48px;
   box-sizing: border-box;
-  margin-block: -8px -14px;
+  /* Its 48 dp target stays clear of the lines around it (v1.94 Readability
+     Gate: once the tag line joined its row, its 8 px reach above lay over the
+     owner line, and its reach below over the stage row). */
+  margin-block: 0 -4px;
   padding: 14px 0;
   border: 0;
   background: none;
@@ -184,6 +225,21 @@ div.stack {
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* The follow-up and the lead's tags share a row (v1.94): side by side when
+   they fit; wrapped, the tags start 16 px under the follow-up's words, past
+   the 14 px its 48 dp target reaches below them, so the two never overlap. */
+.followRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 12px;
+  min-width: 0;
+}
+
+.followRow:empty {
+  display: none;
 }
 
 .follow > svg {
@@ -1151,12 +1207,43 @@ a.callBand {
 }
 
 /* Room at the pane's end, so its last card clears the Call footer. */
-.pane {
-  scroll-padding-bottom: 160px;
+/* On a computer the lead beside the list scrolls in its own box, the Call band
+   under it (v1.94 Readability Gate, axe target-size at 1280: the row of
+   actions rested half under the band's buttons when both scrolled together). */
+section.pane {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: inherit;
+}
+
+.paneBody {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: start;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Room after the last card: it scrolls fully clear of the band. */
+  padding-bottom: 16px;
+  scroll-padding-bottom: 24px;
 }
 
 .paneDock {
   margin-top: 8px;
+}
+
+/* The band takes taps only on its own buttons and links (v1.94 Readability
+   Gate, "covered" at 1280: a control cut off at the foot of the lead's box,
+   "See more", had its middle under the band's empty top). Taps on the band's
+   bare edge reach nothing either way: the lead's box ends where it begins. */
+.paneDock {
+  pointer-events: none;
+}
+
+.paneDock :is(a, button, input, select, textarea, [role="button"]) {
+  pointer-events: auto;
 }
 
 /* The sliding stage strip takes the keyboard's focus: a visible ring. */

@@ -22,6 +22,7 @@ import {
   ChevronRight,
   LogOut,
   Moon,
+  Percent,
   PhoneCall,
   Sun,
   type LucideIcon,
@@ -41,6 +42,11 @@ import { AccountAvatarImage } from "../speaker-avatar";
 import { useWorkspaceAccess } from "../workspace-access";
 import { useCanHere } from "../workspace-role";
 import { readAiApps } from "./ai-apps-client";
+import {
+  LEAD_SPLIT_HREF,
+  SPLIT_LINE_UNKNOWN,
+  useLeadSplitLine,
+} from "./lead-split-line";
 import {
   GROUP_ICON,
   GROUP_LINE,
@@ -182,6 +188,35 @@ function GroupCard({
   );
 }
 
+/**
+ * Who gets new leads, one tap from the hub (v1.94, owner 22 Nov 2026: "I
+ * don't see on mobile or anywhere the settings for the ratio of leads"): how
+ * new leads go now, opening the split itself. Only for whoever may manage
+ * leads; never a seller.
+ */
+function SplitCard() {
+  const allowed = useCanHere()("leads.manage") === true;
+  const line = useLeadSplitLine(allowed);
+  if (!allowed) return null;
+  return (
+    <section className={styles.block} aria-label="Who gets new leads">
+      <Link
+        href={LEAD_SPLIT_HREF}
+        className={styles.card}
+        data-split=""
+        data-sx-feature="settings_hub_split"
+      >
+        <IconTile icon={Percent} />
+        <span className={styles.text}>
+          <span className={styles.name}>Who gets new leads</span>
+          <span className={styles.line}>{line ?? SPLIT_LINE_UNKNOWN}</span>
+        </span>
+        <ChevronRight size={18} aria-hidden="true" className={styles.chevron} />
+      </Link>
+    </section>
+  );
+}
+
 /** The owner's hub: setup first, then the company's cards, then yours. */
 function OwnerHub() {
   const setup = useSetup();
@@ -196,6 +231,7 @@ function OwnerHub() {
   return (
     <>
       <SetupHero setup={setup} />
+      <SplitCard />
       {company.length > 0 ? (
         <section className={styles.block} aria-label="For everyone">
           <Label>For everyone</Label>

@@ -169,6 +169,7 @@
    "tiny-text | span.chats:chatAvatar > span.chats:channelMark > span.report-entities:monogram"
   ],
   "chats | long | 360 light 100%": [
+   "overlap | button.chats__row > span.chats__chatAvatar > span.chats__channelMark > span.report-entities__monogram > ⟂ > li > button.",
    "clipped-text | button.chats__row > span.chats__rowMain > span.chats__rowText > span",
    "contrast | button.chats__row > span.chats__chatAvatar > span.chats__channelMark > span.report-entities__monogram",
    "contrast | span.chats__rowMeta > span.chats__channelTag > span.chats__channelMark > span.report-entities__monogram",
@@ -199,6 +200,7 @@
    "tiny-text | span.chats:chatAvatar > span.chats:channelMark > span.report-entities:monogram"
   ],
   "chats | plain | 360 light 100%": [
+   "overlap | button.chats__row > span.chats__chatAvatar > span.chats__channelMark > span.report-entities__monogram > ⟂ > li > button.",
    "clipped-text | button.chats__row > span.chats__rowMain > span.chats__rowText > span",
    "contrast | button.chats__row > span.chats__chatAvatar > span.chats__channelMark > span.report-entities__monogram",
    "contrast | span.chats__rowMeta > span.chats__channelTag > span.chats__channelMark > span.report-entities__monogram",
@@ -568,6 +570,7 @@
    "blank | body"
   ],
   "report | long | 1280 dark": [
+   "axe:color-contrast | #_R_slritpeoolb_-heading-overview",
    "axe:color-contrast | #_R_eatpesncflb_-heading-overview",
    "axe:color-contrast | .dipak-overview:eyebrow",
    "axe:color-contrast | .dipak-overview:lede",
@@ -691,6 +694,7 @@
    "axe:color-contrast | .dipak-overview:rowBody > .dipak-overview:rowActions > .dipak-overview:textAction[data-open-review=\"14\"][type=\"button\"]"
   ],
   "report | long | 360 dark 130%": [
+   "axe:color-contrast | #_R_slritpeoolb_-heading-overview",
    "axe:color-contrast | #_R_eatpesncflb_-heading-overview",
    "axe:color-contrast | .dipak-overview:eyebrow",
    "axe:color-contrast | .dipak-overview:lede",
@@ -810,6 +814,7 @@
    "axe:color-contrast | .dipak-overview:rowBody > .dipak-overview:rowActions > .dipak-overview:textAction[data-open-review=\"14\"][type=\"button\"]"
   ],
   "report | plain | 1280 dark": [
+   "axe:color-contrast | #_R_slritpeoolb_-heading-overview",
    "axe:color-contrast | #_R_eatpesncflb_-heading-overview",
    "axe:color-contrast | .dipak-overview:eyebrow",
    "axe:color-contrast | .dipak-overview:lede",
@@ -933,6 +938,7 @@
    "axe:color-contrast | .dipak-overview:rowBody > .dipak-overview:rowActions > .dipak-overview:textAction[data-open-review=\"14\"][type=\"button\"]"
   ],
   "report | plain | 360 dark 130%": [
+   "axe:color-contrast | #_R_slritpeoolb_-heading-overview",
    "axe:color-contrast | #_R_eatpesncflb_-heading-overview",
    "axe:color-contrast | #_r_0_-heading-overview",
    "axe:color-contrast | .dipak-overview:eyebrow",

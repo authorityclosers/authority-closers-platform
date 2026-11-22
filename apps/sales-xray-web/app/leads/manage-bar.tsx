@@ -106,6 +106,7 @@ export function filterOf(ask: {
   put("created", more.created);
   put("since", more.since);
   put("until", more.until);
+  put("tag", more.tag);
   put("owner", ask.owner);
   put("pipeline", ask.pipeline);
   put("stage", ask.stage);
@@ -238,19 +239,26 @@ export async function runWithUndo(
 export const UNDONE_EVENT = "sx-leads-bulk-undone";
 
 /**
- * Tags on leads: not built yet (the lead-management API, 17 Nov 2026: "leads
- * have no tags yet, so bulk tag is not built"). The dock keeps its place for
- * it and says so, rather than doing nothing.
+ * Tags on many leads (migration 0165): one bulk job that adds or takes off
+ * the workspace's tags, with Undo on its notice like every other change.
  */
 export type TagChange = {
   selection: Selection;
+  /** The workspace's tags, by id. */
   tags: string[];
-  mode: "add" | "remove" | "replace";
+  mode: "add" | "remove";
 };
-export function tagLeads(change: TagChange): Promise<BulkJob> {
-  void change;
-  return Promise.reject(
-    new LeadsError("Tags come in a later update: leads have no tags yet.", 501),
+export function tagLeads(
+  change: TagChange,
+  command = commandId(),
+): Promise<BulkJob> {
+  return runWithUndo(
+    {
+      ...selectionRequest(change.selection),
+      action: change.mode === "add" ? "tag" : "untag",
+      tag_ids: change.tags,
+    },
+    command,
   );
 }
 
@@ -267,18 +275,6 @@ export function withShelf(
   return enabled
     ? actions
     : { ...actions, onArchive: undefined, onBin: undefined };
-}
-
-export function sayTagsLater() {
-  notify({
-    id: "bulk-tag",
-    tone: "info",
-    title: "Tags are coming",
-    message: SHELF_ACTIONS_ENABLED
-      ? "Leads have no tags yet. Assign, Stage and Archive work now."
-      : "Leads have no tags yet. Assign and Stage work now.",
-    timeout: 5000,
-  });
 }
 
 /* ---------- The scope banner ---------- */

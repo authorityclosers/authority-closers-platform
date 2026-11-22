@@ -1,6 +1,13 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+
+// Who gets new leads: the sheet's row reads the rules (v1.94).
+const routing = vi.hoisted(() => ({ read: vi.fn() }));
+vi.mock("../leads/routing-client", () => ({
+  readRouting: routing.read,
+  ROUTING_CHANGED: "sx:routing-changed",
+}));
 
 import { accountInitials, SettingsMenu } from "./settings-menu";
 import type { Allowance } from "../acquisition-client";
@@ -31,6 +38,11 @@ function asPhone(phone: boolean) {
   });
 }
 
+beforeEach(() => {
+  routing.read.mockReset();
+  routing.read.mockResolvedValue({ rules: [], people: [] });
+});
+
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
@@ -42,6 +54,33 @@ afterEach(async () => {
 });
 
 type Props = Partial<Parameters<typeof SettingsMenu>[0]>;
+
+/** Lets the menu's own reads settle until `ready` holds (up to ~2 s). */
+async function until(ready: () => boolean) {
+  for (let tries = 0; tries < 100 && !ready(); tries++)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+}
+
+/** Signed in to a fictional organisation with this role. */
+const orgAccess = (
+  role: "member" | "manager" | "owner",
+): WorkspaceAccessValue => ({
+  status: "ready",
+  authenticated: true,
+  context: { personId: "fictional-person", sessionId: "s", tenantId: "org" },
+  workspaces: [
+    {
+      tenant_id: "org",
+      kind: "organisation",
+      name: "Fictional Org",
+      role,
+      sales_xray_enabled: true,
+    },
+  ],
+  retry: () => {},
+});
 
 async function open(props: Props = {}, access?: WorkspaceAccessValue) {
   host = document.createElement("div");
@@ -244,15 +283,21 @@ it.each(["main", "news"] as const)(
       button.textContent?.includes("What's new"),
     )!;
     if (initialView === "main") {
+      // The news loads on its own (as the lead split line does): wait for it.
+      await until(() => news.textContent?.includes("1 new") === true);
       expect(news.textContent).toContain("1 new");
       expect(
         fetcher.mock.calls.some(([path]) => path === "/v1/updates/seen"),
       ).toBe(false);
       await act(async () => news.click());
     }
+    await until(() => menu.textContent?.includes("Draft") === true);
     expect(menu.textContent).toContain("Draft");
     expect(menu.textContent).toContain("Updates follow your account");
     expect(menu.textContent).toContain("A fictional improvement");
+    await until(() =>
+      fetcher.mock.calls.some(([path]) => path === "/v1/updates/seen"),
+    );
     expect(fetcher).toHaveBeenCalledWith(
       "/v1/updates/seen",
       expect.objectContaining({
@@ -262,6 +307,7 @@ it.each(["main", "news"] as const)(
     await act(async () =>
       menu.querySelector<HTMLButtonElement>("button")!.click(),
     );
+    await until(() => menu.textContent?.includes("1 new") === false);
     expect(menu.textContent).not.toContain("1 new");
   },
 );
@@ -475,8 +521,9 @@ it("asks the server for nothing while closed, though it stays mounted", async ()
 // admins.
 it("puts your settings, and an organisation's for its managers, in You", async () => {
   asPhone(true);
-  const rows = async (props: Props) => {
-    const sheet = await open(props);
+  routing.read.mockResolvedValue({ rules: [], people: [] });
+  const rows = async (props: Props, access?: WorkspaceAccessValue) => {
+    const sheet = await open(props, access);
     const list = (label: string) =>
       [
         ...sheet.querySelectorAll<HTMLAnchorElement>(
@@ -488,19 +535,76 @@ it("puts your settings, and an organisation's for its managers, in You", async (
       theirs: list("Organisation settings"),
     };
   };
-  const manager = await rows({ organisation: true, insights: true });
+  const manager = await rows(
+    { organisation: true, insights: true },
+    orgAccess("owner"),
+  );
   expect(manager.yours).toEqual([
     "/settings/profile",
     "/settings/selling",
     "/settings/notifications",
   ]);
   // One Settings for the organisation (round-2 board 7, 20 Nov 2026).
-  expect(manager.theirs).toEqual(["/settings", "/settings/team"]);
+  // Who gets new leads first (v1.94), then the organisation's Settings.
+  expect(manager.theirs).toEqual([
+    "/settings/lead-rules",
+    "/settings",
+    "/settings/team",
+  ]);
   await act(async () => root.unmount());
   host.remove();
-  const seller = await rows({ organisation: true, insights: false });
+  const seller = await rows(
+    { organisation: true, insights: false },
+    orgAccess("member"),
+  );
   expect(seller.yours).toHaveLength(3);
   expect(seller.theirs).toEqual([]);
+});
+
+it("gives whoever manages leads a row to the split, saying how leads go now (v1.94)", async () => {
+  asPhone(true);
+  routing.read.mockResolvedValue({
+    rules: [
+      {
+        id: "s",
+        name: "Split new leads",
+        enabled: true,
+        when: [],
+        give_to: ["a", "b", "c"],
+        shares: [20, 40, 40],
+      },
+    ],
+    people: [
+      { person_id: "a", name: "Farah Fictional" },
+      { person_id: "b", name: "Priya Fictional" },
+      { person_id: "c", name: "Rohan Fictional" },
+    ],
+  });
+  // A manager (leads, not billing) gets the Organisation section with the row.
+  const sheet = await open(
+    { organisation: true, insights: false },
+    orgAccess("manager"),
+  );
+  await act(async () => {
+    for (let n = 0; n < 4; n++) await Promise.resolve();
+  });
+  const row = sheet.querySelector<HTMLAnchorElement>(
+    'ul[aria-label="Organisation settings"] a[href="/settings/lead-rules"]',
+  );
+  expect(row?.textContent).toContain("Who gets new leads");
+  expect(row?.textContent).toContain(
+    "Split by percent: Farah 20 %, Priya 40 % +1",
+  );
+  await act(async () => root.unmount());
+  host.remove();
+  routing.read.mockClear();
+  // A seller: no row, no read.
+  const seller = await open(
+    { organisation: true, insights: false },
+    orgAccess("member"),
+  );
+  expect(seller.querySelector('a[href="/settings/lead-rules"]')).toBeNull();
+  expect(routing.read).not.toHaveBeenCalled();
 });
 
 // Shell sweep, 23 Oct 2026: with nothing to take initials from, the avatar

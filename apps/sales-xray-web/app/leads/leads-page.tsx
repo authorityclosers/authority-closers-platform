@@ -87,6 +87,7 @@ import { publishBadge } from "./leads-badge";
 import { useImportAsked } from "./import-asked";
 import { LeadsMenu, type LeadsMenuItem } from "./leads-menu";
 import { ArrivedPick, LeadsPerDaySheet } from "./arrived-pick";
+import { TagPick } from "./tag-pick";
 import { useMarkSeen } from "./arrival";
 import { screenChanged, track } from "../telemetry";
 
@@ -314,6 +315,8 @@ const DUE = new Set(["late", "today", "week", "none"]);
 const SINCE = new Set(["today", "week", "month", "never"]);
 const MADE = new Set(["today", "yesterday", "week", "month", "history"]);
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+// A tag's id (migration 0165).
+const TAG_ID = /^[0-9a-f-]{36}$/i;
 const SORTS = new Set(["next_action", "last_contact", "name", "created"]);
 // What a work tab shares with the others; every other filter is the tab's own.
 const TAB_WIDE = new Set(["side", "view", "when", "sort", "order"]);
@@ -344,6 +347,7 @@ function moreFrom(params: { get: (key: string) => string | null }): ListMore {
     until: DAY.test(params.get("until") ?? "") ? params.get("until") : null,
     sort,
     order: sort && (order === "asc" || order === "desc") ? order : null,
+    tag: TAG_ID.test(params.get("tag") ?? "") ? params.get("tag") : null,
   };
 }
 
@@ -2275,11 +2279,18 @@ export function LeadsRoute({
                       }
                       onChange={(step) => pickWork({ step })}
                       after={
-                        <ArrivedPick
-                          more={more}
-                          onChange={(next) => pickWork(next)}
-                          onPerDay={can ? () => setPerDay(true) : undefined}
-                        />
+                        <>
+                          <ArrivedPick
+                            more={more}
+                            onChange={(next) => pickWork(next)}
+                            onPerDay={can ? () => setPerDay(true) : undefined}
+                          />
+                          {/* Tags (0165): beside the date, once tags exist. */}
+                          <TagPick
+                            more={more}
+                            onChange={(next) => pickWork(next)}
+                          />
+                        </>
                       }
                       end={
                         <>

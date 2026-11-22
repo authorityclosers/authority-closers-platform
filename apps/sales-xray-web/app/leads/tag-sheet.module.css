@@ -1,0 +1,299 @@
+/* The Tag sheet (migration 0165; picks 17 Nov 2026; v1.94), in the v1.90
+   family: the deep green switch pill and main button, never teal. Tokens
+   only (ui/sx-tokens.css). */
+
+.sheet {
+  --sx-sheet-width: 460px;
+  color: var(--sx-ink);
+}
+
+.body {
+  display: grid;
+  gap: 12px;
+}
+
+.modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+}
+
+.mode {
+  min-height: 40px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* The family's switch: the chosen side is the solid deep green pill. */
+.mode[data-on] {
+  background: var(--sx-gloss);
+  color: var(--sx-gloss-ink);
+  box-shadow: var(--sx-gloss-depth);
+}
+
+.mode:focus-visible,
+.make:focus-visible,
+.pill:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  color: var(--sx-muted);
+}
+
+.search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  outline: none;
+}
+
+.search:focus-within {
+  border-color: var(--sx-primary-ink);
+}
+
+.list {
+  display: grid;
+  gap: 2px;
+  max-height: min(52vh, 420px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.tag {
+  position: relative;
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto 28px;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 8px 0 14px;
+  border-radius: var(--sx-radius-md);
+  cursor: pointer;
+}
+
+.tag:hover {
+  background: var(--sx-sunken);
+}
+
+.tag[data-on] {
+  background: color-mix(in oklab, var(--sx-primary-ink) 10%, transparent);
+}
+
+/* Ten are ticked: the others wait (the note says why). */
+.tag[data-waits] {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.tag[data-waits]:hover {
+  background: transparent;
+}
+
+.tag:focus-within {
+  box-shadow: var(--sx-focus-ring);
+}
+
+.name {
+  overflow: hidden;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.count {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The real checkbox covers the row for taps and screen readers; the tick is
+   what shows. */
+.box {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.tick {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--sx-line-strong);
+  border-radius: 7px;
+  color: var(--sx-surface);
+}
+
+.tag[data-on] .tick {
+  border-color: var(--sx-primary-ink);
+  background: var(--sx-primary-ink);
+}
+
+.make {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px dashed var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.plus {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--sx-primary-ink) 12%, transparent);
+  color: var(--sx-primary-ink);
+}
+
+.ghost {
+  height: 52px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-fill-soft);
+}
+
+.note {
+  margin: 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.footer {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 8px;
+}
+
+.preview {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  text-align: center;
+}
+
+.pill {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.pill:disabled {
+  cursor: default;
+  opacity: 0.45;
+  box-shadow: none;
+}
+
+/* The lead page's line: chips, then a quiet button. */
+.leadLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.leadEdit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px dashed var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.leadEdit:hover {
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+}
+
+.leadEdit:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* "Manage tags" under the tag filter's list (owners, admins, managers). */
+.manage {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--sx-radius-md);
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.manage svg {
+  color: var(--sx-ink-2);
+}
+
+.manage:hover {
+  background: var(--sx-sunken);
+}
+
+.manage:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}

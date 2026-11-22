@@ -53,7 +53,6 @@ import {
   UNDONE_EVENT,
   filterOf,
   readLoadsSoon,
-  sayTagsLater,
   selectionCount,
   useDeskSelect,
   useWideList,
@@ -62,6 +61,7 @@ import {
   type Selection,
 } from "./manage-bar";
 import { LoadingRows } from "./leads-skeleton";
+import { TagSheet } from "./tag-sheet";
 import {
   DeleteLeadsSheet,
   SelectBar,
@@ -629,11 +629,12 @@ export function ListView({
     open: boolean;
     leads: Doomed[];
   } | null>(null);
-  // The managed bars' sheets: Assign with each seller's load, Archive, the Bin.
+  // The managed bars' sheets: Assign with each seller's load, Tag, Archive,
+  // the Bin.
   const [manage, setManage] = useState<{
     round: number;
     open: boolean;
-    what: "assign" | "archive" | "bin";
+    what: "assign" | "tag" | "archive" | "bin";
   } | null>(null);
   // Results remember the question they answer; until the current one is
   // answered the list shows its skeleton. A refresh of the same question
@@ -1151,7 +1152,7 @@ export function ListView({
     window.addEventListener(UNDONE_EVENT, again);
     return () => window.removeEventListener(UNDONE_EVENT, again);
   }, []);
-  const openManage = (what: "assign" | "archive" | "bin") =>
+  const openManage = (what: "assign" | "tag" | "archive" | "bin") =>
     setManage((current) => ({
       round: (current?.round ?? 0) + 1,
       open: true,
@@ -1177,7 +1178,7 @@ export function ListView({
   const manageActions: ManageActions = withShelf({
     onAssign: () => openManage("assign"),
     onStage: () => openBulk("stage"),
-    onTag: sayTagsLater,
+    onTag: () => openManage("tag"),
     onArchive: () => openManage("archive"),
     onWhatsApp: allMatching ? undefined : () => openBulk("whatsapp"),
     onBin: () => openManage("bin"),
@@ -1685,6 +1686,14 @@ export function ListView({
             selection={selection}
             side={side}
             owners={owners}
+            onClose={closeManage}
+            onDone={finished}
+          />
+        ) : manage.what === "tag" ? (
+          <TagSheet
+            key={manage.round}
+            open={manage.open}
+            target={{ kind: "many", selection }}
             onClose={closeManage}
             onDone={finished}
           />

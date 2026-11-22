@@ -231,6 +231,13 @@
   flex: none;
 }
 
+/* The "Everyone" chip beside a section's title: 12 px from a tablet up (v1.94). */
+@media (min-width: 600px) {
+  .scope :global([data-pulse-scope] *) {
+    font-size: var(--sx-text-xs);
+  }
+}
+
 /* The hub: no side list, hero and cards across the page. */
 .shell[data-section="index"] {
   grid-template-columns: minmax(0, 1fr);

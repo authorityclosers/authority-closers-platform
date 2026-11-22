@@ -222,8 +222,11 @@ export function AddTaskSheet({
 }) {
   const id = useId();
   const me = useWorkspaceAccess()?.context?.personId ?? null;
-  // One command per sheet: Add again after a failure never adds twice.
-  const [command] = useState(commandId);
+  // One command per task: Add again after a failure never adds twice, and
+  // the next task gets a new one (W8, AC tester, 4 Nov 2026: the sheet stays
+  // open on the lead, and a second meeting's save came back as the first,
+  // already done, task).
+  const [command, setCommand] = useState(commandId);
   const [times] = useState(() => quickTimes(now()));
   // A draft per lead (or one's own): Back, Forward or a refresh keep it
   // (robot, 1 Nov 2026: 2e72e8fa, 11ef4f38, 0f5c0fb1); saving clears it.
@@ -263,6 +266,7 @@ export function AddTaskSheet({
         timeout: 5000,
       });
       setTitle("");
+      setCommand(commandId());
       onAdded(at);
       // Home's and Tasks' lists show it now, not after a refresh (218, 219).
       tasksChanged();
@@ -275,6 +279,7 @@ export function AddTaskSheet({
           message: reason.message,
         });
         setTitle("");
+        setCommand(commandId());
         onAdded(at);
         tasksChanged();
         return;

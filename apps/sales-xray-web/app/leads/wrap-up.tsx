@@ -59,6 +59,7 @@ export function WrapUpFrame({
   children: ReactNode;
 }) {
   const box = useRef<HTMLDivElement>(null);
+  const scrim = useRef<HTMLDivElement>(null);
   const [back, setBack] = useState<(() => void) | null>(null);
   const register = useCallback(
     (next: (() => void) | null) => setBack(() => next),
@@ -77,10 +78,38 @@ export function WrapUpFrame({
       root.style.overflow = was;
     };
   }, []);
+  // With the phone's keyboard up the screen fits what is still seen (the
+  // visual viewport), so Save rides just above the keyboard (v1.94, the
+  // real-iPhone check: typing in "What did they say?" put Save under Safari's
+  // keyboard bar). Without a keyboard it is the whole window again.
+  useEffect(() => {
+    const view = window.visualViewport;
+    const layer = scrim.current;
+    if (!view || !layer) return;
+    const follow = () => {
+      const keyboard = window.innerHeight - view.height > 80;
+      layer.style.top = keyboard ? `${Math.round(view.offsetTop)}px` : "";
+      layer.style.height = keyboard ? `${Math.round(view.height)}px` : "";
+      layer.style.bottom = keyboard ? "auto" : "";
+      if (!keyboard) return;
+      // The field being typed in stays in sight above Save.
+      const field = document.activeElement;
+      if (field instanceof HTMLElement && layer.contains(field))
+        field.scrollIntoView?.({ block: "nearest" });
+    };
+    follow();
+    view.addEventListener("resize", follow);
+    view.addEventListener("scroll", follow);
+    return () => {
+      view.removeEventListener("resize", follow);
+      view.removeEventListener("scroll", follow);
+    };
+  }, []);
   if (typeof document === "undefined") return null;
   const onBack = back ?? onLater;
   return createPortal(
     <div
+      ref={scrim}
       className={styles.scrim}
       // While it asks, the corner's news waits (notice-center.tsx); once
       // saved, the "Moved to" card with its Undo shows.

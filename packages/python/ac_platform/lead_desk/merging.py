@@ -9,7 +9,7 @@ A merge:
   each keeping its own actor and time. Where both leads have an open meeting, the other
   lead's is cancelled first, so one stays open. Open tasks written twice become one;
 - fills the kept lead's empty contact fields from the other (its phone too, when the kept
-  lead has none);
+  lead has none), and puts the other lead's tags on it too, up to 10 (tags.py);
 - keeps the furthest stage, and closes the other lead as Junk, "Merged into another lead":
   the bookkeeping moves (source "merge") are never progress, a conversion, a partner
   event or a seller's work;
@@ -34,6 +34,7 @@ from ac_platform.audit.service import append_audit_event
 from ac_platform.call_data.models import CallObject, CallObjectDecision
 from ac_platform.lead_desk import dupes
 from ac_platform.lead_desk import meetings as meeting_rows
+from ac_platform.lead_desk import tags as lead_tags
 from ac_platform.lead_desk.contracts import MergeLeads, MergeView, UndoMerge
 from ac_platform.lead_desk.errors import DeskError
 from ac_platform.lead_desk.journey import model as journeys
@@ -254,6 +255,11 @@ async def merge(desk: LeadDesk, command: MergeLeads) -> MergeView:
         filled["next_action_at"] = gone.next_action_at.isoformat()
     if filled:
         moved["filled"] = filled
+    # The other lead's tags go on the kept lead too (it keeps its own); an unmerge takes off
+    # exactly these.
+    carried = await lead_tags.carry(desk, gone, kept, command_id=uuid5(command.command_id, "tags"))
+    if carried:
+        moved["tags_added"] = [str(tag_id) for tag_id in carried]
 
     # The furthest stage is kept; the other lead closes as merged.
     kept_journey = await desk._labels(journeys.pipeline_of(kept))
@@ -454,6 +460,13 @@ async def unmerge(desk: LeadDesk, merge_id: UUID, command: UndoMerge) -> MergeVi
         and kept.next_action_at.isoformat() == filled["next_action_at"]
     ):
         kept.next_action_at = None
+    if moved.get("tags_added"):
+        await lead_tags.uncarry(
+            desk,
+            kept,
+            [UUID(tag_id) for tag_id in moved["tags_added"]],
+            command_id=uuid5(command.command_id, "tags"),
+        )
 
     async def back(lead: Lead, was: list[Any], label: str) -> None:
         journey = await desk._labels(journeys.pipeline_of(lead))

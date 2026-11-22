@@ -966,3 +966,49 @@
   text-overflow: clip;
   white-space: normal;
 }
+
+/* A row's tags (v1.94): under the name, the place gives way and one chip
+   and "+N" stay whole on the same line. */
+.wrap[data-wide-table]:not([data-fit]) .nameCell .name small[data-tagged],
+.name small[data-tagged] {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* The place keeps a floor (about eight letters, or half the line); the chip
+   gives way first, its name ending in "…" beside "+N" (v1.94 judge). */
+.nameWhere {
+  flex: 0 1 auto;
+  min-width: min(8ch, 50%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The list's line-3 floor for a chip does not apply in a table cell. */
+.name small .nameTags {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* A tagged row's name button takes the whole cell, so the place and its
+   chip use the column's width, not just the name's. */
+.nameCell .name:has(> small[data-tagged]) {
+  flex: 1 1 auto;
+}
+
+.name small[data-tagged] {
+  align-self: stretch;
+}
+
+/* A little tighter in a table cell (v1.94 polish): "Pune expo +2" whole
+   beside "Kolhapur", shortened only when the cell truly runs out. */
+.wrap .name small .nameTags {
+  margin-inline-start: 4px;
+}
+
+.wrap .name small .nameTags > span {
+  padding-inline: 6px;
+}
