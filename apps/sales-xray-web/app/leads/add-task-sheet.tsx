@@ -14,8 +14,8 @@
  * the task, otherwise at its time.
  */
 
-import { CalendarClock, Check, Search } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { Check, Search } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { displayName } from "../display-name";
 import { notify } from "../notice-center";
@@ -32,13 +32,8 @@ import {
   type NewTask,
   type TaskKind,
 } from "./leads-client";
-import {
-  daysFrom,
-  dueWords,
-  kindOf,
-  localInput,
-  quickTimes,
-} from "./task-words";
+import { ReminderTime, reminderAt, type ReminderPick } from "./reminder-time";
+import { dueWords, kindOf } from "./task-words";
 import { useDraft } from "./drafts";
 import { tasksChanged } from "./tasks-changed";
 import styles from "./add-task-sheet.module.css";
@@ -58,24 +53,6 @@ export const EARLY_MINUTES = 15;
 
 /** The most leads a search shows. */
 const FOUND = 6;
-
-/** The picked time with the day first ("Sat, 1 Nov, 4:00 pm"), whatever the
-    phone's language: the native field wrote 11/01/2026 on some phones. */
-function whenWords(at: Date, now: Date): string {
-  const clock = at.toLocaleTimeString("en-IN", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  const days = daysFrom(at, now);
-  if (days === 0) return `Today, ${clock}`;
-  if (days === 1) return `Tomorrow, ${clock}`;
-  const day = at.toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
-  return `${day}, ${clock}`;
-}
 
 export type TaskLead = {
   lead_id: string;
@@ -220,25 +197,27 @@ export function AddTaskSheet({
   onOpenTasks?: () => void;
   now?: () => Date;
 }) {
-  const id = useId();
   const me = useWorkspaceAccess()?.context?.personId ?? null;
   // One command per task: Add again after a failure never adds twice, and
   // the next task gets a new one (W8, AC tester, 4 Nov 2026: the sheet stays
   // open on the lead, and a second meeting's save came back as the first,
   // already done, task).
   const [command, setCommand] = useState(commandId);
-  const [times] = useState(() => quickTimes(now()));
   // A draft per lead (or one's own): Back, Forward or a refresh keep it
   // (robot, 1 Nov 2026: 2e72e8fa, 11ef4f38, 0f5c0fb1); saving clears it.
   const [title, setTitle] = useDraft(`task:${given?.lead_id ?? "own"}`);
   const [kind, setKind] = useState<TaskKind>(KINDS[0]);
   const [lead, setLead] = useState<TaskLead | null>(given);
-  const [at, setAt] = useState<Date>(times[0].at);
+  // The shared reminder times (owner, 22 Nov 2026): in an hour by default.
+  const [pick, setPick] = useState<ReminderPick>("hour");
+  const [custom, setCustom] = useState("");
   const [early, setEarly] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
     if (busy) return;
+    // Counted at the tap: "In 2 min" is two minutes from now.
+    const at = reminderAt(pick, custom, now()) ?? now();
     setBusy(true);
     const when = dueWords({ starts_at: at.toISOString() }, now());
     const task: NewTask = {
@@ -353,48 +332,14 @@ export function AddTaskSheet({
           <LeadPicker lead={lead} me={me} onPick={setLead} />
         </div>
 
-        <div className={styles.field}>
-          <span id={`${id}-when`}>When</span>
-          <div
-            className={styles.chips}
-            role="group"
-            aria-labelledby={`${id}-when`}
-          >
-            {times.map((time) => (
-              <button
-                key={time.key}
-                type="button"
-                className={styles.chip}
-                aria-pressed={time.at.getTime() === at.getTime()}
-                onClick={() => setAt(time.at)}
-              >
-                {time.label}
-              </button>
-            ))}
-          </div>
-          {/* Our words over the phone's own picker: a tap opens its calendar. */}
-          <label className={styles.when}>
-            <CalendarClock size={16} aria-hidden="true" />
-            <span>{whenWords(at, now())}</span>
-            <input
-              type="datetime-local"
-              className={styles.whenInput}
-              aria-label="Date and time"
-              value={localInput(at)}
-              onClick={(event) => {
-                try {
-                  event.currentTarget.showPicker();
-                } catch {
-                  // Older phones have no showPicker; they open it on the tap.
-                }
-              }}
-              onChange={(event) => {
-                const picked = new Date(event.target.value);
-                if (!Number.isNaN(picked.getTime())) setAt(picked);
-              }}
-            />
-          </label>
-        </div>
+        <ReminderTime
+          label="When"
+          pick={pick}
+          custom={custom}
+          now={now}
+          onPick={setPick}
+          onCustom={setCustom}
+        />
 
         <label className={styles.switch}>
           <span className={styles.switchWords}>

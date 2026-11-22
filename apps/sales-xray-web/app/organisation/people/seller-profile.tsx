@@ -14,10 +14,12 @@ import {
   CircleUserRound,
   LayoutDashboard,
   ListChecks,
+  Send,
   SlidersHorizontal,
   Smartphone,
   Users,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 
 import {
@@ -287,6 +289,31 @@ export function SellerSections({
                           aria-hidden="true"
                         />
                       </button>
+                    ) : null}
+                    {/* What they sent (v1.95, owner 22 Nov 2026): every
+                        message to a lead, on Outreach. */}
+                    {rep && (canSeeTeam || isYou) ? (
+                      <Link
+                        className={family.row}
+                        href={`/outreach?by=${encodeURIComponent(isYou ? "person:me" : `person:${personId}`)}`}
+                        data-sx-feature="person_outreach"
+                      >
+                        <span className={family.tile}>
+                          <Send aria-hidden="true" />
+                        </span>
+                        <span className={family.rowText}>
+                          <span className={family.rowTitle}>Outreach</span>
+                          <span className={family.rowSub}>
+                            {isYou
+                              ? "Every message you sent"
+                              : `Every message ${firstName} sent`}
+                          </span>
+                        </span>
+                        <ChevronRight
+                          className={family.chevron}
+                          aria-hidden="true"
+                        />
+                      </Link>
                     ) : null}
                     {/* Quiet chips (owner, 25 Oct 2026): only what needs a look. */}
                     {(rep && !rep.available) ||

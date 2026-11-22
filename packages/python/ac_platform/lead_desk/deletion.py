@@ -48,6 +48,9 @@ from ac_platform.lead_desk.models import (
     LeadTagLink,
     LeadTask,
     LeadTaskReminder,
+    LeadTouch,
+    LeadTouchOverride,
+    LeadTouchReply,
     LeadWhatsAppMessage,
 )
 from ac_platform.partner_events.models import PartnerLeadEvent
@@ -227,6 +230,15 @@ async def remove(
 
     # Its tags go first (migration 0165; each change was in its history, removed below).
     await db.execute(delete(LeadTagLink).where(*mine(LeadTagLink)).execution_options(**_QUIET))
+    # Its outreach log (migration 0166): replies, then touches, then managers' overrides; the
+    # words in them (our summaries, their reply words) go with the lead.
+    await db.execute(
+        delete(LeadTouchReply).where(*mine(LeadTouchReply)).execution_options(**_QUIET)
+    )
+    await db.execute(delete(LeadTouch).where(*mine(LeadTouch)).execution_options(**_QUIET))
+    await db.execute(
+        delete(LeadTouchOverride).where(*mine(LeadTouchOverride)).execution_options(**_QUIET)
+    )
     removed = {
         "events": _count(
             await db.execute(delete(LeadEvent).where(*mine(LeadEvent)).execution_options(**_QUIET))

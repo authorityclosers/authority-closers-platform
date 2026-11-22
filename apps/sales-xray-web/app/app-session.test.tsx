@@ -349,6 +349,7 @@ it.each([
   "/settings/ai-replies/",
   "/settings/group/leads",
   "/settings/group/calls-phones/",
+  "/outreach",
 ])("keeps %s inside the existing authenticated app boundary", async (route) => {
   pathname = route;
   await mount(<AccountProbe />);

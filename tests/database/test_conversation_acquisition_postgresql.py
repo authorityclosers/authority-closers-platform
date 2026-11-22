@@ -232,10 +232,9 @@ def test_reduced_trial_preserves_historical_usage_and_same_source_replay(
                 await app.claim(guest.token, state.actor)
                 assert await app.reserve(original_source, actor=state.actor) == original_usage
                 assert (await app.allowance(actor=state.actor))["committed_seconds"] == 4000
-                with pytest.raises(
-                    ConversationDenied,
-                    match="remaining trial minutes are not enough for this recording",
-                ):
+                # Nothing is left of the trial's own time: the refusal says so (owner,
+                # 22 Nov 2026: "You've used your 3 free hours", the real trial's size).
+                with pytest.raises(ConversationDenied, match="You've used your 3 free hours"):
                     await app.reserve(source(1), actor=state.actor)
                 await app.settle(original_usage, charged_seconds=4000, receipt_sha256="d" * 64)
                 assert (await app.allowance(actor=state.actor))["available_seconds"] == 0

@@ -1,6 +1,6 @@
 """Plan and usage reads keep the canonical read-only account boundary."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -8,6 +8,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+from ac_platform.billing.projection import Lot, LotKind
 from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS
 from ac_platform.http.auth import AuthenticatedTransaction, AuthenticationRequired
 from ac_platform.http.conversation_acquisition import install_acquisition_http
@@ -78,7 +79,21 @@ async def test_me_reads_share_allowance_and_refuse_guest_or_foreign_workspace(
                     "plan": {"key": "trial", "name": "Trial"},
                     "allowance": allowance,
                     "longest_call_seconds": CALL_LIMIT_SECONDS,
+                    "trial": None,
                 }
+                # Trial v2 (owner, 22 Nov 2026: "1 month + 3 hours"): its size and end.
+                ends = datetime(2026, 12, 22, 6, 30, tzinfo=UTC)
+                start = ends - timedelta(days=30)
+                service.trial = Lot("trial", LotKind.TRIAL, 10_800, start, ends)
+                timed = (await client.get(path)).json()
+                assert timed["plan"] == {"key": "trial", "name": "1 month free"}
+                assert timed["trial"] == {"seconds": 10_800, "ends_at": "2026-12-22T06:30:00+00:00"}
+                # Under v1 the trial has no end: no month is promised.
+                service.trial = Lot("trial", LotKind.TRIAL, 10_800, start)
+                untimed = (await client.get(path)).json()
+                assert untimed["plan"] == {"key": "trial", "name": "Trial"}
+                assert untimed["trial"] == {"seconds": 10_800, "ends_at": None}
+                service.trial = None
             else:
                 assert response.json() == {"allowance": allowance, **usage.return_value}
             assert (await client.get(path + "?person_id=other")).status_code == 422

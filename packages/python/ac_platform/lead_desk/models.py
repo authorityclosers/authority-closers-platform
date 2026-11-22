@@ -1822,3 +1822,354 @@ class LeadTagLink(Base):
     tenant_id: Mapped[UUID] = mapped_column(Uuid)
     added_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+# ----- the outreach log (migration 0166, v1.95; lead_desk/outreach.py) ----------------------
+
+_TOUCH_CHANNELS = (
+    "channel IN ('whatsapp', 'sms', 'email', 'call', 'messenger', 'instagram', 'in_person',"
+    " 'other')"
+)
+_PROVIDERS = (
+    "provider IS NULL OR provider IN ('meta_cloud', 'wa_linked', 'gmail', 'smtp', 'pulse',"
+    " 'phone', 'other')"
+)
+
+
+class LeadOutreachSender(Base):
+    """A tool or automation outside Sales X-Ray that logs its sends here (sx-engage, the tester
+    auto-replies, the owner's own WhatsApp on the Mac), bound to one organisation API key and,
+    for a person's own tool, to the person it speaks for (migration 0166)."""
+
+    __tablename__ = "lead_desk_outreach_senders"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_lead_desk_outreach_sender_tenant"),
+        ForeignKeyConstraint(
+            ["tenant_id"], ["tenants.id"], name="fk_lead_desk_outreach_sender_tenant"
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "person_id"],
+            ["memberships.tenant_id", "memberships.person_id"],
+            name="fk_lead_desk_outreach_sender_person",
+        ),
+        ForeignKeyConstraint(
+            ["api_key_id"], ["integration_api_keys.id"], name="fk_lead_desk_outreach_sender_key"
+        ),
+        ForeignKeyConstraint(
+            ["created_by_person_id"], ["persons.id"], name="fk_lead_desk_outreach_sender_creator"
+        ),
+        CheckConstraint("key ~ '^[a-z0-9][a-z0-9-]{1,39}$'", name="key").ddl_if(
+            dialect="postgresql"
+        ),
+        CheckConstraint("length(trim(label)) > 0", name="label"),
+        CheckConstraint("kind IN ('automation', 'person_tool')", name="kind"),
+        CheckConstraint(
+            "(kind = 'person_tool') = (person_id IS NOT NULL)",
+            name="person",
+        ),
+        CheckConstraint("guard_mode IN ('report', 'hold')", name="guard_mode"),
+        CheckConstraint("status IN ('active', 'paused')", name="status"),
+        CheckConstraint("revision >= 1", name="revision"),
+        Index("uq_lead_desk_outreach_sender_key", "tenant_id", "key", unique=True),
+        Index("ix_lead_desk_outreach_sender_api_key", "tenant_id", "api_key_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    key: Mapped[str] = mapped_column(String(40))
+    label: Mapped[str] = mapped_column(String(80))
+    kind: Mapped[str] = mapped_column(String(16))
+    person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    api_key_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    channels: Mapped[list[str]] = mapped_column(JSON)
+    lead_defaults: Mapped[dict[str, Any]] = mapped_column(JSON)
+    guard_mode: Mapped[str] = mapped_column(String(8))
+    status: Mapped[str] = mapped_column(String(12))
+    revision: Mapped[int] = mapped_column(Integer)
+    created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LeadTouchOverride(Base):
+    """A manager's one-time "send anyway" for one lead and one channel, with the reason: the
+    next touch there uses it, within 30 minutes (migration 0166). Never past a STOP."""
+
+    __tablename__ = "lead_desk_touch_overrides"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_lead_desk_touch_override_tenant"),
+        ForeignKeyConstraint(
+            ["tenant_id", "lead_id"],
+            ["lead_desk_leads.tenant_id", "lead_desk_leads.id"],
+            name="fk_lead_desk_touch_override_lead",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "granted_by_person_id"],
+            ["memberships.tenant_id", "memberships.person_id"],
+            name="fk_lead_desk_touch_override_granted_by",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "asked_by_person_id"],
+            ["memberships.tenant_id", "memberships.person_id"],
+            name="fk_lead_desk_touch_override_asked_by",
+        ),
+        CheckConstraint(_TOUCH_CHANNELS, name="channel"),
+        CheckConstraint(
+            "reason_key IN ('lead_asked', 'time_sensitive', 'wrong_count', 'other')",
+            name="reason",
+        ),
+        CheckConstraint(
+            "reason_key <> 'other' OR length(trim(coalesce(reason_text, ''))) > 0",
+            name="other_words",
+        ),
+        CheckConstraint(
+            "(used_at IS NULL) = (used_by_touch_id IS NULL)",
+            name="used",
+        ),
+        CheckConstraint("expires_at > created_at", name="expiry"),
+        Index("uq_lead_desk_touch_override_command", "tenant_id", "command_id", unique=True),
+        Index(
+            "ix_lead_desk_touch_override_open",
+            "tenant_id",
+            "lead_id",
+            "channel",
+            "expires_at",
+            postgresql_where=text("used_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    channel: Mapped[str] = mapped_column(String(12))
+    granted_by_person_id: Mapped[UUID] = mapped_column(Uuid)
+    asked_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    reason_key: Mapped[str] = mapped_column(String(16))
+    reason_text: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    verdict: Mapped[dict[str, Any]] = mapped_column(JSON)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_by_touch_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    command_id: Mapped[UUID] = mapped_column(Uuid)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadTouch(Base):
+    """One outbound touch to a lead, from Sales X-Ray or an outside sender (migration 0166).
+    The timeline line stays in ``lead_desk_events`` (``event_id``); this row holds who sent
+    it, our own short summary (never the lead's words), the provider and its delivery state,
+    the reply that answered it, whether it counted toward the outreach limits and the guard's
+    verdict when it went."""
+
+    __tablename__ = "lead_desk_touches"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_lead_desk_touch_tenant"),
+        ForeignKeyConstraint(
+            ["tenant_id", "lead_id"],
+            ["lead_desk_leads.tenant_id", "lead_desk_leads.id"],
+            name="fk_lead_desk_touch_lead",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "person_id"],
+            ["memberships.tenant_id", "memberships.person_id"],
+            name="fk_lead_desk_touch_person",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "sender_id"],
+            ["lead_desk_outreach_senders.tenant_id", "lead_desk_outreach_senders.id"],
+            name="fk_lead_desk_touch_sender",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "override_id"],
+            ["lead_desk_touch_overrides.tenant_id", "lead_desk_touch_overrides.id"],
+            name="fk_lead_desk_touch_override",
+        ),
+        CheckConstraint(_TOUCH_CHANNELS, name="channel"),
+        CheckConstraint(
+            "content_kind IN ('text', 'template', 'file', 'quote', 'link', 'call', 'voice')",
+            name="content_kind",
+        ),
+        CheckConstraint("initiated IN ('outreach', 'reply')", name="initiated"),
+        CheckConstraint("sender_type IN ('person', 'automation')", name="sender_type"),
+        CheckConstraint("(sender_type = 'person') = (person_id IS NOT NULL)", name="person"),
+        CheckConstraint(
+            "via IN ('app_link', 'cloud', 'api', 'phone', 'manual', 'pulse')",
+            name="via",
+        ),
+        CheckConstraint(_PROVIDERS, name="provider"),
+        CheckConstraint(
+            "status IN ('queued', 'opened', 'sent', 'delivered', 'read', 'failed', 'expired')",
+            name="status",
+        ),
+        CheckConstraint("(status = 'queued') = (expires_at IS NOT NULL)", name="reservation"),
+        Index("ix_lead_desk_touch_lead", "tenant_id", "lead_id", "sent_at"),
+        Index(
+            "ix_lead_desk_touch_person",
+            "tenant_id",
+            "person_id",
+            "sent_at",
+            postgresql_where=text("person_id IS NOT NULL"),
+        ),
+        Index(
+            "ix_lead_desk_touch_sender",
+            "tenant_id",
+            "sender_id",
+            "sent_at",
+            postgresql_where=text("sender_id IS NOT NULL"),
+        ),
+        Index("ix_lead_desk_touch_recent", "tenant_id", "sent_at"),
+        Index(
+            "ix_lead_desk_touch_open",
+            "tenant_id",
+            "lead_id",
+            "channel",
+            "sent_at",
+            postgresql_where=text("replied_at IS NULL AND status <> 'failed'"),
+        ),
+        Index(
+            "ix_lead_desk_touch_reserved",
+            "expires_at",
+            postgresql_where=text("status = 'queued'"),
+        ),
+        Index(
+            "uq_lead_desk_touch_provider",
+            "tenant_id",
+            "provider",
+            text("coalesce(provider_chat_id, '')"),
+            "provider_message_id",
+            unique=True,
+            postgresql_where=text("provider_message_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_lead_desk_touch_client_ref",
+            "tenant_id",
+            "sender_id",
+            "client_ref",
+            unique=True,
+            postgresql_where=text("client_ref IS NOT NULL"),
+        ),
+        Index(
+            "uq_lead_desk_touch_command",
+            "tenant_id",
+            "command_id",
+            unique=True,
+            postgresql_where=text("command_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_lead_desk_touch_event",
+            "event_id",
+            unique=True,
+            postgresql_where=text("event_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_lead_desk_touch_wa",
+            "whatsapp_message_id",
+            unique=True,
+            postgresql_where=text("whatsapp_message_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_lead_desk_touch_social",
+            "social_message_id",
+            unique=True,
+            postgresql_where=text("social_message_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    channel: Mapped[str] = mapped_column(String(12))
+    content_kind: Mapped[str] = mapped_column(String(12))
+    initiated: Mapped[str] = mapped_column(String(8))
+    sender_type: Mapped[str] = mapped_column(String(12))
+    person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    sender_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    automation: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    campaign_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    via: Mapped[str] = mapped_column(String(12))
+    provider: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    provider_message_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    provider_chat_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    client_ref: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    summary: Mapped[str | None] = mapped_column(String(280), nullable=True)
+    template_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    attachment: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
+    quote_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    status: Mapped[str] = mapped_column(String(12))
+    status_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    counted: Mapped[bool] = mapped_column(Boolean)
+    guard: Mapped[dict[str, Any]] = mapped_column(JSON)
+    override_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    event_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    whatsapp_message_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    social_message_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    replied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reply_ref: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
+    request_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    command_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LeadTouchReply(Base):
+    """A reply (or a first message) an outside sender reports (migration 0166). The lead's own
+    words (``excerpt``) are kept only when the workspace turns "Keep reply words" on."""
+
+    __tablename__ = "lead_desk_touch_replies"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "lead_id"],
+            ["lead_desk_leads.tenant_id", "lead_desk_leads.id"],
+            name="fk_lead_desk_touch_reply_lead",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "touch_id"],
+            ["lead_desk_touches.tenant_id", "lead_desk_touches.id"],
+            name="fk_lead_desk_touch_reply_touch",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "sender_id"],
+            ["lead_desk_outreach_senders.tenant_id", "lead_desk_outreach_senders.id"],
+            name="fk_lead_desk_touch_reply_sender",
+        ),
+        CheckConstraint(_TOUCH_CHANNELS, name="channel"),
+        CheckConstraint(_PROVIDERS, name="provider"),
+        CheckConstraint(
+            "kind IN ('text', 'image', 'video', 'audio', 'document', 'sticker', 'reaction',"
+            " 'other')",
+            name="kind",
+        ),
+        Index("ix_lead_desk_touch_reply_lead", "tenant_id", "lead_id", "received_at"),
+        Index(
+            "uq_lead_desk_touch_reply_provider",
+            "tenant_id",
+            "provider",
+            text("coalesce(provider_chat_id, '')"),
+            "provider_message_id",
+            unique=True,
+            postgresql_where=text("provider_message_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    touch_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    sender_id: Mapped[UUID] = mapped_column(Uuid)
+    channel: Mapped[str] = mapped_column(String(12))
+    provider: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    provider_message_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    provider_chat_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    kind: Mapped[str] = mapped_column(String(12))
+    excerpt: Mapped[str | None] = mapped_column(String(280), nullable=True)
+    opt_out: Mapped[bool] = mapped_column(Boolean)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

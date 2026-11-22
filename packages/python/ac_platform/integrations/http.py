@@ -94,7 +94,7 @@ class AppCommand(BaseModel):
 class KeyCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=80)
-    scopes: list[str] = Field(min_length=1, max_length=len(scopes.SCOPES))
+    scopes: list[str] = Field(min_length=1, max_length=len(scopes.SCOPES) + len(scopes.KEY_SCOPES))
     expires_days: Literal[30, 90, 365] | None = None
 
 

@@ -20,7 +20,7 @@ vi.mock("next/link", () => ({
 import type { Effort, SideEffort } from "../performance/performance-client";
 import type { HomeSide } from "./my-day-client";
 import { onSide, TodayPerformance } from "./seller-home";
-import { elsewhere, noCallsNote } from "./team-floor";
+import { elsewhere, noCallsNote, noCallsRingWord } from "./team-floor";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -75,6 +75,17 @@ it("the team hero's ring says where today's calls are instead of a bare zero (#1
   const quiet = { inbound: side(0), cold: side(0) } as Effort;
   expect(noCallsNote("inbound", quiet, false)).toBe("No calls yet today");
   expect(noCallsNote("cold", quiet, true)).toBe("No calls that day");
+});
+
+it("keeps the ring's word one short line; the full words go under the ring (239, 244)", () => {
+  const effort = { inbound: side(0), cold: side(35) } as Effort;
+  expect(noCallsRingWord("inbound", effort)).toBe("35 on Cold");
+  expect(
+    noCallsRingWord("cold", { inbound: side(4), cold: side(0) } as Effort),
+  ).toBe("4 on Inbound");
+  expect(
+    noCallsRingWord("inbound", { inbound: side(0), cold: side(0) } as Effort),
+  ).toBe("No calls");
 });
 
 it("a seller's Inbound performance at 0 says how many were tried on Cold", async () => {

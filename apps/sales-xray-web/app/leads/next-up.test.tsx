@@ -523,10 +523,10 @@ it("sends the missed call's next try it shows", async () => {
   await flush();
   await act(async () => tile("No answer").click());
   const chosen = document.querySelector(
-    '[aria-label="Quick times"] [aria-pressed="true"]',
+    '[aria-label="When"] [aria-pressed="true"]',
   );
-  // One of the chips, or a time of its own: either way a time is shown.
-  expect(document.body.textContent).toMatch(/· \d{1,2}:\d{2}/);
+  // One of the chips, or a time of its own: either way the exact time is shown.
+  expect(document.body.textContent).toMatch(/Reminds you .*\d{1,2}:\d{2}/);
   await act(async () => tile("Save").click());
   await flush();
   const sent = vi

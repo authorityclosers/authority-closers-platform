@@ -36,6 +36,7 @@ from ac_platform.lead_desk import (
     choices,
     deletion,
     duplicate_queue,
+    outreach,
     owner_words,
     reassign_guard,
     recording_guard,
@@ -152,6 +153,7 @@ from ac_platform.lead_desk.contracts import (
     Team,
     TeamPool,
     ToCallToday,
+    TouchView,
     Unanswered,
     UndoResultView,
     WorkDay,
@@ -2795,6 +2797,8 @@ class LeadDesk:
         photos = await person_photos.photo_urls(
             self.db, people | {seller.person_id for seller in sellers}
         )
+        # Each message, email and call line's outreach touch (v1.95, outreach.py).
+        touches = await outreach.lines(self, events)
         day_end = self._day_start() + timedelta(days=1)
         hidden = await self._private_calls(lead_id=lead.id)
         never = await self._private_calls(lead_id=lead.id, not_placed=True)
@@ -2874,6 +2878,7 @@ class LeadDesk:
                     lead_owner=lead.owner_person_id,
                     photos=photos,
                     answers_undone=answers_undone,
+                    touch=touches.get(event.id),
                 )
                 for event in events
                 if not (event.kind == "edited" and event.data.get(PRIVATE_CALL))
@@ -2919,6 +2924,7 @@ class LeadDesk:
             won_amount=await self._won_amount(lead),
             # Read by any member (v1.93.1): the next try after a call falls in them.
             work_hours=hours_view(work_hours.parse((await self.settings())[1]), self.now),
+            outreach=await outreach.for_lead(self, lead),
         )
 
     async def _won_amount(self, lead: Lead) -> int | None:
@@ -3005,6 +3011,7 @@ class LeadDesk:
         photos: Mapping[UUID, str | None] | None = None,
         answers_undone: frozenset[str] = frozenset(),
         counted: Mapping[str, Any] | None = None,
+        touch: TouchView | None = None,
     ) -> LeadEventView:
         phone_call = event.kind == "call" and event.data.get("via") in {
             "phone",
@@ -3140,6 +3147,7 @@ class LeadDesk:
             can_undo=can_undo,
             answer_undone=event.kind == "result" and str(event.id) in answers_undone,
             to_inbound=event.kind == "repeat" and data.get("to_inbound") is True,
+            touch=touch,
         )
 
     # ----- capture ---------------------------------------------------------------
@@ -5411,15 +5419,30 @@ class LeadDesk:
             raise DeskError(422, "Add a phone number to message this lead.")
         if command.template is not None and command.template not in TEMPLATE_KEYS:
             raise DeskError(422, "Pick one of the ready messages.")
+        # The outreach limits first (v1.95): a STOP or a block refuses it.
+        verdict = await outreach.enforce(self, lead, command.channel, "person")
         lead.updated_at = self.now
         # A WhatsApp or SMS from the app is contact: auto-reassign stops (reassign_guard).
         lead.first_contact_at = lead.first_contact_at or self.now
-        self._event(
+        event = self._event(
             lead,
             "message",
             {"channel": command.channel, "template": command.template, "edited": command.edited},
             actor=self.viewer.person_id,
             command_id=command.command_id,
+        )
+        # The touch: a wa.me or sms: link the app opened; whether it went, we can't see.
+        await outreach.mirror(
+            self,
+            lead,
+            event,
+            channel=command.channel,
+            content_kind="template" if command.template else "text",
+            via="app_link",
+            person_id=self.viewer.person_id,
+            status="opened",
+            template_name=command.template,
+            result=verdict,
         )
         await self.db.flush()
         return await self.detail(lead.id)
@@ -5811,7 +5834,7 @@ class LeadDesk:
         lead.first_contact_at = lead.first_contact_at or self.now
         if submission_id is not None:
             lead.last_submission_id = submission_id
-        self._event(
+        event = self._event(
             lead,
             "call",
             {
@@ -5824,6 +5847,17 @@ class LeadDesk:
             },
             actor=self.viewer.person_id,
             command_id=command_id,
+        )
+        # The call is a touch too (v1.95): shown on the counter, not limited by default.
+        await outreach.mirror(
+            self,
+            lead,
+            event,
+            channel="call",
+            content_kind="call",
+            via="phone",
+            provider="phone",
+            person_id=self.viewer.person_id,
         )
         await self.db.flush()
         return await self.detail(lead.id)
@@ -6022,6 +6056,7 @@ class LeadDesk:
         oldest = self.now - timedelta(days=PHONE_LOG_MAX_DAYS)
         newest = self.now + timedelta(minutes=5)
         wanted: dict[UUID, tuple[PhoneLogCall, str]] = {}
+        dialled: list[tuple[Lead, LeadEvent]] = []
         skipped = already = 0
         for call in command.calls:
             phone = normalise_phone(call.number, default_country=country)
@@ -6203,7 +6238,11 @@ class LeadDesk:
                     log_id=call.log_id, lead_id=lead.id, event_id=event.id, connected=talked
                 )
             )
+            if call.direction == "outgoing":
+                dialled.append((lead, event))
             logged += 1
+        # Calls out are touches too (v1.95): on the counter, not limited by default.
+        await outreach.phone_calls(self, dialled)
         if timing:
             per_dial: dict[UUID, list[tuple[UUID, PhoneLogCall, Lead]]] = {}
             for key, call, lead, dial in timing:

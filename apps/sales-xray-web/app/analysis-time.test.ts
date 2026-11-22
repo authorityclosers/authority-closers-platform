@@ -4,7 +4,7 @@ import { analysisTimeLeft, formatAnalysisTime } from "./analysis-time";
 
 // The time left over Choose a file (orchestrator, 13 Nov 2026): time, never a
 // price; nothing when used up, unlimited or not known yet.
-it("says how much analysis is left, or what a new tester has to try", () => {
+it("says how much analysis is left, or the free month a new account has to try", () => {
   const left = (
     available: number,
     total = 10_800,
@@ -15,10 +15,10 @@ it("says how much analysis is left, or what a new tester has to try", () => {
     available_seconds: available,
   });
   expect(analysisTimeLeft(left(10_800, 10_800, 0), "personal")).toBe(
-    "3 hours to try",
+    "1 month free · 3 hours to try",
   );
   expect(analysisTimeLeft(left(3_600, 3_600, 0), "personal")).toBe(
-    "1 hour to try",
+    "1 month free · 1 hour to try",
   );
   expect(analysisTimeLeft(left(9_660), "personal")).toBe(
     "2 h 41 min of analysis left",

@@ -286,6 +286,9 @@ export type MePlan = {
   plan: { key: string; name: string };
   allowance: Allowance;
   longestCallSeconds: number;
+  /** The free trial's size and end (null end: no month, trial v1); null when the
+   *  plan in effect is not the trial (owner, 22 Nov 2026: "1 month + 3 hours"). */
+  trial?: { seconds: number; endsAt: string | null } | null;
 };
 export type UsageCall = {
   submissionId: string;
@@ -322,8 +325,17 @@ export function parseMePlan(value: unknown): MePlan {
     "plan",
     "allowance",
     "longest_call_seconds",
+    "trial",
   ]);
   const plan = object(raw.plan, "me.plan.plan", ["key", "name"]);
+  // Absent from servers before v1.95: no trial details to show.
+  const trial =
+    raw.trial === null || raw.trial === undefined
+      ? null
+      : object(raw.trial, "me.plan.trial", ["seconds", "ends_at"]);
+  const endsAt = trial ? textOrNull(trial, "ends_at", "me.plan.trial") : null;
+  if (endsAt !== null && Number.isNaN(Date.parse(endsAt)))
+    throw new ContractError("me.plan.trial.ends_at", "expected a time");
   return {
     plan: {
       key: text(plan, "key", "me.plan.plan"),
@@ -331,6 +343,9 @@ export function parseMePlan(value: unknown): MePlan {
     },
     allowance: parseAllowance(raw.allowance, "me.plan.allowance"),
     longestCallSeconds: integer(raw, "longest_call_seconds", "me.plan"),
+    trial: trial
+      ? { seconds: integer(trial, "seconds", "me.plan.trial"), endsAt }
+      : null,
   };
 }
 

@@ -46,6 +46,8 @@ def facts(task: LeadTask) -> scheduler.TaskFacts:
         ),
         # A meeting at a place, not a link: the drive needs more time.
         in_person=task.kind == "meeting" and bool(place) and not place.startswith("http"),
+        # A due set for soon reminds at its time (scheduler.SHORT_NOTICE).
+        set_at=task.updated_at or task.created_at,
     )
 
 

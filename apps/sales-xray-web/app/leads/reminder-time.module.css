@@ -1,0 +1,167 @@
+/* The reminder time picker (owner, 22 Nov 2026), in the v1.90 Home family:
+   presets as big pills in a sunken well tone, the chosen one solid deep
+   green; the phone's own date and time fields; the exact time on a faint
+   green wash with a dark ink icon in a soft tile. Tokens only; light and dark. */
+
+.picker {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.label {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+/* Four across on a phone: In 1 · 2 · 5 · 15 min, In 30 min · 1 hour ·
+   Tomorrow morning, then Pick date & time on its own line. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  max-width: 560px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 6px;
+  border: var(--sx-well-edge);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-well-fill);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  line-height: var(--sx-leading-16);
+  text-align: center;
+  cursor: pointer;
+  transition: transform var(--sx-dur-instant, 90ms) var(--sx-ease-out, ease);
+}
+
+.chip[data-wide] {
+  grid-column: span 2;
+}
+
+.chip[data-full] {
+  grid-column: 1 / -1;
+}
+
+.chip > svg {
+  flex: none;
+  color: var(--sx-ink-2);
+}
+
+.chip:active {
+  transform: var(--sx-press-sink, scale(0.98));
+}
+
+.chip[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
+.chip[aria-pressed="true"] > svg {
+  color: inherit;
+}
+
+/* Pick date & time spans the row: chosen, it is a calm outline on the green
+   wash (its fields below are the point), so it never reads as the screen's
+   one main button. */
+.chip[data-full][aria-pressed="true"] {
+  border: 1px solid var(--sx-tone-good);
+  background: var(--sx-tone-good-soft);
+  box-shadow: none;
+  color: var(--sx-ink);
+}
+
+.chip[data-full][aria-pressed="true"] > svg {
+  color: var(--sx-tone-good);
+}
+
+.chip:focus-visible,
+.field input:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 8px;
+  max-width: 560px;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.field > span {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.field input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: 14px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  color-scheme: light dark;
+}
+
+.result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 560px;
+  margin: 0;
+  padding: 10px 14px 10px 10px;
+  border-radius: 16px;
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-16);
+}
+
+.result strong {
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.resultIcon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--sx-well-fill);
+  color: var(--sx-ink);
+}
+
+.result[data-past] {
+  background: var(--sx-tone-problem-soft);
+}
+
+.result[data-past] .resultIcon {
+  color: var(--sx-tone-problem);
+}

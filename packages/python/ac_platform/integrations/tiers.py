@@ -24,7 +24,7 @@ from ac_platform.billing.current_plan import (
 )
 from ac_platform.http.rate_limits import RateLimitRule
 from ac_platform.integrations import tier_policy
-from ac_platform.integrations.scopes import APP_SCOPES, SCOPES
+from ac_platform.integrations.scopes import APP_SCOPES, KEY_SCOPES, SCOPES
 
 # Admin's saves reach the API within this long.
 CACHE_SECONDS = 60.0
@@ -149,7 +149,7 @@ def _rule(name: str, capacity: int) -> RateLimitRule:
 
 # ----- what people read ------------------------------------------------------------------
 
-LABELS = {**SCOPES, **APP_SCOPES}
+LABELS = {**SCOPES, **APP_SCOPES, **KEY_SCOPES}
 
 
 def comes_with(platform: Platform, scope: str | None = None, *, api_keys: bool = False) -> str:

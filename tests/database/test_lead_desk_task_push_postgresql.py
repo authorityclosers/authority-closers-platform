@@ -55,7 +55,9 @@ def test_at10_a_task_reminds_once_per_due_and_its_lead_does_not_push_it_again(
             # The new lead's own alert goes first.
             await collect(here, start)
 
-            due = start + timedelta(minutes=30)
+            # Two hours ahead: past the short-notice hour (v1.95 reminders), so the early
+            # reminder stands.
+            due = start + timedelta(hours=2)
             item = await task(here, lead_id, kind="call_back", starts_at=due.isoformat())
             assert await collect(here, due - timedelta(minutes=20)) == []
             # A call back reminds five minutes before: one alert for the lead.
@@ -71,11 +73,14 @@ def test_at10_a_task_reminds_once_per_due_and_its_lead_does_not_push_it_again(
             words = (await here.client.get(f"{BASE}/leads/{lead_id}/alert")).json()
             assert words["title"].startswith(f"{item['title']} at "), words
 
-            # A snooze is a new due: it reminds once more, for that due only.
+            # A snooze is a new due: it reminds once more, for that due only. An hour off
+            # is the short-notice edge (v1.95 reminders): early or at the due, never both.
             moved = await act(here, item, "snooze", choice="1h")
             new_due = datetime.fromisoformat(moved["starts_at"])
-            assert len(await collect(here, new_due - timedelta(minutes=5))) == 1
-            assert await collect(here, new_due) == []
+            early = await collect(here, new_due - timedelta(minutes=5))
+            at_due = await collect(here, new_due)
+            assert len(early) + len(at_due) == 1, (early, at_due)
+            assert await collect(here, new_due + timedelta(minutes=2)) == []
             assert await ledger(here) == 2
 
             # Done before its time: it never reminds.

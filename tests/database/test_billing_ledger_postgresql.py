@@ -30,7 +30,7 @@ from ac_platform.authorization.application import CapabilityApplication
 from ac_platform.billing.ledger import LEGACY_GRANT_PREFIX, AccountProjection, BillingLedger
 from ac_platform.billing.models import BillingAccount, BillingLedgerEntry
 from ac_platform.billing.projection import LotKind, due_expiries
-from ac_platform.billing.trial import TRIAL_LOT_ID, TrialPolicy
+from ac_platform.billing.trial import TRIAL_DAYS, TRIAL_LOT_ID, TrialPolicy
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
 )
@@ -49,7 +49,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationDenied,
 )
 from ac_platform.conversation_intelligence.entitlements import MinuteAccount, MinuteGrant
-from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS
+from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS, TRIAL_SECONDS
 from ac_platform.conversation_intelligence.minute_account_admin import MINUTE_GRANT_ACTION
 from ac_platform.conversation_intelligence.models import ConversationMinuteAccount
 from ac_platform.db.models import model_metadata
@@ -759,14 +759,14 @@ def test_reserve_mirrors_legacy_grants_once_and_refuses_over_balance_and_over_li
                 )
                 assert (await acquisition.allowance(actor=learner.actor))[
                     "available_seconds"
-                ] == 8_000
+                ] == 2_000 + TRIAL_SECONDS
                 with pytest.raises(ConversationDenied) as denied:
                     await acquisition.reserve(source(3_601), actor=learner.actor)
                 assert str(denied.value) == LONGEST_CALL_EXCEEDED_MESSAGE
                 await acquisition.reserve(source(3_600), actor=learner.actor)
                 assert (await acquisition.allowance(actor=learner.actor))[
                     "available_seconds"
-                ] == 4_400
+                ] == 2_000 + TRIAL_SECONDS - 3_600
             # A plan in effect takes the one call-length limit through the same path.
             async with sessions() as database, database.begin():
                 acquisition = sessions_for(database, learner, operations)
@@ -800,13 +800,14 @@ def test_reserve_mirrors_legacy_grants_once_and_refuses_over_balance_and_over_li
                 with pytest.raises(ConversationDenied) as denied:
                     await acquisition.reserve(source(3_601), token=guest.token)
                 assert str(denied.value) == LONGEST_CALL_EXCEEDED_MESSAGE
+                # Three hours (v1.95): two longest calls, then all but 600 s.
                 await acquisition.reserve(source(3_600), token=guest.token)
+                await acquisition.reserve(source(3_600), token=guest.token)
+                await acquisition.reserve(source(TRIAL_SECONDS - 7_800), token=guest.token)
                 with pytest.raises(ConversationDenied) as denied:
-                    await acquisition.reserve(source(2_401), token=guest.token)
+                    await acquisition.reserve(source(601), token=guest.token)
                 assert str(denied.value) == TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE
-                assert (await acquisition.allowance(token=guest.token))[
-                    "available_seconds"
-                ] == 2_400
+                assert (await acquisition.allowance(token=guest.token))["available_seconds"] == 600
                 assert len((await legacy_rows(database, learner)).all()) == 2
         finally:
             await engine.dispose()
@@ -832,9 +833,9 @@ def test_trial_v2_vectors_window_end_and_switch_instant(postgres_harness, fixtur
                 usage = await acquisition.reserve(source(120), actor=learner.actor)
                 await acquisition.settle(usage, charged_seconds=120, receipt_sha256="c" * 64)
                 assert await acquisition.allowance(actor=learner.actor) == {
-                    "allowance_seconds": 6_600,
+                    "allowance_seconds": 11_400,
                     "committed_seconds": 120,
-                    "available_seconds": 6_480,
+                    "available_seconds": 11_280,
                 }
                 first_use = await database.scalar(
                     select(ConversationAcquisitionUsage.created_at).where(
@@ -846,17 +847,17 @@ def test_trial_v2_vectors_window_end_and_switch_instant(postgres_harness, fixtur
                     tenant_id=learner.tenant_id, person_id=learner.person_id, now=first_use
                 )
                 assert projected.trial.valid_from == first_use
-                assert projected.trial.expires_at == first_use + timedelta(days=14)
+                assert projected.trial.expires_at == first_use + timedelta(days=TRIAL_DAYS)
                 assert projected.plan_key == TRIAL_LOT_ID
                 assert projected.per_call_seconds == 3_600
-                # Keep the learner's session current for the projection 15 days on.
+                # Keep the learner's session current for the projection a month and a day on.
                 await database.execute(
                     update(IdentitySession)
                     .where(IdentitySession.id == learner.session_id)
                     .values(expires_at=first_use + timedelta(days=60))
                 )
 
-            later = first_use + timedelta(days=15)
+            later = first_use + timedelta(days=TRIAL_DAYS + 1)
             async with sessions() as database, database.begin():
                 acquisition = sessions_for(
                     database, learner, operations, clock=later, trial_policy=v2
@@ -877,8 +878,8 @@ def test_trial_v2_vectors_window_end_and_switch_instant(postgres_harness, fixtur
                 assert due_expiries(projected.projection) == ()
                 # The window is exclusive at its end.
                 edge = acquisition.ledger.trial_policy.lot(first_use_at=first_use, now=later)
-                assert edge.valid_at(first_use + timedelta(days=14) - timedelta(seconds=1))
-                assert not edge.valid_at(first_use + timedelta(days=14))
+                assert edge.valid_at(first_use + timedelta(days=TRIAL_DAYS) - timedelta(seconds=1))
+                assert not edge.valid_at(first_use + timedelta(days=TRIAL_DAYS))
                 with pytest.raises(ConversationDenied) as denied:
                     await acquisition.reserve(source(601), actor=learner.actor)
                 assert str(denied.value) == TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE
@@ -905,16 +906,19 @@ def test_trial_v2_vectors_window_end_and_switch_instant(postgres_harness, fixtur
                     person_id=learner.person_id,
                     now=switch_at + timedelta(hours=1),
                 )
-                assert after.trial.seconds == 6_000
-                assert after.trial.valid_from == switch_at
-                assert after.trial.expires_at == switch_at + timedelta(days=14)
+                assert after.trial.seconds == 10_800
+                # Valid from the first use, its month from the switch (owner, 22 Nov 2026).
+                assert after.trial.valid_from == first_use
+                assert after.trial.expires_at == switch_at + timedelta(days=TRIAL_DAYS)
                 assert after.per_call_seconds == 3_600
-                # The settled use predates the switched window, so it falls to the grant.
-                assert after.available_seconds == 6_000 + 600 - 120
+                # The use before the switch still counts toward the trial's three hours.
+                assert after.available_seconds == 10_800 + 600 - 120
                 grant_position = next(
                     item for item in after.projection.positions if item.lot.kind is LotKind.GRANT
                 )
-                assert grant_position.allocated == 120
+                assert grant_position.allocated == 0
+                trial_position = after.projection.position(TRIAL_LOT_ID)
+                assert trial_position is not None and trial_position.allocated == 120
         finally:
             await engine.dispose()
 

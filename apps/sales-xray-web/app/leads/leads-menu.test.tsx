@@ -93,7 +93,8 @@ it("keeps permission-filtered rows absent and omits empty groups", async () => {
   expect(
     Array.from(host.querySelectorAll("h3"), (el) => el.textContent),
   ).toEqual(["Set up leads", "Manage leads"]);
-  expect(host.querySelectorAll("li")).toHaveLength(3);
+  // The three rows, and Outreach (v1.95), a link for everyone with leads.
+  expect(host.querySelectorAll("li")).toHaveLength(4);
   for (const label of [
     "Share out leads",
     "Lead rules",
@@ -130,4 +131,16 @@ it("keeps Notes, off the Leads strip, first in the menu, for a seller too", asyn
   ]);
   await act(async () => only[0].click());
   expect(notes.onPick).toHaveBeenCalled();
+});
+
+it("links Outreach under Manage leads: every message sent, by whom (v1.95)", async () => {
+  await act(async () =>
+    root.render(<LeadsMenu open onClose={() => {}} items={[]} />),
+  );
+  const link = host.querySelector<HTMLAnchorElement>('a[href="/outreach"]');
+  expect(link?.textContent).toContain("Outreach");
+  expect(link?.textContent).toContain("Every message sent, by whom");
+  expect(
+    Array.from(host.querySelectorAll("h3"), (el) => el.textContent),
+  ).toEqual(["Manage leads"]);
 });

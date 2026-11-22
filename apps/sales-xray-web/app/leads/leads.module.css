@@ -4735,6 +4735,15 @@ a.repName {
   }
 }
 
+/* A computer's card grows to the window, so a held send's reasons and its
+   pinned Send anyway all fit (v1.95 judge round 2: at 1440 the card's edge
+   cut "Something else" through its words). */
+@media (min-width: 900px) {
+  .actionSheet {
+    max-height: calc(100dvh - 48px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .actionSheet[open],
   .actionSheetBody {

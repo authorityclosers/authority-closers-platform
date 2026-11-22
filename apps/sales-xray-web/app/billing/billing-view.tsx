@@ -27,6 +27,7 @@ import type {
   Usage,
 } from "./contract";
 import { count, day, formatMoney, minutes } from "./money";
+import { trialHeadline, trialLeft } from "./trial-copy";
 import { dismissNotice, notify } from "../notice-center";
 import { useWorkspaceAccess } from "../workspace-access";
 import styles from "./billing.module.css";
@@ -97,6 +98,8 @@ export function BillingView({
     ["active", "past_due", "halted"].includes(current.status);
   const allowance = usage?.allowance ?? mePlan?.allowance;
   const planName = mePlan?.plan.name ?? "—";
+  // The free trial in plain words (owner, 22 Nov 2026: "1 month + 3 hours").
+  const trial = current ? null : (mePlan?.trial ?? null);
   const unread = !loading && status !== "ready";
   const readFailed =
     unread || (documents !== undefined && invoicesStatus === "error");
@@ -214,6 +217,11 @@ export function BillingView({
                 <p className={styles.lead}>
                   {"We couldn't load your plan right now."}
                 </p>
+              ) : status === "ready" && trial ? (
+                <p className={styles.lead}>
+                  {trialHeadline(trial)}
+                  {purchasesAllowed ? ". Choose a plan when you're ready." : ""}
+                </p>
               ) : status === "ready" ? (
                 <p className={styles.lead}>
                   {purchasesAllowed
@@ -230,6 +238,12 @@ export function BillingView({
                     ? ` · ${current.seats} team seats`
                     : ""}
                 </li>
+                {trial && allowance && !allowance.unlimited ? (
+                  <li data-part="trial-left">
+                    <CalendarClock size={14} aria-hidden="true" />
+                    {trialLeft(trial, allowance.availableSeconds)}
+                  </li>
+                ) : null}
                 {mePlan ? (
                   <li>
                     <Clock3 size={14} aria-hidden="true" />
@@ -343,7 +357,7 @@ export function BillingView({
                       ? `${count(minutes(allowance.committedSeconds))} min used or reserved by analyses.`
                       : allowance
                         ? allowance.allowanceSeconds > 0
-                          ? `of ${count(minutes(allowance.allowanceSeconds))} min in total (plan, trial and top-ups)`
+                          ? `of ${count(minutes(allowance.allowanceSeconds))} min in total (plan, free month and top-ups)`
                           : "available analysis time"
                         : ""}
                   </span>

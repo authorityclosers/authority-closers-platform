@@ -48,6 +48,8 @@ from ac_platform.lead_desk.models import (
     LeadMerge,
     LeadSocialMessage,
     LeadTask,
+    LeadTouch,
+    LeadTouchReply,
     LeadWhatsAppMessage,
 )
 from ac_platform.lead_desk.vocabulary import MERGED_DUPLICATE
@@ -67,6 +69,9 @@ MOVED: Final[tuple[tuple[str, Any], ...]] = (
     ("ai_replies", LeadAiReply),
     ("calls", CallObject),
     ("call_decisions", CallObjectDecision),
+    # The outreach log (migration 0166): the counter never resets on a merge.
+    ("touches", LeadTouch),
+    ("touch_replies", LeadTouchReply),
 )
 # A person's own work on a lead.
 HUMAN: Final = ("call", "result", "note", "message", "email", "task", "stage", "meeting")

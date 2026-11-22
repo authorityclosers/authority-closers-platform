@@ -150,7 +150,7 @@ them. Compose forwards them to the API only. Contract:
 
 | Secret                   | Constraint                                                                                                                                                                                             |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `AC_PULSE_ISSUER`        | that environment's Pulse address, no trailing slash (production `https://pulse.estateautopilots.com`); not secret                                                                                      |
+| `AC_PULSE_ISSUER`        | that environment's Pulse address, no trailing slash (production `https://app.vitalsos.ai`, the Vitals OS app, also the default when unset there); not secret                                                                                      |
 | `AC_PULSE_CLIENT_ID`     | the client ID of that environment's Sales Xray app on Pulse (Settings → Developer apps); redirect URIs `<Sales Xray URL>/v1/auth/pulse/callback` and `<Sales Xray URL>/v1/integrations/pulse/callback` |
 | `AC_PULSE_CLIENT_SECRET` | that app's client secret                                                                                                                                                                               |
 | `AC_PULSE_SEAL_KEY`      | independent 32-byte url-safe base64 key that seals stored Pulse tokens and webhook secrets; without it the API falls back to `AC_INTEGRATIONS_SEAL_KEY`                                                |

@@ -14,6 +14,7 @@ import {
   NotebookPen,
   Plug,
   Route,
+  Send,
   Split,
   Trash2,
   UsersRound,
@@ -21,6 +22,7 @@ import {
 import type { ReactNode } from "react";
 
 import { ActionList, ActionRow } from "../ui/kit";
+import { useCanHere } from "../workspace-role";
 import { Sheet } from "../ui/sheet";
 import styles from "./leads-menu.module.css";
 
@@ -62,6 +64,11 @@ export function LeadsMenu({
   onClose: () => void;
   items: LeadsMenuItem[];
 }) {
+  // Outreach (v1.95): every message sent to leads, by whom. Sellers see
+  // their own; finance has no leads, so no row.
+  const canHere = useCanHere();
+  const outreach =
+    canHere("leads.work") !== false || canHere("team.view") !== false;
   return (
     <Sheet
       open={open}
@@ -75,11 +82,21 @@ export function LeadsMenu({
           const rows = group.keys.flatMap((key) =>
             items.filter((item) => item.key === key),
           );
-          if (!rows.length) return null;
+          if (!rows.length && !(group.label === "Manage leads" && outreach))
+            return null;
           return (
             <section key={group.label} aria-label={group.label}>
               <h3 className={styles.label}>{group.label}</h3>
               <ActionList label={group.label}>
+                {group.label === "Manage leads" && outreach ? (
+                  <ActionRow
+                    icon={<Send size={20} />}
+                    title="Outreach"
+                    note="Every message sent, by whom"
+                    href="/outreach"
+                    onClick={onClose}
+                  />
+                ) : null}
                 {rows.map((item) => (
                   <ActionRow
                     key={item.key}

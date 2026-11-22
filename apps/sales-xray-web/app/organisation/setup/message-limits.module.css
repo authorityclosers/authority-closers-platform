@@ -1,0 +1,374 @@
+/* Lead rules › Message limits and Message senders (v1.95, 22 Nov 2026): the
+   family's cards, steppers in clean rows, Count | Warn | Hold pills with the
+   chosen one solid deep green. Tokens only; light and dark. */
+
+.counts {
+  display: grid;
+  gap: 10px;
+}
+
+.before {
+  min-width: 3.4em;
+}
+
+.facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--sx-tone-good-soft);
+  list-style: none;
+}
+
+.facts li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.facts svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--sx-tone-good);
+}
+
+.channels {
+  display: grid;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.channelsTitle {
+  margin: 10px 0 0;
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+}
+
+.channelsSub {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.channelList {
+  display: grid;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.channel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  min-height: 56px;
+  padding: 8px 0;
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.channel:first-child {
+  border-top: 0;
+}
+
+.channelName {
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+}
+
+/* Count | Warn | Hold: the family's sunken well, the chosen pill solid green. */
+.pills {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  padding: 3px;
+  border: var(--sx-well-edge);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-well-fill);
+  box-shadow: var(--sx-well-depth);
+}
+
+.pills button {
+  min-width: 64px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.pills button[aria-pressed="true"] {
+  background: var(--lx-home-primary);
+  color: var(--sx-gloss-ink);
+}
+
+.pills button:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+.pills button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* ---------- Message senders ---------- */
+
+.senders {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sender {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 68px;
+  padding: 10px 0;
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.sender:first-child {
+  border-top: 0;
+}
+
+.senderText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.senderName {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+}
+
+.senderLine {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  overflow-wrap: anywhere;
+}
+
+.senderLine {
+  color: var(--sx-ink-2);
+}
+
+.senderSeen {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.senderDetails {
+  font-size: var(--sx-text-sm);
+}
+
+.senderDetails summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  color: var(--sx-primary-ink);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.senderDetails summary:focus-visible {
+  outline: none;
+  border-radius: 8px;
+  box-shadow: var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+.senderDetails > span {
+  display: block;
+  color: var(--sx-muted);
+  overflow-wrap: anywhere;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: var(--sx-radius-pill);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.status[data-tone="good"] {
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-tone-good);
+}
+
+.status[data-tone="amber"] {
+  background: var(--sx-tone-action-soft);
+  color: var(--sx-tone-action);
+}
+
+.small {
+  flex: none;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1.5px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.small:focus-visible,
+.add:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+.small:disabled,
+.add:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.add {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1.5px solid var(--sx-primary-ink);
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-primary-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* The Add a sender sheet. */
+.form {
+  display: grid;
+  gap: 16px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field > span {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.field input,
+.field select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: 12px;
+  background: var(--lx-elevated, var(--sx-surface));
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+}
+
+.field input:focus-visible,
+.field select:focus-visible {
+  outline: none;
+  border-color: var(--sx-primary-ink);
+  box-shadow: var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+.field small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chips button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.chips button[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--lx-home-primary);
+  color: var(--sx-gloss-ink);
+}
+
+.sheetActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.error {
+  margin: 0;
+  color: var(--sx-tone-problem);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+@media (max-width: 599px) {
+  .channel {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pills {
+    align-self: stretch;
+  }
+
+  .pills button {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .sender {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .sender > .small {
+    grid-column: 2;
+    justify-self: start;
+  }
+}

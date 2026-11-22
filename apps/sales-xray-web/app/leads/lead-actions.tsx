@@ -9,30 +9,22 @@
 import { CalendarClock, MessageCircle, Phone, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { Button } from "../ui/kit";
 import { Picker } from "../ui/picker";
 import { ActionSheet } from "./action-sheet";
 import { whyLine } from "./desk-view";
 import {
   LeadsError,
-  nextCallTime,
   readLead,
   reassign,
   setFollowUp,
   when,
-  type CallTime,
   type LeadDetail,
   type LeadRow,
 } from "./leads-client";
 import { buzz } from "./native-phone";
+import { ReminderTime, reminderAt, type ReminderPick } from "./reminder-time";
 import styles from "./leads.module.css";
-
-const TIMES: { key: CallTime; label: string }[] = [
-  { key: "hour", label: "In 1 hour" },
-  { key: "evening", label: "This evening" },
-  { key: "morning", label: "Tomorrow morning" },
-  { key: "week", label: "Next week" },
-  { key: "someday", label: "In 2 weeks" },
-];
 
 export function LeadActions({
   row,
@@ -55,6 +47,10 @@ export function LeadActions({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  // Book the next call: a preset books at once; a picked date and time waits
+  // for Book (owner, 22 Nov 2026: the shared reminder times).
+  const [pick, setPick] = useState<ReminderPick | null>(null);
+  const [custom, setCustom] = useState("");
   const leadId = row?.lead_id ?? null;
 
   // The owners list (managers) and the lead's current revision.
@@ -74,12 +70,17 @@ export function LeadActions({
   const reachable = !!row.phone_last4;
   const closed = row.stage === "won" || row.stage === "lost";
 
-  const book = async (choice: CallTime) => {
+  const book = async (choice: ReminderPick, picked: string = custom) => {
     if (busy) return;
+    const at = reminderAt(choice, picked, new Date(), detail?.work_hours);
+    if (!at) return;
+    if (at.getTime() < Date.now() - 30_000) {
+      setError("That time has passed. Pick a later one.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      const at = nextCallTime(choice);
       await setFollowUp(current, at);
       buzz("done");
       setDone(`Next call ${when(at.toISOString())}`);
@@ -149,19 +150,25 @@ export function LeadActions({
           <span className={styles.stepLabel}>
             <CalendarClock size={14} aria-hidden="true" /> Book the next call
           </span>
-          <div className={styles.chips} role="group" aria-label="Next call">
-            {TIMES.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                className={styles.chip}
-                disabled={busy}
-                onClick={() => void book(item.key)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
+          <ReminderTime
+            pick={pick}
+            custom={custom}
+            hours={detail?.work_hours ?? null}
+            onPick={(next) => {
+              setPick(next);
+              if (next !== "custom") void book(next);
+            }}
+            onCustom={setCustom}
+          />
+          {pick === "custom" ? (
+            <Button
+              variant="primary"
+              disabled={busy}
+              onClick={() => void book("custom")}
+            >
+              Book the next call
+            </Button>
+          ) : null}
         </div>
       )}
       {canManage && detail?.reps.length ? (

@@ -24,7 +24,15 @@ import { readCallAi, type CallAiSettings } from "../../call-ai/call-ai-client";
 import { Skeleton } from "../../ui/kit";
 import family from "../family.module.css";
 import { PersonDisplayName } from "../people/person-display-name";
+import { useCanHere } from "../../workspace-role";
 import { Face, LeadSplitCard, perTen, useLeadSplit } from "./lead-split";
+import {
+  limitsWords,
+  MessageLimitsCard,
+  useMessageLimits,
+  type MessageLimitsState,
+} from "./message-limits";
+import { MessageSenders } from "./message-senders";
 import { OnOff } from "./on-off";
 import {
   clock,
@@ -56,7 +64,8 @@ export function OrganisationRules() {
   const split = useLeadSplit();
   const rules = useTeamRules();
   const [saving, setSaving] = useState(false);
-  const dirty = split.changed || rules.changed;
+  const limits = useMessageLimits();
+  const dirty = split.changed || rules.changed || limits.changed;
   const problem = !split.valid
     ? "The shares add up to 100 % to save."
     : rules.problem;
@@ -66,8 +75,18 @@ export function OrganisationRules() {
     setSaving(true);
     try {
       const splitSaved = await split.save();
+      // The team's settings, their hours and the message limits share one
+      // revision: each save goes on the one the save before it returned.
       const rulesSaved = await rules.save();
-      if (splitSaved && rulesSaved)
+      if (typeof rulesSaved === "number") limits.adoptRevision(rulesSaved);
+      const limitsSaved =
+        rulesSaved === false
+          ? false
+          : await limits.save(
+              typeof rulesSaved === "number" ? rulesSaved : undefined,
+            );
+      if (typeof limitsSaved === "number") rules.adoptRevision(limitsSaved);
+      if (splitSaved && rulesSaved !== false && limitsSaved !== false)
         notify({ id: "org-rules", tone: "success", title: "Lead rules saved" });
     } finally {
       setSaving(false);
@@ -79,7 +98,7 @@ export function OrganisationRules() {
       <div className={styles.page}>
         <div className={styles.main}>
           <LeadSplitCard split={split} />
-          <SellerRules rules={rules} />
+          <SellerRules rules={rules} limits={limits} />
         </div>
         <aside
           className={styles.rail}
@@ -130,6 +149,12 @@ export function OrganisationRules() {
                   <dt>Sellers can give leads</dt>
                   <dd>{rules.giving ? "Yes, with a reason" : "No"}</dd>
                 </div>
+                {limits.draft ? (
+                  <div>
+                    <dt>Messages to one lead</dt>
+                    <dd>{limitsWords(limits.draft)}</dd>
+                  </div>
+                ) : null}
               </dl>
             ) : null}
           </section>
@@ -149,6 +174,7 @@ export function OrganisationRules() {
                   onClick={() => {
                     split.discard();
                     rules.discard();
+                    limits.discard();
                   }}
                 >
                   Undo
@@ -223,8 +249,12 @@ function useTeamRules() {
     ? "Pick a wait between 5 and 1440 minutes."
     : hoursProblem(hours);
 
-  /** Settings first, then the hours on the revision that save returned. */
-  const save = async (): Promise<boolean> => {
+  /**
+   * Settings first, then the hours on the revision that save returned. The
+   * revision after (a number) when something was saved, true when nothing
+   * needed it, false when a save failed.
+   */
+  const save = async (): Promise<number | boolean> => {
     if (!team || !(settingsChanged || workChanged)) return true;
     if (lock.current || problem) return false;
     lock.current = true;
@@ -249,7 +279,7 @@ function useTeamRules() {
         setTeam(current);
       }
       reset(current);
-      return true;
+      return current.settings.revision;
     } catch (reason) {
       notify({
         id: "org-rules",
@@ -289,11 +319,24 @@ function useTeamRules() {
     discard: () => {
       if (team) reset(team);
     },
+    /** The message limits were saved: the same revision moved on. */
+    adoptRevision: (revision: number) =>
+      setTeam((now) =>
+        now ? { ...now, settings: { ...now.settings, revision } } : now,
+      ),
   };
 }
 
-function SellerRules({ rules }: { rules: TeamRules }) {
+function SellerRules({
+  rules,
+  limits,
+}: {
+  rules: TeamRules;
+  limits: MessageLimitsState;
+}) {
   const { team, busy } = rules;
+  // Outside senders are the owners' and admins' (org.manage).
+  const ownsSenders = useCanHere()("org.manage") === true;
   const [editing, setEditing] = useState<RepView | null>(null);
   const [round, setRound] = useState(0);
   const [advanced, setAdvanced] = useState(false);
@@ -436,6 +479,15 @@ function SellerRules({ rules }: { rules: TeamRules }) {
         </div>
         <p className={card.sub}>They say why. Owners and admins always can.</p>
       </section>
+      <MessageLimitsCard limits={limits} />
+      {ownsSenders ? (
+        <MessageSenders
+          people={team.reps.map((rep) => ({
+            id: rep.person_id,
+            name: rep.name,
+          }))}
+        />
+      ) : null}
       <section className={styles.more} aria-label="More lead rules">
         <More
           icon={<Signpost aria-hidden="true" />}

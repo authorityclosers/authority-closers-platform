@@ -758,7 +758,7 @@ async def test_project_person_refuses_naive_now(state: SimpleNamespace) -> None:
 async def test_project_person_under_v2_uses_the_v2_trial(state: SimpleNamespace) -> None:
     ledger = BillingLedger(state.async_db, clock=lambda: T0, trial_policy=TrialPolicy("v2"))
     projected = await ledger.project_person(tenant_id=state.tenant, person_id=state.person, now=T0)
-    assert projected.available_seconds == 6000
+    assert projected.available_seconds == 10_800
     assert projected.trial.expires_at == T0 + timedelta(days=14)
     assert projected.per_call_seconds == 3600
 

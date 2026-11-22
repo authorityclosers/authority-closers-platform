@@ -11,16 +11,19 @@
   box-sizing: border-box;
 }
 
-/* The menu stays below the app's see-through top bar (its "Settings" title),
-   never scrolling under it (v1.93.1, owner 22 Nov 2026); its own scroll
-   fades at the edges instead of cutting a row in half. */
+/* The menu stays below the app's see-through top bar (its "Settings" title).
+   The page scrolls inside the app's main box, which starts under the top bar;
+   a menu taller than what is left of the screen was pushed up under the
+   title at the end of a long page (v1.93.1, then the v1.95 judge, 22 Nov
+   2026), so it is never taller than that, and its own scroll fades at the
+   edges instead of cutting a row in half. */
 .nav {
   position: sticky;
-  top: calc(var(--lx-topbar-h, 64px) + 8px);
+  top: 24px;
   align-self: start;
   display: grid;
   gap: 14px;
-  max-height: calc(100dvh - var(--lx-topbar-h, 64px) - 24px);
+  max-height: calc(100dvh - var(--lx-topbar-h, 64px) - 112px);
   overflow-y: auto;
   mask-image: linear-gradient(
     to bottom,
