@@ -73,6 +73,20 @@
   color: inherit;
 }
 
+/* Pick date & time spans the row: chosen, it is a calm outline on the green
+   wash (its fields below are the point), so it never reads as the screen's
+   one main button. */
+.chip[data-full][aria-pressed="true"] {
+  border: 1px solid var(--sx-tone-good);
+  background: var(--sx-tone-good-soft);
+  box-shadow: none;
+  color: var(--sx-ink);
+}
+
+.chip[data-full][aria-pressed="true"] > svg {
+  color: var(--sx-tone-good);
+}
+
 .chip:focus-visible,
 .field input:focus-visible {
   outline: none;
