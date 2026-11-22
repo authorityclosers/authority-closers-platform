@@ -182,6 +182,38 @@ describe("acquisition permission recovery", () => {
   });
 
   it.each([
+    [
+      "Your free month has ended. Contact AC for more access.",
+      "trial_ended",
+      "Your free month has ended.",
+    ],
+    [
+      "You've used your 3 free hours. Contact AC for more access.",
+      "trial_used",
+      "You've used your 3 free hours.",
+    ],
+  ])("says how the free trial ended: %s", async (detail, reason, shown) => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ detail }), { status: 403 }),
+        ),
+    );
+    await expect(
+      acquisition(`/submissions/${submissionId}/source`, { method: "PUT" }),
+    ).rejects.toMatchObject({
+      status: 403,
+      reason,
+      message: expect.stringContaining(shown),
+    });
+    expect(
+      new AcquisitionError(403, reason as "trial_ended").message,
+    ).toContain("Contact AC for more access.");
+  });
+
+  it.each([
     JSON.stringify({ detail: "private-provider-context" }),
     JSON.stringify({ detail: `${allowanceDetail} private-provider-context` }),
     JSON.stringify([{ detail: allowanceDetail }]),

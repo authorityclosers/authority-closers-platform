@@ -78,6 +78,7 @@ import {
   requestedSubmissionId,
   savedSubmissionId,
   STANDARD_RETENTION_DAYS,
+  TRIAL_LIMIT_REASONS,
   readCallLead,
   submissionPath,
   type Allowance,
@@ -224,10 +225,14 @@ const message = (error: unknown) =>
 /** Plan & billing's Add minutes: where "Get more minutes" goes (issue 243). */
 export const ADD_MINUTES_HREF = "/settings/plan#add-minutes";
 
+/** Whether a refusal is the trial's own limit: too few minutes for this call, its
+ *  free month ended, or its free hours used (owner, 22 Nov 2026). */
+const trialLimit = (reason: AcquisitionError["reason"]) =>
+  (TRIAL_LIMIT_REASONS as readonly (string | undefined)[]).includes(reason);
+
 /** Whether an error is the analysis-minutes limit (this call needs more than are left). */
 export const minutesLimitError = (error: unknown) =>
-  error instanceof AcquisitionError &&
-  error.reason === "trial_allowance_insufficient";
+  error instanceof AcquisitionError && trialLimit(error.reason);
 
 /** A signed-in seller with no minutes left (or too few for this recording) is sent to Plans. */
 export function analysisMinutesOut(
@@ -236,10 +241,7 @@ export function analysisMinutesOut(
   error: string | AcquisitionError,
 ): boolean {
   if (!authenticated) return false;
-  if (
-    error instanceof AcquisitionError &&
-    error.reason === "trial_allowance_insufficient"
-  )
+  if (error instanceof AcquisitionError && trialLimit(error.reason))
     return true;
   return (
     allowance !== null &&
@@ -3565,7 +3567,7 @@ export function AcquisitionStudio({
                         <span aria-hidden="true">
                           <Check size={13} />
                         </span>
-                        Free analysis · included in your trial
+                        Free analysis · part of your 1 month free
                       </p>
                       <details
                         className={styles.privacyDetails}
@@ -4365,6 +4367,8 @@ function errorTitle(error: unknown, statusOnly: boolean) {
     if (error.reason === "call_too_long") return "This call is too long";
     if (error.reason === "trial_allowance_insufficient")
       return "Not enough analysis minutes";
+    if (error.reason === "trial_ended") return "Your free month has ended";
+    if (error.reason === "trial_used") return "Your 3 free hours are used";
     if (error.status === 403) return "Access needs a check";
     if (error.status === 404) return "Call not found";
     if (error.status === 429) return "One moment";

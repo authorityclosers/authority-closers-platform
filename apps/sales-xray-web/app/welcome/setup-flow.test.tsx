@@ -260,6 +260,22 @@ it("sets up a business one question at a time, then adds the first lead", async 
   expect(readSetupMark(PERSON)).toBe("done");
 });
 
+it("tells someone starting with their own calls about the free month", async () => {
+  await act(async () => root.render(<SetupFlow />));
+  await settle();
+  const solo = Array.from(host.querySelectorAll('[role="radio"]')).find(
+    (item) => item.textContent?.includes("Just my own calls"),
+  ) as HTMLButtonElement;
+  await act(async () => solo.click());
+  await press("Start with my calls");
+  expect(heading()).toBe("Analyse your first call");
+  // Owner, 22 Nov 2026: "1 month + 3 hours".
+  expect(host.textContent).toContain(
+    "1 month free, with 3 hours of call analysis.",
+  );
+  expect(host.textContent).not.toMatch(/15\s*days?/i);
+});
+
 it("lets every step be skipped, and Skip setup leaves at once", async () => {
   const assign = vi
     .spyOn(window.location, "assign")

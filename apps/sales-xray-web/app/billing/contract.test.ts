@@ -265,6 +265,45 @@ describe("plan in effect and usage (AUT-417)", () => {
       availableSeconds: 3720,
       unlimited: false,
     });
+    // A server before v1.95 names no trial.
+    expect(me.trial).toBeNull();
+    // The free month (owner, 22 Nov 2026: "1 month + 3 hours").
+    const month = parseMePlan({
+      plan: { key: "trial", name: "1 month free" },
+      allowance: {
+        allowance_seconds: 10800,
+        committed_seconds: 0,
+        available_seconds: 10800,
+      },
+      longest_call_seconds: 3600,
+      trial: { seconds: 10800, ends_at: "2026-12-25T06:30:00+00:00" },
+    });
+    expect(month.trial).toEqual({
+      seconds: 10800,
+      endsAt: "2026-12-25T06:30:00+00:00",
+    });
+    const base = {
+      plan: { key: "trial", name: "Trial" },
+      allowance: {
+        allowance_seconds: 10800,
+        committed_seconds: 0,
+        available_seconds: 10800,
+      },
+      longest_call_seconds: 3600,
+    };
+    expect(
+      parseMePlan({ ...base, trial: { seconds: 10800, ends_at: null } }).trial,
+    ).toEqual({ seconds: 10800, endsAt: null });
+    expect(parseMePlan({ ...base, trial: null }).trial).toBeNull();
+    expect(() =>
+      parseMePlan({ ...base, trial: { seconds: 10800, ends_at: "soon" } }),
+    ).toThrow(ContractError);
+    expect(() =>
+      parseMePlan({
+        ...base,
+        trial: { seconds: 10800, ends_at: null, days: 30 },
+      }),
+    ).toThrow(ContractError);
     const usage = parseUsage({
       allowance: {
         allowance_seconds: 6000,

@@ -318,12 +318,27 @@ const FILE_REFUSALS: Readonly<Record<string, string>> = {
   call_too_long: CALL_TOO_LONG,
 };
 
+/** The server's two ends of the free trial (owner, 22 Nov 2026: "1 month + 3
+ *  hours"), matched exactly like every other known refusal. */
+export const TRIAL_ENDED_DETAIL =
+  "Your free month has ended. Contact AC for more access.";
+export const TRIAL_USED_DETAIL =
+  "You've used your 3 free hours. Contact AC for more access.";
+/** The refusals that mean the trial's time is what ran out. */
+export const TRIAL_LIMIT_REASONS = [
+  "trial_allowance_insufficient",
+  "trial_ended",
+  "trial_used",
+] as const;
+
 export class AcquisitionError extends Error {
   constructor(
     readonly status: number,
     readonly reason?:
       | "provider_allowance_used"
       | "trial_allowance_insufficient"
+      | "trial_ended"
+      | "trial_used"
       | "plan_permission"
       | "plan_stale"
       | "execution_paused"
@@ -356,13 +371,17 @@ export class AcquisitionError extends Error {
                     : status === 403
                       ? reason === "trial_allowance_insufficient"
                         ? "This recording is longer than your remaining analysis minutes. Your recording stays private."
-                        : reason === "provider_allowance_used"
-                          ? "This analysis allowance has been used. Your recording is saved. Contact the AC team for help."
-                          : reason === "plan_stale"
-                            ? "This call’s plan changed while it was being prepared. We fetched a fresh plan for you to review."
-                            : reason === "plan_permission"
-                              ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
-                              : "This action is not available with your current access. Ask the AC team to check your permission."
+                        : reason === "trial_ended"
+                          ? "Your free month has ended. Your recording stays private. Contact AC for more access."
+                          : reason === "trial_used"
+                            ? "You've used your 3 free hours. Your recording stays private. Contact AC for more access."
+                            : reason === "provider_allowance_used"
+                              ? "This analysis allowance has been used. Your recording is saved. Contact the AC team for help."
+                              : reason === "plan_stale"
+                                ? "This call’s plan changed while it was being prepared. We fetched a fresh plan for you to review."
+                                : reason === "plan_permission"
+                                  ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
+                                  : "This action is not available with your current access. Ask the AC team to check your permission."
                       : status === 404
                         ? "This call is unavailable in your current session. It may have expired or been deleted."
                         : status === 429
@@ -429,6 +448,10 @@ export async function acquisition(
           requestId,
         );
       }
+      if (detail === TRIAL_ENDED_DETAIL)
+        throw new AcquisitionError(response.status, "trial_ended", requestId);
+      if (detail === TRIAL_USED_DETAIL)
+        throw new AcquisitionError(response.status, "trial_used", requestId);
       // Over the longest call: not an access problem (bug report 201).
       if (detail === CALL_TOO_LONG)
         throw new AcquisitionError(response.status, "call_too_long", requestId);
@@ -555,7 +578,7 @@ export function parseEntry(value: unknown): Entry {
 export function parseAllowance(value: unknown): Allowance {
   const item = record(value);
   // A person's balance includes audited admin grants, so it can exceed the
-  // advertised trial (the entry's 6,000 s cap still applies there).
+  // advertised trial (the entry's 10,800 s cap still applies there).
   const allowance_seconds = integer(item.allowance_seconds, 2147483647),
     committed_seconds = integer(item.committed_seconds, 2147483647),
     available_seconds = integer(item.available_seconds, 2147483647);
