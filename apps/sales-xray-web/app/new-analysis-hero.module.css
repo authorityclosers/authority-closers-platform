@@ -137,3 +137,30 @@
   font-weight: 600;
   text-decoration: none;
 }
+
+/* ---------- v1.96 device polish: the first-call guide in the page ----------
+   guide-overlay.tsx draws the open guide here: under the header in the
+   column, and on a wide screen in a 340 px column at the right of the page's
+   column, so it never covers the upload, the steps or Recent calls. */
+.guideSlot:empty {
+  display: none;
+}
+
+@media (min-width: 1200px) {
+  *:has(> .guideSlot:not(:empty)) {
+    position: relative;
+    padding-right: 356px;
+  }
+
+  .guideSlot:not(:empty) {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 340px;
+  }
+}
+
+/* The name in Home's green ink, not the teal accent. */
+.name {
+  color: var(--sx-primary-ink);
+}

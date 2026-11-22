@@ -166,3 +166,20 @@
     transition: none;
   }
 }
+
+/* ---------- v1.96 device polish ----------
+   The reading rail in Home's green ink, never the teal (a turquoise bar at
+   the window's edge in dark). */
+.thumb {
+  background: var(--sx-primary-ink);
+}
+
+.checkpoint[data-active]::before {
+  background: var(--sx-primary-ink);
+  box-shadow: 0 0 0 3px var(--sx-tone-good-soft);
+}
+
+.checkpoint:hover::before,
+.checkpoint:focus-visible::before {
+  box-shadow: 0 0 0 2px var(--sx-primary-ink);
+}

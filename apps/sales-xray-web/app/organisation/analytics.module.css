@@ -827,3 +827,30 @@ button.stat {
     height: 72px;
   }
 }
+
+/* ---------- v1.96 device polish ----------
+   A phone: Export sits at the end of the "Team activity" title row instead
+   of alone on a line of its own under the period switch. */
+@media (max-width: 599.98px) {
+  .header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 12px 8px;
+  }
+
+  .headerTools {
+    display: contents;
+  }
+
+  .headerTools > button {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .headerTools > :not(button) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: start;
+  }
+}

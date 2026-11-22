@@ -153,7 +153,7 @@ describe("calls on the current skill", () => {
       );
       // Every Report shortcut continues to target its original call.
       expect(
-        [...host.querySelectorAll('a[aria-label^="Open Report for"]')].map(
+        [...host.querySelectorAll('a[aria-label^="Open report for"]')].map(
           (link) => link.getAttribute("href"),
         ),
       ).toEqual(
@@ -245,7 +245,7 @@ describe("calls on the current skill", () => {
               `/analysis/calls/${source.submission_id}`,
             );
             expect(anchors[1].getAttribute("aria-label")).toBe(
-              `Open Report for ${source.call_label}`,
+              `Open report for ${source.call_label}`,
             );
             expect(anchors[1].textContent).toBe("Report");
           }

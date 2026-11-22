@@ -3689,3 +3689,23 @@
     );
   }
 }
+
+/* ---------- v1.96 device polish: the report's end on a phone ----------
+   The report's scroller runs on under the tab bar, so its end (and the
+   player docked there) sat under the bar even at the very bottom: the end
+   keeps the bar's height too (device matrix, 22 Nov 2026: Seek and Mute
+   under the tab bar at 360-430). */
+@media (max-width: 899.98px) {
+  .app.app.app[data-stage="report"] :global(.studio-main) {
+    padding-bottom: calc(
+      var(--lx-bottom-nav-h, 64px) + env(safe-area-inset-bottom, 0px) +
+        max(
+          16px,
+          calc(
+            var(--sx-speaker-room, 0px) - var(--lx-bottom-nav-h, 0px) + 12px
+          ),
+          calc(var(--sx-corner-h, 0px) - var(--lx-bottom-nav-h, 0px) + 12px)
+        )
+    );
+  }
+}

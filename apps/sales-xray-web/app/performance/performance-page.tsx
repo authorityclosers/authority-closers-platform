@@ -10,6 +10,12 @@ import { useWorkspaceAccess } from "../workspace-access";
 import styles from "./performance.module.css";
 import { PerformanceLoading, PerformanceView } from "./performance-view";
 
+/** Growth and Performance light the sidebar's Results area, not Home (v1.96
+ *  device polish: Home was lit on Growth at 1440). "review" is the shell's
+ *  place in Results with no page row of its own; the page names itself in
+ *  the bar (pageName). */
+const RESULTS = "review" as const;
+
 /** The page's own shape while it opens: the heading, then the view's own
  *  loading card, so nothing moves when the page arrives (robot 2ac64000). */
 export function PerformanceSkeleton({
@@ -23,10 +29,12 @@ export function PerformanceSkeleton({
     <AcquisitionShell
       authenticated={false}
       loading
-      active="dashboard"
+      active={RESULTS}
       pageName={title}
     >
-      <PageHeader title={title} titleInBar />
+      <div className={styles.pageHead}>
+        <PageHeader title={title} titleInBar />
+      </div>
       {section ? <h2 className={styles.section}>{section}</h2> : null}
       <PerformanceLoading withPeriod />
     </AcquisitionShell>
@@ -57,7 +65,7 @@ export function PerformanceRoute({
     ) : (
       <AcquisitionShell
         authenticated={access?.authenticated === true}
-        active="dashboard"
+        active={RESULTS}
         pageName={title}
       >
         <SignedOutWelcome
@@ -68,8 +76,10 @@ export function PerformanceRoute({
     );
   }
   return (
-    <AcquisitionShell authenticated active="dashboard" pageName={title}>
-      <PageHeader title={title} titleInBar />
+    <AcquisitionShell authenticated active={RESULTS} pageName={title}>
+      <div className={styles.pageHead}>
+        <PageHeader title={title} titleInBar />
+      </div>
       {section ? <h2 className={styles.section}>{section}</h2> : null}
       <PerformanceView
         key={`${access.context?.personId}:${access.context?.tenantId}`}

@@ -416,7 +416,7 @@ describe("Coaching story", () => {
     const theirs = renderToStaticMarkup(
       <CoachingStory coaching={{ ...empty, sandbox_reps: 0 }} readOnly />,
     );
-    expect(theirs).toContain("What They Should Work On Now");
+    expect(theirs).toContain("What they should work on now");
     expect(theirs).not.toContain("Analyse a call");
     expect(theirs).not.toContain("Who sees your coaching");
   });
@@ -546,25 +546,25 @@ describe("Coaching story", () => {
       <CoachingStory coaching={{ ...fictionalCoaching, progress }} readOnly />,
     );
     for (const words of [
-      "What They Should Work On Now",
+      "What they should work on now",
       "Their highest-priority improvement.",
       "On their next call",
       "From their calls",
       "using their own calls",
-      "Try This on Their Next Call",
+      "Try this on their next call",
       "Their next-call mission",
-      "See How They’re Improving",
+      "See how they’re improving",
       "Their calls on this skill",
       "Since their mission started",
       "See the next stage of their development.",
     ])
       expect(theirs).toContain(words);
     for (const words of [
-      "What You Should Work On Now",
+      "What you should work on now",
       "On your next call",
       "From your calls",
       "Your next-call mission",
-      "See How You’re Improving",
+      "See how you’re improving",
       "Your calls on this skill",
       "Your call ·",
     ])
@@ -601,7 +601,7 @@ describe("Coaching story", () => {
     const mine = renderToStaticMarkup(
       <CoachingStory coaching={{ ...fictionalCoaching, progress }} />,
     );
-    expect(mine).toContain("What You Should Work On Now");
+    expect(mine).toContain("What you should work on now");
     expect(mine).toContain("From your calls");
     expect(mine).toContain("Since your mission started");
     expect(mine).not.toContain("Their next-call mission");
@@ -635,7 +635,7 @@ describe("Coaching story", () => {
     );
     expect(withRep).toContain("Rohan Kendrekar’s coaching across calls");
     // A fictional rep's call says "their"; the importer's own calls say "your".
-    expect(withRep).toContain("What They Should Work On Now");
+    expect(withRep).toContain("What they should work on now");
     expect(withRep).toContain("Their next-call mission");
     expect(withRep).toContain(
       "Rohan Kendrekar’s coaching follows all their calls.",
@@ -688,10 +688,10 @@ describe("Coaching story", () => {
     const html = renderToStaticMarkup(
       <CallCoachingStory coaching={fictionalCallCoaching} />,
     );
-    expect(html).toContain("What You Should Work On Now");
-    expect(html).toContain("What Happened on This Call");
-    expect(html).toContain("Here’s What Better Looks Like");
-    expect(html).toContain("Try This on Your Next Call");
+    expect(html).toContain("What you should work on now");
+    expect(html).toContain("What happened on this call");
+    expect(html).toContain("Here’s what better looks like");
+    expect(html).toContain("Try this on your next call");
     expect(html.match(/data-active-mission/g)).toHaveLength(1);
     expect(html).not.toContain("Not Enough Evidence");
     expect(html).not.toContain("Compare one more evidence moment");
@@ -758,12 +758,12 @@ describe("Coaching story", () => {
       <CoachingStory coaching={fictionalCoaching} />,
     );
     const headings = [
-      "What You Should Work On Now",
-      "Why This Keeps Happening",
-      "Here’s What Better Looks Like",
-      "Try This on Your Next Call",
-      "See How You’re Improving",
-      "Where We Go From Here",
+      "What you should work on now",
+      "Why this keeps happening",
+      "Here’s what better looks like",
+      "Try this on your next call",
+      "See how you’re improving",
+      "Where we go from here",
     ];
     let previous = -1;
     for (const heading of headings) {
@@ -783,7 +783,7 @@ describe("Coaching story", () => {
     expect(html).toContain("कामाला");
     // Spec 12.6: agree / not completely, after the evidence; sharing below.
     expect(html.indexOf("Not completely")).toBeGreaterThan(
-      html.indexOf("Where We Go From Here"),
+      html.indexOf("Where we go from here"),
     );
     expect(html).toContain("Who sees your coaching");
     // A fictional or shared rep's view is read-only: nothing to save.

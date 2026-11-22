@@ -13,6 +13,7 @@ import { PageHeader, SkeletonRow } from "../ui/kit";
 import { RecordingLine } from "../capture-setup/recording-check";
 import { useWorkspaceAccess } from "../workspace-access";
 import { ReportsHub, useReportsData } from "./reports-hub";
+import styles from "./reports.module.css";
 
 export function ReportsSkeleton() {
   return (
@@ -22,7 +23,9 @@ export function ReportsSkeleton() {
       active="dashboard"
       pageName="Results"
     >
-      <PageHeader title="Results" titleInBar />
+      <div className={styles.pageHead}>
+        <PageHeader title="Results" titleInBar />
+      </div>
       {Array.from({ length: 6 }, (_, index) => (
         <SkeletonRow key={index} />
       ))}
@@ -62,7 +65,9 @@ export function ReportsRoute() {
   }
   return (
     <AcquisitionShell authenticated active="dashboard" pageName="Results">
-      <PageHeader title="Results" titleInBar />
+      <div className={styles.pageHead}>
+        <PageHeader title="Results" titleInBar />
+      </div>
       <RecordingLine
         key={`line:${access.context?.personId}:${access.context?.tenantId}`}
       />

@@ -38,6 +38,13 @@ import styles from "./updates-bell.module.css";
 
 type Kind = UpdateNotification["kind"];
 
+/** A lead's source as the bell says it: "From a file upload", not "File". */
+const SOURCE_WORDS: Readonly<Record<string, string>> = {
+  File: "From a file upload",
+  Manual: "Added by hand",
+  CSV: "From a file upload",
+};
+
 /**
  * sx-redesign board pick (owner, 21 Nov 2026): each kind has a word chip, a
  * dark ink icon in a soft tile of its meaning's colour and one short button.
@@ -216,7 +223,9 @@ function Row({
   const lead = LEAD_KINDS.has(entry.kind);
   // A lead says where it came from ("Meta Ads"); others their own words.
   const source = lead ? (leadSource(entry).split(":")[0] ?? "").trim() : "";
-  const detail = source || entry.body || "";
+  // A bare source word says where in a few plain words (v1.96 device polish:
+  // every row read just "File").
+  const detail = (SOURCE_WORDS[source] ?? source) || entry.body || "";
   return (
     <li data-unread={!entry.read}>
       <button
