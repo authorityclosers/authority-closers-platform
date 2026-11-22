@@ -1098,7 +1098,7 @@ async def record_touch(
         touch.event_id = line.id
     desk.db.add(touch)
     await desk.db.flush()
-    await _after_write(desk, lead, touch, result, sender=sender)
+    await _after_write(desk, lead, touch, sender=sender)
     return touch
 
 
@@ -1106,18 +1106,17 @@ async def _after_write(
     desk: LeadDesk,
     lead: Lead,
     touch: LeadTouch,
-    result: OutreachGuard,
     *,
     sender: LeadOutreachSender | None,
 ) -> None:
     if touch.status == "queued":
         return
-    if result.override_id is not None:
+    if touch.override_id is not None:
         override = await desk.db.scalar(
             select(LeadTouchOverride)
             .where(
                 LeadTouchOverride.tenant_id == desk.tenant_id,
-                LeadTouchOverride.id == result.override_id,
+                LeadTouchOverride.id == touch.override_id,
                 LeadTouchOverride.used_at.is_(None),
             )
             .with_for_update()

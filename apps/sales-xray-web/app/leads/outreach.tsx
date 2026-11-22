@@ -321,19 +321,30 @@ export function useOutreach(
     guard: OutreachGuard | null;
   } | null>(null);
   const [round, setRound] = useState(0);
+  // The read that has answered (or failed) last, for this lead and channel.
+  const [settled, setSettled] = useState<string | null>(null);
   const key = `${leadId}:${channel}`;
   useEffect(() => {
     if (!leadId) return;
     const controller = new AbortController();
     readOutreach(leadId, channel, controller.signal).then(
-      (guard) => setRead({ key, guard }),
-      () => undefined,
+      (guard) => {
+        setRead({ key, guard });
+        setSettled(key);
+      },
+      () => {
+        // A failed read does not hold the send for ever: the server still
+        // checks the limits when the touch is logged.
+        if (!controller.signal.aborted) setSettled(key);
+      },
     );
     return () => controller.abort();
   }, [leadId, channel, key, round]);
   const fallback = initial && initial.channel === channel ? initial : null;
   return {
     guard: read?.key === key ? read.guard : fallback,
+    /** This channel's guard is still being read (PR #663 review): no send yet. */
+    checking: !!leadId && settled !== key,
     reload: () => setRound((value) => value + 1),
   };
 }

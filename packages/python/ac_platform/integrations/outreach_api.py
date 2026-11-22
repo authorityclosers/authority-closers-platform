@@ -461,7 +461,13 @@ async def check(reader: Reader, body: CheckBody) -> dict[str, Any]:
             if held.status != "queued":
                 raise ApiError(409, "reservation_used", "That client_ref was sent already.")
             if held.expires_at is not None and held.expires_at > call.now:
+                # A retry of this reservation (PR #663 review): its own place is not counted
+                # against itself, so the verdict that let it through stands.
+                counted, held.counted = held.counted, False
+                await reader.session.flush()
                 result = await _after(call, lead, body.channel)
+                held.counted = counted
+                await reader.session.flush()
                 return _guard_json(result.model_copy(update={"reservation_id": held.id}))
             held.status, held.expires_at, held.counted = "expired", None, False
             held.client_ref = None
@@ -738,6 +744,9 @@ async def _complete(
         raise ApiError(
             409, "idempotency_mismatch", "That message id was logged already on another touch."
         ) from None
+    # The manager's one-time override it went under is used now, as for any send
+    # (PR #663 review): a reservation skipped it, so it is used up and audited here.
+    await outreach._after_write(desk, lead, touch, sender=call.sender)
     if touch.sender_type == "person" and body.status != "failed":
         lead.first_contact_at = lead.first_contact_at or sent_at
     lead.updated_at = desk.now

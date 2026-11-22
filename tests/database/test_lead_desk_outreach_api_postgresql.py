@@ -30,6 +30,7 @@ from ac_platform.lead_desk.models import (
     LeadTag,
     LeadTagLink,
     LeadTouch,
+    LeadTouchOverride,
     LeadTouchReply,
 )
 from ac_platform.tenancy.models import Organisation
@@ -346,6 +347,13 @@ def test_outside_senders_log_touches_through_the_api(postgres_harness: Any, tmp_
                 assert len(passed) == 1
                 assert {answer["verdict"] for answer in both} == {"ok", "block"}
                 ref = "q:10" if both[0]["reservation_id"] else "q:11"
+                # A retry of the passing hold keeps its verdict and its place (PR #663 review:
+                # its own reservation never counts against itself).
+                again = await hold(ref)
+                assert (again["verdict"], again["reservation_id"]) == (
+                    "ok",
+                    passed[0]["reservation_id"],
+                )
                 sent = await call(
                     "/touches",
                     {
@@ -406,6 +414,56 @@ def test_outside_senders_log_touches_through_the_api(postgres_harness: Any, tmp_
                     )
                 missing = await engine.delete(f"{API}/reservations/{uuid4()}", headers=bearer(key))
                 assert missing.status_code == 404
+
+                # A manager's one-time override lets one reservation through; once that is
+                # sent the override is used (and audited), so the next check is held again
+                # (PR #663 review).
+                assert (
+                    await call("/check", {"sender": "sx-engage", "to": {"phone": "98111 22202"}})
+                )["verdict"] == "block"
+                granted = await session(
+                    "POST",
+                    f"/leads/{riya}/overrides",
+                    {"command_id": str(uuid4()), "channel": "whatsapp", "reason_key": "lead_asked"},
+                    201,
+                )
+                let_through = await call(
+                    "/check",
+                    {
+                        "sender": "sx-engage",
+                        "to": {"phone": "98111 22202"},
+                        "hold": True,
+                        "client_ref": "q:20",
+                    },
+                )
+                assert let_through["reservation_id"]
+                await call(
+                    "/touches",
+                    {
+                        **first,
+                        "to": {"phone": "98111 22202"},
+                        "client_ref": "q:20",
+                        "reservation_id": let_through["reservation_id"],
+                        "provider_message_id": "wamid.FICTIONAL-B2",
+                    },
+                    201,
+                )
+                async with setup.sessions() as db, db.begin():
+                    used = await db.get(LeadTouchOverride, UUID(granted["override_id"]))
+                    assert used is not None
+                    assert used.used_by_touch_id == UUID(let_through["reservation_id"])
+                    audited = await db.scalar(
+                        select(func.count())
+                        .select_from(AuditEvent)
+                        .where(
+                            AuditEvent.action == "lead_desk.outreach.override_used",
+                            AuditEvent.resource_id == granted["override_id"],
+                        )
+                    )
+                    assert audited == 1
+                assert (
+                    await call("/check", {"sender": "sx-engage", "to": {"phone": "98111 22202"}})
+                )["verdict"] == "block"
 
                 # Statuses move forward only; a late older one is ignored.
                 start = datetime.now(UTC)
@@ -716,8 +774,9 @@ def test_outside_senders_log_touches_through_the_api(postgres_harness: Any, tmp_
                     code="sender_paused",
                 )
                 listed_senders = await session("GET", "/outreach/senders", None)
+                # sx-engage: six sends, plus the one a manager's override let through.
                 assert {s["key"]: s["touches_week"] for s in listed_senders["senders"]} == {
-                    "sx-engage": 6,
+                    "sx-engage": 7,
                     "owner-mac-whatsapp": 2,
                     "elsewhere": 0,
                 }
@@ -743,6 +802,8 @@ def test_outside_senders_log_touches_through_the_api(postgres_harness: Any, tmp_
                     "lead_desk.outreach.sender_created": 3,
                     "lead_desk.outreach.sent_past_block": 1,
                     "lead_desk.outreach.sender_paused": 1,
+                    "lead_desk.outreach.override_granted": 1,
+                    "lead_desk.outreach.override_used": 1,
                 }
                 past_block = await db.scalar(
                     select(AuditEvent).where(

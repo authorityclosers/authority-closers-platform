@@ -100,7 +100,7 @@ export function MessageSheet({
   const chosen = templates.find((template) => template.key === picked);
   const edited = !!chosen && text.trim() !== fill(chosen).trim();
   // The counter for this channel before the send (v1.95): read when it opens.
-  const { guard, reload } = useOutreach(
+  const { guard, reload, checking } = useOutreach(
     open && target ? target.leadId : null,
     channel,
     outreach,
@@ -217,9 +217,12 @@ export function MessageSheet({
             href={href}
             target={channel === "whatsapp" ? "_blank" : undefined}
             rel="noreferrer"
-            aria-disabled={!text.trim() || undefined}
+            aria-disabled={!text.trim() || checking || undefined}
+            aria-busy={checking || undefined}
             onClick={(event) => {
-              if (!text.trim()) {
+              // Not before this channel's limits are read (PR #663 review: a
+              // held send must not open WhatsApp while its guard loads).
+              if (!text.trim() || checking) {
                 event.preventDefault();
                 return;
               }
@@ -227,7 +230,11 @@ export function MessageSheet({
             }}
           >
             <Send size={18} aria-hidden="true" />
-            {channel === "whatsapp" ? "Open WhatsApp" : "Open Messages"}
+            {checking
+              ? "Checking…"
+              : channel === "whatsapp"
+                ? "Open WhatsApp"
+                : "Open Messages"}
           </a>
         </SendGuard>
         {held ? null : (
