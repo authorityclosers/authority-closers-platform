@@ -36,6 +36,16 @@ vi.mock("../../leads/leads-client", () => ({
   saveWorkHours: vi.fn(),
 }));
 vi.mock("../../notice-center", () => ({ notify: vi.fn() }));
+// Message limits (v1.95): the same settings revision as the team's.
+const outreach = vi.hoisted(() => ({ read: vi.fn(), save: vi.fn() }));
+vi.mock("../../outreach/outreach-client", () => ({
+  OutreachError: class OutreachError extends Error {},
+  readOutreachRules: outreach.read,
+  saveOutreachRules: outreach.save,
+}));
+vi.mock("./message-senders", () => ({
+  MessageSenders: () => <section>Message senders</section>,
+}));
 vi.mock("./lead-split", () => ({
   useLeadSplit: () => ({
     changed: false,
@@ -76,7 +86,32 @@ const team = {
     },
   },
 };
+const limits = (revision: number) => ({
+  revision,
+  enabled: true,
+  per_day: 1,
+  per_week: 3,
+  rest_after: 3,
+  rest_days: 14,
+  quiet: null,
+  hours_in_use: { days: [0, 1, 2, 3, 4, 5], start: "10:00", end: "20:00" },
+  modes: {
+    whatsapp: { people: "warn", automations: "block" },
+    sms: { people: "warn", automations: "warn" },
+    call: { people: "show", automations: "show" },
+  },
+  keep_reply_words: false,
+  never_lead: [],
+  can_edit: true,
+});
 beforeEach(() => {
+  outreach.read.mockResolvedValue(limits(7));
+  outreach.save.mockImplementation(
+    async (change: { expected_revision: number }) => ({
+      ...limits(change.expected_revision + 1),
+      per_day: 2,
+    }),
+  );
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -114,13 +149,23 @@ it("puts every lead rule on one page, with no rows of tabs", async () => {
   // Round-2 board 3 (option C, 20 Nov 2026): the split, the move, the hours
   // and the sellers' switch on one page instead of two rows of tabs.
   await act(async () => root.render(<OrganisationRules />));
-  // The only group is the work days' pills: no row of tabs.
+  // Groups are pills (work days, each channel's Count | Warn | Hold): no
+  // row of tabs.
   expect(host.querySelector('[role="tablist"]')).toBeNull();
   expect(
     [...host.querySelectorAll('[role="group"]')].map((group) =>
       group.getAttribute("aria-label"),
     ),
-  ).toEqual(["Work days"]);
+  ).toEqual([
+    "Work days",
+    "WhatsApp from a person",
+    "WhatsApp from an automation",
+    "SMS",
+    "Email",
+    "Messenger",
+    "Instagram",
+    "Calls",
+  ]);
   const text = host.textContent ?? "";
   for (const words of [
     "Who gets new leads",
@@ -210,4 +255,52 @@ it("holds Save while the hours can't work, and Undo puts everything back", async
   await tap("Undo");
   expect(host.textContent).not.toContain("Save rules");
   expect(host.textContent).not.toContain("Pick at least one work day.");
+});
+
+it("saves message limits on the revision the team's save returned (one revision)", async () => {
+  await act(async () => root.render(<OrganisationRules />));
+  expect(host.textContent).toContain("Message limits");
+  expect(host.textContent).toContain("STOP always holds");
+  // A team setting and a limit, both drafts until the one Save.
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>(
+        '[role="switch"][aria-label="Move untouched leads"]',
+      )!
+      .click(),
+  );
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>(
+        'button[aria-label="Messages a day: one more"]',
+      )!
+      .click(),
+  );
+  expect(outreach.save).not.toHaveBeenCalled();
+  await tap("Save rules");
+  expect(saveSettings).toHaveBeenCalledWith(7, {
+    auto_reassign: true,
+    reassign_minutes: 35,
+  });
+  // saveSettings answered revision 8: the limits go on 8, with only what changed.
+  expect(outreach.save).toHaveBeenCalledWith({
+    expected_revision: 8,
+    per_day: 2,
+  });
+  expect(host.textContent).not.toContain("Save rules");
+});
+
+it("saves a channel's mode alone, on the revision it read", async () => {
+  await act(async () => root.render(<OrganisationRules />));
+  const sms = host.querySelector('[role="group"][aria-label="SMS"]')!;
+  const hold = [...sms.querySelectorAll("button")].find(
+    (button) => button.textContent === "Hold",
+  )!;
+  await act(async () => hold.click());
+  await tap("Save rules");
+  expect(saveSettings).not.toHaveBeenCalled();
+  expect(outreach.save).toHaveBeenCalledWith({
+    expected_revision: 7,
+    modes: { sms: { people: "block", automations: "block" } },
+  });
 });
