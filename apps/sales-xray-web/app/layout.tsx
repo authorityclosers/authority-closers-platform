@@ -52,6 +52,10 @@ import { PressFeedback } from "./press-feedback";
 import { WebReady } from "./web-ready";
 import { GetAppSheet } from "./testers/get-app-sheet";
 import { PrePaintScript } from "./pre-paint-script";
+import { OfflineWatch } from "./shell/offline-watch";
+import { ShellWorker } from "./shell/shell-worker";
+import { SlowNetwork } from "./shell/slow-network";
+import { slowNetworkScript } from "./shell/slow-network-script";
 export const metadata: Metadata = {
   title: "Sales X-Ray · Authority Closers",
   description:
@@ -122,6 +126,12 @@ export default async function Layout({
         {/* Inside the phone app, website-only chrome is hidden from the
             first paint (html[data-sx-app], styles.css). */}
         <PrePaintScript id="sales-xray-app-init" code={inAppInitScript()} />
+        {/* "Slow network. Still loading…" after 5 s, even before the app's
+            scripts arrive on a slow line (shell/slow-network.tsx). */}
+        <PrePaintScript
+          id="sales-xray-slow-network"
+          code={slowNetworkScript()}
+        />
         {/* Starts this page's reads while the HTML is still arriving, so the
             app finds its data ready instead of asking after it starts. */}
         {/* crypto.randomUUID over plain http (a test setup on a LAN), before
@@ -150,6 +160,14 @@ export default async function Layout({
               <DesktopKeys />
               {/* Releases: one fetch layer waits them out behind a calm banner. */}
               <ReleaseHoldBanner />
+              {/* No internet: one calm line, and the screen keeps what it shows. */}
+              <OfflineWatch />
+              <SlowNetwork />
+              {/* The offline screen's service worker; never in the phone apps.
+                  AC_SALES_XRAY_SERVICE_WORKER=off removes it everywhere. */}
+              <ShellWorker
+                off={process.env.AC_SALES_XRAY_SERVICE_WORKER === "off"}
+              />
               {/* Usage and performance telemetry, sent only for people it is on for. */}
               <TelemetryAuto />
               {/* Microsoft Clarity: only for a signed-in person it is on for, in production. */}
