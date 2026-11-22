@@ -11,7 +11,9 @@ vi.mock("../app-session", () => ({
 import {
   GetAppSheet,
   SETTLED_KEY,
+  SETTLE_MS,
   SNOOZE_KEY,
+  SNOOZE_MS,
   forgetTesterRead,
 } from "./get-app-sheet";
 
@@ -47,6 +49,8 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.useRealTimers();
+  window.history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
   if (agent) Object.defineProperty(Navigator.prototype, "userAgent", agent);
   delete (navigator as { userAgent?: string }).userAgent;
@@ -61,17 +65,29 @@ const answer = (state: string) =>
       }),
   );
 
+// v1.96 device polish, lane P: it waits for the page to settle and the
+// person to pause before it opens.
+async function calmMoment() {
+  await act(async () => {
+    vi.advanceTimersByTime(SETTLE_MS + 2000);
+  });
+}
+
 const sheetLinks = () =>
   [...document.querySelectorAll<HTMLAnchorElement>("a[data-step]")].map(
     (link) => link.getAttribute("href"),
   );
 
 it("opens Play's two steps for a ready tester on an Android browser, and Not now snoozes it", async () => {
+  vi.useFakeTimers();
   as(ANDROID);
   const fetcher = answer("ready");
   vi.stubGlobal("fetch", fetcher);
   await act(async () => root.render(<GetAppSheet />));
   expect(fetcher).toHaveBeenCalledTimes(1);
+  // Not on landing: only once the page has settled.
+  expect(document.body.textContent).not.toContain("Get the Sales X-Ray app");
+  await calmMoment();
   expect(document.body.textContent).toContain("Get the Sales X-Ray app");
   expect(sheetLinks()).toEqual([
     "https://play.google.com/apps/testing/com.authorityclosers.salesxray",
@@ -84,7 +100,28 @@ it("opens Play's two steps for a ready tester on an Android browser, and Not now
       .find((button) => button.textContent === "Not now")!
       .click();
   });
-  expect(Number(localStorage.getItem(SNOOZE_KEY))).toBeGreaterThan(Date.now());
+  // Once a week at most (v1.96 device polish, lane P).
+  const until = Number(localStorage.getItem(SNOOZE_KEY));
+  expect(until).toBeGreaterThan(Date.now() + SNOOZE_MS - 60_000);
+});
+
+it("never opens over a task in progress, and waits for one to end", async () => {
+  vi.useFakeTimers();
+  as(ANDROID);
+  vi.stubGlobal("fetch", answer("ready"));
+  window.history.replaceState(null, "", "/dashboard?lead=abc");
+  await act(async () => root.render(<GetAppSheet />));
+  await calmMoment();
+  expect(document.body.textContent).not.toContain("Get the Sales X-Ray app");
+  window.history.replaceState(null, "", "/dashboard");
+  const dialog = document.createElement("div");
+  dialog.setAttribute("role", "dialog");
+  document.body.append(dialog);
+  await calmMoment();
+  expect(document.body.textContent).not.toContain("Get the Sales X-Ray app");
+  dialog.remove();
+  await calmMoment();
+  expect(document.body.textContent).toContain("Get the Sales X-Ray app");
 });
 
 it("stays away inside the app, while snoozed, off the app's pages and for anyone not ready", async () => {
@@ -118,6 +155,7 @@ it("stays away inside the app, while snoozed, off the app's pages and for anyone
 });
 
 it("asks once when React runs the effect twice, and still opens", async () => {
+  vi.useFakeTimers();
   as(ANDROID);
   const fetcher = answer("ready");
   vi.stubGlobal("fetch", fetcher);
@@ -130,5 +168,6 @@ it("asks once when React runs the effect twice, and still opens", async () => {
     ),
   );
   expect(fetcher).toHaveBeenCalledTimes(1);
+  await calmMoment();
   expect(document.body.textContent).toContain("Get the Sales X-Ray app");
 });
