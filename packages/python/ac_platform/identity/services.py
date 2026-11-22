@@ -24,6 +24,7 @@ from ac_platform.identity.models import (
     ProviderAuthorizationTransactionStatus,
     SessionAudience,
 )
+from ac_platform.pulse.addresses import pulse_issuer_values
 
 GOOGLE_ISSUER_CANONICAL = "https://accounts.google.com"
 GOOGLE_ISSUER_ALIASES = (GOOGLE_ISSUER_CANONICAL, "accounts.google.com")
@@ -36,12 +37,13 @@ def normalize_provider_issuer(issuer: str) -> str:
 
 
 def provider_issuer_lookup_values(issuer: str) -> tuple[str, ...]:
-    """Include Google's historical issuer spelling when resolving a canonical key."""
+    """Include Google's historical issuer spelling, and Pulse's earlier address (the
+    Vitals OS app, issue 235), when resolving a canonical key."""
 
     normalized = normalize_provider_issuer(issuer)
     if normalized == GOOGLE_ISSUER_CANONICAL:
         return GOOGLE_ISSUER_ALIASES
-    return (normalized,)
+    return pulse_issuer_values(normalized)
 
 
 if TYPE_CHECKING:

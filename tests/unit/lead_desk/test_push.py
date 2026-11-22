@@ -77,6 +77,10 @@ def test_a_message_carries_ids_and_counts_never_names() -> None:
     alert.leads.append(("due", uuid4()))
     assert alert.data()["kind"] == "many" and alert.data()["alerts"] == "2"
     assert all(isinstance(value, str) for value in alert.data().values())
+    # Something due: the phone's Reminders channel (owner, 22 Nov 2026).
+    assert alert.data()["reminder"] == "1"
+    due = push.Alert(tenant_id=tenant, person_id=person, leads=[("due", lead)])
+    assert due.data()["kind"] == "due" and due.data()["reminder"] == "1"
 
 
 @pytest.mark.parametrize(
@@ -114,6 +118,39 @@ def test_fcm_answers(status: int, body: dict[str, Any], outcome: str) -> None:
     assert seen[0]["url"].endswith("/v1/projects/sales-xray-test/messages:send")
     message = seen[0]["body"]["message"]
     assert message["token"] == DEVICE and message["android"]["priority"] == "HIGH"
+    # Not a reminder: no iPhone block.
+    assert "apns" not in message
+
+
+def test_a_reminder_push_is_time_sensitive_on_an_iphone() -> None:
+    import asyncio
+
+    cfg = push.config({**CLIENT, "AC_FCM_SERVICE_ACCOUNT": json.dumps(_account())})
+    assert cfg is not None
+    fcm = push.Fcm(cfg)
+    seen: list[dict[str, Any]] = []
+
+    async def token() -> str:
+        return "access-token"
+
+    fcm._token = token  # type: ignore[method-assign]
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json={"name": "projects/x/messages/1"})
+
+    async def go() -> str:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(answer)) as client:
+            return await fcm.send(client, DEVICE, {"type": "lead_desk", "reminder": "1"})
+
+    assert asyncio.run(go()) == "sent"
+    message = seen[0]["message"]
+    assert message["android"]["priority"] == "HIGH"
+    aps = message["apns"]["payload"]["aps"]
+    assert aps["interruption-level"] == "time-sensitive"
+    assert message["apns"]["headers"]["apns-priority"] == "10"
+    # Plain words only: no lead's name goes through Apple.
+    assert aps["alert"] == {"title": "Reminder", "body": "A follow-up is due now. Tap to open it."}
 
 
 def test_ready_messages_name_only_known_placeholders() -> None:

@@ -24,7 +24,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import SessionTransactionOrigin
 
 from ac_platform.billing.ledger import AccountProjection, BillingLedger
-from ac_platform.billing.trial import TrialPolicy
+from ac_platform.billing.projection import Lot
+from ac_platform.billing.trial import TRIAL_LOT_ID, TrialPolicy
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionSettlement,
     ConversationAcquisitionUsage,
@@ -35,6 +36,8 @@ from ac_platform.conversation_intelligence.acquisition_usage import (
     LONGEST_CALL_EXCEEDED_MESSAGE,
     RECEIPT_CEILING_SECONDS,
     TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE,
+    TRIAL_ENDED_MESSAGE,
+    TRIAL_USED_MESSAGE,
 )
 from ac_platform.conversation_intelligence.activation_contract import InternalTesterApproval
 from ac_platform.conversation_intelligence.admission_lock import take_admission_lock
@@ -52,6 +55,23 @@ from ac_platform.tenancy.models import Tenant
 
 _TOKEN = re.compile(r"^[A-Za-z0-9_-]{43}$")
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
+
+
+def trial_refusal(projected: AccountProjection) -> str:
+    """Why a recording cannot be analysed: the free month ended, its hours are used,
+    or (with time left, or any other lot) too little is left for this recording."""
+
+    trial, at = projected.trial, projected.projection.at
+    if trial is None or projected.available_seconds > 0:
+        return TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE
+    if projected.plan_key not in (None, TRIAL_LOT_ID):
+        return TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE
+    if trial.expires_at is not None and at >= trial.expires_at:
+        return TRIAL_ENDED_MESSAGE
+    position = projected.projection.position(TRIAL_LOT_ID)
+    if position is not None and position.unallocated <= 0:
+        return TRIAL_USED_MESSAGE
+    return TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE
 
 
 @dataclass(frozen=True)
@@ -299,6 +319,16 @@ class AcquisitionSessions:
             value["unlimited"] = True
         return value
 
+    async def trial_lot(
+        self, *, actor: ActorContext, shared_identity_locks: bool = False
+    ) -> Lot | None:
+        """The person's derived trial lot: its size and, under trial v2, its end
+        (None in an organisation, which has no trial)."""
+
+        now = await self._admit()
+        owner = await self._owner(None, actor, now, shared_identity_locks=shared_identity_locks)
+        return (await self._project(*owner, now, mirror=False)).trial
+
     async def _account_tester(self, actor: ActorContext | None) -> InternalTesterApproval | None:
         if self.tester_policy is None or actor is None:
             return None
@@ -345,7 +375,7 @@ class AcquisitionSessions:
             if not projected.projection.can_reserve(
                 source.seconds, per_call_limit=projected.per_call_seconds
             ):
-                raise ConversationDenied(TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE)
+                raise ConversationDenied(trial_refusal(projected))
         identifier = uuid4()
         self.database.add(
             ConversationAcquisitionUsage(

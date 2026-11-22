@@ -114,7 +114,12 @@ import {
   type LeadDetail,
   type LeadEvent,
   type LeadRow,
+  type OutreachGuard,
   type Stage,
+  heldByLimits,
+  logTouch,
+  readOutreach,
+  setFollowUp,
   undoResult,
 } from "./leads-client";
 import { PersonAvatar } from "../people/person-avatar";
@@ -126,6 +131,12 @@ import { callStep } from "./phone-call-steps";
 import { CompanyCallStrip, useCompanyCall } from "./company-call";
 import { LeadTasks } from "./lead-tasks";
 import { AddTaskSheet } from "./add-task-sheet";
+import { ReminderTime, reminderAt } from "./reminder-time";
+import {
+  isReminderPreset,
+  tomorrowMorning,
+  type ReminderPreset,
+} from "./reminder-times";
 import { AskDipakSheet } from "../shell/ask-deepak";
 import {
   EMPTY_MEETING,
@@ -145,6 +156,15 @@ import {
 import { chatFacts, chatOrigin } from "./chat-origin";
 import { SocialThread } from "./social-thread";
 import { WhatsAppThread } from "./whatsapp-thread";
+import {
+  OutreachLine,
+  OverrideSheet,
+  TouchLine,
+  TouchSheet,
+  canPass,
+  isHeld,
+  whyWords,
+} from "./outreach";
 import { dueWords, whyLine } from "./desk-view";
 import type { Kind, StageView } from "./journey/journey-client";
 import { stageTone as stageDot } from "./journey/stage-look";
@@ -235,7 +255,9 @@ const NO_RETRY = new Set([
 /* ---------- After the call ---------- */
 
 type Talk = "talked" | "missed" | null;
-type Pick = CallTime | "custom";
+/** A follow-up's time: the shared reminder presets (owner, 22 Nov 2026), an
+ *  older chip ("This evening", "Next week"), or a picked date and time. */
+type Pick = CallTime | ReminderPreset | "custom";
 
 const MISSED: { key: string; label: string }[] = [
   { key: "did_not_pick", label: "No answer" },
@@ -327,64 +349,45 @@ export function stageAfterTalk(stage: Stage): Stage | null {
   return stage === "interested" || stage === "follow_up" ? stage : null;
 }
 
-const TIMES: { key: Pick; label: string }[] = [
-  { key: "hour", label: "In 1 hour" },
-  { key: "evening", label: "This evening" },
-  { key: "morning", label: "Tomorrow morning" },
-  { key: "week", label: "Next week" },
-  { key: "someday", label: "In 2 weeks" },
-  { key: "custom", label: "Pick a time" },
-];
-
-function timeOf(pick: Pick | null, custom: string): Date | null {
+function timeOf(
+  pick: Pick | null,
+  custom: string,
+  hours: TeamHours | null = null,
+  now: Date = new Date(),
+): Date | null {
   if (pick === null) return null;
-  if (pick !== "custom") return nextCallTime(pick);
-  const at = custom ? new Date(custom) : null;
-  return at && !Number.isNaN(at.getTime()) ? at : null;
+  if (pick === "custom" || isReminderPreset(pick))
+    return reminderAt(pick, custom, now, hours);
+  return nextCallTime(pick, now);
 }
 
+/** The follow-up time outside the wrap-up: the shared reminder picker. */
 function TimePicker({
   label,
   pick,
   custom,
+  hours,
   onPick,
   onCustom,
 }: {
   label: string;
   pick: Pick;
   custom: string;
+  hours: TeamHours | null;
   onPick: (pick: Pick) => void;
   onCustom: (value: string) => void;
 }) {
-  const at = timeOf(pick, custom);
   return (
     <div className={styles.outcomeStep}>
-      <span className={styles.stepLabel}>{label}</span>
-      <div className={styles.chips} role="group" aria-label={label}>
-        {TIMES.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className={styles.chip}
-            aria-pressed={pick === item.key}
-            onClick={() => onPick(item.key)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-      {pick === "custom" ? (
-        <Field label="Date and time">
-          <input
-            type="datetime-local"
-            value={custom}
-            min={localInputValue(new Date())}
-            onChange={(event) => onCustom(event.target.value)}
-          />
-        </Field>
-      ) : at ? (
-        <p className={styles.hint}>{when(at.toISOString())}</p>
-      ) : null}
+      <ReminderTime
+        label={label}
+        pick={pick}
+        custom={custom}
+        hours={hours}
+        other={timeOf(pick, custom, hours)}
+        onPick={onPick}
+        onCustom={onCustom}
+      />
     </div>
   );
 }
@@ -652,14 +655,6 @@ export function likelyNext(
   );
 }
 
-/** "In 2 days" at 10:00 (v1.93's third chip; the follow-up field's own time). */
-function inTwoDays(now: Date = new Date()): Date {
-  const at = new Date(now);
-  at.setDate(at.getDate() + 2);
-  at.setHours(10, 0, 0, 0);
-  return at;
-}
-
 /** The team's hours as the after-call screen reads them (the lead's
  *  ``work_hours``): days (0 is Monday), "HH:MM" start and end, and their clock. */
 export type TeamHours = {
@@ -766,9 +761,14 @@ export function inTeamHours(at: Date, hours: TeamHours | null = null): Date {
   return at;
 }
 
-/** A time for the follow-up field: the Tomorrow chip's own when it is that. */
-function asPick(at: Date, now: Date): { pick: Pick; custom: string } {
-  const tomorrow = nextCallTime("morning", now);
+/** A time for the follow-up field: the Tomorrow morning chip's own when it
+ *  is that (the team's opening, owner 22 Nov 2026). */
+function asPick(
+  at: Date,
+  now: Date,
+  hours: TeamHours | null = null,
+): { pick: Pick; custom: string } {
+  const tomorrow = tomorrowMorning(now, hours);
   return {
     pick: at.getTime() === tomorrow.getTime() ? "morning" : "custom",
     custom: localInputValue(at),
@@ -792,122 +792,49 @@ export function daytimeRetry(
   const chosen = inTeamHours(at, hours);
   if (chosen.getTime() === at.getTime() && gapHours === 1)
     return { pick: "hour", custom: localInputValue(at) };
-  return asPick(chosen, now);
+  return asPick(chosen, now, hours);
 }
 
-/** After a talk, the next call: tomorrow 10:00, moved into the team's hours. */
+/** After a talk, the next call: tomorrow morning (the team's opening, else
+ *  10:00), moved into the team's hours. */
 export function talkedNext(
   now: Date = new Date(),
   hours: TeamHours | null = null,
 ): { pick: Pick; custom: string } {
-  return asPick(inTeamHours(nextCallTime("morning", now), hours), now);
-}
-
-/** "Mon, 23 Nov · 10:00 am": the follow-up field's words. */
-function fieldWhen(at: Date): string {
-  const day = at.toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
-  const time = at
-    .toLocaleTimeString("en-IN", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    })
-    .replace(/\s(am|pm)$/i, " $1");
-  return `${day} · ${time}`;
+  return asPick(inTeamHours(tomorrowMorning(now, hours), hours), now, hours);
 }
 
 /**
- * The wrap-up's follow-up time (v1.93): the time in words in a field that
- * opens the phone's own picker, and three quick chips. Null (a missed call's
- * default) leaves the next try to the desk, as before, and says when.
+ * The wrap-up's follow-up time (v1.93; owner 22 Nov 2026: the shared presets,
+ * 1 minute to tomorrow morning, or any date and time, and the exact time it
+ * reminds). Null (a missed call's default) leaves the next try to the desk.
  */
 function WrapTime({
   label,
   pick,
   custom,
-  auto,
+  hours,
   onPick,
   onCustom,
 }: {
   label?: string;
   pick: Pick | null;
   custom: string;
-  /** What happens with no time picked ("Back on your desk in 1 hour"). */
-  auto?: string;
+  hours: TeamHours | null;
   onPick: (pick: Pick) => void;
   onCustom: (value: string) => void;
 }) {
-  const at = timeOf(pick, custom);
-  const two = localInputValue(inTwoDays());
-  const chips: { key: string; label: string; on: boolean; run: () => void }[] =
-    [
-      {
-        key: "hour",
-        label: "In 1 hour",
-        on: pick === "hour",
-        run: () => onPick("hour"),
-      },
-      {
-        key: "morning",
-        label: "Tomorrow",
-        on: pick === "morning",
-        run: () => onPick("morning"),
-      },
-      {
-        key: "two",
-        label: "In 2 days",
-        on: pick === "custom" && custom === two,
-        run: () => {
-          onCustom(two);
-          onPick("custom");
-        },
-      },
-    ];
   return (
     <div className={wrap.time}>
-      {label ? <span className={wrap.timeLabel}>{label}</span> : null}
-      <div className={wrap.timeField}>
-        <input
-          type="datetime-local"
-          className={wrap.timeInput}
-          aria-label={label ?? "When to try again"}
-          value={pick === "custom" ? custom : at ? localInputValue(at) : ""}
-          min={localInputValue(new Date())}
-          onClick={(event) => {
-            try {
-              event.currentTarget.showPicker?.();
-            } catch {
-              // An older browser opens its picker by itself.
-            }
-          }}
-          onChange={(event) => {
-            onCustom(event.target.value);
-            onPick("custom");
-          }}
-        />
-        <span className={wrap.timeFace} data-auto={at ? undefined : ""}>
-          <CalendarClock size={20} aria-hidden="true" />
-          <span>{at ? fieldWhen(at) : (auto ?? "Pick a time")}</span>
-          <ChevronDown size={18} aria-hidden="true" />
-        </span>
-      </div>
-      <div className={wrap.chips} role="group" aria-label="Quick times">
-        {chips.map((chip) => (
-          <button
-            key={chip.key}
-            type="button"
-            className={wrap.chip}
-            aria-pressed={chip.on}
-            onClick={chip.run}
-          >
-            {chip.label}
-          </button>
-        ))}
-      </div>
+      <ReminderTime
+        label={label}
+        pick={pick}
+        custom={custom}
+        hours={hours}
+        other={timeOf(pick, custom, hours)}
+        onPick={onPick}
+        onCustom={onCustom}
+      />
     </div>
   );
 }
@@ -1226,11 +1153,14 @@ export function CallOutcome({
   const meetingAt = wantsMeeting ? meetingStart(meeting) : null;
   const needsTime =
     talk === "talked" && stage !== null && !closes && !wantsMeeting;
-  const at = needsTime
-    ? timeOf(next, custom)
-    : talk === "missed"
-      ? timeOf(retry, custom)
-      : null;
+  // Counted again at Save: "In 2 min" is two minutes from the tap.
+  const timeNow = () =>
+    needsTime
+      ? timeOf(next, custom, teamHours)
+      : talk === "missed"
+        ? timeOf(retry, custom, teamHours)
+        : null;
+  const at = timeNow();
   // A Won deal says what it was worth (revenue targets, owner meeting 28 Oct 2026).
   const worth = amountOf(deal);
   const needsAmount = talk === "talked" && stage === "won" && worth === null;
@@ -1424,7 +1354,7 @@ export function CallOutcome({
               }
             : undefined,
         follow_up_at: at
-          ? at.toISOString()
+          ? (timeNow() ?? at).toISOString()
           : meetingAt
             ? meetingAt.toISOString()
             : undefined,
@@ -1715,6 +1645,7 @@ export function CallOutcome({
             <WrapTime
               pick={retry}
               custom={custom}
+              hours={teamHours}
               onPick={setRetry}
               onCustom={setCustom}
             />
@@ -1738,6 +1669,7 @@ export function CallOutcome({
               label="Try again"
               pick={retry}
               custom={custom}
+              hours={teamHours}
               onPick={setRetry}
               onCustom={setCustom}
             />
@@ -1774,6 +1706,10 @@ export function CallOutcome({
                 </button>
               ))}
             </div>
+          ) : null}
+          {/* Send details is a message: its counter first (v1.95). */}
+          {wrapUp && nextId === "send-details" && detail.outreach ? (
+            <OutreachLine guard={detail.outreach} />
           ) : null}
           {wrapUp && nexts.length && otherStages.length && !stageKept ? (
             <button
@@ -1932,6 +1868,7 @@ export function CallOutcome({
               label="Next call"
               pick={next}
               custom={custom}
+              hours={teamHours}
               onPick={setNext}
               onCustom={setCustom}
             />
@@ -1940,6 +1877,7 @@ export function CallOutcome({
               label="Next call"
               pick={next}
               custom={custom}
+              hours={teamHours}
               onPick={setNext}
               onCustom={setCustom}
             />
@@ -2891,8 +2829,11 @@ export function History({
   label = "History",
   upcoming = null,
   onGenerate,
+  onTouches,
   shown,
 }: {
+  /** A touch line's Details: the lead's touch sheet (v1.95). */
+  onTouches?: () => void;
   events: LeadEvent[];
   onChanged?: (next: LeadDetail) => void;
   /** For Undo on a change an AI app made: the lead is read again after. */
@@ -3032,7 +2973,9 @@ export function History({
                 data-kind={event.kind}
                 data-at={event.at}
                 data-report={report ? "" : undefined}
-                data-opens={report ? "" : undefined}
+                data-opens={
+                  report || (event.touch && onTouches) ? "" : undefined
+                }
                 data-missed={
                   event.direction === "missed" || event.direction === "rejected"
                     ? true
@@ -3063,6 +3006,9 @@ export function History({
                     {words ? `${words} · ` : null}
                     <time dateTime={event.at}>{stamp(event.at)}</time>
                   </span>
+                  {event.touch ? (
+                    <TouchLine touch={event.touch} actor={event.actor_name} />
+                  ) : null}
                   {event.kind === "call" ? (
                     <AutoCaptureState eventId={event.event_id} />
                   ) : null}
@@ -3081,6 +3027,15 @@ export function History({
                   <Link className={page.tlAction} href={callHref(report)}>
                     View report
                   </Link>
+                ) : event.touch && onTouches ? (
+                  <button
+                    type="button"
+                    className={page.tlAction}
+                    data-sx-feature="outreach_touch_details"
+                    onClick={onTouches}
+                  >
+                    Details
+                  </button>
                 ) : generate ? (
                   <button
                     type="button"
@@ -4212,6 +4167,52 @@ export function LeadCard({
   const [more, setMore] = useState(false);
   // Give to a colleague, from More (a seller, when the workspace allows it).
   const [giving, setGiving] = useState(false);
+  // The lead's touches (v1.95 outreach log), from the counter or the history.
+  const [touching, setTouching] = useState(false);
+  // An email past the limits, a manager's "Send anyway" first.
+  const [emailHold, setEmailHold] = useState<OutreachGuard | null>(null);
+  const sendEmail = () => {
+    if (!detail.email) return;
+    window.location.href = `mailto:${detail.email}`;
+    // Every message is tracked: the email opened in the mail app is a touch.
+    void logTouch(lead.lead_id, {
+      channel: "email",
+      via: "app_link",
+      content_kind: "text",
+    }).then(
+      () => void readLead(lead.lead_id).then(onChanged, () => undefined),
+      (problem: unknown) =>
+        heldByLimits(problem)
+          ? notify({
+              id: "why-email",
+              tone: "info",
+              title: (problem as Error).message,
+            })
+          : undefined,
+    );
+  };
+  const emailLead = async () => {
+    let guard: OutreachGuard | null = null;
+    try {
+      guard = await readOutreach(lead.lead_id, "email");
+    } catch {
+      guard = null;
+    }
+    if (guard && isHeld(guard)) {
+      if (canPass(guard, detail.can_assign)) {
+        setEmailHold(guard);
+        return;
+      }
+      notify({
+        id: "why-email",
+        tone: "info",
+        title: "Held by the outreach limits",
+        message: whyWords(guard) ?? undefined,
+      });
+      return;
+    }
+    sendEmail();
+  };
   // Give sits in the row when there is someone to give it to (give-lead.tsx).
   const canGive =
     !detail.can_assign &&
@@ -4789,6 +4790,16 @@ export function LeadCard({
             </div>
           </div>
         </div>
+        {/* The outreach counter (v1.95): how often we reached them, and
+            whether a message may go now; Touches opens every one. */}
+        {detail.outreach ? (
+          <div className={page.outreachRow}>
+            <OutreachLine
+              guard={detail.outreach}
+              onOpen={() => setTouching(true)}
+            />
+          </div>
+        ) : null}
         {stageBlock}
       </section>
       {canMove ? (
@@ -4995,14 +5006,15 @@ export function LeadCard({
               </li>
               <li>
                 {detail.email ? (
-                  <a
+                  <button
+                    type="button"
                     className={page.moreItem}
-                    href={`mailto:${detail.email}`}
-                    onClick={() => setMore(false)}
+                    data-sx-feature="outreach_email"
+                    onClick={() => afterMore(() => void emailLead())}
                   >
                     <Mail size={20} aria-hidden="true" />
                     Email
-                  </a>
+                  </button>
                 ) : (
                   <button
                     type="button"
@@ -5097,6 +5109,26 @@ export function LeadCard({
           )}
         </ul>
       </Picker>
+      <TouchSheet
+        open={touching}
+        leadId={lead.lead_id}
+        name={lead.name}
+        guard={detail.outreach ?? null}
+        onClose={() => setTouching(false)}
+      />
+      {emailHold ? (
+        <OverrideSheet
+          open
+          leadId={lead.lead_id}
+          name={lead.name}
+          guard={emailHold}
+          onClose={() => setEmailHold(null)}
+          onGranted={() => {
+            setEmailHold(null);
+            sendEmail();
+          }}
+        />
+      ) : null}
       {!detail.can_assign && detail.can_give ? (
         <GiveLeadSheet
           detail={detail}
@@ -5198,6 +5230,7 @@ export function LeadCard({
           open={reminding}
           leadId={lead.lead_id}
           leadName={lead.name}
+          hours={detail.work_hours ?? null}
           onClose={() => setReminding(false)}
           onSaved={() => {
             setReminding(false);
@@ -5251,8 +5284,36 @@ export function LeadCard({
           org={setup.org}
           preset={messaging?.preset}
           channel={messaging?.channel}
+          manager={detail.can_assign}
+          outreach={detail.outreach ?? null}
           onClose={() => setMessaging(null)}
           onLogged={onChanged}
+          onHeld={() =>
+            void readLead(lead.lead_id).then(onChanged, () => undefined)
+          }
+          onFollowUp={async (at) => {
+            // Held: the next call goes in for when it is OK again (v1.95).
+            try {
+              onChanged(await setFollowUp(lead, at));
+              notify({
+                id: "outreach-follow-up",
+                tone: "success",
+                title: `Follow-up set for ${when(at.toISOString())}`,
+                message: lead.name,
+              });
+              setMessaging(null);
+            } catch (problem) {
+              notify({
+                id: "outreach-follow-up",
+                tone: "error",
+                title: "The follow-up wasn't set",
+                message:
+                  problem instanceof LeadsError
+                    ? problem.message
+                    : "Try again.",
+              });
+            }
+          }}
         />
       ) : null}
       {recordingNow ? recording : null}
@@ -5274,6 +5335,7 @@ export function LeadCard({
           events={detail.events}
           onChanged={onChanged}
           leadId={lead.lead_id}
+          onTouches={() => setTouching(true)}
           chats={chats}
           focusAt={focusAt}
           upcoming={
@@ -5324,8 +5386,13 @@ export function LeadCard({
 
       <WhatsAppThread
         leadId={lead.lead_id}
+        name={lead.name}
+        manager={detail.can_assign}
         canSend={detail.can_edit}
         shared={{ chat: conversations.wa }}
+        onChanged={() =>
+          void readLead(lead.lead_id).then(onChanged, () => undefined)
+        }
       />
       <SocialThread
         leadId={lead.lead_id}

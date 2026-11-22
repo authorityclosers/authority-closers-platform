@@ -78,6 +78,7 @@ import {
   requestedSubmissionId,
   savedSubmissionId,
   STANDARD_RETENTION_DAYS,
+  TRIAL_LIMIT_REASONS,
   readCallLead,
   submissionPath,
   type Allowance,
@@ -221,6 +222,18 @@ const message = (error: unknown) =>
     ? error
     : "This result could not be verified. Try again; your completed work stays saved.";
 
+/** Plan & billing's Add minutes: where "Get more minutes" goes (issue 243). */
+export const ADD_MINUTES_HREF = "/settings/plan#add-minutes";
+
+/** Whether a refusal is the trial's own limit: too few minutes for this call, its
+ *  free month ended, or its free hours used (owner, 22 Nov 2026). */
+const trialLimit = (reason: AcquisitionError["reason"]) =>
+  (TRIAL_LIMIT_REASONS as readonly (string | undefined)[]).includes(reason);
+
+/** Whether an error is the analysis-minutes limit (this call needs more than are left). */
+export const minutesLimitError = (error: unknown) =>
+  error instanceof AcquisitionError && trialLimit(error.reason);
+
 /** A signed-in seller with no minutes left (or too few for this recording) is sent to Plans. */
 export function analysisMinutesOut(
   authenticated: boolean,
@@ -228,10 +241,7 @@ export function analysisMinutesOut(
   error: string | AcquisitionError,
 ): boolean {
   if (!authenticated) return false;
-  if (
-    error instanceof AcquisitionError &&
-    error.reason === "trial_allowance_insufficient"
-  )
+  if (error instanceof AcquisitionError && trialLimit(error.reason))
     return true;
   return (
     allowance !== null &&
@@ -258,8 +268,11 @@ export function minutesOutNotice(
         dock: true,
         title: "Get more analysis minutes",
         message:
-          "Choose a plan or a top-up to analyse more calls. Your recordings stay private.",
-        action: { label: "See plans", run: seePlans },
+          "Add minutes or choose a plan to analyse more calls. Your recordings stay private.",
+        // Issue 243 (owner, 21 Nov 2026): one clear step to more minutes.
+        action: { label: "Get more minutes", run: seePlans, icon: "none" },
+        // The step stays in view on the one-line pill too.
+        pillAction: true,
         // Stays until the seller closes it (info cards otherwise leave after 5 s).
         timeout: 0,
       }
@@ -637,7 +650,7 @@ export function AcquisitionStudio({
     // file instead (minutesBlockedReason), never a card over it.
     if (!minutesOut || !purchasesAllowed) return;
     const notice = minutesOutNotice(purchasesAllowed, () =>
-      router.push("/plans"),
+      router.push(ADD_MINUTES_HREF),
     );
     notify(notice);
     return () => dismissNotice(notice.id);
@@ -3069,6 +3082,17 @@ export function AcquisitionStudio({
                       Analyse another call
                     </button>
                   )}
+                  {/* The limit's way out (issue 243): whoever pays adds
+                      minutes; a member is told who can. */}
+                  {minutesLimitError(visibleError) && purchasesAllowed ? (
+                    <Link
+                      className="primary-button"
+                      href={ADD_MINUTES_HREF}
+                      data-sx-feature="report_get_more_minutes"
+                    >
+                      Get more minutes
+                    </Link>
+                  ) : null}
                   {visibleError instanceof AcquisitionError &&
                     visibleError.status === 401 && (
                       <Link className="text-button" href="/login">
@@ -3543,7 +3567,7 @@ export function AcquisitionStudio({
                         <span aria-hidden="true">
                           <Check size={13} />
                         </span>
-                        Free analysis · included in your trial
+                        Free analysis · part of your 1 month free
                       </p>
                       <details
                         className={styles.privacyDetails}
@@ -4341,6 +4365,10 @@ function errorTitle(error: unknown, statusOnly: boolean) {
   if (error instanceof AcquisitionError) {
     if (error.status === 401) return "You’re signed out";
     if (error.reason === "call_too_long") return "This call is too long";
+    if (error.reason === "trial_allowance_insufficient")
+      return "Not enough analysis minutes";
+    if (error.reason === "trial_ended") return "Your free month has ended";
+    if (error.reason === "trial_used") return "Your 3 free hours are used";
     if (error.status === 403) return "Access needs a check";
     if (error.status === 404) return "Call not found";
     if (error.status === 429) return "One moment";

@@ -3,8 +3,10 @@
 /**
  * Remind (owner, 24 Oct 2026; work-memory engine): a task on this lead in three
  * taps: what (Call back, WhatsApp, Email, Send file, Meeting, Other), when (in
- * an hour, this evening, tomorrow morning or a time picked), Save. A meeting
- * also asks where. It shows in Tasks on its day and the phone reminds once.
+ * 1, 2, 5, 15 or 30 min, in 1 hour, tomorrow morning, or any date and time:
+ * the shared reminder picker, owner 22 Nov 2026), Save. A meeting also asks
+ * where. It shows in Tasks on its day and the phone reminds once, at the time
+ * shown.
  */
 
 import { useEffect, useState } from "react";
@@ -22,7 +24,9 @@ import {
   type TaskKind,
   type TaskView,
 } from "./leads-client";
-import { TASK_KINDS, localInput, quickTimes } from "./task-words";
+import { ReminderTime, reminderAt, type ReminderPick } from "./reminder-time";
+import { isReminderPreset, type OpeningHours } from "./reminder-times";
+import { TASK_KINDS } from "./task-words";
 import styles from "./tasks.module.css";
 
 /**
@@ -51,7 +55,13 @@ function keptRemind(leadId: string): Kept | null {
     const known = TASK_KINDS.some((item) => item.key === kept.kind);
     return {
       kind: known ? (kept.kind as TaskKind) : "call_back",
-      quick: typeof kept.quick === "string" ? kept.quick : null,
+      // An older build kept "tomorrow" or "afternoon": tomorrow morning now.
+      quick:
+        typeof kept.quick === "string"
+          ? isReminderPreset(kept.quick)
+            ? kept.quick
+            : "morning"
+          : null,
       picked: typeof kept.picked === "string" ? kept.picked : "",
       where: typeof kept.where === "string" ? kept.where : "",
       note: typeof kept.note === "string" ? kept.note : "",
@@ -67,6 +77,7 @@ export function RemindSheet({
   leadName,
   onClose,
   onSaved,
+  hours = null,
   now = () => new Date(),
 }: {
   open: boolean;
@@ -75,10 +86,13 @@ export function RemindSheet({
   onClose: () => void;
   /** The task as saved; null when the phone kept it to send later. */
   onSaved: (task: TaskView | null) => void;
+  /** The team's hours (the lead's ``work_hours``): Tomorrow morning is their opening. */
+  hours?: OpeningHours;
   now?: () => Date;
 }) {
   const [kind, setKind] = useState<TaskKind>("call_back");
-  const [quick, setQuick] = useState<string | null>("tomorrow");
+  // A preset, or null for a picked date and time (kept drafts say it so).
+  const [quick, setQuick] = useState<string | null>("morning");
   const [picked, setPicked] = useState("");
   const [where, setWhere] = useState("");
   const [note, setNote] = useState("");
@@ -110,17 +124,16 @@ export function RemindSheet({
     );
   }, [open, leadId, kind, quick, picked, where, note]);
 
-  const times = quickTimes(now());
-  const chosen = quick
-    ? (times.find((time) => time.key === quick)?.at ?? null)
-    : picked
-      ? new Date(picked)
-      : null;
-  const valid = !!chosen && !Number.isNaN(chosen.getTime());
+  const pick: ReminderPick | null =
+    quick === null ? "custom" : isReminderPreset(quick) ? quick : null;
+  const chosenAt = (at: Date) => reminderAt(pick, picked, at, hours);
+  const chosen = chosenAt(now());
+  // A time already gone is not a reminder (the picker says so).
+  const valid = !!chosen && chosen.getTime() >= now().getTime() - 30_000;
 
   const reset = () => {
     setKind("call_back");
-    setQuick("tomorrow");
+    setQuick("morning");
     setPicked("");
     setWhere("");
     setNote("");
@@ -136,6 +149,8 @@ export function RemindSheet({
   };
 
   const save = async () => {
+    // Counted now: "In 2 min" is two minutes from the tap on Save.
+    const chosen = chosenAt(now());
     if (!valid || !chosen) {
       setError("Pick when.");
       return;
@@ -209,40 +224,14 @@ export function RemindSheet({
         </div>
         <div>
           <h3>When</h3>
-          <div className={styles.times} role="group" aria-label="When">
-            {times.map((time) => (
-              <button
-                key={time.key}
-                type="button"
-                className={styles.kind}
-                aria-pressed={quick === time.key}
-                onClick={() => setQuick(time.key)}
-              >
-                {time.label}
-              </button>
-            ))}
-            <button
-              type="button"
-              className={styles.kind}
-              aria-pressed={quick === null}
-              onClick={() => {
-                setQuick(null);
-                if (!picked) setPicked(localInput(times[times.length - 1].at));
-              }}
-            >
-              Pick a time
-            </button>
-          </div>
-          {quick === null ? (
-            <input
-              className={styles.input}
-              type="datetime-local"
-              aria-label="Date and time"
-              value={picked}
-              min={localInput(now())}
-              onChange={(event) => setPicked(event.target.value)}
-            />
-          ) : null}
+          <ReminderTime
+            pick={pick}
+            custom={picked}
+            hours={hours}
+            now={now}
+            onPick={(next) => setQuick(next === "custom" ? null : next)}
+            onCustom={setPicked}
+          />
         </div>
         {kind === "meeting" ? (
           <label className={styles.field}>

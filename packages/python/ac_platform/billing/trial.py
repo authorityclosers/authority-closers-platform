@@ -1,18 +1,29 @@
 """The trial policy: a derived lot, never a stored ledger row (ADR 0052, section A/D).
 
-``v1`` is today's shared quota: limits.TRIAL_SECONDS (three hours, owner,
-13 Nov 2026) with no end. ``v2`` is 6,000
-seconds or 14 days from the first use, whichever comes first. Either's longest
-call is the one call-length limit (limits.CALL_LIMIT_SECONDS, 23 Oct 2026). Production stays on
-``v1`` until the owner's activation step; dev and staging switch at a fixed
-UTC instant, before which ``v1`` still applies, so nobody's clock starts
-retroactively.
+``v1`` is the shared quota: limits.TRIAL_SECONDS (three hours, owner, 13 Nov 2026)
+with no end. ``v2`` is the owner's "1 month + 3 hours" (22 Nov 2026): the same
+three hours, or ``TRIAL_DAYS`` (30 days) from the first use, whichever comes first.
+Either's longest call is the one call-length limit (limits.CALL_LIMIT_SECONDS,
+23 Oct 2026).
+
+An environment moves from v1 to v2 at a fixed UTC instant (the setting
+``sales_xray_trial_policy_switch_at``), before which ``v1`` still applies. Nobody
+loses access at the switch: someone who started under v1 gets their month from the
+switch instant, not from their first use, and the minutes they used before it
+still count toward the three hours (the lot is valid from their first use, so
+their earlier use is allocated to it). Someone new gets the month from their
+first use.
+
+The window's end is computed on every read, never stored, so ``TRIAL_DAYS`` moves
+every running trial at once. A window that had already ended under the earlier
+14 days before ``TRIAL_DAYS_CHANGED_AT`` stays ended: that change lengthened the
+trials running then and reopened none.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
@@ -21,9 +32,23 @@ from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS, TRI
 
 TrialVersion = Literal["v1", "v2"]
 TRIAL_LOT_ID = "trial"
-_SECONDS = {"v1": TRIAL_SECONDS, "v2": 6000}
+#: The trial's length: one month (owner, 22 Nov 2026: "the Sales X-Ray trial is
+#: 1 MONTH (30 days), not 15 days"). The one place the number lives.
+TRIAL_DAYS = 30
+#: The length before that decision, and the decision's instant (20:15 IST). A v2
+#: window whose 14 days had ended by then keeps that end; every later one gets 30.
+EARLIER_TRIAL_DAYS = 14
+TRIAL_DAYS_CHANGED_AT = datetime(2026, 11, 22, 14, 45, tzinfo=UTC)
+_SECONDS = {"v1": TRIAL_SECONDS, "v2": TRIAL_SECONDS}
 _PER_CALL = {"v1": CALL_LIMIT_SECONDS, "v2": CALL_LIMIT_SECONDS}
-_DURATION: dict[str, timedelta | None] = {"v1": None, "v2": timedelta(days=14)}
+_DURATION: dict[str, timedelta | None] = {"v1": None, "v2": timedelta(days=TRIAL_DAYS)}
+
+
+def _window_end(start: datetime, duration: timedelta) -> datetime:
+    """``start + duration``, unless the earlier 14-day window had ended before the change."""
+
+    earlier = start + timedelta(days=EARLIER_TRIAL_DAYS)
+    return earlier if earlier <= TRIAL_DAYS_CHANGED_AT else max(earlier, start + duration)
 
 
 def trial_enabled_for_tenant(tenant_id: UUID | None, public_learner_tenant_id: UUID | None) -> bool:
@@ -69,23 +94,33 @@ class TrialPolicy:
     def lot(self, *, first_use_at: datetime | None, now: datetime) -> Lot:
         """The derived trial lot for one person or guest.
 
-        The window starts at the first reservation of the person or any guest
-        they claimed (or now, when there is none) and, under ``v2``, never
-        before the switch instant.
+        It is valid from the first reservation of the person or any guest they
+        claimed (or now, when there is none). Under ``v2`` its month runs from
+        that first use, or from the switch instant for someone who started
+        before it, so nobody's clock starts retroactively.
         """
 
         version = self.active_version(now)
-        start = now if first_use_at is None else min(_aware(first_use_at, "first_use_at"), now)
+        first = now if first_use_at is None else min(_aware(first_use_at, "first_use_at"), now)
+        window_start = first
         if version == "v2" and self.switch_at is not None:
-            start = max(start, self.switch_at)
+            window_start = max(first, self.switch_at)
         duration = _DURATION[version]
         return Lot(
             lot_id=TRIAL_LOT_ID,
             kind=LotKind.TRIAL,
             seconds=_SECONDS[version],
-            valid_from=start,
-            expires_at=None if duration is None else start + duration,
+            valid_from=first,
+            expires_at=None if duration is None else _window_end(window_start, duration),
         )
 
 
-__all__ = ["TRIAL_LOT_ID", "TrialPolicy", "TrialVersion", "trial_enabled_for_tenant"]
+__all__ = [
+    "EARLIER_TRIAL_DAYS",
+    "TRIAL_DAYS",
+    "TRIAL_DAYS_CHANGED_AT",
+    "TRIAL_LOT_ID",
+    "TrialPolicy",
+    "TrialVersion",
+    "trial_enabled_for_tenant",
+]

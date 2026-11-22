@@ -1580,6 +1580,10 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
     from ac_platform.integrations.admin_api import install_admin_api
 
     install_admin_api(application, ctx)
+    # The outreach log for outside senders (v1.95, owner 22 Nov 2026; outreach_api.py).
+    from ac_platform.integrations.outreach_api import install_outreach_api
+
+    install_outreach_api(application, ctx)
     # The importer files waiting chunks in the background (servers only).
     lead_imports.attach(
         application,

@@ -59,6 +59,69 @@ it("raises one corner card when billing can't be read, with quiet placeholders",
   expect(onRefresh).toHaveBeenCalledOnce();
 });
 
+it("says the free month, its three hours and what is left", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-11-28T06:30:00Z"));
+  try {
+    await act(async () =>
+      root.render(
+        <BillingView
+          status="ready"
+          documents={[]}
+          mePlan={{
+            plan: { key: "trial", name: "1 month free" },
+            allowance: {
+              allowanceSeconds: 10_800,
+              committedSeconds: 3000,
+              availableSeconds: 7800,
+              unlimited: false,
+            },
+            longestCallSeconds: 3600,
+            trial: { seconds: 10_800, endsAt: "2026-12-25T07:00:00Z" },
+          }}
+        />,
+      ),
+    );
+    const text = host.textContent ?? "";
+    expect(text).toContain("Free for 1 month · 3 hours of call analysis");
+    expect(text).toContain("27 days · 2 h 10 min left");
+    expect(text).toContain("1 month free");
+    expect(text).not.toContain("You're on the free trial.");
+    expect(text).not.toMatch(/15\s*days?/i);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("says when the free month has ended", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-12-26T06:30:00Z"));
+  try {
+    await act(async () =>
+      root.render(
+        <BillingView
+          status="ready"
+          documents={[]}
+          mePlan={{
+            plan: { key: "trial", name: "1 month free" },
+            allowance: {
+              allowanceSeconds: 0,
+              committedSeconds: 3000,
+              availableSeconds: 0,
+              unlimited: false,
+            },
+            longestCallSeconds: 3600,
+            trial: { seconds: 10_800, endsAt: "2026-12-25T07:00:00Z" },
+          }}
+        />,
+      ),
+    );
+    expect(host.textContent).toContain("Your free month has ended");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it("tells a trial buyer where they stand", async () => {
   await act(async () =>
     root.render(<BillingView status="ready" documents={[]} />),

@@ -15,7 +15,8 @@ import { chatHref } from "../chats/chats-client";
 import { Badge, Button } from "../ui/kit";
 import { Picker } from "../ui/picker";
 import { AiHelp, useLeadAi } from "./ai-replies";
-import { ago, LeadsError } from "./leads-client";
+import { ago, heldByLimits, LeadsError } from "./leads-client";
+import { SendGuard, useOutreach } from "./outreach";
 import styles from "./leads.module.css";
 import {
   filled,
@@ -133,11 +134,17 @@ function TemplatePicker({
 
 export function WhatsAppThread({
   leadId,
+  name = "this lead",
+  manager = false,
   canSend,
   onChanged,
   shared,
 }: {
   leadId: string;
+  /** The lead's name, for the outreach "Send anyway" sheet (v1.95). */
+  name?: string;
+  /** An owner, admin or manager: may send past an outreach hold once. */
+  manager?: boolean;
   canSend: boolean;
   onChanged?: () => void;
   /** The lead page's own read of this chat (shared with its timeline); without
@@ -159,6 +166,17 @@ export function WhatsAppThread({
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const ai = useLeadAi(leadId);
+  // A template outside the 24 hours is outreach: its counter and guard first
+  // (v1.95). A reply inside them is a conversation and never counted.
+  const outsideWindow =
+    !!chat?.configured &&
+    !!chat.connected &&
+    !chat.windowOpen &&
+    !!chat.optedIn;
+  const { guard, reload } = useOutreach(
+    canSend && outsideWindow ? leadId : null,
+    "whatsapp",
+  );
 
   useEffect(() => {
     if (!reads) return;
@@ -189,6 +207,11 @@ export function WhatsAppThread({
       setNote(
         reason instanceof LeadsError ? reason.message : "That didn't work.",
       );
+      // Held by the outreach limits: the counter says why and when (v1.95).
+      if (heldByLimits(reason)) {
+        reload();
+        onChanged?.();
+      }
     } finally {
       setBusy(false);
     }
@@ -267,19 +290,27 @@ export function WhatsAppThread({
               </Button>
             </div>
           ) : chat.optedIn ? (
-            <TemplatePicker
-              templates={chat.templates}
-              busy={busy}
-              onSend={(template, values) =>
-                run(() =>
-                  sendWhatsApp(leadId, {
-                    template: template.name,
-                    language: template.language,
-                    values,
-                  }),
-                )
-              }
-            />
+            <SendGuard
+              leadId={leadId}
+              name={name}
+              guard={guard}
+              manager={manager}
+              onPassed={reload}
+            >
+              <TemplatePicker
+                templates={chat.templates}
+                busy={busy}
+                onSend={(template, values) =>
+                  run(() =>
+                    sendWhatsApp(leadId, {
+                      template: template.name,
+                      language: template.language,
+                      values,
+                    }),
+                  )
+                }
+              />
+            </SendGuard>
           ) : (
             <div className={styles.waOptIn}>
               <p className={styles.hint}>

@@ -1218,6 +1218,9 @@ section.pane {
 }
 
 .paneBody {
+  /* A 44 px gutter on the right for the pane's close button, so it never
+     sits on the words when the lead scrolls under it (v1.95 judge, 1440). */
+  padding-right: 44px;
   display: grid;
   flex: 1 1 auto;
   align-content: start;
@@ -1265,4 +1268,11 @@ section.pane {
 
 .stepper .step[data-state="current"] .stepDot {
   margin-bottom: -2px;
+}
+
+/* The outreach counter (v1.95): the header's full width, under the name,
+   the follow-up and the tags, a hairline above it. */
+.outreachRow {
+  padding-top: 12px;
+  border-top: 1px solid var(--sx-hairline);
 }

@@ -32,6 +32,7 @@ from ac_platform.identity.models import (
     ProviderIdentity,
 )
 from ac_platform.identity.models import Session as IdentitySession
+from ac_platform.pulse.addresses import PULSE_PRODUCTION_ISSUER
 
 Provider = Literal["google", "apple", "facebook", "pulse"]
 MethodKind = Literal["email_code", "password", "google", "apple", "facebook", "pulse"]
@@ -41,6 +42,7 @@ PROVIDER_ISSUERS: dict[Provider, tuple[str, ...]] = {
     "facebook": ("https://www.facebook.com",),
     # Each environment's Pulse; register_pulse_issuer adds a configured one not listed.
     "pulse": (
+        PULSE_PRODUCTION_ISSUER,
         "https://pulse.estateautopilots.com",
         "https://pulse.authorityclosers.com",
         "https://pulse-staging.estateautopilots.com",

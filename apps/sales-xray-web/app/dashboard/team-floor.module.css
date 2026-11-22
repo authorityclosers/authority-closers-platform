@@ -711,11 +711,26 @@ a.row:focus-visible {
   line-height: var(--sx-leading-16);
 }
 
+/* One short line inside the ring, never wrapping out of it (bugs 239, 244);
+   the full words sit under the ring (.ringHint). */
 .ringText small {
-  max-width: 96px;
+  max-width: 84px;
+  overflow: hidden;
   color: var(--sx-muted);
   font-size: var(--sx-text-2xs);
   line-height: var(--sx-leading-16);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ringHint {
+  max-width: 150px;
+  margin: 4px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .stats {

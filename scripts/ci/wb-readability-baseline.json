@@ -350,6 +350,7 @@
    "clipped-text | div.work-views__callBand > button.call-lens__capsule > span.work-views__callBandWords > span.work-views__callBandWho",
    "contrast-aa | a.call-lens:capsule > span.lead-page:callWords > span.lead-page:callNumber",
    "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho",
+   "covered | div.leads:leadActions > div.lead-page:row4 > button.lead-page:act",
    "overlap | section.lead-page__head > div.lead-page__headTop > div.lead-page__headWords > button.lead-page__follow > ⟂ > section.lea"
   ],
   "lead-page | long | 1280 light": [
@@ -358,6 +359,7 @@
    "clipped-text | div.work-views__callBand > button.call-lens__capsule > span.work-views__callBandWords > span.work-views__callBandWho",
    "contrast-aa | a.call-lens:capsule > span.lead-page:callWords > span.lead-page:callNumber",
    "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho",
+   "covered | div.leads:leadActions > div.lead-page:row4 > button.lead-page:act",
    "overlap | section.lead-page__head > div.lead-page__headTop > div.lead-page__headWords > button.lead-page__follow > ⟂ > section.lea"
   ],
   "lead-page | long | 360 dark 130%": [

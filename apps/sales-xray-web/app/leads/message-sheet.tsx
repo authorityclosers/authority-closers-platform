@@ -11,18 +11,22 @@
 import { MessageCircle, MessageSquareText, Send } from "lucide-react";
 import { createContext, useState } from "react";
 
+import { notify } from "../notice-center";
 import { ActionSheet } from "./action-sheet";
 import {
   displayPhone,
   fillTemplate,
   firstName,
+  heldByLimits,
   logMessage,
   smsHref,
   whatsappHref,
   type Channel,
   type LeadDetail,
   type MessageTemplate,
+  type OutreachGuard,
 } from "./leads-client";
+import { isHeld, SendGuard, useOutreach } from "./outreach";
 import { buzz } from "./native-phone";
 import styles from "./message-sheet.module.css";
 
@@ -49,9 +53,24 @@ export function MessageSheet({
   org,
   preset,
   channel: initialChannel = "whatsapp",
+  manager = false,
+  outreach = null,
   onClose,
   onLogged,
+  onHeld,
+  onFollowUp,
+  workSlot,
 }: {
+  /** Held for this seller: book the next call for when it is OK again. */
+  onFollowUp?: (at: Date) => Promise<void>;
+  /** The first moment the team works from a time: the follow-up's slot. */
+  workSlot?: (at: Date) => Date;
+  /** An owner, admin or manager: may send past a hold once, with a reason. */
+  manager?: boolean;
+  /** The lead's own counter (its main channel), shown until this channel's is read. */
+  outreach?: OutreachGuard | null;
+  /** The send was held by the outreach limits: read the lead again. */
+  onHeld?: () => void;
   open: boolean;
   target: MessageTarget | null;
   templates: MessageTemplate[];
@@ -80,8 +99,19 @@ export function MessageSheet({
   const [text, setText] = useState(() => fill(first));
   const chosen = templates.find((template) => template.key === picked);
   const edited = !!chosen && text.trim() !== fill(chosen).trim();
+  // The counter for this channel before the send (v1.95): read when it opens.
+  const { guard, reload, checking } = useOutreach(
+    open && target ? target.leadId : null,
+    channel,
+    outreach,
+  );
 
   if (!target) return null;
+  // Held: no message to write while nobody may send it (v1.95 judge: a live
+  // composer under a hold was a dead end), and for a manager the reasons
+  // first, the message once it is allowed (judge round 2: the templates and
+  // the box pushed Send anyway below the fold).
+  const held = isHeld(guard);
   const href =
     channel === "whatsapp"
       ? whatsappHref(target.phone, text.trim())
@@ -95,7 +125,17 @@ export function MessageSheet({
       edited: edited || !picked,
     })
       .then((next) => onLogged?.(next))
-      .catch(() => undefined);
+      .catch((problem: unknown) => {
+        // Held by the outreach limits after all (it changed meanwhile).
+        if (!heldByLimits(problem)) return;
+        notify({
+          id: "outreach-held",
+          tone: "info",
+          title: (problem as Error).message,
+        });
+        reload();
+        onHeld?.();
+      });
     // Leave the sheet up for a moment, so coming back shows where you were.
     window.setTimeout(onClose, 400);
   };
@@ -128,59 +168,82 @@ export function MessageSheet({
             SMS
           </button>
         </div>
-        <div
-          className={styles.templates}
-          role="group"
-          aria-label="Ready messages"
-        >
-          {templates.map((template) => (
-            <button
-              key={template.key}
-              type="button"
-              className={styles.template}
-              aria-pressed={picked === template.key}
-              title={template.label}
-              onClick={() => {
-                setPicked(template.key);
-                setText(fill(template));
-              }}
+        {held ? null : (
+          <>
+            <div
+              className={styles.templates}
+              role="group"
+              aria-label="Ready messages"
             >
-              {template.label}
-            </button>
-          ))}
-        </div>
-        <label className={styles.field}>
-          <span className={styles.fieldLabel}>Your message</span>
-          <textarea
-            rows={5}
-            value={text}
-            maxLength={1000}
-            onChange={(event) => setText(event.target.value)}
-          />
-        </label>
-        <a
-          className={styles.send}
-          data-channel={channel}
-          href={href}
-          target={channel === "whatsapp" ? "_blank" : undefined}
-          rel="noreferrer"
-          aria-disabled={!text.trim() || undefined}
-          onClick={(event) => {
-            if (!text.trim()) {
-              event.preventDefault();
-              return;
-            }
-            sent();
-          }}
+              {templates.map((template) => (
+                <button
+                  key={template.key}
+                  type="button"
+                  className={styles.template}
+                  aria-pressed={picked === template.key}
+                  title={template.label}
+                  onClick={() => {
+                    setPicked(template.key);
+                    setText(fill(template));
+                  }}
+                >
+                  {template.label}
+                </button>
+              ))}
+            </div>
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>Your message</span>
+              <textarea
+                rows={5}
+                value={text}
+                maxLength={1000}
+                onChange={(event) => setText(event.target.value)}
+              />
+            </label>
+          </>
+        )}
+        <SendGuard
+          leadId={target.leadId}
+          name={target.name}
+          guard={guard}
+          manager={manager}
+          onPassed={reload}
+          onFollowUp={onFollowUp}
+          workSlot={workSlot}
         >
-          <Send size={18} aria-hidden="true" />
-          {channel === "whatsapp" ? "Open WhatsApp" : "Open Messages"}
-        </a>
-        <p className={styles.hint}>
-          It opens in your own{" "}
-          {channel === "whatsapp" ? "WhatsApp" : "Messages"} app with the text
-          ready. Sales X-Ray notes that you sent it, not what it said.
-        </p>
+          <a
+            className={styles.send}
+            data-channel={channel}
+            href={href}
+            target={channel === "whatsapp" ? "_blank" : undefined}
+            rel="noreferrer"
+            aria-disabled={!text.trim() || checking || undefined}
+            aria-busy={checking || undefined}
+            onClick={(event) => {
+              // Not before this channel's limits are read (PR #663 review: a
+              // held send must not open WhatsApp while its guard loads).
+              if (!text.trim() || checking) {
+                event.preventDefault();
+                return;
+              }
+              sent();
+            }}
+          >
+            <Send size={18} aria-hidden="true" />
+            {checking
+              ? "Checking…"
+              : channel === "whatsapp"
+                ? "Open WhatsApp"
+                : "Open Messages"}
+          </a>
+        </SendGuard>
+        {held ? null : (
+          <p className={styles.hint}>
+            It opens in your own{" "}
+            {channel === "whatsapp" ? "WhatsApp" : "Messages"} app with the text
+            ready. Sales X-Ray notes that you sent it, not what it said.
+          </p>
+        )}
       </div>
     </ActionSheet>
   );

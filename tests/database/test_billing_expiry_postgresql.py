@@ -195,7 +195,7 @@ def test_due_closing_preserves_availability_history_and_credits_and_replays(
                 before = await projection(db, state)
                 assert before.available == 300 and before.statement_balance == 780
                 trial = before.position("trial")
-                assert trial.lot.expires_at == NOW and trial.unallocated == 6000
+                assert trial.lot.expires_at == NOW and trial.unallocated == 10_800
                 credit_history = await CreditsLedger(db).history(
                     tenant_id=state.owner.tenant_id, account_id=state.account.id
                 )

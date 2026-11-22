@@ -30,6 +30,10 @@ x-application-environment: &application-environment
   AC_GOOGLE_OAUTH_CLIENT_SECRET: ${AC_GOOGLE_OAUTH_CLIENT_SECRET:?AC_GOOGLE_OAUTH_CLIENT_SECRET is required for staging or production}
   AC_LEARNER_CONSENT_VERSION: ${AC_LEARNER_CONSENT_VERSION:-}
   AC_PUBLIC_LEARNER_TENANT_ID: ${AC_PUBLIC_LEARNER_TENANT_ID:-}
+  # The free trial (owner, 22 Nov 2026: "1 month + 3 hours"): v2 from the profile's
+  # UTC switch instant on; v1 (three hours, no end) when the profile names none.
+  AC_SALES_XRAY_TRIAL_POLICY: ${AC_SALES_XRAY_TRIAL_POLICY:-v1}
+  AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT: ${AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT:-}
   # An empty value is admitted only while AC_EXTERNAL_SIDE_EFFECTS_HOLD remains
   # true. Application settings reject releasing the hold without an exact
   # existing control tenant, and tenantless operations fail closed meanwhile.

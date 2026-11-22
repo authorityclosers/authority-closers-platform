@@ -29,6 +29,7 @@ from ac_platform.lead_desk.models import (
     LeadDevice,
     LeadEvent,
     LeadSlaBreach,
+    LeadTouch,
     LeadWhatsAppMessage,
     LeadWhatsAppNumber,
 )
@@ -601,6 +602,8 @@ def test_whatsapp_conversations_from_connect_to_sla(
             # ----- a lead that leaves takes its WhatsApp words with it -----
             async with setup.sessions() as db, db.begin():
                 await db.execute(delete(LeadSlaBreach).where(LeadSlaBreach.lead_id == lead.id))
+                # Its outreach touches first (v1.95; deletion.py does the same).
+                await db.execute(delete(LeadTouch).where(LeadTouch.lead_id == lead.id))
                 await db.execute(delete(LeadEvent).where(LeadEvent.lead_id == lead.id))
                 await db.execute(delete(Lead).where(Lead.id == lead.id))
             async with setup.sessions() as db, db.begin():

@@ -649,6 +649,19 @@ export function noCallsNote(
   return away || (past ? "No calls that day" : "No calls yet today");
 }
 
+/** The ring's own short word when the side shown has no calls: one line inside
+ *  the ring ("35 on Cold", "No calls"); the full words go under the ring
+ *  (noCallsNote). Bugs 239 and 244 (owner, 21 Nov 2026): the long line wrapped
+ *  out of the ring on a 363 px phone with large text. */
+export function noCallsRingWord(side: Side, effort: Effort | null): string {
+  const other: Side = side === "cold" ? "inbound" : "cold";
+  const here = effort?.[side]?.attempted ?? 0;
+  const there = effort?.[other]?.attempted ?? 0;
+  return !here && there
+    ? `${there} on ${other === "cold" ? "Cold" : "Inbound"}`
+    : "No calls";
+}
+
 const FACES_KEY = "sx:home-floor-faces";
 const subscribeNothing = () => () => {};
 const readKeptFaces = (): string | null => {
@@ -1039,12 +1052,15 @@ function FloorHero({
                 {!day
                   ? " "
                   : none
-                    ? noCallsNote(side, effort, past)
+                    ? noCallsRingWord(side, effort)
                     : `of ${count(day.attempted)} calls`}
               </small>
             </span>
           </span>
         </button>
+        {day && none ? (
+          <p className={styles.ringHint}>{noCallsNote(side, effort, past)}</p>
+        ) : null}
       </div>
       <div className={styles.stats}>
         <button

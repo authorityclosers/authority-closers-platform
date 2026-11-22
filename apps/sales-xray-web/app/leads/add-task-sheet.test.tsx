@@ -135,7 +135,7 @@ it("adds a task for the picked lead at the picked time, reminding early", async 
   );
   await pickLead();
   expect(host.textContent).toContain("Asha Fictional");
-  await act(async () => button("Tomorrow 10 AM")!.click());
+  await act(async () => button("Tomorrow morning")!.click());
   await act(async () => button("Add task")!.click());
   expect(calls.add).toHaveBeenCalledWith(
     "lead-1",
@@ -285,19 +285,32 @@ it("a task list listening reads again when a task is added anywhere", async () =
 
 // Persona QA 8417b4d1 (31 Oct 2026): tasks are the non-calling work, the
 // time reads day first, tomorrow afternoon is one tap, and no helper lines.
-it("offers non-calling kinds, tomorrow at 4 PM and the time day first", async () => {
+it("offers non-calling kinds, any date and time, and the time day first", async () => {
   calls.own.mockResolvedValue({});
   await open();
   expect(button("Call back")).toBeUndefined();
   expect(button("WhatsApp")?.getAttribute("aria-pressed")).toBe("true");
   expect(host.textContent).not.toContain("A reminder on");
-  await act(async () => button("Tomorrow 4 PM")!.click());
-  expect(host.textContent).toMatch(/Tomorrow, 4:00\spm/i);
+  // Owner, 22 Nov 2026: 1 to 30 minutes, an hour, tomorrow morning, or any time.
+  for (const label of [
+    "In 1 min",
+    "In 2 min",
+    "In 5 min",
+    "In 15 min",
+    "In 30 min",
+    "In 1 hour",
+    "Tomorrow morning",
+  ])
+    expect(button(label)).toBeDefined();
+  await act(async () => button("Pick date & time")!.click());
   await act(async () =>
     type(
-      host.querySelector<HTMLInputElement>('input[type="datetime-local"]')!,
-      "2026-11-03T16:00",
+      host.querySelector<HTMLInputElement>('input[type="date"]')!,
+      "2026-11-03",
     ),
+  );
+  await act(async () =>
+    type(host.querySelector<HTMLInputElement>('input[type="time"]')!, "16:00"),
   );
   expect(host.textContent).toContain("3 Nov");
   expect(host.textContent).not.toContain("Nov 3");

@@ -27,6 +27,7 @@ import { day, formatMoney, money, count } from "../billing/money";
 import { RefundRequest, type RequestRefund } from "../billing/refund-request";
 import type { BillingDocument } from "../billing/billing-view";
 import type { MePlan, Subscriptions } from "../billing/contract";
+import { trialHeadline, trialLeft } from "../billing/trial-copy";
 import { Ring } from "../organisation/family";
 import family from "../organisation/family.module.css";
 import { readSeats, type OrgSeats } from "../organisation/organisation-api";
@@ -120,13 +121,20 @@ export function PlanOverview({
   const current = subs?.current ?? null;
   const loading = status === "loading";
   const unread = !loading && status !== "ready";
-  const word = statusWord(subs, unread);
+  // On the free month the chip says so, not "No plan yet" (owner, 22 Nov 2026).
+  const onTrial = !current && !unread && Boolean(mePlan?.trial);
+  const word = onTrial
+    ? { label: "Free", tone: "good" }
+    : statusWord(subs, unread);
   const planName = mePlan?.plan.name ?? current?.planName ?? null;
   const time = allowance.state === "ready" ? allowance.value : null;
   const total = time ? mins(time.allowance_seconds) : 0;
   const left = time ? mins(time.available_seconds) : 0;
   const share = total > 0 ? left / total : 0;
   const unlimited = time?.unlimited === true;
+  // The free trial in plain words (owner, 22 Nov 2026: "1 month + 3 hours"):
+  // "Free for 1 month · 3 hours of call analysis", "27 days · 2 h 10 min left".
+  const trial = !current && !unlimited ? (mePlan?.trial ?? null) : null;
   const low = Boolean(time) && !unlimited && total > 0 && share < LOW_SHARE;
   const topUp = purchasesAllowed && onBuyTopUp ? packs[0] : undefined;
   const canCancel =
@@ -137,13 +145,20 @@ export function PlanOverview({
     ? `Access until ${day(current.currentPeriod?.end ?? null) || "the period ends"}`
     : current?.renewsAt
       ? `Renews ${day(current.renewsAt)}`
-      : status === "ready" && !current
+      : status === "ready" && !current && !trial
         ? "No subscription yet."
         : null;
   const used = [...(team ?? [])]
     .filter((person) => person.used_seconds > 0)
     .sort((a, b) => b.used_seconds - a.used_seconds);
   const latest = documents?.[0] ?? null;
+
+  // "Get more minutes" (a call report's limit, issue 243) lands here: the card
+  // comes into view once the top-up is read.
+  useEffect(() => {
+    if (!topUp || window.location.hash !== "#add-minutes") return;
+    document.getElementById("add-minutes")?.scrollIntoView({ block: "center" });
+  }, [topUp]);
 
   const heroButton =
     low && topUp ? (
@@ -190,9 +205,11 @@ export function PlanOverview({
                 ? "Minutes couldn't load"
                 : unlimited
                   ? "Unlimited minutes"
-                  : total > 0
-                    ? `${count(left)} of ${count(total)} min left`
-                    : "No analysis minutes yet"}
+                  : trial && time
+                    ? trialLeft(trial, time.available_seconds)
+                    : total > 0
+                      ? `${count(left)} of ${count(total)} min left`
+                      : "No analysis minutes yet"}
           </p>
           {loading ? (
             <p className={family.heroLine} role="status">
@@ -204,11 +221,13 @@ export function PlanOverview({
             {[
               unlimited && time
                 ? `${count(mins(time.committed_seconds))} min used or reserved`
-                : total <= 0 && allowance.state === "ready"
-                  ? "Ask the AC team to allot minutes."
-                  : mePlan
-                    ? `Analysis minutes for calls up to ${count(mePlan.longestCallSeconds / 60)} min long`
-                    : "Analysis minutes for your sales calls",
+                : trial
+                  ? trialHeadline(trial)
+                  : total <= 0 && allowance.state === "ready"
+                    ? "Ask the AC team to allot minutes."
+                    : mePlan
+                      ? `Analysis minutes for calls up to ${count(mePlan.longestCallSeconds / 60)} min long`
+                      : "Analysis minutes for your sales calls",
               renewal,
             ]
               .filter(Boolean)
@@ -261,7 +280,10 @@ export function PlanOverview({
         ) : null}
 
         {topUp ? (
-          <div className={`${family.card} ${family.row} ${styles.rowCard}`}>
+          <div
+            id="add-minutes"
+            className={`${family.card} ${family.row} ${styles.rowCard}`}
+          >
             <span className={family.tile}>
               <Plus aria-hidden="true" />
             </span>

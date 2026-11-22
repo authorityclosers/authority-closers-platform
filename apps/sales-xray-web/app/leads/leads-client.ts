@@ -219,6 +219,8 @@ export type LeadEvent = {
   /** Archive and Bin: "archive", "bin", "restore_archive" or "restore_bin". */
   shelf?: ShelfAction | null;
   channel?: string | null;
+  /** A message, email or call we sent: its touch (v1.95 outreach log). */
+  touch?: TouchView | null;
   template_label?: string | null;
   /** "phone": the seller's phone logged this call by itself (UX study item 5). */
   via?: "phone" | "dialler_recording" | null;
@@ -295,6 +297,8 @@ export type LeadDetail = {
   meeting?: MeetingView | null;
   /** Its open tasks, the next one first (work-memory engine). */
   tasks?: TaskView[];
+  /** The outreach counter and guard for its main channel (v1.95). */
+  outreach?: OutreachGuard | null;
   /**
    * The team's work hours, to read (v1.93.1): the after-call next try falls in
    * them. Null when none are set; absent on an older server.
@@ -1773,6 +1777,140 @@ export function logMessage(
   return request<LeadDetail>(
     `/leads/${encodeURIComponent(leadId)}/messages`,
     json("POST", { command_id: command, ...message }),
+  );
+}
+
+/* ---------- Outreach (v1.95, owner 22 Nov 2026: "every message we send is
+   tracked, so we never feel spammy"; docs/product/lead-desk/lead-management-api.md §6) ---------- */
+
+export type OutreachChannel =
+  | "whatsapp"
+  | "sms"
+  | "email"
+  | "call"
+  | "messenger"
+  | "instagram"
+  | "in_person"
+  | "other";
+
+/** The guard for one lead and channel: the counter line, and whether a send may go. */
+export type OutreachGuard = {
+  lead_id?: string;
+  channel: OutreachChannel;
+  mode?: string;
+  verdict: "ok" | "warn" | "block";
+  reasons: { code: string; words: string; level: "show" | "warn" | "block" }[];
+  /** The counter line, ready to show ("Last touched 2 days ago · 3 touches this week"). */
+  words: string;
+  last_touch_at?: string | null;
+  counts?: {
+    today: number;
+    week: number;
+    unanswered: number;
+    calls_week: number;
+  };
+  next_ok_at?: string | null;
+  quiet_until?: string | null;
+  opted_out?: boolean;
+  in_reply_window?: boolean;
+  override?: { possible: boolean; who?: string | null } | null;
+  /** A manager's unused send-anyway passes this guard once. */
+  override_id?: string | null;
+};
+
+/** One message, call, file or quote we sent a lead (a history line's `touch`). */
+export type TouchView = {
+  touch_id: string;
+  lead_id?: string;
+  channel: OutreachChannel;
+  content_kind?: string | null;
+  initiated?: "outreach" | "reply";
+  sender_type: "person" | "automation";
+  by_name: string | null;
+  sender_label: string | null;
+  automation: string | null;
+  via: string | null;
+  summary: string | null;
+  template_name?: string | null;
+  attachment?: { kind: string; name: string; bytes?: number | null } | null;
+  status: string;
+  status_at?: string | null;
+  sent_at: string;
+  counted: boolean;
+  verdict?: string | null;
+  after_block?: boolean;
+  override_by_name?: string | null;
+  override_reason?: string | null;
+  replied_at: string | null;
+  event_id?: string | null;
+};
+
+export type OverrideReason =
+  | "lead_asked"
+  | "time_sensitive"
+  | "wrong_count"
+  | "other";
+
+/** The guard for one channel (the lead page carries its main one). */
+export function readOutreach(
+  leadId: string,
+  channel?: OutreachChannel,
+  signal?: AbortSignal,
+) {
+  const query = channel ? `?channel=${encodeURIComponent(channel)}` : "";
+  return request<OutreachGuard>(
+    `/leads/${encodeURIComponent(leadId)}/outreach${query}`,
+    { signal },
+  );
+}
+
+/** The lead's touches, newest first, a page at a time. */
+export function readTouches(leadId: string, cursor?: string | null) {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  return request<{ touches: TouchView[]; next_cursor: string | null }>(
+    `/leads/${encodeURIComponent(leadId)}/touches${query}`,
+  );
+}
+
+/** Notes a touch the app can't see go out (an email opened in the mail app). */
+export function logTouch(
+  leadId: string,
+  touch: {
+    channel: OutreachChannel;
+    via: "manual" | "app_link";
+    content_kind?: string;
+    summary?: string;
+  },
+  command = commandId(),
+) {
+  return request<{ touch: TouchView; outreach: OutreachGuard }>(
+    `/leads/${encodeURIComponent(leadId)}/touches`,
+    json("POST", { command_id: command, ...touch }),
+  );
+}
+
+/** A manager's one-time "send anyway" (30 minutes, one touch). */
+export function grantOverride(
+  leadId: string,
+  body: {
+    channel: OutreachChannel;
+    reason_key: OverrideReason;
+    reason_text?: string;
+  },
+  command = commandId(),
+) {
+  return request<{ override_id: string; expires_at: string }>(
+    `/leads/${encodeURIComponent(leadId)}/overrides`,
+    json("POST", { command_id: command, ...body }),
+  );
+}
+
+/** A send the outreach limits held (409 "Held by the outreach limits: …"). */
+export function heldByLimits(error: unknown): boolean {
+  return (
+    error instanceof LeadsError &&
+    error.status === 409 &&
+    /outreach limits/i.test(error.message)
   );
 }
 

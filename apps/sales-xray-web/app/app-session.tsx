@@ -58,6 +58,8 @@ const SHELL_ROUTES = new Set([
   // Ask Dipak: his library, with your saved lessons and Next-call missions
   // (Dipak's spec, 13 Nov 2026); without it the page stayed its outline.
   "/ask-dipak",
+  // Outreach: every message sent to leads, by whom (v1.95, 22 Nov 2026).
+  "/outreach",
 ]);
 
 export function isShellRoute(pathname: string | null) {

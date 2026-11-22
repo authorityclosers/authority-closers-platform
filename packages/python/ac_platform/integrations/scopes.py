@@ -32,6 +32,13 @@ SCOPES: dict[str, str] = {
     "recordings:write": "Upload calls for a seller to analyse",
     "webhooks:manage": "Manage the webhook",
 }
+# Only an organisation's own API key may hold these, never an app a person connects, so
+# they are not offered to apps (OAuth discovery lists SCOPES): the outreach log (v1.95,
+# owner 22 Nov 2026; integrations/outreach_api.py), a key bound to a registered sender.
+KEY_SCOPES: dict[str, str] = {
+    "outreach:write": "Log messages your tools send, and check the outreach limits",
+    "outreach:read": "Read the outreach log and opt-outs",
+}
 # Only an app a person connects may ask for these: they act as that person, which an
 # organisation's API key never is (POST /v1/api/calls; integrations/app_uploads.py).
 APP_SCOPES: dict[str, str] = {
@@ -48,7 +55,7 @@ class ScopeError(ValueError):
 def validate(scopes: Iterable[object], *, app: bool = False) -> list[str]:
     """Known scopes only, at least one, sorted and without repeats; ``app`` also takes
     the scopes only a person's connected app may hold."""
-    known = {**SCOPES, **APP_SCOPES} if app else SCOPES
+    known = {**SCOPES, **APP_SCOPES} if app else {**SCOPES, **KEY_SCOPES}
     chosen = list(scopes)
     if not chosen or any(not isinstance(scope, str) or scope not in known for scope in chosen):
         raise ScopeError("scopes")
@@ -56,4 +63,4 @@ def validate(scopes: Iterable[object], *, app: bool = False) -> list[str]:
 
 
 def public() -> list[dict[str, str]]:
-    return [{"key": key, "label": label} for key, label in SCOPES.items()]
+    return [{"key": key, "label": label} for key, label in {**SCOPES, **KEY_SCOPES}.items()]

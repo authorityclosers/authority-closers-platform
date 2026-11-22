@@ -1,0 +1,395 @@
+/* The outreach log on a lead (v1.95): a calm counter line, an amber chip on a
+   warning and a red one on a hold, colour only by meaning. Tokens only, light
+   and dark. */
+
+.line {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.counter {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.counter:not(:has(.open)) {
+  grid-template-columns: 22px minmax(0, 1fr);
+}
+
+.icon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-top: -1px;
+  border-radius: 7px;
+  background: color-mix(in oklab, var(--sx-ink) 7%, var(--sx-surface));
+  color: var(--sx-ink);
+}
+
+/* The words, the chip riding at their end. */
+.words {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.words .chip {
+  vertical-align: 1px;
+}
+
+/* A counter part keeps its words together; lines break at the dots. */
+.part {
+  white-space: nowrap;
+}
+
+.words strong {
+  color: var(--sx-ink);
+  font-weight: 600;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: var(--sx-radius-pill);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  line-height: var(--sx-leading-16);
+  white-space: nowrap;
+}
+
+.chip[data-verdict="warn"] {
+  background: var(--sx-tone-action-soft);
+  color: var(--sx-tone-action);
+}
+
+.chip[data-verdict="block"] {
+  background: var(--sx-tone-problem-soft);
+  color: var(--sx-tone-problem);
+}
+
+.why {
+  margin: 0;
+  padding-left: 30px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+}
+
+.line[data-verdict="block"] .why {
+  color: var(--sx-tone-problem);
+}
+
+/* "Touches": opens the lead's touch sheet; a 44 px target around its word. */
+.open {
+  min-height: 44px;
+  margin: -12px -4px -12px 0;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: none;
+  color: var(--sx-primary-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.open:focus-visible,
+.anyway:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* Before a send: the line, then the send itself, Send anyway, or why not. */
+.gate {
+  display: grid;
+  gap: 10px;
+}
+
+.anyway {
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--sx-tone-problem);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-tone-problem);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.held {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--sx-tone-problem-soft);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.ask {
+  margin: 8px 0 -4px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.small {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.chosen {
+  color: var(--sx-primary-ink);
+}
+
+.free {
+  color: var(--sx-muted);
+}
+
+/* A history line's touch: who and what, then its delivery and the reply. */
+.touch {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: var(--sx-text-xs);
+  line-height: var(--sx-leading-16);
+}
+
+.touchMain {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--sx-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.touchIcon {
+  display: inline-grid;
+  flex: none;
+  color: var(--sx-ink);
+}
+
+.touchMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  color: var(--sx-muted);
+}
+
+.touchMeta [data-status="failed"] {
+  color: var(--sx-tone-problem);
+}
+
+.replied {
+  color: var(--sx-tone-good);
+  font-weight: 600;
+}
+
+/* A send past a hold: amber, as the Outreach page's chip, not blame. */
+.past {
+  color: var(--sx-tone-action);
+}
+
+/* The touch sheet: one row per touch, newest first. */
+.list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--sx-hairline);
+}
+
+.itemIcon {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--sx-ink) 7%, var(--sx-surface));
+  color: var(--sx-ink);
+}
+
+.itemWords {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.itemWords strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+/* The sheet's one main button in the family's deep green (never teal), light
+   and dark. Doubled to outweigh the kit's primary. */
+.green.green {
+  border-color: transparent;
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
+.green.green:disabled {
+  opacity: 0.5;
+}
+
+/* The override in the send's own place: 16 px above each label, 8 below. */
+.override {
+  display: grid;
+}
+
+.label {
+  display: block;
+  margin: 16px 0 8px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.reasons {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--sx-line);
+  border-radius: 16px;
+  background: var(--sx-surface);
+}
+
+.reason {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 16px;
+  border: 0;
+  border-top: 1px solid var(--sx-hairline);
+  background: none;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.reason:first-child {
+  border-top: 0;
+}
+
+.reason:focus-visible {
+  outline: none;
+  box-shadow: inset var(--sx-focus-ring);
+}
+
+.note {
+  min-height: 64px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: 14px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.override > .small {
+  margin-top: 8px;
+}
+
+.overrideActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+/* The label's own room (a sheet's "p { margin: 0 }" took it): 16 px above,
+   8 px below (v1.95 judge round 2). */
+.override .label {
+  margin: 16px 0 8px;
+}
+
+/* Send anyway and Cancel pinned to the sheet's bottom, on its own surface
+   with a 16 px fade above, so the main action is always in view (v1.95
+   judge round 2: with the reasons open it sat below the fold). */
+.override .overrideActions {
+  position: sticky;
+  z-index: 1;
+  bottom: 0;
+  padding: 12px 0 max(12px, env(safe-area-inset-bottom, 0px));
+  background: var(--sx-surface);
+}
+
+.override .overrideActions::before {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: 16px;
+  background: linear-gradient(to bottom, transparent, var(--sx-surface));
+  content: "";
+  pointer-events: none;
+}
+
+@media (max-width: 599.98px) {
+  .override .overrideActions > * {
+    flex: 1 1 0;
+  }
+}
+
+/* Held for a seller: one way on, the family's one solid green button. */
+.followUp {
+  min-height: 52px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.followUp:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* The touch and override sheets are opaque: nothing behind shows through. */
+.opaque [class*="panel"] {
+  background: var(--sx-surface);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.older {
+  margin-top: 16px;
+}

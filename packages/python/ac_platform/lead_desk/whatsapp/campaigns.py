@@ -33,6 +33,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ac_platform.lead_desk import outreach
 from ac_platform.lead_desk.models import (
     Lead,
     LeadEvent,
@@ -64,7 +65,12 @@ STOP_WORDS: Final[dict[str, str]] = {
     "gone": "left Lead Desk",
     "ended": "campaign ended",
 }
-SKIP_WORDS: Final[dict[str, str]] = {**inbox.SKIP_WORDS}
+SKIP_WORDS: Final[dict[str, str]] = {
+    **inbox.SKIP_WORDS,
+    # The outreach limits held it (v1.95, outreach.py).
+    "outreach_limit": "held by the outreach limits",
+}
+OUTREACH_LIMIT: Final = "outreach_limit"
 
 
 # ----- checking what a manager asks for ---------------------------------------------------
@@ -547,6 +553,28 @@ async def send_due(
                     }
             step = (campaign.steps or [])[row.step]
             desk = _system(db, campaign, number, now)
+            # The outreach limits (v1.95): an automation waits on a warning too, so a lead the
+            # guard holds waits (or is skipped when waiting can't help), with the reason
+            # (outreach.py). Only once the workspace saved its limits: until then they show.
+            held, limits, _ = await outreach.check_lead(
+                db, campaign.tenant_id, lead, "whatsapp", "automation", now
+            )
+            if held.verdict != "ok" and (limits.saved or held.opted_out):
+                wait = held.quiet_until or held.next_ok_at
+                if wait is not None and not held.opted_out and wait <= now + LONGEST:
+                    # Waiting helps (sending hours, a day or week limit, a rest): it waits.
+                    row.next_at, row.reason, row.updated_at = wait, OUTREACH_LIMIT, now
+                else:
+                    row.status, row.reason, row.next_at, row.updated_at = (
+                        "skipped",
+                        OUTREACH_LIMIT,
+                        None,
+                        now,
+                    )
+                out["stopped"] += 1
+                continue
+            if row.reason == OUTREACH_LIMIT:
+                row.reason = None
             try:
                 message = await inbox.send(
                     desk,

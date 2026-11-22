@@ -207,8 +207,10 @@ export function Picker({
   onChange: (key: string | null) => void;
   /** "inline": the list opens in place, for a picker inside a sheet. "cell": a
       table cell's editor, whose list floats above the page (no table box clips
-      it) and is never a sheet. */
-  mode?: "auto" | "inline" | "cell";
+      it) and is never a sheet. "float": a sheet on a phone, and on a computer
+      a list floating above the page, for a picker inside a card that clips
+      (Team sounds, issue 234, 22 Nov 2026). */
+  mode?: "auto" | "inline" | "cell" | "float";
   /** Open from the start, as when a click opened the editor holding it. */
   defaultOpen?: boolean;
   className?: string;
@@ -248,7 +250,10 @@ export function Picker({
   const sheet = !inline && !cell && phone;
   // A cell's list, and a chip's on a computer, float in the top layer: no
   // scrolling box (a table, a chip row) clips them.
-  const floats = cell || (variant === "chip" && !sheet && !inline);
+  const floats =
+    cell ||
+    (mode === "float" && !sheet) ||
+    (variant === "chip" && !sheet && !inline);
   const rows: Row[] = [
     ...(all ? [{ key: null, label: all.label, count: all.count }] : []),
     ...options,

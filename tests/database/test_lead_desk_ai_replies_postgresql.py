@@ -32,6 +32,7 @@ from ac_platform.lead_desk.models import (
     LeadEvent,
     LeadSocialAccount,
     LeadSocialMessage,
+    LeadTouch,
     LeadWhatsAppMessage,
     LeadWhatsAppNumber,
 )
@@ -527,6 +528,8 @@ def test_ai_replies_answer_hand_off_stop_and_wait_for_budget(
 
                 # ----- a lead that leaves takes the drafts -----
                 async with setup.sessions() as db, db.begin():
+                    # Its outreach touches first (v1.95; deletion.py does the same).
+                    await db.execute(delete(LeadTouch).where(LeadTouch.lead_id == ids["ravi"]))
                     await db.execute(delete(LeadEvent).where(LeadEvent.lead_id == ids["ravi"]))
                     await db.execute(delete(Lead).where(Lead.id == ids["ravi"]))
                 async with setup.sessions() as db, db.begin():

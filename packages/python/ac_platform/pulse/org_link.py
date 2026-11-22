@@ -45,6 +45,7 @@ from ac_platform.http.identity_provider import (
 )
 from ac_platform.identity.models import Person, ProviderIdentity
 from ac_platform.integrations import sealed
+from ac_platform.pulse.addresses import pulse_issuer_values
 from ac_platform.pulse.models import PulseOrgLink, PulseOrgMember
 from ac_platform.pulse.oidc import ORG_LINK_SCOPES, PulseClaims, PulseClient
 from ac_platform.pulse.profile import picture_source_sha256, record_profile
@@ -354,7 +355,7 @@ async def activate(
         raise PulseLinkError(409, "gone", "That link attempt ended. Start again.")
     taken = await database.scalar(
         select(PulseOrgLink.id).where(
-            PulseOrgLink.issuer == link.issuer,
+            PulseOrgLink.issuer.in_(pulse_issuer_values(link.issuer)),
             PulseOrgLink.pulse_org_id == grant.pulse_org_id,
             PulseOrgLink.status == "active",
         )
@@ -547,7 +548,7 @@ async def _person_by_subject(
         select(ProviderIdentity.person_id)
         .join(Membership, Membership.person_id == ProviderIdentity.person_id)
         .where(
-            ProviderIdentity.issuer == issuer,
+            ProviderIdentity.issuer.in_(pulse_issuer_values(issuer)),
             ProviderIdentity.subject == subject,
             Membership.tenant_id == tenant_id,
             Membership.status == "active",
