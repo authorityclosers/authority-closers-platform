@@ -293,7 +293,9 @@ it("says how far the profile is, once, with email and phone in it", async () => 
   expect(host.textContent).not.toContain("Profile complete");
   expect(host.textContent).toContain("seller@example.test");
   expect(host.textContent).toContain("+919800000000Verified");
-  expect(button("Finish")).toBeTruthy();
+  // One main action (Save); "Next" only goes to what is missing (v1.96).
+  expect(button("Next")).toBeTruthy();
+  expect(button("Finish")).toBeFalsy();
   expect(button("Edit name and phone")).toBeTruthy();
 });
 
@@ -308,7 +310,7 @@ it("says Profile complete, with nothing to finish, when all six are in", async (
   await settle();
   expect(host.textContent).toContain("Profile complete");
   expect(host.textContent).not.toContain("of 6");
-  expect(button("Finish")).toBeFalsy();
+  expect(button("Next")).toBeFalsy();
 });
 
 it("opens the picker from the avatar, and explains an unverified phone", async () => {

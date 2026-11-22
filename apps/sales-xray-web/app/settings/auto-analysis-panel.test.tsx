@@ -116,10 +116,14 @@ const sheetText = () => document.querySelector("dialog")?.textContent ?? "";
 
 it("turns on only from the sheet, with the server's words and the terms shown", async () => {
   await render();
-  // Not on: no switch to flip, only Turn on.
-  expect(host.querySelector('button[role="switch"]')).toBeNull();
+  // Not on: a switch like every other setting (v1.96), which opens the sheet.
+  const off = () =>
+    host.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-checked="false"]',
+    )!;
+  expect(off().getAttribute("aria-label")).toMatch(/^Turn on /);
   expect(host.textContent).toContain("Off: each call waits for your tap.");
-  await press(button("Turn on", host));
+  await press(off());
   expect(sheetText()).toContain(WORDS);
   expect(sheetText()).toContain(TERMS.privacy_details);
   expect(posts).toEqual([]);
@@ -128,7 +132,7 @@ it("turns on only from the sheet, with the server's words and the terms shown", 
   await press(button("Not now"));
   expect(posts).toEqual([]);
 
-  await press(button("Turn on", host));
+  await press(off());
   await press(button("Turn on", document.querySelector("dialog")!));
   expect(posts).toHaveLength(1);
   expect(posts[0]?.body).toEqual({

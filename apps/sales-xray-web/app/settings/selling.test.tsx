@@ -52,10 +52,13 @@ it("tells an owner where seller limits are set, with the way there", async () =>
   await render(true);
   // Phone personas ph1-37 (1 Nov 2026): "Leads → Team" doesn't exist.
   expect(host.textContent).not.toContain("Leads → Team");
+  // A green row to Seller rules on Lead rules, not a breadcrumb link (v1.96).
+  expect(host.textContent).toContain("Seller rules");
+  expect(host.textContent).not.toContain("Leads setup → Lead rules");
   const link = host.querySelector<HTMLAnchorElement>(
-    'a[href="/organisation?tab=leads&part=rules"]',
+    'a[href="/settings/lead-rules"]',
   );
-  expect(link?.textContent).toBe("Leads setup → Lead rules → Seller rules");
+  expect(link?.textContent).toBe("Open");
 });
 
 it("tells a seller their owner or admin sets them, with no path they can't open", async () => {

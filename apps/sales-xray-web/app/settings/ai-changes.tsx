@@ -7,11 +7,10 @@
  * every change from apps. Shown only in an organisation, where leads live.
  */
 import { useCallback, useEffect, useState } from "react";
-import { Sparkles } from "lucide-react";
 
 import { SwitchRow } from "../leads/app-card";
 import { notify } from "../notice-center";
-import { Badge, Button, Empty, List, Panel, Row, SkeletonRow } from "../ui/kit";
+import { Badge, Button, List, Panel, Row, SkeletonRow } from "../ui/kit";
 import {
   changeWords,
   dayWords,
@@ -93,11 +92,10 @@ export function AppChangesPanel() {
           <SkeletonRow />
         </div>
       ) : changes.length === 0 ? (
-        <Empty
-          icon={Sparkles}
-          title="No changes from AI apps"
-          text="Notes and tasks an AI app adds to your leads show here for 30 days, with Undo for 7."
-        />
+        <p className={styles.planNote}>
+          No changes yet. Notes and tasks an AI app adds show here for 30 days,
+          with Undo for 7.
+        </p>
       ) : (
         <List label="Changes from AI apps">
           {changes.map((change) => (

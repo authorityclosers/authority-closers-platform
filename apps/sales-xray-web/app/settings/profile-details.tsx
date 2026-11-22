@@ -297,9 +297,11 @@ export function ProfileDetailsPanel() {
           : undefined
       }
       tools={
+        // One main action, Save; this only goes to the next thing missing
+        // (v1.96 device polish: "Finish" at step 1 of 6 read as a second one).
         completion && !complete ? (
-          <Button variant="secondary" onClick={finish}>
-            Finish
+          <Button variant="ghost" onClick={finish}>
+            Next
           </Button>
         ) : undefined
       }
@@ -420,7 +422,7 @@ export function ProfileDetailsPanel() {
               {/* A long address goes under its name, never cut mid-word. */}
               <span className={styles.rowText}>
                 <span className={styles.rowName}>Email</span>
-                <span className={styles.rowHint}>
+                <span className={`${styles.rowHint} ${styles.email}`}>
                   {emailWithBreak(profile.email)}
                 </span>
               </span>

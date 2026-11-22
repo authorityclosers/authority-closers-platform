@@ -90,7 +90,7 @@
 .tag {
   flex: none;
   width: 34px;
-  color: var(--lx-strength-on-film);
+  color: var(--sx-primary-ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: var(--sx-text-xs);
   font-weight: 700;

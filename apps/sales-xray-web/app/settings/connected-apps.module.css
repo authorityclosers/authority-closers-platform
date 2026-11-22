@@ -121,7 +121,7 @@
 }
 
 .filter[data-tone="good"] .dot {
-  background: var(--sx-good);
+  background: var(--sx-tone-good);
 }
 
 .filter[data-tone="warn"] .dot {

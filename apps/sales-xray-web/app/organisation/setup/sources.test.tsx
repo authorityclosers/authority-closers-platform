@@ -332,7 +332,8 @@ it("keeps the other source controls on the screen, without a second Facebook car
   expect(host.querySelector('a[href="/settings/sources"]')).toBeNull();
   const details = [...host.querySelectorAll("details")].find(
     (item) =>
-      item.querySelector("summary")?.textContent === "Other lead sources",
+      item.querySelector("summary strong")?.textContent ===
+      "Other lead sources",
   )!;
   await act(async () => {
     details.open = true;

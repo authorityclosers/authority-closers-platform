@@ -75,9 +75,17 @@
   box-sizing: border-box;
 }
 
+/* The chosen mode: the family's solid deep-green pill, white words, in both
+   themes (v1.96 device polish: a faint grey or white pill read as unset). */
+.mode > [role="group"] > [aria-pressed="true"] {
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
 .modeHint {
   margin: 0;
-  color: var(--sx-muted);
+  color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
 }
 
