@@ -1,4 +1,8 @@
-"""The derived trial lot: v1 today, v2 from a switch instant on (ADR 0052, section D)."""
+"""The derived trial lot: v1 today, v2 from a switch instant on (ADR 0052, section D).
+
+v2 lasts one month (TRIAL_DAYS, owner 22 Nov 2026); windows that had ended under the earlier
+14 days before the change stay ended.
+"""
 
 from __future__ import annotations
 
@@ -8,11 +12,19 @@ from typing import Any
 import pytest
 
 from ac_platform.billing.projection import LotKind
-from ac_platform.billing.trial import TRIAL_LOT_ID, TrialPolicy
+from ac_platform.billing.trial import (
+    EARLIER_TRIAL_DAYS,
+    TRIAL_DAYS,
+    TRIAL_DAYS_CHANGED_AT,
+    TRIAL_LOT_ID,
+    TrialPolicy,
+)
 from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS, TRIAL_SECONDS
 
 T0 = datetime(2026, 10, 1, 12, tzinfo=UTC)
 SWITCH = datetime(2026, 10, 15, tzinfo=UTC)
+# A sign-up after the owner's 22 Nov 2026 change to one month.
+NEW = datetime(2026, 12, 1, 12, tzinfo=UTC)
 
 
 def hours(number: float) -> datetime:
@@ -42,18 +54,63 @@ def test_v1_is_the_shared_quota_with_no_end() -> None:
     assert lot.valid_at(hours(-48)) and lot.valid_at(T0 + timedelta(days=3650))
 
 
-def test_v2_is_6000_seconds_or_14_days_from_first_use() -> None:
-    policy = TrialPolicy("v2")
-    assert policy.active_version(T0) == "v2"
-    assert policy.seconds(T0) == 6000
-    assert policy.per_call_seconds(T0) == 3600
+def test_the_trial_is_one_month() -> None:
+    # Owner, 22 Nov 2026: "the Sales X-Ray trial is 1 MONTH (30 days), not 15 days".
+    assert TRIAL_DAYS == 30
+    assert EARLIER_TRIAL_DAYS == 14
+    # 20:15 IST on 22 Nov 2026, in UTC.
+    assert TRIAL_DAYS_CHANGED_AT.isoformat() == "2026-11-22T14:45:00+00:00"
 
-    lot = policy.lot(first_use_at=hours(-1), now=T0)
+
+def test_v2_is_6000_seconds_or_30_days_from_first_use() -> None:
+    policy = TrialPolicy("v2")
+    first_use = NEW - timedelta(hours=1)
+    assert policy.active_version(NEW) == "v2"
+    assert policy.seconds(NEW) == 6000
+    assert policy.per_call_seconds(NEW) == 3600
+
+    lot = policy.lot(first_use_at=first_use, now=NEW)
     assert lot.seconds == 6000
-    assert lot.valid_from == hours(-1)
-    assert lot.expires_at == hours(-1) + timedelta(days=14)
-    assert lot.valid_at(hours(-1) + timedelta(days=14) - timedelta(seconds=1))
-    assert not lot.valid_at(hours(-1) + timedelta(days=14))
+    assert lot.valid_from == first_use
+    assert lot.expires_at == first_use + timedelta(days=30)
+    assert lot.valid_at(first_use + timedelta(days=30) - timedelta(seconds=1))
+    assert not lot.valid_at(first_use + timedelta(days=30))
+
+
+def test_a_trial_running_at_the_change_gets_the_month() -> None:
+    policy = TrialPolicy("v2")
+    # Started 10 days before the change: 4 days left under 14, now 20.
+    started = TRIAL_DAYS_CHANGED_AT - timedelta(days=10)
+    lot = policy.lot(first_use_at=started, now=TRIAL_DAYS_CHANGED_AT)
+    assert lot.expires_at == started + timedelta(days=30)
+    # Its 14 days end one second after the change: still running then, so extended.
+    edge = TRIAL_DAYS_CHANGED_AT - timedelta(days=14) + timedelta(seconds=1)
+    assert policy.lot(first_use_at=edge, now=NEW).expires_at == edge + timedelta(days=30)
+
+
+def test_a_trial_that_had_ended_before_the_change_stays_ended() -> None:
+    policy = TrialPolicy("v2")
+    # Its 14 days ended exactly at the change (the window is exclusive at its end).
+    ended = TRIAL_DAYS_CHANGED_AT - timedelta(days=14)
+    lot = policy.lot(first_use_at=ended, now=NEW)
+    assert lot.expires_at == TRIAL_DAYS_CHANGED_AT
+    assert not lot.valid_at(NEW)
+    # Ended 5 days before the change: inside 30 days of its start, still not reopened.
+    older = TRIAL_DAYS_CHANGED_AT - timedelta(days=19)
+    assert not policy.lot(first_use_at=older, now=TRIAL_DAYS_CHANGED_AT).valid_at(
+        TRIAL_DAYS_CHANGED_AT
+    )
+    assert policy.lot(first_use_at=hours(-1), now=T0).expires_at == hours(-1) + timedelta(
+        days=EARLIER_TRIAL_DAYS
+    )
+
+
+@pytest.mark.parametrize("days_before_change", [0, 1, 13, 14, 15, 29, 30, 31, 60])
+def test_the_change_never_shortens_a_window(days_before_change: int) -> None:
+    started = TRIAL_DAYS_CHANGED_AT - timedelta(days=days_before_change)
+    lot = TrialPolicy("v2").lot(first_use_at=started, now=NEW)
+    assert lot.expires_at is not None
+    assert lot.expires_at - started >= timedelta(days=EARLIER_TRIAL_DAYS)
 
 
 @pytest.mark.parametrize("version", ["v1", "v2"])
@@ -81,13 +138,14 @@ def test_v2_switch_keeps_v1_before_the_instant_and_never_starts_before_it() -> N
     at_switch = policy.lot(first_use_at=T0, now=SWITCH)
     assert at_switch.seconds == 6000
     # The first use predates the switch: the window opens at the switch, not retroactively.
+    # (These October windows had ended before the 22 Nov change, so they keep 14 days.)
     assert at_switch.valid_from == SWITCH
-    assert at_switch.expires_at == SWITCH + timedelta(days=14)
+    assert at_switch.expires_at == SWITCH + timedelta(days=EARLIER_TRIAL_DAYS)
 
     later_first_use = SWITCH + timedelta(days=2)
     fresh = policy.lot(first_use_at=later_first_use, now=later_first_use + timedelta(hours=1))
     assert fresh.valid_from == later_first_use
-    assert fresh.expires_at == later_first_use + timedelta(days=14)
+    assert fresh.expires_at == later_first_use + timedelta(days=EARLIER_TRIAL_DAYS)
 
     never_used = policy.lot(first_use_at=None, now=SWITCH + timedelta(days=30))
     assert never_used.valid_from == SWITCH + timedelta(days=30)

@@ -15,6 +15,7 @@ from sqlalchemy.engine import make_url
 
 from ac_platform.application.release_identity import require_baked_release_id
 from ac_platform.media.studio_video_limits import STUDIO_VIDEO_MAX_SOURCE_BYTES
+from ac_platform.pulse.addresses import PULSE_PRODUCTION_ISSUER
 
 DEVELOPMENT_ORGANISATION_AVATAR_ROOT = (
     "/srv/authority-closers/sales-xray/development/avatar-objects"
@@ -259,9 +260,9 @@ class Settings(BaseSettings):
     # Network admission is bounded, but must accommodate real guest uploads on
     # slower connections. Keep it deployment-configurable and auditable.
     sales_xray_upload_response_budget_seconds: float = 900.0
-    # Trial policy (ADR 0052): v1 is today's 60-minute shared quota; v2 (100
-    # minutes or 14 days) applies from the switch instant on. Production stays
-    # on v1 until the owner's activation step.
+    # Trial policy (ADR 0052): v1 is today's three-hour shared quota with no end;
+    # v2 (100 minutes or one month, billing.trial.TRIAL_DAYS) applies from the
+    # switch instant on. Production stays on v1 until the owner's activation step.
     sales_xray_trial_policy: Literal["v1", "v2"] = "v1"
     sales_xray_trial_policy_switch_at: datetime | None = None
     # Billing (ADR 0052, Contract C1). Off by default: without it the checkout
@@ -889,6 +890,14 @@ class Settings(BaseSettings):
             and key is not None
             and key.get_secret_value().strip()
         )
+
+    @model_validator(mode="after")
+    def _pulse_production_issuer(self) -> Settings:
+        """Production's Pulse is the Vitals OS app unless AC_PULSE_ISSUER says else
+        (issue 235, 22 Nov 2026)."""
+        if self.environment == "production" and not (self.pulse_issuer or "").strip():
+            self.pulse_issuer = PULSE_PRODUCTION_ISSUER
+        return self
 
     @property
     def pulse_configured(self) -> bool:

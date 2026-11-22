@@ -30,7 +30,7 @@ from ac_platform.authorization.application import CapabilityApplication
 from ac_platform.billing.ledger import LEGACY_GRANT_PREFIX, AccountProjection, BillingLedger
 from ac_platform.billing.models import BillingAccount, BillingLedgerEntry
 from ac_platform.billing.projection import LotKind, due_expiries
-from ac_platform.billing.trial import TRIAL_LOT_ID, TrialPolicy
+from ac_platform.billing.trial import TRIAL_DAYS, TRIAL_LOT_ID, TrialPolicy
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
 )
@@ -846,17 +846,17 @@ def test_trial_v2_vectors_window_end_and_switch_instant(postgres_harness, fixtur
                     tenant_id=learner.tenant_id, person_id=learner.person_id, now=first_use
                 )
                 assert projected.trial.valid_from == first_use
-                assert projected.trial.expires_at == first_use + timedelta(days=14)
+                assert projected.trial.expires_at == first_use + timedelta(days=TRIAL_DAYS)
                 assert projected.plan_key == TRIAL_LOT_ID
                 assert projected.per_call_seconds == 3_600
-                # Keep the learner's session current for the projection 15 days on.
+                # Keep the learner's session current for the projection a month and a day on.
                 await database.execute(
                     update(IdentitySession)
                     .where(IdentitySession.id == learner.session_id)
                     .values(expires_at=first_use + timedelta(days=60))
                 )
 
-            later = first_use + timedelta(days=15)
+            later = first_use + timedelta(days=TRIAL_DAYS + 1)
             async with sessions() as database, database.begin():
                 acquisition = sessions_for(
                     database, learner, operations, clock=later, trial_policy=v2
@@ -877,8 +877,8 @@ def test_trial_v2_vectors_window_end_and_switch_instant(postgres_harness, fixtur
                 assert due_expiries(projected.projection) == ()
                 # The window is exclusive at its end.
                 edge = acquisition.ledger.trial_policy.lot(first_use_at=first_use, now=later)
-                assert edge.valid_at(first_use + timedelta(days=14) - timedelta(seconds=1))
-                assert not edge.valid_at(first_use + timedelta(days=14))
+                assert edge.valid_at(first_use + timedelta(days=TRIAL_DAYS) - timedelta(seconds=1))
+                assert not edge.valid_at(first_use + timedelta(days=TRIAL_DAYS))
                 with pytest.raises(ConversationDenied) as denied:
                     await acquisition.reserve(source(601), actor=learner.actor)
                 assert str(denied.value) == TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE
@@ -907,7 +907,7 @@ def test_trial_v2_vectors_window_end_and_switch_instant(postgres_harness, fixtur
                 )
                 assert after.trial.seconds == 6_000
                 assert after.trial.valid_from == switch_at
-                assert after.trial.expires_at == switch_at + timedelta(days=14)
+                assert after.trial.expires_at == switch_at + timedelta(days=TRIAL_DAYS)
                 assert after.per_call_seconds == 3_600
                 # The settled use predates the switched window, so it falls to the grant.
                 assert after.available_seconds == 6_000 + 600 - 120
