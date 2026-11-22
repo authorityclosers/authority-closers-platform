@@ -41,6 +41,18 @@ export function lightRow(
   return row;
 }
 
+type ListPlace = { window: number; inside: [Element, number][] };
+
+/** Every scroll inside the list, and the window's, to give back on close. */
+function placeOf(covered: HTMLElement): ListPlace {
+  const inside: [Element, number][] = [];
+  const walker = document.createTreeWalker(covered, NodeFilter.SHOW_ELEMENT);
+  for (let node = walker.currentNode; node; node = walker.nextNode() as Node)
+    if (node instanceof Element && node.scrollTop > 0)
+      inside.push([node, node.scrollTop]);
+  return { window: window.scrollY, inside };
+}
+
 export function LeadPageFrame({
   open,
   label,
@@ -66,6 +78,8 @@ export function LeadPageFrame({
   const opener = useLeadOpener();
   const back = useRef<HTMLButtonElement>(null);
   const page = useRef<HTMLElement>(null);
+  // Where the list was scrolled when the lead opened (phones), till it closes.
+  const listPlace = useRef<ListPlace | null>(null);
   const dock = useRef<HTMLDivElement>(null);
   // The last lead shown (the key goes as the page closes).
   const lastKey = useRef<string | null>(null);
@@ -83,8 +97,42 @@ export function LeadPageFrame({
     if (!covered) return;
     const was = covered.style.visibility;
     covered.style.visibility = "hidden";
+    // On a phone the page scrolls the window (v1.94), so the list under it
+    // must not make the window taller than the lead (PR #662 review: a long
+    // list left a blank stretch past the lead, and the Back bar went with
+    // it): it takes no height while the lead is open, and every scroll inside
+    // it, and the window's, is kept and given back on close.
+    const phone = window.matchMedia?.("(max-width: 599.98px)").matches;
+    if (!phone)
+      return () => {
+        covered.style.visibility = was;
+      };
+    // Taken once per opening (a development double run finds the window at
+    // its top already, from the first run).
+    const kept = (listPlace.current ??= placeOf(covered));
+    const height = covered.style.height;
+    const overflow = covered.style.overflow;
+    covered.style.height = "0";
+    covered.style.overflow = "hidden";
+    window.scrollTo?.(0, 0);
     return () => {
       covered.style.visibility = was;
+      covered.style.height = height;
+      covered.style.overflow = overflow;
+      const giveBack = () => {
+        // Opened again meanwhile (a development double run): leave it.
+        if (covered.style.height === "0px") return;
+        for (const [node, top] of kept.inside) node.scrollTop = top;
+        window.scrollTo?.(0, kept.window);
+        listPlace.current = null;
+      };
+      giveBack();
+      // Closing changes the address, and the router may scroll to the top
+      // after this: the list's place is given back again once that settles.
+      window.requestAnimationFrame?.(giveBack);
+      window.setTimeout(() => {
+        if (window.scrollY === 0 && kept.window > 0) giveBack();
+      }, 350);
     };
   }, [open]);
   useEffect(() => {
@@ -128,11 +176,6 @@ export function LeadPageFrame({
     watch.observe(box);
     return () => watch.disconnect();
   }, [open, footer]);
-  // It opens at its top (the window may have been scrolled by an earlier page).
-  useLayoutEffect(() => {
-    if (open && window.matchMedia?.("(max-width: 599.98px)").matches)
-      window.scrollTo?.(0, 0);
-  }, [open]);
   if (!open || typeof document === "undefined") return null;
   return createPortal(
     <section
