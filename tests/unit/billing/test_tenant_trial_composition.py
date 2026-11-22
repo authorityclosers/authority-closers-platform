@@ -17,7 +17,7 @@ from tests.unit.billing.test_ledger import state as state  # noqa: F401
 
 
 @pytest.mark.parametrize("personal", [True, False])
-@pytest.mark.parametrize("version,trial_seconds", [("v1", TRIAL_SECONDS), ("v2", 6000)])
+@pytest.mark.parametrize("version,trial_seconds", [("v1", TRIAL_SECONDS), ("v2", TRIAL_SECONDS)])
 async def test_checkout_projection_keeps_grants_and_tenant_trial(
     state, monkeypatch, personal, version, trial_seconds
 ):

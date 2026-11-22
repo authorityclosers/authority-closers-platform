@@ -677,3 +677,30 @@ def test_local_sales_xray_has_no_other_addresses() -> None:
     assert settings.sales_xray_origin_for("app.salesxray.in") == "http://127.0.0.1:3016"
     assert Settings(_env_file=None).sales_xray_hosts == frozenset()
     assert Settings(_env_file=None).sales_xray_origin_for("app.salesxray.in") is None
+
+
+def test_trial_switch_instant_blank_is_none_and_v2_in_production_needs_one() -> None:
+    """The free month (owner, 22 Nov 2026: "1 month + 3 hours"). The release compose passes
+    the switch key through empty when a profile names none; production's v2 needs the
+    instant, or everyone who started under v1 over a month ago would lose access at once."""
+    blank = Settings(_env_file=None, sales_xray_trial_policy_switch_at="")  # type: ignore[arg-type]
+    assert blank.sales_xray_trial_policy == "v1"
+    assert blank.sales_xray_trial_policy_switch_at is None
+    # Development and tests may run v2 without one.
+    assert Settings(_env_file=None, sales_xray_trial_policy="v2").sales_xray_trial_policy == "v2"
+    with pytest.raises(ValidationError, match="requires AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT"):
+        Settings(
+            _env_file=None,
+            environment="production",
+            sales_xray_trial_policy="v2",
+            **_production_values(),  # type: ignore[arg-type]
+        )
+    switched = Settings(
+        _env_file=None,
+        environment="production",
+        sales_xray_trial_policy="v2",
+        sales_xray_trial_policy_switch_at="2026-11-25T06:30:00+00:00",  # type: ignore[arg-type]
+        **_production_values(),  # type: ignore[arg-type]
+    )
+    assert switched.sales_xray_trial_policy_switch_at is not None
+    assert switched.sales_xray_trial_policy_switch_at.isoformat() == "2026-11-25T06:30:00+00:00"

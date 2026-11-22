@@ -14,6 +14,7 @@ from pydantic import SecretStr
 
 import ac_platform.http.conversation_acquisition_runtime as acquisition_runtime_module
 from ac_platform.application.settings import Settings
+from ac_platform.billing.projection import Lot
 from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
 from ac_platform.conversation_intelligence.acquisition_source import NativeUploadPreflight
@@ -134,6 +135,7 @@ class _Service:
         self.trial_enabled = tenant_id == PUBLIC_TENANT
         self.allowance_actors: list[ActorContext] = []
         self.allowance_lock_modes: list[bool] = []
+        self.trial: Lot | None = None
 
     async def allowance(
         self,
@@ -150,6 +152,13 @@ class _Service:
             "committed_seconds": 17,
             "available_seconds": 3583,
         }
+
+    async def trial_lot(
+        self, *, actor: ActorContext, shared_identity_locks: bool = False
+    ) -> Lot | None:
+        self.allowance_actors.append(actor)
+        self.allowance_lock_modes.append(shared_identity_locks)
+        return self.trial
 
 
 class _Native(NativeRuntime):
@@ -235,6 +244,11 @@ async def test_learner_mount_requires_public_account_and_keeps_guest_challenge_o
         }
 
     monkeypatch.setattr(AcquisitionSessions, "allowance", allowance)
+
+    async def no_trial_lot(_self: AcquisitionSessions, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(AcquisitionSessions, "trial_lot", no_trial_lot)
 
     async def require_actor(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         mode = request.headers.get("x-test-auth")
@@ -491,6 +505,11 @@ async def test_routes_serve_the_selected_workspace_and_refuse_operations_and_unl
         return {"allowance_seconds": 0, "committed_seconds": 0, "available_seconds": 0}
 
     monkeypatch.setattr(AcquisitionSessions, "allowance", allowance)
+
+    async def no_trial_lot(_self: AcquisitionSessions, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(AcquisitionSessions, "trial_lot", no_trial_lot)
     summaries: list[UUID] = []
 
     async def summary(ownership: GuestOwnership, actor: ActorContext, **_kwargs: object):

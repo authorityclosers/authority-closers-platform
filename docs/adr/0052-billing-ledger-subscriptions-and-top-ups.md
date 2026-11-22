@@ -57,12 +57,14 @@ event may create paid seconds, and use already lives in append-only tables.
    authentication each time (RBI e-mandate); the UI says so.
 8. Plan in effect is the plan key of the latest valid `period_grant` lot,
    else `trial` while the trial lot is valid and unused, else none; it sets
-   the per-call limit and features. Trial v2 (6,000 s or 30 days, 3,600 s per
-   call) ships behind the `trial_policy` setting; v1 (3,600 s, 6,000 s per
-   call) is the default and production stays on v1 until activation (S7).
-   (Owner, 22 Nov 2026: the trial is one month, `trial.TRIAL_DAYS`; it was 14
-   days. Windows are computed, so running trials moved to 30 days; a window
-   that had ended before the decision stays ended.)
+   the per-call limit and features. Trial v2 (10,800 s or 30 days, 3,600 s
+   per call) ships behind the `trial_policy` setting; v1 (10,800 s, no end) is
+   the default until an environment's switch instant (S7).
+   (Owner, 22 Nov 2026: "1 month + 3 hours", `trial.TRIAL_DAYS`; v2 was 6,000 s
+   or 14 days. Windows are computed, so running trials moved to 30 days; a
+   window that had ended before the decision stays ended. At the switch, a
+   person who started under v1 keeps the lot from their first use, so their
+   earlier minutes count, and gets the 30 days from the switch instant.)
 9. Provider contract: `create_checkout`, `create_subscription`,
    `cancel_subscription`, `verify_event`, `fetch_payment`, `refund`; events
    `payment.captured`, `subscription.activated|charged|state`,

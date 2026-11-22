@@ -22,6 +22,8 @@ import httpx
 from ac_platform.conversation_intelligence.acquisition_usage import (
     LONGEST_CALL_EXCEEDED_MESSAGE,
     TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE,
+    TRIAL_ENDED_MESSAGE,
+    TRIAL_USED_MESSAGE,
 )
 from ac_platform.conversation_intelligence.bulk_import_contracts import ImportConfirmation
 from ac_platform.conversation_intelligence.bulk_import_preview import (
@@ -43,6 +45,8 @@ CAPACITY_DETAIL = (
 )
 ITEM_REFUSALS = {
     (403, TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE),
+    (403, TRIAL_ENDED_MESSAGE),
+    (403, TRIAL_USED_MESSAGE),
     (403, LONGEST_CALL_EXCEEDED_MESSAGE),
     (403, "The complete plan exceeds the effective provider budget."),
     (409, "The provider budget cannot cover this complete plan."),

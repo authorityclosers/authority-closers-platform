@@ -301,19 +301,42 @@ def install_acquisition_http(
             actor = auth.resolved.actor
             app = service(auth.database, await workspace(auth.database, actor))
             allowance = await result(app.allowance(actor=actor, shared_identity_locks=True))
+            trial_lot = (
+                await result(app.trial_lot(actor=actor, shared_identity_locks=True))
+                if app.trial_enabled
+                else None
+            )
             current = await current_personal_plan(
                 auth.database, tenant_id=app.tenant_id, person_id=actor.person_id, now=app.clock()
             )
+        # The free trial's size and end (owner, 22 Nov 2026: "1 month + 3 hours"); its end
+        # is null under trial policy v1, which has none.
+        trial = (
+            {
+                "seconds": trial_lot.seconds,
+                "ends_at": None
+                if trial_lot.expires_at is None
+                else trial_lot.expires_at.isoformat(),
+            }
+            if current is None and app.trial_enabled and trial_lot is not None
+            else None
+        )
         return {
             "plan": (
                 {"key": current.key, "name": current.name}
                 if current is not None
-                else {"key": "trial", "name": "Trial"}
+                else {
+                    "key": "trial",
+                    "name": "Trial"
+                    if trial is None or trial["ends_at"] is None
+                    else "1 month free",
+                }
                 if app.trial_enabled
                 else {"key": "none", "name": "No plan"}
             ),
             "allowance": allowance,
             "longest_call_seconds": LONGEST_CALL_SECONDS,
+            "trial": trial,
         }
 
     @me_router.get("/usage")

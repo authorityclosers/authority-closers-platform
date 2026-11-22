@@ -260,9 +260,10 @@ class Settings(BaseSettings):
     # Network admission is bounded, but must accommodate real guest uploads on
     # slower connections. Keep it deployment-configurable and auditable.
     sales_xray_upload_response_budget_seconds: float = 900.0
-    # Trial policy (ADR 0052): v1 is today's three-hour shared quota with no end;
-    # v2 (100 minutes or one month, billing.trial.TRIAL_DAYS) applies from the
-    # switch instant on. Production stays on v1 until the owner's activation step.
+    # Trial policy (ADR 0052): v1 is the three-hour shared quota with no end; v2
+    # (owner, 22 Nov 2026: "1 month + 3 hours", billing.trial.TRIAL_DAYS) applies
+    # from the switch instant on; someone who started under v1 gets their month
+    # from that instant, their minutes used so far still counting.
     sales_xray_trial_policy: Literal["v1", "v2"] = "v1"
     sales_xray_trial_policy_switch_at: datetime | None = None
     # Billing (ADR 0052, Contract C1). Off by default: without it the checkout
@@ -337,6 +338,12 @@ class Settings(BaseSettings):
             }:
                 raise ValueError(f"{environment_field} must be the canonical HTTPS origin")
         return values
+
+    @field_validator("sales_xray_trial_policy_switch_at", mode="before")
+    @classmethod
+    def _no_switch_when_blank(cls, value: object) -> object:
+        # The release compose passes the key through even when a profile omits it.
+        return None if isinstance(value, str) and not value.strip() else value
 
     @field_validator("sales_xray_app_url", mode="before")
     @classmethod
@@ -672,6 +679,17 @@ class Settings(BaseSettings):
             raise ValueError("AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT requires trial policy v2")
         if switch_at is not None and switch_at.tzinfo is None:
             raise ValueError("AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT must carry a UTC offset")
+        # Without a switch instant, v2's month would run from each person's first use, so
+        # everyone who started under v1 more than 30 days ago would lose access at once.
+        if (
+            self.environment in ("staging", "production")
+            and self.sales_xray_trial_policy == "v2"
+            and switch_at is None
+        ):
+            raise ValueError(
+                "trial policy v2 in staging or production requires "
+                "AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT"
+            )
 
     def _validate_billing(self) -> None:
         if self.environment == "production" and self.billing_fake_provider_signing_key is not None:

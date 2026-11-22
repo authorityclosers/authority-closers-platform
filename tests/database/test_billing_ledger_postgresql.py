@@ -832,9 +832,9 @@ def test_trial_v2_vectors_window_end_and_switch_instant(postgres_harness, fixtur
                 usage = await acquisition.reserve(source(120), actor=learner.actor)
                 await acquisition.settle(usage, charged_seconds=120, receipt_sha256="c" * 64)
                 assert await acquisition.allowance(actor=learner.actor) == {
-                    "allowance_seconds": 6_600,
+                    "allowance_seconds": 11_400,
                     "committed_seconds": 120,
-                    "available_seconds": 6_480,
+                    "available_seconds": 11_280,
                 }
                 first_use = await database.scalar(
                     select(ConversationAcquisitionUsage.created_at).where(
@@ -905,16 +905,19 @@ def test_trial_v2_vectors_window_end_and_switch_instant(postgres_harness, fixtur
                     person_id=learner.person_id,
                     now=switch_at + timedelta(hours=1),
                 )
-                assert after.trial.seconds == 6_000
-                assert after.trial.valid_from == switch_at
+                assert after.trial.seconds == 10_800
+                # Valid from the first use, its month from the switch (owner, 22 Nov 2026).
+                assert after.trial.valid_from == first_use
                 assert after.trial.expires_at == switch_at + timedelta(days=TRIAL_DAYS)
                 assert after.per_call_seconds == 3_600
-                # The settled use predates the switched window, so it falls to the grant.
-                assert after.available_seconds == 6_000 + 600 - 120
+                # The use before the switch still counts toward the trial's three hours.
+                assert after.available_seconds == 10_800 + 600 - 120
                 grant_position = next(
                     item for item in after.projection.positions if item.lot.kind is LotKind.GRANT
                 )
-                assert grant_position.allocated == 120
+                assert grant_position.allocated == 0
+                trial_position = after.projection.position(TRIAL_LOT_ID)
+                assert trial_position is not None and trial_position.allocated == 120
         finally:
             await engine.dispose()
 

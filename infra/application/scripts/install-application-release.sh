@@ -348,6 +348,10 @@ initialize_release_profile_contract() {
   # Microsoft Clarity's public project id (owner, 28 Oct 2026). Production only:
   # validate_release_profile refuses it anywhere else, so test sessions never mix in.
   profile_allowed_keys[AC_SALES_XRAY_CLARITY_PROJECT]=1
+  # The free trial's policy (owner, 22 Nov 2026: "1 month + 3 hours"). Both optional;
+  # validate_release_profile admits v2 only with an exact UTC switch instant.
+  profile_allowed_keys[AC_SALES_XRAY_TRIAL_POLICY]=1
+  profile_allowed_keys[AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT]=1
 }
 
 initialize_release_profile_contract
@@ -484,6 +488,32 @@ validate_release_profile() {
       return 1
     fi
   fi
+  local trial_policy="v1" trial_switch_at=""
+  if [[ -n "${profile_values[AC_SALES_XRAY_TRIAL_POLICY]+present}" ]]; then
+    trial_policy="${profile_values[AC_SALES_XRAY_TRIAL_POLICY]}"
+  fi
+  if [[ -n "${profile_values[AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT]+present}" ]]; then
+    trial_switch_at="${profile_values[AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT]}"
+  fi
+  case "$trial_policy" in
+    v1)
+      if [[ -n "$trial_switch_at" ]]; then
+        printf 'AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT requires AC_SALES_XRAY_TRIAL_POLICY=v2.\n' >&2
+        return 1
+      fi
+      ;;
+    v2)
+      # Without it everyone who started under v1 over a month ago would lose access.
+      if ! [[ "$trial_switch_at" =~ ^20[0-9]{2}-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9]\+00:00$ ]]; then
+        printf 'AC_SALES_XRAY_TRIAL_POLICY=v2 requires AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT as YYYY-MM-DDTHH:MM:SS+00:00.\n' >&2
+        return 1
+      fi
+      ;;
+    *)
+      printf 'AC_SALES_XRAY_TRIAL_POLICY must be v1 or v2.\n' >&2
+      return 1
+      ;;
+  esac
   for expected_profile_assignment in "${expected_profile_assignments[@]}"; do
     expected_profile_key="${expected_profile_assignment%%=*}"
     expected_profile_value="${expected_profile_assignment#*=}"
@@ -1098,6 +1128,8 @@ compose_for() {
         -u AC_PUBLIC_APP_URL \
         -u AC_SALES_XRAY_APP_URL \
         -u AC_SALES_XRAY_UPLOAD_RESPONSE_BUDGET_SECONDS \
+        -u AC_SALES_XRAY_TRIAL_POLICY \
+        -u AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT \
         -u AC_ADMIN_APP_URL \
         -u AC_COACH_APP_URL \
         -u AC_API_URL \
