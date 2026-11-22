@@ -123,6 +123,7 @@ from ac_platform.lead_desk.contracts import (
     NotSame,
     NudgesCommand,
     OutreachGuard,
+    OutreachPage,
     OutreachRules,
     OutreachRulesCommand,
     OverrideCommand,
@@ -698,6 +699,42 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response) as lead_desk:
             return await outreach.bulk(lead_desk, command)
+
+    @router.get("/outreach", response_model=OutreachPage)
+    async def outreach_view(
+        request: Request,
+        response: Response,
+        view: Literal["leads", "touches"] = "leads",
+        by: str | None = Query(default=None, max_length=80),
+        channel: str | None = None,
+        date_from: str | None = Query(default=None, alias="from", max_length=10),
+        date_to: str | None = Query(default=None, alias="to", max_length=10),
+        replied: Literal["any", "replied", "no_reply"] = "any",
+        over: bool = False,
+        cursor: str | None = Query(default=None, max_length=120),
+        limit: int = Query(default=50, ge=1, le=100),
+    ) -> OutreachPage:
+        """What the team sent (v1.95.3): by lead or by message, filtered by who, channel,
+        dates, replies and limits; a seller's own only."""
+        no_query(
+            request,
+            frozenset(
+                {"view", "by", "channel", "from", "to", "replied", "over", "cursor", "limit"}
+            ),
+        )
+        async with desk_for(request, response) as lead_desk:
+            return await outreach.outreach_page(
+                lead_desk,
+                view=view,
+                by=by,
+                channel=channel,
+                date_from=outreach.day_param(date_from),
+                date_to=outreach.day_param(date_to),
+                replied=replied,
+                over=over,
+                cursor=cursor,
+                limit=limit,
+            )
 
     @router.get("/outreach/rules", response_model=OutreachRules)
     async def outreach_rules(request: Request, response: Response) -> OutreachRules:

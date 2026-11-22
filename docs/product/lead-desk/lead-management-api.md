@@ -255,6 +255,26 @@ in-person hand-overs count only when their mode is warn or block.
 - Delete removes a lead's touches, replies and overrides with it; a merge moves touches and
   replies to the kept lead.
 
+### The Outreach view (v1.95.3): `GET /outreach`
+
+"What the owner sent". Query: `view=leads|touches` (default leads), `by=person:<id>|person:me|
+sender:<id>|automation:<rule>`, `channel=`, `from=` and `to=` (team days, YYYY-MM-DD; default the
+last 7 days; up to 92 days), `replied=any|replied|no_reply`, `over=true` (the guard warned or
+blocked it), `cursor=`, `limit=` (1–100, default 50). Owners, admins, managers and viewers see the
+team, outside senders included; a seller sees their own sends and the leads they added (any other
+`by` is 403; `filter.locked_to_self` is true); finance is 403.
+
+`OutreachPage = {filter: {view, by, channel, date_from, date_to, replied, over, locked_to_self},
+hero: {touches, leads, replied, past_limit, leads_added (by=person only), period ("Today", "Last
+7 days", "1 Nov - 20 Nov 2026"), words ("142 touches · 38 leads · 9 replied"), sentence ("6 were
+sent past a limit." / "None went past a limit.")}, leads: OutreachLeadRow[], touches: TouchView[],
+next_cursor}`. By lead (`leads`, newest activity first): each lead touched in the filter, plus,
+for `by=person:`, the leads that person added in the period: `{lead_id, name,
+added_by_person_id, added_by_name (the person, else the source label such as "sx-engage"),
+added_at, touches, last_touch_at, replied, received: TouchView[] (oldest first, up to 20)}`. By
+message (`touches`): every touch, newest first. Leads in the Bin and unused reservations never
+show.
+
 ### The ingest API for outside senders (`integrations/outreach_api.py`, under `/v1/api/outreach`)
 
 An organisation API key with `outreach:write` / `outreach:read` (key-only scopes; a connected app

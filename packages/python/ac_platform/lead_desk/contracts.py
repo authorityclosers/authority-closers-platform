@@ -2924,6 +2924,59 @@ class SenderPause(Command):
     paused: bool = True
 
 
-# The timeline line and the lead page carry the outreach views defined after them.
+class OutreachHero(Model):
+    """The Outreach view's one hero for the chosen filter: "142 touches · 38 leads · 9 replied"
+    and one plain sentence ("6 were sent past a limit")."""
+
+    touches: int
+    leads: int
+    replied: int
+    past_limit: int
+    # Leads the chosen person added in the period (``by=person:``); None for other filters.
+    leads_added: int | None = None
+    period: str
+    words: str
+    sentence: str
+
+
+class OutreachLeadRow(Model):
+    """One lead the chosen person added or touched (By lead), with what it received."""
+
+    lead_id: UUID
+    name: str
+    added_by_person_id: UUID | None
+    added_by_name: str | None
+    added_at: datetime
+    # Its touches in the filter and period, and the newest of them.
+    touches: int
+    last_touch_at: datetime | None
+    replied: bool
+    # What this lead received, oldest first (up to 20 in the filter and period).
+    received: tuple[TouchView, ...]
+
+
+class OutreachFilterView(Model):
+    view: Literal["leads", "touches"]
+    by: str | None
+    channel: str | None
+    date_from: date
+    date_to: date
+    replied: Literal["any", "replied", "no_reply"]
+    over: bool
+    # A seller's view is their own: the By filter is locked to them.
+    locked_to_self: bool
+
+
+class OutreachPage(Model):
+    """GET /outreach: "what the owner sent" (spec §5). ``leads`` for view=leads, ``touches``
+    for view=touches; the other is empty."""
+
+    filter: OutreachFilterView
+    hero: OutreachHero
+    leads: tuple[OutreachLeadRow, ...] = ()
+    touches: tuple[TouchView, ...] = ()
+    next_cursor: str | None = None
+
+
 LeadEventView.model_rebuild()
 LeadDetail.model_rebuild()

@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
@@ -48,7 +49,7 @@ from typing import TYPE_CHECKING, Any, Final, Literal
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, distinct, func, or_, select, union_all, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -63,7 +64,11 @@ from ac_platform.lead_desk.contracts import (
     LeadDefaults,
     OutreachChannelMode,
     OutreachCounts,
+    OutreachFilterView,
     OutreachGuard,
+    OutreachHero,
+    OutreachLeadRow,
+    OutreachPage,
     OutreachReason,
     OutreachRules,
     OutreachRulesCommand,
@@ -1893,6 +1898,306 @@ def body_sha256(body: Mapping[str, Any]) -> str:
 
 def local_day(at: datetime, tz: ZoneInfo = IST) -> date:
     return at.astimezone(tz).date()
+
+
+# ----- the Outreach view: "what the owner sent" (v1.95.3, spec §5) -------------------------
+
+VIEW_DAYS: Final = 92
+RECEIVED_MAX: Final = 20
+_AUTOMATION_KEY: Final = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
+
+
+def day_param(raw: str | None) -> date | None:
+    """A ?from= or ?to= day (YYYY-MM-DD, the team's day)."""
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        raise DeskError(422, "Days are YYYY-MM-DD.") from None
+
+
+def _period_words(start: date, end: date, today: date) -> str:
+    days = (end - start).days
+    if end == today and days == 0:
+        return "Today"
+    if end == today and days in (6, 29):
+        return f"Last {days + 1} days"
+    if start == end:
+        return start.strftime("%-d %b %Y")
+    return f"{start.strftime('%-d %b')} - {end.strftime('%-d %b %Y')}"
+
+
+def _over() -> Any:
+    """A touch sent past a limit: the guard warned or blocked it (or a manager overrode)."""
+    return or_(
+        LeadTouch.guard["verdict"].as_string().in_(("warn", "block")),
+        LeadTouch.guard["after_block"].as_string() == "true",
+    )
+
+
+async def outreach_page(
+    desk: LeadDesk,
+    *,
+    view: Literal["leads", "touches"] = "leads",
+    by: str | None = None,
+    channel: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    replied: Literal["any", "replied", "no_reply"] = "any",
+    over: bool = False,
+    cursor: str | None = None,
+    limit: int = PAGE,
+) -> OutreachPage:
+    """GET /outreach: every touch sent, by whom, and what each lead received. Owners, admins,
+    managers and viewers see the team, outside senders included; a seller sees their own
+    sends and the leads they added (the By filter is locked to them); finance has no entry."""
+    team = desk.viewer.can_see_team
+    if not team and not can(desk.viewer.role, "leads.work"):
+        raise DeskError(403, "Outreach is for the sales team.")
+    me = f"person:{desk.viewer.person_id}"
+    if by == "person:me":
+        by = me
+    if not team:
+        if by not in (None, me):
+            raise DeskError(403, "You see your own outreach.")
+        by = me
+    if channel is not None and channel not in CHANNELS:
+        raise DeskError(422, "Pick a channel.")
+    today = local_day(desk.now)
+    end = date_to or today
+    start = date_from or end - timedelta(days=6)
+    if start > end or (end - start).days >= VIEW_DAYS:
+        raise DeskError(422, f"Pick up to {VIEW_DAYS} days, the start before the end.")
+    after = datetime.combine(start, time.min, tzinfo=IST).astimezone(UTC)
+    before = datetime.combine(end + timedelta(days=1), time.min, tzinfo=IST).astimezone(UTC)
+    person: UUID | None = None
+    conditions: list[Any] = [
+        LeadTouch.tenant_id == desk.tenant_id,
+        LeadTouch.status.not_in(("queued", "expired")),
+        LeadTouch.sent_at >= after,
+        LeadTouch.sent_at < before,
+        Lead.binned_at.is_(None),
+    ]
+    if by is not None:
+        kind, _, value = by.partition(":")
+        try:
+            if kind == "person":
+                person = UUID(value)
+                conditions.append(LeadTouch.person_id == person)
+            elif kind == "sender":
+                conditions.append(LeadTouch.sender_id == UUID(value))
+            elif kind == "automation" and _AUTOMATION_KEY.fullmatch(value):
+                conditions += [LeadTouch.sender_type == "automation", LeadTouch.automation == value]
+            else:
+                raise ValueError(by)
+        except ValueError:
+            raise DeskError(422, "By is person:<id>, sender:<id> or automation:<rule>.") from None
+    if channel is not None:
+        conditions.append(LeadTouch.channel == channel)
+    if replied == "replied":
+        conditions.append(LeadTouch.replied_at.is_not(None))
+    elif replied == "no_reply":
+        conditions.append(LeadTouch.replied_at.is_(None))
+    if over:
+        conditions.append(_over())
+    joined = and_(Lead.tenant_id == LeadTouch.tenant_id, Lead.id == LeadTouch.lead_id)
+    limit = max(1, min(limit, 100))
+
+    totals = (
+        await desk.db.execute(
+            select(
+                func.count(),
+                func.count(distinct(LeadTouch.lead_id)),
+                func.count(distinct(LeadTouch.lead_id)).filter(LeadTouch.replied_at.is_not(None)),
+                func.count().filter(_over()),
+            )
+            .select_from(LeadTouch)
+            .join(Lead, joined)
+            .where(*conditions)
+        )
+    ).one()
+    added_where = (
+        [
+            Lead.tenant_id == desk.tenant_id,
+            Lead.created_by_person_id == person,
+            Lead.created_at >= after,
+            Lead.created_at < before,
+            Lead.binned_at.is_(None),
+        ]
+        if person is not None
+        else None
+    )
+    leads_added = (
+        int(await desk.db.scalar(select(func.count()).select_from(Lead).where(*added_where)) or 0)
+        if added_where is not None
+        else None
+    )
+    touches, leads, answered, past = (int(value or 0) for value in totals)
+    words = (
+        f"{_plural(touches, 'touch', 'touches')} · {_plural(leads, 'lead', 'leads')} · "
+        f"{answered} replied"
+    )
+    hero = OutreachHero(
+        touches=touches,
+        leads=leads,
+        replied=answered,
+        past_limit=past,
+        leads_added=leads_added,
+        period=_period_words(start, end, today),
+        words=words,
+        sentence=(
+            "None went past a limit."
+            if past == 0
+            else f"{past} {'was' if past == 1 else 'were'} sent past a limit."
+        ),
+    )
+    shown = OutreachFilterView(
+        view=view,
+        by=by,
+        channel=channel,
+        date_from=start,
+        date_to=end,
+        replied=replied,
+        over=over,
+        locked_to_self=not team,
+    )
+    page_after = parse_cursor(cursor)
+    if view == "touches":
+        query = select(LeadTouch).join(Lead, joined).where(*conditions)
+        if page_after is not None:
+            query = query.where(
+                or_(
+                    LeadTouch.sent_at < page_after[0],
+                    and_(LeadTouch.sent_at == page_after[0], LeadTouch.id < page_after[1]),
+                )
+            )
+        rows = (
+            await desk.db.scalars(
+                query.order_by(LeadTouch.sent_at.desc(), LeadTouch.id.desc()).limit(limit + 1)
+            )
+        ).all()
+        more = len(rows) > limit
+        rows = rows[:limit]
+        return OutreachPage(
+            filter=shown,
+            hero=hero,
+            touches=tuple(await views(desk, rows)),
+            next_cursor=_cursor(rows[-1]) if more and rows else None,
+        )
+
+    # By lead: each lead touched in the filter, and the leads the chosen person added.
+    parts: list[Any] = [
+        select(LeadTouch.lead_id.label("lead_id"), func.max(LeadTouch.sent_at).label("at"))
+        .join(Lead, joined)
+        .where(*conditions)
+        .group_by(LeadTouch.lead_id)
+    ]
+    if added_where is not None and channel is None and replied == "any" and not over:
+        parts.append(
+            select(Lead.id.label("lead_id"), Lead.created_at.label("at")).where(*added_where)
+        )
+    both = union_all(*parts).subquery()
+    activity = (
+        select(both.c.lead_id, func.max(both.c.at).label("at")).group_by(both.c.lead_id).subquery()
+    )
+    query = select(activity.c.lead_id, activity.c.at)
+    if page_after is not None:
+        query = query.where(
+            or_(
+                activity.c.at < page_after[0],
+                and_(activity.c.at == page_after[0], activity.c.lead_id < page_after[1]),
+            )
+        )
+    found = (
+        await desk.db.execute(
+            query.order_by(activity.c.at.desc(), activity.c.lead_id.desc()).limit(limit + 1)
+        )
+    ).all()
+    more = len(found) > limit
+    found = found[:limit]
+    ids = [row[0] for row in found]
+    rows_by_id = (
+        {
+            lead.id: lead
+            for lead in await desk.db.scalars(
+                select(Lead).where(Lead.tenant_id == desk.tenant_id, Lead.id.in_(ids))
+            )
+        }
+        if ids
+        else {}
+    )
+    received: dict[UUID, list[LeadTouch]] = {}
+    counts: dict[UUID, tuple[int, datetime | None, bool]] = {}
+    if ids:
+        scoped = [*conditions, LeadTouch.lead_id.in_(ids)]
+        for lead_id, count, last, any_reply in (
+            await desk.db.execute(
+                select(
+                    LeadTouch.lead_id,
+                    func.count(),
+                    func.max(LeadTouch.sent_at),
+                    func.count().filter(LeadTouch.replied_at.is_not(None)),
+                )
+                .join(Lead, joined)
+                .where(*scoped)
+                .group_by(LeadTouch.lead_id)
+            )
+        ).all():
+            counts[lead_id] = (int(count), last, bool(any_reply))
+        newest = (
+            select(
+                LeadTouch.id,
+                func.row_number()
+                .over(
+                    partition_by=LeadTouch.lead_id,
+                    order_by=(LeadTouch.sent_at.desc(), LeadTouch.id.desc()),
+                )
+                .label("place"),
+            )
+            .join(Lead, joined)
+            .where(*scoped)
+            .subquery()
+        )
+        for touch in await desk.db.scalars(
+            select(LeadTouch)
+            .where(LeadTouch.id.in_(select(newest.c.id).where(newest.c.place <= RECEIVED_MAX)))
+            .order_by(LeadTouch.sent_at, LeadTouch.id)
+        ):
+            received.setdefault(touch.lead_id, []).append(touch)
+    shown_views = {
+        view_row.touch_id: view_row
+        for view_row in await views(desk, [t for items in received.values() for t in items])
+    }
+    names = await desk._names({lead.created_by_person_id for lead in rows_by_id.values()})
+    lines: list[OutreachLeadRow] = []
+    for lead_id in ids:
+        lead = rows_by_id.get(lead_id)
+        if lead is None:
+            continue
+        count, last, any_reply = counts.get(lead_id, (0, None, False))
+        lines.append(
+            OutreachLeadRow(
+                lead_id=lead.id,
+                name=lead.name,
+                added_by_person_id=lead.created_by_person_id,
+                added_by_name=names.get(lead.created_by_person_id)
+                if lead.created_by_person_id
+                else lead.source_label,
+                added_at=lead.created_at,
+                touches=count,
+                last_touch_at=last,
+                replied=any_reply,
+                received=tuple(shown_views[t.id] for t in received.get(lead_id, [])),
+            )
+        )
+    last_row = found[-1] if found else None
+    return OutreachPage(
+        filter=shown,
+        hero=hero,
+        leads=tuple(lines),
+        next_cursor=f"{last_row[1].isoformat()}|{last_row[0]}" if more and last_row else None,
+    )
 
 
 __all__ = [
