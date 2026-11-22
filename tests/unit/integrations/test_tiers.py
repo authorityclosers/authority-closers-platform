@@ -8,14 +8,14 @@ import pytest
 
 from ac_platform.economics import policy as economics
 from ac_platform.integrations import tier_policy, tiers
-from ac_platform.integrations.scopes import APP_SCOPES, SCOPES
+from ac_platform.integrations.scopes import APP_SCOPES, KEY_SCOPES, SCOPES
 
 
 def test_defaults_keep_todays_access_and_nobody_gets_less_than_120_a_minute() -> None:
     table = tier_policy.validate({})
     assert table["advertise_writes"] is False and table["overrides"] == {}
     unbilled = table["tiers"]["unbilled"]
-    assert unbilled["scopes"] == sorted({*SCOPES, *APP_SCOPES})
+    assert unbilled["scopes"] == sorted({*SCOPES, *APP_SCOPES, *KEY_SCOPES})
     assert unbilled["api_keys"] is True and unbilled["webhooks"] == 1
     for row in table["tiers"].values():
         assert row["per_minute"] >= 120 and row["workspace_per_minute"] >= row["per_minute"]

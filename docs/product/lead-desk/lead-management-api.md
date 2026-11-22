@@ -1,4 +1,4 @@
-# Lead management API (Archive and Bin, bulk with undo, seller load, saved views, tags)
+# Lead management API (Archive and Bin, bulk with undo, seller load, saved views, tags, outreach)
 
 The owner, 16 Nov 2026: "management of leads and reorganizing, reassigning each other, deleting
 old leads, managing the leads at a higher level is not there". Design study:
@@ -171,3 +171,115 @@ per workspace, case aside: a unique index on `(tenant_id, lower(name))`.
   order; an unmerge takes off exactly those.
 - Not yet: tags on import (I4). Undo import treats the import's own history lines as not work, and
   an import's tag line could not yet be told apart from a later import's edit of the same lead.
+
+## 6. Outreach: the touch log, the counter and the guard (`lead_desk/outreach.py`, migration 0166, v1.95)
+
+The owner, 22 Nov 2026: "every person we contact is a lead, every message we send them is
+tracked, so we never feel spammy". Spec: `boards/sx-redesign/review/v195-outreach-log-spec.md`.
+A **touch** is one message, call, file or quote we send a lead. Each keeps exactly one line in the
+lead's history (`message`, `email` or `call`); its row in `lead_desk_touches` holds who sent it,
+our own short summary (never the lead's words), the provider and its delivery state, the reply
+that answered it, whether it counted, and the guard's verdict when it went.
+
+Touches are written by: a ready message (`POST /leads/{id}/messages`: `via app_link`, status
+`opened`), a Cloud API WhatsApp (`via cloud`, linked to the message row; the webhook copies its
+delivery state), the Call button and the phone's own call log (`channel call`), Log a touch, and
+outside senders through the API below. An inbound WhatsApp, or a reply an outside sender reports,
+answers the newest unanswered touch on that channel in the 7 days before it.
+
+**The guard** (ok, warn or block, the same shape everywhere): a STOP on the channel blocks and
+nothing overrides it; a lead in the Bin blocks (test data blocks automations, warns people);
+archived and history leads warn; the lead wrote in the last 24 hours on this channel: ok and not
+counted; then the day limit (in India's day), the week limit (rolling 7 × 24 h) and the cool-off
+(that many unanswered in a row, then rest days), each in the channel's mode; outside the sending
+hours people are warned and automations held; a manager's unused override passes warn or block
+once. WhatsApp, SMS, email, Messenger, Instagram, files and quotes count together; calls and
+in-person hand-overs count only when their mode is warn or block.
+
+| Route | Who | Answer |
+|---|---|---|
+| `GET /leads/{lead_id}/outreach?channel=` | anyone who can open the lead | `OutreachGuard` (default channel: WhatsApp with a phone, else email) |
+| `GET /leads/{lead_id}/touches?cursor=` | the same | `{touches: TouchView[], next_cursor}` newest first, 50 a page |
+| `POST /leads/{lead_id}/touches` | the lead's owner, managers | `{touch: TouchView, outreach: OutreachGuard}` (201) |
+| `POST /leads/{lead_id}/overrides` | owners, admins, managers | `OverrideView` (201) |
+| `POST /outreach/guard` | owners, admins, managers | `BulkGuard` for up to 500 leads |
+| `GET /outreach/rules` | everyone | `OutreachRules` |
+| `PUT /outreach/rules` | owners, admins, managers | `OutreachRules` |
+| `GET /outreach/senders` | owners, admins | `{senders: SenderView[]}` |
+| `POST /outreach/senders` | owners, admins | `SenderView` (201) |
+| `PUT /outreach/senders/{sender_id}` | owners, admins | `SenderView` |
+| `POST /outreach/senders/{sender_id}/pause` | owners, admins | `SenderView` (`{expected_revision, paused}`) |
+
+- `OutreachGuard = {lead_id, would_create, channel, mode, verdict: ok|warn|block, reasons:
+  [{code, words, level: show|warn|block}], words, last_touch_at, counts: {today, week,
+  unanswered, calls_week}, next_ok_at, quiet_until, opted_out, in_reply_window, override:
+  {possible, who}, override_id, reservation_id}`. `words` is the counter line: "Not contacted
+  yet", "Touched today at 11:02 · 2 touches this week", "Last touched 2 days ago · 3 touches this
+  week · 2 calls". Reason codes: `opted_out`, `opted_out_other` (show), `in_bin`, `test_data`,
+  `archived`, `history`, `internal` (show), `day_cap`, `week_cap`, `rest` ("3 touches with no
+  answer: rests until Thu 27 Nov"), `quiet`.
+- The lead page (`LeadDetail.outreach`) carries the guard for the lead's main channel, and each
+  history line that is a touch carries `LeadEventView.touch: TouchView = {touch_id, lead_id,
+  channel, content_kind, initiated: outreach|reply, sender_type: person|automation, by_name,
+  person_id, sender_id, sender_label, automation, via, provider, summary, template_name,
+  attachment, status, status_at, sent_at, counted, verdict, after_block, override_by_name,
+  override_reason, replied_at, event_id}`.
+- Log a touch: `{command_id, channel, via: manual|app_link, content_kind?, summary? (≤ 280),
+  attachment?: {kind, name, bytes?}, sent_at?, override_id?}`. Idempotent by `command_id`. A STOP
+  on that channel is 409.
+- Sends from the app ask first: a ready message or a seller's WhatsApp is refused with 409
+  ("Held by the outreach limits: …") on a block (a STOP always; a limit only when the channel's
+  people mode is block). Campaign steps are held while the guard says warn or block (they wait for
+  `next_ok_at` or the sending hours, or are skipped with `outreach_limit` when waiting can't
+  help), once the workspace has saved its limits; first and after-hours replies are recorded, not
+  held.
+- Override: `{command_id, channel, reason_key: lead_asked|time_sensitive|wrong_count|other,
+  reason_text? (required for other)}`; 30 minutes, one touch. 409 when nothing holds the send or
+  the lead said STOP. `OverrideView = {override_id, lead_id, channel, reason_key, reason_text,
+  granted_by_name, expires_at, used_at, guard}`.
+- Rules: `{expected_revision, enabled?, per_day? (1–10), per_week? (1–30), rest_after? (0–20),
+  rest_days? (1–90), quiet?: {days, start, end} | null, modes?: {channel: off|show|warn|block |
+  {people, automations}}, keep_reply_words?, never_lead?: (≤ 200 phones or emails)}`; stale is 409.
+  `OutreachRules` adds `hours_in_use` and `can_edit`. Defaults: 1 a day, 3 a week, rest 14 days
+  after 3 unanswered, WhatsApp warn for people and block for automations, SMS/email/Messenger/
+  Instagram warn, calls show, sending hours = the work hours or 10:00–20:00 Mon–Sat.
+- Bulk: `{lead_ids (≤ 500), channel, sender: person|automation}` → `{channel, ok, warned, held,
+  said_stop, words: "38 ok · 4 warned · 6 held (3 said stop)", leads: [{lead_id, verdict,
+  opted_out, words, next_ok_at}]}`.
+- Senders: `{command_id, key (a-z0-9-), label, kind: automation|person_tool, person_id (a person's
+  tool only), api_key_id (a key with outreach:write), channels, lead_defaults: {create, side:
+  live|cold, tags (≤ 3), assign: rules|none}, guard_mode: report|hold}`.
+- Audit (ids, counts and field names only): `lead_desk.outreach.settings_changed`,
+  `.sender_created`, `.sender_changed`, `.sender_paused`, `.sender_key_bound`,
+  `.override_granted`, `.override_used`, `.sent_past_block`.
+- Delete removes a lead's touches, replies and overrides with it; a merge moves touches and
+  replies to the kept lead.
+
+### The ingest API for outside senders (`integrations/outreach_api.py`, under `/v1/api/outreach`)
+
+An organisation API key with `outreach:write` / `outreach:read` (key-only scopes; a connected app
+is `org_key_only`). Every write names `sender`: a sender of this workspace bound to this key.
+Errors are `{error: {code, message}}`: 401 `key_invalid`; 403 `scope_missing`, `org_key_only`,
+`sender_not_bound`, `sender_paused`, `channel_not_allowed`; 404 `reservation_not_found`; 409
+`idempotency_mismatch`, `reservation_used`; 422 `needs_id`, `phone_needed` (an `@lid` alone),
+`bad_phone`, `bad_time` (no zone, or more than 5 minutes ahead), `summary_too_long`, `bad_by`;
+429 `rate_limited` (600 a minute per key, after the plan's own per-key limit).
+
+| Route | Scope | Body → answer |
+|---|---|---|
+| `POST /check` | write | `{sender, to: {phone?, email?, name?}, channel, hold?, client_ref?}` → `OutreachGuard` (with `reservation_id` when held for 15 minutes), or `{ignored: "internal"}` |
+| `POST /touches` | write | spec §3.2 body → 201 `{touch_id, lead_id, lead_created, duplicate: false, counted, after_block, guard}`; a repeat 200 `{…, duplicate: true}`; `{ignored: "internal"}`; `{lead_id: null, stored: false}` |
+| `DELETE /reservations/{id}` | write | `{reservation_id, released}` |
+| `POST /statuses` | write | `{sender, statuses: [{provider, provider_message_id, provider_chat_id?, status, at, error_code?}] (≤ 100)}` → `{updated, ignored, unknown}` |
+| `POST /replies` | write | `{sender, provider, provider_message_id, provider_chat_id?, channel, from, at, kind, excerpt?, opt_out?, in_reply_to?, lead?}` → 201 `{reply_id, lead_id, lead_created, duplicate, touch_id, opted_out}`; a reaction is `{ignored: "reaction"}` |
+| `POST /opt-outs` | write | `{sender, to, channel, at?}` → `{lead_id, recorded, channel}` |
+| `GET /opt-outs?since=` | read | `{opt_outs: [{lead_id, channel, phone, email, at}], next_since}` |
+| `GET /touches?phone=|email=|lead_id=&since=&cursor=` | read | `{lead_id, touches: […], next_cursor}` |
+
+Leads match by phone (E.164 with the workspace's default country; a WhatsApp JID's number is
+read), then email (any case); a merged lead resolves to its survivor; teammates and the Never a
+lead list are ignored. A new lead (when `lead.create` or the sender's default says so) is made by
+the desk's own intake: source `webhook`, source label the sender's label, the side and up to 3
+tags, created by the sender's person for a person's own tool. Not yet: the backfill of old
+messages, the "Ask a manager" request, the bell line for a send past a block, Messenger and
+Instagram sends as touches, and WhatsApp Business app echoes as touches.

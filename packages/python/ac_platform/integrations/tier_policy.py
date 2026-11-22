@@ -23,7 +23,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from ac_platform.integrations.scopes import APP_SCOPES, SCOPES
+from ac_platform.integrations.scopes import APP_SCOPES, KEY_SCOPES, SCOPES
 
 TIERS = ("unbilled", "trial", "personal", "organisation", "enterprise")
 # Which tier a paid plan key gives; any other plan, or none, is the trial.
@@ -31,7 +31,7 @@ PLAN_TIERS = {"personal": "personal", "organisation": "organisation", "enterpris
 # The order a "comes with" sentence looks in.
 UPGRADES = ("personal", "organisation", "enterprise")
 READ = ["calls:read", "reports:read", "leads:read"]
-EVERY = sorted({*SCOPES, *APP_SCOPES})
+EVERY = sorted({*SCOPES, *APP_SCOPES, *KEY_SCOPES})
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 MAX_PER_MINUTE = 100_000
 MAX_MONTHLY = 1_000_000_000

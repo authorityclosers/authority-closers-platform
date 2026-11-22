@@ -32,7 +32,14 @@ def test_scopes_are_known_sorted_and_never_empty() -> None:
         # calls:write is for a person's connected app only (scopes.APP_SCOPES).
         with pytest.raises(scopes.ScopeError):
             scopes.validate(wrong)
-    assert {item["key"] for item in scopes.public()} == set(scopes.SCOPES)
+    # Keys also take the key-only scopes (the outreach log, v1.95); apps never do.
+    assert {item["key"] for item in scopes.public()} == {*scopes.SCOPES, *scopes.KEY_SCOPES}
+    assert scopes.validate(["outreach:write", "outreach:read"]) == [
+        "outreach:read",
+        "outreach:write",
+    ]
+    with pytest.raises(scopes.ScopeError):
+        scopes.validate(["outreach:write"], app=True)
     assert scopes.validate(["calls:write", "leads:read"], app=True) == [
         "calls:write",
         "leads:read",
