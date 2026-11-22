@@ -19,6 +19,9 @@ import {
   OutreachLine,
   pastLimitWords,
   SendGuard,
+  senderName,
+  slotWords,
+  touchSender,
   TouchLine,
   TouchSheet,
   whyWords,
@@ -242,4 +245,55 @@ it("lists the touches a page at a time", async () => {
   });
   expect(document.body.textContent).toContain("First hello");
   expect(button("Show older")).toBeUndefined();
+});
+
+it("offers a held seller's follow-up in work hours, said like the hold", async () => {
+  // v1.95 judge round 2: "rests until Thu 3 Dec" over a button for 9:09 pm.
+  const restEnds = new Date("2026-12-02T15:39:00Z");
+  const opens = new Date("2026-12-03T04:30:00Z");
+  const booked = vi.fn(async () => undefined);
+  await act(async () =>
+    root.render(
+      <SendGuard
+        leadId={LEAD}
+        name="Ravi"
+        guard={{ ...held, next_ok_at: restEnds.toISOString() }}
+        manager={false}
+        onPassed={() => undefined}
+        onFollowUp={booked}
+        workSlot={(at) => (at < opens ? opens : at)}
+      >
+        <button type="button">Open WhatsApp</button>
+      </SendGuard>,
+    ),
+  );
+  const follow = button("Set follow-up for")!;
+  expect(follow.textContent).toBe(`Set follow-up for ${slotWords(opens)}`);
+  expect(slotWords(opens)).toMatch(/^Thu 3 Dec, \d{1,2}:\d{2} (am|pm)$/);
+  await act(async () => follow.click());
+  expect(booked).toHaveBeenCalledWith(opens);
+});
+
+it("names an outside sender in words, never by its slug", () => {
+  expect(senderName("sx-engage")).toBe("SX Engage");
+  expect(senderName("lead_bot")).toBe("Lead bot");
+  expect(senderName("First reply")).toBe("First reply");
+  expect(
+    touchSender(
+      touch({
+        sender_type: "automation",
+        by_name: null,
+        sender_label: "sx-engage",
+      }),
+    ),
+  ).toBe("SX Engage");
+});
+
+it("keeps the chip with the counter's last part", async () => {
+  await act(async () => root.render(<OutreachLine guard={held} />));
+  const chip = host.querySelector("span[data-verdict]")!;
+  // One unbreakable part: "3 touches this week" and its chip.
+  expect(chip.parentElement?.textContent).toBe(
+    "3 touches this week\u00a03 this week",
+  );
 });

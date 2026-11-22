@@ -82,16 +82,44 @@ const OVERRIDE_SAID: Record<string, string> = {
   wrong_count: "the count was wrong",
 };
 
+/** Outside tools by their own names, where the server has their slug. */
+const SENDER_WORDS: Record<string, string> = {
+  "sx-engage": "SX Engage",
+};
+
+/** A sender's label as people read it: "sx-engage" is "SX Engage" (v1.95
+ *  judge round 2: the raw slug showed in the history and the touch sheet). */
+export function senderName(label: string): string {
+  const known = SENDER_WORDS[label.trim().toLowerCase()];
+  if (known) return known;
+  if (!/^[a-z0-9]+(?:[-_][a-z0-9]+)+$/.test(label.trim())) return label;
+  return label
+    .trim()
+    .split(/[-_]/)
+    .map((word, index) =>
+      word.length <= 2
+        ? word.toUpperCase()
+        : index === 0
+          ? word[0].toUpperCase() + word.slice(1)
+          : word,
+    )
+    .join(" ");
+}
+
 /** Who sent a touch: the person, else the automation or the outside tool. */
 export function touchSender(touch: TouchView): string {
   if (touch.sender_type === "automation")
     return (
-      touch.sender_label ??
+      (touch.sender_label ? senderName(touch.sender_label) : null) ??
       (touch.automation
         ? (AUTOMATION_WORDS[touch.automation] ?? touch.automation)
         : "An automation")
     );
-  return touch.by_name ?? touch.sender_label ?? "Someone";
+  return (
+    touch.by_name ??
+    (touch.sender_label ? senderName(touch.sender_label) : null) ??
+    "Someone"
+  );
 }
 
 /** What went: our own summary, else the file's or the template's name. */
@@ -226,6 +254,7 @@ export function OutreachLine({
 }) {
   const chip = chipWords(guard);
   const why = whyWords(guard);
+  const parts = guard.words.split(" · ");
   return (
     <div
       className={styles.line}
@@ -238,21 +267,26 @@ export function OutreachLine({
         </span>
         <span className={styles.words}>
           {label ? <strong>{label}: </strong> : null}
-          {/* Each part keeps its words together: a line breaks at a dot. */}
-          {guard.words.split(" · ").map((part, index) => (
+          {/* Each part keeps its words together: a line breaks at a dot.
+              The chip rides with the last part, never on a line alone
+              (v1.96 device polish: "3 this week" dropped under the words
+              in the 1440 pane). */}
+          {parts.map((part, index) => (
             <Fragment key={index}>
               {index ? " · " : null}
-              <span className={styles.part}>{part}</span>
+              <span className={styles.part}>
+                {part}
+                {chip && index === parts.length - 1 ? (
+                  <>
+                    {"\u00a0"}
+                    <span className={styles.chip} data-verdict={guard.verdict}>
+                      {chip}
+                    </span>
+                  </>
+                ) : null}
+              </span>
             </Fragment>
           ))}
-          {chip ? (
-            <>
-              {" "}
-              <span className={styles.chip} data-verdict={guard.verdict}>
-                {chip}
-              </span>
-            </>
-          ) : null}
         </span>
         {onOpen ? (
           <button
@@ -452,6 +486,23 @@ export function OverrideSheet({
 
 const firstWord = (name: string) => name.trim().split(/\s+/)[0] || name;
 
+/** "Thu 3 Dec, 10:00 am": the day as the hold's own words say it, and the time. */
+export function slotWords(at: Date): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-IN", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    })
+      .formatToParts(at)
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.weekday} ${parts.day} ${parts.month}, ${parts.hour}:${parts.minute} ${String(parts.dayPeriod ?? "").toLowerCase()}`.trim();
+}
+
 /**
  * Before a send: the line, and on a hold either "Send anyway" (a manager, in
  * the send's own place) or why, and one way on: a follow-up when it is OK again
@@ -464,6 +515,7 @@ export function SendGuard({
   manager,
   onPassed,
   onFollowUp,
+  workSlot,
   children,
 }: {
   leadId: string;
@@ -474,13 +526,20 @@ export function SendGuard({
   onPassed: () => void;
   /** Held: book the next call for when it is OK again (until "Ask a manager"). */
   onFollowUp?: (at: Date) => Promise<void>;
+  /** The first moment the team works from a time (lead-sheet.tsx
+   *  inTeamHours): a follow-up lands in work hours, never at 9 pm. */
+  workSlot?: (at: Date) => Date;
   children: ReactNode;
 }) {
   const [passing, setPassing] = useState(false);
   const [booking, setBooking] = useState(false);
   if (!guard) return <>{children}</>;
   const held = isHeld(guard);
-  const okAt = guard.next_ok_at ? new Date(guard.next_ok_at) : null;
+  // The first work-hour slot on or after the rest ends (v1.95 judge round 2:
+  // "rests until Thu 3 Dec" over a button for 2 Dec, 9:09 pm).
+  const okAt = guard.next_ok_at
+    ? (workSlot ?? ((at: Date) => at))(new Date(guard.next_ok_at))
+    : null;
   return (
     <div className={styles.gate}>
       <OutreachLine guard={guard} label={CHANNEL_WORDS[guard.channel]} />
@@ -525,9 +584,7 @@ export function SendGuard({
                 void onFollowUp(okAt).finally(() => setBooking(false));
               }}
             >
-              {booking
-                ? "Setting…"
-                : `Set follow-up for ${when(okAt.toISOString())}`}
+              {booking ? "Setting…" : `Set follow-up for ${slotWords(okAt)}`}
             </button>
           ) : null}
         </>
