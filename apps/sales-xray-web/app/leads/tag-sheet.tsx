@@ -168,6 +168,8 @@ export function TagSheet({
     .filter((tag) => picked.has(tag.tag_id))
     .map((tag) => tag.name);
   const many = target.kind === "many";
+  // Taking tags off: nothing is made, so the words and the search say so.
+  const taking = many && mode === "remove";
   const count = many ? selectionCount(target.selection) : 1;
   const added = many ? [] : [...picked].filter((id) => !start.includes(id));
   const removed = many ? [] : start.filter((id) => !picked.has(id));
@@ -228,10 +230,18 @@ export function TagSheet({
     <Sheet
       open={open}
       onClose={onClose}
-      title={many ? `Tag ${leadsWord(count)}` : "Tags on this lead"}
+      title={
+        many
+          ? mode === "add"
+            ? `Tag ${leadsWord(count)}`
+            : `Take tags off ${leadsWord(count)}`
+          : "Tags on this lead"
+      }
       description={
         many
-          ? "Pick tags, or type a new one."
+          ? mode === "add"
+            ? "Pick tags, or type a new one."
+            : "Pick the tags to take off."
           : "Tick the tags this lead carries."
       }
       wide="center"
@@ -276,13 +286,13 @@ export function TagSheet({
           <Search size={20} aria-hidden="true" />
           <input
             type="text"
-            placeholder="Find or make a tag"
-            aria-label="Find or make a tag"
+            placeholder={taking ? "Find a tag" : "Find or make a tag"}
+            aria-label={taking ? "Find a tag" : "Find or make a tag"}
             maxLength={32}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && words && !exact) {
+              if (event.key === "Enter" && words && !exact && !taking) {
                 event.preventDefault();
                 void make();
               }

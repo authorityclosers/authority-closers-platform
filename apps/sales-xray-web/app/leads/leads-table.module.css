@@ -1002,3 +1002,13 @@
 .name small[data-tagged] {
   align-self: stretch;
 }
+
+/* A little tighter in a table cell (v1.94 polish): "Pune expo +2" whole
+   beside "Kolhapur", shortened only when the cell truly runs out. */
+.wrap .name small .nameTags {
+  margin-inline-start: 4px;
+}
+
+.wrap .name small .nameTags > span {
+  padding-inline: 6px;
+}

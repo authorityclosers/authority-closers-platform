@@ -238,6 +238,15 @@ it("takes a tag off many leads with the same job", async () => {
   );
   await settle();
   await act(async () => button("Take tags off")?.click());
+  // The words follow the mode, and nothing is made while taking tags off.
+  expect(document.body.textContent).toContain("Take tags off 12 leads");
+  expect(document.body.textContent).toContain("Pick the tags to take off.");
+  const find = document.querySelector<HTMLInputElement>(
+    'input[aria-label="Find a tag"]',
+  )!;
+  await type(find, "Brand new");
+  expect(document.body.textContent).not.toContain("Make “Brand new”");
+  await type(find, "");
   await act(async () =>
     document.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
   );

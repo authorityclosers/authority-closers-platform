@@ -41,10 +41,6 @@
   padding: calc((20px - 1em) / 2) 7px 0;
 }
 
-.chips[data-size="sm"] .chip {
-  max-width: 112px;
-}
-
 .chips[data-size="md"] {
   flex-wrap: wrap;
   gap: 6px;

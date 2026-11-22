@@ -701,8 +701,9 @@
 /* The row stops where the pinned end (List | Table, Filter) starts, so its
    own fade shows instead of a chip chopped under them, and the last chip
    scrolls fully clear of the fade. */
+/* 12 px (v1.94 polish): the fade starts later, so "Any tag" sits clear of it. */
 .headStage [role="group"] {
-  margin-right: 24px;
+  margin-right: 12px;
 }
 
 /* Only while chips sit past the right edge, and only its last 12 px, so a
