@@ -93,7 +93,8 @@ it("says the counter calmly, with a chip and why when it holds", async () => {
   expect(host.querySelector("[data-verdict] span[data-verdict]")).toBeNull();
   await act(async () => root.render(<OutreachLine guard={held} />));
   expect(chipWords(held)).toBe("3 this week");
-  expect(whyWords(held)).toMatch(/^3 touches in the last 7 days · OK again /);
+  // The count is said once (the counter, the chip): the why is short.
+  expect(whyWords(held)).toMatch(/^At the weekly limit · OK again /);
   expect(host.textContent).toContain("3 this week");
   // A stop is never OK again by waiting.
   expect(
@@ -127,7 +128,25 @@ it("holds a seller's send and says why; a manager may send anyway with a reason"
   );
   expect(button("Open WhatsApp")).toBeUndefined();
   expect(button("Send anyway")).toBeUndefined();
-  expect(host.textContent).toContain("Held for now");
+  expect(host.textContent).toContain("so Ravi never feels chased");
+  // One way on: a follow-up for when it is OK again.
+  const booked = vi.fn(async () => undefined);
+  await act(async () =>
+    root.render(
+      <SendGuard
+        leadId={LEAD}
+        name="Ravi Kulkarni"
+        guard={held}
+        manager={false}
+        onPassed={() => undefined}
+        onFollowUp={booked}
+      >
+        <button type="button">Open WhatsApp</button>
+      </SendGuard>,
+    ),
+  );
+  await act(async () => button("Set follow-up for")!.click());
+  expect(booked).toHaveBeenCalledWith(new Date(held.next_ok_at!));
   const passed = vi.fn();
   await act(async () =>
     root.render(
@@ -143,11 +162,12 @@ it("holds a seller's send and says why; a manager may send anyway with a reason"
     ),
   );
   await act(async () => button("Send anyway")!.click());
-  // The sheet's Send anyway waits for a reason.
+  // In the send's own place, never a sheet over it; it waits for a reason.
+  expect(document.querySelector("dialog[open]")).toBeNull();
   const sheetSend = () =>
-    [...document.querySelectorAll("dialog button")].find(
-      (item) => item.textContent === "Send anyway",
-    ) as HTMLButtonElement;
+    host.querySelector<HTMLButtonElement>(
+      '[data-sx-feature="outreach_send_anyway"]',
+    )!;
   expect(sheetSend().disabled).toBe(true);
   await act(async () => button("The lead asked for it")!.click());
   expect(sheetSend().disabled).toBe(false);
@@ -184,7 +204,7 @@ it("says who sent a touch, what, its delivery, the reply and a send past the lim
   expect(host.textContent).toContain("Delivered");
   expect(host.textContent).toContain("Replied");
   expect(host.textContent).toContain(
-    "Sent past the limit by Shivam: lead asked for it",
+    "Sent anyway by Shivam · lead asked for it",
   );
   expect(
     pastLimitWords(
@@ -194,7 +214,7 @@ it("says who sent a touch, what, its delivery, the reply and a send past the lim
         after_block: true,
       }),
     ),
-  ).toBe("Sent past the limit by Drip");
+  ).toBe("Sent anyway by Drip");
 });
 
 it("lists the touches a page at a time", async () => {

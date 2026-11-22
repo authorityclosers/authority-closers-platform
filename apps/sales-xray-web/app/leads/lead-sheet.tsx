@@ -5291,6 +5291,29 @@ export function LeadCard({
           onHeld={() =>
             void readLead(lead.lead_id).then(onChanged, () => undefined)
           }
+          onFollowUp={async (at) => {
+            // Held: the next call goes in for when it is OK again (v1.95).
+            try {
+              onChanged(await setFollowUp(lead, at));
+              notify({
+                id: "outreach-follow-up",
+                tone: "success",
+                title: `Follow-up set for ${when(at.toISOString())}`,
+                message: lead.name,
+              });
+              setMessaging(null);
+            } catch (problem) {
+              notify({
+                id: "outreach-follow-up",
+                tone: "error",
+                title: "The follow-up wasn't set",
+                message:
+                  problem instanceof LeadsError
+                    ? problem.message
+                    : "Try again.",
+              });
+            }
+          }}
         />
       ) : null}
       {recordingNow ? recording : null}

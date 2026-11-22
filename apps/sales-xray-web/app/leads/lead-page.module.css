@@ -1218,6 +1218,9 @@ section.pane {
 }
 
 .paneBody {
+  /* A 44 px gutter on the right for the pane's close button, so it never
+     sits on the words when the lead scrolls under it (v1.95 judge, 1440). */
+  padding-right: 44px;
   display: grid;
   flex: 1 1 auto;
   align-content: start;

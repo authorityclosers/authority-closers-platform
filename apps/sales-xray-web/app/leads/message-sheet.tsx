@@ -26,7 +26,7 @@ import {
   type MessageTemplate,
   type OutreachGuard,
 } from "./leads-client";
-import { SendGuard, useOutreach } from "./outreach";
+import { canPass, isHeld, SendGuard, useOutreach } from "./outreach";
 import { buzz } from "./native-phone";
 import styles from "./message-sheet.module.css";
 
@@ -58,7 +58,10 @@ export function MessageSheet({
   onClose,
   onLogged,
   onHeld,
+  onFollowUp,
 }: {
+  /** Held for this seller: book the next call for when it is OK again. */
+  onFollowUp?: (at: Date) => Promise<void>;
   /** An owner, admin or manager: may send past a hold once, with a reason. */
   manager?: boolean;
   /** The lead's own counter (its main channel), shown until this channel's is read. */
@@ -101,6 +104,9 @@ export function MessageSheet({
   );
 
   if (!target) return null;
+  // Held, with no way past for this person: no message to write (v1.95 judge:
+  // a live composer under a hold was a dead end).
+  const shut = isHeld(guard) && !canPass(guard, manager);
   const href =
     channel === "whatsapp"
       ? whatsappHref(target.phone, text.trim())
@@ -157,42 +163,47 @@ export function MessageSheet({
             SMS
           </button>
         </div>
-        <div
-          className={styles.templates}
-          role="group"
-          aria-label="Ready messages"
-        >
-          {templates.map((template) => (
-            <button
-              key={template.key}
-              type="button"
-              className={styles.template}
-              aria-pressed={picked === template.key}
-              title={template.label}
-              onClick={() => {
-                setPicked(template.key);
-                setText(fill(template));
-              }}
+        {shut ? null : (
+          <>
+            <div
+              className={styles.templates}
+              role="group"
+              aria-label="Ready messages"
             >
-              {template.label}
-            </button>
-          ))}
-        </div>
-        <label className={styles.field}>
-          <span className={styles.fieldLabel}>Your message</span>
-          <textarea
-            rows={5}
-            value={text}
-            maxLength={1000}
-            onChange={(event) => setText(event.target.value)}
-          />
-        </label>
+              {templates.map((template) => (
+                <button
+                  key={template.key}
+                  type="button"
+                  className={styles.template}
+                  aria-pressed={picked === template.key}
+                  title={template.label}
+                  onClick={() => {
+                    setPicked(template.key);
+                    setText(fill(template));
+                  }}
+                >
+                  {template.label}
+                </button>
+              ))}
+            </div>
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>Your message</span>
+              <textarea
+                rows={5}
+                value={text}
+                maxLength={1000}
+                onChange={(event) => setText(event.target.value)}
+              />
+            </label>
+          </>
+        )}
         <SendGuard
           leadId={target.leadId}
           name={target.name}
           guard={guard}
           manager={manager}
           onPassed={reload}
+          onFollowUp={onFollowUp}
         >
           <a
             className={styles.send}
@@ -213,11 +224,13 @@ export function MessageSheet({
             {channel === "whatsapp" ? "Open WhatsApp" : "Open Messages"}
           </a>
         </SendGuard>
-        <p className={styles.hint}>
-          It opens in your own{" "}
-          {channel === "whatsapp" ? "WhatsApp" : "Messages"} app with the text
-          ready. Sales X-Ray notes that you sent it, not what it said.
-        </p>
+        {shut ? null : (
+          <p className={styles.hint}>
+            It opens in your own{" "}
+            {channel === "whatsapp" ? "WhatsApp" : "Messages"} app with the text
+            ready. Sales X-Ray notes that you sent it, not what it said.
+          </p>
+        )}
       </div>
     </ActionSheet>
   );

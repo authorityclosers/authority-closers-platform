@@ -19,10 +19,10 @@ import {
   Phone,
   Send,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 
 import { notify } from "../notice-center";
-import { ActionList, ActionRow, Button, Field } from "../ui/kit";
+import { Button } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
 import {
   grantOverride,
@@ -104,14 +104,15 @@ export function touchWhat(touch: TouchView): string | null {
   );
 }
 
-/** "Sent past the limit by Shivam: lead asked for it", for a send past a hold. */
+/** "Sent anyway by Shivam · lead asked for it", for a send past a hold: the
+ *  Outreach page's own words for it (v1.95 judge round 1: one phrase). */
 export function pastLimitWords(touch: TouchView): string | null {
   if (!touch.after_block) return null;
   const who = touch.override_by_name ?? touchSender(touch);
   const why = touch.override_reason
     ? (OVERRIDE_SAID[touch.override_reason] ?? touch.override_reason)
     : null;
-  return `Sent past the limit by ${who}${why ? `: ${why}` : ""}`;
+  return `Sent anyway by ${who}${why ? ` · ${why}` : ""}`;
 }
 
 /** The chip on a warning or a hold: a few words for the reason that holds. */
@@ -151,7 +152,14 @@ export function whyWords(guard: OutreachGuard): string | null {
   const reason =
     guard.reasons.find((item) => item.level === guard.verdict) ??
     guard.reasons[0];
-  const parts = [reason?.words ?? null];
+  // The count is in the counter and the chip already: said once (v1.95 judge).
+  const said =
+    reason?.code === "week_cap"
+      ? "At the weekly limit"
+      : reason?.code === "day_cap"
+        ? "Touched once today already"
+        : (reason?.words ?? null);
+  const parts = [said];
   if (guard.opted_out) parts.push("nobody can send past a stop");
   // A rest already says until when.
   else if (guard.next_ok_at && reason?.code !== "rest")
@@ -230,11 +238,20 @@ export function OutreachLine({
         </span>
         <span className={styles.words}>
           {label ? <strong>{label}: </strong> : null}
-          {guard.words}
+          {/* Each part keeps its words together: a line breaks at a dot. */}
+          {guard.words.split(" · ").map((part, index) => (
+            <Fragment key={index}>
+              {index ? " · " : null}
+              <span className={styles.part}>{part}</span>
+            </Fragment>
+          ))}
           {chip ? (
-            <span className={styles.chip} data-verdict={guard.verdict}>
-              {chip}
-            </span>
+            <>
+              {" "}
+              <span className={styles.chip} data-verdict={guard.verdict}>
+                {chip}
+              </span>
+            </>
           ) : null}
         </span>
         {onOpen ? (
@@ -290,47 +307,26 @@ export function useOutreach(
 
 /* ---------- Send anyway (managers) ---------- */
 
-function Mark({ on }: { on: boolean }) {
-  return on ? (
-    <Check
-      className={styles.chosen}
-      size={20}
-      strokeWidth={2.5}
-      aria-label="Chosen"
-    />
-  ) : (
-    <Circle className={styles.free} size={20} aria-hidden="true" />
-  );
-}
-
 /**
  * A manager passes a hold once, with a reason (spec §4.4): 30 minutes, one
- * send; the history says "Sent past the limit by …: reason". A STOP has none.
+ * send; the history says "Sent anyway by …". A STOP has none. In the send's own
+ * place (the message sheet, the WhatsApp thread), never a second sheet over it.
  */
-export function OverrideSheet({
-  open,
+export function OverrideForm({
   leadId,
-  name,
   guard,
-  onClose,
+  onCancel,
   onGranted,
 }: {
-  open: boolean;
   leadId: string;
-  name: string;
   guard: OutreachGuard;
-  onClose: () => void;
+  onCancel: () => void;
   onGranted: () => void;
 }) {
   const [reason, setReason] = useState<OverrideReason | null>(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const needsText = reason === "other" && !text.trim();
-  const close = () => {
-    setReason(null);
-    setText("");
-    onClose();
-  };
   const grant = async () => {
     if (!reason || needsText || busy) return;
     setBusy(true);
@@ -357,65 +353,109 @@ export function OverrideSheet({
       setBusy(false);
     }
   };
+  const textId = `${leadId}-override-text`;
   return (
-    <Sheet
-      open={open}
-      onClose={close}
-      title={`Send to ${name} anyway?`}
-      wide="center"
-      footer={
-        <>
-          <Button variant="secondary" disabled={busy} onClick={close}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            className={styles.green}
-            disabled={!reason || needsText || busy}
-            data-sx-feature="outreach_send_anyway"
-            onClick={() => void grant()}
-          >
-            {busy ? "Allowing…" : "Send anyway"}
-          </Button>
-        </>
-      }
-    >
-      <OutreachLine guard={guard} label={CHANNEL_WORDS[guard.channel]} />
-      <p className={styles.ask}>Why send past the limit?</p>
-      <ActionList label="Why">
+    <div className={styles.override} data-sx-feature="outreach_override">
+      <p className={styles.label}>Why send past the limit?</p>
+      <div className={styles.reasons} role="radiogroup" aria-label="Why">
         {OVERRIDE_REASONS.map((item) => (
-          <ActionRow
+          <button
             key={item.key}
-            title={item.label}
-            end={<Mark on={reason === item.key} />}
-            chevron={false}
+            type="button"
+            role="radio"
+            aria-checked={reason === item.key}
+            className={styles.reason}
             disabled={busy}
             onClick={() => setReason(item.key)}
-          />
+          >
+            <span>{item.label}</span>
+            {reason === item.key ? (
+              <Check
+                className={styles.chosen}
+                size={20}
+                strokeWidth={2.5}
+                aria-hidden="true"
+              />
+            ) : (
+              <Circle className={styles.free} size={20} aria-hidden="true" />
+            )}
+          </button>
         ))}
-      </ActionList>
-      <Field
-        label={reason === "other" ? "Why, in a few words" : "Note (optional)"}
-      >
-        <textarea
-          value={text}
-          maxLength={200}
-          rows={2}
-          onChange={(event) => setText(event.target.value)}
-        />
-      </Field>
+      </div>
+      <label className={styles.label} htmlFor={textId}>
+        {reason === "other" ? "Why, in a few words" : "Note (optional)"}
+      </label>
+      <textarea
+        id={textId}
+        className={styles.note}
+        value={text}
+        maxLength={200}
+        rows={2}
+        onChange={(event) => setText(event.target.value)}
+      />
       <p className={styles.small}>
         It allows one send in the next 30 minutes, and the history says who
         allowed it and why.
       </p>
+      <div className={styles.overrideActions}>
+        <Button variant="secondary" disabled={busy} onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          className={styles.green}
+          disabled={!reason || needsText || busy}
+          data-sx-feature="outreach_send_anyway"
+          onClick={() => void grant()}
+        >
+          {busy ? "Allowing…" : "Send anyway"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** The same, as a sheet of its own where there is no send sheet (Email from More). */
+export function OverrideSheet({
+  open,
+  leadId,
+  name,
+  guard,
+  onClose,
+  onGranted,
+}: {
+  open: boolean;
+  leadId: string;
+  name: string;
+  guard: OutreachGuard;
+  onClose: () => void;
+  onGranted: () => void;
+}) {
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={`Send to ${name} anyway?`}
+      wide="center"
+      className={styles.opaque}
+    >
+      <OutreachLine guard={guard} label={CHANNEL_WORDS[guard.channel]} />
+      <OverrideForm
+        leadId={leadId}
+        guard={guard}
+        onCancel={onClose}
+        onGranted={onGranted}
+      />
     </Sheet>
   );
 }
 
+const firstWord = (name: string) => name.trim().split(/\s+/)[0] || name;
+
 /**
- * Before a send: the line, and on a hold either "Send anyway" (a manager) or
- * why and when it is OK again (everyone else). `children` is the send itself,
- * shown unless the send is held.
+ * Before a send: the line, and on a hold either "Send anyway" (a manager, in
+ * the send's own place) or why, and one way on: a follow-up when it is OK again
+ * (everyone else). `children` is the send itself, shown unless it is held.
  */
 export function SendGuard({
   leadId,
@@ -423,6 +463,7 @@ export function SendGuard({
   guard,
   manager,
   onPassed,
+  onFollowUp,
   children,
 }: {
   leadId: string;
@@ -431,18 +472,32 @@ export function SendGuard({
   manager: boolean;
   /** The override went through: read the guard again. */
   onPassed: () => void;
+  /** Held: book the next call for when it is OK again (until "Ask a manager"). */
+  onFollowUp?: (at: Date) => Promise<void>;
   children: ReactNode;
 }) {
   const [passing, setPassing] = useState(false);
+  const [booking, setBooking] = useState(false);
   if (!guard) return <>{children}</>;
   const held = isHeld(guard);
+  const okAt = guard.next_ok_at ? new Date(guard.next_ok_at) : null;
   return (
     <div className={styles.gate}>
       <OutreachLine guard={guard} label={CHANNEL_WORDS[guard.channel]} />
       {!held ? (
         children
       ) : canPass(guard, manager) ? (
-        <>
+        passing ? (
+          <OverrideForm
+            leadId={leadId}
+            guard={guard}
+            onCancel={() => setPassing(false)}
+            onGranted={() => {
+              setPassing(false);
+              onPassed();
+            }}
+          />
+        ) : (
           <button
             type="button"
             className={styles.anyway}
@@ -451,24 +506,31 @@ export function SendGuard({
           >
             Send anyway
           </button>
-          <OverrideSheet
-            open={passing}
-            leadId={leadId}
-            name={name}
-            guard={guard}
-            onClose={() => setPassing(false)}
-            onGranted={() => {
-              setPassing(false);
-              onPassed();
-            }}
-          />
-        </>
+        )
       ) : (
-        <p className={styles.held} data-sx-feature="outreach_held">
-          {guard.opted_out
-            ? "They said stop on this channel, so nothing more goes out here."
-            : "Held for now, so they never feel chased. A manager can send it anyway."}
-        </p>
+        <>
+          <p className={styles.held} data-sx-feature="outreach_held">
+            {guard.opted_out
+              ? `${firstWord(name)} said stop on this channel, so nothing more goes out here.`
+              : `Held for now, so ${firstWord(name)} never feels chased. A manager can send it anyway.`}
+          </p>
+          {okAt && onFollowUp && !guard.opted_out ? (
+            <button
+              type="button"
+              className={styles.followUp}
+              disabled={booking}
+              data-sx-feature="outreach_held_follow_up"
+              onClick={() => {
+                setBooking(true);
+                void onFollowUp(okAt).finally(() => setBooking(false));
+              }}
+            >
+              {booking
+                ? "Setting…"
+                : `Set follow-up for ${when(okAt.toISOString())}`}
+            </button>
+          ) : null}
+        </>
       )}
     </div>
   );
@@ -480,7 +542,10 @@ export function SendGuard({
 export function TouchLine({
   touch,
   actor = null,
+  icon = true,
 }: {
+  /** The channel's small icon (none where a tile shows it already). */
+  icon?: boolean;
   touch: TouchView;
   /** Whom the history line already names: not said twice. */
   actor?: string | null;
@@ -491,9 +556,11 @@ export function TouchLine({
   return (
     <span className={styles.touch} data-sx-feature="outreach_touch_line">
       <span className={styles.touchMain}>
-        <span className={styles.touchIcon} aria-hidden="true">
-          <ChannelIcon channel={touch.channel} size={13} />
-        </span>
+        {icon ? (
+          <span className={styles.touchIcon} aria-hidden="true">
+            <ChannelIcon channel={touch.channel} size={13} />
+          </span>
+        ) : null}
         <span>
           {[sender === actor ? null : sender, what ? `“${what}”` : null]
             .filter(Boolean)
@@ -575,6 +642,7 @@ export function TouchSheet({
       onClose={onClose}
       title={`Touches with ${name}`}
       wide="right"
+      className={styles.opaque}
     >
       {guard ? <OutreachLine guard={guard} /> : null}
       {mine === null && state !== "error" ? (
@@ -597,7 +665,7 @@ export function TouchSheet({
                   {CHANNEL_WORDS[touch.channel]} ·{" "}
                   <time dateTime={touch.sent_at}>{when(touch.sent_at)}</time>
                 </strong>
-                <TouchLine touch={touch} />
+                <TouchLine touch={touch} icon={false} />
               </span>
             </li>
           ))}
@@ -611,6 +679,7 @@ export function TouchSheet({
       {mine?.next ? (
         <Button
           variant="secondary"
+          className={styles.older}
           disabled={state === "loading"}
           onClick={() => load(mine.next)}
         >
