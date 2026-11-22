@@ -43,6 +43,7 @@ from ac_platform.lead_desk import (
     load,
     merging,
     notify_prefs,
+    outreach,
     owner_alerts,
     push,
     recording_guard,
@@ -62,6 +63,8 @@ from ac_platform.lead_desk.contracts import (
     AlertText,
     Badge,
     BulkDone,
+    BulkGuard,
+    BulkGuardCommand,
     BulkJob,
     BulkJobCommand,
     BulkJobs,
@@ -119,6 +122,11 @@ from ac_platform.lead_desk.contracts import (
     NoteCommand,
     NotSame,
     NudgesCommand,
+    OutreachGuard,
+    OutreachRules,
+    OutreachRulesCommand,
+    OverrideCommand,
+    OverrideView,
     Performance,
     PhoneBook,
     PhoneCall,
@@ -148,6 +156,11 @@ from ac_platform.lead_desk.contracts import (
     SeedCommand,
     SellerLoads,
     SellerTargets,
+    SenderCommand,
+    SenderEdit,
+    SenderPause,
+    Senders,
+    SenderView,
     SettingsCommand,
     ShelveLeads,
     SimulationPick,
@@ -170,6 +183,9 @@ from ac_platform.lead_desk.contracts import (
     TaskView,
     Team,
     TeamTargets,
+    TouchCommand,
+    TouchLogged,
+    TouchPage,
     UndoImport,
     UndoMerge,
     WorkDay,
@@ -633,6 +649,99 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_tags.on_lead(lead_desk, lead_id, command)
+
+    # ----- the outreach log (v1.95, outreach.py) -----------------------------------------
+
+    @router.get("/leads/{lead_id}/outreach", response_model=OutreachGuard)
+    async def lead_outreach(
+        lead_id: UUID, request: Request, response: Response, channel: str | None = None
+    ) -> OutreachGuard:
+        """The touch counter and cadence guard for one lead and channel (WhatsApp when it has
+        a phone, else email)."""
+        no_query(request, frozenset({"channel"}))
+        async with desk_for(request, response) as lead_desk:
+            return await outreach.lead_outreach(lead_desk, lead_id, channel)
+
+    @router.get("/leads/{lead_id}/touches", response_model=TouchPage)
+    async def lead_touches(
+        lead_id: UUID, request: Request, response: Response, cursor: str | None = None
+    ) -> TouchPage:
+        """The lead's touches, newest first (the touch sheet, "All touches for this lead")."""
+        no_query(request, frozenset({"cursor"}))
+        async with desk_for(request, response) as lead_desk:
+            return await outreach.page_for(lead_desk, lead_id, cursor)
+
+    @router.post("/leads/{lead_id}/touches", response_model=TouchLogged, status_code=201)
+    async def log_touch(
+        lead_id: UUID, command: TouchCommand, request: Request, response: Response
+    ) -> TouchLogged:
+        """Log a touch: a call from another phone, an email from Gmail, a PDF handed over, or a
+        mailto/sms link the app opened (``via: app_link``)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await outreach.log_touch(lead_desk, lead_id, command)
+
+    @router.post("/leads/{lead_id}/overrides", response_model=OverrideView, status_code=201)
+    async def grant_override(
+        lead_id: UUID, command: OverrideCommand, request: Request, response: Response
+    ) -> OverrideView:
+        """A manager's one-time "send anyway" for this lead and channel (30 minutes)."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await outreach.grant_override(lead_desk, lead_id, command)
+
+    @router.post("/outreach/guard", response_model=BulkGuard)
+    async def outreach_bulk_guard(
+        command: BulkGuardCommand, request: Request, response: Response
+    ) -> BulkGuard:
+        """The guard for up to 500 leads: "38 ok · 4 warned · 6 held (3 said stop)"."""
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await outreach.bulk(lead_desk, command)
+
+    @router.get("/outreach/rules", response_model=OutreachRules)
+    async def outreach_rules(request: Request, response: Response) -> OutreachRules:
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await outreach.rules_view(lead_desk)
+
+    @router.put("/outreach/rules", response_model=OutreachRules)
+    async def save_outreach_rules(
+        command: OutreachRulesCommand, request: Request, response: Response
+    ) -> OutreachRules:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await outreach.save_rules(lead_desk, command)
+
+    @router.get("/outreach/senders", response_model=Senders)
+    async def outreach_senders(request: Request, response: Response) -> Senders:
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await outreach.senders(lead_desk)
+
+    @router.post("/outreach/senders", response_model=SenderView, status_code=201)
+    async def add_outreach_sender(
+        command: SenderCommand, request: Request, response: Response
+    ) -> SenderView:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await outreach.create_sender(lead_desk, command)
+
+    @router.put("/outreach/senders/{sender_id}", response_model=SenderView)
+    async def edit_outreach_sender(
+        sender_id: UUID, command: SenderEdit, request: Request, response: Response
+    ) -> SenderView:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await outreach.edit_sender(lead_desk, sender_id, command)
+
+    @router.post("/outreach/senders/{sender_id}/pause", response_model=SenderView)
+    async def pause_outreach_sender(
+        sender_id: UUID, command: SenderPause, request: Request, response: Response
+    ) -> SenderView:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await outreach.pause_sender(lead_desk, sender_id, command)
 
     @router.post("/leads/bulk-jobs", response_model=BulkJob, response_model_by_alias=True)
     async def run_bulk_job(

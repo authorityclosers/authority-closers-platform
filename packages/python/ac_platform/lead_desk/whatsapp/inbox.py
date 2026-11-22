@@ -29,6 +29,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.lead_desk import hours as work_hours
+from ac_platform.lead_desk import outreach
 from ac_platform.lead_desk.models import (
     Lead,
     LeadEvent,
@@ -402,11 +403,21 @@ async def receive(db: AsyncSession, delivery: cloud.Delivery, *, now: datetime) 
             )
             .returning(LeadWhatsAppMessage.id)
         )
-        if inserted.first() is not None:
+        filed = inserted.first()
+        if filed is not None:
             out.messages += 1
             out.leads_created += created
             if lead is not None:
                 lead.updated_at = now
+                # Their message answers our newest touch on WhatsApp (v1.95, outreach.py).
+                await outreach.link_reply(
+                    db,
+                    row.tenant_id,
+                    lead.id,
+                    "whatsapp",
+                    message.at or now,
+                    {"table": "whatsapp", "id": str(filed[0])},
+                )
                 if message.kind in ("text", "button") and await _stop_word(
                     db, row, lead, message.body, now=now
                 ):
@@ -468,6 +479,16 @@ async def receive(db: AsyncSession, delivery: cloud.Delivery, *, now: datetime) 
             )
         result = await db.execute(query)
         out.statuses += int(getattr(result, "rowcount", 0) or 0)
+        # The same state on the touch (v1.95), and on an outside sender's touch for a wamid
+        # Sales X-Ray never sent itself (sx-engage on the same number, outreach.py).
+        await outreach.copy_whatsapp_status(
+            db,
+            status.wamid,
+            status.status,
+            status.at or now,
+            str(status.error_code) if status.error_code is not None else None,
+            now,
+        )
     for change in delivery.templates:
         result = await db.execute(
             update(LeadWhatsAppTemplate)
@@ -743,6 +764,10 @@ async def send(
     wa = cloud.wa_id(lead.phone)
     if wa is None:
         raise DeskError(422, "Add a phone number with its country code to WhatsApp this lead.")
+    # The outreach limits first (v1.95): a person's send refuses on a block (a STOP); an
+    # automation's verdict is kept (campaign runs ask before sending, campaigns.py; first
+    # and after-hours replies answer the lead's own enquiry).
+    verdict = await outreach.enforce(desk, lead, "whatsapp", "person") if not auto else None
     rows = await numbers(desk.db, desk.tenant_id)
     row = next((r for r in rows if number_id is None or r.id == number_id), None)
     if row is None:
@@ -871,7 +896,7 @@ async def send(
         message.status = "failed"
         message.error_code = str(error.code) if error.code is not None else "refused"
         message.error_title = str(error)[:200]
-    desk._event(
+    event = desk._event(
         lead,
         "message",
         {
@@ -888,6 +913,29 @@ async def send(
         actor=None if auto else desk.viewer.person_id,
         command_id=command_id,
     )
+    # The touch, linked to this message row: its delivery state follows the webhook.
+    touch = await outreach.mirror(
+        desk,
+        lead,
+        event,
+        channel="whatsapp",
+        content_kind="template" if template else "file" if attached is not None else "text",
+        via="cloud",
+        provider="meta_cloud",
+        person_id=None if auto else desk.viewer.person_id,
+        automation=auto,
+        status="failed" if message.status == "failed" else "sent",
+        whatsapp_message_id=message.id,
+        template_name=template,
+        attachment={"kind": attached.kind, "name": attached.filename}
+        if attached is not None
+        else None,
+        campaign_id=campaign_id,
+        result=verdict,
+        error_code=message.error_code,
+    )
+    touch.provider_message_id = message.wamid
+    touch.summary = (shown or "")[:280] or None
     lead.updated_at = desk.now
     if not auto and message.status != "failed":
         # A person's WhatsApp is contact: auto-reassign stops (lead_desk/reassign_guard.py).

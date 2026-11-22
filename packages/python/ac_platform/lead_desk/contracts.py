@@ -666,6 +666,9 @@ class LeadEventView(Model):
     answer_undone: bool = False
     # A repeat enquiry that brought a Cold lead back to Inbound (teardown #23).
     to_inbound: bool = False
+    # The outreach touch this line is (v1.95, outreach.py): who sent it, what, its delivery
+    # state and the reply that answered it. None for every other line.
+    touch: TouchView | None = None
 
 
 class RepOption(Model):
@@ -1260,6 +1263,9 @@ class LeadDetail(Model):
     # screen sets the next try in them, skipping days off. None when none are set.
     # Changing them stays with owners and admins (PUT /work-hours).
     work_hours: WorkHoursView | None = None
+    # The touch counter and cadence guard for the lead's main channel (v1.95): WhatsApp when
+    # it has a phone, else email. GET /leads/{id}/outreach?channel= gives another channel.
+    outreach: OutreachGuard | None = None
 
 
 class PhoneHealth(Model):
@@ -2622,3 +2628,302 @@ class RevenueBreakdownView(Model):
     amount_not_set: int
     by_seller: tuple[RevenueSplitLine, ...]
     by_side: tuple[RevenueSplitLine, ...]
+
+
+# ----- the outreach log (v1.95, owner 22 Nov 2026; lead_desk/outreach.py) -----------------
+
+TouchChannel = Literal[
+    "whatsapp", "sms", "email", "call", "messenger", "instagram", "in_person", "other"
+]
+OutreachMode = Literal["off", "show", "warn", "block"]
+OutreachVerdict = Literal["ok", "warn", "block"]
+OverrideReason = Literal["lead_asked", "time_sensitive", "wrong_count", "other"]
+
+
+class OutreachReason(Model):
+    """Why the guard says what it says: a code, the plain words, and how strong it is here
+    (``show`` is only shown: the channel's mode is Show only)."""
+
+    code: str
+    words: str
+    level: Literal["show", "warn", "block"]
+
+
+class OutreachCounts(Model):
+    today: int
+    # The last 7 days (a rolling window, the same as the limit), not the calendar week.
+    week: int
+    # Counted touches since the lead last wrote (or ever): the cool-off's streak.
+    unanswered: int
+    calls_week: int
+
+
+class OverrideHint(Model):
+    possible: bool
+    who: Literal["manager"] = "manager"
+
+
+class OutreachGuard(Model):
+    """The touch counter and cadence guard for one lead and one channel (spec §3.3): the same
+    shape in the app, the bulk check and the public API. ``words`` is the counter line:
+    "Last touched 2 days ago · 3 touches this week"."""
+
+    lead_id: UUID | None
+    would_create: bool = False
+    channel: TouchChannel
+    mode: OutreachMode
+    verdict: OutreachVerdict
+    reasons: tuple[OutreachReason, ...]
+    words: str
+    last_touch_at: datetime | None
+    counts: OutreachCounts
+    next_ok_at: datetime | None = None
+    quiet_until: datetime | None = None
+    opted_out: bool = False
+    # A send now would be a reply in the lead's 24-hour window: never counted.
+    in_reply_window: bool = False
+    override: OverrideHint
+    override_id: UUID | None = None
+    reservation_id: UUID | None = None
+
+
+class TouchAttachment(Model):
+    kind: Literal["image", "video", "document", "audio", "quote"]
+    name: str = Field(max_length=200)
+    bytes: int | None = Field(default=None, ge=0)
+    sha256: str | None = Field(default=None, max_length=64)
+
+
+class TouchView(Model):
+    """One outbound touch, for the timeline line and the touch sheet."""
+
+    touch_id: UUID
+    lead_id: UUID
+    channel: TouchChannel
+    content_kind: str
+    initiated: Literal["outreach", "reply"]
+    sender_type: Literal["person", "automation"]
+    # Who: the person (in Sales X-Ray, or the one a person's tool speaks for), else the
+    # automation or outside sender's label ("sx-engage", "First reply").
+    by_name: str
+    person_id: UUID | None = None
+    sender_id: UUID | None = None
+    sender_label: str | None = None
+    automation: str | None = None
+    via: str
+    provider: str | None = None
+    summary: str | None = None
+    template_name: str | None = None
+    attachment: dict[str, Any] | None = None
+    status: str
+    status_at: datetime | None = None
+    sent_at: datetime
+    counted: bool
+    verdict: OutreachVerdict = "ok"
+    after_block: bool = False
+    # A manager's "send anyway": who and why ("Sent anyway by Shivam: lead asked for it").
+    override_by_name: str | None = None
+    override_reason: str | None = None
+    replied_at: datetime | None = None
+    event_id: UUID | None = None
+
+
+class TouchPage(Model):
+    touches: tuple[TouchView, ...]
+    next_cursor: str | None = None
+
+
+class TouchLogged(Model):
+    """A logged touch and the counter after it."""
+
+    touch: TouchView
+    outreach: OutreachGuard
+
+
+class TouchCommand(Command):
+    """Log a touch made outside the app's own sends ("Log a touch": a call from another phone,
+    an email from Gmail, a PDF handed over), or a mailto/sms link the app opened."""
+
+    command_id: UUID
+    channel: TouchChannel
+    via: Literal["manual", "app_link"] = "manual"
+    content_kind: Literal["text", "template", "file", "quote", "link", "call", "voice"] | None = (
+        None
+    )
+    summary: str | None = Field(default=None, max_length=280)
+    attachment: TouchAttachment | None = None
+    sent_at: AwareDatetime | None = None
+    # The manager's "send anyway" this touch uses (POST /leads/{id}/overrides).
+    override_id: UUID | None = None
+
+
+class OutreachChannelMode(Model):
+    people: OutreachMode
+    automations: OutreachMode
+
+
+class SendHours(Model):
+    # 0 is Monday.
+    days: tuple[int, ...]
+    start: str
+    end: str
+
+
+class OutreachRules(Model):
+    """Lead rules › Outreach limits (``lead_desk_settings.config["outreach"]``)."""
+
+    revision: int
+    enabled: bool
+    per_day: int
+    per_week: int
+    rest_after: int
+    rest_days: int
+    # The sending hours set here; None: the team's work hours, else 10:00-20:00 Mon-Sat.
+    quiet: SendHours | None
+    # The hours the guard uses now (``quiet``, else the work hours, else the default).
+    hours_in_use: SendHours
+    modes: dict[str, OutreachChannelMode]
+    keep_reply_words: bool
+    never_lead: tuple[str, ...]
+    can_edit: bool
+
+
+class ChannelModeCommand(Command):
+    people: OutreachMode
+    automations: OutreachMode
+
+
+class SendHoursCommand(Command):
+    days: tuple[int, ...] = Field(min_length=1, max_length=7)
+    start: str = Field(pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+    end: str = Field(pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+
+
+class OutreachRulesCommand(Command):
+    """Owners, admins and managers save the outreach limits; a field left out stays."""
+
+    expected_revision: int = Field(ge=0)
+    enabled: bool | None = None
+    per_day: int | None = Field(default=None, ge=1, le=10)
+    per_week: int | None = Field(default=None, ge=1, le=30)
+    rest_after: int | None = Field(default=None, ge=0, le=20)
+    rest_days: int | None = Field(default=None, ge=1, le=90)
+    # Sent as null: back to the team's work hours.
+    quiet: SendHoursCommand | None = None
+    modes: dict[TouchChannel, ChannelModeCommand | OutreachMode] | None = None
+    keep_reply_words: bool | None = None
+    never_lead: tuple[str, ...] | None = Field(default=None, max_length=200)
+
+
+class OverrideCommand(Command):
+    command_id: UUID
+    channel: TouchChannel
+    reason_key: OverrideReason
+    reason_text: str | None = Field(default=None, max_length=200)
+
+
+class OverrideView(Model):
+    override_id: UUID
+    lead_id: UUID
+    channel: TouchChannel
+    reason_key: OverrideReason
+    reason_text: str | None
+    granted_by_name: str
+    expires_at: datetime
+    used_at: datetime | None
+    guard: OutreachGuard
+
+
+class BulkGuardCommand(Command):
+    lead_ids: tuple[UUID, ...] = Field(min_length=1, max_length=500)
+    channel: TouchChannel = "whatsapp"
+    sender: Literal["person", "automation"] = "person"
+
+
+class BulkGuardLead(Model):
+    lead_id: UUID
+    verdict: OutreachVerdict
+    opted_out: bool
+    words: str
+    next_ok_at: datetime | None = None
+
+
+class BulkGuard(Model):
+    """Counts for many leads: "38 ok · 4 warned · 6 held (3 said stop)"."""
+
+    channel: TouchChannel
+    ok: int
+    warned: int
+    held: int
+    said_stop: int
+    words: str
+    leads: tuple[BulkGuardLead, ...]
+
+
+class LeadDefaults(Model):
+    create: bool = False
+    side: Literal["live", "cold"] = "live"
+    tags: tuple[str, ...] = Field(default=(), max_length=3)
+    assign: Literal["rules", "none"] = "none"
+
+
+class SenderView(Model):
+    sender_id: UUID
+    key: str
+    label: str
+    kind: Literal["automation", "person_tool"]
+    person_id: UUID | None
+    person_name: str | None
+    api_key_id: UUID | None
+    api_key_prefix: str | None
+    channels: tuple[TouchChannel, ...]
+    lead_defaults: LeadDefaults
+    guard_mode: Literal["report", "hold"]
+    status: Literal["active", "paused"]
+    revision: int
+    last_seen_at: datetime | None
+    touches_week: int = 0
+
+
+class Senders(Model):
+    senders: tuple[SenderView, ...]
+
+
+class LeadDefaultsCommand(Command):
+    create: bool = False
+    side: Literal["live", "cold"] = "live"
+    tags: tuple[str, ...] = Field(default=(), max_length=3)
+    assign: Literal["rules", "none"] = "none"
+
+
+class SenderCommand(Command):
+    """Owners and admins register an outside sender and bind it to one API key."""
+
+    command_id: UUID
+    key: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{1,39}$")
+    label: str = Field(min_length=1, max_length=80)
+    kind: Literal["automation", "person_tool"]
+    person_id: UUID | None = None
+    api_key_id: UUID | None = None
+    channels: tuple[TouchChannel, ...] = Field(min_length=1, max_length=8)
+    lead_defaults: LeadDefaultsCommand = Field(default_factory=LeadDefaultsCommand)
+    guard_mode: Literal["report", "hold"] = "report"
+
+
+class SenderEdit(Command):
+    expected_revision: int = Field(ge=1)
+    label: str | None = Field(default=None, min_length=1, max_length=80)
+    api_key_id: UUID | None = None
+    channels: tuple[TouchChannel, ...] | None = Field(default=None, min_length=1, max_length=8)
+    lead_defaults: LeadDefaultsCommand | None = None
+    guard_mode: Literal["report", "hold"] | None = None
+
+
+class SenderPause(Command):
+    expected_revision: int = Field(ge=1)
+    paused: bool = True
+
+
+# The timeline line and the lead page carry the outreach views defined after them.
+LeadEventView.model_rebuild()
+LeadDetail.model_rebuild()

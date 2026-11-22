@@ -64,6 +64,7 @@ from ac_platform.lead_desk import (
     hours,
     notify_prefs,
     nudge_push,
+    outreach,
     reassign,
     revenue_push,
     sheet_sync,
@@ -583,6 +584,10 @@ async def run_hours_release(
                     released = await hours.release_held(database, datetime.now(UTC))
                     if released:
                         log.info("lead desk gave out %d leads at the start of work", released)
+                    # Outreach reservations nobody used end by themselves (v1.95).
+                    lapsed = await outreach.expire_reservations(database, datetime.now(UTC))
+                    if lapsed:
+                        log.info("lead desk ended %d unused outreach reservations", lapsed)
                     # Auto-reassign on its own, not only on "Check now" (27 Oct 2026).
                     moved = await reassign.reassign_due(database, datetime.now(UTC))
                     if moved:
