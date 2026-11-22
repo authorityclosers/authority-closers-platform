@@ -51,7 +51,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequenc
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Final, Literal
 from uuid import UUID
 
 import httpx
@@ -94,6 +94,22 @@ _HOURS_TICK = 60
 _HOURS_LOCK = (1802, 1263)  # one work-hours release across processes
 
 Kind = Literal["new", "due"]
+
+# A reminder on an iPhone (owner, 22 Nov 2026): time-sensitive, so it breaks through a Focus
+# and stays on the lock screen; plain words only, the lead's name is read in the app. Inert
+# until the iPhone app registers for push (it needs the Time Sensitive Notifications
+# entitlement, com.apple.developer.usernotifications.time-sensitive). Android ignores it.
+APNS_REMINDER: Final[dict[str, Any]] = {
+    "headers": {"apns-priority": "10", "apns-push-type": "alert"},
+    "payload": {
+        "aps": {
+            "alert": {"title": "Reminder", "body": "A follow-up is due now. Tap to open it."},
+            "sound": "default",
+            "interruption-level": "time-sensitive",
+            "mutable-content": 1,
+        }
+    },
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,13 +197,14 @@ class Fcm:
         self, client: httpx.AsyncClient, token: str, data: Mapping[str, str]
     ) -> Literal["sent", "gone", "failed"]:
         url = f"https://fcm.googleapis.com/v1/projects/{self.cfg.project_id}/messages:send"
-        body = {
-            "message": {
-                "token": token,
-                "data": dict(data),
-                "android": {"priority": "HIGH", "ttl": "3600s"},
-            }
+        message: dict[str, Any] = {
+            "token": token,
+            "data": dict(data),
+            "android": {"priority": "HIGH", "ttl": "3600s"},
         }
+        if data.get("reminder") == "1":
+            message["apns"] = APNS_REMINDER
+        body = {"message": message}
         try:
             response = await client.post(
                 url,
@@ -219,7 +236,7 @@ class Alert:
         """The FCM data: ids and a count only, never a lead's name or number."""
         first_kind, first = self.leads[0]
         kind = first_kind if len(self.leads) == 1 else "many"
-        return {
+        data = {
             "type": "lead_desk",
             "kind": kind,
             "lead": str(first),
@@ -227,6 +244,10 @@ class Alert:
             "alerts": str(len(self.leads)),
             "count": str(self.to_call),
         }
+        # A follow-up or task that is due: the phone's Reminders channel (owner, 22 Nov 2026).
+        if any(item == "due" for item, _ in self.leads):
+            data["reminder"] = "1"
+        return data
 
 
 def _has_device() -> Any:

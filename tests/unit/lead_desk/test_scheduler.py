@@ -152,3 +152,63 @@ def test_property_one_reminder_per_due_through_any_snooze_chain() -> None:
         assert len(keys) == len(set(keys))
         per_due = [(key[0], key[2]) for key in keys]
         assert len(per_due) == len(set(per_due))
+
+
+# Owner, 22 Nov 2026: "In 2 min" buzzed at once (5 minutes early for a due 2 minutes away)
+# and never at the time. A due set for soon reminds at the time the seller picked.
+def test_a_call_back_set_for_soon_reminds_at_its_due() -> None:
+    set_at = at(20, 40)
+    for minutes in (1, 2, 5, 15, 30, 60):
+        due = set_at + timedelta(minutes=minutes)
+        task = TaskFacts("q", "call_back", due, set_at=set_at)
+        assert plan(task) == [Reminder("q", "due", due, due)], minutes
+    # Set well ahead: the heads-up 5 minutes before stays.
+    later = TaskFacts("q", "call_back", at(22, 0), set_at=set_at)
+    assert plan(later)[0].send_at == at(21, 55)
+    # Unknown when it was set: as before.
+    assert plan(TaskFacts("q", "call_back", at(20, 42)))[0].send_at == at(20, 37)
+
+
+def test_an_early_reminder_that_would_come_at_once_comes_at_the_due() -> None:
+    set_at = at(12, 0)
+    # "Remind me 15 minutes early" on a task 10 minutes away: at the due.
+    soon = TaskFacts(
+        "e", "whatsapp", at(12, 10), remind_before=timedelta(minutes=15), set_at=set_at
+    )
+    assert plan(soon)[0].send_at == at(12, 10)
+    # 40 minutes away: the seller asked for early, so 15 minutes before.
+    asked = TaskFacts(
+        "e", "whatsapp", at(12, 40), remind_before=timedelta(minutes=15), set_at=set_at
+    )
+    assert plan(asked)[0].send_at == at(12, 25)
+    # A meeting in 45 minutes keeps its 30 minutes to get ready.
+    meeting = TaskFacts("m", "meeting", at(12, 45), set_at=set_at)
+    assert plan(meeting)[0].send_at == at(12, 15)
+    # A meeting in 20 minutes: at its time, not at once.
+    close = TaskFacts("m", "meeting", at(12, 20), set_at=set_at)
+    assert plan(close)[0].send_at == at(12, 20)
+
+
+def test_a_due_that_reminded_never_reminds_again_after_an_edit() -> None:
+    due = at(18, 0)
+    early = TaskFacts("x", "call_back", due, set_at=at(15, 0))
+    [first] = due_now([early], set(), at(17, 55))
+    assert first.kind == "before"
+    # A note edit at 17:56 makes it "set for soon"; the due already reminded.
+    edited = TaskFacts("x", "call_back", due, set_at=at(17, 56))
+    assert due_now([edited], {first.key}, at(18, 0)) == []
+
+
+def test_short_reminders_go_within_the_senders_tick() -> None:
+    # The sender looks every 10 seconds: a 1-minute reminder goes 60 to 70 s after it is set.
+    set_at = at(9, 0) + timedelta(seconds=37)
+    task = TaskFacts("t", "call_back", set_at + timedelta(minutes=1), set_at=set_at)
+    sent: set = set()
+    pushed = []
+    for tick in range(0, 30):
+        now = at(9, 0) + timedelta(seconds=10 * tick)
+        for reminder in due_now([task], sent, now):
+            sent.add(reminder.key)
+            pushed.append(now)
+    assert len(pushed) == 1
+    assert timedelta(0) <= pushed[0] - task.starts_at < timedelta(seconds=10)

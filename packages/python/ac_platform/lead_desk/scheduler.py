@@ -48,6 +48,10 @@ MEETING_IN_PERSON_BEFORE: Final = timedelta(hours=2)
 OVERDUE_FROM: Final = timedelta(minutes=1)
 # Nothing older than this is sent (a phone that registers late is not flooded).
 STALE: Final = timedelta(hours=2)
+# A due set this close to now reminds at the due itself, never early (owner, 22 Nov 2026:
+# "In 2 min" buzzed at once, 5 minutes before a due only 2 minutes away, and never at the
+# time). A meeting keeps its early reminder: that is time to get there.
+SHORT_NOTICE: Final = timedelta(hours=1)
 _RANK: Final[dict[ReminderKind, int]] = {"before": 0, "due": 1, "overdue": 2}
 
 
@@ -61,6 +65,9 @@ class TaskFacts:
     status: TaskStatus = "open"
     remind_before: timedelta | None = None
     in_person: bool = False
+    # When the due was last set (the task's last change); None: unknown, the early
+    # reminder stands.
+    set_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,10 +87,21 @@ class Reminder:
 
 def lead_time(task: TaskFacts) -> timedelta:
     if task.remind_before is not None:
-        return max(timedelta(0), task.remind_before)
-    if task.kind == "meeting" and task.in_person:
-        return MEETING_IN_PERSON_BEFORE
-    return REMIND_BEFORE[task.kind]
+        before = max(timedelta(0), task.remind_before)
+    elif task.kind == "meeting" and task.in_person:
+        before = MEETING_IN_PERSON_BEFORE
+    else:
+        before = REMIND_BEFORE[task.kind]
+    if not before or task.set_at is None:
+        return before
+    gap = task.starts_at - task.set_at
+    # Early would be at once (the due is closer than the lead time): at the due instead.
+    if gap <= before + OVERDUE_FROM:
+        return timedelta(0)
+    # Set for soon by the seller: the time they picked is the reminder (not a meeting's).
+    if task.kind != "meeting" and task.remind_before is None and gap <= SHORT_NOTICE:
+        return timedelta(0)
+    return before
 
 
 def plan(task: TaskFacts, hours: work_hours.WorkHours | None = None) -> list[Reminder]:
@@ -115,7 +133,9 @@ def due_now(
     hours: work_hours.WorkHours | None = None,
 ) -> list[Reminder]:
     """What to send now: due, not sent before, and not stale. When a task has more than
-    one waiting (the sender was down), only the most pressing goes."""
+    one waiting (the sender was down), only the most pressing goes. A due that already
+    reminded, of any kind, never reminds again (an edit that moves "before" to "due")."""
+    reminded = {(task_id, for_due_at) for task_id, _, for_due_at in sent}
     out: list[Reminder] = []
     for task in tasks:
         waiting = [
@@ -123,6 +143,7 @@ def due_now(
             for reminder in plan(task, hours)
             if reminder.send_at <= now
             and reminder.key not in sent
+            and (reminder.task_id, reminder.for_due_at) not in reminded
             and now - reminder.send_at <= STALE
         ]
         if waiting:
