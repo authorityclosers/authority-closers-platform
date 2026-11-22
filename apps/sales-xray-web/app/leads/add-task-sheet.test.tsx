@@ -327,3 +327,23 @@ it("keeps a half-typed task title until it is saved", async () => {
   expect(onAdded).toHaveBeenCalled();
   expect(localStorage.length).toBe(0);
 });
+
+// W8 (AC tester, 4 Nov 2026): a second meeting task was refused as the first,
+// already done one. The sheet stays open on the lead and kept one command id,
+// which the server (rightly) answered with the first task. Each task now has
+// its own id; a retry after a failure keeps it, so it never adds twice.
+it("gives each task its own command, and a retry the same one", async () => {
+  await open();
+  await pickLead();
+  await act(async () => button("Meeting")!.click());
+  calls.add.mockRejectedValueOnce(new LeadsError("No network.", 0));
+  await act(async () => button("Add task")!.click());
+  await act(async () => button("Add task")!.click());
+  await act(async () => button("Add task")!.click());
+  const ids = calls.add.mock.calls.map((call) => call[2]);
+  expect(ids).toHaveLength(3);
+  // The failed save and its retry: one command. The next task: a new one.
+  expect(ids[0]).toBe(ids[1]);
+  expect(ids[2]).not.toBe(ids[1]);
+  expect(calls.add.mock.calls[2][1]).toMatchObject({ kind: "meeting" });
+});
