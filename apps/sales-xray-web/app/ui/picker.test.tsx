@@ -297,6 +297,44 @@ it("as a table cell's editor opens at once above the page, never as a sheet, and
   }
 });
 
+it("in float mode floats above a clipping card on a computer and is the sheet on a phone (issue 234)", async () => {
+  const real = window.matchMedia;
+  const phone = (on: boolean) => {
+    window.matchMedia = ((query: string) => ({
+      matches: on && query === SHEET_PHONE_QUERY,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    })) as unknown as typeof window.matchMedia;
+  };
+  const show = () =>
+    act(async () =>
+      root.render(
+        <Picker
+          mode="float"
+          defaultOpen
+          title="Sound for New lead"
+          value="new"
+          options={OPTIONS}
+          onChange={vi.fn()}
+        />,
+      ),
+    );
+  try {
+    phone(false);
+    await show();
+    expect(host.querySelector("dialog")).toBeNull();
+    const floating = host.querySelector('[role="listbox"]')!.parentElement!;
+    expect(floating.getAttribute("popover")).toBe("manual");
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    phone(true);
+    await show();
+    expect(host.querySelector('[popover="manual"]')).toBeNull();
+  } finally {
+    window.matchMedia = real;
+  }
+});
+
 // Leads part 03: a row with nothing in it stays listed and tappable, muted.
 it("marks a row with nothing in it, and still picks it", async () => {
   const onChange = vi.fn();

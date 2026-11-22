@@ -686,7 +686,11 @@ export function TeamSounds() {
                         className={styles.teamPick}
                         data-sx-feature="team_sound_pick"
                       >
+                        {/* Its list floats above the page on a computer
+                            (the card clips; issue 234, 22 Nov 2026) and is
+                            the shared sheet on a phone. */}
                         <Picker
+                          mode="float"
                           title={shortLabel(event)}
                           ariaLabel={`Sound for ${shortLabel(event)}`}
                           value={current}
