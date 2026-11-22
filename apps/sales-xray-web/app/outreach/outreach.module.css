@@ -536,7 +536,7 @@
     min-height: 24px;
     padding-block: 3px;
     white-space: normal;
-    line-height: 1.3;
+    line-height: var(--sx-leading-16);
   }
 
   .messageText .touchMeta,

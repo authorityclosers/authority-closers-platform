@@ -49,7 +49,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationDenied,
 )
 from ac_platform.conversation_intelligence.entitlements import MinuteAccount, MinuteGrant
-from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS
+from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS, TRIAL_SECONDS
 from ac_platform.conversation_intelligence.minute_account_admin import MINUTE_GRANT_ACTION
 from ac_platform.conversation_intelligence.models import ConversationMinuteAccount
 from ac_platform.db.models import model_metadata
@@ -759,14 +759,14 @@ def test_reserve_mirrors_legacy_grants_once_and_refuses_over_balance_and_over_li
                 )
                 assert (await acquisition.allowance(actor=learner.actor))[
                     "available_seconds"
-                ] == 8_000
+                ] == 2_000 + TRIAL_SECONDS
                 with pytest.raises(ConversationDenied) as denied:
                     await acquisition.reserve(source(3_601), actor=learner.actor)
                 assert str(denied.value) == LONGEST_CALL_EXCEEDED_MESSAGE
                 await acquisition.reserve(source(3_600), actor=learner.actor)
                 assert (await acquisition.allowance(actor=learner.actor))[
                     "available_seconds"
-                ] == 4_400
+                ] == 2_000 + TRIAL_SECONDS - 3_600
             # A plan in effect takes the one call-length limit through the same path.
             async with sessions() as database, database.begin():
                 acquisition = sessions_for(database, learner, operations)
@@ -800,13 +800,14 @@ def test_reserve_mirrors_legacy_grants_once_and_refuses_over_balance_and_over_li
                 with pytest.raises(ConversationDenied) as denied:
                     await acquisition.reserve(source(3_601), token=guest.token)
                 assert str(denied.value) == LONGEST_CALL_EXCEEDED_MESSAGE
+                # Three hours (v1.95): two longest calls, then all but 600 s.
                 await acquisition.reserve(source(3_600), token=guest.token)
+                await acquisition.reserve(source(3_600), token=guest.token)
+                await acquisition.reserve(source(TRIAL_SECONDS - 7_800), token=guest.token)
                 with pytest.raises(ConversationDenied) as denied:
-                    await acquisition.reserve(source(2_401), token=guest.token)
+                    await acquisition.reserve(source(601), token=guest.token)
                 assert str(denied.value) == TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE
-                assert (await acquisition.allowance(token=guest.token))[
-                    "available_seconds"
-                ] == 2_400
+                assert (await acquisition.allowance(token=guest.token))["available_seconds"] == 600
                 assert len((await legacy_rows(database, learner)).all()) == 2
         finally:
             await engine.dispose()

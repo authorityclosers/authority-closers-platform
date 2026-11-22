@@ -236,13 +236,22 @@ def test_trial_policy_is_v2_only_with_an_exact_utc_switch_instant(
 ) -> None:
     """The free month (owner, 22 Nov 2026: "1 month + 3 hours"): a profile may name trial v2
     only with its switch instant, so nobody who started under v1 loses access at the switch."""
-    profile = (APPLICATION / "environments" / f"{target_environment}.env").read_bytes()
+    shipped = (APPLICATION / "environments" / f"{target_environment}.env").read_bytes()
+    # The profile as it ships passes (production names v2 and its switch since v1.95).
+    released = _run_profile(tmp_path, shipped, target_environment=target_environment)
+    assert released.returncode == 0, released.stderr
+    # The rules below run on the profile without its own trial lines, so none is named twice.
+    profile = b"".join(
+        line
+        for line in shipped.splitlines(keepends=True)
+        if not line.startswith(b"AC_SALES_XRAY_TRIAL_POLICY")
+    )
     v2 = b"AC_SALES_XRAY_TRIAL_POLICY=v2\n"
 
     def run(extra: bytes) -> subprocess.CompletedProcess[str]:
         return _run_profile(tmp_path, profile + extra, target_environment=target_environment)
 
-    # Today's profiles name no policy: v1.
+    # A profile that names no policy: v1.
     assert run(b"").returncode == 0
     assert run(b"AC_SALES_XRAY_TRIAL_POLICY=v1\n").returncode == 0
     assert run(v2 + SWITCH).returncode == 0, run(v2 + SWITCH).stderr
