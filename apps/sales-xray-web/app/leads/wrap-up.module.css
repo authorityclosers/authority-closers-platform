@@ -1,0 +1,832 @@
+/* The wrap-up screen after a call (round-2 board 1, option B, 20 Nov 2026).
+   A phone: the whole screen, over the lead page and the tab bar. A computer:
+   a centred white card (radius 22) over a dimmed page. Tokens only; the four
+   answers wear the app's own result colours (talked, missed, warning, danger).
+   v1.93 (22 Nov 2026): one surface, white in light and the card colour in
+   dark, under everything, the Save row included (--wrap-bg), and the
+   family's deep green for the one main button. */
+.scrim {
+  position: fixed;
+  z-index: 70;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  background: var(--sx-surface);
+  overscroll-behavior: contain;
+}
+
+.screen {
+  --wrap-pad: 16px;
+  --wrap-bg: var(--sx-surface);
+
+  /* A field scrolled to clears the stuck Save row. */
+  scroll-padding-bottom: 120px;
+
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 560px;
+  max-height: 100%;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) var(--wrap-pad)
+    calc(env(safe-area-inset-bottom, 0px) + 16px);
+  box-sizing: border-box;
+  background: var(--wrap-bg);
+  color: var(--sx-ink);
+}
+
+@media (min-width: 760px) {
+  .scrim {
+    align-items: center;
+    padding: 24px;
+    background: var(--sx-scrim);
+  }
+
+  .screen {
+    --wrap-pad: 24px;
+
+    max-height: calc(100dvh - 48px);
+    padding: 20px var(--wrap-pad) 24px;
+    border: 1px solid var(--sx-line);
+    border-radius: var(--sx-tile-radius, 22px);
+    box-shadow: var(--lx-shadow-2);
+  }
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  margin-bottom: 8px;
+}
+
+.later {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-left: -8px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink);
+  cursor: pointer;
+}
+
+.later:hover {
+  background: var(--sx-fill-soft);
+}
+
+.later:focus-visible,
+.tile:focus-visible,
+.other:focus-visible,
+.didntCall:focus-visible,
+.back:focus-visible,
+.primary:focus-visible,
+.secondary:focus-visible,
+.next:focus-visible,
+.chip:focus-visible,
+.moreStages:focus-visible,
+.stage:focus-visible,
+.undo:focus-visible,
+.save:focus-visible,
+.timeInput:focus-visible + .timeFace {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.who {
+  display: grid;
+  min-width: 0;
+}
+
+.who strong {
+  font-weight: 700;
+  overflow: hidden;
+  font-size: var(--sx-text-large);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.who small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.body {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* CallOutcome in the wrap-up: no card of its own, the screen is the card. */
+.screenCard {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* The wrap-up never wears the lead card's "asks first" ring. */
+.screenCard[data-attention] {
+  border: 0;
+  box-shadow: none;
+}
+
+.title {
+  margin: 4px 0 0;
+  font-size: var(--sx-text-xl);
+  font-weight: 700;
+  line-height: var(--sx-leading-28);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Step 1: four big answers ---------- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 120px;
+  padding: 16px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-tile-radius, 22px);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-large);
+  font-weight: 700;
+  line-height: var(--sx-leading-24);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.tile span {
+  overflow-wrap: anywhere;
+}
+
+.tile:active {
+  transform: scale(0.98);
+}
+
+/* Each answer's faint wash and an edge of the same family: no answer wears a
+   stronger edge than the others (v1.93: Busy's was the full amber). */
+.tile[data-tone="good"] {
+  border-color: color-mix(in oklab, var(--sx-tone-good) 22%, var(--sx-surface));
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-tone-good);
+}
+
+.tile[data-tone="info"] {
+  border-color: color-mix(
+    in oklab,
+    var(--lx-closing-ink) 22%,
+    var(--sx-surface)
+  );
+  background: var(--lx-closing-soft);
+  color: var(--lx-closing-ink);
+}
+
+.tile[data-tone="later"] {
+  border-color: color-mix(in oklab, var(--lx-warning) 22%, var(--sx-surface));
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
+}
+
+.tile[data-tone="bad"] {
+  border-color: color-mix(in oklab, var(--lx-danger) 22%, var(--sx-surface));
+  background: var(--lx-danger-soft);
+  color: var(--lx-danger);
+}
+
+/* "Something else happened" and "I didn't call": two equal outline buttons
+   under the four answers, the same height and shape. */
+.otherRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.otherRow > :only-child {
+  grid-column: 1 / -1;
+}
+
+.other,
+.didntCall {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+  line-height: var(--sx-leading-20);
+  cursor: pointer;
+}
+
+.other {
+  color: var(--sx-ink-2);
+  font-weight: 600;
+}
+
+/* ---------- Where the wrap-up is: "Step 2 of 2", two segments ---------- */
+
+.stepBar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.stepCount {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.progress {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.progress i {
+  height: 4px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-line);
+}
+
+.progress i[data-done] {
+  background: var(--sx-primary-ink);
+}
+
+/* The way back when no frame holds it (the frame's chevron, otherwise). */
+.back {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-left: -10px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink);
+  cursor: pointer;
+}
+
+.answer {
+  padding: 4px 12px;
+  border-radius: var(--sx-radius-pill);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.answer[data-tone="good"] {
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-tone-good);
+}
+
+.answer[data-tone="info"] {
+  background: var(--lx-closing-soft);
+  color: var(--lx-closing-ink);
+}
+
+.answer[data-tone="later"] {
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
+}
+
+.answer[data-tone="bad"] {
+  background: var(--lx-danger-soft);
+  color: var(--lx-danger);
+}
+
+/* ---------- Step 2: one group of next steps ---------- */
+
+.nexts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.next {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: 18px;
+  background: color-mix(in oklab, var(--sx-ink) 3%, var(--sx-surface));
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+  line-height: var(--sx-leading-20);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.next > span:last-child {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+/* Dark ink line icon in a soft grey tile. */
+.nextIcon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--sx-ink) 7%, var(--sx-surface));
+  color: var(--sx-ink);
+}
+
+/* Chosen: the deep green ring and a pale green wash. */
+.next[aria-pressed="true"] {
+  border-color: var(--sx-primary-ink);
+  background: var(--sx-tone-good-soft);
+  box-shadow: inset 0 0 0 1px var(--sx-primary-ink);
+  color: var(--sx-primary-ink);
+}
+
+.next[aria-pressed="true"] .nextIcon {
+  background: var(--sx-surface);
+  color: var(--sx-primary-ink);
+}
+
+/* "Change stage": the organisation's other stages, one tap down. */
+.moreStages {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  margin: -6px 0 -6px -4px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: none;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--sx-line-strong);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* The other stages, under "Stage": compact pills in the set's own surface
+   and edge (dark too), lit like a chosen tile. */
+.stages {
+  display: grid;
+  gap: 8px;
+}
+
+.stageChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stage {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  background: color-mix(in oklab, var(--sx-ink) 3%, var(--sx-surface));
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.stage[aria-pressed="true"] {
+  border-color: var(--sx-primary-ink);
+  background: var(--sx-tone-good-soft);
+  box-shadow: inset 0 0 0 1px var(--sx-primary-ink);
+  color: var(--sx-primary-ink);
+}
+
+.moreStages[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+
+/* ---------- The follow-up time: a field, three quick chips ---------- */
+
+.time {
+  display: grid;
+  gap: 10px;
+}
+
+.timeLabel {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+/* The field shows the time in words; the real date-time input lies over it,
+   so a tap opens the phone's own picker. */
+.timeField {
+  position: relative;
+  min-width: 0;
+}
+
+.timeFace {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 0 16px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: 16px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+}
+
+.timeFace > svg {
+  flex: none;
+  color: var(--sx-ink-2);
+}
+
+.timeFace > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeFace[data-auto] > span {
+  color: var(--sx-ink-2);
+  font-weight: 500;
+}
+
+.timeInput {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--sx-primary-ink);
+  color: var(--sx-primary-ink);
+}
+
+.timeNote {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+/* "What did they say?": a white field, a hairline, radius 14, 72 px tall. */
+.note textarea {
+  min-height: 72px;
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: 14px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  resize: vertical;
+}
+
+/* ---------- Save: the one solid deep green, on the screen's own colour ---------- */
+
+/* Sticky at the screen's foot, edge to edge, the same colour as the screen:
+   never an inset box of another colour (v1.93, light and dark). */
+.saveRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  position: sticky;
+  bottom: calc(-1 * (env(safe-area-inset-bottom, 0px) + 16px));
+  z-index: 2;
+  margin: 0 calc(-1 * var(--wrap-pad))
+    calc(-1 * (env(safe-area-inset-bottom, 0px) + 16px));
+  padding: 12px var(--wrap-pad) calc(env(safe-area-inset-bottom, 0px) + 16px);
+  margin-top: 8px;
+  border-top: 1px solid var(--sx-line);
+  background: var(--wrap-bg);
+  box-shadow: none;
+}
+
+/* What scrolls under the stuck Save fades out above it, never a hard cut. */
+.saveRow::before {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: 24px;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--wrap-bg) 0%, transparent),
+    var(--wrap-bg)
+  );
+  content: "";
+  pointer-events: none;
+}
+
+@media (min-width: 760px) {
+  .saveRow {
+    bottom: -24px;
+    margin-bottom: -24px;
+    padding-bottom: 24px;
+  }
+}
+
+.saveRow > :only-child {
+  grid-column: 1 / -1;
+}
+
+.save {
+  width: 100%;
+  min-height: 56px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.save:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.save[data-pressed]:not(:disabled) {
+  transform: var(--sx-press-sink);
+}
+
+/* The message button beside Save stays a quiet outline. */
+.saveRow > button:not(.save) {
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+}
+
+/* ---------- Saved: where the lead went, the report on its way, Call next lead ---------- */
+
+.done {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 16px 0 8px;
+  text-align: center;
+}
+
+.doneMark {
+  color: var(--sx-primary-ink);
+}
+
+.doneTitle {
+  margin: 0;
+  font-size: var(--sx-text-xl);
+  font-weight: 700;
+}
+
+.doneLine {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-md);
+}
+
+/* Undo, beside where the lead went (in place of the corner card's). */
+.undo {
+  min-height: 44px;
+  margin: -12px 0 -12px 8px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: none;
+  color: var(--sx-primary-ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* A calm card: a soft green wash, the ink dark, its steps ticked as known. */
+.report {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  margin-top: 4px;
+  padding: 16px;
+  border: 1px solid color-mix(in oklab, var(--sx-primary-ink) 18%, transparent);
+  border-radius: 18px;
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-ink);
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.reportIcon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--sx-surface);
+  color: var(--sx-primary-ink);
+}
+
+.reportWords {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.reportWords strong {
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  line-height: var(--sx-leading-24);
+}
+
+.reportWords small {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.reportRows {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reportRows li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.reportRows li > svg {
+  flex: none;
+}
+
+.reportRows li[data-state="done"] > svg {
+  color: var(--sx-primary-ink);
+}
+
+.reportRows li[data-state="now"] > svg {
+  color: var(--sx-primary-ink);
+  animation: wrap-spin 1.2s linear infinite;
+}
+
+.reportRows li[data-state="wait"] {
+  color: var(--sx-muted);
+}
+
+@keyframes wrap-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.doneActions {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 56px;
+  padding: 0 16px;
+  border-radius: var(--sx-radius-pill);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* The family's one solid deep green (Home's Call band). */
+.primary {
+  border: 0;
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
+.secondary {
+  border: 1px solid var(--sx-line-strong);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+}
+
+.primary:active,
+.secondary:active {
+  transform: var(--sx-press-sink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile {
+    transition: none;
+  }
+
+  .tile:active,
+  .primary:active,
+  .secondary:active {
+    transform: none;
+  }
+
+  .reportRows li[data-state="now"] > svg {
+    animation: none;
+  }
+}
+
+/* The end of a lead's call report: Call next lead, then back to the lead. */
+.reportNext {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.reportNext .primary,
+.reportNext .secondary {
+  box-sizing: border-box;
+  text-decoration: none;
+}
+
+@media (min-width: 760px) {
+  .reportNext {
+    grid-template-columns: repeat(2, minmax(0, max-content));
+  }
+
+  .reportNext .primary,
+  .reportNext .secondary {
+    width: auto;
+    padding: 0 24px;
+  }
+}

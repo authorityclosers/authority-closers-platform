@@ -6,11 +6,15 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 vi.mock("next/link", () => ({
   default: ({ children }: { children: unknown }) => children,
 }));
-vi.mock("../notice-center", () => ({ notify: () => undefined }));
+vi.mock("../notice-center", () => ({
+  notify: () => undefined,
+  dismissNotice: () => undefined,
+}));
 
 import { resetBackCloseForTests } from "../ui/back-close";
 import { CallNext } from "./call-next";
-import { LeadSheet } from "./lead-sheet";
+import { daytimeRetry, LeadSheet } from "./lead-sheet";
+import { reportRows, WrapUpDone } from "./wrap-up";
 import type { LeadDetail, LeadEvent } from "./leads-client";
 
 (
@@ -101,47 +105,53 @@ const tile = (label: string) =>
     button.textContent?.startsWith(label),
   )!;
 
-// Dipak's Home + Leads handoff (31 Oct 2026, items 16-17): from Call Next,
-// Save & Next Lead goes on through the list; a one-off call's Save & Close
-// closes the question and stays on the lead (J213, 1 Nov 2026: a note or a
-// follow-up often comes next).
-it.each([
-  [false, "Save & Close"],
-  [true, "Save & Next Lead"],
-])("after a call opened with queue %s, saves with %s", async (queue, label) => {
-  const onNext = vi.fn();
-  const onClose = vi.fn();
-  await act(async () =>
-    root.render(
-      <LeadSheet
-        leadId={ONE}
-        me={null}
-        onClose={onClose}
-        onChanged={() => undefined}
-        onNext={onNext}
-        queue={queue}
-      />,
-    ),
-  );
-  await flush();
-  // No call yet: the question waits behind its light chip.
-  await act(async () => tile("Log a call").click());
-  await act(async () => tile("Didn't get through").click());
-  await act(async () => tile("No answer").click());
-  await act(async () => tile(label).click());
-  await flush();
-  expect(onClose).not.toHaveBeenCalled();
-  if (queue) {
-    expect(onNext).toHaveBeenCalledWith(ONE);
-  } else {
-    expect(onNext).not.toHaveBeenCalled();
-    // Still on the lead, the question answered and gone.
-    expect(document.body.textContent).toContain("Ravi Kulkarni");
-    expect(document.body.textContent).not.toContain("How did the call");
-    expect(tile("Log a call")).toBeDefined();
-  }
-  expect(document.querySelector('[class*="nextUp"]')).toBeNull();
-});
+// Dipak's Home + Leads handoff (31 Oct 2026, items 16-17): from Call Next, a
+// missed call goes on through the list; a one-off call closes the question and
+// stays on the lead (J213, 1 Nov 2026: a note or a follow-up often comes
+// next). Since the wrap-up screen (round-2 board 1, 20 Nov 2026) the question
+// is a screen of its own with four answers, and a one-off call ends on Saved
+// with Back to the lead.
+it.each([false, true])(
+  "after a call opened with queue %s, a missed call saves",
+  async (queue) => {
+    const onNext = vi.fn();
+    const onClose = vi.fn();
+    await act(async () =>
+      root.render(
+        <LeadSheet
+          leadId={ONE}
+          me={null}
+          onClose={onClose}
+          onChanged={() => undefined}
+          onNext={onNext}
+          queue={queue}
+        />,
+      ),
+    );
+    await flush();
+    // No call yet: the question waits behind its light chip.
+    await act(async () => tile("Log a call").click());
+    expect(document.querySelector("[data-wrap-up]")).not.toBeNull();
+    expect(tile("I didn't call")).toBeDefined();
+    await act(async () => tile("No answer").click());
+    expect(document.body.textContent).toContain("Step 2 of 2");
+    await act(async () => tile("Save").click());
+    await flush();
+    expect(onClose).not.toHaveBeenCalled();
+    if (queue) {
+      expect(onNext).toHaveBeenCalledWith(ONE);
+    } else {
+      expect(onNext).not.toHaveBeenCalled();
+      expect(document.body.textContent).toContain("Saved");
+      await act(async () => tile("Back to Ravi").click());
+      // Still on the lead, the question answered and gone.
+      expect(document.body.textContent).toContain("Ravi Kulkarni");
+      expect(document.body.textContent).not.toContain("How did the call");
+      expect(tile("Log a call")).toBeDefined();
+    }
+    expect(document.querySelector('[class*="nextUp"]')).toBeNull();
+  },
+);
 
 it("asks once when opened to log a call, then stays on the lead", async () => {
   const onClose = vi.fn();
@@ -158,10 +168,10 @@ it("asks once when opened to log a call, then stays on the lead", async () => {
   );
   await flush();
   expect(document.body.textContent).toContain("How did the call with Ravi go?");
-  await act(async () => tile("Didn't get through").click());
   await act(async () => tile("No answer").click());
-  await act(async () => tile("Save & Close").click());
+  await act(async () => tile("Save").click());
   await flush();
+  await act(async () => tile("Back to Ravi").click());
   expect(onClose).not.toHaveBeenCalled();
   expect(document.body.textContent).toContain("Ravi Kulkarni");
   expect(document.body.textContent).not.toContain("How did the call");
@@ -240,7 +250,12 @@ it("asks straight away after a call the phone logged with talk time", async () =
   );
   await flush();
   const text = document.body.textContent ?? "";
-  expect(text).toContain("Back from the call with Ravi. How did it go?");
+  // The wrap-up screen asks, the phone's talk time under the lead's name.
+  expect(document.querySelector("[data-wrap-up]")).not.toBeNull();
+  // The phone says they talked: straight to step 2, one tap back to change.
+  expect(text).toContain("Step 2 of 2");
+  expect(text).toContain("What happens next?");
+  expect(text).toContain("Talked 1\u00a0min 22\u00a0s · just now");
   expect(text).toContain(
     "Your phone says you talked for 1\u00a0min 22\u00a0s.",
   );
@@ -310,4 +325,218 @@ it("says a lead that moved off your desk has, with Close and no Try again", asyn
   expect(tile("Try again")).toBeUndefined();
   await act(async () => tile("Close").click());
   expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+// Round-2 board 1 (option B, 20 Nov 2026): after a call the wrap-up screen
+// has four big answers; Busy sets the next try in the same tap, and a call
+// that connected ends on Saved, the report on its way and Call next lead.
+it("wraps up a call: busy sets the next try, a talk ends with Call next lead", async () => {
+  const onCallNext = vi.fn();
+  await act(async () =>
+    root.render(
+      <LeadSheet
+        leadId={ONE}
+        me={null}
+        intent="log"
+        onClose={() => undefined}
+        onChanged={() => undefined}
+        onCallNext={onCallNext}
+      />,
+    ),
+  );
+  await flush();
+  for (const label of [
+    "We talked",
+    "No answer",
+    "Busy, call back",
+    "Wrong number",
+  ])
+    expect(tile(label), label).toBeDefined();
+  await act(async () => tile("Busy, call back").click());
+  expect(document.body.textContent).toContain("When to try again?");
+  expect(document.body.textContent).toContain("In 1 hour");
+  // Back to the four answers, nothing saved.
+  await act(async () =>
+    (
+      document.querySelector(
+        'button[aria-label="Change how it went"]',
+      ) as HTMLButtonElement
+    ).click(),
+  );
+  expect(tile("Wrong number")).toBeDefined();
+});
+
+// v1.93 (round-2 board 1, option B, owner 22 Nov 2026: "Yes, build them"):
+// step 2 starts ready to save, the likely next step chosen and the follow-up
+// time filled; the other stages one tap down; one back arrow.
+it("starts step 2 ready: Interested chosen, tomorrow's time, one way back", async () => {
+  await act(async () =>
+    root.render(
+      <LeadSheet
+        leadId={ONE}
+        me={null}
+        intent="log"
+        onClose={() => undefined}
+        onChanged={() => undefined}
+      />,
+    ),
+  );
+  await flush();
+  expect(document.body.textContent).toContain("Step 1 of 2");
+  await act(async () => tile("We talked").click());
+  expect(document.body.textContent).toContain("Step 2 of 2");
+  const group = document.querySelector('[aria-label="Next step"]')!;
+  expect(
+    [...group.querySelectorAll("button")].map((b) => b.textContent),
+  ).toEqual(["Interested", "Send details", "Call back", "Not interested"]);
+  expect(group.querySelector('[aria-pressed="true"]')?.textContent).toBe(
+    "Interested",
+  );
+  // Nothing missing to say: Save is ready.
+  expect(document.body.textContent).not.toContain("to save");
+  expect(
+    document.querySelectorAll('button[aria-label="Change how it went"]'),
+  ).toHaveLength(1);
+  expect(tile("Tomorrow").getAttribute("aria-pressed")).toBe("true");
+  // The organisation's other stages, one tap down.
+  expect(document.querySelector('[aria-label="What happens next"]')).toBeNull();
+  await act(async () => tile("Change stage").click());
+  // Only the stages none of the four is, under "Stage", none lit twice
+  // (v1.93 judge round 2); the toggle keeps its words.
+  const others = document.querySelector('[aria-label="What happens next"]')!;
+  expect(
+    [...others.querySelectorAll("button")].map((b) => b.textContent),
+  ).toEqual(["Won"]);
+  expect(others.querySelector('[aria-pressed="true"]')).toBeNull();
+  expect(others.parentElement?.textContent).toMatch(/^Stage/);
+  expect(tile("Change stage").getAttribute("aria-expanded")).toBe("true");
+  await act(async () => tile("Save").click());
+  await flush();
+  const sent = vi
+    .mocked(fetch)
+    .mock.calls.find(([url]) => String(url).endsWith("/dispose"));
+  const body = JSON.parse(String(sent?.[1]?.body));
+  expect(body).toMatchObject({ connected: true, stage: "interested" });
+  expect(new Date(body.follow_up_at).getTime()).toBeGreaterThan(Date.now());
+  expect(document.body.textContent).toContain("Saved");
+});
+
+it("says only what it knows of the report on its way", () => {
+  expect(reportRows(null, "Ravi").rows).toEqual([]);
+  expect(reportRows(null, "Ravi").line).toContain("about 2 min");
+  expect(
+    reportRows(
+      { done: 4, label: "Analysing", stuck: false, recording: "arrived" },
+      "Ravi",
+    ).rows,
+  ).toEqual([
+    { label: "Recording found", state: "done" },
+    { label: "Uploaded", state: "done" },
+    { label: "Reading the call · about 2 min", state: "now" },
+  ]);
+  expect(
+    reportRows(
+      {
+        done: 0,
+        label: "No recording after 30 minutes",
+        stuck: false,
+        ended: true,
+        recording: "not found",
+      },
+      "Ravi",
+    ).title,
+  ).toBe("No recording for this call");
+});
+
+it("ends a talk on Saved with the report on its way and one Call next lead", async () => {
+  const saved = {
+    ...detail(ONE, "Ravi Kulkarni"),
+    lead: { ...detail(ONE, "Ravi Kulkarni").lead, stage_label: "Interested" },
+  };
+  const onCallNext = vi.fn();
+  await act(async () =>
+    root.render(
+      <WrapUpDone
+        saved={saved}
+        talked
+        reportExpected
+        onCallNext={onCallNext}
+        onBack={() => undefined}
+      />,
+    ),
+  );
+  expect(host.textContent).toContain("Your call report is on its way");
+  const next = tile("Call next lead");
+  expect(next.className).toMatch(/primary/);
+  expect(tile("Back to Ravi").className).toMatch(/secondary/);
+  await act(async () => next.click());
+  expect(onCallNext).toHaveBeenCalledTimes(1);
+  // Undo sits on the Saved screen itself, only while the server offers it.
+  expect(tile("Undo")).toBeUndefined();
+  const onUndo = vi.fn();
+  await act(async () =>
+    root.render(
+      <WrapUpDone
+        saved={saved}
+        talked
+        reportExpected
+        onUndo={onUndo}
+        onBack={() => undefined}
+      />,
+    ),
+  );
+  await act(async () => tile("Undo").click());
+  expect(onUndo).toHaveBeenCalledTimes(1);
+});
+
+// v1.93 judge round 3: a missed call's next try fell at 4 am (the desk's own
+// gap). It is chosen in the working day and sent as the follow-up.
+it("puts a missed call's next try in the working day", () => {
+  const at = (iso: string) => new Date(iso);
+  // 2 pm, first try: in 1 hour, inside the day.
+  expect(daytimeRetry(0, at("2026-11-23T14:00:00")).pick).toBe("hour");
+  // 8 pm, first try: 9 pm is late, so tomorrow 10:00 (the Tomorrow chip).
+  expect(daytimeRetry(0, at("2026-11-23T20:00:00")).pick).toBe("morning");
+  // 4 am, later try: 4 am tomorrow is early, so 10:00 that morning (the
+  // Tomorrow chip).
+  const early = daytimeRetry(2, at("2026-11-23T04:02:00"));
+  expect(early.pick).toBe("morning");
+  expect(early.custom).toBe("2026-11-24T10:00");
+  // 3 pm, later try: the same time tomorrow, inside the day.
+  expect(daytimeRetry(2, at("2026-11-23T15:00:00")).custom).toBe(
+    "2026-11-24T15:00",
+  );
+});
+
+it("sends the missed call's next try it shows", async () => {
+  await act(async () =>
+    root.render(
+      <LeadSheet
+        leadId={ONE}
+        me={null}
+        intent="log"
+        onClose={() => undefined}
+        onChanged={() => undefined}
+      />,
+    ),
+  );
+  await flush();
+  await act(async () => tile("No answer").click());
+  const chosen = document.querySelector(
+    '[aria-label="Quick times"] [aria-pressed="true"]',
+  );
+  // One of the chips, or a time of its own: either way a time is shown.
+  expect(document.body.textContent).toMatch(/· \d{1,2}:\d{2}/);
+  await act(async () => tile("Save").click());
+  await flush();
+  const sent = vi
+    .mocked(fetch)
+    .mock.calls.find(([url]) => String(url).endsWith("/dispose"));
+  const body = JSON.parse(String(sent?.[1]?.body));
+  expect(body).toMatchObject({ connected: false, reason: "did_not_pick" });
+  const when = new Date(body.follow_up_at);
+  const minutes = when.getHours() * 60 + when.getMinutes();
+  expect(minutes).toBeGreaterThanOrEqual(9 * 60 + 30);
+  expect(minutes).toBeLessThanOrEqual(19 * 60 + 30);
+  expect(chosen === null || chosen.textContent !== "").toBe(true);
 });

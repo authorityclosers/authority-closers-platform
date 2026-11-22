@@ -41,7 +41,14 @@ export type RoutingRule = {
   when: Condition[];
   /** One person, or a group taking turns (1 to 30). */
   give_to: string[];
+  /** A split by percent: one share per person in give_to, adding to 100
+   *  (lead rules page's "Who gets new leads"); absent or empty: turns. */
+  shares?: number[];
 };
+
+/** Said on the window after a save of the rules, so the page's other parts
+ *  read them again. */
+export const ROUTING_CHANGED = "sx:routing-changed";
 
 export type RoutingPerson = Readonly<{
   person_id: string;

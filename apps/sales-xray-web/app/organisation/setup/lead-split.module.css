@@ -1,0 +1,364 @@
+/* Lead rules on one page (round-2 board 3, option C; v1.93 22 Nov 2026):
+   the family's white radius-22 cards with 24 px inside, a title and an
+   Off | On pill switch on one line, a quiet line under it. The percent split
+   shows while off too, greyed. Tokens only; light and dark. */
+
+.card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  min-width: 0;
+  padding: 24px;
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+  color: var(--sx-ink);
+  box-sizing: border-box;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  min-height: 44px;
+}
+
+.title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+  line-height: var(--sx-leading-24);
+  letter-spacing: -0.01em;
+}
+
+.sub {
+  margin: -6px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  overflow-wrap: anywhere;
+}
+
+.retry {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0 18px;
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ---------- The split ---------- */
+
+.split {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.people {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 8px 0;
+  border-top: 1px solid var(--sx-hairline);
+  box-sizing: border-box;
+}
+
+.person:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.name {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.name strong {
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  line-height: var(--sx-leading-24);
+  overflow-wrap: anywhere;
+}
+
+/* Initials on one neutral tile: colour only by meaning. */
+.avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-style: normal;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+
+/* "4 not taking leads": one quiet row that shows them. */
+.more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  margin-top: -8px;
+  padding: 0 4px 0 48px;
+  border: 0;
+  border-top: 1px solid var(--sx-hairline);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  text-align: start;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.more svg {
+  width: 18px;
+  height: 18px;
+  color: var(--sx-muted);
+  transition: transform var(--sx-dur-fast, 160ms) var(--sx-ease-out, ease);
+}
+
+.more[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.more:focus-visible {
+  outline: none;
+  border-radius: 12px;
+  box-shadow: var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+.name small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.percent {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  width: 104px;
+  min-height: 44px;
+  padding: 0 14px 0 8px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: 12px;
+  background: var(--lx-elevated, var(--sx-surface));
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  box-sizing: border-box;
+}
+
+.percent:focus-within {
+  border-color: var(--sx-primary-ink);
+  box-shadow: var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+.percent input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.percent input:focus {
+  outline: none;
+}
+
+.percent input::placeholder {
+  color: var(--sx-ink-2);
+  opacity: 1;
+}
+
+.percent input:disabled {
+  color: var(--sx-ink-2);
+  -webkit-text-fill-color: var(--sx-ink-2);
+  opacity: 1;
+}
+
+/* One bar, one piece per seller in three shades of the deep green. */
+.bar {
+  display: flex;
+  gap: 3px;
+  overflow: hidden;
+  height: 14px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+}
+
+.bar span {
+  flex-grow: 0;
+  flex-shrink: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.bar span:nth-child(3n + 1) {
+  background: color-mix(
+    in oklab,
+    var(--lx-home-primary) 38%,
+    var(--lx-elevated)
+  );
+}
+
+.bar span:nth-child(3n + 2) {
+  background: color-mix(
+    in oklab,
+    var(--lx-home-primary) 70%,
+    var(--lx-elevated)
+  );
+}
+
+.bar span:nth-child(3n) {
+  background: var(--lx-home-primary);
+}
+
+.sum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.good {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--sx-tone-good);
+  font-weight: 700;
+}
+
+.short {
+  color: var(--sx-tone-action);
+  font-weight: 700;
+}
+
+.ten {
+  color: var(--sx-ink-2);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* "The next 5 leads go to": a faint good wash, as on the board. */
+.next {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
+}
+
+.next strong {
+  font-weight: 750;
+}
+
+.next span {
+  color: var(--sx-ink-2);
+}
+
+/* Off: the split stays to read, dimmed by ink mix (not opacity), so names
+   keep about 62 % and sub-lines 50 % of the ink in both themes. */
+.card[data-off] .name strong,
+.card[data-off] .avatar,
+.card[data-off] .percent,
+.card[data-off] .percent input,
+.card[data-off] .percent input::placeholder {
+  color: color-mix(in oklab, var(--sx-ink) 62%, transparent);
+  -webkit-text-fill-color: color-mix(in oklab, var(--sx-ink) 62%, transparent);
+}
+
+.card[data-off] .name small {
+  color: color-mix(in oklab, var(--sx-ink) 50%, transparent);
+}
+
+.card[data-off] .percent {
+  border-color: var(--sx-hairline);
+  background: transparent;
+}
+
+.card[data-off] .bar span:nth-child(3n + 1) {
+  background: color-mix(in oklab, var(--sx-ink) 14%, transparent);
+}
+
+.card[data-off] .bar span:nth-child(3n + 2) {
+  background: color-mix(in oklab, var(--sx-ink) 22%, transparent);
+}
+
+.card[data-off] .bar span:nth-child(3n) {
+  background: color-mix(in oklab, var(--sx-ink) 30%, transparent);
+}
+
+.card[data-off] .good,
+.card[data-off] .short,
+.card[data-off] .ten {
+  color: color-mix(in oklab, var(--sx-ink) 62%, transparent);
+}
+
+@media (max-width: 599px) {
+  .card {
+    padding: 20px;
+  }
+
+  .percent {
+    width: 84px;
+    padding-right: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .more svg {
+    transition: none;
+  }
+}

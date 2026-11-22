@@ -118,6 +118,10 @@ export function StageStepper({
       {...edges}
       className={`${styles.stepper} ${sideScrollFades}`}
       aria-label="Stage"
+      // A strip that slides is reached by keyboard too (axe
+      // scrollable-region-focusable, v1.93 Readability Gate): Tab, then the
+      // arrow keys scroll it.
+      tabIndex={0}
       style={{
         // Each column as wide as its step's longest word and at least 72 dp
         // (the step's own min-width), spread across the card when they fit;

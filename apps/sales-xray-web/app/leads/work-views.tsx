@@ -198,17 +198,55 @@ export function WorkHead({
   );
 }
 
-/** The element the page scrolls in: the app's own content area, or the window. */
-function scrollerOf(node: HTMLElement): Element {
+/** The nearest box that scrolls its content (overflow auto or scroll), even
+ *  while its content is too short to scroll; else the page. */
+function frameOf(node: HTMLElement): Element {
   for (let at = node.parentElement; at; at = at.parentElement) {
     const flow = getComputedStyle(at).overflowY;
-    if (
-      (flow === "auto" || flow === "scroll") &&
-      at.scrollHeight > at.clientHeight
-    )
-      return at;
+    if (flow === "auto" || flow === "scroll") return at;
   }
   return document.scrollingElement ?? document.documentElement;
+}
+
+/** The page's own foot under `split` inside its scroller: the boxes after it
+ *  and the paddings around it, never the empty room of a short page nor the
+ *  scroller's room for the corner cards. */
+function footUnder(split: HTMLElement, scroller: Element): number {
+  let foot = 0;
+  let child: Element = split;
+  for (let at = split.parentElement; at; at = at.parentElement) {
+    const bottom = child.getBoundingClientRect().bottom;
+    let last = bottom;
+    for (
+      let next = child.nextElementSibling;
+      next;
+      next = next.nextElementSibling
+    ) {
+      const style = getComputedStyle(next);
+      if (
+        style.display === "none" ||
+        style.position === "fixed" ||
+        style.position === "absolute"
+      )
+        continue;
+      last = Math.max(last, next.getBoundingClientRect().bottom);
+    }
+    foot += Math.max(0, last - bottom);
+    // The scroller's own bottom padding is the room it keeps for the corner
+    // cards, which the pane already stays clear of (--sx-corner-h): counted
+    // twice it left a 384 px pane on a 900 px window.
+    if (
+      at === scroller ||
+      at === document.body ||
+      at === document.documentElement
+    )
+      break;
+    const style = getComputedStyle(at);
+    foot += parseFloat(style.paddingBottom) || 0;
+    foot += parseFloat(style.borderBottomWidth) || 0;
+    child = at;
+  }
+  return foot;
 }
 
 const WIDE = "(min-width: 1100px)";
@@ -253,16 +291,19 @@ export function WorkSplit({
       // is never lifted under the pinned head (QA robot 898f3d7a, 3 Nov 2026:
       // at 1440 Close sat under Call Next).
       const split = node.parentElement;
-      const scroller = scrollerOf(node);
+      // The box the page scrolls in, even while it is too short to scroll.
+      const scroller = frameOf(node);
       if (!split) return;
       const view =
         scroller === document.scrollingElement
           ? { top: 0, bottom: window.innerHeight }
           : scroller.getBoundingClientRect();
-      const end =
-        split.getBoundingClientRect().bottom - view.top + scroller.scrollTop;
+      // Only what really follows the split counts, never the window's empty
+      // room under a short page: that room grew as the pane shrank, so the
+      // pane shrank again, down to 364 px with the lead cut under its Call
+      // button (round-2 board 3, 20 Nov 2026: "on PC a lead never opens").
       const after =
-        Math.max(0, scroller.scrollHeight - end) +
+        footUnder(split, scroller) +
         Math.max(0, window.innerHeight - view.bottom);
       node.style.setProperty("--split-after", `${Math.round(after)}px`);
     };
@@ -272,8 +313,14 @@ export function WorkSplit({
     fit();
     document.addEventListener("scroll", ask, { passive: true, capture: true });
     window.addEventListener("resize", ask);
+    // The list loading, a filter or the pane's own lead change the page's
+    // height with no scroll: measure again then too.
+    const sizes =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(ask);
+    if (sizes && node.parentElement) sizes.observe(node.parentElement);
     return () => {
       window.cancelAnimationFrame(frame);
+      sizes?.disconnect();
       document.removeEventListener("scroll", ask, { capture: true });
       window.removeEventListener("resize", ask);
     };

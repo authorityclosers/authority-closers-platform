@@ -130,9 +130,10 @@ export function dueWords(iso: string, now: Date): string {
 
 /** A work-view row's last line, only when someone needs to act (bug 156, 3 Nov
  *  2026; the Leads L1 judge, 8 Nov 2026: other rows are two lines): a follow-up
- *  late, reading "Late · was due 2:00 pm" (the word saying it as well as the
- *  colour); one due today; a missed call to return; no owner yet; or a new
- *  enquiry's wait. Empty otherwise. */
+ *  late, reading "Late · today 2:00 pm" or "Late · yesterday 7:36 pm" (the
+ *  word saying it as well as the colour; v1.93: short enough for one line at
+ *  390, "was due" went); one due today; a missed call to return; no owner yet;
+ *  or a new enquiry's wait. Empty otherwise. */
 export function stepLine(
   row: LeadRow,
   now: Date = new Date(),
@@ -145,7 +146,9 @@ export function stepLine(
   )
     return {
       late: true,
-      text: `was due ${dueWords(row.next_action_at, now)}`,
+      text: when(row.next_action_at, now).startsWith("today ")
+        ? when(row.next_action_at, now)
+        : dueWords(row.next_action_at, now),
     };
   const today =
     !!row.next_action_at &&
@@ -235,6 +238,7 @@ export function LeadLine({
   quietLate = false,
   onPick,
   fresh = false,
+  current = false,
   at,
   index,
   count,
@@ -264,6 +268,9 @@ export function LeadLine({
   onPick?: (row: LeadRow) => void;
   /** Just arrived: the row pulses once as it joins the list (competitor teardown 12). */
   fresh?: boolean;
+  /** The lead open beside the list (round-2 board 3, option C): marked as
+   *  the current row. */
+  current?: boolean;
 }) {
   const reachable = !!row.phone_last4;
   const {
@@ -306,11 +313,18 @@ export function LeadLine({
         }
         aria-hidden="true"
       />
-      <span className={styles.leadStage}>{stageWord ?? row.stage_label}</span>
-      {" · "}
-      <span className={styles.leadSource} title={row.source_label || undefined}>
-        {/* The source's kind only; the programme is the lead page's (part 01). */}
-        {shortSource(row).split(" · ")[0]}
+      <span className={styles.leadStage}>{stageWord ?? row.stage_label}</span>{" "}
+      {/* One part, its "·" leading it, so a wrap never splits "Meta Ads" or
+          ends a line on "·" (v1.93 judge, round 3). */}
+      <span className={`${styles.leadPart} ${styles.leadSourcePart}`}>
+        <span className={styles.leadSep}>· </span>
+        <span
+          className={styles.leadSource}
+          title={row.source_label || undefined}
+        >
+          {/* The source's kind only; the programme is the lead page's (part 01). */}
+          {shortSource(row).split(" · ")[0]}
+        </span>
       </span>
       {older ? ` · ${older}` : null}
       {unowned ? " · No owner" : null}
@@ -356,6 +370,7 @@ export function LeadLine({
       data-row-key={row.lead_id}
       data-overdue={(compact ? red : row.overdue) || undefined}
       data-fresh={fresh || undefined}
+      aria-current={current ? "true" : undefined}
       {...bind}
     >
       {reachable && actions ? (
@@ -406,30 +421,92 @@ export function LeadLine({
             <span className={styles.leadName}>
               <span className={styles.leadNameText}>{row.name}</span>
               {/* When it came in, at the line's end; New since the last
-                visit (owner, 16 Nov 2026). */}
+                visit (owner, 16 Nov 2026). A work-view row keeps the name
+                line for the whole name (v1.93): its age ends line 2. */}
               <span className={styles.leadWhen}>
                 {isNew ? (
                   <span className={styles.leadNew} data-lead-new="">
                     New
                   </span>
                 ) : null}
+                {compact ? null : (
+                  <span
+                    className={styles.leadAge}
+                    title={`Came in ${fullTime(arrived)}`}
+                    data-lead-age=""
+                  >
+                    {arrivedShort(arrived)}
+                  </span>
+                )}
+              </span>
+            </span>
+            {sub && compact ? (
+              // Lines 2 and 3 (v1.93), in parts that wrap whole: "● Interested
+              // · Website · Sneha · 5 d", then the next step on its own line.
+              // On a phone an owner's row reads "● Meeting Scheduled", then
+              // "Meta Ads · Sneha  Late · 1 Nov" (round-3 judge: three lines);
+              // the age stays on the lead's page there.
+              <span
+                className={styles.leadSub}
+                data-aged=""
+                data-owned={showOwner ? "" : undefined}
+              >
+                <span className={styles.leadSubWords}>{sub}</span>
+                {showOwner && row.owner_name ? (
+                  <>
+                    {" "}
+                    <span
+                      className={`${styles.leadPart} ${styles.leadOwnerWord}`}
+                    >
+                      <span className={styles.leadSep}>· </span>
+                      {row.owner_name.trim().split(/\s+/)[0]}
+                    </span>
+                  </>
+                ) : null}{" "}
                 <span
-                  className={styles.leadAge}
+                  className={`${styles.leadPart} ${styles.leadSubAge}`}
                   title={`Came in ${fullTime(arrived)}`}
                   data-lead-age=""
                 >
+                  <span className={styles.leadSep}>· </span>
                   {arrivedShort(arrived)}
                 </span>
+                {line ? (
+                  <>
+                    {" "}
+                    <span
+                      className={styles.leadWhy}
+                      data-tone={
+                        // Red only for Late (part 01; L1): a wait is quiet.
+                        row.missed_at || red
+                          ? "bad"
+                          : step
+                            ? undefined
+                            : WHY_TONE[row.why_kind]
+                      }
+                    >
+                      {step?.late ? (
+                        <>
+                          <span className={styles.lateWord}>Late</span>
+                          {` · ${line}`}
+                        </>
+                      ) : (
+                        line
+                      )}
+                    </span>
+                  </>
+                ) : null}
               </span>
-            </span>
-            {sub ? <span className={styles.leadSub}>{sub}</span> : null}
+            ) : sub ? (
+              <span className={styles.leadSub}>{sub}</span>
+            ) : null}
             {/* The owner's view: who owns the lead, on its own line (part 01). */}
             {compact && showOwner && !unowned ? (
               <span className={styles.leadOwnerLine}>
                 {row.owner_name ? `Owner: ${row.owner_name}` : "No owner yet"}
               </span>
             ) : null}
-            {line ? (
+            {line && !compact ? (
               <span
                 className={styles.leadWhy}
                 data-tone={
