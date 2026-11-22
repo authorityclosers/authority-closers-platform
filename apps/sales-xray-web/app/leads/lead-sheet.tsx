@@ -5845,8 +5845,11 @@ export function LeadSheet({
         framed={framed}
         open={leadId !== null}
         rowKey={leadId}
+        // The Call band stays while the question waits on the lead (Back from
+        // the wrap-up keeps it there, the W2 rule): only the wrap-up's own
+        // screen hides it (v1.94, the real-iPhone check: it went away).
         footer={
-          detail && !questionOpen ? (
+          detail && !wrapping ? (
             <div
               className={styles.primaryDock}
               data-sheet-no-drag
@@ -5886,7 +5889,7 @@ export function LeadSheet({
           <>
             <LeadCard
               primarySlot={primarySlot}
-              hidePrimary={questionOpen || typing}
+              hidePrimary={wrapping || typing}
               onSkip={
                 queue && onNext && leadId
                   ? () => onNext(leadId, true)
@@ -6116,7 +6119,7 @@ function PaneOrSheet({
       >
         <X size={18} aria-hidden="true" />
       </button>
-      {children}
+      <div className={page.paneBody}>{children}</div>
       {footer ? (
         <div className={`${styles.leadPaneDock} ${page.paneDock}`}>
           {footer}

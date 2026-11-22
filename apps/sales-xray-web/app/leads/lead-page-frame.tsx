@@ -65,6 +65,8 @@ export function LeadPageFrame({
   // Opened from Calls, its Back goes there and says so (batch 6).
   const opener = useLeadOpener();
   const back = useRef<HTMLButtonElement>(null);
+  const page = useRef<HTMLElement>(null);
+  const dock = useRef<HTMLDivElement>(null);
   // The last lead shown (the key goes as the page closes).
   const lastKey = useRef<string | null>(null);
   useEffect(() => {
@@ -108,9 +110,37 @@ export function LeadPageFrame({
       if (!kept && row && row.tabIndex >= 0) row.focus({ preventScroll: true });
     };
   }, [open]);
+  // On a phone the page scrolls the window, the Call band fixed above the tab
+  // bar (v1.94, lead-page.module.css): the page ends the band's height above
+  // it, whatever the band holds (Log a call, a round's Skip).
+  useEffect(() => {
+    const box = dock.current;
+    const section = page.current;
+    if (!open || !box || !section) return;
+    const measure = () =>
+      section.style.setProperty(
+        "--lead-dock-h",
+        `${Math.ceil(box.getBoundingClientRect().height)}px`,
+      );
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver(measure);
+    watch.observe(box);
+    return () => watch.disconnect();
+  }, [open, footer]);
+  // It opens at its top (the window may have been scrolled by an earlier page).
+  useLayoutEffect(() => {
+    if (open && window.matchMedia?.("(max-width: 599.98px)").matches)
+      window.scrollTo?.(0, 0);
+  }, [open]);
   if (!open || typeof document === "undefined") return null;
   return createPortal(
-    <section className={styles.page} aria-label={label} data-lead-page="">
+    <section
+      ref={page}
+      className={styles.page}
+      aria-label={label}
+      data-lead-page=""
+    >
       <div className={styles.bar}>
         <button
           ref={back}
@@ -124,7 +154,11 @@ export function LeadPageFrame({
         <span ref={menuSlot} className={styles.barEnd} />
       </div>
       <div className={styles.body}>{children}</div>
-      {footer ? <div className={styles.dock}>{footer}</div> : null}
+      {footer ? (
+        <div ref={dock} className={styles.dock}>
+          {footer}
+        </div>
+      ) : null}
     </section>,
     document.body,
   );

@@ -11,6 +11,7 @@ import { UploadSessionProvider } from "./hooks/upload-session";
 import { UploadIndicator } from "./shell/upload-indicator";
 import { themeControlEnabled, themeInitScript } from "./lightbox/theme";
 import { earlyReadsScript } from "./early-reads";
+import { uuidInitScript } from "./random-uuid";
 import { sidebarInitScript } from "./shell/shell-store";
 import { inAppInitScript } from "./in-app";
 import {
@@ -123,6 +124,9 @@ export default async function Layout({
         <PrePaintScript id="sales-xray-app-init" code={inAppInitScript()} />
         {/* Starts this page's reads while the HTML is still arriving, so the
             app finds its data ready instead of asking after it starts. */}
+        {/* crypto.randomUUID over plain http (a test setup on a LAN), before
+            anything calls it (v1.94, the real-iPhone check). */}
+        <PrePaintScript id="sales-xray-uuid-init" code={uuidInitScript()} />
         <PrePaintScript id="sales-xray-early-reads" code={earlyReadsScript()} />
         <ThemeProvider controlEnabled={themeControl}>
           {/* The root layout persists across client navigation, so a live
