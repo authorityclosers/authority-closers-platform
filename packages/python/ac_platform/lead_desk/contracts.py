@@ -2699,6 +2699,9 @@ class TouchView(Model):
 
     touch_id: UUID
     lead_id: UUID
+    # The lead's display name, for lists of many leads' touches ("By message"); None for a
+    # lead in the Bin.
+    lead_name: str | None = None
     channel: TouchChannel
     content_kind: str
     initiated: Literal["outreach", "reply"]

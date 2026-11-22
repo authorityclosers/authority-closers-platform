@@ -984,9 +984,14 @@ async def touches(
     ).all()
     more = len(rows) > PAGE
     rows = rows[:PAGE]
+    items = [_touch_json(row) for row in rows]
+    # The lead's name only for a key that may read leads (leads:read).
+    if "leads:read" in reader.key.scopes:
+        for item in items:
+            item["lead_name"] = lead.name if lead.binned_at is None else None
     return {
         "lead_id": str(lead.id),
-        "touches": [_touch_json(row) for row in rows],
+        "touches": items,
         "next_cursor": outreach._cursor(rows[-1]) if more and rows else None,
     }
 

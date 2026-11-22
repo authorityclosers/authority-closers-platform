@@ -231,6 +231,7 @@ def test_touches_counter_rules_overrides_and_stop_in_the_app(
                 assert called["outreach"]["counts"]["calls_week"] == 1
                 assert called["outreach"]["words"].endswith("· 1 call")
                 page = await get(f"/leads/{one}/touches")
+                assert {t["lead_name"] for t in page["touches"]} == {"Outreach Fictional 0"}
                 assert len(page["touches"]) == 3
                 assert page["touches"][0]["override_by_name"] is not None
 

@@ -596,6 +596,13 @@ def test_outside_senders_log_touches_through_the_api(postgres_harness: Any, tmp_
                     "wamid.FICTIONAL-A2",
                     "wamid.FICTIONAL-A1",
                 ]
+                # The lead's name only for a key that may read leads.
+                assert all("lead_name" not in t for t in history.json()["touches"])
+                leads_key, _ = await _key(setup, tenant, admin, ["outreach:read", "leads:read"])
+                named = await engine.get(
+                    f"{API}/touches", params={"lead_id": manas}, headers=bearer(leads_key)
+                )
+                assert {t["lead_name"] for t in named.json()["touches"]} == {"Manas Fictional"}
 
                 # Teammates and the Never a lead list are never leads.
                 teammate = await call(

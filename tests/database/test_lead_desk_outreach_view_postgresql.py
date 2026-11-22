@@ -185,6 +185,13 @@ def test_the_outreach_view_by_lead_and_message_roles_paging_and_tenancy(
                 team = await view(view="touches")
                 assert team["filter"]["locked_to_self"] is False
                 assert len(team["touches"]) == team["hero"]["touches"] == 5
+                # Whose message it was: each touch names its lead.
+                assert {t["lead_name"] for t in team["touches"]} == {
+                    "View Fictional 0",
+                    "View Fictional 1",
+                    "View Fictional 2",
+                    "Seller Fictional 0",
+                }
                 assert team["hero"]["leads"] == 4
                 assert team["hero"]["period"] == "Last 7 days"
                 assert team["hero"]["words"] == "5 touches · 4 leads · 0 replied"

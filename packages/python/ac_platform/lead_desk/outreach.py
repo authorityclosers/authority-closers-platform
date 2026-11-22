@@ -1393,6 +1393,17 @@ async def views(desk: LeadDesk, touches: Sequence[LeadTouch]) -> list[TouchView]
         {touch.person_id for touch in touches}
         | {row.granted_by_person_id for row in overrides.values()}
     )
+    lead_names: dict[UUID, str | None] = {
+        lead_id: None if binned is not None else name
+        for lead_id, name, binned in (
+            await desk.db.execute(
+                select(Lead.id, Lead.name, Lead.binned_at).where(
+                    Lead.tenant_id == desk.tenant_id,
+                    Lead.id.in_({touch.lead_id for touch in touches}),
+                )
+            )
+        ).all()
+    }
     out: list[TouchView] = []
     for touch in touches:
         label = labels.get(touch.sender_id) if touch.sender_id else None
@@ -1409,6 +1420,7 @@ async def views(desk: LeadDesk, touches: Sequence[LeadTouch]) -> list[TouchView]
             TouchView(
                 touch_id=touch.id,
                 lead_id=touch.lead_id,
+                lead_name=lead_names.get(touch.lead_id),
                 channel=touch.channel,
                 content_kind=touch.content_kind,
                 initiated=touch.initiated,

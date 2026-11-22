@@ -220,7 +220,7 @@ in-person hand-overs count only when their mode is warn or block.
   answer: rests until Thu 27 Nov"), `quiet`.
 - The lead page (`LeadDetail.outreach`) carries the guard for the lead's main channel, and each
   history line that is a touch carries `LeadEventView.touch: TouchView = {touch_id, lead_id,
-  channel, content_kind, initiated: outreach|reply, sender_type: person|automation, by_name,
+  lead_name (null for a lead in the Bin), channel, content_kind, initiated: outreach|reply, sender_type: person|automation, by_name,
   person_id, sender_id, sender_label, automation, via, provider, summary, template_name,
   attachment, status, status_at, sent_at, counted, verdict, after_block, override_by_name,
   override_reason, replied_at, event_id}`.
@@ -294,7 +294,7 @@ Errors are `{error: {code, message}}`: 401 `key_invalid`; 403 `scope_missing`, `
 | `POST /replies` | write | `{sender, provider, provider_message_id, provider_chat_id?, channel, from, at, kind, excerpt?, opt_out?, in_reply_to?, lead?}` → 201 `{reply_id, lead_id, lead_created, duplicate, touch_id, opted_out}`; a reaction is `{ignored: "reaction"}` |
 | `POST /opt-outs` | write | `{sender, to, channel, at?}` → `{lead_id, recorded, channel}` |
 | `GET /opt-outs?since=` | read | `{opt_outs: [{lead_id, channel, phone, email, at}], next_since}` |
-| `GET /touches?phone=|email=|lead_id=&since=&cursor=` | read | `{lead_id, touches: […], next_cursor}` |
+| `GET /touches?phone=|email=|lead_id=&since=&cursor=` | read | `{lead_id, touches: […], next_cursor}`; each touch has `lead_name` only when the key also holds `leads:read` |
 
 Leads match by phone (E.164 with the workspace's default country; a WhatsApp JID's number is
 read), then email (any case); a merged lead resolves to its survivor; teammates and the Never a
