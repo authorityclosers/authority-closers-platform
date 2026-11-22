@@ -370,3 +370,19 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/* A quiet action under the choices ("Manage tags", v1.94); in a popover it
+   stays in sight at the bottom while a long list scrolls. */
+.footer {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--sx-line);
+}
+
+.pop .footer {
+  position: sticky;
+  bottom: -6px;
+  margin-bottom: -6px;
+  padding-bottom: 6px;
+  background: var(--sx-elevated);
+}

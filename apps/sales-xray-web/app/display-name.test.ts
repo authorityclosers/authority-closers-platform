@@ -56,6 +56,21 @@ it("shows the listed keys with capitals at any depth and leaves the rest", () =>
   expect(answer.me.name).toBe("priya fictional");
 });
 
+// v1.94: a tag's name is the team's own word, on its row and in the list.
+it("leaves a tag's name as typed", () => {
+  const answer = {
+    name: "ravi fictional",
+    tags: [{ tag_id: "t1", name: "VIP", colour: "rose" }],
+  };
+  expect(withDisplayNames(answer, new Set(["name"]))).toEqual({
+    name: "Ravi Fictional",
+    tags: [{ tag_id: "t1", name: "VIP", colour: "rose" }],
+  });
+  expect(
+    withDisplayNames({ tag_id: "t2", name: "hot" }, new Set(["name"])),
+  ).toEqual({ tag_id: "t2", name: "hot" });
+});
+
 // Polish pass, 24 Oct 2026: a short label instead of a name cut mid-word.
 it("shortens a name to the first name and last initial", () => {
   expect(shortName("swamini fictional")).toBe("Swamini F.");

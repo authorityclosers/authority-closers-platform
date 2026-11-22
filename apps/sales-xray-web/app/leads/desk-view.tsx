@@ -41,6 +41,7 @@ import styles from "./leads.module.css";
 import { reportCallPress } from "./phone-call-steps";
 import { placed } from "./row-window";
 import { shortSource, sourceText } from "./source-mark";
+import { TagChips } from "./tag-chips";
 import { WhatsAppGlyph } from "./whatsapp-glyph";
 
 const WHY_TONE: Record<LeadRow["why_kind"], Tone> = {
@@ -332,6 +333,12 @@ export function LeadLine({
   ) : (
     [row.interest, row.company, row.city].filter(Boolean).join(" · ")
   );
+  // Tags (0165, v1.94): one small chip and "+N" on line 3, after the next
+  // step, so line 2 never grows a line (L1); with no next step, line 3 is
+  // the tags alone.
+  const chips = row.tags?.length ? (
+    <TagChips tags={row.tags} max={1} inline={!!line} />
+  ) : null;
   const red = !!step?.late && !quietLate;
   const tap = actions?.onTap;
   // A tap felt at once, while the lead opens to call or message (friction
@@ -476,6 +483,7 @@ export function LeadLine({
                     {" "}
                     <span
                       className={styles.leadWhy}
+                      data-tagged={chips ? "" : undefined}
                       data-tone={
                         // Red only for Late (part 01; L1): a wait is quiet.
                         row.missed_at || red
@@ -485,14 +493,26 @@ export function LeadLine({
                             : WHY_TONE[row.why_kind]
                       }
                     >
-                      {step?.late ? (
-                        <>
-                          <span className={styles.lateWord}>Late</span>
-                          {` · ${line}`}
-                        </>
-                      ) : (
-                        line
-                      )}
+                      {/* One box, so the words keep their spaces when the
+                          tags sit beside them (v1.94). */}
+                      <span>
+                        {step?.late ? (
+                          <>
+                            <span className={styles.lateWord}>Late</span>
+                            {` · ${line}`}
+                          </>
+                        ) : (
+                          line
+                        )}
+                      </span>
+                      {chips}
+                    </span>
+                  </>
+                ) : chips ? (
+                  <>
+                    {" "}
+                    <span className={styles.leadWhy} data-tagged="">
+                      {chips}
                     </span>
                   </>
                 ) : null}

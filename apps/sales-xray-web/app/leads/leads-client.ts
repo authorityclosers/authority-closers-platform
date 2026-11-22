@@ -85,6 +85,8 @@ export type LeadRow = {
   /** Archive and Bin (shelf API): when it was archived or moved to the Bin. */
   archived_at?: string | null;
   binned_at?: string | null;
+  /** The workspace's tags on this lead, in the workspace's order (0165). */
+  tags?: TagChip[];
 };
 
 export type MessageTemplate = { key: string; label: string; text: string };
@@ -898,6 +900,8 @@ export type ListMore = {
   until?: string | null;
   sort?: ListSort | null;
   order?: "asc" | "desc" | null;
+  /** The leads carrying one of the workspace's tags (its id). */
+  tag?: string | null;
 };
 
 /** The address parameters of the list's sort and filters, in a fixed order. */
@@ -917,6 +921,7 @@ export function moreParams(
       ["created", more.created],
       ["since", more.since],
       ["until", more.until],
+      ["tag", more.tag],
       ["sort", more.sort],
       ["order", more.sort ? more.order : null],
     ] as [string, string | null | undefined][]
@@ -1225,7 +1230,13 @@ export function deleteLeads(leadIds: string[], command = commandId()) {
 /** At most this many leads go in one bulk change (ids or "all N matching"). */
 export const BULK_JOB_LIMIT = 2000;
 
-export type BulkJobAction = "assign" | "stage" | "pipeline" | ShelfAction;
+export type BulkJobAction =
+  | "assign"
+  | "stage"
+  | "pipeline"
+  | ShelfAction
+  | "tag"
+  | "untag";
 
 /** A Leads list as `GET /leads` names it, frozen when the bulk change arrives. */
 export type LeadFilter = {
@@ -1248,6 +1259,7 @@ export type LeadFilter = {
   older?: boolean;
   duplicates?: boolean;
   shelf?: "archived" | "bin" | null;
+  tag?: string | null;
 };
 
 export type BulkJobRequest = {
@@ -1263,6 +1275,8 @@ export type BulkJobRequest = {
   outcome_reason?: string | null;
   reason_note?: string | null;
   next_action_at?: string | null;
+  /** tag and untag: the workspace's tags (1-10). */
+  tag_ids?: string[];
 };
 
 export type BulkJob = {
@@ -1303,6 +1317,93 @@ export function undoBulkJob(jobId: string) {
   return request<BulkUndone>(
     `/leads/bulk-jobs/${encodeURIComponent(jobId)}/undo`,
     json("POST", {}),
+  );
+}
+
+/* ---------- Tags (migration 0165, lead_desk/tags.py; v1.94) ---------- */
+
+/** The app's tints a tag may wear (tag-chips.module.css maps each to a token). */
+export type TagColour =
+  | "mint"
+  | "sky"
+  | "amber"
+  | "rose"
+  | "violet"
+  | "slate"
+  | "lime"
+  | "orange";
+
+/** A tag as a lead's row and page carry it. */
+export type TagChip = { tag_id: string; name: string; colour: TagColour };
+
+/** A workspace tag; `leads`: how many leads on the desk carry it (that I see). */
+export type TagView = TagChip & {
+  position: number;
+  revision: number;
+  leads: number;
+  can_change: boolean;
+};
+
+/** The workspace's tags in order. */
+export function readTags(signal?: AbortSignal) {
+  return request<{ tags: TagView[] }>("/tags", { signal });
+}
+
+/** Make a tag (anyone); a name already here is that tag. */
+export function createTag(
+  name: string,
+  colour?: TagColour,
+  command = commandId(),
+) {
+  return request<TagView>(
+    "/tags",
+    json("POST", {
+      command_id: command,
+      name: name.trim().slice(0, 32),
+      ...(colour ? { colour } : {}),
+    }),
+  );
+}
+
+/** Rename, recolour or move a tag (owners, admins and managers). */
+export function editTag(
+  tagId: string,
+  change: { expected_revision: number; name?: string; colour?: TagColour },
+) {
+  return request<TagView>(
+    `/tags/${encodeURIComponent(tagId)}`,
+    json("PUT", change),
+  );
+}
+
+/** Delete a tag: it leaves every lead (owners, admins and managers). */
+export function deleteTag(tagId: string, expectedRevision: number) {
+  return request<{ tags: TagView[] }>(
+    `/tags/${encodeURIComponent(tagId)}/delete`,
+    json("POST", { expected_revision: expectedRevision }),
+  );
+}
+
+/** Add or take off tags on one lead (anyone who may change it); `create`
+ *  makes tags by name on the way. */
+export function changeLeadTags(
+  leadId: string,
+  change: { add?: string[]; remove?: string[]; create?: string[] },
+  command = commandId(),
+) {
+  return request<{
+    lead_id: string;
+    tags: TagChip[];
+    added: number;
+    removed: number;
+  }>(
+    `/leads/${encodeURIComponent(leadId)}/tags`,
+    json("POST", {
+      command_id: command,
+      add: change.add ?? [],
+      remove: change.remove ?? [],
+      new: change.create ?? [],
+    }),
   );
 }
 

@@ -966,3 +966,28 @@
   text-overflow: clip;
   white-space: normal;
 }
+
+/* A row's tags (v1.94): under the name, the place gives way and one chip
+   and "+N" stay whole on the same line. */
+.wrap[data-wide-table]:not([data-fit]) .nameCell .name small[data-tagged],
+.name small[data-tagged] {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.nameWhere {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Here the chip stays whole and the place gives way (the list's line-3
+   floor for a chip does not apply in a table cell). */
+.name small .nameTags {
+  flex: 0 0 auto;
+  min-width: 0;
+}

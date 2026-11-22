@@ -221,6 +221,7 @@ import wrap from "./wrap-up.module.css";
 import { WrapBack, WrapUpDone, WrapUpFrame } from "./wrap-up";
 import { shortSource, sourceKind } from "./source-mark";
 import { mainPath, StageStepper } from "./stage-stepper";
+import { LeadTagsLine } from "./tag-sheet";
 
 // Sources whose leads arrive with a form's own answers worth showing.
 const FORM_SOURCES = new Set(["meta", "webhook", "sheet", "csv", "google_ads"]);
@@ -4772,6 +4773,16 @@ export function LeadCard({
               <p className={page.ownerLine}>Owner: {lead.owner_name}</p>
             ) : null}
             {followLine}
+            {/* Its tags (0165), and Tag for whoever may change the lead. */}
+            <LeadTagsLine
+              key={`${lead.lead_id}:${(lead.tags ?? []).map((tag) => tag.tag_id).join()}`}
+              leadId={lead.lead_id}
+              tags={lead.tags}
+              canEdit={detail.can_edit}
+              onChanged={() =>
+                void readLead(lead.lead_id).then(onChanged, () => undefined)
+              }
+            />
           </div>
         </div>
         {stageBlock}
