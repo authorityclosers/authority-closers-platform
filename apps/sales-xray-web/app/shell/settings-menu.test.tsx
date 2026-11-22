@@ -578,7 +578,7 @@ it("gives whoever manages leads a row to the split, saying how leads go now (v1.
   );
   expect(row?.textContent).toContain("Who gets new leads");
   expect(row?.textContent).toContain(
-    "Split by percent: Farah 20 %, Priya 40 % …",
+    "Split by percent: Farah 20 %, Priya 40 % +1",
   );
   await act(async () => root.unmount());
   host.remove();

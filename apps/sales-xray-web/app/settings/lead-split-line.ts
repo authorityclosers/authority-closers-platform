@@ -21,14 +21,15 @@ export const LEAD_SPLIT_HREF = "/settings/lead-rules";
 /** Said while the rules are still on their way, or didn't load. */
 export const SPLIT_LINE_UNKNOWN = "Split new leads by percent";
 
-const OFF_LINE = "Off: whoever is free gets the next lead";
+const OFF_LINE = "Percent split is off: whoever is free gets the next lead";
 
-/** How many sellers the line names before "…". */
+/** How many sellers the line names before "+N". */
 const NAMED = 2;
 
 /**
- * "Split by percent: Farah 20 %, Priya 20 % …" while the split is on;
- * "Off: whoever is free gets the next lead" while it isn't.
+ * "Split by percent: Farah 20 %, Priya 20 % +3" while the split is on;
+ * "Percent split is off: whoever is free gets the next lead" while it isn't
+ * (owner's words matter here: v1.94 judge, 22 Nov 2026).
  */
 export function splitLine(routing: Pick<Routing, "rules" | "people">): string {
   const rule = routing.rules.find(
@@ -47,7 +48,8 @@ export function splitLine(routing: Pick<Routing, "rules" | "people">): string {
     .map((part) => `${names.get(part.id) ?? "A seller"} ${part.share} %`);
   if (!parts.length) return OFF_LINE;
   const shown = parts.slice(0, NAMED).join(", ");
-  return `Split by percent: ${shown}${parts.length > NAMED ? " …" : ""}`;
+  const rest = parts.length - NAMED;
+  return `Split by percent: ${shown}${rest > 0 ? ` +${rest}` : ""}`;
 }
 
 /**

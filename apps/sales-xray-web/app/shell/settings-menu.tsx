@@ -410,7 +410,8 @@ export function SettingsMenu({
   // most used section.
   const theirs = [
     {
-      label: "Organisation",
+      // Under the "Organisation" heading, the row says what it opens (v1.94).
+      label: "All company settings",
       hint: "Team, leads setup, phones, connections, company and billing",
       href: "/settings",
       icon: <Building2 size={18} />,

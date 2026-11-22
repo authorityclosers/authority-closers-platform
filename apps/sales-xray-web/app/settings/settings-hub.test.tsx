@@ -295,7 +295,7 @@ it("puts who gets new leads first on an owner's hub, opening the split (v1.94)",
   expect(card?.getAttribute("href")).toBe("/settings/lead-rules");
   expect(card?.textContent).toContain("Who gets new leads");
   expect(card?.textContent).toContain(
-    "Split by percent: Farah 20 %, Priya 40 % …",
+    "Split by percent: Farah 20 %, Priya 40 % +1",
   );
   // Right after the setup hero, before the company's cards.
   const blocks = [...host.querySelectorAll("section[aria-label]")].map(
@@ -311,7 +311,7 @@ it("says the split is off in plain words", async () => {
   await act(async () => root.render(inOrg("owner")));
   await settle();
   expect(host.querySelector("a[data-split]")?.textContent).toContain(
-    "Off: whoever is free gets the next lead",
+    "Percent split is off: whoever is free gets the next lead",
   );
 });
 
