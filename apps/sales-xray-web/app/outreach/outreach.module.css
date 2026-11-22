@@ -1,0 +1,441 @@
+/* Outreach, "what the owner sent" (v1.95, 22 Nov 2026): the v1.90 Home
+   family. One hero, pills for the filters, white radius-22 cards of short
+   rows with dark ink icon tiles, colour only by meaning. Tokens only; light
+   and dark. Phone a list of cards, tablet a centred column, laptop wider. */
+
+.page {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  max-width: 880px;
+  min-width: 0;
+  margin: 0;
+  padding-bottom: 32px;
+  color: var(--sx-ink);
+  box-sizing: border-box;
+}
+
+/* ---------- Hero ---------- */
+
+.hero {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  padding: 22px 24px;
+  overflow: hidden;
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+  isolation: isolate;
+}
+
+.hero::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(
+    120% 140% at 100% 0%,
+    color-mix(in oklab, var(--sx-tone-calls) 14%, transparent),
+    transparent 62%
+  );
+  content: "";
+  pointer-events: none;
+}
+
+.period {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.heroWords {
+  margin: 0;
+  font-family: var(--lx-font-display);
+  font-size: var(--sx-text-xl);
+  font-weight: 750;
+  line-height: var(--sx-leading-28);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.sentence {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-md);
+  line-height: var(--sx-leading-24);
+}
+
+.retry,
+.more {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0 18px;
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.more {
+  justify-self: center;
+}
+
+/* ---------- Filters ---------- */
+
+.filters {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.selects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.selectPill,
+.togglePill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  max-width: 100%;
+  padding: 0 14px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-elevated, var(--sx-surface));
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  white-space: nowrap;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.selectPill > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selectPill svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--sx-muted);
+}
+
+/* The native picker covers the pill: the phone's own list, still labelled. */
+.selectPill select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.selectPill:focus-within,
+.togglePill:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+.selectPill[data-set],
+.togglePill[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-tone-good);
+}
+
+.selectPill[data-set] svg {
+  color: var(--sx-tone-good);
+}
+
+.selectPill[data-locked] {
+  border-style: dashed;
+  color: var(--sx-ink-2);
+  cursor: default;
+}
+
+.viewRow {
+  display: flex;
+  justify-content: flex-start;
+}
+
+/* ---------- Lists ---------- */
+
+.list {
+  margin: 0;
+  padding: 4px 20px;
+  list-style: none;
+}
+
+.lead + .lead,
+.list > .touch + .touch {
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.leadDetails summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+  padding: 12px 0;
+  list-style: none;
+  cursor: pointer;
+}
+
+.leadDetails summary::-webkit-details-marker {
+  display: none;
+}
+
+.leadDetails summary:focus-visible {
+  outline: none;
+  border-radius: 12px;
+  box-shadow: var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+.leadText {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.leadName {
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  line-height: var(--sx-leading-24);
+  overflow-wrap: anywhere;
+}
+
+.leadMeta,
+.touchMeta {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+  overflow-wrap: anywhere;
+}
+
+.leadEnd {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.chevron {
+  width: 18px;
+  height: 18px;
+  color: var(--sx-muted);
+  transition: transform var(--sx-dur-fast, 160ms) var(--sx-ease-out, ease);
+}
+
+.leadDetails[open] .chevron {
+  transform: rotate(180deg);
+}
+
+.received {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--sx-well-fill);
+}
+
+.receivedTitle {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 750;
+}
+
+.touches {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.touches > .touch + .touch {
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.touch {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.list > .touch {
+  padding: 14px 0;
+}
+
+.channelTile {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: var(--sx-fill);
+  color: var(--sx-ink);
+}
+
+.channelTile svg {
+  width: 18px;
+  height: 18px;
+}
+
+.touchText {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.touchWhat {
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+  line-height: var(--sx-leading-24);
+  overflow-wrap: anywhere;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.chip[data-tone="good"] {
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-tone-good);
+}
+
+.chip[data-tone="amber"] {
+  background: var(--sx-tone-action-soft);
+  color: var(--sx-tone-action);
+}
+
+.chip[data-tone="red"] {
+  background: var(--sx-tone-problem-soft);
+  color: var(--sx-tone-problem);
+}
+
+.leadLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 2px;
+  font-size: var(--sx-text-sm);
+}
+
+.leadLink,
+.openLead {
+  color: var(--sx-primary-ink);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.openLead {
+  justify-self: start;
+  padding: 4px 0;
+  font-size: var(--sx-text-sm);
+}
+
+.empty {
+  display: grid;
+  gap: 4px;
+  padding: 28px 24px;
+  text-align: center;
+}
+
+.emptyTitle {
+  margin: 0;
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+}
+
+.quiet {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+@media (min-width: 600px) {
+  .hero {
+    padding: 26px 28px;
+  }
+
+  .heroWords {
+    font-size: var(--sx-text-2xl);
+    line-height: var(--sx-leading-36);
+  }
+
+  .filters {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .list {
+    padding: 4px 24px;
+  }
+}
+
+@media (max-width: 599px) {
+  .filters > :first-child {
+    justify-self: stretch;
+  }
+
+  .filters > :first-child button {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .viewRow > * {
+    flex: 1;
+  }
+
+  .viewRow button {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .list {
+    padding: 4px 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
+}
