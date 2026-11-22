@@ -48,6 +48,7 @@ from ac_platform.kernel.errors import DomainError
 from ac_platform.organisations.seats import seat_exempt
 from ac_platform.organisations.service import OrganisationService
 from ac_platform.pulse import org_link
+from ac_platform.pulse.addresses import pulse_issuer_values
 from ac_platform.pulse.models import PersonPulseProfile, PulseOrgLink
 from ac_platform.pulse.oidc import PulseClient
 from ac_platform.pulse.org_link import PulseLinkError
@@ -663,7 +664,7 @@ def install_pulse_http(
         async with sessions() as database, database.begin():
             link = await database.scalar(
                 select(PulseOrgLink).where(
-                    PulseOrgLink.issuer == client.issuer,
+                    PulseOrgLink.issuer.in_(pulse_issuer_values(client.issuer)),
                     PulseOrgLink.pulse_org_id == org_id,
                     PulseOrgLink.status == "active",
                 )
