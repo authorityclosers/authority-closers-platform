@@ -268,7 +268,9 @@ export function minutesOutNotice(
         message:
           "Add minutes or choose a plan to analyse more calls. Your recordings stay private.",
         // Issue 243 (owner, 21 Nov 2026): one clear step to more minutes.
-        action: { label: "Get more minutes", run: seePlans },
+        action: { label: "Get more minutes", run: seePlans, icon: "none" },
+        // The step stays in view on the one-line pill too.
+        pillAction: true,
         // Stays until the seller closes it (info cards otherwise leave after 5 s).
         timeout: 0,
       }
