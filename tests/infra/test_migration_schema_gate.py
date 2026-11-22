@@ -117,6 +117,7 @@ def test_schema_archive_must_include_version_table():
         ("    op.create_index('ix', 'existing', ['id'])", "CONCURRENTLY"),
         ("    op.create_unique_constraint('uq', 'existing', ['id'])", "CONCURRENTLY"),
         ("    op.execute('CREATE INDEX ix ON existing(id)')", "unproven"),
+        ("    op.execute(\"SET LOCAL lock_timeout = '5s'; SELECT 1\")", "unproven"),
         ("    helper()", "unproven"),
         ("    op.create_index('ix', table, ['id'])", "dynamic"),
         ("    op.create_table('existing', sa.Column('id', sa.Integer()))", "baseline table"),
@@ -136,6 +137,8 @@ def test_unsafe_defaults_indexes_and_unproven_helpers_fail(tmp_path, upgrade, me
         "        op.create_index('ix', 'existing', ['id'], postgresql_concurrently=True)",
         "    op.create_table('added', sa.Column('id', sa.Integer()))\n"
         "    op.create_index('ix', 'added', ['id'])",
+        "    op.execute(\"SET LOCAL lock_timeout = '5s'\")\n"
+        "    op.create_table('added', sa.Column('id', sa.Integer()))",
     ],
 )
 def test_nullable_columns_concurrent_indexes_and_empty_table_indexes_pass(tmp_path, upgrade):

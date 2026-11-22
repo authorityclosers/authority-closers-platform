@@ -120,6 +120,18 @@ class Counts(Model):
     call_back: int = 0
 
 
+# The colours a tag may have (tags.py): the app's own tints, never a raw colour.
+TagColour = Literal["mint", "sky", "amber", "rose", "violet", "slate", "lime", "orange"]
+
+
+class TagChip(Model):
+    """A tag on a lead's row and page (migration 0165, tags.py)."""
+
+    tag_id: UUID
+    name: str
+    colour: TagColour
+
+
 class LeadRow(Model):
     lead_id: UUID
     revision: int
@@ -184,6 +196,8 @@ class LeadRow(Model):
     # Lists on the desk never hold either; a search and the Archived and Bin lists do.
     archived_at: datetime | None = None
     binned_at: datetime | None = None
+    # The workspace's tags on this lead, in the workspace's order (migration 0165).
+    tags: tuple[TagChip, ...] = ()
 
 
 class MessageTemplate(Model):
@@ -1917,6 +1931,8 @@ class LeadFilter(Command):
     older: bool = False
     duplicates: bool = False
     shelf: Literal["archived", "bin"] | None = None
+    # The leads carrying this tag (migration 0165, tags.py).
+    tag: UUID | None = None
 
 
 class BulkJobCommand(Command):
@@ -1930,10 +1946,20 @@ class BulkJobCommand(Command):
     filter: LeadFilter | None = None
     expected_total: int | None = Field(default=None, ge=1)
     action: Literal[
-        "assign", "stage", "pipeline", "archive", "bin", "restore_archive", "restore_bin"
+        "assign",
+        "stage",
+        "pipeline",
+        "archive",
+        "bin",
+        "restore_archive",
+        "restore_bin",
+        "tag",
+        "untag",
     ]
     # assign: the person (none: the lead rules pick). stage: the business's stage key, with a
-    # Lost or Junk reason and a next action when the move asks. pipeline: its key.
+    # Lost or Junk reason and a next action when the move asks. pipeline: its key. tag and
+    # untag: the workspace's tags to add or take off (tags.py).
+    tag_ids: tuple[UUID, ...] = Field(default=(), max_length=10)
     person_id: UUID | None = None
     step: str | None = Field(default=None, max_length=40)
     pipeline: str | None = Field(default=None, max_length=40)
@@ -1990,6 +2016,63 @@ class SavedView(Model):
 class SavedViews(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
     views: tuple[SavedView, ...]
+
+
+class TagCommand(Command):
+    """Make a tag (tags.py). Anyone in the workspace makes one; a name already here is
+    that tag (case aside), so a retry or a twin tap never makes two."""
+
+    command_id: UUID
+    name: str = Field(min_length=1, max_length=32)
+    colour: TagColour | None = None
+
+
+class TagEdit(Command):
+    """Rename or recolour a tag, or move it (owners, admins and managers)."""
+
+    expected_revision: int = Field(ge=1)
+    name: str | None = Field(default=None, min_length=1, max_length=32)
+    colour: TagColour | None = None
+    position: int | None = Field(default=None, ge=0, le=10_000)
+
+
+class TagDelete(Command):
+    expected_revision: int = Field(ge=1)
+
+
+class TagView(Model):
+    """A workspace tag; ``leads``: how many leads carry it that this person may see."""
+
+    tag_id: UUID
+    name: str
+    colour: TagColour
+    position: int
+    revision: int
+    leads: int = 0
+    can_change: bool = False
+
+
+class Tags(Model):
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    tags: tuple[TagView, ...]
+
+
+class LeadTagsChange(Command):
+    """Add or take off tags on one lead (anyone who may change it). ``new``: tag names to make
+    and add in the same step (a name already here is that tag)."""
+
+    command_id: UUID
+    add: tuple[UUID, ...] = Field(default=(), max_length=10)
+    remove: tuple[UUID, ...] = Field(default=(), max_length=10)
+    new: tuple[str, ...] = Field(default=(), max_length=3)
+
+
+class LeadTagsChanged(Model):
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    lead_id: UUID
+    tags: tuple[TagChip, ...]
+    added: int
+    removed: int
 
 
 class MovePipeline(Command):

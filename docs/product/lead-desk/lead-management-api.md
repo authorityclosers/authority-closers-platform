@@ -1,4 +1,4 @@
-# Lead management API (Archive and Bin, bulk with undo, seller load, saved views)
+# Lead management API (Archive and Bin, bulk with undo, seller load, saved views, tags)
 
 The owner, 16 Nov 2026: "management of leads and reorganizing, reassigning each other, deleting
 old leads, managing the leads at a higher level is not there". Design study:
@@ -130,3 +130,44 @@ outcome_reason?, reason_note?, next_action_at?}`.
   (`scope: "unassigned"`), Late follow-ups (`due: "late"`), Not worked for 30 days
   (`contact: "never"` or an older `contact`), Possible duplicates (`duplicates: true`), Archived
   (`shelf: "archived"`).
+
+## 5. Tags (`lead_desk/tags.py`, migration 0165, v1.94)
+
+The workspace's own short labels ("Nov video ad", "Hot"), each with one of the app's colours
+(`mint, sky, amber, rose, violet, slate, lime, orange`; a database CHECK holds them). One name
+per workspace, case aside: a unique index on `(tenant_id, lower(name))`.
+
+| Route | Who | Answer |
+|---|---|---|
+| `GET /tags` | everyone | `{tags: TagView[]}` in the workspace's order |
+| `POST /tags` | everyone | `TagView` (201) |
+| `PUT /tags/{tag_id}` | owners, admins, managers | `TagView` |
+| `POST /tags/{tag_id}/delete` | owners, admins, managers | `{tags}` |
+| `POST /leads/{lead_id}/tags` | anyone who may change the lead | `{lead_id, tags: TagChip[], added, removed}` |
+
+- Create: `{command_id, name (1–32), colour?}`. Idempotent by `command_id`, and a name already
+  here (case and spaces aside) is that tag, so a twin tap never makes two, even at the same
+  moment (the unique index decides; the loser gets the winner's tag). Up to 100 per workspace;
+  with no colour, the next one round the list.
+- Edit: `{expected_revision, name?, colour?, position?}`; stale is 409, a name taken is 409.
+  Delete: `{expected_revision}`; the tag leaves every lead. Each lead's history keeps the lines
+  that added it.
+- Audit: `lead_desk.tag.created` (colour, position), `lead_desk.tag.edited` (which fields
+  changed, new revision) and `lead_desk.tag.deleted` (lead count). Ids only, never the name.
+- One lead: `{command_id, add: tag_id[], remove: tag_id[], new: name[] (up to 3)}`; `new` makes a
+  tag by name on the way. Up to 10 tags on a lead: asking for an 11th is 422 ("Up to 10 tags on a
+  lead; take one off first."), and nothing changes. Each change is one `edited` history line with
+  `changed: ["tags"]` and `allocation_reason` like "Tag added: Hot" or "Tags removed: A, B".
+- `TagView = {tag_id, name, colour, position, revision, leads, can_change}`; `leads` counts the
+  leads on the desk carrying it that the person may see. `TagChip = {tag_id, name, colour}`.
+- Every lead row (`LeadRow.tags`) and the lead page carry their chips in the workspace's order.
+- Filter: `GET /leads?tag=<tag_id>`; `LeadFilter.tag` in saved views and bulk "all matching".
+- Bulk: `POST /leads/bulk-jobs` with `action: "tag" | "untag"` and `tag_ids` (1–10). Owners,
+  admins and managers. A lead that already had (or lacked) the tag is `unchanged`. Words: "2 leads
+  tagged Hot", "Hot taken off 3 leads". A lead that would pass 10 tags stays as it is and is in
+  `failed` as "10 tags already". Undo (30 minutes) reverses exactly what the job changed on each
+  lead (a lead that has 10 tags since is skipped); the lead's revision does not move for a tag.
+- Merge: the merged-away lead's tags go on the kept lead too, as many as fit, in the workspace's
+  order; an unmerge takes off exactly those.
+- Not yet: tags on import (I4). Undo import treats the import's own history lines as not work, and
+  an import's tag line could not yet be told apart from a later import's edit of the same lead.

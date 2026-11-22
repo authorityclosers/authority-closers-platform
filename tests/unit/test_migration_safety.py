@@ -104,6 +104,34 @@ def test_uninspectable_operations_are_unknown(operation: str) -> None:
     assert classify_source(source_for(f"    {operation}")).verdict == "unknown"
 
 
+@pytest.mark.parametrize(
+    "setting",
+    [
+        """op.execute("SET LOCAL lock_timeout = '5s'")""",
+        """op.execute(sa.text("SET LOCAL lock_timeout = '2000ms'"))""",
+    ],
+)
+def test_a_lock_timeout_keeps_an_additive_migration_additive(setting: str) -> None:
+    migration = classify_source(source_for(f'    {setting}\n    op.create_table("items")'))
+    assert migration.verdict == "additive"
+
+
+@pytest.mark.parametrize(
+    "setting",
+    [
+        """op.execute("SET lock_timeout = '5s'")""",
+        """op.execute("SET LOCAL lock_timeout = '5s'; DROP TABLE items")""",
+        """op.execute("SET LOCAL statement_timeout = '5s'")""",
+        """op.execute("SET LOCAL lock_timeout = '0'")""",
+        """op.execute(f"SET LOCAL lock_timeout = '{wait}'")""",
+        """op.execute(sa.text("SET LOCAL lock_timeout = '5s'"), {"x": 1})""",
+    ],
+)
+def test_other_raw_sql_beside_a_table_stays_unknown(setting: str) -> None:
+    migration = classify_source(source_for(f'    {setting}\n    op.create_table("items")'))
+    assert migration.verdict == "unknown"
+
+
 def test_destructive_operation_wins_over_unknown_operation() -> None:
     migration = classify_source(
         source_for('    op.execute("SELECT 1")\n    op.drop_table("items")')

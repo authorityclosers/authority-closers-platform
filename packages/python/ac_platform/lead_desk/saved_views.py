@@ -70,6 +70,7 @@ async def _count(desk: LeadDesk, query: LeadFilter) -> int | None:
             scope=query.scope,
             stage=query.stage,
             search=query.search,
+            tag=query.tag,
             offset=0,
             test_only=query.test,
             older_only=query.older,

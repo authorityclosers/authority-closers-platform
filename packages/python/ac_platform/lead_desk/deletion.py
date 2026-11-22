@@ -45,6 +45,7 @@ from ac_platform.lead_desk.models import (
     LeadMetaConversion,
     LeadSlaBreach,
     LeadSocialMessage,
+    LeadTagLink,
     LeadTask,
     LeadTaskReminder,
     LeadWhatsAppMessage,
@@ -224,6 +225,8 @@ async def remove(
         ),
     }
 
+    # Its tags go first (migration 0165; each change was in its history, removed below).
+    await db.execute(delete(LeadTagLink).where(*mine(LeadTagLink)).execution_options(**_QUIET))
     removed = {
         "events": _count(
             await db.execute(delete(LeadEvent).where(*mine(LeadEvent)).execution_options(**_QUIET))
