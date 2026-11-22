@@ -650,12 +650,19 @@
   white-space: nowrap;
 }
 
-/* Open: the banner's one filled button, in the calls colour. */
-.pill[data-banner] .action,
-.pill[data-banner] .action:hover {
+/* Open: an outline pill in the calls colour (v1.93.1, owner 22 Nov 2026: a
+   solid blue button outshone the page's one green action). */
+.pill[data-banner] .action {
   min-height: 36px;
   padding: 0 16px;
+  border: 1.5px solid var(--sx-tone-calls);
   border-radius: 999px;
-  background: var(--sx-tone-calls);
-  color: var(--sx-tone-calls-soft);
+  background: transparent;
+  color: var(--sx-tone-calls);
+  font-weight: 700;
+}
+
+.pill[data-banner] .action:hover {
+  background: color-mix(in oklab, var(--sx-tone-calls) 10%, transparent);
+  color: var(--sx-tone-calls);
 }

@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -193,6 +194,10 @@ function leadNameIn(title: string): string {
     /^(.+?) is your lead now$/.exec(title) ?? /^New lead:\s*(.+)$/.exec(title);
   return named ? named[1].trim() : "";
 }
+
+/** A new lead's notice: the enquiry card or "<name> is your lead now". */
+const aboutNewLead = (notice: Notice) =>
+  notice.tone === "lead" || leadNameIn(notice.title) !== "";
 
 /** "Sameer Sheikh" -> "SS", "Asha" -> "A"; "" without letters. */
 function initialsOf(name: string): string {
@@ -994,6 +999,10 @@ export function NoticeCenter() {
     () => notices,
     () => EMPTY,
   );
+  // v1.93.1 (owner, 22 Nov 2026): a new lead's notice waits off Settings, so
+  // it never sits over the rules being set; it shows on the next other page.
+  const quietHere = usePathname()?.startsWith("/settings") ?? false;
+  const shown = quietHere ? list.filter((item) => !aboutNewLead(item)) : list;
   const asking = useSyncExternalStore(watchAsking, askingNow, notAsking);
   const [expanded, setExpanded] = useState(false);
   const [stack, setStack] = useState<HTMLDivElement | null>(null);
@@ -1212,7 +1221,10 @@ export function NoticeCenter() {
 
   const docks = (item: Notice) =>
     item.dock === true || DOCKED_TONES.has(item.tone);
-  const dockable = [...list.filter(docks), ...(workCard ? [workCard] : [])];
+  // The bell's own line about a new lead waits off Settings too.
+  const workHere =
+    quietHere && workCard && aboutNewLead(workCard) ? null : workCard;
+  const dockable = [...shown.filter(docks), ...(workHere ? [workHere] : [])];
   placeLines(
     pageDock,
     dockable.map((item) => item.id),
@@ -1224,14 +1236,14 @@ export function NoticeCenter() {
     sheet !== null && pageDock !== null && pushesPage(item);
   const inDock = (item: Notice) => inDockHere.get(item.id) === true;
   const docked = docking
-    ? list.filter((item) => docks(item) && inDock(item))
+    ? shown.filter((item) => docks(item) && inDock(item))
     : [];
   const corner = (
-    docking ? list.filter((item) => !docks(item) || !inDock(item)) : list
+    docking ? shown.filter((item) => !docks(item) || !inDock(item)) : shown
   ).filter((item) => !asking || !WAITS_FOR_ANSWER.has(item.tone));
-  const workDocked = !!docking && !!workCard && inDock(workCard);
-  const cornerWork = workDocked ? null : workCard;
-  const dockWork = workDocked ? workCard : null;
+  const workDocked = !!docking && !!workHere && inDock(workHere);
+  const cornerWork = workDocked ? null : workHere;
+  const dockWork = workDocked ? workHere : null;
   const waiting = Math.max(0, corner.length - SHOWN);
   // Once no card waits, the next pile starts folded again.
   if (expanded && waiting === 0) setExpanded(false);

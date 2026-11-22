@@ -18,6 +18,10 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+// Where the page is: a new lead's notice waits off Settings (v1.93.1).
+const route = vi.hoisted(() => ({ path: "/leads" }));
+vi.mock("next/navigation", () => ({ usePathname: () => route.path }));
+
 import {
   dismissNotice,
   InCorner,
@@ -47,6 +51,7 @@ afterEach(async () => {
   });
   host.remove();
   window.sessionStorage.clear();
+  route.path = "/leads";
 });
 const close = () =>
   host.querySelector<HTMLButtonElement>('[aria-label="Dismiss"]')!;
@@ -1537,4 +1542,51 @@ it("says whether a card is up, so one setup card waits for another", async () =>
   expect(seen[0]).toBe(false);
   expect(seen).toContain(true);
   expect(seen.at(-1)).toBe(false);
+});
+
+it("keeps a new lead's notice off Settings, then shows it on the next page", async () => {
+  route.path = "/settings/lead-rules";
+  await act(async () => root.render(<NoticeCenter />));
+  await act(async () =>
+    notify({
+      id: "fictional",
+      tone: "lead",
+      title: "Fictional Asha is your lead now",
+      timeout: 0,
+    }),
+  );
+  expect(host.textContent).not.toContain("Fictional Asha is your lead now");
+  // Other news still shows on Settings.
+  await act(async () =>
+    notify({
+      id: "fictional-problem",
+      tone: "error",
+      title: "Fictional save didn't go through",
+    }),
+  );
+  expect(host.textContent).toContain("Fictional save didn't go through");
+  route.path = "/leads";
+  await act(async () => root.render(<NoticeCenter key="leads" />));
+  expect(host.textContent).toContain("Fictional Asha is your lead now");
+  await act(async () => dismissNotice("fictional-problem"));
+});
+
+it("keeps the bell's new-lead line off Settings too", async () => {
+  route.path = "/settings";
+  await act(async () => root.render(<NoticeCenter />));
+  await act(async () =>
+    raiseAlert({
+      id: "event:fictional-lead",
+      level: "normal",
+      title: "New lead: Fictional Manasi",
+      message: "Meta Ads",
+      action: { label: "Open lead", href: "/leads" },
+      timeout: 600_000,
+    }),
+  );
+  expect(host.textContent).not.toContain("Fictional Manasi");
+  route.path = "/leads";
+  await act(async () => root.render(<NoticeCenter key="leads" />));
+  expect(host.textContent).toContain("Fictional Manasi");
+  await act(async () => clearAlert("event:fictional-lead"));
 });

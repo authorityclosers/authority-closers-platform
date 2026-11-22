@@ -11,14 +11,24 @@
   box-sizing: border-box;
 }
 
+/* The menu stays below the app's see-through top bar (its "Settings" title),
+   never scrolling under it (v1.93.1, owner 22 Nov 2026); its own scroll
+   fades at the edges instead of cutting a row in half. */
 .nav {
   position: sticky;
-  top: 16px;
+  top: calc(var(--lx-topbar-h, 64px) + 8px);
   align-self: start;
   display: grid;
   gap: 14px;
-  max-height: calc(100dvh - 32px);
+  max-height: calc(100dvh - var(--lx-topbar-h, 64px) - 24px);
   overflow-y: auto;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 12px,
+    black calc(100% - 16px),
+    transparent 100%
+  );
 }
 
 /* Back to the hub from any section; the top bar already says Settings. */
