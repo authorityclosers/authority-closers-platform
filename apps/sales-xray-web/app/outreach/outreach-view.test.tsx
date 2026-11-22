@@ -35,7 +35,7 @@ vi.mock("../leads/leads-client", () => ({
 }));
 
 import type { OutreachPage, TouchView } from "./outreach-client";
-import { OutreachView, periodOf, queryFrom } from "./outreach-view";
+import { heroWords, OutreachView, periodOf, queryFrom } from "./outreach-view";
 import { teamDay, whatWords, whenWords } from "./outreach-words";
 
 (
@@ -176,8 +176,9 @@ it("shows the hero and each lead with what it received", async () => {
     expect.objectContaining({ view: "leads", by: null }),
     expect.anything(),
   );
+  // One word throughout: messages (v1.95 judge).
   expect(host.querySelector("h2")?.textContent).toBe(
-    "14 touches · 6 leads · 2 replied",
+    "14 messages · 6 leads · 2 replied",
   );
   expect(host.textContent).toContain("1 was sent past a limit.");
   const lead = host.querySelector("details")!;
@@ -220,15 +221,25 @@ it("lists each message on By message, with a way to its lead", async () => {
     page({
       filter: { ...page().filter, view: "touches" },
       leads: [],
-      touches: [touch({ channel: "email", summary: "Sent the brochure" })],
+      touches: [
+        touch({
+          channel: "email",
+          summary: "Sent the brochure",
+          lead_name: "Asha Fictional",
+        }),
+      ],
     }),
   );
   await act(async () => root.render(<OutreachView />));
   await settle();
   expect(host.textContent).toContain("Sent the brochure");
-  expect(host.querySelector('a[href="/leads?lead=l1"]')?.textContent).toBe(
-    "Open lead",
-  );
+  // The whole row opens the lead and says who received it.
+  const row = host.querySelector<HTMLAnchorElement>(
+    'a[href="/leads?lead=l1"]',
+  )!;
+  expect(row.textContent).toContain("Sent the brochure");
+  expect(row.textContent).toContain("To Asha Fictional · by Anjali Fictional");
+  expect(host.textContent).not.toContain("Open lead");
 });
 
 it("locks a seller's By to themselves", async () => {
@@ -249,4 +260,30 @@ it("says plainly when nothing was sent", async () => {
   await act(async () => root.render(<OutreachView />));
   await settle();
   expect(host.textContent).toContain("Nothing sent in this period");
+});
+
+it("says one word, messages, in the hero, and gives a call no Sent chip", async () => {
+  expect(heroWords({ ...page().hero, touches: 1, leads: 1, replied: 0 })).toBe(
+    "1 message · 1 lead · 0 replied",
+  );
+  nav.search = "view=touches";
+  api.read.mockResolvedValue(
+    page({
+      filter: { ...page().filter, view: "touches" },
+      leads: [],
+      touches: [
+        touch({
+          channel: "call",
+          content_kind: "call",
+          summary: "Call, 4 min",
+          status: "sent",
+          lead_name: "Asha Fictional",
+        }),
+      ],
+    }),
+  );
+  await act(async () => root.render(<OutreachView />));
+  await settle();
+  expect(host.textContent).toContain("Call, 4 min");
+  expect(host.textContent).not.toContain("Sent");
 });

@@ -172,9 +172,38 @@
   overflow-wrap: anywhere;
 }
 
-.senderLine code {
-  font-family: var(--lx-font-mono, ui-monospace, monospace);
-  font-size: var(--sx-text-xs);
+.senderLine {
+  color: var(--sx-ink-2);
+}
+
+.senderSeen {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.senderDetails {
+  font-size: var(--sx-text-sm);
+}
+
+.senderDetails summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  color: var(--sx-primary-ink);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.senderDetails summary:focus-visible {
+  outline: none;
+  border-radius: 8px;
+  box-shadow: var(--sx-focus-ring, var(--lx-ring-focus));
+}
+
+.senderDetails > span {
+  display: block;
+  color: var(--sx-muted);
+  overflow-wrap: anywhere;
 }
 
 .status {

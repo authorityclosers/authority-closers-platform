@@ -20,7 +20,10 @@ export function OutreachSkeleton() {
       active="leads"
       pageName={TITLE}
     >
-      <PageHeader title={TITLE} titleInBar />
+      {/* The laptop's top bar names the page; the heading is for phones. */}
+      <div className={styles.pageTitle}>
+        <PageHeader title={TITLE} titleInBar />
+      </div>
       <div
         className={styles.page}
         aria-busy="true"
@@ -60,7 +63,10 @@ export function OutreachRoute() {
   }
   return (
     <AcquisitionShell authenticated active="leads" pageName={TITLE}>
-      <PageHeader title={TITLE} titleInBar />
+      {/* The laptop's top bar names the page; the heading is for phones. */}
+      <div className={styles.pageTitle}>
+        <PageHeader title={TITLE} titleInBar />
+      </div>
       <OutreachView
         key={`${access.context?.personId}:${access.context?.tenantId}`}
       />

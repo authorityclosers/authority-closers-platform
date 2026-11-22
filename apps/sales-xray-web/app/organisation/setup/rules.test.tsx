@@ -158,8 +158,8 @@ it("puts every lead rule on one page, with no rows of tabs", async () => {
     ),
   ).toEqual([
     "Work days",
-    "WhatsApp from a person",
-    "WhatsApp from an automation",
+    "WhatsApp, people",
+    "WhatsApp, automations",
     "SMS",
     "Email",
     "Messenger",

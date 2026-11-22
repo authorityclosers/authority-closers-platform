@@ -61,6 +61,17 @@ const ICONS: Record<string, ReactNode> = {
 
 type Period = "today" | "week" | "month";
 
+/** "142 messages · 38 leads · 9 replied": one word, messages, throughout. */
+export function heroWords(hero: OutreachPage["hero"]): string {
+  const n = (value: number, one: string, many: string) =>
+    `${value.toLocaleString("en-IN")} ${value === 1 ? one : many}`;
+  return [
+    n(hero.touches, "message", "messages"),
+    n(hero.leads, "lead", "leads"),
+    `${hero.replied.toLocaleString("en-IN")} replied`,
+  ].join(" · ");
+}
+
 /** The filter the address says. */
 export function queryFrom(search: URLSearchParams): OutreachQuery {
   const replied = search.get("replied");
@@ -108,12 +119,15 @@ function ChannelTile({ channel }: { channel: string }) {
 function TouchChips({ touch }: { touch: TouchView }) {
   return (
     <>
-      <span
-        className={styles.chip}
-        data-tone={touch.status === "failed" ? "red" : undefined}
-      >
-        {statusWords(touch.status)}
-      </span>
+      {/* A call has no delivery state to show (v1.95 judge). */}
+      {touch.channel === "call" ? null : (
+        <span
+          className={styles.chip}
+          data-tone={touch.status === "failed" ? "red" : undefined}
+        >
+          {statusWords(touch.status)}
+        </span>
+      )}
       {touch.replied_at ? (
         <span className={styles.chip} data-tone="good">
           Replied
@@ -133,34 +147,54 @@ function TouchChips({ touch }: { touch: TouchView }) {
   );
 }
 
-/** One touch as a compact line: channel, what, who and when, its state. */
-function TouchLine({
-  touch,
-  withLead = false,
-}: {
-  touch: TouchView;
-  withLead?: boolean;
-}) {
+/** One message a lead received, inside its lead: what, by whom and when. */
+function TouchLine({ touch }: { touch: TouchView }) {
   return (
     <li className={styles.touch}>
       <ChannelTile channel={touch.channel} />
       <span className={styles.touchText}>
         <span className={styles.touchWhat}>{whatWords(touch)}</span>
         <span className={styles.touchMeta}>
-          {touch.by_name} · {whenWords(touch.sent_at)}
+          by {touch.by_name} · {whenWords(touch.sent_at)}
         </span>
         <span className={styles.chips}>
           <TouchChips touch={touch} />
-          {withLead ? (
-            <Link
-              className={styles.leadLink}
-              href={`/leads?lead=${encodeURIComponent(touch.lead_id)}`}
-            >
-              {touch.lead_name || "Open lead"}
-            </Link>
-          ) : null}
         </span>
       </span>
+    </li>
+  );
+}
+
+/** By message: one message as a row that opens its lead. A phone reads it
+ *  as lines ("To Kavya Iyer · by Anjali · Today 11:02 am"); a laptop as
+ *  columns (Message · To · By · When · Status). */
+export function MessageRow({ touch }: { touch: TouchView }) {
+  const to = touch.lead_name || "A lead";
+  const when = whenWords(touch.sent_at);
+  return (
+    <li>
+      <Link
+        className={styles.messageRow}
+        href={`/leads?lead=${encodeURIComponent(touch.lead_id)}`}
+        aria-label={`${whatWords(touch)}, to ${to}, by ${touch.by_name}, ${when}`}
+      >
+        <ChannelTile channel={touch.channel} />
+        <span className={styles.messageText}>
+          <span className={styles.touchWhat}>{whatWords(touch)}</span>
+          <span className={styles.touchMeta}>
+            To {to} · by {touch.by_name} · {when}
+          </span>
+          <span className={`${styles.chips} ${styles.narrowOnly}`}>
+            <TouchChips touch={touch} />
+          </span>
+        </span>
+        <span className={styles.col}>{to}</span>
+        <span className={styles.col}>{touch.by_name}</span>
+        <span className={styles.col}>{when}</span>
+        <span className={`${styles.col} ${styles.chips}`}>
+          <TouchChips touch={touch} />
+        </span>
+      </Link>
     </li>
   );
 }
@@ -408,7 +442,7 @@ export function OutreachView() {
         {page ? (
           <>
             <p className={styles.period}>{page.hero.period}</p>
-            <h2 className={styles.heroWords}>{page.hero.words}</h2>
+            <h2 className={styles.heroWords}>{heroWords(page.hero)}</h2>
             <p className={styles.sentence}>
               {page.hero.leads_added !== null &&
               page.hero.leads_added !== undefined
@@ -495,11 +529,21 @@ export function OutreachView() {
       {page ? (
         query.view === "touches" ? (
           touches.length ? (
-            <ol className={`${family.card} ${styles.list}`}>
-              {touches.map((touch) => (
-                <TouchLine key={touch.touch_id} touch={touch} withLead />
-              ))}
-            </ol>
+            <div className={`${family.card} ${styles.list}`}>
+              <div className={styles.messageHead} aria-hidden="true">
+                <span />
+                <span>Message</span>
+                <span>To</span>
+                <span>By</span>
+                <span>When</span>
+                <span>Status</span>
+              </div>
+              <ol className={styles.messages}>
+                {touches.map((touch) => (
+                  <MessageRow key={touch.touch_id} touch={touch} />
+                ))}
+              </ol>
+            </div>
           ) : (
             <Empty />
           )

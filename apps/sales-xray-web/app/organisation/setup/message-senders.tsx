@@ -46,31 +46,40 @@ const CHANNEL_WORDS: Record<string, string> = {
 
 /** "2 h ago", "3 days ago", "never". */
 export function seenWords(at: string | null, now = Date.now()): string {
-  if (!at) return "not used yet";
+  if (!at) return "Not used yet";
   const minutes = Math.max(0, Math.round((now - Date.parse(at)) / 60_000));
-  if (minutes < 2) return "seen just now";
-  if (minutes < 60) return `seen ${minutes} min ago`;
+  if (minutes < 2) return "Last seen just now";
+  if (minutes < 60) return `Last seen ${minutes} min ago`;
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `seen ${hours} h ago`;
+  if (hours < 24) return `Last seen ${hours} h ago`;
   const days = Math.round(hours / 24);
-  return `seen ${days} ${days === 1 ? "day" : "days"} ago`;
+  return `Last seen ${days} ${days === 1 ? "day" : "days"} ago`;
 }
 
-/** "sx-engage · key sxk_live_ab12 · WhatsApp · 12 this week · seen 2 h ago". */
-export function senderLine(sender: SenderView, now = Date.now()): string {
+/** Line 1: "WhatsApp · 42 this week" (a person's tool says whose first). */
+export function senderLine(sender: SenderView): string {
   return [
     sender.kind === "person_tool" && sender.person_name
       ? `For ${sender.person_name}`
       : null,
-    sender.api_key_prefix ? `key ${sender.api_key_prefix}…` : "no key yet",
     sender.channels
       .map((channel) => CHANNEL_WORDS[channel] ?? channel)
       .join(", "),
     `${sender.touches_week} this week`,
-    seenWords(sender.last_seen_at, now),
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+/** Behind Details: "Short key sx-engage · API key sxk_live_9f3a…". */
+export function senderDetails(sender: SenderView): string {
+  return [
+    `Short key ${sender.key}`,
+    sender.api_key_prefix
+      ? `API key ${sender.api_key_prefix}…`
+      : "No API key yet",
+    sender.guard_mode === "hold" ? "Holds at a limit" : "Logs and advises",
+  ].join(" · ");
 }
 
 const slug = (words: string) =>
@@ -417,9 +426,14 @@ export function MessageSenders({
                     {sender.status === "active" ? "Sending" : "Paused"}
                   </span>
                 </span>
-                <span className={styles.senderLine}>
-                  <code>{sender.key}</code> · {senderLine(sender)}
+                <span className={styles.senderLine}>{senderLine(sender)}</span>
+                <span className={styles.senderSeen}>
+                  {seenWords(sender.last_seen_at)}
                 </span>
+                <details className={styles.senderDetails}>
+                  <summary>Details</summary>
+                  <span>{senderDetails(sender)}</span>
+                </details>
               </span>
               <button
                 type="button"

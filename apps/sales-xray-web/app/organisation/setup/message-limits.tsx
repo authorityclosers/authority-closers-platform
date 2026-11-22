@@ -43,11 +43,11 @@ export const CHANNEL_ROWS: readonly {
   side: "people" | "automations" | "both";
   label: string;
 }[] = [
-  { channel: "whatsapp", side: "people", label: "WhatsApp from a person" },
+  { channel: "whatsapp", side: "people", label: "WhatsApp, people" },
   {
     channel: "whatsapp",
     side: "automations",
-    label: "WhatsApp from an automation",
+    label: "WhatsApp, automations",
   },
   { channel: "sms", side: "both", label: "SMS" },
   { channel: "email", side: "both", label: "Email" },

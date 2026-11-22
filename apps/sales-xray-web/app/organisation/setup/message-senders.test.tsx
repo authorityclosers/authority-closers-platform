@@ -17,7 +17,12 @@ vi.mock("../integrations/integrations-client", () => ({
 vi.mock("../../notice-center", () => ({ notify: vi.fn() }));
 
 import type { SenderView } from "../../outreach/outreach-client";
-import { MessageSenders, seenWords, senderLine } from "./message-senders";
+import {
+  MessageSenders,
+  seenWords,
+  senderDetails,
+  senderLine,
+} from "./message-senders";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -56,22 +61,23 @@ afterEach(async () => {
   host.remove();
 });
 
-it("says each sender's key, channels, week and last seen in one line", () => {
-  expect(senderLine(engine, NOW)).toBe(
-    "key sxk_live_ab12… · WhatsApp · 12 this week · seen 2 h ago",
+it("says each sender's channels and week, when it was last seen, and keeps the keys behind Details", () => {
+  expect(senderLine(engine)).toBe("WhatsApp · 12 this week");
+  expect(seenWords(engine.last_seen_at, NOW)).toBe("Last seen 2 h ago");
+  expect(seenWords(null, NOW)).toBe("Not used yet");
+  expect(senderDetails(engine)).toBe(
+    "Short key fictional-engine · API key sxk_live_ab12… · Logs and advises",
   );
-  expect(seenWords(null, NOW)).toBe("not used yet");
   expect(
-    senderLine(
-      {
-        ...engine,
-        kind: "person_tool",
-        person_name: "Mira Fictional",
-        api_key_prefix: null,
-      },
-      NOW,
-    ),
-  ).toContain("For Mira Fictional · no key yet");
+    senderLine({
+      ...engine,
+      kind: "person_tool",
+      person_name: "Mira Fictional",
+    }),
+  ).toBe("For Mira Fictional · WhatsApp · 12 this week");
+  expect(
+    senderDetails({ ...engine, api_key_prefix: null, guard_mode: "hold" }),
+  ).toBe("Short key fictional-engine · No API key yet · Holds at a limit");
 });
 
 it("lists the senders and pauses one at once, on its revision", async () => {
@@ -80,6 +86,9 @@ it("lists the senders and pauses one at once, on its revision", async () => {
   await act(async () => root.render(<MessageSenders />));
   expect(host.textContent).toContain("Fictional engine");
   expect(host.textContent).toContain("Sending");
+  // The keys sit behind Details, in plain type (no code font).
+  expect(host.querySelector("details summary")?.textContent).toBe("Details");
+  expect(host.querySelector("code")).toBeNull();
   const pause = [...host.querySelectorAll("button")].find(
     (button) => button.textContent === "Pause",
   )!;
