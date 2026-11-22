@@ -931,7 +931,20 @@ LEAD_TAGS_PARITY_TABLES = PROVIDER_EMAIL_PARITY_TABLES + (
     "lead_desk_tags",
     "lead_desk_lead_tags",
 )
+# 0166 adds the outreach log: senders, touches, replies and overrides (4 tables).
+LEAD_OUTREACH_PARITY_MIGRATION_HEAD = "20261123_0166"
+LEAD_OUTREACH_PARITY_CONTRACT = "ac-postgres-parity-v131"
+LEAD_OUTREACH_PARITY_TABLES = LEAD_TAGS_PARITY_TABLES + (
+    "lead_desk_outreach_senders",
+    "lead_desk_touches",
+    "lead_desk_touch_replies",
+    "lead_desk_touch_overrides",
+)
 VERSIONED_PARITY_CONTRACTS = {
+    LEAD_OUTREACH_PARITY_MIGRATION_HEAD: (
+        LEAD_OUTREACH_PARITY_CONTRACT,
+        LEAD_OUTREACH_PARITY_TABLES,
+    ),
     LEAD_TAGS_PARITY_MIGRATION_HEAD: (
         LEAD_TAGS_PARITY_CONTRACT,
         LEAD_TAGS_PARITY_TABLES,
