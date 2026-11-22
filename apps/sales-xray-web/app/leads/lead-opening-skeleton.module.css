@@ -1,0 +1,60 @@
+/* lead-opening-skeleton.tsx: the lead page's own cards, in outline. */
+.root {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 8px 0 24px;
+}
+
+.card {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--sx-line, var(--lx-line));
+  border-radius: 22px;
+  background: var(--sx-surface, var(--lx-surface));
+}
+
+.head {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.lines {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.stage,
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.steps,
+.actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.step,
+.action {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.readerOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
