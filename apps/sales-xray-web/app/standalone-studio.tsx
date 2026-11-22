@@ -167,6 +167,16 @@ type ViewState =
       error?: string;
     };
 
+/** The server answered, and its answer was no (a 4xx, or a reply of the wrong
+ *  shape): a kept frame must not stand in for it (lane P follow-up, 23 Nov
+ *  2026). Only a check that got no answer (a dropped line, a 5xx) keeps the
+ *  frame this tab last confirmed. */
+class WorkspaceRefused extends Error {}
+
+function refusedOrDown(response: Response, code: string): Error {
+  return response.status >= 500 ? new Error(code) : new WorkspaceRefused(code);
+}
+
 const GENERIC_LOAD_ERROR =
   "Workspace access could not be checked. Try again in a moment.";
 const GENERIC_SELECTION_ERROR =
@@ -258,12 +268,12 @@ async function readWorkspaceChoices(
     allowEarlyConversationReads(false);
     return null;
   }
-  if (!response.ok) throw new Error("workspace_read_rejected");
+  if (!response.ok) throw refusedOrDown(response, "workspace_read_rejected");
   // The session still named a workspace the person is no longer in: the
   // server answered without it, and names it.
   const left = leftWorkspace(response);
   const choices = parseWorkspaceChoices(await response.json());
-  if (!choices) throw new Error("workspace_shape_invalid");
+  if (!choices) throw new WorkspaceRefused("workspace_shape_invalid");
   // Academy embeds retain their existing identity/chooser contract.
   if (!standalone) return { ...choices, left };
   // The legacy endpoint confirms session identity only. Sales Xray choices
@@ -344,10 +354,11 @@ async function selectWorkspace(tenantId: string, signal: AbortSignal) {
     },
     body: JSON.stringify({ tenant_id: tenantId }),
   });
-  if (!response.ok) throw new Error("workspace_selection_rejected");
+  if (!response.ok)
+    throw refusedOrDown(response, "workspace_selection_rejected");
   const body: unknown = await response.json();
   if (!isRecord(body) || body.tenant_id !== tenantId)
-    throw new Error("workspace_selection_mismatch");
+    throw new WorkspaceRefused("workspace_selection_mismatch");
 }
 
 /** Standalone app pages share one persistent frame; embeds keep their own. */
@@ -541,12 +552,18 @@ function StandaloneStudioView({
             : { kind: "empty", choices },
         );
       })
-      .catch(() => {
+      .catch((problem: unknown) => {
         if (
           !controller.signal.aborted &&
           generation.current === requestGeneration
         ) {
           setFailures((count) => count + 1);
+          // A definite no is never covered by a kept frame.
+          if (problem instanceof WorkspaceRefused) {
+            forgetAccess();
+            setView({ kind: "unavailable", message: GENERIC_LOAD_ERROR });
+            return;
+          }
           // The server didn't answer (a 502, a dropped line): keep the frame
           // already up, or the one this tab last confirmed, and check again
           // quietly; the page's own reads say what didn't load (v1.96 device
