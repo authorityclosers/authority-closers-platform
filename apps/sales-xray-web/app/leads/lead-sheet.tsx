@@ -80,6 +80,7 @@ import { useWorkspaceAccess } from "../workspace-access";
 import {
   answerAccount,
   answeredCallFor,
+  releaseCallToAnswer,
   useCallToAnswer,
 } from "./pending-answer";
 import { haptic } from "../ui/haptics";
@@ -5755,6 +5756,12 @@ export function LeadSheet({
   const holdAccount = answerAccount(useWorkspaceAccess()?.context ?? null);
   const heldCall = useCallToAnswer(holdAccount);
   const mustAnswer = !!leadId && heldCall?.leadId === leadId;
+  // That lead no longer opens for this seller (given to someone else, or
+  // deleted): its question can't be answered, so it holds nobody (23 Nov 2026).
+  const goneLead = failed?.gone ? failed.leadId : null;
+  useEffect(() => {
+    if (goneLead) releaseCallToAnswer(holdAccount, goneLead);
+  }, [goneLead, holdAccount]);
   const questionOpen = asking || logIntent || logging === leadId || mustAnswer;
   // The wrap-up screen (round-2 board 1, option B): the question on a screen
   // of its own; Back keeps it on the lead instead, unless it must be answered.

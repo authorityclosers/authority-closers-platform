@@ -132,6 +132,18 @@ export function answeredCallFor(account: string | null, leadId: string) {
   });
 }
 
+/**
+ * The held call's lead isn't on this seller's desk any more (a manager gave it
+ * to someone else, or it was deleted): its question can never be answered
+ * here, so nothing holds the seller for it (Wise Life, 23 Nov 2026: a lead moved
+ * away minutes after its call locked the seller out of every screen). Kept as
+ * answered, so the phone's second report of that call doesn't hold them again.
+ */
+export function releaseCallToAnswer(account: string | null, leadId: string) {
+  answeredCallFor(account, leadId);
+  forgetDial(leadId);
+}
+
 /** The held call, kept current as calls end and answers are saved. */
 export function useCallToAnswer(account: string | null): PendingAnswer | null {
   const [held, setHeld] = useState<PendingAnswer | null>(null);
