@@ -3,7 +3,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import type { NativeCall } from "../leads/native-phone";
-import { answeredCallFor, rememberDial } from "../leads/pending-answer";
+import {
+  answeredCallFor,
+  releaseCallToAnswer,
+  rememberDial,
+} from "../leads/pending-answer";
 import { AfterCallGuard, showingLead } from "./after-call-guard";
 
 (
@@ -147,4 +151,24 @@ it("holds a call whose end the page never heard, read from the phone on return",
     await Promise.resolve();
   });
   expect(opened).toEqual(["/leads?lead=lead-3"]);
+});
+
+it("lets the seller go when the called lead was given to someone else (Wise Life, 23 Nov 2026)", async () => {
+  mount();
+  rememberDial("lead-4");
+  hear(ended("lead-4", true));
+  expect(opened).toEqual(["/leads?lead=lead-4"]);
+
+  // The lead sheet's read comes back 404 ("isn't on your desk any more"): the
+  // hold goes, and Close, the tab bar and coming back to the app all stay put.
+  act(() => releaseCallToAnswer(ACCOUNT, "lead-4"));
+  window.history.replaceState(null, "", "/home");
+  act(() => vi.advanceTimersByTime(6_000));
+  phone.last = ended("lead-4", true);
+  await act(async () => {
+    document.dispatchEvent(new Event("visibilitychange"));
+    await Promise.resolve();
+  });
+  act(() => vi.advanceTimersByTime(6_000));
+  expect(opened).toEqual(["/leads?lead=lead-4"]);
 });

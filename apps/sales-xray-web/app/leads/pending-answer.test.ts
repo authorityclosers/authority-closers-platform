@@ -8,6 +8,7 @@ import {
   callToAnswer,
   dialledLead,
   forgetDial,
+  releaseCallToAnswer,
   rememberCallToAnswer,
   rememberDial,
 } from "./pending-answer";
@@ -84,4 +85,18 @@ it("remembers the lead being dialled until its call's end is known", () => {
   expect(dialledLead(NOW)).toBe("lead-1");
   forgetDial("lead-1");
   expect(dialledLead(NOW)).toBeNull();
+});
+
+it("lets go of a held call whose lead was given to someone else (Wise Life, 23 Nov 2026)", () => {
+  rememberDial("lead-1", NOW);
+  rememberCallToAnswer(ME, call(), NOW);
+  // Another lead going away changes nothing.
+  releaseCallToAnswer(ME, "lead-2");
+  expect(callToAnswer(ME, NOW)?.leadId).toBe("lead-1");
+  releaseCallToAnswer(ME, "lead-1");
+  expect(callToAnswer(ME, NOW)).toBeNull();
+  expect(dialledLead(NOW)).toBeNull();
+  // The phone's second report of that call (final recording) holds no one again.
+  expect(rememberCallToAnswer(ME, call(), NOW)).toBe(false);
+  expect(callToAnswer(ME, NOW)).toBeNull();
 });
