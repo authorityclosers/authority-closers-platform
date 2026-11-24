@@ -314,3 +314,67 @@
     display: none;
   }
 }
+
+/* ---------- v1.96 device polish ----------
+   In the page (New analysis keeps it a place, [data-inline]): a card of the
+   page's own, not a floating layer, so nothing sits under it. */
+.card[data-inline] {
+  position: static;
+  right: auto;
+  bottom: auto;
+  z-index: auto;
+  width: auto;
+  max-height: none;
+  overflow: visible;
+  translate: none;
+  border: var(--sx-tile-edge);
+  border-radius: var(--sx-tile-radius);
+  background: var(--sx-tile-fill);
+  box-shadow: var(--sx-tile-depth);
+  transition: none;
+}
+
+.card[data-inline] .header,
+.card[data-inline] .footer {
+  position: static;
+  background: transparent;
+}
+
+/* One solid green on the page is Choose a file: the guide's Next is an
+   outline pill, and its picture and link use Home's green, never the teal
+   (turquoise in dark). */
+.next {
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+}
+
+.visual {
+  border-color: transparent;
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-tone-good);
+}
+
+.wave i {
+  background: var(--sx-tone-good);
+}
+
+.link {
+  background: var(--sx-tone-good-soft);
+  color: var(--sx-tone-good);
+}
+
+.coach {
+  border-color: var(--sx-primary-ink);
+}
+
+.coach span {
+  background: var(--lx-home-primary);
+  color: var(--sx-gloss-ink);
+}
+
+.card button:focus-visible,
+.card a:focus-visible {
+  outline-color: var(--sx-primary-ink);
+}

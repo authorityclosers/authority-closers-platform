@@ -18,7 +18,6 @@ import {
   Avatar,
   Button,
   Dialog,
-  Empty,
   List,
   Panel,
   Row,
@@ -38,6 +37,7 @@ import { AiWritesPanel, AppChangesPanel } from "./ai-changes";
 import { CopyButton } from "./copy-button";
 import { useOrigin } from "./use-origin";
 import { useCanHere } from "../workspace-role";
+import family from "../organisation/family.module.css";
 import styles from "./ai-apps.module.css";
 
 type Host = "chatgpt" | "claude" | "other";
@@ -99,26 +99,24 @@ function PlanPanel() {
   const missing = plan.rows.some((row) => !row.included);
   return (
     <Panel title="What your plan includes" sub={plan.label}>
-      <List label="What your plan includes">
+      {/* Each line whole, on two lines if it needs them: never cut (v1.96). */}
+      <ul className={styles.planRows} aria-label="What your plan includes">
         {plan.rows.map((row) => (
-          <Row
-            key={row.key}
-            icon={
-              row.included ? (
-                <Check size={18} aria-hidden="true" />
-              ) : (
-                <Lock size={18} aria-hidden="true" />
-              )
-            }
-            title={row.label}
-            meta={[
-              row.included
-                ? "Included"
-                : `Comes with ${row.comesWith ?? "a higher plan"}`,
-            ]}
-          />
+          <li key={row.key} className={styles.planRow}>
+            <span className={styles.planTile} aria-hidden="true">
+              {row.included ? <Check size={18} /> : <Lock size={18} />}
+            </span>
+            <span className={styles.planText}>
+              <strong>{row.label}</strong>
+              <small>
+                {row.included
+                  ? "Included"
+                  : `Comes with ${row.comesWith ?? "a higher plan"}`}
+              </small>
+            </span>
+          </li>
         ))}
-      </List>
+      </ul>
       {missing ? (
         <p className={styles.planNote}>
           {pays ? (
@@ -141,7 +139,7 @@ function ConnectPanel() {
   const guide = STEPS[host];
   return (
     <Panel title="Connect an AI app">
-      <div className={styles.connect}>
+      <div className={styles.connect} id="connect-ai-app">
         <div className={styles.address}>
           <span className={styles.addressWords}>
             <span className={styles.addressLabel}>Sales X-Ray address</span>
@@ -269,11 +267,28 @@ export function AiAppsSection() {
             <SkeletonRow avatar={36} />
           </div>
         ) : apps.length === 0 ? (
-          <Empty
-            icon={Sparkles}
-            title="No AI apps connected"
-            text="Connect ChatGPT or Claude below, then ask them about your calls and leads."
-          />
+          // One row with the one way on (v1.96: a tall empty card with no
+          // button pushed the switches two screens down).
+          <div className={styles.emptyRow}>
+            <span className={styles.planTile} aria-hidden="true">
+              <Sparkles size={18} />
+            </span>
+            <span className={styles.planText}>
+              <strong>No AI apps connected</strong>
+              <small>Ask ChatGPT or Claude about your calls and leads.</small>
+            </span>
+            <button
+              type="button"
+              className={family.primary}
+              onClick={() =>
+                document
+                  .getElementById("connect-ai-app")
+                  ?.scrollIntoView({ block: "start", behavior: "smooth" })
+              }
+            >
+              Connect an AI app
+            </button>
+          </div>
         ) : (
           <List label="Connected AI apps">
             {apps.map((app) => (

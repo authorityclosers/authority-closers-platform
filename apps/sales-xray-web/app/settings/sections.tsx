@@ -32,11 +32,12 @@ import { AnalysisTimeSection } from "./analysis-time";
 import { ConnectedApps } from "./connected-apps";
 import { DevelopersSection } from "./developers";
 import { NotificationPrefs } from "./notification-prefs";
-import { ThemeControl } from "../lightbox/theme-provider";
+import { MicrophoneCard } from "../organisation/setup/microphone";
 import { PhoneSetupPanel, VibrationPanel } from "./phone-panel";
 import { PrivacySettings } from "./privacy";
 import { ProfileDetailsPanel } from "./profile-details";
 import { SellingSettings } from "./selling";
+import { ThemePills } from "./theme-pills";
 import { MySounds, TeamSounds } from "./sounds";
 import type { SettingsSectionId } from "./settings-sections";
 import { useCanHere } from "../workspace-role";
@@ -117,31 +118,44 @@ function AppPanel() {
 }
 
 /**
- * Phone & alerts: the person's own switches on one screen (owner, 24 Oct
- * 2026: "simpler least steps workflows"). What this phone still needs, each
- * line one tap from its fix; lead alerts; vibration; usage analytics. Privacy
- * and Apps & devices open here too, so no page holds a single switch.
+ * Phone & alerts: what reaches this phone and when (owner, 24 Oct 2026:
+ * "simpler least steps workflows"): lead alerts, reminders, vibration and
+ * usage analytics. v1.96 (device polish): no Appearance and no app here; the
+ * phone app, its setup and the look are Apps & devices.
  */
 function PhoneAndAlerts() {
   return (
     <div className={styles.stack}>
-      {/* Owner, 24 Oct 2026: the theme choice easy to find; System follows the phone. */}
-      <Panel title="Appearance">
-        <div className={styles.appearance}>
-          <ThemeControl />
-        </div>
-      </Panel>
-      <PhoneSetupPanel />
       <AlertsCard />
       {/* What reaches this phone and when (competitor teardown 26). */}
       <NotificationPrefs />
       <VibrationPanel />
       <PrivacySettings />
-      <AppPanel />
       <p className={styles.hint}>
         Product updates show under the bell at the top of the app. Sign-in
         codes, new sign-in methods and invitations always come by email.
       </p>
+    </div>
+  );
+}
+
+/**
+ * Apps & devices: the phone app, its setup and call recording, then this
+ * device's own look and microphone (v1.96 device polish: it opened on the
+ * same Appearance and Notifications as Phone & alerts).
+ */
+function AppsAndDevices() {
+  return (
+    <div className={styles.stack}>
+      <AppPanel />
+      <PhoneSetupPanel />
+      <Panel title="Look on this device">
+        <div className={styles.look}>
+          <span id="device-look">Light or dark, on this device only.</span>
+          <ThemePills labelledBy="device-look" />
+        </div>
+      </Panel>
+      <MicrophoneCard />
     </div>
   );
 }
@@ -238,7 +252,8 @@ export function SettingsSectionView({
     case "pulse":
       return <PulsePanel />;
     case "notifications":
-    case "devices":
       return <PhoneAndAlerts />;
+    case "devices":
+      return <AppsAndDevices />;
   }
 }

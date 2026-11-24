@@ -424,3 +424,31 @@
     box-shadow: none;
   }
 }
+
+/* ---------- v1.96 device polish ----------
+   Folded away until something plays, the player's controls are out of reach
+   and out of the reading order too (they were drawn clipped inside the
+   folded bar: Play, Seek and Mute counted as cut or under the tab bar). */
+.dock.dock:not([data-embedded="true"]):not([data-revealed="true"]) {
+  visibility: hidden;
+}
+
+/* Home's green, never the teal (turquoise in dark). */
+.dock.dock .play {
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
+.dock[data-playing="true"] .play {
+  box-shadow: 0 0 0 5px var(--sx-tone-good-soft);
+}
+
+.fill {
+  background: var(--sx-primary-ink);
+}
+
+.playhead {
+  background: var(--sx-primary-ink);
+  box-shadow: 0 0 0 1px var(--sx-primary-ink);
+}

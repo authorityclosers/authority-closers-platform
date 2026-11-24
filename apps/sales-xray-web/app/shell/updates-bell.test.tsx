@@ -138,6 +138,34 @@ it("shows a lead's chip, name and where it came from, unread, and names the tap"
   expect(sheet().querySelector("h3")?.textContent).toBe("Today");
 });
 
+// v1.96 device polish: a lead from a file read just "File".
+it("says a file's lead came from a file upload, in words", async () => {
+  const lead: UpdateNotification = {
+    ...release,
+    id: "fictional-file-lead",
+    kind: "lead_new",
+    title: "Asha Fictional",
+    body: "File · Pune",
+    href: "/leads?lead=2",
+    created_at: new Date().toISOString(),
+  };
+  await act(async () =>
+    root.render(
+      <UpdatesBell
+        notifications={[lead]}
+        unreadCount={1}
+        status="ready"
+        openNews={vi.fn()}
+        openEvent={vi.fn(async () => {})}
+      />,
+    ),
+  );
+  await act(async () => trigger().click());
+  expect(rows()[0].querySelector("small")?.textContent).toBe(
+    "From a file upload",
+  );
+});
+
 it("uses the API count, opens release notes and gives focus back on close", async () => {
   const openNews = vi.fn();
   await act(async () =>

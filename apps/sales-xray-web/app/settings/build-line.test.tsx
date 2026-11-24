@@ -10,7 +10,12 @@ vi.mock("../notice-center", () => ({
   notify: (...args: unknown[]) => notify(...args),
 }));
 
-import { BuildLine, buildLine } from "./build-line";
+import {
+  BuildLine,
+  buildLine,
+  manifestPublishedHere,
+  readVersion,
+} from "./build-line";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -20,6 +25,11 @@ let root: Root;
 let host: HTMLDivElement;
 
 beforeEach(() => {
+  // Production's address: a local one never asks for the manifest.
+  (
+    window as unknown as { happyDOM: { setURL: (url: string) => void } }
+  ).happyDOM.setURL("https://salesxray.authorityclosers.com/settings/help");
+  localStorage.clear();
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -108,4 +118,26 @@ it("copies the line when it is held, and says so", async () => {
   await act(async () => vi.advanceTimersByTime(2100));
   expect(host.textContent).toBe("Build 3b08990 · App 1.0.84");
   expect(notify).not.toHaveBeenCalled();
+});
+
+it("asks for the manifest only where one can be published, and once per build after a 404", async () => {
+  // v1.96 device polish, lane P: a local copy's Settings answered 404 on every page.
+  const release = `3b08990${"a".repeat(33)}`;
+  for (const host of ["localhost", "127.0.0.1", "[::1]", "app.localhost"])
+    expect(manifestPublishedHere(host, release), host).toBe(false);
+  expect(manifestPublishedHere("salesxray.authorityclosers.com", release)).toBe(
+    true,
+  );
+  const none = vi.fn(async () => new Response("{}", { status: 404 }));
+  vi.stubGlobal("fetch", none);
+  expect(await readVersion(release)).toBeNull();
+  expect(await readVersion(release)).toBeNull();
+  expect(none).toHaveBeenCalledTimes(1);
+  // A new build asks again.
+  expect(
+    manifestPublishedHere(
+      "salesxray.authorityclosers.com",
+      `9${release.slice(1)}`,
+    ),
+  ).toBe(true);
 });

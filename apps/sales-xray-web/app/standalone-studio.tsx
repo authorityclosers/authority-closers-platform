@@ -35,7 +35,8 @@ import {
 import { telemetry } from "./telemetry";
 import { useInitialSession } from "./initial-session";
 import type { InitialSession } from "./server-reads";
-import { ConnectionNotice } from "./connection-notice";
+import { ConnectionNotice, retryDelay } from "./connection-notice";
+import { forgetAccess, keptAccess, rememberAccess } from "./last-access";
 import {
   WorkspaceAccessProvider,
   type WorkspaceAccessValue,
@@ -166,6 +167,16 @@ type ViewState =
       error?: string;
     };
 
+/** The server answered, and its answer was no (a 4xx, or a reply of the wrong
+ *  shape): a kept frame must not stand in for it (lane P follow-up, 23 Nov
+ *  2026). Only a check that got no answer (a dropped line, a 5xx) keeps the
+ *  frame this tab last confirmed. */
+class WorkspaceRefused extends Error {}
+
+function refusedOrDown(response: Response, code: string): Error {
+  return response.status >= 500 ? new Error(code) : new WorkspaceRefused(code);
+}
+
 const GENERIC_LOAD_ERROR =
   "Workspace access could not be checked. Try again in a moment.";
 const GENERIC_SELECTION_ERROR =
@@ -257,12 +268,12 @@ async function readWorkspaceChoices(
     allowEarlyConversationReads(false);
     return null;
   }
-  if (!response.ok) throw new Error("workspace_read_rejected");
+  if (!response.ok) throw refusedOrDown(response, "workspace_read_rejected");
   // The session still named a workspace the person is no longer in: the
   // server answered without it, and names it.
   const left = leftWorkspace(response);
   const choices = parseWorkspaceChoices(await response.json());
-  if (!choices) throw new Error("workspace_shape_invalid");
+  if (!choices) throw new WorkspaceRefused("workspace_shape_invalid");
   // Academy embeds retain their existing identity/chooser contract.
   if (!standalone) return { ...choices, left };
   // The legacy endpoint confirms session identity only. Sales Xray choices
@@ -343,10 +354,11 @@ async function selectWorkspace(tenantId: string, signal: AbortSignal) {
     },
     body: JSON.stringify({ tenant_id: tenantId }),
   });
-  if (!response.ok) throw new Error("workspace_selection_rejected");
+  if (!response.ok)
+    throw refusedOrDown(response, "workspace_selection_rejected");
   const body: unknown = await response.json();
   if (!isRecord(body) || body.tenant_id !== tenantId)
-    throw new Error("workspace_selection_mismatch");
+    throw new WorkspaceRefused("workspace_selection_mismatch");
 }
 
 /** Standalone app pages share one persistent frame; embeds keep their own. */
@@ -461,6 +473,10 @@ function StandaloneStudioView({
   const [frameRound, setFrameRound] = useState(0);
   // Failed access checks in a row, for the corner notice's retry pace.
   const [failures, setFailures] = useState(0);
+  // Quiet re-checks behind a kept frame: 5, 10, 20, then every 30 s.
+  const [quietAttempt, setQuietAttempt] = useState(0);
+  const quietRetry = useRef(0);
+  const quietTimer = useRef<number | undefined>(undefined);
   // A server-read session (dev) starts the page ready; the browser's check
   // below still runs and confirms it, so the page never trusts it alone.
   // The server's session for a server-rendered page (dev), never for embeds.
@@ -469,6 +485,11 @@ function StandaloneStudioView({
     const seeded = seededChoices(initialSession);
     return seeded ? { kind: "ready", choices: seeded } : { kind: "loading" };
   });
+  // What the frame shows now, for a failed check to keep (read in its callback).
+  const viewKind = useRef(view.kind);
+  useEffect(() => {
+    viewKind.current = view.kind;
+  }, [view.kind]);
   const [authRequested, setAuthRequested] = useState(false);
   const [dismissedAuthIntentId, setDismissedAuthIntentId] = useState<
     string | null
@@ -501,7 +522,9 @@ function StandaloneStudioView({
         )
           return;
         setFailures(0);
+        quietRetry.current = 0;
         if (read === null) {
+          forgetAccess();
           observeAccount?.(null);
           setView({ kind: "unauthenticated" });
           return;
@@ -519,6 +542,7 @@ function StandaloneStudioView({
           notify(leftNotice(left, choices));
         }
         if (choices.selected_tenant_id !== null) {
+          if (!embedded) rememberAccess(choices);
           setView({ kind: "ready", choices });
           return;
         }
@@ -528,13 +552,35 @@ function StandaloneStudioView({
             : { kind: "empty", choices },
         );
       })
-      .catch(() => {
+      .catch((problem: unknown) => {
         if (
           !controller.signal.aborted &&
           generation.current === requestGeneration
         ) {
           setFailures((count) => count + 1);
-          setView({ kind: "unavailable", message: GENERIC_LOAD_ERROR });
+          // A definite no is never covered by a kept frame.
+          if (problem instanceof WorkspaceRefused) {
+            forgetAccess();
+            setView({ kind: "unavailable", message: GENERIC_LOAD_ERROR });
+            return;
+          }
+          // The server didn't answer (a 502, a dropped line): keep the frame
+          // already up, or the one this tab last confirmed, and check again
+          // quietly; the page's own reads say what didn't load (v1.96 device
+          // polish, lane P: Leads swapped to the waiting shell on a 502).
+          const kept = embedded ? null : keptAccess<WorkspaceChoices>();
+          const shown = viewKind.current === "ready";
+          if (!shown && !kept) {
+            setView({ kind: "unavailable", message: GENERIC_LOAD_ERROR });
+            return;
+          }
+          if (!shown && kept) setView({ kind: "ready", choices: kept });
+          quietRetry.current += 1;
+          window.clearTimeout(quietTimer.current);
+          quietTimer.current = window.setTimeout(
+            () => setQuietAttempt((value) => value + 1),
+            retryDelay(quietRetry.current) * 1000,
+          );
         }
       });
     return () => {
@@ -545,6 +591,7 @@ function StandaloneStudioView({
     };
   }, [
     attempt,
+    quietAttempt,
     embedded,
     observeAccount,
     review.fixtureRequested,
@@ -555,6 +602,7 @@ function StandaloneStudioView({
     () => () => {
       generation.current += 1;
       activeController.current?.abort();
+      window.clearTimeout(quietTimer.current);
     },
     [],
   );

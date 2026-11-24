@@ -9,6 +9,7 @@
  * enquiry is never dropped. A file of old leads starts Ended.
  */
 
+import { Megaphone } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { SOURCE_WORDS } from "../../leads/lead-filters";
@@ -131,7 +132,15 @@ export function CampaignStatuses() {
       className={styles.details}
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
-      <summary>Campaigns</summary>
+      <summary>
+        <span className={styles.moreTile} aria-hidden="true">
+          <Megaphone size={20} />
+        </span>
+        <span className={styles.moreText}>
+          <strong>Campaigns</strong>
+          <small>Which ad brought each lead</small>
+        </span>
+      </summary>
       {open ? (
         <div className={own.campaigns}>
           {rows === null ? (

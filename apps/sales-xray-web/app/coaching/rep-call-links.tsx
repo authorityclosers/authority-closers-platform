@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { useContext } from "react";
 
-import { kitStyles } from "../ui/kit";
 import type { CallSummary, ProgressPoint } from "./coaching-client";
 import { CALLS, POINT_COPY } from "./coaching-copy";
 import { callDate } from "./coaching-format";
@@ -62,14 +61,14 @@ export function RepCallLinks({
         {latest ? (
           <>
             <Link
-              className={kitStyles.button}
+              className={styles.quietLink}
               href={`/analysis/calls/${latest.submission_id}`}
             >
               {CALLS.openReport}
             </Link>
             {reportsOnly ? null : (
               <Link
-                className={kitStyles.button}
+                className={styles.quietLink}
                 href={`/coaching?call=${latest.submission_id}`}
               >
                 {CALLS.openCoaching}
@@ -78,7 +77,7 @@ export function RepCallLinks({
           </>
         ) : null}
         <a
-          className={kitStyles.button}
+          className={styles.quietLink}
           href="#coaching-calls"
           aria-controls="coaching-calls"
           onClick={onSeeCalls}

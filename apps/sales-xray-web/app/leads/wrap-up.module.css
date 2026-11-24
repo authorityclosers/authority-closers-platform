@@ -38,10 +38,15 @@
 }
 
 @media (min-width: 760px) {
+  /* The page under the card blurred as well as dimmed, so the lead's own
+     words beside the card don't read as part of it (v1.96 device polish:
+     at 1440 the pane's text showed through on both sides). */
   .scrim {
     align-items: center;
     padding: 24px;
     background: var(--sx-scrim);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
   }
 
   .screen {
@@ -328,6 +333,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+  container-type: inline-size;
 }
 
 .next {
@@ -353,6 +359,20 @@
 .next > span:last-child {
   min-width: 0;
   overflow-wrap: break-word;
+  hyphens: none;
+}
+
+/* Narrow tiles (a 360 phone, or large text): the icon over the name, so a
+   name keeps the tile's whole width and never splits mid-word (v1.96 device
+   polish: "Intereste-d" at 130% text on a 390 phone). */
+@container (max-width: 23em) {
+  .next {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+  }
 }
 
 /* Dark ink line icon in a soft grey tile. */

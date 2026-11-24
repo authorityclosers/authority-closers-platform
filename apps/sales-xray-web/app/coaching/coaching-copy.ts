@@ -27,33 +27,33 @@ export type CoachingPillarCopy = {
 export const COACHING_PILLARS: Record<CoachingPillarId, CoachingPillarCopy> = {
   focus: {
     number: 1,
-    label: "What You Should Work On Now",
+    label: "What you should work on now",
     subtitle: "Your highest-priority improvement.",
   },
   why: {
     number: 2,
-    label: "Why This Keeps Happening",
+    label: "Why this keeps happening",
     subtitle: "Understand the pattern behind the problem.",
   },
   better: {
     number: 3,
-    label: "Here’s What Better Looks Like",
+    label: "Here’s what better looks like",
     subtitle:
       "Learn the better approach using your own calls and Dipak’s coaching.",
   },
   next: {
     number: 4,
-    label: "Try This on Your Next Call",
+    label: "Try this on your next call",
     subtitle: "One practice. One mission. One clear target.",
   },
   progress: {
     number: 5,
-    label: "See How You’re Improving",
+    label: "See how you’re improving",
     subtitle: "Track real progress, not completed content.",
   },
   path: {
     number: 6,
-    label: "Where We Go From Here",
+    label: "Where we go from here",
     subtitle: "See the next stage of your development.",
   },
 };
@@ -68,12 +68,12 @@ export const CALL_PILLARS: Record<
 > = {
   focus: {
     number: 1,
-    label: "What You Should Work On Now",
+    label: "What you should work on now",
     subtitle: "The one thing this call says to work on.",
   },
   why: {
     number: 2,
-    label: "What Happened on This Call",
+    label: "What happened on this call",
     subtitle: "Replay the moments behind this focus.",
   },
   better: COACHING_PILLARS.better,
@@ -87,7 +87,7 @@ export const CALL_PILLARS: Record<
 export const THEIR_PILLARS: Record<CoachingPillarId, CoachingPillarCopy> = {
   focus: {
     number: 1,
-    label: "What They Should Work On Now",
+    label: "What they should work on now",
     subtitle: "Their highest-priority improvement.",
   },
   why: COACHING_PILLARS.why,
@@ -96,10 +96,10 @@ export const THEIR_PILLARS: Record<CoachingPillarId, CoachingPillarCopy> = {
     subtitle:
       "Learn the better approach using their own calls and Dipak’s coaching.",
   },
-  next: { ...COACHING_PILLARS.next, label: "Try This on Their Next Call" },
+  next: { ...COACHING_PILLARS.next, label: "Try this on their next call" },
   progress: {
     ...COACHING_PILLARS.progress,
-    label: "See How They’re Improving",
+    label: "See how they’re improving",
   },
   path: {
     ...COACHING_PILLARS.path,
@@ -426,9 +426,9 @@ export const CALLS = {
   latestReady: "Latest call with coaching",
   yourShortcuts: "Your latest call",
   theirShortcuts: "This rep’s calls",
-  openReport: "Open Report",
+  openReport: "Open report",
   report: "Report",
-  reportFor: (label: string) => `Open Report for ${label}`,
+  reportFor: (label: string) => `Open report for ${label}`,
   openCoaching: "Call coaching",
   seeCalls: "See calls",
   findCall: "Find a call",

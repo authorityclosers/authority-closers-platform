@@ -317,18 +317,56 @@ export function LeadLine({
       <span className={styles.leadStage}>{stageWord ?? row.stage_label}</span>{" "}
       {/* One part, its "·" leading it, so a wrap never splits "Meta Ads" or
           ends a line on "·" (v1.93 judge, round 3). */}
-      <span className={`${styles.leadPart} ${styles.leadSourcePart}`}>
-        <span className={styles.leadSep}>· </span>
+      {/* The source and what follows it ("Meta Ads · Sneha"), as one line
+          on a phone (v1.96 device polish: "· Venkatesh" and "· Meta Ads"
+          wrapped onto lines of their own at 360). */}
+      <span className={styles.leadMeta}>
+        <span className={`${styles.leadPart} ${styles.leadSourcePart}`}>
+          <span className={styles.leadSep}>· </span>
+          <span
+            className={styles.leadSource}
+            title={row.source_label || undefined}
+          >
+            {/* The source's kind only; the programme is the lead page's (part 01). */}
+            {shortSource(row).split(" · ")[0]}
+          </span>
+        </span>
+        {showOwner && row.owner_name ? (
+          <>
+            {" "}
+            <span className={`${styles.leadPart} ${styles.leadOwnerWord}`}>
+              <span className={styles.leadSep}>· </span>
+              {row.owner_name.trim().split(/\s+/)[0]}
+            </span>
+          </>
+        ) : null}
+        {older ? (
+          <>
+            {" "}
+            <span className={styles.leadPart}>
+              <span className={styles.leadSep}>· </span>
+              {older}
+            </span>
+          </>
+        ) : null}
+        {unowned ? (
+          <>
+            {" "}
+            <span className={styles.leadPart}>
+              <span className={styles.leadSep}>· </span>
+              No owner
+            </span>
+          </>
+        ) : null}{" "}
         <span
-          className={styles.leadSource}
-          title={row.source_label || undefined}
+          className={`${styles.leadPart} ${styles.leadSubAge}`}
+          title={`Came in ${fullTime(arrived)}`}
+          data-lead-age=""
         >
-          {/* The source's kind only; the programme is the lead page's (part 01). */}
-          {shortSource(row).split(" · ")[0]}
+          <span className={styles.leadSep}>· </span>
+          {arrivedShort(arrived)}
         </span>
       </span>
-      {older ? ` · ${older}` : null}
-      {unowned ? " · No owner" : null}
     </>
   ) : (
     [row.interest, row.company, row.city].filter(Boolean).join(" · ")
@@ -459,25 +497,6 @@ export function LeadLine({
                 data-owned={showOwner ? "" : undefined}
               >
                 <span className={styles.leadSubWords}>{sub}</span>
-                {showOwner && row.owner_name ? (
-                  <>
-                    {" "}
-                    <span
-                      className={`${styles.leadPart} ${styles.leadOwnerWord}`}
-                    >
-                      <span className={styles.leadSep}>· </span>
-                      {row.owner_name.trim().split(/\s+/)[0]}
-                    </span>
-                  </>
-                ) : null}{" "}
-                <span
-                  className={`${styles.leadPart} ${styles.leadSubAge}`}
-                  title={`Came in ${fullTime(arrived)}`}
-                  data-lead-age=""
-                >
-                  <span className={styles.leadSep}>· </span>
-                  {arrivedShort(arrived)}
-                </span>
                 {line ? (
                   <>
                     {" "}

@@ -49,6 +49,13 @@
   white-space: nowrap;
 }
 
+/* The last part and its chip as one box: on to the next line whole, and
+   wrapping inside only when wider than the line (large text). */
+.partLast {
+  display: inline-block;
+  max-width: 100%;
+}
+
 .words strong {
   color: var(--sx-ink);
   font-weight: 600;

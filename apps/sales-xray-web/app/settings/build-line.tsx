@@ -34,6 +34,43 @@ export function buildLine(
   return app ? `${head} · App ${app}` : head;
 }
 
+/** This browser heard "none published" for this build: it isn't asked again. */
+const NO_MANIFEST_KEY = "sx.app-web.none";
+
+/**
+ * Whether to ask for the phone apps' manifest here (v1.96 device polish,
+ * lane P: /v1/app-web/manifest.json answered 404 on every Settings page of a
+ * local copy). Production publishes one; a local address (localhost, a
+ * .localhost name) never does, and an environment that answered 404 for this
+ * build isn't asked again in this browser.
+ */
+export function manifestPublishedHere(
+  hostname: string,
+  release: string,
+): boolean {
+  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host === "::1" ||
+    /^127\./.test(host)
+  )
+    return false;
+  try {
+    return window.localStorage.getItem(NO_MANIFEST_KEY) !== release;
+  } catch {
+    return true;
+  }
+}
+
+function rememberNoManifest(release: string): void {
+  try {
+    window.localStorage.setItem(NO_MANIFEST_KEY, release);
+  } catch {
+    // Asked again next time: harmless.
+  }
+}
+
 /**
  * The release's number, from the signed manifest of the phone apps' live web
  * updates, when it is this very build (its commit); null otherwise, and on an
@@ -44,12 +81,14 @@ export async function readVersion(
   release: string | null,
 ): Promise<string | null> {
   if (!release || !/^[0-9a-f]{7,}$/.test(release)) return null;
+  if (!manifestPublishedHere(window.location.hostname, release)) return null;
   try {
     const response = await fetch("/v1/app-web/manifest.json", {
       credentials: "same-origin",
       cache: "no-store",
       headers: { accept: "application/json" },
     });
+    if (response.status === 404) rememberNoManifest(release);
     if (!response.ok) return null;
     const manifest = (await response.json()) as { payload?: unknown };
     if (typeof manifest.payload !== "string") return null;

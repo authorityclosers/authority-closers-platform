@@ -541,3 +541,59 @@ a.tile:focus-visible {
     transition: none;
   }
 }
+
+/* ---------- v1.96 device polish ----------
+   Colour by meaning, Home's palette, never the teal accent (turquoise in
+   dark): calls in the calls blue, the work done (bars, rings, talk) in Home's
+   green ink. */
+.sideFigure,
+.sideWords {
+  color: var(--sx-tone-calls);
+}
+
+.speedEmpty svg {
+  color: var(--sx-tone-calls);
+}
+
+.ringValue {
+  stroke: var(--sx-primary-ink);
+}
+
+.sellerTried {
+  background: var(--sx-tone-good-soft);
+}
+
+.sellerSpoke,
+.talkBar,
+.bar {
+  background: var(--sx-primary-ink);
+}
+
+/* A narrow tile (a 360 px phone, two a row): the second figure goes under
+   the first instead of running into it ("4 h 47 min" met "4 min a call"). */
+@container (max-width: 180px) {
+  .tile .side {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    justify-items: start;
+    text-align: start;
+  }
+
+  .tile > .figure {
+    grid-column: 1 / -1;
+  }
+}
+
+/* A computer: the page keeps a readable width, the four tiles in one row,
+   each figure beside its second one instead of at the tile's far ends. */
+@media (min-width: 900px) {
+  .view {
+    max-width: 960px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

@@ -75,9 +75,25 @@
   box-sizing: border-box;
 }
 
+/* The chosen mode: the family's solid deep-green pill, white words, in both
+   themes (v1.96 device polish: a faint grey or white pill read as unset). */
+.mode > [role="group"] > [aria-pressed="true"] {
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
+/* Once the kit's sliding pill is placed ([data-pill]) the chosen button goes
+   transparent and the pill shows through: the pill itself takes the green, or
+   the white words sit on a white pill in light (v1.96 judge, 24 Nov 2026). */
+.mode > [role="group"] > [aria-hidden="true"] {
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+}
+
 .modeHint {
   margin: 0;
-  color: var(--sx-muted);
+  color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
 }
 

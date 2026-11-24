@@ -428,13 +428,7 @@ it("sorts from the list's head: its own order, then the Filter's choices", async
     [...document.querySelectorAll('[role="option"]')].map((item) =>
       item.textContent?.trim(),
     ),
-  ).toEqual([
-    "Newest",
-    "Follow-up soonest",
-    "Last contact",
-    "Name",
-    "Oldest first",
-  ]);
+  ).toEqual(["Newest", "Due soonest", "Last contact", "Name", "Oldest first"]);
   await act(async () => option("Oldest first").click());
   expect(onChange).toHaveBeenLastCalledWith({ sort: "created", order: "asc" });
 });

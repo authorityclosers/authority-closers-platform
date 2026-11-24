@@ -542,3 +542,36 @@
     min-height: 44px;
   }
 }
+
+/* ---------- v1.96 device polish ----------
+   "26 calls today have no recording · Fix" is a row of its own, not loose
+   words on the page: an amber wash with its dot, the words, and Fix as a
+   green text button at the end, each 44 px to a finger. */
+.missingLine {
+  padding: 2px 4px 2px 14px;
+  border-radius: 16px;
+  background: var(--sx-tone-action-soft);
+}
+
+.missingLine[data-state="fine"] {
+  background: var(--sx-tone-good-soft);
+}
+
+.missingLine button {
+  min-height: 44px;
+}
+
+.missingLine button[aria-expanded] {
+  text-decoration: none;
+}
+
+.missingLine button[data-fix] {
+  padding: 0 12px;
+  border-radius: var(--sx-radius-pill);
+  color: var(--sx-primary-ink);
+}
+
+.missingLine button:focus-visible,
+.missingLine a:focus-visible {
+  outline-color: var(--sx-primary-ink);
+}

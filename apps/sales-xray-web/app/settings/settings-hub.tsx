@@ -61,6 +61,8 @@ import {
 import { SetupHero, useSetup, type SetupFacts } from "./setup-checklist";
 import { ThemePills } from "./theme-pills";
 import styles from "./settings-hub.module.css";
+import shellStyles from "./settings-shell.module.css";
+import { Skeleton } from "../ui/kit";
 
 /**
  * Whether the open workspace is an organisation: true outside the app frame
@@ -80,7 +82,8 @@ export function useVisibleGroups(): {
   sections: SettingsSection[];
 }[] {
   // A section the server would refuse your role isn't listed (Plan & billing
-  // for a member of an organisation); it stays while your role is unknown.
+  // for a member of an organisation), nor while your role is unknown (v1.96
+  // device polish, lane P: a seller saw the owner's sections for 30 s).
   const canHere = useCanHere();
   const inOrganisation = useInOrganisation();
   return SETTINGS_GROUPS.map((group) => ({
@@ -90,7 +93,7 @@ export function useVisibleGroups(): {
         item.group === group &&
         !item.within &&
         (!item.org || inOrganisation) &&
-        (!item.needs || canHere(item.needs) !== false),
+        (!item.needs || canHere(item.needs) === true),
     ),
   })).filter((entry) => entry.sections.length > 0);
 }
@@ -100,15 +103,52 @@ const PERSONAL_GROUPS: readonly SettingsGroup[] = ["Just me", "This phone"];
 
 /**
  * Which hub this person gets: the owner's (setup and company cards) where
- * they can set the company up, or while the role is still unknown; the
- * seller's everywhere else, a personal workspace included.
+ * they can set the company up; the seller's everywhere else, a personal
+ * workspace included; "unknown" while the role is still on its way and this
+ * browser has never seen one (v1.96 device polish, lane P: a seller saw the
+ * owner's groups for 30 s on slow 3G). workspace-role.ts keeps the last role.
  */
-export function useHubKind(): "owner" | "personal" {
+export function useHubKind(): "owner" | "personal" | "unknown" {
   const canHere = useCanHere();
   const inOrganisation = useInOrganisation();
-  return inOrganisation && canHere("leads.manage") !== false
-    ? "owner"
-    : "personal";
+  if (!inOrganisation) return "personal";
+  const manages = canHere("leads.manage");
+  if (manages === null) return "unknown";
+  return manages ? "owner" : "personal";
+}
+
+/** The hub before the role is known: plain outlines, no one's groups. */
+function HubOutline() {
+  return (
+    <div
+      className={shellStyles.loading}
+      role="status"
+      aria-busy="true"
+      aria-label="Loading settings"
+      data-hub-outline=""
+    >
+      {[3, 2].map((rows, panel) => (
+        <div
+          key={panel}
+          className={shellStyles.skeletonPanel}
+          aria-hidden="true"
+        >
+          <span className={shellStyles.skeletonHead}>
+            <Skeleton width="34%" height={12} />
+          </span>
+          {Array.from({ length: rows }, (_, row) => (
+            <span key={row} className={shellStyles.skeletonRow}>
+              <Skeleton width={36} height={36} />
+              <span className={shellStyles.skeletonLines}>
+                <Skeleton width="46%" height={12} />
+                <Skeleton width="72%" height={10} />
+              </span>
+            </span>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /** Where a group's card goes: its one section, or its own page. */
@@ -591,7 +631,13 @@ export function SettingsHub() {
     <div className={styles.hub} data-hub={kind}>
       {/* The top bar already says Settings: the heading is for readers. */}
       <h1 className={styles.readerOnly}>Settings</h1>
-      {kind === "owner" ? <OwnerHub /> : <PersonalHub />}
+      {kind === "owner" ? (
+        <OwnerHub />
+      ) : kind === "personal" ? (
+        <PersonalHub />
+      ) : (
+        <HubOutline />
+      )}
     </div>
   );
 }

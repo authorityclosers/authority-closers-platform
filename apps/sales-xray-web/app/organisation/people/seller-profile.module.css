@@ -306,3 +306,21 @@
     font-size: var(--sx-text-xs);
   }
 }
+
+/* ---------- v1.96 device polish ----------
+   Today's three figures keep their words whole at 360 px ("Follow-/ups"
+   broke): the third column is the widest, the cells' sides narrower, and a
+   word never breaks inside itself. */
+.figureCell span {
+  white-space: nowrap;
+}
+
+@media (max-width: 399.98px) {
+  .figures {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr);
+  }
+
+  .figureCell {
+    padding: 0 8px;
+  }
+}

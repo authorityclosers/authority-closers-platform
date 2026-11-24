@@ -1,0 +1,70 @@
+/* didnt-load.tsx: the one "didn't load" card, a white radius-22 card with the
+   action-amber wash and a dark ink icon in an amber tile. */
+.card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 4px 12px;
+  align-items: center;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid color-mix(in oklab, var(--lx-warning) 28%, var(--sx-line));
+  border-radius: 22px;
+  background: color-mix(
+    in oklab,
+    var(--lx-warning-soft) 70%,
+    var(--sx-surface)
+  );
+}
+
+.icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--lx-warning) 16%, var(--sx-surface));
+  color: var(--lx-ink);
+}
+
+.copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.copy b {
+  color: var(--lx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+}
+
+.copy p {
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
+}
+
+.retry {
+  display: inline-flex;
+  grid-column: 2;
+  justify-self: start;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 0 18px;
+  border: 1px solid var(--sx-line);
+  border-radius: 999px;
+  background: var(--sx-surface);
+  color: var(--lx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.retry:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}

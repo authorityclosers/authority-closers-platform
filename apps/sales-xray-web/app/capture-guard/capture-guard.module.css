@@ -63,11 +63,20 @@
 .check a {
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   min-height: 44px;
-  padding: 0 12px;
-  color: var(--sx-ink);
-  font-weight: 600;
+  padding: 0 4px 0 12px;
+  color: var(--sx-primary-ink);
+  font-weight: 650;
   text-decoration: none;
+}
+
+/* The check's heading: a quiet card header, not a loose big title (v1.96). */
+.health > h3 {
+  margin: 0 0 2px;
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+  line-height: var(--sx-leading-24);
 }
 /* The phone's last recording, or where to check without a phone. */
 .checkNote {
@@ -81,7 +90,7 @@
   padding: 0 4px;
   border: 0;
   background: none;
-  color: var(--sx-accent);
+  color: var(--sx-primary-ink);
   font: inherit;
   font-weight: 600;
   text-decoration: none;

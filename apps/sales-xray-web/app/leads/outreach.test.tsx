@@ -289,11 +289,12 @@ it("names an outside sender in words, never by its slug", () => {
   ).toBe("SX Engage");
 });
 
-it("keeps the chip with the counter's last part", async () => {
+it("moves the chip with the counter's last part", async () => {
   await act(async () => root.render(<OutreachLine guard={held} />));
   const chip = host.querySelector("span[data-verdict]")!;
-  // One unbreakable part: "3 touches this week" and its chip.
+  // One box: never the chip on a line alone (v1.96, the 1440 pane).
   expect(chip.parentElement?.textContent).toBe(
-    "3 touches this week\u00a03 this week",
+    "3 touches this week 3 this week",
   );
+  expect(chip.parentElement?.className).toMatch(/partLast/);
 });

@@ -20,13 +20,13 @@
     "review": "Re-pin 14 Nov 2026 (ux-audit for the orchestrator, during the v1.60 hold while the CI queue was quiet; the 14025987287 pin from run 43402793658, made 09:40Z on 13 Nov, would pass its 36-hour window at about 21:40Z on 14 Nov): producer run 43619970592 (workbench-checks.yml, push, success) on a request whose only parent is workbench 0f33427e8 (dev/live HEAD; its lockfiles, packages, workflows and scripts/ci match main except .github/workflows/sales-xray-native-image.yml, checked by diff), and which changes only .wb-ci/request.json. Same identity 8fed5c6d; artifact digest from the API. The pinned 14025987287 bundle was deleted first so a fresh bundle could publish."
   },
   {
-    "artifact_id": 14770453082,
-    "digest": "73efab9658e6d63ebadea8d9b334e0e16ad0e12a90c7b9dabaf127211b1d9d39",
+    "artifact_id": 14922239368,
+    "digest": "e111e4d1626149708c83eef08d80ab1b4ffc122e6733101bbc003f28ce17bdea",
     "identity": "df10b24de0db7bee94c7d0e374e55de165d998c577dfd93f3664144c284e3144",
     "repository": "authorityclosers/authority-closers-platform",
-    "run_id": 45063476965,
-    "source_sha": "4fd83c428d94a8f15bac537e0cdb45df52302777",
-    "reviewed_source_sha": "0494d36e842c831234bd9a24df9b99a316a3dc83",
-    "review": "Re-pin 22 Nov 2026 (SX-RELEASE on ac, for the v1.95 cut): the df10b24d pin 14695878341 passed its 36-hour window at about 18:35Z on 22 Nov. Producer run 45063476965 (workbench-checks.yml, push, success) on request 4fd83c428 whose only parent is workbench 0494d36e8 (dev/live HEAD) and which changes only .wb-ci/request.json; identity df10b24d, which main shares (same lockfiles and producer code); artifact 14770453082 made 19:59:28Z, reusable until about 07:59Z on 24 Nov; digest from the API. Two earlier unpinnable bundles of this session (14768743614, 14770127740) were deleted (owner's yes 23 Nov 01:13 IST, and his 01:20 IST rule for routine CI steps)."
+    "run_id": 45399620044,
+    "source_sha": "be01f1b6555bdf514d6da7998267d96989d0b36e",
+    "reviewed_source_sha": "79a582042d2d6dd4c9b872a404cbf4c21e4441ef",
+    "review": "Re-pin 24 Nov 2026 (SX-SHIP on ac, for the v1.96 cut): the df10b24d pin 14770453082 passed its 36-hour window at about 07:59Z on 24 Nov. Producer run 45399620044 (workbench-checks.yml, push, success) on request be01f1b65 whose only parent is workbench 79a582042 (dev/live HEAD) and which changes only .wb-ci/request.json; identity df10b24d, which main shares (same lockfiles and producer code); artifact 14922239368 made 13:07:08Z, reusable until about 01:07Z on 26 Nov; digest from the API. Nothing was deleted."
   }
 ]

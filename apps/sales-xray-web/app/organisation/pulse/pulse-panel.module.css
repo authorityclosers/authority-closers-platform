@@ -73,6 +73,24 @@
   color: var(--sx-ink-2);
 }
 
+/* Connect: the family's solid deep-green pill, white words; when it can't be
+   used, plain grey (the card's line above says why), never a washed teal
+   (v1.96). */
+.chip.chip[data-variant="primary"]:not(:disabled) {
+  border-color: transparent;
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
+.chip.chip[data-variant="primary"]:disabled {
+  border-color: transparent;
+  background: var(--sx-fill);
+  box-shadow: none;
+  color: var(--sx-muted);
+  opacity: 1;
+}
+
 .chip.chip[data-variant="ghost"][data-confirm] {
   color: var(--sx-bad);
 }
@@ -91,9 +109,16 @@
   white-space: nowrap;
 }
 
+/* Its note on its own line under the title, never cut (v1.96: "Allowed by
+   each per…" at 360). */
+.fit h2 {
+  flex-wrap: wrap;
+}
+
 .fit h2 > small {
-  flex: 1 1 0;
+  flex: 1 1 100%;
   min-width: 0;
+  white-space: normal;
 }
 
 /* What you share: the switches as rows split by hairlines inside the card,

@@ -1489,3 +1489,47 @@
     padding-inline: 0;
   }
 }
+
+/* ---------- v1.96 device polish ----------
+   One main action on the focus card: Hear Dipak's take is the solid deep-green
+   pill; the latest call's Open report, Call coaching and See calls are quiet
+   green text links on one row (they were three grey pills of equal weight). */
+.take.take {
+  min-height: 44px;
+  border-color: transparent;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
+.take.take:hover {
+  background: var(--sx-gloss);
+  filter: brightness(1.06);
+}
+
+.quietLink {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 0 4px;
+  color: var(--sx-primary-ink);
+  font: var(--sx-text-label);
+  text-decoration: none;
+}
+
+.quietLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.quietLink:focus-visible {
+  border-radius: var(--sx-radius-sm, 8px);
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* A call's name in the calls list is a whole 24 px line to a finger. */
+.callList a[href] {
+  min-height: 24px;
+}

@@ -88,8 +88,8 @@ function profileParts(settings: AiSettings): number {
 }
 
 /**
- * The business profile, folded to one row that says how much is filled; it
- * opens by itself while the profile is incomplete.
+ * The business profile, folded to one row that says how much is filled; a
+ * tap opens it (v1.96: it no longer opens by itself, so the page stays short).
  */
 function ProfileFold({
   filled,
@@ -98,7 +98,8 @@ function ProfileFold({
   filled: number;
   children: ReactNode;
 }) {
-  const [open] = useState(filled < 4);
+  // Folded by default, one row (v1.96 device polish): it opens on a tap.
+  const [open] = useState(false);
   return (
     <details className={aiStyles.fold} open={open}>
       <summary>

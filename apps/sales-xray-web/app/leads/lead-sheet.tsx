@@ -234,6 +234,7 @@ import { Sheet as Picker } from "../ui/sheet";
 import deleteStyles from "./delete-leads.module.css";
 import { keepDraft, readDraft } from "./drafts";
 import styles from "./leads.module.css";
+import { LeadOpeningSkeleton } from "./lead-opening-skeleton";
 import lens from "../ui/call-lens/call-lens.module.css";
 import { LeadBrief } from "./lead-brief";
 import { LeadPageFrame } from "./lead-page-frame";
@@ -5292,6 +5293,7 @@ export function LeadCard({
           onHeld={() =>
             void readLead(lead.lead_id).then(onChanged, () => undefined)
           }
+          workSlot={(at) => inTeamHours(at, detail.work_hours ?? null)}
           onFollowUp={async (at) => {
             // Held: the next call goes in for when it is OK again (v1.95).
             try {
@@ -6030,8 +6032,8 @@ export function LeadSheet({
             ) : null}
           </>
         ) : (
-          <div className={styles.sheetLoading} aria-busy="true">
-            Opening the lead…
+          <div className={styles.sheetLoading} data-outline="">
+            <LeadOpeningSkeleton />
           </div>
         )}
         {/* In the page: while it is open the page behind it is out of

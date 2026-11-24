@@ -13,6 +13,7 @@ import {
   Building2,
   PhoneCall,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
@@ -31,6 +32,8 @@ import { inPhoneApp } from "../leads/native-phone";
 import { PhoneLogCard } from "../leads/phone-log-card";
 import { TakingSwitch } from "../leads/taking-switch";
 import { Panel, Skeleton } from "../ui/kit";
+import { DidntLoad } from "../ui/didnt-load";
+import { useWorkspaceAccess } from "../workspace-access";
 import { CompanyCallingPanel } from "./company-calling";
 import styles from "./sections.module.css";
 
@@ -87,6 +90,11 @@ export function SellingSettings() {
   const [me, setMe] = useState<Read<Desk["me"]>>({ status: "loading" });
   const [ai, setAi] = useState<Read<CallAiSettings>>({ status: "loading" });
   const [version, setVersion] = useState(0);
+  const access = useWorkspaceAccess();
+  const inOrganisation =
+    access?.workspaces?.find(
+      (workspace) => workspace.tenant_id === access.context?.tenantId,
+    )?.kind === "organisation";
 
   useEffect(() => {
     const controller = new AbortController();
@@ -103,6 +111,23 @@ export function SellingSettings() {
       });
     return () => controller.abort();
   }, [version]);
+
+  // In an organisation a failed read is the server's, not "no lead desk":
+  // one card says it didn't load, with Try again (v1.96 device polish, lane
+  // P: on a 502 a seller was told to switch to her organisation).
+  if (me.status === "none" && inOrganisation)
+    return (
+      <div className={styles.stack}>
+        <DidntLoad
+          what="Your selling settings"
+          onRetry={() => {
+            setMe({ status: "loading" });
+            setAi({ status: "loading" });
+            setVersion((value) => value + 1);
+          }}
+        />
+      </div>
+    );
 
   if (me.status === "none")
     return (
@@ -143,14 +168,14 @@ export function SellingSettings() {
         {/* Where they are really set (phone personas ph1-37, 1 Nov 2026: the
             hint sent an owner to "Leads → Team", which doesn't exist). */}
         {me.status !== "ready" ? null : me.value.can_manage ? (
-          <p className={styles.hint}>
-            Each seller&apos;s languages, areas and how many open leads they
-            hold, yours too, are set in{" "}
-            <Link href="/organisation?tab=leads&part=rules">
-              Leads setup → Lead rules → Seller rules
-            </Link>
-            .
-          </p>
+          <Line
+            icon={<SlidersHorizontal size={18} />}
+            title="Seller rules"
+            href="/settings/lead-rules"
+            action="Open"
+          >
+            Languages, areas and open-lead limits, yours too.
+          </Line>
         ) : (
           <p className={styles.hint}>
             Your languages, areas and how many open leads you hold are set by
@@ -171,13 +196,11 @@ export function SellingSettings() {
             // opened the older phone flow, which shows nothing once it's done).
             onAction={() => openCaptureSetup()}
           >
-            Recording, the recordings folder, background and uploads, checked
-            one by one and proven with a test call.
+            Recording, folder and uploads, checked with a test call.
           </Line>
         ) : null}
         <Line icon={<ShieldCheck size={18} />} title="Private calls">
-          Only calls with your leads are logged; every other number stays on
-          your phone. A logged call you mark private shows to you alone.
+          Only calls with your leads are logged.
         </Line>
       </Panel>
 
@@ -192,7 +215,7 @@ export function SellingSettings() {
           href="/settings/notifications"
           action="Notifications"
         >
-          Your phone tells you when a new lead comes in or a call is due.
+          When a new lead comes in or a call is due.
         </Line>
       </Panel>
 

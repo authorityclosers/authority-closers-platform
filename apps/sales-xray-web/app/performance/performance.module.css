@@ -428,3 +428,16 @@
   color: var(--sx-gloss-ink);
   font-weight: 750;
 }
+
+/* v1.96 device polish: a computer's top bar already names the page, so the
+   page's own heading stays for screen readers only (Growth was said twice). */
+@media (min-width: 900px) {
+  .pageHead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

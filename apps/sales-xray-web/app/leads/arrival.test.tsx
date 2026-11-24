@@ -112,28 +112,36 @@ it("reads an unowned new Meta lead as one status line, with its time", async () 
     String(Date.parse("2026-11-16T07:00:00Z")),
   );
   forgetSeen();
-  await act(async () =>
-    root.render(
-      <ul>
-        <LeadLine
-          row={row}
-          onOpen={() => undefined}
-          compact
-          showOwner
-          stageWord="New"
-        />
-      </ul>,
-    ),
-  );
-  expect(host.querySelector('[class*="leadSubWords"]')?.textContent).toMatch(
-    /^New · Meta.* · No owner$/,
-  );
-  expect(host.textContent).not.toContain("No owner yet");
-  expect(host.textContent).not.toContain("Waiting for an owner");
-  expect(host.querySelector("[data-lead-new]")?.textContent).toBe("New");
-  expect(host.querySelector("[data-lead-age]")?.getAttribute("title")).toMatch(
-    /^Came in 16 Nov 2026/,
-  );
+  // Three days after the lead came in, so its age reads "3 d" on any day the
+  // suite runs (from 23 Nov, a week on, the real clock gave "16 Nov").
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 10, 19, 15, 0));
+  try {
+    await act(async () =>
+      root.render(
+        <ul>
+          <LeadLine
+            row={row}
+            onOpen={() => undefined}
+            compact
+            showOwner
+            stageWord="New"
+          />
+        </ul>,
+      ),
+    );
+    expect(host.querySelector('[class*="leadSubWords"]')?.textContent).toMatch(
+      /^New · Meta.* · No owner · 3 d$/,
+    );
+    expect(host.textContent).not.toContain("No owner yet");
+    expect(host.textContent).not.toContain("Waiting for an owner");
+    expect(host.querySelector("[data-lead-new]")?.textContent).toBe("New");
+    expect(
+      host.querySelector("[data-lead-age]")?.getAttribute("title"),
+    ).toMatch(/^Came in 16 Nov 2026/);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it("shows a seller only Received, and a manager the whole Timeline", async () => {

@@ -1246,3 +1246,32 @@
     justify-content: flex-end;
   }
 }
+
+/* ---------- v1.96 device polish (Calls) ---------- */
+
+/* The switch's words keep inside their pills at 360 px: "Reports ready"
+   touched its pill's edge. All is short, the two long ones share the rest. */
+@media (max-width: 399.98px) {
+  .tabs {
+    grid-template-columns: minmax(48px, 0.55fr) minmax(0, 1.45fr) minmax(
+        0,
+        1.2fr
+      );
+  }
+
+  .tab {
+    padding-inline: 6px;
+  }
+}
+
+/* "Your phone calls" stays inside its card: its padding counted on top of
+   its full width, so it ran 26 px past the card's edge. */
+.callLog {
+  box-sizing: border-box;
+}
+
+/* A report's name is a whole 24 px line to a finger (the row opens it too). */
+.rowLink {
+  display: inline-block;
+  min-height: 24px;
+}

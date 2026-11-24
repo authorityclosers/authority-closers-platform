@@ -267,6 +267,26 @@ div.stack {
   white-space: nowrap;
 }
 
+/* One line, never "Follow-up ·" over the date (v1.96 device polish, 360-430
+   px): the date and its pencil come first; "Follow-up ·" sits before them
+   when it fits, and where it doesn't it drops out of sight (the calendar
+   says it, and a screen reader still reads it). */
+.follow:not([data-late]) > span {
+  display: flex;
+  flex-flow: row-reverse wrap;
+  justify-content: flex-end;
+  column-gap: 0.3em;
+  max-height: 20px;
+  max-height: 1lh;
+  overflow: hidden;
+}
+
+.follow:not([data-late]) > span > .followWhen {
+  order: -1;
+  height: 20px;
+  height: 1lh;
+}
+
 /* The pencil rides with the last words, wrapped or not. */
 .followEdit {
   display: inline-block;
@@ -304,6 +324,7 @@ div.stack {
   padding: 0;
   overflow-x: auto;
   font-size: var(--sx-text-xs);
+  grid-template-columns: repeat(var(--step-count, 1), min-content);
   list-style: none;
   scrollbar-width: none;
 }
@@ -1275,4 +1296,65 @@ section.pane {
 .outreachRow {
   padding-top: 12px;
   border-top: 1px solid var(--sx-hairline);
+}
+
+/* v1.96 device polish: on a phone the strip is the step before, the current
+   one and the next, a third of the card each, so a name never runs off the
+   edge mid-word ("Meetin… schedu…" at 360-430). Names wrap between words, a
+   whole word never splits; a line fading to the card's edge says more steps
+   sit that way (all of them under the stage's Change). */
+@media (max-width: 599.98px) {
+  .stepper {
+    grid-template-columns: repeat(
+      var(--step-near, 3),
+      minmax(min-content, 1fr)
+    );
+    column-gap: 8px;
+    padding-inline-end: 0;
+  }
+
+  .stepper > .step {
+    min-width: 0;
+  }
+
+  .stepper > .step[data-far] {
+    display: none;
+  }
+
+  .stepper > .step[data-state="current"] .stepLabel {
+    white-space: normal;
+  }
+
+  .stepper .stepLabel {
+    hyphens: none;
+    overflow-wrap: normal;
+    text-wrap: balance;
+  }
+
+  /* More steps before: the line runs in from the card's edge. */
+  .stepper > .step[data-more="before"]::before {
+    display: block;
+    left: -8px;
+    width: calc(50% + 8px);
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--sx-primary-ink) 75%
+    );
+  }
+
+  /* More steps after: the line runs on out to the card's edge. */
+  .stepper > .step[data-more="after"]::after {
+    position: absolute;
+    top: 9px;
+    left: 50%;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(
+      to right,
+      var(--sx-line-strong) 25%,
+      transparent
+    );
+    content: "";
+  }
 }

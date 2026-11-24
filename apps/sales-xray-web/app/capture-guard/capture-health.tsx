@@ -1,4 +1,5 @@
 "use client";
+import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "../ui/kit";
@@ -256,6 +257,7 @@ export function CaptureHealthView({
             }
           >
             {status?.supported ? "Upload settings" : "Apps & devices"}
+            <ChevronRight size={16} aria-hidden="true" />
           </Link>
         </div>
       ) : null}
