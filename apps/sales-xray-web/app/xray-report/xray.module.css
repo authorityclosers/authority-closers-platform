@@ -331,6 +331,24 @@
 .iconButton:focus-visible .tip {
   opacity: 1;
 }
+/* v1.98 (bug radar): the hidden tip never makes a phone page scroll sideways.
+   Under 480 px it hangs from the whole "Call Statistics" row, full row width,
+   instead of centring on the small button. */
+@media (max-width: 479.98px) {
+  .statsHead {
+    position: relative;
+  }
+  .statsHead .iconButton {
+    position: static;
+  }
+  .statsHead .tip {
+    left: 0;
+    right: 0;
+    top: calc(100% + 4px);
+    transform: none;
+    width: auto;
+  }
+}
 .stats {
   display: grid;
   gap: 14px;
@@ -2185,6 +2203,27 @@
   }
   .glanceCard {
     padding: 16px;
+  }
+}
+/* v1.98 (bug radar, 320-360 px with large text): the score's words and its
+   badge stay inside the card. The badge may take a second line, and on the
+   narrowest phones the ring sits above the words instead of beside them. */
+.heroWords > * {
+  max-width: 100%;
+}
+.heroWords .scoreBadge {
+  line-height: var(--sx-leading-20);
+  padding-block: 2px;
+  white-space: normal;
+}
+@media (max-width: 379.98px) {
+  .heroScore {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 12px;
+  }
+  .heroScore .scoreRing {
+    height: 80px;
+    width: 80px;
   }
 }
 /* The numbers under the hero stay small: label and figure, no picture, so
