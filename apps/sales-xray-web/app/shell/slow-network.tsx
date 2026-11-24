@@ -66,7 +66,15 @@ export function SlowNetwork() {
     };
   }, [stuckCard]);
   return (
-    <div className={styles.pill} data-sx-slow-pill="" role="status">
+    // A passing status, like the notice cards: left out of bug-report captures
+    // and the pixel guard ([data-capture-skip]), which settles 9 s on a review
+    // fixture whose loading outline never ends.
+    <div
+      className={styles.pill}
+      data-sx-slow-pill=""
+      data-capture-skip=""
+      role="status"
+    >
       <span className={styles.dot} aria-hidden="true" />
       Slow network. Still loading…
     </div>
