@@ -64,7 +64,8 @@ def test_failed_shards_keep_diagnostics_with_the_same_coverage_identity() -> Non
     assert green["with"]["path"] == failed["with"]["path"] + "/manifest.json"
     steps = JOBS["summary"]["steps"]
     download = next(step for step in steps if step.get("uses", "").startswith("actions/download"))
-    assert download["with"]["pattern"] == "wb-py-*-${{ github.sha }}-*"
+    # A failed fold leaves every shard's artifact (green or failed) in place, and the summary reads them all.
+    assert "|| format('wb-py-*-{0}-*', github.sha) }}" in download["with"]["pattern"]
     verify = next(step for step in steps if step.get("id") == "verify")
     assert "python_test_shard.py verify" in verify["run"]
     assert '--sha "${{ github.sha }}"' in verify["run"]
@@ -130,8 +131,18 @@ def test_each_run_folds_its_shard_manifests_into_one_artifact() -> None:
     assert fold["with"]["delete-merged"] is True
     assert fold["with"]["separate-directories"] is True
     assert fold["with"]["pattern"] == "wb-py-[ab]-${{ github.sha }}-${{ github.run_attempt }}-*"
-    # The summary still downloads the folded artifact; a failed fold leaves the shards in place.
-    assert fnmatch.fnmatchcase(fold["with"]["name"], download["with"]["pattern"])
+    # After a good fold the summary downloads only the folded artifact: the shard artifacts the fold just deleted
+    # can still be listed by GitHub for a while, and a wide pattern 404'd on them (24 Nov 2026). A failed fold
+    # leaves the shards in place, and the pattern falls back to them.
+    pattern = download["with"]["pattern"]
+    assert fold["id"] == "fold"
+    assert pattern.startswith("${{ steps.fold.outcome == 'success' && ")
+    folded = "format('wb-py-shards-{0}-{1}', github.sha, github.run_attempt)"
+    assert folded in pattern
+    assert fold["with"]["name"] == "wb-py-shards-${{ github.sha }}-${{ github.run_attempt }}"
+    fallback = pattern.split("|| format('", 1)[1].split("'", 1)[0].replace("{0}", "${{ github.sha }}")
+    assert fnmatch.fnmatchcase(fold["with"]["name"], fallback)
+    assert fnmatch.fnmatchcase("wb-py-a-${{ github.sha }}-1-0", fallback)
     assert fold["continue-on-error"] is True
     assert fold["if"] == download["if"]
 
