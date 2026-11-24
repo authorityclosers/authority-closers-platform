@@ -24,13 +24,25 @@ import { FixtureWorkspace } from "../leads/leads-preview";
 import { fixtureBilling } from "../plans/fixture-billing";
 import { OrganisationFixture } from "../_fixtures/organisation-fixture";
 
+// This preview is an organisation, which has no free trial (only a personal
+// account has one): its Plan & usage reads the plans fixture without it.
+const organisationBilling: typeof fixtureBilling = {
+  ...fixtureBilling,
+  async readMePlan() {
+    const plan = await fixtureBilling.readMePlan();
+    return plan.trial
+      ? { ...plan, plan: { key: "trial", name: "Trial" }, trial: null }
+      : plan;
+  },
+};
+
 function Section() {
   const query = useSearchParams();
   const id = query.get("section");
   // Plan & usage reads the plans fixture's billing; ?billing=fail leaves
   // every read to fail, to review the "not loaded" state.
   const fixture = id === "plan" && query.get("billing") !== "fail";
-  const billing = useBillingAccount(fixture, fixtureBilling);
+  const billing = useBillingAccount(fixture, organisationBilling);
   return (
     <AcquisitionShell
       authenticated
