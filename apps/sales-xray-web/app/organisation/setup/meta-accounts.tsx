@@ -22,6 +22,7 @@ import type {
   MetaPage,
 } from "../../leads/sources-view";
 import { notify } from "../../notice-center";
+import { Sheet } from "../../ui/sheet";
 import { metaFormStatus, metaRequest } from "./meta-client";
 import styles from "./setup.module.css";
 
@@ -193,6 +194,143 @@ export function MetaAccounts({
           Connect another Facebook account
         </a>
       ) : null}
+      {groups.length ? <DisconnectFacebook onChanged={onChanged} /> : null}
+    </>
+  );
+}
+
+/** What disconnecting Facebook stops (asked first) or stopped (POST /meta/disconnect). */
+export type MetaDisconnected = {
+  done: boolean;
+  accounts: number;
+  pages: number;
+  pagesOn: number;
+  formsOn: number;
+  leadsKept: number;
+  revoked: boolean;
+};
+
+/** The confirm sheet's words, from the server's own count. */
+export function disconnectWords(count: MetaDisconnected): string {
+  const bringing = count.pagesOn
+    ? `This stops ${plural(count.pagesOn, "Page")}${
+        count.formsOn ? ` and ${plural(count.formsOn, "form")}` : ""
+      } bringing leads`
+    : "No Page brings leads now";
+  const all =
+    count.pages > count.pagesOn
+      ? `, and ${plural(count.pages, "connected Page")} in all go`
+      : "";
+  const kept = count.leadsKept
+    ? `${plural(count.leadsKept, "lead")} from Facebook already in Sales X-Ray stay, with their history.`
+    : "Leads already in Sales X-Ray stay.";
+  return `${bringing}${all}. ${kept}`;
+}
+
+/**
+ * Disconnect Facebook entirely (owner bug reports 111 and 112, 29 Oct 2026:
+ * "an option to remove the connected entire facebook account"; the server half
+ * landed 20 Nov 2026). The sheet first asks the server what would stop (it
+ * changes nothing), says so, and only Disconnect does it: every Facebook
+ * account's Pages stop, Meta takes back the sign-in, leads already here stay.
+ */
+export function DisconnectFacebook({ onChanged }: { onChanged: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [count, setCount] = useState<MetaDisconnected | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const ask = async () => {
+    setOpen(true);
+    setCount(null);
+    setProblem(null);
+    try {
+      setCount(
+        await metaRequest<MetaDisconnected>("/disconnect", { confirm: false }),
+      );
+    } catch (error) {
+      setProblem(failed(error));
+    }
+  };
+  const disconnect = async () => {
+    setBusy(true);
+    try {
+      const done = await metaRequest<MetaDisconnected>("/disconnect", {
+        confirm: true,
+      });
+      notify({
+        id: "meta-account",
+        tone: "success",
+        title: "Facebook disconnected",
+        message: `${plural(done.pages, "Page")} stopped. Leads already here stay.`,
+      });
+      setOpen(false);
+      onChanged();
+    } catch (error) {
+      notify({
+        id: "meta-account",
+        tone: "error",
+        title: "Not disconnected",
+        message: failed(error),
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <button
+        type="button"
+        className={`${styles.quietRow} ${styles.disconnectAll}`}
+        data-sx-feature="meta_disconnect_all"
+        onClick={() => void ask()}
+      >
+        Disconnect Facebook account
+      </button>
+      <Sheet
+        open={open}
+        onClose={() => (busy ? undefined : setOpen(false))}
+        title="Disconnect Facebook?"
+        wide="center"
+        footer={
+          <div className={styles.chips}>
+            <button
+              type="button"
+              className={styles.danger}
+              disabled={busy || !count}
+              data-sx-feature="meta_disconnect_all_confirm"
+              onClick={() => void disconnect()}
+            >
+              {busy ? "Disconnecting…" : "Disconnect"}
+            </button>
+            <button
+              type="button"
+              className={styles.chip}
+              disabled={busy}
+              onClick={() => setOpen(false)}
+            >
+              Keep
+            </button>
+          </div>
+        }
+      >
+        <div className={styles.disconnectBody} aria-live="polite">
+          {problem ? (
+            <p>{problem}</p>
+          ) : count ? (
+            <>
+              <p>{disconnectWords(count)}</p>
+              <p className={styles.disconnectNote}>
+                {count.accounts > 1
+                  ? `All ${count.accounts} Facebook accounts are disconnected and Meta takes back Sales X-Ray's access.`
+                  : "The Facebook account is disconnected and Meta takes back Sales X-Ray's access."}{" "}
+                Connecting again brings the Pages back, off.
+              </p>
+            </>
+          ) : (
+            <p>Counting what would stop…</p>
+          )}
+        </div>
+      </Sheet>
     </>
   );
 }
