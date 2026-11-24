@@ -863,9 +863,12 @@
   font-size: var(--sx-text-xs);
 }
 
+/* v1.98: the family's deep green with white words in both themes (in dark the
+   emerald was a light mint with dark words). */
 .filter[aria-pressed="true"] {
-  background: var(--lx-home-emerald);
-  color: var(--sx-surface);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
 }
 
 .filter[aria-pressed="true"] strong {

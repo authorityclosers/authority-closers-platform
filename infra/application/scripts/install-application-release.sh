@@ -352,6 +352,7 @@ initialize_release_profile_contract() {
   # validate_release_profile admits v2 only with an exact UTC switch instant.
   profile_allowed_keys[AC_SALES_XRAY_TRIAL_POLICY]=1
   profile_allowed_keys[AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT]=1
+  profile_allowed_keys[AC_SALES_XRAY_TRIAL_15_DAYS_FROM]=1
 }
 
 initialize_release_profile_contract
@@ -488,12 +489,15 @@ validate_release_profile() {
       return 1
     fi
   fi
-  local trial_policy="v1" trial_switch_at=""
+  local trial_policy="v1" trial_switch_at="" trial_15_days_from=""
   if [[ -n "${profile_values[AC_SALES_XRAY_TRIAL_POLICY]+present}" ]]; then
     trial_policy="${profile_values[AC_SALES_XRAY_TRIAL_POLICY]}"
   fi
   if [[ -n "${profile_values[AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT]+present}" ]]; then
     trial_switch_at="${profile_values[AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT]}"
+  fi
+  if [[ -n "${profile_values[AC_SALES_XRAY_TRIAL_15_DAYS_FROM]+present}" ]]; then
+    trial_15_days_from="${profile_values[AC_SALES_XRAY_TRIAL_15_DAYS_FROM]}"
   fi
   case "$trial_policy" in
     v1)
@@ -501,11 +505,20 @@ validate_release_profile() {
         printf 'AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT requires AC_SALES_XRAY_TRIAL_POLICY=v2.\n' >&2
         return 1
       fi
+      if [[ -n "$trial_15_days_from" ]]; then
+        printf 'AC_SALES_XRAY_TRIAL_15_DAYS_FROM requires AC_SALES_XRAY_TRIAL_POLICY=v2.\n' >&2
+        return 1
+      fi
       ;;
     v2)
       # Without it everyone who started under v1 over a month ago would lose access.
       if ! [[ "$trial_switch_at" =~ ^20[0-9]{2}-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9]\+00:00$ ]]; then
         printf 'AC_SALES_XRAY_TRIAL_POLICY=v2 requires AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT as YYYY-MM-DDTHH:MM:SS+00:00.\n' >&2
+        return 1
+      fi
+      # Optional: new trials are 15 days from this instant on; earlier ones keep their month.
+      if [[ -n "$trial_15_days_from" ]] && ! [[ "$trial_15_days_from" =~ ^20[0-9]{2}-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9]\+00:00$ ]]; then
+        printf 'AC_SALES_XRAY_TRIAL_15_DAYS_FROM must be YYYY-MM-DDTHH:MM:SS+00:00.\n' >&2
         return 1
       fi
       ;;
@@ -1130,6 +1143,7 @@ compose_for() {
         -u AC_SALES_XRAY_UPLOAD_RESPONSE_BUDGET_SECONDS \
         -u AC_SALES_XRAY_TRIAL_POLICY \
         -u AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT \
+        -u AC_SALES_XRAY_TRIAL_15_DAYS_FROM \
         -u AC_ADMIN_APP_URL \
         -u AC_COACH_APP_URL \
         -u AC_API_URL \

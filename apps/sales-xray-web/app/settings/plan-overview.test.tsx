@@ -33,7 +33,14 @@ afterEach(async () => {
 
 // Owner, 22 Nov 2026: "1 month + 3 hours", whichever comes first.
 const plan = (trial: MePlan["trial"]): MePlan => ({
-  plan: { key: "trial", name: trial?.endsAt ? "1 month free" : "Trial" },
+  plan: {
+    key: "trial",
+    name: !trial?.endsAt
+      ? "Trial"
+      : trial.days === 15
+        ? "15 days free"
+        : "1 month free",
+  },
   allowance: {
     allowanceSeconds: 10_800,
     committedSeconds: 3000,
@@ -77,19 +84,31 @@ it("says the free month, its three hours and the days and time left", async () =
     plan({ seconds: 10_800, endsAt: "2026-12-25T07:00:00Z" }),
   );
   expect(text).toContain("1 month free");
-  expect(text).toContain("Free for 1 month · 3 hours of call analysis");
+  expect(text).toContain("Free for 1 month or 3 hours of call analysis");
   expect(text).toContain("27 days · 2 h 10 min left");
   expect(text).toContain("Free");
   expect(text).not.toContain("No plan yet");
   expect(text).not.toContain("No subscription yet.");
+  // A month that started before 25 Nov keeps its month: never "15 days" to them.
   expect(text).not.toMatch(/15\s*days?/i);
+});
+
+it("says 15 days or 3 hours for a trial that started from 25 Nov", async () => {
+  // Owner, 25 Nov 2026: "fifteen days or three hours, no card, whichever ends".
+  const text = await show(
+    plan({ seconds: 10_800, endsAt: "2026-12-10T07:00:00Z", days: 15 }),
+  );
+  expect(text).toContain("15 days free");
+  expect(text).toContain("Free for 15 days or 3 hours of call analysis");
+  expect(text).toContain("12 days · 2 h 10 min left");
+  expect(text).not.toMatch(/1 month/i);
 });
 
 it("says which end of the free month came first", async () => {
   vi.setSystemTime(new Date("2026-12-26T06:30:00Z"));
   expect(
     await show(plan({ seconds: 10_800, endsAt: "2026-12-25T07:00:00Z" }), 0),
-  ).toContain("Your free month has ended");
+  ).toContain("Your free trial has ended");
   vi.setSystemTime(new Date("2026-11-28T06:30:00Z"));
   expect(
     await show(plan({ seconds: 10_800, endsAt: "2026-12-25T07:00:00Z" }), 0),

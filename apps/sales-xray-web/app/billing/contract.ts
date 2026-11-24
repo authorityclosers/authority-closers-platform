@@ -286,10 +286,23 @@ export type MePlan = {
   plan: { key: string; name: string };
   allowance: Allowance;
   longestCallSeconds: number;
-  /** The free trial's size and end (null end: no month, trial v1); null when the
-   *  plan in effect is not the trial (owner, 22 Nov 2026: "1 month + 3 hours"). */
-  trial?: { seconds: number; endsAt: string | null } | null;
+  /** The free trial's size, end (null: no end, trial v1) and length in days; null
+   *  when the plan in effect is not the trial. New trials are 15 days or 3 hours
+   *  (owner, 25 Nov 2026); one that started before keeps its month (30 days). */
+  trial?: {
+    seconds: number;
+    endsAt: string | null;
+    days?: number | null;
+  } | null;
 };
+
+/** The trial's length from the plan's name ("15 days free", "1 month free"): the
+ *  server names it there so the trial object keeps the two keys older apps parse. */
+export function trialDaysFromName(name: string): number | null {
+  if (name === "1 month free") return 30;
+  const days = /^(\d{1,3}) days free$/.exec(name);
+  return days ? Number(days[1]) : null;
+}
 export type UsageCall = {
   submissionId: string;
   createdAt: string;
@@ -344,7 +357,13 @@ export function parseMePlan(value: unknown): MePlan {
     allowance: parseAllowance(raw.allowance, "me.plan.allowance"),
     longestCallSeconds: integer(raw, "longest_call_seconds", "me.plan"),
     trial: trial
-      ? { seconds: integer(trial, "seconds", "me.plan.trial"), endsAt }
+      ? {
+          seconds: integer(trial, "seconds", "me.plan.trial"),
+          endsAt,
+          days: endsAt
+            ? trialDaysFromName(text(plan, "name", "me.plan.plan"))
+            : null,
+        }
       : null,
   };
 }

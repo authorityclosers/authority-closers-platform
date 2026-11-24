@@ -92,7 +92,7 @@ function read(): Store {
   } catch {
     // Fresh store.
   }
-  return { orders: {}, subscriptions: [], minutesLeft: 62, minutesTotal: 100 };
+  return { orders: {}, subscriptions: [], minutesLeft: 142, minutesTotal: 180 };
 }
 function write(store: Store) {
   try {
@@ -287,16 +287,24 @@ export const fixtureBilling: BillingClient = {
     await wait();
     const store = read();
     const current = liveSubscription(store);
+    // On the trial: a new one, 15 days or 3 hours (owner, 25 Nov 2026), with
+    // 12 days of it left, as production names it.
     return parseMePlan({
       plan: current
         ? { key: current.plan_key, name: current.plan_name }
-        : { key: "trial", name: "Trial" },
+        : { key: "trial", name: "15 days free" },
       allowance: {
         allowance_seconds: store.minutesTotal * 60,
         committed_seconds: (store.minutesTotal - store.minutesLeft) * 60,
         available_seconds: store.minutesLeft * 60,
       },
       longest_call_seconds: CALL_LIMIT_SECONDS,
+      trial: current
+        ? null
+        : {
+            seconds: 10_800,
+            ends_at: new Date(Date.now() + 12.5 * 86_400_000).toISOString(),
+          },
     });
   },
   async readUsage() {

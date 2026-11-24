@@ -191,7 +191,7 @@ it("reuses a failed checkout key, shows server tax before payment and handles SD
     expect.stringMatching(/^\/account\/billing\/return\?order=/),
   );
   expect((await fixtureBilling.readUsage()).allowance.availableSeconds).toBe(
-    62 * 60,
+    142 * 60,
   );
   expect(text()).not.toContain("Payment successful");
 });
@@ -258,7 +258,7 @@ it("stops Organisation at 49 seats and retains the Personal singular and Enterpr
 it("prices two team seats yearly, accepts the server total and warns about renewal approval", async () => {
   const checkout = vi.fn(fixtureBilling.checkout);
   await render(<PlansPurchase client={{ ...fixtureBilling, checkout }} />);
-  await until(() => text().includes("Current: Trial"));
+  await until(() => text().includes("Current: 15 days free"));
   await click("Get Organisation");
   expect(text()).toContain("Subtotal (2 seats)");
   const yearly = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
@@ -349,7 +349,7 @@ it("return verification shows minutes and the canonical new balance, with no dup
       client={client}
     />,
   );
-  await until(() => text().includes("862 analysis minutes"));
+  await until(() => text().includes("942 analysis minutes"));
   expect(text()).toContain("Order minutes800");
   expect(text()).not.toMatch(/credits/i);
   expect(host.querySelector('span[aria-live="polite"]')?.textContent).toBe(
@@ -358,7 +358,7 @@ it("return verification shows minutes and the canonical new balance, with no dup
   expect(verifyOrder).toHaveBeenCalled();
   fixtureProviderReports(checkout.order.orderId, "paid");
   expect((await fixtureBilling.readUsage()).allowance.availableSeconds).toBe(
-    862 * 60,
+    942 * 60,
   );
 });
 
@@ -412,7 +412,7 @@ it("loads billing usage and invoices, and cancels renewal at period end", async 
     .mockRejectedValueOnce(new BillingError(503, "unavailable", "Try again"));
   const client = { ...fixtureBilling, cancelSubscription };
   await render(<AccountBilling client={client} />);
-  await until(() => text().includes("862 min (14 h 22 min) left"));
+  await until(() => text().includes("942 min (15 h 42 min) left"));
   expect(text()).toContain("Invoices & Receipts");
   expect(text()).toContain("FIXTURE-1");
   expect(host.querySelector("a[download]")?.getAttribute("href")).toMatch(
@@ -433,7 +433,7 @@ it("loads billing usage and invoices, and cancels renewal at period end", async 
     cancelSubscription.mock.calls[1][2],
   );
   expect((await fixtureBilling.readMePlan()).allowance.availableSeconds).toBe(
-    862 * 60,
+    942 * 60,
   );
   await render(
     <AccountBilling
@@ -442,7 +442,7 @@ it("loads billing usage and invoices, and cancels renewal at period end", async 
     true,
     "different-workspace",
   );
-  expect(text()).not.toContain("862 min (14 h 22 min) left");
+  expect(text()).not.toContain("942 min (15 h 42 min) left");
   expect(text()).not.toContain("FIXTURE-1");
 });
 
@@ -533,8 +533,8 @@ it("keeps plan, usage, subscription facts and checkout usable while invoices loa
       </>,
     );
     await settle();
-    expect(text()).toContain("Current: Trial");
-    expect(text()).toContain("62 min (1 h 2 min) left");
+    expect(text()).toContain("Current: 15 days free");
+    expect(text()).toContain("142 min (2 h 22 min) left");
     expect(text()).toContain("No renewal scheduled");
     expect(text()).toContain("Loading invoices");
     expect(text()).not.toContain("No invoices or receipts yet");
@@ -547,8 +547,8 @@ it("keeps plan, usage, subscription facts and checkout usable while invoices loa
     );
     await settle();
     expect(text()).toContain("Invoices and receipts are currently unavailable");
-    expect(text()).toContain("Current: Trial");
-    expect(text()).toContain("62 min (1 h 2 min) left");
+    expect(text()).toContain("Current: 15 days free");
+    expect(text()).toContain("142 min (2 h 22 min) left");
     expect(text()).toContain("No renewal scheduled");
     expect(text()).not.toContain("Billing details could not be loaded");
     await click("Pay ₹2,499 with Razorpay");
@@ -575,7 +575,7 @@ it("shows an empty invoice section on the first organisation visit when the API 
     await until(
       () =>
         text().includes("No invoices or receipts yet") &&
-        text().includes("62 min (1 h 2 min) left"),
+        text().includes("142 min (2 h 22 min) left"),
     );
     expect(fetch).toHaveBeenCalledWith(
       "/v1/invoices?account=organisation",
@@ -699,7 +699,7 @@ it.each([
       );
       expect(text()).not.toContain("No invoices or receipts yet");
       await click("Refresh status");
-      await until(() => text().includes("62 min (1 h 2 min) left"));
+      await until(() => text().includes("142 min (2 h 22 min) left"));
       expect(readSubscriptions).toHaveBeenCalledTimes(2);
       expect(readInvoices).toHaveBeenCalledTimes(2);
     }
@@ -720,7 +720,7 @@ it.each([404, 403, 503])(
     await until(
       () =>
         text().includes("Invoices and receipts are currently unavailable") &&
-        text().includes("62 min (1 h 2 min) left"),
+        text().includes("142 min (2 h 22 min) left"),
     );
     expect(text()).not.toContain("No invoices or receipts yet");
     expect(text()).not.toContain("Billing details could not be loaded");

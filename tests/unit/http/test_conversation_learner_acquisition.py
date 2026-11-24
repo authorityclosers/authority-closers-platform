@@ -15,6 +15,7 @@ from pydantic import SecretStr
 import ac_platform.http.conversation_acquisition_runtime as acquisition_runtime_module
 from ac_platform.application.settings import Settings
 from ac_platform.billing.projection import Lot
+from ac_platform.billing.trial import TrialPolicy
 from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
 from ac_platform.conversation_intelligence.acquisition_source import NativeUploadPreflight
@@ -136,6 +137,7 @@ class _Service:
         self.allowance_actors: list[ActorContext] = []
         self.allowance_lock_modes: list[bool] = []
         self.trial: Lot | None = None
+        self.trial_policy = TrialPolicy()
 
     async def allowance(
         self,

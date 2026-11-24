@@ -12,6 +12,7 @@ import {
   parseProblem,
   parseSubscriptions,
   parseUsage,
+  trialDaysFromName,
 } from "./contract";
 import { FIXTURE_PLANS } from "../review-fixture/plans/fixture-billing";
 
@@ -281,7 +282,28 @@ describe("plan in effect and usage (AUT-417)", () => {
     expect(month.trial).toEqual({
       seconds: 10800,
       endsAt: "2026-12-25T06:30:00+00:00",
+      days: 30,
     });
+    // Owner, 25 Nov 2026: "fifteen days or three hours": the length is in the name.
+    const fifteen = parseMePlan({
+      plan: { key: "trial", name: "15 days free" },
+      allowance: {
+        allowance_seconds: 10800,
+        committed_seconds: 0,
+        available_seconds: 10800,
+      },
+      longest_call_seconds: 3600,
+      trial: { seconds: 10800, ends_at: "2026-12-10T06:30:00+00:00" },
+    });
+    expect(fifteen.trial).toEqual({
+      seconds: 10800,
+      endsAt: "2026-12-10T06:30:00+00:00",
+      days: 15,
+    });
+    expect(trialDaysFromName("15 days free")).toBe(15);
+    expect(trialDaysFromName("1 month free")).toBe(30);
+    expect(trialDaysFromName("Trial")).toBeNull();
+    expect(trialDaysFromName("Personal")).toBeNull();
     const base = {
       plan: { key: "trial", name: "Trial" },
       allowance: {
@@ -293,7 +315,7 @@ describe("plan in effect and usage (AUT-417)", () => {
     };
     expect(
       parseMePlan({ ...base, trial: { seconds: 10800, ends_at: null } }).trial,
-    ).toEqual({ seconds: 10800, endsAt: null });
+    ).toEqual({ seconds: 10800, endsAt: null, days: null });
     expect(parseMePlan({ ...base, trial: null }).trial).toBeNull();
     expect(() =>
       parseMePlan({ ...base, trial: { seconds: 10800, ends_at: "soon" } }),

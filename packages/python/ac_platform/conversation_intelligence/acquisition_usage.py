@@ -43,9 +43,10 @@ RECEIPT_CEILING_SECONDS = 7200
 TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE = (
     "Your remaining trial minutes are not enough for this recording. Contact AC for more access."
 )
-# The free month's two ends (owner, 22 Nov 2026: "1 month + 3 hours"). Paid plans are not
-# on sale, so both still send people to AC.
-TRIAL_ENDED_MESSAGE = "Your free month has ended. Contact AC for more access."
+# The free trial's two ends (owner, 25 Nov 2026: "fifteen days or three hours, whichever
+# ends"; a month for trials that started before). Paid plans are not on sale, so both
+# still send people to AC. The days' end is worded for both lengths.
+TRIAL_ENDED_MESSAGE = "Your free trial has ended. Contact AC for more access."
 TRIAL_USED_MESSAGE = (
     f"You've used your {TRIAL_SECONDS // 3600} free hours. Contact AC for more access."
 )

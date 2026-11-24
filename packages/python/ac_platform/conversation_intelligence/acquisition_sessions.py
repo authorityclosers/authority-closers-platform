@@ -58,7 +58,7 @@ _DIGEST = re.compile(r"^[0-9a-f]{64}$")
 
 
 def trial_refusal(projected: AccountProjection) -> str:
-    """Why a recording cannot be analysed: the free month ended, its hours are used,
+    """Why a recording cannot be analysed: the free trial's days ended, its hours are used,
     or (with time left, or any other lot) too little is left for this recording."""
 
     trial, at = projected.trial, projected.projection.at

@@ -79,7 +79,9 @@ it("says when nothing waits, and keeps sellers out", async () => {
     }),
   );
   await act(async () => root.render(<AlertsView initialKind="seller_idle" />));
-  expect(host.textContent).toContain("Nothing here right now.");
+  expect(host.textContent).toContain(
+    "No seller has gone 45 minutes without a call.",
+  );
   vi.stubGlobal("fetch", answer({ detail: "Only owners and admins" }, 403));
   act(() => root.unmount());
   root = createRoot(host);

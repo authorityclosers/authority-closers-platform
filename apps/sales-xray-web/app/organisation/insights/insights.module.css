@@ -1516,11 +1516,14 @@ a.callTitle:hover {
   font-weight: 650;
 }
 
+/* v1.98: the family's deep green with white words in both themes (in dark the
+   emerald was a light mint with dark words). */
 .page [role="group"][aria-label] > button[aria-pressed="true"] {
   position: relative;
   z-index: 1;
-  background: var(--lx-home-emerald);
-  color: var(--sx-surface);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
 }
 
 @media (min-width: 600px) and (max-width: 899.98px) {
@@ -1558,9 +1561,10 @@ a.callTitle:hover {
 
 .page button[data-variant="primary"],
 .page a[data-variant="primary"] {
-  border-color: var(--lx-home-emerald);
-  background: var(--lx-home-emerald);
-  color: var(--sx-surface);
+  border-color: transparent;
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
 }
 
 .muted,

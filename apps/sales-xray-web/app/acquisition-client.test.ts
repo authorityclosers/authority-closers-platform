@@ -183,9 +183,15 @@ describe("acquisition permission recovery", () => {
 
   it.each([
     [
+      "Your free trial has ended. Contact AC for more access.",
+      "trial_ended",
+      "Your free trial has ended.",
+    ],
+    // A server before v1.98 said "free month": still the trial's end.
+    [
       "Your free month has ended. Contact AC for more access.",
       "trial_ended",
-      "Your free month has ended.",
+      "Your free trial has ended.",
     ],
     [
       "You've used your 3 free hours. Contact AC for more access.",

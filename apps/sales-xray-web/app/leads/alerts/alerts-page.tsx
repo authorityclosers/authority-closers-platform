@@ -58,6 +58,15 @@ function sinceWords(iso: string, now = Date.now()): string {
   return day(at.getTime()) === day(now) ? CLOCK.format(at) : DAY.format(at);
 }
 
+// An empty list says the job is done, in the kind's own words (v1.98: it said
+// "Nothing here right now." on every tab, which reads like a failed load).
+const ALL_CLEAR: Record<AlertKind, string> = {
+  first_call: "All caught up: every new enquiry has had its first call.",
+  missed_call: "All caught up: every missed call has been returned.",
+  no_follow_up: "All caught up: every Interested lead has a next step.",
+  seller_idle: "No seller has gone 45 minutes without a call.",
+};
+
 const LINE: Record<AlertKind, string> = {
   first_call: "Came in",
   missed_call: "Called",
@@ -189,7 +198,7 @@ export function AlertsView({ initialKind }: { initialKind: AlertKind }) {
             </ul>
           ) : (
             <div className={styles.empty}>
-              <p>Nothing here right now.</p>
+              <p>{ALL_CLEAR[kind]}</p>
               <Link className={styles.retry} href="/leads">
                 Open Leads
               </Link>
