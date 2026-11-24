@@ -917,13 +917,16 @@
   place-items: center;
   border: 0;
   border-radius: 50%;
-  background: var(--sx-accent);
-  color: var(--sx-accent-ink);
+  /* Deep green with a white mark in both themes, like Coaching's main button
+     (v1.98: the accent was a light mint with a dark mark in dark). */
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
   cursor: pointer;
 }
 
 .clipPlay:hover:not(:disabled, [aria-disabled="true"]) {
-  background: var(--lx-teal-hover);
+  filter: brightness(1.06);
 }
 
 .clipPlay:disabled,

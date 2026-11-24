@@ -452,7 +452,8 @@
    (sx-redesign judge, 21 Nov 2026). */
 .matching.matching[data-variant],
 .matching.matching[data-variant]:hover:not(:disabled) {
-  border-color: var(--lx-home-emerald);
-  background: var(--lx-home-emerald);
-  color: var(--sx-surface);
+  border-color: transparent;
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
 }

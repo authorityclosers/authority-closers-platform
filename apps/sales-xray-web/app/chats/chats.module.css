@@ -456,6 +456,33 @@
   background: var(--sx-accent-soft);
 }
 
+/* No chats yet: the empty state's one action is a real button, the family's
+   deep-green pill (v1.98: an underlined link read as a footnote). */
+.emptyGo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 10px;
+  padding: 0 22px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.emptyGo:hover {
+  filter: brightness(1.06);
+}
+
+.emptyGo:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--sx-focus-ring);
+}
+
 /* ---------- One chat ---------- */
 
 .thread {
@@ -1901,11 +1928,12 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* The picked filter is the family's deep green with white words in both
+   themes (in dark the emerald was a light mint with dark words); v1.98. */
 .segmentItem[aria-pressed="true"] {
-  background: var(--lx-home-emerald);
-  color: var(--sx-surface);
-  box-shadow: 0 4px 10px -6px
-    color-mix(in oklab, var(--lx-home-emerald) 70%, transparent);
+  background: var(--sx-gloss);
+  color: var(--sx-gloss-ink);
+  box-shadow: var(--sx-gloss-depth);
 }
 
 .segmentItem:focus-visible {

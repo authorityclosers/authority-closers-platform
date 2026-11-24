@@ -78,9 +78,12 @@
 
 /* The kit's primary (teal): ink turned it into a white pill in dark mode
    (QA robot, 8 Nov 2026, at 1440 and 360). */
+/* The family's deep-green pill with white words in both themes (v1.98: the
+   teal was a light mint with dark words in dark). */
 .primary {
-  background: var(--lx-teal);
-  color: var(--lx-on-teal);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
 }
 
 .secondary {

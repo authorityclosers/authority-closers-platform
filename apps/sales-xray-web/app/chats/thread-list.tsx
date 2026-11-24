@@ -349,11 +349,11 @@ export function ThreadList({
           here.
         </p>
         {canConnect ? (
-          <Link href="/settings/apps" className={styles.linkButton}>
+          <Link href="/settings/apps" className={styles.emptyGo}>
             Connect WhatsApp
           </Link>
         ) : (
-          <Link href="/leads" className={styles.linkButton}>
+          <Link href="/leads" className={styles.emptyGo}>
             Message a lead
           </Link>
         )}
