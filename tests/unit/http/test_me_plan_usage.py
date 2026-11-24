@@ -9,6 +9,7 @@ import pytest
 from fastapi import FastAPI
 
 from ac_platform.billing.projection import Lot, LotKind
+from ac_platform.billing.trial import TrialPolicy
 from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS
 from ac_platform.http.auth import AuthenticatedTransaction, AuthenticationRequired
 from ac_platform.http.conversation_acquisition import install_acquisition_http
@@ -88,6 +89,21 @@ async def test_me_reads_share_allowance_and_refuse_guest_or_foreign_workspace(
                 timed = (await client.get(path)).json()
                 assert timed["plan"] == {"key": "trial", "name": "1 month free"}
                 assert timed["trial"] == {"seconds": 10_800, "ends_at": "2026-12-22T06:30:00+00:00"}
+                # Owner, 25 Nov 2026: "fifteen days or three hours": a trial that starts
+                # from the cut-over on is 15 days; one that started before keeps its month.
+                service.trial_policy = TrialPolicy("v2", fifteen_days_from=start)
+                fifteen = start + timedelta(days=15)
+                service.trial = Lot("trial", LotKind.TRIAL, 10_800, start, fifteen)
+                short = (await client.get(path)).json()
+                assert short["plan"] == {"key": "trial", "name": "15 days free"}
+                # The trial keeps its two keys: web apps already open parse it strictly.
+                assert short["trial"] == {"seconds": 10_800, "ends_at": fifteen.isoformat()}
+                service.trial_policy = TrialPolicy("v2", fifteen_days_from=ends)
+                service.trial = Lot("trial", LotKind.TRIAL, 10_800, start, ends)
+                kept = (await client.get(path)).json()
+                assert kept["plan"] == {"key": "trial", "name": "1 month free"}
+                assert kept["trial"] == {"seconds": 10_800, "ends_at": ends.isoformat()}
+                service.trial_policy = TrialPolicy()
                 # Under v1 the trial has no end: no month is promised.
                 service.trial = Lot("trial", LotKind.TRIAL, 10_800, start)
                 untimed = (await client.get(path)).json()

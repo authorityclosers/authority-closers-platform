@@ -82,6 +82,7 @@ def worker(state, *, sessions=None, signal=None):
         operations_tenant_id=state.operations.tenant_id,
         sales_xray_trial_policy="v2",
         sales_xray_trial_policy_switch_at=NOW - timedelta(days=14),
+        sales_xray_trial_15_days_from=None,
     )
     return create_minute_expiry_worker(
         settings=settings,

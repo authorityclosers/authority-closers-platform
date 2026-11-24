@@ -261,11 +261,15 @@ class Settings(BaseSettings):
     # slower connections. Keep it deployment-configurable and auditable.
     sales_xray_upload_response_budget_seconds: float = 900.0
     # Trial policy (ADR 0052): v1 is the three-hour shared quota with no end; v2
-    # (owner, 22 Nov 2026: "1 month + 3 hours", billing.trial.TRIAL_DAYS) applies
+    # (owner, 22 Nov 2026: "1 month + 3 hours", billing.trial.MONTH_TRIAL_DAYS) applies
     # from the switch instant on; someone who started under v1 gets their month
     # from that instant, their minutes used so far still counting.
     sales_xray_trial_policy: Literal["v1", "v2"] = "v1"
     sales_xray_trial_policy_switch_at: datetime | None = None
+    # From this UTC instant a new v2 trial is 15 days or three hours, whichever ends
+    # first (owner, 25 Nov 2026: "fifteen days or three hours, no card, whichever
+    # ends", billing.trial.TRIAL_DAYS); a trial that started before it keeps its month.
+    sales_xray_trial_15_days_from: datetime | None = None
     # Billing (ADR 0052, Contract C1). Off by default: without it the checkout
     # routes are not installed and the screens show "Not on sale yet". Provider
     # secrets come from Infisical (/application) as AC_RAZORPAY_*; live mode
@@ -339,7 +343,9 @@ class Settings(BaseSettings):
                 raise ValueError(f"{environment_field} must be the canonical HTTPS origin")
         return values
 
-    @field_validator("sales_xray_trial_policy_switch_at", mode="before")
+    @field_validator(
+        "sales_xray_trial_policy_switch_at", "sales_xray_trial_15_days_from", mode="before"
+    )
     @classmethod
     def _no_switch_when_blank(cls, value: object) -> object:
         # The release compose passes the key through even when a profile omits it.
@@ -679,6 +685,11 @@ class Settings(BaseSettings):
             raise ValueError("AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT requires trial policy v2")
         if switch_at is not None and switch_at.tzinfo is None:
             raise ValueError("AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT must carry a UTC offset")
+        fifteen = self.sales_xray_trial_15_days_from
+        if fifteen is not None and self.sales_xray_trial_policy != "v2":
+            raise ValueError("AC_SALES_XRAY_TRIAL_15_DAYS_FROM requires trial policy v2")
+        if fifteen is not None and fifteen.tzinfo is None:
+            raise ValueError("AC_SALES_XRAY_TRIAL_15_DAYS_FROM must carry a UTC offset")
         # Without a switch instant, v2's month would run from each person's first use, so
         # everyone who started under v1 more than 30 days ago would lose access at once.
         if (

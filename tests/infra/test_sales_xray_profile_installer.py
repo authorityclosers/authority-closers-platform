@@ -228,6 +228,7 @@ compose_for "$release_dir" config
 
 
 SWITCH = b"AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT=2026-11-25T06:30:00+00:00\n"
+FIFTEEN = b"AC_SALES_XRAY_TRIAL_15_DAYS_FROM=2026-11-26T06:30:00+00:00\n"
 
 
 @pytest.mark.parametrize("target_environment", ("staging", "production"))
@@ -244,7 +245,7 @@ def test_trial_policy_is_v2_only_with_an_exact_utc_switch_instant(
     profile = b"".join(
         line
         for line in shipped.splitlines(keepends=True)
-        if not line.startswith(b"AC_SALES_XRAY_TRIAL_POLICY")
+        if not line.startswith(b"AC_SALES_XRAY_TRIAL_")
     )
     v2 = b"AC_SALES_XRAY_TRIAL_POLICY=v2\n"
 
@@ -255,6 +256,8 @@ def test_trial_policy_is_v2_only_with_an_exact_utc_switch_instant(
     assert run(b"").returncode == 0
     assert run(b"AC_SALES_XRAY_TRIAL_POLICY=v1\n").returncode == 0
     assert run(v2 + SWITCH).returncode == 0, run(v2 + SWITCH).stderr
+    # Owner, 25 Nov 2026: "fifteen days or three hours": new trials from this instant on.
+    assert run(v2 + SWITCH + FIFTEEN).returncode == 0, run(v2 + SWITCH + FIFTEEN).stderr
 
     refused = {
         v2: "requires AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT",
@@ -264,6 +267,10 @@ def test_trial_policy_is_v2_only_with_an_exact_utc_switch_instant(
         v2 + b"AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT=2026-11-25\n": "YYYY-MM-DDTHH:MM:SS+00:00",
         SWITCH: "requires AC_SALES_XRAY_TRIAL_POLICY=v2",
         b"AC_SALES_XRAY_TRIAL_POLICY=v3\n": "must be v1 or v2",
+        FIFTEEN: "AC_SALES_XRAY_TRIAL_15_DAYS_FROM requires AC_SALES_XRAY_TRIAL_POLICY=v2",
+        v2 + SWITCH + b"AC_SALES_XRAY_TRIAL_15_DAYS_FROM=2026-11-25\n": (
+            "AC_SALES_XRAY_TRIAL_15_DAYS_FROM must be YYYY-MM-DDTHH:MM:SS+00:00"
+        ),
     }
     for extra, message in refused.items():
         result = run(extra)
@@ -285,3 +292,5 @@ def test_trial_policy_reaches_the_api_and_worker_and_never_from_the_host() -> No
     )
     assert "-u AC_SALES_XRAY_TRIAL_POLICY \\" in compose_for
     assert "-u AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT \\" in compose_for
+    assert "AC_SALES_XRAY_TRIAL_15_DAYS_FROM: ${AC_SALES_XRAY_TRIAL_15_DAYS_FROM:-}" in shared
+    assert "-u AC_SALES_XRAY_TRIAL_15_DAYS_FROM \\" in compose_for

@@ -1,8 +1,11 @@
 """The derived trial lot: v1 today, v2 from a switch instant on (ADR 0052, section D).
 
-v2 is three hours or one month (TRIAL_DAYS), whichever comes first (owner 22 Nov 2026); someone
-who started under v1 gets the month from the switch, their earlier use still counting; windows
-that had ended under the earlier 14 days before 22 Nov stay ended.
+v2 is three hours or one month (MONTH_TRIAL_DAYS), whichever comes first (owner 22 Nov
+2026); someone who started under v1 gets the month from the switch, their earlier use still
+counting; windows that had ended under the earlier 14 days before 22 Nov stay ended. From the
+policy's fifteen_days_from instant a new trial is 15 days (TRIAL_DAYS) or three hours (owner
+25 Nov 2026: "fifteen days or three hours, no card, whichever ends"); a trial that started
+before keeps its month.
 """
 
 from __future__ import annotations
@@ -15,6 +18,7 @@ import pytest
 from ac_platform.billing.projection import LotKind, Use, project
 from ac_platform.billing.trial import (
     EARLIER_TRIAL_DAYS,
+    MONTH_TRIAL_DAYS,
     TRIAL_DAYS,
     TRIAL_DAYS_CHANGED_AT,
     TRIAL_LOT_ID,
@@ -57,7 +61,7 @@ def test_v1_is_the_shared_quota_with_no_end() -> None:
 
 def test_the_trial_is_one_month() -> None:
     # Owner, 22 Nov 2026: "the Sales X-Ray trial is 1 MONTH (30 days), not 15 days".
-    assert TRIAL_DAYS == 30
+    assert MONTH_TRIAL_DAYS == 30
     assert EARLIER_TRIAL_DAYS == 14
     # 20:15 IST on 22 Nov 2026, in UTC.
     assert TRIAL_DAYS_CHANGED_AT.isoformat() == "2026-11-22T14:45:00+00:00"
@@ -244,6 +248,8 @@ def test_the_switch_never_ends_anyone_before_a_month_after_it(days_before_releas
         ({"version": ""}, "must be v1 or v2"),
         ({"version": "v2", "switch_at": SWITCH.replace(tzinfo=None)}, "timezone-aware"),
         ({"version": "v2", "switch_at": "2026-10-15"}, "timezone-aware"),
+        ({"version": "v1", "fifteen_days_from": SWITCH}, "only trial policy v2 has days"),
+        ({"version": "v2", "fifteen_days_from": SWITCH.replace(tzinfo=None)}, "timezone-aware"),
     ],
 )
 def test_invalid_policies_are_refused(kwargs: dict[str, Any], message: str) -> None:
@@ -269,3 +275,76 @@ def test_policy_is_immutable() -> None:
     policy = TrialPolicy("v2", switch_at=SWITCH)
     with pytest.raises(AttributeError):
         policy.version = "v1"
+
+
+# ---- 15 days or three hours (owner, 25 Nov 2026) ------------------------------------------
+
+FIFTEEN = datetime(2026, 11, 25, 12, tzinfo=UTC)
+
+
+def test_new_trials_are_15_days_or_three_hours() -> None:
+    # Owner, 25 Nov 2026: "fifteen days or three hours, no card, whichever ends".
+    assert TRIAL_DAYS == 15
+    policy = TrialPolicy("v2", switch_at=SWITCH, fifteen_days_from=FIFTEEN)
+    first_use = FIFTEEN + timedelta(hours=5)
+    now = first_use + timedelta(days=1)
+    lot = policy.lot(first_use_at=first_use, now=now)
+    assert lot.seconds == TRIAL_SECONDS == 10_800
+    assert lot.expires_at == first_use + timedelta(days=15)
+    assert lot.valid_at(first_use + timedelta(days=15) - timedelta(seconds=1))
+    assert not lot.valid_at(first_use + timedelta(days=15))
+    assert policy.days(lot) == 15
+
+
+def test_someone_who_has_not_started_gets_15_days_from_their_first_use() -> None:
+    policy = TrialPolicy("v2", switch_at=SWITCH, fifteen_days_from=FIFTEEN)
+    now = FIFTEEN + timedelta(days=3)
+    lot = policy.lot(first_use_at=None, now=now)
+    assert lot.expires_at == now + timedelta(days=15)
+    assert policy.days(lot) == 15
+
+
+@pytest.mark.parametrize("days_before", [0.0001, 1, 10, 29, 40, 60])
+def test_a_trial_running_at_the_cut_over_keeps_its_month(days_before: float) -> None:
+    # "Existing trials keep their current end (don't shorten anyone mid-trial)."
+    month = TrialPolicy("v2", switch_at=SWITCH)
+    both = TrialPolicy("v2", switch_at=SWITCH, fifteen_days_from=FIFTEEN)
+    first_use = FIFTEEN - timedelta(days=days_before)
+    for now in (FIFTEEN - timedelta(seconds=1), FIFTEEN, FIFTEEN + timedelta(days=20)):
+        if now < first_use:
+            continue
+        before = month.lot(first_use_at=first_use, now=now)
+        after = both.lot(first_use_at=first_use, now=now)
+        assert after == before
+        assert both.days(after) == 30
+
+
+def test_a_v1_starter_keeps_the_month_from_the_switch() -> None:
+    both = TrialPolicy("v2", switch_at=SWITCH, fifteen_days_from=FIFTEEN)
+    lot = both.lot(first_use_at=T0, now=FIFTEEN + timedelta(days=1))
+    assert lot.valid_from == T0
+    assert lot.expires_at is not None
+    assert lot.expires_at >= SWITCH + timedelta(days=EARLIER_TRIAL_DAYS)
+    assert both.days(lot) == 30
+
+
+def test_the_cut_over_starts_15_days_exactly_at_its_instant() -> None:
+    both = TrialPolicy("v2", switch_at=SWITCH, fifteen_days_from=FIFTEEN)
+    at = both.lot(first_use_at=FIFTEEN, now=FIFTEEN)
+    just_before = both.lot(first_use_at=FIFTEEN - timedelta(seconds=1), now=FIFTEEN)
+    assert at.expires_at == FIFTEEN + timedelta(days=15)
+    assert just_before.expires_at == FIFTEEN - timedelta(seconds=1) + timedelta(days=30)
+
+
+def test_a_future_cut_over_changes_nothing_yet() -> None:
+    later = FIFTEEN + timedelta(days=7)
+    month = TrialPolicy("v2", switch_at=SWITCH)
+    both = TrialPolicy("v2", switch_at=SWITCH, fifteen_days_from=later)
+    lot = both.lot(first_use_at=None, now=FIFTEEN)
+    assert lot == month.lot(first_use_at=None, now=FIFTEEN)
+    assert both.days(lot) == 30
+
+
+def test_v1_has_no_days() -> None:
+    policy = TrialPolicy()
+    assert policy.days(policy.lot(first_use_at=None, now=T0)) is None

@@ -309,8 +309,11 @@ def install_acquisition_http(
             current = await current_personal_plan(
                 auth.database, tenant_id=app.tenant_id, person_id=actor.person_id, now=app.clock()
             )
-        # The free trial's size and end (owner, 22 Nov 2026: "1 month + 3 hours"); its end
-        # is null under trial policy v1, which has none.
+        # The free trial's size and end (null under trial policy v1, which has none). Its
+        # length is in the plan's name (owner, 25 Nov 2026: "fifteen days or three hours";
+        # a month for trials that started before): "15 days free" or "1 month free". The
+        # trial object keeps its two keys, which web apps already running parse strictly.
+        trial_days = None if trial_lot is None else app.trial_policy.days(trial_lot)
         trial = (
             {
                 "seconds": trial_lot.seconds,
@@ -329,7 +332,9 @@ def install_acquisition_http(
                     "key": "trial",
                     "name": "Trial"
                     if trial is None or trial["ends_at"] is None
-                    else "1 month free",
+                    else "1 month free"
+                    if trial_days == 30
+                    else f"{trial_days} days free",
                 }
                 if app.trial_enabled
                 else {"key": "none", "name": "No plan"}

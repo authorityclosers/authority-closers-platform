@@ -26,7 +26,9 @@ def _ledger(database: AsyncSession, settings: Any, tenant_id: UUID) -> BillingLe
     return BillingLedger(
         database,
         trial_policy=TrialPolicy(
-            settings.sales_xray_trial_policy, settings.sales_xray_trial_policy_switch_at
+            settings.sales_xray_trial_policy,
+            settings.sales_xray_trial_policy_switch_at,
+            settings.sales_xray_trial_15_days_from,
         ),
         operations_tenant_id=settings.operations_tenant_id,
         trial_enabled=trial_enabled_for_tenant(tenant_id, settings.public_learner_tenant_id),

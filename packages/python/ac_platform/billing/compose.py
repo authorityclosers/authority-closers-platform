@@ -68,7 +68,9 @@ def compose_billing(
         return_url_base=str(settings.sales_xray_app_url).rstrip("/"),
         fake_checkout_base_url=fake_checkout_base_url,
         trial_policy=TrialPolicy(
-            settings.sales_xray_trial_policy, settings.sales_xray_trial_policy_switch_at
+            settings.sales_xray_trial_policy,
+            settings.sales_xray_trial_policy_switch_at,
+            settings.sales_xray_trial_15_days_from,
         ),
         clock=lambda: datetime.now(UTC),
         invoice_settings=settings,
