@@ -66,6 +66,7 @@ import {
   type SetupStep,
 } from "./setup-state";
 import styles from "./setup-flow.module.css";
+import { TRIAL_TERMS } from "../billing/trial-copy";
 
 /**
  * /welcome: first-run setup, one question per step (setup-state.ts says when it
@@ -921,8 +922,8 @@ export function SetupFlow({ preview }: { preview?: SetupPreview }) {
           </h1>
           <p className={styles.lead}>
             {path === "solo"
-              ? // Owner, 22 Nov 2026: "1 month + 3 hours" for a personal account.
-                "1 month free, with 3 hours of call analysis. Upload a recording to get your report and coaching."
+              ? // Owner, 25 Nov 2026: "fifteen days or three hours, no card, whichever ends".
+                `Free for ${TRIAL_TERMS}, whichever ends first. No card needed. Upload a recording to get your report and coaching.`
               : "Add a lead now, or analyse a call you’ve already recorded."}
           </p>
           {path === "business" ? (

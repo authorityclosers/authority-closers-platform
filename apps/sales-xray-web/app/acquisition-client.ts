@@ -318,9 +318,12 @@ const FILE_REFUSALS: Readonly<Record<string, string>> = {
   call_too_long: CALL_TOO_LONG,
 };
 
-/** The server's two ends of the free trial (owner, 22 Nov 2026: "1 month + 3
- *  hours"), matched exactly like every other known refusal. */
+/** The server's two ends of the free trial (owner, 25 Nov 2026: "fifteen days or
+ *  three hours"), matched exactly like every other known refusal. Servers before
+ *  v1.98 said "free month". */
 export const TRIAL_ENDED_DETAIL =
+  "Your free trial has ended. Contact AC for more access.";
+const TRIAL_ENDED_DETAIL_BEFORE_V198 =
   "Your free month has ended. Contact AC for more access.";
 export const TRIAL_USED_DETAIL =
   "You've used your 3 free hours. Contact AC for more access.";
@@ -372,7 +375,7 @@ export class AcquisitionError extends Error {
                       ? reason === "trial_allowance_insufficient"
                         ? "This recording is longer than your remaining analysis minutes. Your recording stays private."
                         : reason === "trial_ended"
-                          ? "Your free month has ended. Your recording stays private. Contact AC for more access."
+                          ? "Your free trial has ended. Your recording stays private. Contact AC for more access."
                           : reason === "trial_used"
                             ? "You've used your 3 free hours. Your recording stays private. Contact AC for more access."
                             : reason === "provider_allowance_used"
@@ -448,7 +451,10 @@ export async function acquisition(
           requestId,
         );
       }
-      if (detail === TRIAL_ENDED_DETAIL)
+      if (
+        detail === TRIAL_ENDED_DETAIL ||
+        detail === TRIAL_ENDED_DETAIL_BEFORE_V198
+      )
         throw new AcquisitionError(response.status, "trial_ended", requestId);
       if (detail === TRIAL_USED_DETAIL)
         throw new AcquisitionError(response.status, "trial_used", requestId);

@@ -98,7 +98,7 @@ export function BillingView({
     ["active", "past_due", "halted"].includes(current.status);
   const allowance = usage?.allowance ?? mePlan?.allowance;
   const planName = mePlan?.plan.name ?? "—";
-  // The free trial in plain words (owner, 22 Nov 2026: "1 month + 3 hours").
+  // The free trial in plain words (owner, 25 Nov 2026: "15 days or 3 hours").
   const trial = current ? null : (mePlan?.trial ?? null);
   const unread = !loading && status !== "ready";
   const readFailed =
@@ -357,7 +357,7 @@ export function BillingView({
                       ? `${count(minutes(allowance.committedSeconds))} min used or reserved by analyses.`
                       : allowance
                         ? allowance.allowanceSeconds > 0
-                          ? `of ${count(minutes(allowance.allowanceSeconds))} min in total (plan, free month and top-ups)`
+                          ? `of ${count(minutes(allowance.allowanceSeconds))} min in total (plan, free trial and top-ups)`
                           : "available analysis time"
                         : ""}
                   </span>

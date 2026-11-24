@@ -83,7 +83,7 @@ it("says the free month, its three hours and what is left", async () => {
       ),
     );
     const text = host.textContent ?? "";
-    expect(text).toContain("Free for 1 month · 3 hours of call analysis");
+    expect(text).toContain("Free for 1 month or 3 hours of call analysis");
     expect(text).toContain("27 days · 2 h 10 min left");
     expect(text).toContain("1 month free");
     expect(text).not.toContain("You're on the free trial.");
@@ -116,7 +116,7 @@ it("says when the free month has ended", async () => {
         />,
       ),
     );
-    expect(host.textContent).toContain("Your free month has ended");
+    expect(host.textContent).toContain("Your free trial has ended");
   } finally {
     vi.useRealTimers();
   }

@@ -260,7 +260,7 @@ it("sets up a business one question at a time, then adds the first lead", async 
   expect(readSetupMark(PERSON)).toBe("done");
 });
 
-it("tells someone starting with their own calls about the free month", async () => {
+it("tells someone starting with their own calls about the free trial", async () => {
   await act(async () => root.render(<SetupFlow />));
   await settle();
   const solo = Array.from(host.querySelectorAll('[role="radio"]')).find(
@@ -269,11 +269,11 @@ it("tells someone starting with their own calls about the free month", async () 
   await act(async () => solo.click());
   await press("Start with my calls");
   expect(heading()).toBe("Analyse your first call");
-  // Owner, 22 Nov 2026: "1 month + 3 hours".
+  // Owner, 25 Nov 2026: "fifteen days or three hours, no card, whichever ends".
   expect(host.textContent).toContain(
-    "1 month free, with 3 hours of call analysis.",
+    "Free for 15 days or 3 hours of call analysis, whichever ends first. No card needed.",
   );
-  expect(host.textContent).not.toMatch(/15\s*days?/i);
+  expect(host.textContent).not.toMatch(/1 month/i);
 });
 
 it("lets every step be skipped, and Skip setup leaves at once", async () => {
