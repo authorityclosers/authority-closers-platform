@@ -9119,6 +9119,21 @@ fieldset.form {
   text-overflow: ellipsis;
 }
 
+/* When even the shrunk source leaves no room (130% text at 360 px, long
+   names, the list column beside an open lead), the other parts end in "…"
+   instead of being cut at the row's edge; the source still gives way first
+   (v1.96 readability gate, 24 Nov 2026). */
+.leadFace[data-compact] .leadMeta > .leadPart {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.leadFace[data-compact] .leadSub .leadMeta > .leadSourcePart {
+  flex-shrink: 100;
+}
+
 .leadFace[data-compact] .leadMeta .leadSource {
   white-space: nowrap;
 }
