@@ -973,13 +973,16 @@
   padding: 0 8px;
 }
 
-/* The page's one solid green: the first Connect, or a Reconnect. */
+/* The page's one solid green: the first Connect, or a Reconnect. The family's
+   deep-green pill with white words in both themes (v1.97: in dark the emerald
+   turned a light mint with dark words, off the family). */
 .card[data-lead] .actions .tinted,
 .actions > button[data-variant="primary"],
 .linkButton[data-variant="primary"] {
-  border-color: var(--lx-home-emerald);
-  background: var(--lx-home-emerald);
-  color: var(--sx-surface);
+  border-color: transparent;
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
 }
 
 .testPassed {
