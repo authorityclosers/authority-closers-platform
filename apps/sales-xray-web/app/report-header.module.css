@@ -81,3 +81,14 @@ small.fileType.fileType.fileType.fileType.fileType {
     content: "";
   }
 }
+
+/* ---------- v1.96 device polish ----------
+   The lead's name in the report's meta line: Home's green ink, not the teal
+   accent (turquoise in dark), and a 24 px box of its own as well as the
+   44 px touch band. */
+.lead {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  color: var(--sx-primary-ink);
+}

@@ -19,6 +19,41 @@
   background: #fff;
   box-shadow: 0 24px 60px #183d6410;
 }
+/* Dark (v1.96, 24 Nov 2026): the preview's page and frame were white in both
+   themes, so the Readability Gate judged the report's dark-theme light words on
+   white (near-invisible; the report's own surfaces are dark in the app). The
+   frame and its header take the theme's tokens; light is unchanged. */
+:global(:root[data-theme="dark"]) .page,
+:global(:root[data-theme="dark"]) .frame {
+  border-color: var(--sx-line);
+  background: var(--sx-surface);
+  box-shadow: none;
+  color: var(--sx-ink);
+}
+:global(:root[data-theme="dark"]) .page {
+  background: var(--sx-paper);
+}
+:global(:root[data-theme="dark"]) .eyebrow,
+:global(:root[data-theme="dark"]) .badge {
+  color: var(--sx-accent);
+}
+:global(:root[data-theme="dark"]) .badge {
+  border-color: var(--sx-line-strong);
+  background: var(--sx-accent-soft);
+}
+:global(:root[data-theme="dark"]) .heading p:not(.eyebrow),
+:global(:root[data-theme="dark"]) .disclaimer,
+:global(:root[data-theme="dark"]) .source small {
+  color: var(--sx-ink-2);
+}
+:global(:root[data-theme="dark"]) .disclaimer,
+:global(:root[data-theme="dark"]) .source {
+  background: var(--sx-sunken);
+}
+:global(:root[data-theme="dark"]) .source {
+  border-color: var(--sx-line);
+  color: var(--sx-ink);
+}
 .heading {
   display: flex;
   align-items: flex-start;

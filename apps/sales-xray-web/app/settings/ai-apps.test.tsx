@@ -182,7 +182,15 @@ it("says how to start when nothing is connected", async () => {
   await act(async () => root.render(<AiAppsSection />));
   await settle();
   expect(host.textContent).toContain("No AI apps connected");
-  expect(host.textContent).toContain("Connect ChatGPT or Claude below");
+  // One row with the one way on (v1.96).
+  expect(host.textContent).toContain(
+    "Ask ChatGPT or Claude about your calls and leads.",
+  );
+  const connect = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Connect an AI app",
+  );
+  expect(connect).toBeDefined();
+  expect(host.querySelector("#connect-ai-app")).not.toBeNull();
 });
 
 it("keeps the outline and a corner card when the list does not load", async () => {

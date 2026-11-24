@@ -6,9 +6,22 @@ import Link from "next/link";
 import styles from "./new-analysis-hero.module.css";
 import { useProfileFirstName } from "./profile-first-name";
 
-/** The welcome header above the upload card on New analysis. */
+/** The welcome header above the upload card on New analysis, and the
+ *  first-call guide's place in the page (guide-overlay.tsx; v1.96 device
+ *  polish): under the header on a phone, a right column on a wide screen, so
+ *  the guide never floats over the steps or Recent calls. Empty, it takes no
+ *  room. */
 export function NewAnalysisHero() {
   const name = useProfileFirstName();
+  return (
+    <>
+      <NewAnalysisHeader name={name} />
+      <div className={styles.guideSlot} data-guide-slot="" />
+    </>
+  );
+}
+
+function NewAnalysisHeader({ name }: { name: string | null }) {
   return (
     <header className={styles.hero}>
       <h2 className={styles.title}>

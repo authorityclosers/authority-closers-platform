@@ -311,8 +311,9 @@ const WIDE_WIDTH: Record<Exclude<Column, "name">, number> = {
   // dot, whole (v1.93: "Meeting Schedul…" at 1440).
   stage: 184,
   pipeline: 120,
-  // An avatar and a first name ("Sneha", 70 px); a long one ends in "…".
-  owner: 96,
+  // An avatar and a first name whole: "Venkatesh" (68 px) beside its 20 px
+  // avatar (v1.96 device polish: at 96 every owner read "Venk…" at 1440).
+  owner: 120,
   // "Website" beside its mark.
   source: 100,
   // "Yesterday" in bold (69 px).

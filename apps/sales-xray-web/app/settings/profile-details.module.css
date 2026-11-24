@@ -31,8 +31,8 @@
   height: 26px;
   border: 2px solid var(--sx-surface);
   border-radius: 50%;
-  background: var(--sx-accent);
-  color: var(--sx-accent-ink);
+  background: var(--lx-home-primary);
+  color: var(--lx-film-text);
 }
 
 .phoneNote {
@@ -115,8 +115,24 @@
 /* Save: the one solid deep-green button, once something changed. */
 button.save[data-variant]:not(:disabled) {
   border-color: transparent;
-  background: var(--lx-home-emerald);
-  color: var(--sx-surface);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
+/* Before anything changed: plain grey, never a washed green (v1.96). */
+button.save[data-variant]:disabled {
+  border-color: transparent;
+  background: var(--sx-fill);
+  box-shadow: none;
+  color: var(--sx-muted);
+  opacity: 1;
+}
+
+/* The address on one line where it fits, else at its "@" (v1.96). */
+.email {
+  font-size: var(--sx-text-xs);
+  overflow-wrap: anywhere;
 }
 
 /* Email, phone and the two ways on, as short rows (sx-redesign, 21 Nov 2026). */

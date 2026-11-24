@@ -123,6 +123,17 @@
   transition: width 0.3s ease;
 }
 
+/* The words take the ink each fill carries, so the shares read in both
+   themes: in dark the teal and the grey turn light, and white on them was
+   1.6:1 (v1.96 readability). Light is unchanged: white on both. */
+.talkShareSegment.repSegment {
+  color: var(--lx-on-teal);
+}
+
+.talkShareSegment.buyerSegment {
+  color: var(--lx-surface);
+}
+
 .repSegment {
   background: var(--lx-teal, #097870);
 }

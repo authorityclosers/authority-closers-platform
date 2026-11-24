@@ -222,9 +222,14 @@ it("adds the owner for a team's list, and keeps the full card elsewhere", async 
   );
   // Part 01 (15 Nov 2026) gave the owner a line of their own; v1.93 (round-2
   // and round-3 judges): the owner's first name is a part of line 2, each part
-  // led by its "·" so a wrap never ends a line on it; then the age.
-  expect(host.querySelector('[class*="leadSubWords"]')?.textContent).toBe(
-    "Interested · Website",
+  // led by its "·" so a wrap never ends a line on it; then the age. v1.96: the
+  // source, the owner and the age in one group (leadMeta), one line at any
+  // width, so no "·" ever starts a line.
+  expect(host.querySelector('[class*="leadSubWords"]')?.textContent).toMatch(
+    /^Interested · Website · Fictional · /,
+  );
+  expect(host.querySelector('[class*="leadMeta"]')?.textContent).toMatch(
+    /^· Website · Fictional · /,
   );
   expect(host.querySelector('[class*="leadOwnerWord"]')?.textContent).toBe(
     "· Fictional",
@@ -234,7 +239,7 @@ it("adds the owner for a team's list, and keeps the full card elsewhere", async 
   );
   // (The old owner line stays in the markup for now, hidden by the CSS.)
   expect(
-    host.querySelector('[class*="leadSub"] > [data-lead-age]')?.textContent,
+    host.querySelector('[class*="leadMeta"] > [data-lead-age]')?.textContent,
   ).toMatch(/^· /);
   expect(
     host.querySelector("[data-lead-row]")!.getAttribute("aria-current"),
@@ -402,7 +407,7 @@ it("puts a new Inbound enquiry's wait on its last line, quiet", async () => {
   const why = () => host.querySelector('[class*="leadWhy"]')!;
   await show(fresh);
   expect(host.querySelector('[class*="leadSubWords"]')!.textContent).toBe(
-    "New Lead · Website",
+    "New Lead · Website · 12 min",
   );
   expect(why().textContent).toBe("Waiting 12 min");
   // A wait is quiet, however long: red only for Late (part 01; L1).

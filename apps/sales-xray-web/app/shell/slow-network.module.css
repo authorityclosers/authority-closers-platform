@@ -1,0 +1,70 @@
+/* "Slow network. Still loading…" (slow-network.tsx): one calm pill, the
+   notice cards' glass, low on the screen above the phone's tab bar, never
+   over the header's controls. Hidden until html[data-sx-slow]. */
+.pill {
+  position: fixed;
+  z-index: 1150;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  display: none;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 32px);
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid var(--sx-glass-edge);
+  border-radius: 999px;
+  background: var(--sx-glass-thick);
+  -webkit-backdrop-filter: var(--sx-glass-blur);
+  backdrop-filter: var(--sx-glass-blur);
+  box-shadow: var(--sx-glass-shine), var(--sx-glass-shadow);
+  color: var(--lx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  line-height: var(--sx-leading-20);
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+:global(html[data-sx-slow]) .pill {
+  display: inline-flex;
+  animation: enter var(--sx-dur-sheet) var(--sx-spring) both;
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--lx-info);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@media (max-width: 899.98px) {
+  .pill {
+    bottom: calc(
+      env(safe-area-inset-bottom, 0px) + var(--sx-bottom-nav-h, 64px) + 12px
+    );
+  }
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global(html[data-sx-slow]) .pill,
+  .dot {
+    animation: none;
+  }
+}

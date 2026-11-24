@@ -979,3 +979,24 @@
     white-space: normal;
   }
 }
+
+/* ---------- v1.96 device polish ----------
+   Choose a file is the page's one main action: Home's deep green pill (it was
+   a teal rounded rectangle beside the guide's teal Next), 44 px to a finger. */
+.stage[data-has-files="false"] .browse {
+  min-height: 44px;
+  padding: 10px 24px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
+.stage[data-has-files="false"] .browse:hover:not(:disabled) {
+  background: var(--sx-gloss);
+  filter: brightness(1.06);
+}
+
+.timeLeft {
+  color: var(--sx-primary-ink);
+}

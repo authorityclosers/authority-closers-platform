@@ -107,6 +107,69 @@
 }
 
 .planNote a {
-  color: var(--lx-teal);
+  color: var(--sx-primary-ink);
   font-weight: 600;
+}
+
+/* What your plan includes, and the empty row: a dark ink icon on a soft
+   tile, words that wrap rather than cut (v1.96 device polish). */
+.planRows {
+  display: grid;
+  margin: 0;
+  padding: 0 16px;
+  list-style: none;
+}
+
+.planRow,
+.emptyRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 10px 0;
+}
+
+.planRow + .planRow {
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.emptyRow {
+  flex-wrap: wrap;
+  padding: 10px 16px 14px;
+}
+
+.planTile {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: var(--sx-fill);
+  color: var(--sx-ink);
+}
+
+.planText {
+  display: grid;
+  flex: 1 1 180px;
+  gap: 2px;
+  min-width: 0;
+}
+
+.planText strong {
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  line-height: var(--sx-leading-20);
+  overflow-wrap: anywhere;
+}
+
+.planText small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+@media (max-width: 599px) {
+  .emptyRow > button {
+    flex: 1 1 100%;
+  }
 }

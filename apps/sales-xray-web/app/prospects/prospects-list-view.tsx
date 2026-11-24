@@ -199,7 +199,18 @@ export function ProspectsListView() {
         ) : null}
 
         <div className={styles.listPanel}>
-          <div className={styles.toolbar}>
+          {/* Nothing to search yet: the empty state's one action leads (v1.96
+              device polish: a search over an empty list). */}
+          <div
+            className={styles.toolbar}
+            hidden={
+              !showLoading &&
+              !visibleError &&
+              visibleProspects.length === 0 &&
+              !searchQuery &&
+              stageFilter === null
+            }
+          >
             <div className={styles.searchBox}>
               <Search
                 size={16}
@@ -260,13 +271,18 @@ export function ProspectsListView() {
               <div className={styles.emptyTitle}>
                 {searchQuery || stageFilter !== null
                   ? "No prospects match your search"
-                  : "No prospects recorded yet"}
+                  : "No prospects yet"}
               </div>
               <p className={styles.emptyText}>
                 {searchQuery || stageFilter !== null
                   ? "Try clearing the search query or stage filter."
-                  : "Open an analysed call’s Where the Deal Stands section to save a new prospect or link it to an earlier prospect."}
+                  : "Save one from any call report."}
               </p>
+              {searchQuery || stageFilter !== null ? null : (
+                <Link className={styles.emptyAction} href="/analysis/calls">
+                  Open my calls
+                </Link>
+              )}
             </div>
           ) : (
             <div

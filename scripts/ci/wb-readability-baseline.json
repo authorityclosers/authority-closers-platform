@@ -197,7 +197,8 @@
    "contrast | button.chats__row > span.chats__chatAvatar > span.chats__channelMark > span.report-entities__monogram",
    "contrast | span.chats__rowMeta > span.chats__channelTag > span.chats__channelMark > span.report-entities__monogram",
    "tiny-text | span.chats:channelTag > span.chats:channelMark > span.report-entities:monogram",
-   "tiny-text | span.chats:chatAvatar > span.chats:channelMark > span.report-entities:monogram"
+   "tiny-text | span.chats:chatAvatar > span.chats:channelMark > span.report-entities:monogram",
+   "overlap | button.chats__row > span.chats__chatAvatar > span.chats__channelMark > span.report-entities__monogram > ⟂ > li > button."
   ],
   "chats | plain | 360 light 100%": [
    "overlap | button.chats__row > span.chats__chatAvatar > span.chats__channelMark > span.report-entities__monogram > ⟂ > li > button.",
@@ -381,13 +382,15 @@
    "contrast-aa | a.call-lens:capsule > span.lead-page:callWords > span.lead-page:callNumber",
    "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho",
    "covered | div.lead-page:headTop > div.lead-page:headWords > button.lead-page:follow",
-   "overlap | section.lead-page__head > div.lead-page__headTop > div.lead-page__headWords > button.lead-page__follow > ⟂ > section.lea"
+   "overlap | section.lead-page__head > div.lead-page__headTop > div.lead-page__headWords > button.lead-page__follow > ⟂ > section.lea",
+   "clipped-text | span.leads__leadSub > span.leads__leadSubWords > span.leads__leadMeta > span.leads__leadPart"
   ],
   "lead-page | plain | 1280 light": [
    "contrast-aa | a.call-lens:capsule > span.lead-page:callWords > span.lead-page:callNumber",
    "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho",
    "covered | div.lead-page:headTop > div.lead-page:headWords > button.lead-page:follow",
-   "overlap | section.lead-page__head > div.lead-page__headTop > div.lead-page__headWords > button.lead-page__follow > ⟂ > section.lea"
+   "overlap | section.lead-page__head > div.lead-page__headTop > div.lead-page__headWords > button.lead-page__follow > ⟂ > section.lea",
+   "clipped-text | span.leads__leadSub > span.leads__leadSubWords > span.leads__leadMeta > span.leads__leadPart"
   ],
   "lead-page | plain | 360 dark 130%": [
    "axe:scrollable-region-focusable | .lead-page:stepper",
@@ -443,14 +446,16 @@
    "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho",
    "covered | div.lead-page:headTop > div.lead-page:headWords > button.lead-page:follow",
    "covered | div.leads:card > section.lead-page:card > button.lead-page:textAction",
-   "overlap | section.lead-page__head > div.lead-page__headTop > div.lead-page__headWords > button.lead-page__follow > ⟂ > section.lea"
+   "overlap | section.lead-page__head > div.lead-page__headTop > div.lead-page__headWords > button.lead-page__follow > ⟂ > section.lea",
+   "clipped-text | span.leads__leadSub > span.leads__leadSubWords > span.leads__leadMeta > span.leads__leadPart"
   ],
   "lead-page-long-path | plain | 1280 light": [
    "contrast-aa | a.call-lens:capsule > span.lead-page:callWords > span.lead-page:callNumber",
    "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho",
    "covered | div.lead-page:headTop > div.lead-page:headWords > button.lead-page:follow",
    "covered | div.leads:card > section.lead-page:card > button.lead-page:textAction",
-   "overlap | section.lead-page__head > div.lead-page__headTop > div.lead-page__headWords > button.lead-page__follow > ⟂ > section.lea"
+   "overlap | section.lead-page__head > div.lead-page__headTop > div.lead-page__headWords > button.lead-page__follow > ⟂ > section.lea",
+   "clipped-text | span.leads__leadSub > span.leads__leadSubWords > span.leads__leadMeta > span.leads__leadPart"
   ],
   "lead-page-long-path | plain | 360 dark 130%": [
    "contrast-aa | a.call-lens:capsule > span.lead-page:callWords > span.lead-page:callNumber",
@@ -485,14 +490,17 @@
    "clipped-text | div.leads__leadFace > button.leads__leadButton > span.leads__leadMain > span.leads__leadOwnerLine",
    "clipped-text | div.leads__leadFace > button.leads__leadButton > span.leads__leadMain > span.leads__leadSub",
    "clipped-text | div.work-views__callBand > button.call-lens__capsule > span.work-views__callBandWords > span.work-views__callBandWho",
-   "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho"
+   "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho",
+   "clipped-label | span.leads__leadSub > span.leads__leadSubWords > span.leads__leadMeta > span.leads__leadPart",
+   "clipped-text | span.leads__leadSub > span.leads__leadSubWords > span.leads__leadMeta > span.leads__leadPart"
   ],
   "leads-list | long | 360 light 100%": [
    "clipped-label | span.leads__listSort > div.picker__root > button.picker__button > span",
    "clipped-text | button.leads__leadButton > span.leads__leadMain > span.leads__leadName > span.leads__leadNameText",
    "clipped-text | div.leads__leadFace > button.leads__leadButton > span.leads__leadMain > span.leads__leadSub",
    "clipped-text | div.work-views__callBand > button.call-lens__capsule > span.work-views__callBandWords > span.work-views__callBandWho",
-   "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho"
+   "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho",
+   "clipped-text | span.leads__leadSub > span.leads__leadSubWords > span.leads__leadMeta > span.leads__leadPart"
   ],
   "leads-list | plain | 1280 dark": [
    "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho"
@@ -505,7 +513,8 @@
    "clipped-text | button.leads__leadButton > span.leads__leadMain > span.leads__leadName > span.leads__leadNameText",
    "clipped-text | div.leads__leadFace > button.leads__leadButton > span.leads__leadMain > span.leads__leadOwnerLine",
    "clipped-text | div.leads__leadFace > button.leads__leadButton > span.leads__leadMain > span.leads__leadSub",
-   "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho"
+   "contrast-aa | button.call-lens:capsule > span.work-views:callBandWords > span.work-views:callBandWho",
+   "clipped-text | span.leads__leadSub > span.leads__leadSubWords > span.leads__leadMeta > span.leads__leadPart"
   ],
   "leads-list | plain | 360 light 100%": [
    "clipped-label | span.leads__listSort > div.picker__root > button.picker__button > span",
@@ -527,12 +536,15 @@
    "clipped-label | span.leads__listSort > div.picker__root > button.picker__button > span",
    "clipped-text | button.leads__leadButton > span.leads__leadMain > span.leads__leadName > span.leads__leadNameText",
    "clipped-text | div.leads__leadFace > button.leads__leadButton > span.leads__leadMain > span.leads__leadOwnerLine",
-   "clipped-text | div.leads__leadFace > button.leads__leadButton > span.leads__leadMain > span.leads__leadSub"
+   "clipped-text | div.leads__leadFace > button.leads__leadButton > span.leads__leadMain > span.leads__leadSub",
+   "clipped-text | span.leads__leadSub > span.leads__leadSubWords > span.leads__leadMeta > span.leads__leadPart",
+   "clipped-label | span.leads__leadSub > span.leads__leadSubWords > span.leads__leadMeta > span.leads__leadPart"
   ],
   "leads-open | long | 360 light 100%": [
    "clipped-label | span.leads__listSort > div.picker__root > button.picker__button > span",
    "clipped-text | button.leads__leadButton > span.leads__leadMain > span.leads__leadName > span.leads__leadNameText",
-   "clipped-text | div.leads__leadFace > button.leads__leadButton > span.leads__leadMain > span.leads__leadSub"
+   "clipped-text | div.leads__leadFace > button.leads__leadButton > span.leads__leadMain > span.leads__leadSub",
+   "clipped-text | span.leads__leadSub > span.leads__leadSubWords > span.leads__leadMeta > span.leads__leadPart"
   ],
   "leads-open | plain | 1280 dark": [],
   "leads-open | plain | 1280 light": [],
@@ -540,7 +552,8 @@
    "clipped-label | span.leads__listSort > div.picker__root > button.picker__button > span",
    "clipped-text | button.leads__leadButton > span.leads__leadMain > span.leads__leadName > span.leads__leadNameText",
    "clipped-text | div.leads__leadFace > button.leads__leadButton > span.leads__leadMain > span.leads__leadOwnerLine",
-   "clipped-text | div.leads__leadFace > button.leads__leadButton > span.leads__leadMain > span.leads__leadSub"
+   "clipped-text | div.leads__leadFace > button.leads__leadButton > span.leads__leadMain > span.leads__leadSub",
+   "clipped-text | span.leads__leadSub > span.leads__leadSubWords > span.leads__leadMeta > span.leads__leadPart"
   ],
   "leads-open | plain | 360 light 100%": [
    "clipped-label | span.leads__listSort > div.picker__root > button.picker__button > span",

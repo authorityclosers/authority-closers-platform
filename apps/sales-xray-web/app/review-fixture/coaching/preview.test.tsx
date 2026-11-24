@@ -187,7 +187,7 @@ describe("Coaching review fixture", () => {
         (button) => button.textContent,
       );
     expect(pressed()).toContain("My coaching");
-    expect(host.textContent).toContain("Why This Keeps Happening");
+    expect(host.textContent).toContain("Why this keeps happening");
     const team = [...host.querySelectorAll("button")].find(
       (button) => button.textContent === "Team",
     );

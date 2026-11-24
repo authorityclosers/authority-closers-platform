@@ -165,6 +165,8 @@ async function mount(openingExistingCall = false) {
 
 beforeEach(() => {
   vi.mocked(readSalesXrayWorkspaces).mockReset();
+  // The frame a tab last confirmed (last-access.ts) belongs to one test only.
+  sessionStorage.clear();
   pathname = "/";
   consentStatus = "current";
   authSelectedFile = null;
@@ -889,6 +891,24 @@ it("keeps Academy embeds on their existing identity workspace contract", async (
   ).not.toBeNull();
   expect(fetchMock).toHaveBeenCalledOnce();
   expect(readSalesXrayWorkspaces).not.toHaveBeenCalled();
+});
+
+// v1.96 device polish, lane P: on a backend 502 Leads swapped to the waiting
+// shell. A tab keeps the frame it last confirmed and checks again quietly.
+it("keeps the frame this tab confirmed when the check fails for a moment", async () => {
+  fetchMock.mockResolvedValueOnce(response(workspaceChoices(firstTenantId)));
+  await mount();
+  await outline('[data-testid="call-studio"]');
+  expect(container.querySelector('[data-testid="call-studio"]')).not.toBeNull();
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  fetchMock.mockResolvedValueOnce(response({}, 502));
+  await mount();
+  await outline('[data-testid="call-studio"]');
+  expect(container.querySelector('[data-testid="call-studio"]')).not.toBeNull();
+  expect(container.textContent).not.toContain(
+    "Workspace access could not be checked",
+  );
 });
 
 // The test robot (0320c84e, 2 Nov 2026): each automatic retry dropped Home to

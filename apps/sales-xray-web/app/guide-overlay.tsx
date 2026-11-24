@@ -16,6 +16,7 @@ import {
   useId,
   useLayoutEffect,
   useRef,
+  useState,
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
@@ -54,6 +55,23 @@ export function GuideOverlay({
 }) {
   const heading = useId();
   const card = useRef<HTMLElement>(null);
+  // Where the page keeps a place for it (New analysis, [data-guide-slot];
+  // v1.96 device polish): the card sits in the page's own flow, above the
+  // upload on a phone and in the right column on a computer, so it never
+  // covers the steps or Recent calls. Elsewhere it floats in the corner.
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    // The page draws (and drops) its place as it changes, e.g. once a file
+    // is chosen: follow it, back to the corner when it goes.
+    const find = () =>
+      setSlot(document.querySelector<HTMLElement>("[data-guide-slot]"));
+    find();
+    if (typeof MutationObserver === "undefined") return;
+    const watch = new MutationObserver(find);
+    watch.observe(document.body, { childList: true, subtree: true });
+    return () => watch.disconnect();
+  }, []);
+  const inline = !!slot?.isConnected;
   const skipRef = useRef(onSkip);
   // Auto-open never moves focus. Explicit dismissal releases focus only when
   // the removed card owns it, without disturbing someone using the page.
@@ -102,7 +120,7 @@ export function GuideOverlay({
   useEffect(() => {
     const node = card.current;
     const root = document.documentElement;
-    if (!node || above || typeof ResizeObserver === "undefined") {
+    if (!node || above || inline || typeof ResizeObserver === "undefined") {
       root.style.removeProperty("--sx-guide-h");
       return;
     }
@@ -123,10 +141,10 @@ export function GuideOverlay({
       node.removeEventListener("transitionend", publish);
       root.style.removeProperty("--sx-guide-h");
     };
-  }, [above]);
+  }, [above, inline]);
   useLayoutEffect(() => {
     const node = card.current;
-    if (!node) return;
+    if (!node || inline) return;
     const box = node.getBoundingClientRect();
     const under =
       target &&
@@ -140,7 +158,7 @@ export function GuideOverlay({
         `${Math.ceil(target.top + target.height)}px`,
       );
     else node.style.removeProperty("--guide-clear");
-  }, [target, above]);
+  }, [target, above, inline]);
   return createPortal(
     <>
       {target ? (
@@ -165,6 +183,7 @@ export function GuideOverlay({
         data-guide-card
         data-waiting={step.waitForPage || undefined}
         data-position={above ? "top" : "bottom"}
+        data-inline={inline ? "" : undefined}
         aria-labelledby={heading}
       >
         <header className={styles.header}>
@@ -266,6 +285,6 @@ export function GuideOverlay({
         </footer>
       </aside>
     </>,
-    document.body,
+    inline && slot ? slot : document.body,
   );
 }

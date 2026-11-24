@@ -38,6 +38,16 @@ const LEVEL_ICON: Record<CallAiLevel, LucideIcon> = {
   full: Sparkles,
 };
 
+/** One short line per level (v1.96 device polish: two to four lines of
+ *  small grey words each read as a wall on a phone); the server's longer
+ *  words stay as the row's tooltip. */
+export const LEVEL_LINE: Record<CallAiLevel, string> = {
+  off: "No AI reads calls",
+  data_only: "Transcript and lead facts",
+  auto: "Sales X-Ray picks per call",
+  full: "Report and coaching",
+};
+
 /**
  * One choice per level as rows of one grouped list (owner, 29 Oct 2026: calm
  * and clean like Insights): its mark, name and plain words, a check on the
@@ -63,6 +73,7 @@ export function LevelChoices({
           key={level.id}
           className={styles.choice}
           data-checked={level.id === value ? "" : undefined}
+          title={level.hint}
         >
           <input
             type="radio"
@@ -75,7 +86,7 @@ export function LevelChoices({
           <LevelMark level={level.id} />
           <span className={styles.choiceText}>
             <strong>{level.name}</strong>
-            <small>{level.hint}</small>
+            <small>{LEVEL_LINE[level.id]}</small>
           </span>
         </label>
       ))}

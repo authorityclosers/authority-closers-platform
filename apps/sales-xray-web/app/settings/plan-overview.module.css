@@ -126,6 +126,13 @@
   background: var(--sx-tile-fill);
 }
 
+/* A row's line wraps rather than cut: never "₹1,299 + …" (v1.96). */
+.rowCard > span:nth-child(2) > span:last-child {
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 button.rowCard:disabled {
   cursor: default;
   opacity: 0.7;

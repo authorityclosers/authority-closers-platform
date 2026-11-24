@@ -202,3 +202,32 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ---------- v1.96 device polish ---------- */
+
+/* The chosen kind is the family's solid deep-green pill, not black. */
+.kind[aria-selected="true"] {
+  border-color: transparent;
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
+/* Two a row on a wide screen: a group's last odd card takes the whole row
+   instead of sitting half wide beside nothing. */
+.cards > li:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+/* A computer's top bar names the page: its heading is for screen readers
+   there (Results was said twice at 1440). */
+@media (min-width: 900px) {
+  .pageHead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

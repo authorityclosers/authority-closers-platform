@@ -348,10 +348,17 @@ describe("ProspectsListView", () => {
     expect(
       host.querySelector('[data-testid="empty-prospects"]'),
     ).not.toBeNull();
-    expect(host.textContent).toContain("No prospects recorded yet");
-    expect(host.textContent).toContain(
-      "Open an analysed call’s Where the Deal Stands section to save a new prospect",
+    // v1.96 device polish: plain words and one way on, no search over nothing.
+    expect(host.textContent).toContain("No prospects yet");
+    expect(host.textContent).toContain("Save one from any call report.");
+    expect(host.querySelector('a[href="/analysis/calls"]')?.textContent).toBe(
+      "Open my calls",
     );
+    expect(
+      host
+        .querySelector<HTMLInputElement>('input[type="search"]')
+        ?.closest("[hidden]"),
+    ).not.toBeNull();
     expect(host.textContent).not.toContain("appear here automatically");
   });
 
@@ -489,7 +496,7 @@ describe("ProspectsListView", () => {
     expect(host.querySelector('[role="alert"] button')?.textContent).toContain(
       "Try again",
     );
-    expect(host.textContent).not.toContain("No prospects recorded yet");
+    expect(host.textContent).not.toContain("No prospects yet");
   });
 
   it.each(["tenantId", "sessionId"])(

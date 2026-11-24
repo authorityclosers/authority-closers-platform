@@ -465,6 +465,53 @@ def test_outside_senders_log_touches_through_the_api(postgres_harness: Any, tmp_
                     await call("/check", {"sender": "sx-engage", "to": {"phone": "98111 22202"}})
                 )["verdict"] == "block"
 
+                # A reservation sent to an address no lead has is refused, not put on the
+                # reserved lead (PR #663 review).
+                ravi_hold = await call(
+                    "/check",
+                    {
+                        "sender": "sx-engage",
+                        "to": {"phone": "98111 22203"},
+                        "hold": True,
+                        "client_ref": "q:30",
+                    },
+                )
+                assert ravi_hold["reservation_id"]
+                wrong = await engine.post(
+                    f"{API}/touches",
+                    json={
+                        **first,
+                        "to": {"phone": "98111 22299"},
+                        "client_ref": "q:30",
+                        "reservation_id": ravi_hold["reservation_id"],
+                        "provider_message_id": "wamid.FICTIONAL-C9",
+                    },
+                    headers=bearer(key),
+                )
+                assert wrong.status_code == 409, wrong.text
+                # The hold lapses; a late send with its client_ref is a touch of its own, not
+                # a "duplicate" of the lapsed hold (PR #663 review).
+                async with setup.sessions() as db, db.begin():
+                    assert (
+                        await outreach.expire_reservations(
+                            db, datetime.now(UTC) + timedelta(minutes=16)
+                        )
+                        >= 1
+                    )
+                late = await call(
+                    "/touches",
+                    {
+                        **first,
+                        "to": {"phone": "98111 22203"},
+                        "client_ref": "q:30",
+                        "provider_message_id": "wamid.FICTIONAL-C10",
+                    },
+                    201,
+                )
+                assert late["lead_id"] == ravi
+                assert late["touch_id"] != ravi_hold["reservation_id"]
+                assert late.get("duplicate") is not True
+
                 # Statuses move forward only; a late older one is ignored.
                 start = datetime.now(UTC)
                 moved = await call(
@@ -646,6 +693,19 @@ def test_outside_senders_log_touches_through_the_api(postgres_harness: Any, tmp_
                     (riya, "whatsapp"),
                     (mine["lead_id"], "email"),
                 }
+                # next_since is "<time>|<event id>": a page ending inside a timestamp tie skips
+                # nothing (PR #663 review); a plain time still works, a broken cursor is refused.
+                tied = await engine.get(
+                    f"{API}/opt-outs",
+                    params={"since": f"{_at(timedelta(days=-1))}|{uuid4()}"},
+                    headers=bearer(key),
+                )
+                assert tied.status_code == 200, tied.text
+                assert len(tied.json()["opt_outs"]) == 2
+                broken = await engine.get(
+                    f"{API}/opt-outs", params={"since": "yesterday|x"}, headers=bearer(key)
+                )
+                assert broken.status_code == 422, broken.text
                 history = await engine.get(
                     f"{API}/touches", params={"phone": "+91 98111 22201"}, headers=bearer(key)
                 )
@@ -774,9 +834,10 @@ def test_outside_senders_log_touches_through_the_api(postgres_harness: Any, tmp_
                     code="sender_paused",
                 )
                 listed_senders = await session("GET", "/outreach/senders", None)
-                # sx-engage: six sends, plus the one a manager's override let through.
+                # sx-engage: six sends, the one a manager's override let through, and the late
+                # send after a lapsed hold.
                 assert {s["key"]: s["touches_week"] for s in listed_senders["senders"]} == {
-                    "sx-engage": 7,
+                    "sx-engage": 8,
                     "owner-mac-whatsapp": 2,
                     "elsewhere": 0,
                 }

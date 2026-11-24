@@ -123,3 +123,12 @@ export function MicrophoneAccess() {
     </details>
   );
 }
+
+/** The microphone check in a card of its own (Apps & devices, v1.96). */
+export function MicrophoneCard() {
+  return (
+    <div className={styles.more}>
+      <MicrophoneAccess />
+    </div>
+  );
+}

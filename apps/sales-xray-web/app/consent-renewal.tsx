@@ -24,6 +24,8 @@ import { useWorkspaceAccess } from "./workspace-access";
 
 const READ_NOTICE = "consent-read";
 const SAVE_NOTICE = "consent-save";
+/** Quiet tries after a failed Terms check: 10 s, 30 s, then 90 s. */
+export const CONSENT_RETRY_MS = [10_000, 30_000, 90_000] as const;
 
 /**
  * One calm card, shown once to a signed-in person whose recorded consent is
@@ -49,6 +51,7 @@ export function ConsentRenewal() {
   const [saving, setSaving] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const savingRef = useRef(false);
+  const retry = useRef<number | undefined>(undefined);
   const cardRef = useRef<HTMLElement>(null);
   const latest = useRef({ consent, checked, key });
   const acceptRef = useRef<() => void>(() => {});
@@ -78,15 +81,22 @@ export function ConsentRenewal() {
           setLoaded(null);
           return;
         }
-        notify({
-          id: READ_NOTICE,
-          tone: "error",
-          title: "Couldn't check the Terms",
-          message: "Your calls and reports are safe. Try again in a moment.",
-          action: { label: "Try again", run: () => setAttempt((n) => n + 1) },
-        });
+        // A background check that failed (the server busy, no connection)
+        // tries again quietly: the screen's own card already says what
+        // didn't load, so this never adds a second error (v1.96 device
+        // polish, lane P: Home showed two on a 502). After the last try
+        // the next page load checks again.
+        const wait = CONSENT_RETRY_MS[attempt];
+        if (wait !== undefined)
+          retry.current = window.setTimeout(
+            () => setAttempt((n) => n + 1),
+            wait,
+          );
       });
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      window.clearTimeout(retry.current);
+    };
   }, [signedIn, key, attempt]);
 
   const open = consent !== null && consent.status !== "current";

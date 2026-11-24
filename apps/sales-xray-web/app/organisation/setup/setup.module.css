@@ -421,6 +421,18 @@
   font-weight: 600;
   white-space: nowrap;
 }
+/* A whole sentence in a status pill wraps on a phone (sx-tutorials, 23 Nov
+   2026: "Only Meta test leads so far…" was clipped at 390 px). */
+.statusLong {
+  max-width: 100%;
+  padding-block: 4px;
+  border-radius: 12px;
+  line-height: var(--sx-leading-16);
+  white-space: normal;
+}
+.statusLong::before {
+  flex: none;
+}
 .status::before {
   content: "";
   width: 7px;
@@ -663,12 +675,38 @@
   border-top: 1px solid var(--sx-line);
 }
 .more > .details > summary {
-  min-height: 52px;
-  padding: 0 16px;
+  gap: 12px;
+  min-height: 68px;
+  padding: 10px 16px;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
   font-weight: 500;
   list-style: none;
+}
+/* Each row: a dark ink icon on a soft tile, its name and one line (v1.96). */
+.moreTile {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--sx-fill);
+  color: var(--sx-ink);
+}
+.moreText {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+.moreText strong {
+  font-weight: 650;
+}
+.moreText small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: var(--sx-leading-20);
 }
 .more > .details > summary::-webkit-details-marker {
   display: none;
@@ -687,7 +725,7 @@
   transform: rotate(45deg);
 }
 .more > .details > summary > svg {
-  color: var(--sx-accent);
+  color: var(--sx-ink);
 }
 .more > .details > div {
   margin: 0;

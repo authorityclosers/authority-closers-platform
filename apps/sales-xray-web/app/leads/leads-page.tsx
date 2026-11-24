@@ -1078,7 +1078,7 @@ export function LeadsRoute({
     !!more.step &&
     journey?.view.stages.find((stage) => stage.key === more.step)?.kind ===
       "new";
-  // All Leads with no sort picked says "Follow-up soonest": ask the server for
+  // All Leads with no sort picked says "Due soonest": ask the server for
   // exactly that, so a lead with no next step or a closed one is not first
   // (round-2 board 3, glitch "Sort looks wrong", 20 Nov 2026).
   const sayFollowUp = workView === "all" && !more.sort && !newestFirst;
@@ -2081,7 +2081,7 @@ export function LeadsRoute({
       ? ({ label: "Next call first", same: null } as const)
       : newestFirst
         ? ({ label: "Newest first", same: "created" } as const)
-        : ({ label: "Follow-up soonest", same: "next_action" } as const);
+        : ({ label: "Due soonest", same: "next_action" } as const);
   // "Assigned to"'s sellers, most leads first (Leads part 03).
   const sellersToPick =
     can && team && team.length > 1

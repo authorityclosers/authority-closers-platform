@@ -10,7 +10,7 @@
 import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { Button, Panel, Skeleton } from "../ui/kit";
+import { Panel, Skeleton } from "../ui/kit";
 import { StateSwitch } from "../ui/state-switch";
 import {
   chooseAutoAnalysis,
@@ -87,7 +87,16 @@ export function AutoAnalysisPanel() {
                 : "Off: each call waits for your tap."}
             </span>
           </span>
-          <Button onClick={() => setAsking(true)}>Turn on</Button>
+          {/* A switch like every other setting (v1.96): turning it on opens
+              the sheet with the owner's words first. */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={false}
+            aria-label={`Turn on ${title}`}
+            className={styles.offSwitch}
+            onClick={() => setAsking(true)}
+          />
         </div>
       )}
       <AutoCapturePanel

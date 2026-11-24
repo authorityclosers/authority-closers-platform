@@ -303,14 +303,17 @@ it("builds each section from the existing screens, with only its own parts", asy
   // Connected apps is one grid of app cards of its own.
   await render("apps");
   expect(host.querySelector('[data-testid="connected-apps"]')).not.toBeNull();
-  // Phone & alerts: your own switches on one screen; Apps & devices opens it too.
+  // Apps & devices and Phone & alerts each have their own page (v1.96).
   await render("devices");
   // Google Play first; the app file stays under it (24 Oct 2026).
   expect(host.querySelector(`a[href="${PLAY_OPT_IN_URL}"]`)).not.toBeNull();
   expect(host.querySelector(`a[href="${ANDROID_APK_URL}"]`)).not.toBeNull();
-  expect(host.textContent).toContain("Usage analytics");
+  expect(host.textContent).toContain("Look on this device");
+  expect(host.textContent).not.toContain("Usage analytics");
   await render("notifications");
   expect(host.textContent).toContain("Usage analytics");
+  expect(host.textContent).not.toContain("Sales X-Ray on your phone");
+  expect(host.textContent).not.toContain("Appearance");
   expect(host.textContent).toContain("Product updates show under the bell");
 });
 

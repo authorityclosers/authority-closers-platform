@@ -1,5 +1,5 @@
 "use client";
-import { Link2, RefreshCw } from "lucide-react";
+import { Inbox, Link2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { notify } from "../../notice-center";
@@ -15,7 +15,7 @@ import { Skeleton } from "../../ui/kit";
 import { CampaignStatuses } from "./campaigns";
 import { MetaAccounts, testOnly, topLine } from "./meta-accounts";
 import { metaRequest, refreshForms, type MetaCatalogue } from "./meta-client";
-import { MicrophoneAccess } from "./microphone";
+import family from "../family.module.css";
 import styles from "./setup.module.css";
 
 const outcomes: Record<string, string> = {
@@ -183,7 +183,11 @@ export function OrganisationSources() {
           </button>
         </div>
         {configured && testOnly(pages) ? (
-          <span className={styles.status} data-tone="warn" role="status">
+          <span
+            className={`${styles.status} ${styles.statusLong}`}
+            data-tone="warn"
+            role="status"
+          >
             Only Meta test leads so far: no real form has sent a lead yet
           </span>
         ) : null}
@@ -191,8 +195,9 @@ export function OrganisationSources() {
             at the end of the list (ux-audit, 2 Nov 2026): the top is one line. */}
         {configured && catalogue && !pages.length ? (
           <div className={styles.chips}>
+            {/* The family's one solid deep-green pill (v1.96). */}
             <a
-              className={styles.primary}
+              className={family.primary}
               href="/v1/lead-desk/meta/connect-sources"
               onClick={add}
             >
@@ -234,7 +239,15 @@ export function OrganisationSources() {
           className={styles.details}
           onToggle={(event) => setShowOther(event.currentTarget.open)}
         >
-          <summary>Other lead sources</summary>
+          <summary>
+            <span className={styles.moreTile} aria-hidden="true">
+              <Inbox size={20} />
+            </span>
+            <span className={styles.moreText}>
+              <strong>Other lead sources</strong>
+              <small>Forms, sheets, webhooks and imports</small>
+            </span>
+          </summary>
           {showOther ? (
             <div className={styles.otherProviders}>
               <SourcesView
@@ -251,7 +264,6 @@ export function OrganisationSources() {
             </div>
           ) : null}
         </details>
-        <MicrophoneAccess />
       </div>
     </div>
   );

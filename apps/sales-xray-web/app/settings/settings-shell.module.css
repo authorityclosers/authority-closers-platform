@@ -1,5 +1,33 @@
 /* Settings: sections down the side on a computer; list, then a section on a phone. Tokens only. */
 
+/* v1.96 (device polish, owner 22 Nov 2026): Settings speaks the v1.90 Home
+   family's green, never teal or mint. Inside the Settings frame the accent
+   tokens are Home's deep green: a fill with white words in both themes. In
+   dark, words in the accent read the family's light green
+   (--sx-primary-ink) where they sit on dark (rules below and in each
+   section). Scoped to Settings: Home and the tab bar keep their own. */
+.shell {
+  --lx-teal: var(--lx-home-primary);
+  --lx-teal-hover: color-mix(in oklab, var(--lx-home-primary) 86%, black);
+  --lx-on-teal: var(--lx-film-text);
+  --sx-accent: var(--lx-home-primary);
+  --sx-accent-ink: var(--lx-film-text);
+  --sx-accent-soft: color-mix(
+    in oklab,
+    var(--lx-home-primary) 12%,
+    transparent
+  );
+}
+
+:global(:root[data-theme="dark"]) .shell {
+  --lx-teal-hover: color-mix(in oklab, var(--lx-home-primary) 84%, white);
+  --sx-accent-soft: color-mix(
+    in oklab,
+    var(--lx-home-emerald) 14%,
+    transparent
+  );
+}
+
 .shell {
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
@@ -114,11 +142,11 @@
 
 .item[aria-current="page"] {
   background: var(--sx-accent-soft);
-  color: var(--sx-accent-ink);
+  color: var(--sx-ink);
 }
 
 .item[aria-current="page"] .icon {
-  color: var(--sx-accent);
+  color: var(--sx-primary-ink);
 }
 
 .icon {
