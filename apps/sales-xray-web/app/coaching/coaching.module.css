@@ -1060,6 +1060,19 @@
   text-align: center;
 }
 
+/* The card's one main button ("Analyse a call") is the family's deep-green
+   pill with white words in both themes, not the kit's teal (a light mint with
+   dark words in dark); v1.98. */
+.actions > a[data-variant="primary"],
+.actions > button[data-variant="primary"],
+.actions > a[data-variant="primary"]:hover:not(:disabled),
+.actions > button[data-variant="primary"]:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--sx-gloss);
+  box-shadow: var(--sx-gloss-depth);
+  color: var(--sx-gloss-ink);
+}
+
 .actions button[aria-disabled="true"] {
   cursor: wait;
   opacity: 0.55;
