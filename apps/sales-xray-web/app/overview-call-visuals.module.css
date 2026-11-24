@@ -1,7 +1,10 @@
 /* Overview call visuals: system measurements and call map visuals (AUT-345) */
 
+/* v1.99: every track may shrink to the phone (bug radar: the call map held
+   the report 8-13 px wider than a 320-360 px screen). */
 .visualsRoot {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   margin-top: 18px;
 }
@@ -314,6 +317,7 @@
 /* Call map styling */
 .callMapSection {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   margin-top: 6px;
 }
@@ -348,6 +352,7 @@
 /* Detail Card */
 .detailCard {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   padding: 14px 16px;
   border: 1px solid var(--lx-line);
@@ -415,7 +420,7 @@
 /* Signals grid */
 .signalsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
   gap: 10px;
 }
 
@@ -430,9 +435,11 @@
 
 .signalHeader {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+  min-width: 0;
 }
 
 .signalTag {
@@ -604,7 +611,7 @@
 /* Claims */
 .claimsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
   gap: 10px;
 }
 
@@ -640,7 +647,7 @@
 /* Qualification */
 .qualSplit {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
   gap: 12px;
 }
 
