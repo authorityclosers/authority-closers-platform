@@ -91,10 +91,12 @@ export function SellingSettings() {
   const [ai, setAi] = useState<Read<CallAiSettings>>({ status: "loading" });
   const [version, setVersion] = useState(0);
   const access = useWorkspaceAccess();
-  const inOrganisation =
-    access?.workspaces?.find(
-      (workspace) => workspace.tenant_id === access.context?.tenantId,
-    )?.kind === "organisation";
+  // undefined while this workspace itself is unknown (not read yet, or its
+  // read failed too, as a 502 takes both down).
+  const workspaceKind = access?.workspaces?.find(
+    (workspace) => workspace.tenant_id === access.context?.tenantId,
+  )?.kind;
+  const knownPersonal = workspaceKind === "personal";
 
   useEffect(() => {
     const controller = new AbortController();
@@ -112,10 +114,12 @@ export function SellingSettings() {
     return () => controller.abort();
   }, [version]);
 
-  // In an organisation a failed read is the server's, not "no lead desk":
-  // one card says it didn't load, with Try again (v1.96 device polish, lane
-  // P: on a 502 a seller was told to switch to her organisation).
-  if (me.status === "none" && inOrganisation)
+  // A failed read is "no lead desk" only in a workspace known to be personal.
+  // In an organisation, or while the workspace itself is unknown, it is the
+  // server's: one card says it didn't load, with Try again (v1.96 device
+  // polish, lane P; v1.97: on a 502 the workspace read fails too, and the
+  // seller was still told to switch to her organisation).
+  if (me.status === "none" && !knownPersonal)
     return (
       <div className={styles.stack}>
         <DidntLoad
